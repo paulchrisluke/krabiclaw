@@ -1,7 +1,5 @@
 <template>
   <div class="font-poppins">
-  
-      <NuxtPage/>
-   
+    <NuxtPage/>
   </div>
 </template>
