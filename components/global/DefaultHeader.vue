@@ -3,7 +3,7 @@
         <div class="container mx-auto flex justify-between items-center p-4">
             <!-- Logo Section -->
             <div class="flex items-center">
-                <a href="#" class="brand inline-flex items-center"><img src="~/assets/images/brand.svg" alt=""></a>
+                <NuxtLink to="/" class="brand inline-flex items-center"><img src="~/assets/images/brand.svg" alt="" /></NuxtLink>
             </div>
             <!-- Order Now Button -->
             <div>
