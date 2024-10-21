@@ -12,7 +12,7 @@
           </span>
           <h1
             class="text-black text-center xl:text-[76px] lg:text-[56px] text-[38px] leading-10 lg:leading-[70px] font-extrabold xl:leading-[76px]">
-            Unique flavor</h1>
+            Unique flavors</h1>
         </div>
         <div
           class="md:p-10 p-0 group lg:mb-10 mb-[27px] xl:mb-[152px] rounded-[40px] cursor-pointer transition-all duration-500 ease-in-out md:hover:bg-black hover:transition-all hover:duration-500 hover:ease-in-out">
