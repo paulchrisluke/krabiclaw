@@ -1,0 +1,12 @@
+[build]
+  publish = "dist"  # This should point to your static build folder
+  command = "npm run generate"  # Ensure you're using the correct generate command
+
+[build.environment]
+  NODE_VERSION = "18"  # Match your local Node.js version
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
