@@ -21,7 +21,7 @@
                   <div>
                     <p
                       class="md:text-base text-sm md:leading-normal leading-[22px] font-normal max-w-[592px] w-full pb-[30px] text-white">
-                      It all started with Shokupan. Our passion for crafting the perfect loaf grew into a mission
+                      Our passion for crafting the perfect loaf grew into a mission
                       to blend Japanese flavors with every bite. Shokupan's soft, pillowy texture became the heart of Sand-O,
                       inspiring our unique sandwiches that combine tradition with innovation.
                     </p>
