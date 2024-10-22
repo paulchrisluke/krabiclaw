@@ -1,5 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
+
   app: {
     head: {
       title: 'Sand-O | Authentic Shokupan Bread',
@@ -7,6 +8,8 @@ export default defineNuxtConfig({
         lang: 'en',
       },
       meta: [
+        { charset: 'utf-8' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { property: 'og:title', content: 'Sand-O | Authentic Shokupan Bread' },
         { property: 'og:description', content: 'Come taste the 8th wonder of the world. Authentic Shokupan Bread, where dreams come true.' },
         { property: 'og:image', content: '/og-image.jpg' },
@@ -17,10 +20,10 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#000000' }
       ],
       link: [
-        { rel: 'icon', href: '/favicon.ico', type: 'image/x-icon' },
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' }
         { rel: 'shortcut icon', href: '/favicon.ico', type: 'image/x-icon' }
-      ]
-    }
+      ],
+    },
   },
   compatibilityDate: '2024-04-03',
   devtools: { enabled: true },
