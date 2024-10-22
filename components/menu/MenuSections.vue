@@ -10,8 +10,11 @@
         :key="index"
         :class="[
           'md:p-10 p-0 group lg:mb-10 mb-[27px] xl:mb-[152px] rounded-[40px] cursor-pointer transition-all duration-500 ease-in-out md:hover:bg-black hover:transition-all hover:duration-500 hover:ease-in-out',
-          index % 2 === 0 ? 'flex-row' : 'flex-row-reverse'
+          index % 2 === 0 ? 'flex-row' : 'flex-row-reverse',
+          { 'mobile-hover': sectionHovered === index }
         ]"
+        @touchstart="onTouchStart(index)"
+        @touchend="onTouchEnd"
       >
         <div class="flex lg:items-center items-center md:items-start gap-6">
           <div v-if="index % 2 === 0" class="md:w-2/5 w-[46%]">
@@ -47,7 +50,6 @@
 
 <script setup>
 import { ref } from 'vue';
-import { defineProps } from 'vue';
 import MenuDetailModal from './MenuDetailModal.vue';
 
 const props = defineProps({
@@ -76,8 +78,32 @@ const openOffcanvas = (content) => {
 const closeOffcanvas = () => {
   showModal.value = false;
 };
+
+const sectionHovered = ref(null);
+
+const onTouchStart = (index) => {
+  sectionHovered.value = index;
+};
+
+const onTouchEnd = () => {
+  sectionHovered.value = null;
+};
 </script>
 
 <style scoped>
-/* Add any additional styles if needed */
+@media (max-width: 767px) {
+  .mobile-hover {
+    background-color: black;
+  }
+
+  .mobile-hover h2,
+  .mobile-hover p,
+  .mobile-hover .learn-btn {
+    color: white;
+  }
+
+  .mobile-hover .learn-btn {
+    border-color: white;
+  }
+}
 </style>

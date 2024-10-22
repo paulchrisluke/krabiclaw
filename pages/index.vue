@@ -23,8 +23,6 @@ const images = Object.fromEntries(
   Object.entries(glob).map(([key, value]) => [filename(key), value.default])
 )
 
-console.log(images)
-
 definePageMeta({
   layout: 'home'
 })
