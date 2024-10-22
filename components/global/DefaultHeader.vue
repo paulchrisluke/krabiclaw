@@ -7,12 +7,20 @@
             </div>
             <!-- Order Now Button -->
             <div>
-                <a href="#"
-                    class="text-base text-black bg-white font-semibold py-0 px-8 h-[50px] leading-[18px] hover:bg-transparent hover:border-white hover:text-white flex items-center justify-center border border-solid border-transparent rounded-[48px]">
-                    Order Now
-                </a>
+                <button
+      @click="showOrderModal = true"
+      class="text-base text-black bg-white font-semibold py-0 px-8 h-[50px] leading-[18px] hover:bg-transparent hover:border-white hover:text-white flex items-center justify-center border border-solid border-transparent rounded-[48px]"
+    >
+      Order Now
+    </button>
             </div>
         </div>
+        <OrderNowModal :show="showOrderModal" @close="showOrderModal = false" />
     </header>
 </template>
+<script setup>
+import { ref } from 'vue';
 
+// State to control modal visibility
+const showOrderModal = ref(false);
+</script>
