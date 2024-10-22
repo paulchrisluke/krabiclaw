@@ -21,23 +21,19 @@
                   <div>
                     <p
                       class="md:text-base text-sm md:leading-normal leading-[22px] font-normal max-w-[592px] w-full pb-[30px] text-white">
-                      It all began with Shokupan. What started as a passion for baking the perfect loaf grew into a
-                      mission to bring the essence of Japanese flavors to every bite. With its soft, pillowy texture,
-                      shokupan became the foundation of everything we do at Sand-O, inspiring a unique sandwich
-                      experience that blends tradition with innovation.
+                      It all started with Shokupan. Our passion for crafting the perfect loaf grew into a mission
+                      to blend Japanese flavors with every bite. Shokupan's soft, pillowy texture became the heart of Sand-O,
+                      inspiring our unique sandwiches that combine tradition with innovation.
                     </p>
                     <p
                       class="md:text-base text-sm md:leading-normal leading-[22px] font-normal max-w-[592px] w-full pb-[30px] text-white">
                       Every day, we bake our signature shokupan milk bread from scratch, using locally sourced, 100%
-                      sustainable ingredients. Our commitment to eco-friendly practices ensures you’re enjoying fresh,
-                      flavorful sandos while supporting the planet.
+                      sustainable ingredients. 
                     </p>
                     <p
                       class="md:text-base text-sm md:leading-normal leading-[22px] font-normal max-w-[592px] w-full pb-[30px] text-white">
-                      Our menu changes weekly, offering a rotating selection of unique sandos—from crispy katsu to light
-                      egg and indulgent fruit and cream varieties. Each creation reflects Japanese culinary tradition
-                      with a modern twist, constantly introducing new flavors while perfecting our classics. There's
-                      always something new and irresistible to discover at Sand-O.
+                      Our menu changes weekly, featuring a rotating selection of sandos—from crispy katsu to indulgent fruit and cream.
+                      Each creation honors Japanese tradition with a modern twist, always offering something new to enjoy.
                     </p>
                   </div>
                   <a href="#"

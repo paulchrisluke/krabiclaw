@@ -43,7 +43,7 @@ useHead({
 })
 
 const weekText = "Week of Oct 14-21"
-const title = "Unique flavor"
+const title = "Featured Flavors"
 const menuSections = [
   {
     id: "chicken",

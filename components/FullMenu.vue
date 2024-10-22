@@ -46,7 +46,7 @@
                  <div class="flex items-center justify-between border-b border-black pb-4">
                     <div>
                        <h4 class="sm:text-xl text-base leading-5 text-black font-normal">
-                          SALMON ROYALE
+                          French Toast
                        </h4>
                        <p class="text-xs leading-4 text-black font-normal">Lorem ipsum dolor sit amet, consectetur
                           adipisicing elit.

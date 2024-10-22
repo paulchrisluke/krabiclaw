@@ -7,6 +7,10 @@
             <li><a href="#"><img src="~/assets/images/tiktok.svg" alt="TikTok"></a></li>
             <li><a href="#"><img src="~/assets/images/insta.svg" alt="Instagram"></a></li>
             <li><a href="#"><img src="~/assets/images/twitter.svg" alt="Twitter"></a></li>
+            <li><a href="#"><img src="~/assets/images/youtube.svg" alt="Youtube"></a></li>
+            <li><a href="#"><img src="~/assets/images/facebook.svg" alt="Facebook"></a></li>
+            <li><a href="#"><img src="~/assets/images/linkedin.svg" alt="Linkedin"></a></li>
+            <li><a href="#"><img src="~/assets/images/pinterest.svg" alt="Pinterest"></a></li>
           </ul>
           <a href="#" class="inline-flex my-[52px] mx-0">
             <img src="~/assets/images/ftr-brand.svg" alt="Brand" class="md:h-auto h-[130px] object-cover object-center">

@@ -32,7 +32,7 @@
                 </a>
             </li>
             <li>
-                <a href="https://www.doordash.com" target="_blank" class="outline outline-2 block text-black py-4 px-6 rounded-lg">
+                <a href="https://www.doordash.com/store/31182261/?srsltid=AfmBOoozLVM9FeIjMVSPmxMLUnCbpdS-417_RUy4zNAoITZCdUMuFjit" target="_blank" class="outline outline-2 block text-black py-4 px-6 rounded-lg">
                     <div class="flex items-center justify-between w-full">
                         <div class="flex-1 flex items-center">
                            
@@ -47,7 +47,7 @@
                 </a>
             </li>
             <li>
-                <a href="https://www.grubhub.com" target="_blank" class="outline outline-2 block text-black py-4 px-6 rounded-lg">
+                <a href="https://www.grubhub.com/restaurant/sand-o-6608-telegraph-rd-bloomfield-hills/9131288" target="_blank" class="outline outline-2 block text-black py-4 px-6 rounded-lg">
                     <div class="flex items-center justify-between w-full">
                         <div class="flex-1 flex items-center">
                            
