@@ -1,7 +1,7 @@
 <template>
   <div class="font-poppins">
    <default-header />
-      <NuxtPage/>
+      <slot />
     <default-footer />
   </div>
 </template>
