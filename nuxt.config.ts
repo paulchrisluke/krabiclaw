@@ -20,9 +20,9 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#000000' }
       ],
       link: [
-        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' }
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
         { rel: 'shortcut icon', href: '/favicon.ico', type: 'image/x-icon' }
-      ],
+      ]
     },
   },
   compatibilityDate: '2024-04-03',
