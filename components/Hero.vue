@@ -11,7 +11,7 @@
       Order Now
     </button>
         </div>
-        <video autoplay muted loop playsinline class="w-full h-full object-cover" preload="auto">
+        <video autoplay muted loop playsinline class="w-full h-full object-cover" preload="auto" poster="~/assets/images/video-poster.jpg">
           <source src="~/assets/videos/hero-video.webm" type="video/webm">
           <source src="~/assets/videos/hero-video.mp4" type="video/mp4">
           Your browser does not support the video tag.
