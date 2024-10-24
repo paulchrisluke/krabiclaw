@@ -28,10 +28,10 @@ const weekText = "Week of Oct 14-21"
 const title = "Featured Flavors"
 const menuSections = [
   {
-    id: "Fried",
-    title: "Fried Cream",
-    description: "The Fried Cream Sand-O is a tasty chicken sandwich featuring a crispy or grilled chicken fillet on a soft bun, topped with fresh lettuce, tomatoes, and your choice of sauce. It's a satisfying option for a quick meal.",
-    image: images['fried']
+    id: "Chicken",
+    title: "Chicken Katsu",
+    description: "The Chicken Katsu Sand-O is a tasty chicken sandwich featuring a crispy or grilled chicken fillet on a soft bun, topped with fresh lettuce, tomatoes, and your choice of sauce. It's a satisfying option for a quick meal.",
+    image: images['chicken']
   },
   {
     id: "pork",
