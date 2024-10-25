@@ -20,12 +20,13 @@
             <p class="text-sm text-white text-center font-normal max-w-[208px] w-full mx-auto">
               6608 Telegraph Rd, Bloomfield Hills, MI 48301
             </p>
+            <NuxtLink to="/bred-to-rise" class="text-white text-sm font-medium mt-2 hover:underline">Bred to Rise</NuxtLink>
           </div>
         </div>
         <div class="footer-bottom">
           <ul class="flex items-center justify-between md:flex-row flex-col">
             <li class="md:mb-0 mb-3.5 md:w-1/4 text-sm font-normal">
-              <NuxtLink to="/privacy-policy" class="text-white">Privacy Policy</NuxtLink>
+              <NuxtLink to="/privacy-policy" class="text-white">Privacy Policy</NuxtLink> 
             </li>
             <li class="md:mb-0 mb-3.5 md:w-1/2 text-sm text-center text-white font-normal">
               © 2024 All rights reserved
