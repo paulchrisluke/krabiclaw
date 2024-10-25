@@ -18,7 +18,7 @@
           <div class="text-center flex items-center flex-col">
             <img src="~/assets/images/location-icon.svg" alt="Location Icon" class="mb-2">
             <p class="text-sm text-white text-center font-normal max-w-[208px] w-full mx-auto">
-              6608 Telegraph Rd, Bloomfield Hills, MI 48301
+            915 E Maple Rd, Birmingham, MI 48009
             </p>
             <NuxtLink to="/bred-to-rise" class="text-white text-sm font-medium mt-2 hover:underline">Bred to Rise</NuxtLink>
           </div>
