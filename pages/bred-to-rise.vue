@@ -23,6 +23,9 @@
       </div>
 
       <div class="mx-auto prose lg:prose-xl px-4 sm:px-8 py-10 sm:py-20 max-w-7xl">
+        <div class="lg:hidden mb-8">
+          <img src="~/assets/images/initiative-min.png" alt="Initiative" class="w-full h-auto object-contain" />
+        </div>
         <h2 class="text-2xl sm:text-3xl lg:text-4xl mb-6">Community Uprising Initiative</h2>
         <div class="flex flex-col lg:flex-row items-start">
           <div class="flex-1 lg:pr-8 w-full lg:w-2/3">
@@ -39,7 +42,7 @@
               </button>
             </div>
           </div>
-          <div class="flex-shrink-0 mt-8 lg:mt-0 lg:ml-12 w-full lg:w-1/3">
+          <div class="flex-shrink-0 mt-8 lg:mt-0 lg:ml-12 w-full lg:w-1/3 hidden lg:block">
             <img src="~/assets/images/initiative-min.png" alt="Initiative" class="w-full h-auto object-contain" />
           </div>
         </div>
