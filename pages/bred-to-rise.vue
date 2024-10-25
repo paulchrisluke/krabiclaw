@@ -26,7 +26,7 @@
         <h2 class="text-2xl sm:text-3xl lg:text-4xl mb-6">Breaking Bread: Where Community and Change Meet</h2>
         <div class="flex flex-col lg:flex-row items-start">
           <div class="flex-1 lg:pr-8 w-full lg:w-2/3">
-            <p class="text-base sm:text-lg"> At <strong> Bred to Rise</strong>, we believe that true transformation begins with connection. Just like the act of breaking bread brings people together,
+            <p class="text-base sm:text-lg"> At <strong> Bred to Rise</strong>, we believe that true transformation begins with connection. Just like the act of <i>breaking bread</i> brings people together,
                our programs foster unity and mutual support. Whether you're sharing a meal, participating in a fitness class, or attending a wellness workshop, every interaction strengthens the fabric of our community. We aim to uplift individuals facing challenges such as mental health struggles, addiction recovery, or life after incarceration.</p>
             <p class="text-base sm:text-lg">Our community partners—including gyms, bakeries, schools, and wellness centers—play a vital role 
               in delivering our programs. Together, we build environments where people can rise stronger, one step at a time. 
