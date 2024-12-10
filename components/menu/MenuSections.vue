@@ -69,14 +69,27 @@ const props = defineProps({
 
 const showModal = ref(false);
 const modalContent = ref({});
+const { gtag } = useGtag();
 
 const openOffcanvas = (content) => {
   modalContent.value = content;
   showModal.value = true;
+
+    // Track modal open event
+    gtag('event', 'sando_modal', {
+    action: "expand",
+    menu_item_name: content.title,
+  });
 };
 
 const closeOffcanvas = () => {
   showModal.value = false;
+  
+  // Track modal close event
+  gtag('event', 'sando_modal', {
+    action: "dismiss",
+    menu_item_name: modalContent.value.title,
+  });
 };
 
 const sectionHovered = ref(null);

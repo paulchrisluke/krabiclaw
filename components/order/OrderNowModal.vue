@@ -7,6 +7,7 @@
       enter-to-class="opacity-100"
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
+      @before-enter="handleBeforeEnter"
     >
       <!-- Modal with full overlay -->
       <div v-if="show" class="fixed inset-0 bg-black/50 z-[99] flex items-center justify-center" @click.self="closeModal">
@@ -17,7 +18,7 @@
           <!-- Order options -->
           <ul class="space-y-4 text-center px-12">
             <li>
-                <a href="https://www.squareup.com" target="_blank" class="outline outline-2 block text-black py-4 px-6 rounded-lg">
+                <a href="https://www.squareup.com" target="_blank" class="outline outline-2 block text-black py-4 px-6 rounded-lg" @click="trackDeliveryClick('square')">
                     <div class="flex items-center justify-between w-full">
                         <div class="flex-1 flex items-center">
                            
@@ -32,7 +33,7 @@
                 </a>
             </li>
             <li>
-                <a href="https://www.doordash.com/store/31182261/?srsltid=AfmBOoozLVM9FeIjMVSPmxMLUnCbpdS-417_RUy4zNAoITZCdUMuFjit" target="_blank" class="outline outline-2 block text-black py-4 px-6 rounded-lg">
+                <a href="https://www.doordash.com/store/31182261/?srsltid=AfmBOoozLVM9FeIjMVSPmxMLUnCbpdS-417_RUy4zNAoITZCdUMuFjit" target="_blank" class="outline outline-2 block text-black py-4 px-6 rounded-lg" @click="trackDeliveryClick('doordash')">
                     <div class="flex items-center justify-between w-full">
                         <div class="flex-1 flex items-center">
                            
@@ -47,7 +48,7 @@
                 </a>
             </li>
             <li>
-                <a href="https://www.grubhub.com/restaurant/sand-o-6608-telegraph-rd-bloomfield-hills/9131288" target="_blank" class="outline outline-2 block text-black py-4 px-6 rounded-lg">
+                <a href="https://www.grubhub.com/restaurant/sand-o-6608-telegraph-rd-bloomfield-hills/9131288" target="_blank" class="outline outline-2 block text-black py-4 px-6 rounded-lg" @click="trackDeliveryClick('grubhub')">
                     <div class="flex items-center justify-between w-full">
                         <div class="flex-1 flex items-center">
                            
@@ -62,7 +63,7 @@
                 </a>
             </li>
             <li>
-                <a href="https://www.ubereats.com" target="_blank" class="outline outline-2 block text-black py-4 px-6 rounded-lg">
+                <a href="https://www.ubereats.com" target="_blank" class="outline outline-2 block text-black py-4 px-6 rounded-lg" @click="trackDeliveryClick('ubereats')">
                     <div class="flex items-center justify-between w-full">
                         <div class="flex-1 flex items-center">
                            
@@ -101,10 +102,20 @@
   });
   
   const emit = defineEmits(['close']);
+  const { gtag } = useGtag();
   
   // Function to close the modal
   function closeModal() {
+    gtag('event', 'sando_order_now', {
+        action: "dismiss",
+      });
     emit('close');
+  }
+
+  function handleBeforeEnter() {
+    gtag('event', 'sando_order_now', {
+        action: "expand",
+      });
   }
   
   // Event listener for Escape key to close modal
@@ -123,6 +134,13 @@
   onUnmounted(() => {
     window.removeEventListener('keydown', handleKeydown);
   });
+
+  function trackDeliveryClick(platform) {
+    gtag('event', 'sando_order_now_exit', {
+      action: "click",
+      platform: platform
+    });
+  }
   </script>
   
   <style scoped>

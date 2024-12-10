@@ -53,6 +53,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close']);
+const { gtag } = useGtag();
 
 // Add event listener for 'keydown' event
 onMounted(() => {
@@ -67,6 +68,11 @@ onUnmounted(() => {
 // Function to handle keydown event
 const handleKeyDown = (event) => {
   if (event.key === 'Escape' && props.show) {
+    gtag('event', 'sando_modal', {
+      action: "dismiss",
+      menu_item_name: props.content.title,
+      dismiss_method: "escape_key"
+    });
     emit('close');
   }
 };

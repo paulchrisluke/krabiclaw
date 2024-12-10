@@ -2,7 +2,6 @@
 export default defineNuxtConfig({
   modules: ['nuxt-gtag'],
   gtag: {
-    enabled: process.env.NODE_ENV === 'production',
     id: 'G-Z18L1Y4G7K'
   },
   app: {

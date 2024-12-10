@@ -12,6 +12,7 @@
 <script setup>
 import { ref } from 'vue';
 const menuOpen = ref(false);
+const { gtag } = useGtag();
 
 const toggleMenu = () => {
   menuOpen.value = !menuOpen.value;
