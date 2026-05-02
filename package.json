@@ -10,13 +10,13 @@
     "postinstall": "nuxt prepare"
   },
   "devDependencies": {
-    "@tailwindcss/typography": "^0.5.15",
-    "autoprefixer": "^10.4.20",
-    "nuxt": "^3.13.2",
-    "nuxt-gtag": "3.0.2",
-    "postcss": "^8.4.47",
-    "tailwindcss": "^3.4.14",
-    "vue": "latest",
-    "vue-router": "latest"
+    "@tailwindcss/typography": "^0.5.19",
+    "autoprefixer": "^10.5.0",
+    "nuxt": "^4.4.2",
+    "nuxt-gtag": "^4.1.0",
+    "postcss": "^8.5.13",
+    "tailwindcss": "^3.4.19",
+    "vue": "^3.5.33",
+    "vue-router": "^5.0.6"
   }
 }
