@@ -18,5 +18,11 @@
     "tailwindcss": "^3.4.19",
     "vue": "^3.5.33",
     "vue-router": "^5.0.6"
+  },
+  "dependencies": {
+    "@nuxtjs/i18n": "^10.3.0",
+    "@nuxtjs/robots": "^6.0.8",
+    "@nuxtjs/sitemap": "^8.0.15",
+    "nuxt-schema-org": "^6.0.4"
   }
 }
