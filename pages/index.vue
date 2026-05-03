@@ -173,70 +173,12 @@ definePageMeta({
 })
 
 const { data: googleBusiness } = await useFetch('/api/google-business/public', {
+  key: 'google-business-public',
   default: () => ({
     business: null,
-    reviews: [
-      {
-        name: 'accounts/123456789/locations/987654321/reviews/1',
-        reviewId: '1',
-        reviewer: {
-          displayName: 'Sarah Johnson'
-        },
-        starRating: 'FIVE',
-        comment: 'Absolutely incredible robatayaki experience! The grilled salmon was perfection, and the atmosphere was intimate and authentic. The chef\'s skill is evident in every dish.',
-        createTime: '2024-03-15T19:30:00Z',
-        updateTime: '2024-03-15T19:30:00Z'
-      },
-      {
-        name: 'accounts/123456789/locations/987654321/reviews/2',
-        reviewId: '2',
-        reviewer: {
-          displayName: 'Michael Chen'
-        },
-        starRating: 'FOUR',
-        comment: 'Great Japanese restaurant in Krabi! Fresh ingredients and traditional preparation. The yakitori was excellent, though service was a bit slow during peak hours.',
-        createTime: '2024-03-10T20:15:00Z',
-        updateTime: '2024-03-10T20:15:00Z'
-      },
-      {
-        name: 'accounts/123456789/locations/987654321/reviews/3',
-        reviewId: '3',
-        reviewer: {
-          displayName: 'Emma Thompson'
-        },
-        starRating: 'FIVE',
-        comment: 'Hidden gem in Krabi! The robatayaki is authentic and the quality is outstanding. Perfect for a special dinner. Will definitely return!',
-        createTime: '2024-03-08T18:45:00Z',
-        updateTime: '2024-03-08T18:45:00Z'
-      }
-    ],
+    reviews: [],
     media: [],
-    posts: [
-      {
-        name: 'mock-post-1',
-        title: 'New Seasonal Menu: Autumn Flavors',
-        summary: 'Experience the essence of autumn with our newly launched seasonal dishes. From grilled mushrooms to slow-cooked wagyu, discover the rich flavors of the harvest season.',
-        createTime: '2024-03-15T10:00:00Z',
-        media: [{ googleUrl: '/images/menu/steak.png' }]
-      },
-      {
-        name: 'mock-post-2',
-        title: 'Songkran Festival Celebration',
-        summary: 'Join us for a special robatayaki feast during the Songkran holidays! We will be serving traditional favorites with a modern Japanese twist.',
-        createTime: '2024-03-10T14:30:00Z',
-        media: [{ googleUrl: '/images/menu/chicken.png' }],
-        event: { title: 'Songkran Special' }
-      },
-      {
-        name: 'mock-post-3',
-        title: 'Now Open for Lunch!',
-        summary: 'By popular demand, KIKUZUKI is now open for lunch service starting this weekend. Join us for premium bento boxes and light robatayaki sets.',
-        createTime: '2024-03-05T09:15:00Z',
-        media: [{ googleUrl: '/images/menu/egg-salad.png' }]
-      }
-    ],
-    products: [],
-    qa: [],
+    posts: [],
     errors: [],
     syncedAt: null
   })

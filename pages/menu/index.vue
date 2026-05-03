@@ -73,13 +73,12 @@ import MenuItemCard from '~/components/menu/MenuItemCard.vue'
 const activeCategory = ref(menuData.categories[0]?.id ?? '')
 
 const { data: googleBusiness } = await useFetch('/api/google-business/public', {
+  key: 'google-business-public',
   default: () => ({
     business: null,
     reviews: [],
     media: [],
     posts: [],
-    products: [],
-    qa: [],
     errors: [],
     syncedAt: null
   })
