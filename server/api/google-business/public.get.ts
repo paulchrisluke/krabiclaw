@@ -5,8 +5,6 @@ const emptySnapshot = {
   reviews: [],
   media: [],
   posts: [],
-  products: [],
-  qa: [],
   errors: [],
   syncedAt: null
 }
@@ -25,20 +23,6 @@ export default defineEventHandler(async (event) => {
 
   const env = cloudflareEnv(event)
   const db = env.REVIEWS_DB
-  
-  // Local development cache fallback
-  if (!db && process.env.NODE_ENV === 'development') {
-    try {
-      const fs = await import('node:fs')
-      const path = await import('node:path')
-      const cachePath = path.join(process.cwd(), 'public', 'google-business-cache.json')
-      if (fs.existsSync(cachePath)) {
-        return JSON.parse(fs.readFileSync(cachePath, 'utf8'))
-      }
-    } catch (e) {
-      console.warn('Failed to read local cache:', e)
-    }
-  }
 
   if (!db) {
     return jsonResponse({
@@ -52,8 +36,6 @@ export default defineEventHandler(async (event) => {
             reviews_json AS reviewsJson,
             media_json AS mediaJson,
             posts_json AS postsJson,
-            products_json AS productsJson,
-            qa_json AS qaJson,
             errors_json AS errorsJson,
             synced_at AS syncedAt
      FROM google_business_snapshots
@@ -73,8 +55,6 @@ export default defineEventHandler(async (event) => {
       reviews: parseJson(row.reviewsJson) ?? [],
       media: parseJson(row.mediaJson) ?? [],
       posts: parseJson(row.postsJson) ?? [],
-      products: parseJson(row.productsJson) ?? [],
-      qa: parseJson(row.qaJson) ?? [],
       errors: parseJson(row.errorsJson) ?? [],
       syncedAt: row.syncedAt
     }

@@ -16,8 +16,6 @@ export interface GoogleBusinessSyncResult {
   reviews: unknown[]
   media: unknown[]
   posts: unknown[]
-  products: unknown[]
-  qa: unknown[]
   errors: Array<{ source: string; message: string }>
 }
 
@@ -71,30 +69,7 @@ export const getGoogleRefreshToken = async (env: GoogleBusinessEnv) => {
 }
 
 export const saveGoogleRefreshToken = async (env: GoogleBusinessEnv, refreshToken: string, scope = '') => {
-  if (!refreshToken) return
-  
-  // Auto-update .env in local development
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      const fs = await import('node:fs')
-      const path = await import('node:path')
-      const envPath = path.join(process.cwd(), '.env')
-      let envContent = fs.readFileSync(envPath, 'utf8')
-      
-      if (envContent.includes('GOOGLE_REFRESH_TOKEN=')) {
-        envContent = envContent.replace(/GOOGLE_REFRESH_TOKEN=.*/, `GOOGLE_REFRESH_TOKEN=${refreshToken}`)
-        fs.writeFileSync(envPath, envContent)
-      } else {
-        fs.appendFileSync(envPath, `\nGOOGLE_REFRESH_TOKEN=${refreshToken}\n`)
-      }
-      console.log('✅ Successfully updated .env with new GOOGLE_REFRESH_TOKEN')
-    } catch (e) {
-      console.warn('Failed to auto-update .env:', e)
-    }
-  }
-
-  if (!env.REVIEWS_DB) return
-
+  if (!refreshToken || !env.REVIEWS_DB) return
   await env.REVIEWS_DB.prepare(
     `INSERT INTO google_oauth_tokens (provider, refresh_token, scope)
      VALUES ('google', ?, ?)
@@ -138,18 +113,15 @@ export const getGoogleAccessToken = async (env: GoogleBusinessEnv) => {
 
 export const syncGoogleBusiness = async (env: GoogleBusinessEnv): Promise<GoogleBusinessSyncResult> => {
   const accessToken = await getGoogleAccessToken(env)
-  const accountId = env.GOOGLE_BUSINESS_ACCOUNT_ID?.trim()
   const locName = locationName(env)
   const errors: GoogleBusinessSyncResult['errors'] = []
   let business: unknown = null
   let reviews: unknown[] = []
   let media: unknown[] = []
   let posts: unknown[] = []
-  let products: unknown[] = []
-  let qa: unknown[] = []
 
-  if (!accountId || !locName) {
-    throw new Error('Missing GOOGLE_BUSINESS_ACCOUNT_ID or GOOGLE_BUSINESS_LOCATION_ID.')
+  if (!locName) {
+    throw new Error('Missing GOOGLE_BUSINESS_LOCATION_ID.')
   }
 
   const readMask = [
@@ -179,26 +151,18 @@ export const syncGoogleBusiness = async (env: GoogleBusinessEnv): Promise<Google
   }
 
   try {
-    const response = await googleJson<{ reviews?: unknown[]; averageRating?: number; totalReviewCount?: number }>(
-      `https://mybusiness.googleapis.com/v4/accounts/${accountId}/${locName}/reviews?pageSize=50`,
+    const response = await googleJson<{ reviews?: unknown[] }>(
+      `https://mybusinessreviews.googleapis.com/v1/${locName}/reviews?pageSize=50`,
       accessToken
     )
     reviews = response.reviews ?? []
-    
-    // Inject aggregate data into business object if it exists
-    if (business && typeof business === 'object') {
-      (business as any).reviewSummary = {
-        averageRating: response.averageRating,
-        totalReviewCount: response.totalReviewCount
-      }
-    }
   } catch (error) {
     errors.push({ source: 'reviews', message: error instanceof Error ? error.message : String(error) })
   }
 
   try {
     const response = await googleJson<{ mediaItems?: unknown[] }>(
-      `https://mybusiness.googleapis.com/v4/accounts/${accountId}/${locName}/media?pageSize=50`,
+      `https://mybusinessmedia.googleapis.com/v1/${locName}/media?pageSize=50`,
       accessToken
     )
     media = response.mediaItems ?? []
@@ -208,7 +172,7 @@ export const syncGoogleBusiness = async (env: GoogleBusinessEnv): Promise<Google
 
   try {
     const response = await googleJson<{ localPosts?: unknown[] }>(
-      `https://mybusiness.googleapis.com/v4/accounts/${accountId}/${locName}/localPosts?pageSize=20`,
+      `https://mybusinessposts.googleapis.com/v1/${locName}/localPosts?pageSize=20`,
       accessToken
     )
     posts = response.localPosts ?? []
@@ -216,106 +180,30 @@ export const syncGoogleBusiness = async (env: GoogleBusinessEnv): Promise<Google
     errors.push({ source: 'posts', message: error instanceof Error ? error.message : String(error) })
   }
 
-  try {
-    const response = await googleJson<{ products?: unknown[] }>(
-      `https://mybusiness.googleapis.com/v4/accounts/${accountId}/${locName}/products?pageSize=50`,
-      accessToken
-    )
-    products = response.products ?? []
-  } catch (error) {
-    errors.push({ source: 'products', message: error instanceof Error ? error.message : String(error) })
-  }
-
-  try {
-    const response = await googleJson<{ questions?: unknown[] }>(
-      `https://mybusiness.googleapis.com/v4/accounts/${accountId}/${locName}/questions?pageSize=50`,
-      accessToken
-    )
-    qa = response.questions ?? []
-  } catch (error) {
-    errors.push({ source: 'qa', message: error instanceof Error ? error.message : String(error) })
-  }
-
   const syncedAt = new Date().toISOString()
-  const result = { business, reviews, media, posts, products, qa, errors, syncedAt }
-
-  // Auto-update local cache in development
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      const fs = await import('node:fs')
-      const path = await import('node:path')
-      const cachePath = path.join(process.cwd(), 'public', 'google-business-cache.json')
-      fs.writeFileSync(cachePath, JSON.stringify(result, null, 2))
-      console.log('✅ Successfully updated local Google Business cache')
-    } catch (e) {
-      console.warn('Failed to update local cache:', e)
-    }
+  
+  if (env.REVIEWS_DB) {
+    await env.REVIEWS_DB.prepare(
+      `INSERT INTO google_business_snapshots (id, business_json, reviews_json, media_json, posts_json, errors_json, synced_at)
+       VALUES ('current', ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         business_json = excluded.business_json,
+         reviews_json = excluded.reviews_json,
+         media_json = excluded.media_json,
+         posts_json = excluded.posts_json,
+         errors_json = excluded.errors_json,
+         synced_at = excluded.synced_at`
+    ).bind(
+      JSON.stringify(business),
+      JSON.stringify(reviews),
+      JSON.stringify(media),
+      JSON.stringify(posts),
+      JSON.stringify(errors),
+      syncedAt
+    ).run()
   }
 
-  if (!env.REVIEWS_DB) {
-    return result
-  }
-  await env.REVIEWS_DB.prepare(
-    `INSERT INTO google_business_snapshots (id, business_json, reviews_json, media_json, posts_json, products_json, qa_json, errors_json, synced_at)
-     VALUES ('current', ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       business_json = excluded.business_json,
-       reviews_json = excluded.reviews_json,
-       media_json = excluded.media_json,
-       posts_json = excluded.posts_json,
-       products_json = excluded.products_json,
-       qa_json = excluded.qa_json,
-       errors_json = excluded.errors_json,
-       synced_at = excluded.synced_at`
-  ).bind(
-    JSON.stringify(business),
-    JSON.stringify(reviews),
-    JSON.stringify(media),
-    JSON.stringify(posts),
-    JSON.stringify(products),
-    JSON.stringify(qa),
-    JSON.stringify(errors),
-    syncedAt
-  ).run()
-
-  return { syncedAt, business, reviews, media, posts, products, qa, errors }
-}
-
-export const getGoogleBusinessSnapshot = async (env: GoogleBusinessEnv) => {
-  const row = await env.REVIEWS_DB.prepare(
-    `SELECT business_json AS businessJson,
-            reviews_json AS reviewsJson,
-            media_json AS mediaJson,
-            posts_json AS postsJson,
-            products_json AS productsJson,
-            qa_json AS qaJson,
-            errors_json AS errorsJson,
-            synced_at AS syncedAt
-     FROM google_business_snapshots
-     WHERE id = 'current'`
-  ).first<{
-    businessJson: string | null
-    reviewsJson: string | null
-    mediaJson: string | null
-    postsJson: string | null
-    productsJson: string | null
-    qaJson: string | null
-    errorsJson: string | null
-    syncedAt: string
-  }>()
-
-  if (!row) return null
-
-  return {
-    business: row.businessJson ? JSON.parse(row.businessJson) : null,
-    reviews: row.reviewsJson ? JSON.parse(row.reviewsJson) : [],
-    media: row.mediaJson ? JSON.parse(row.mediaJson) : [],
-    posts: row.postsJson ? JSON.parse(row.postsJson) : [],
-    products: row.productsJson ? JSON.parse(row.productsJson) : [],
-    qa: row.qaJson ? JSON.parse(row.qaJson) : [],
-    errors: row.errorsJson ? JSON.parse(row.errorsJson) : [],
-    syncedAt: row.syncedAt
-  }
+  return { syncedAt, business, reviews, media, posts, errors }
 }
 
 export const updateNotificationSetting = async (env: GoogleBusinessEnv) => {
