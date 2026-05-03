@@ -1,62 +1,118 @@
 <template>
-    <article>
-      <div class="bg-black text-white w-full py-10 sm:py-20 px-4 sm:px-8">
-        <div class="mx-auto prose lg:prose-xl max-w-7xl">
-          <div class="flex flex-col lg:flex-row items-start">
-            <div class="flex-1 lg:pr-8 w-full lg:w-2/3">
-              <h1 class="text-white text-3xl sm:text-4xl lg:text-5xl mb-6">Bred to Rise</h1>
+  <div class="min-h-screen bg-white">
+    <!-- Hero Section -->
+    <div class="bg-black text-white py-16 px-4">
+      <div class="max-w-6xl mx-auto text-center">
+        <h1 class="text-4xl md:text-6xl font-bold mb-4">About KIKUZUKI</h1>
+        <p class="text-lg md:text-xl opacity-90">Authentic Japanese Robatayaki Experience in Krabi</p>
+      </div>
+    </div>
 
-              <p class="text-white text-base sm:text-lg"> <strong class="text-white"> Bred to Rise</strong> is a non-profit intiative rooted in Sand-O's mission to uplift communities 
-                  through mental wellness, nutrition, and personal development. In 2024, we will reward 
-                  resilience—supporting those overcoming mental health challenges, pursuing fitness goals, 
-                  and rebuilding their lives.
-              </p>
-              <p class="text-white text-base sm:text-lg">  Our goal is to create meaningful moments of progress by providing tools, meals, and support that 
-                  help individuals rise to their full potential. Just like bread, people rise best with the right care and attention.
-              </p>
+    <!-- Brand Story Section -->
+    <div class="max-w-6xl mx-auto px-4 py-12">
+      <div class="mb-16">
+        <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Our Story</h2>
+        <div class="prose prose-lg max-w-none">
+          <p class="text-gray-700 mb-4">
+            <strong>PLACEHOLDER_BRAND_STORY_TEXT</strong> - This section will contain the authentic story of KIKUZUKI, our journey in bringing traditional Japanese robatayaki to Krabi, and our commitment to preserving the art of Japanese grilling culture in Southern Thailand.
+          </p>
+          <p class="text-gray-700">
+            PLACEHOLDER_BRAND_MISSION_TEXT - Our mission is to create an authentic Japanese dining experience that honors tradition while embracing the vibrant culture of Krabi. Every dish tells a story of craftsmanship, quality ingredients, and the art of robatayaki grilling.
+          </p>
+        </div>
+      </div>
+
+      <!-- Japan Authenticity Section -->
+      <div class="mb-16">
+        <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Japanese Authenticity</h2>
+        <div class="grid md:grid-cols-2 gap-8">
+          <div>
+            <div class="bg-gray-200 rounded-lg h-48 flex items-center justify-center mb-4">
+              <span class="text-gray-500">PLACEHOLDER_JAPAN_IMAGE</span>
             </div>
-            <div class="flex-shrink-0 mt-8 lg:mt-0 lg:ml-12 w-full lg:w-1/3">
-              <img src="~/assets/images/bread-min.png" alt="Bread" class="w-full h-auto object-contain" />
-            </div>
+          </div>
+          <div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-3">Traditional Robatayaki</h3>
+            <p class="text-gray-700 mb-4">
+              <strong>PLACEHOLDER_ROBATAYAKI_DESCRIPTION</strong> - Robatayaki is a traditional Japanese style of cooking where food is grilled over charcoal. At KIKUZUKI, we bring this authentic experience to Krabi using traditional techniques and the finest ingredients.
+            </p>
+            <p class="text-gray-700">
+              PLACEHOLDER_AUTHENTICITY_TEXT - Our commitment to authenticity means using traditional grilling methods, imported Japanese ingredients, and time-honored recipes passed down through generations.
+            </p>
           </div>
         </div>
       </div>
 
-      <div class="mx-auto prose lg:prose-xl px-4 sm:px-8 py-10 sm:py-20 max-w-7xl">
-        <h2 class="text-2xl sm:text-3xl lg:text-4xl mb-6">Breaking Bread: Where Community and Change Meet</h2>
-        <div class="flex flex-col lg:flex-row items-start">
-          <div class="flex-1 lg:pr-8 w-full lg:w-2/3">
-            <p class="text-base sm:text-lg"> We believe that true transformation begins with connection. Just like the act of <i>breaking bread</i> brings people together,
-               our programs foster unity and mutual support. Whether you're sharing a meal, participating in a fitness class, or attending a wellness workshop, every interaction strengthens the fabric of our community. At Sand-o we partner with Bred to Rise, and aim to uplift individuals facing challenges such as mental health struggles, addiction recovery, or life after incarceration.</p>
-            <p class="text-base sm:text-lg">Our community partners— including gyms, bakeries, schools, and wellness centers—play a vital role 
-              in delivering our programs. Together, we build environments where people can rise stronger, one step at a time. 
-              To connect with a Bred to Rise program or explore ways to support our efforts, please click below.</p> 
-            <div class="mt-8 mb-8 lg:mb-0">
-              <button class="bg-black text-white px-6 sm:px-8 py-3 sm:py-4 rounded-full text-base sm:text-lg font-bold hover:bg-gray-800 transition duration-300">
-                Inquire
-              </button>
+      <!-- Chef Section -->
+      <div class="mb-16">
+        <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Our Chef</h2>
+        <div class="grid md:grid-cols-2 gap-8">
+          <div>
+            <div class="bg-gray-200 rounded-lg h-64 flex items-center justify-center mb-4">
+              <span class="text-gray-500">PLACEHOLDER_CHEF_PHOTO</span>
             </div>
           </div>
-          <div class="flex-shrink-0 mt-8 lg:mt-0 lg:ml-12 w-full lg:w-1/3">
-            <img src="~/assets/images/initiative-min.png" alt="Initiative" class="w-full h-auto object-contain" />
+          <div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-3">PLACEHOLDER_CHEF_NAME</h3>
+            <p class="text-gray-700 mb-4">
+              <strong>PLACEHOLDER_CHEF_BIO</strong> - Our head chef brings years of experience in Japanese cuisine, having trained in Tokyo's finest robatayaki establishments before bringing this authentic experience to Thailand.
+            </p>
+            <p class="text-gray-700">
+              PLACEHOLDER_CHEF_PHILOSOPHY - With a deep respect for tradition and a passion for innovation, our chef creates dishes that honor Japanese culinary heritage while celebrating local Thai ingredients.
+            </p>
           </div>
         </div>
       </div>
-    </article>
+
+      <!-- Values Section -->
+      <div class="mb-16">
+        <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Our Values</h2>
+        <div class="grid md:grid-cols-3 gap-8">
+          <div class="text-center">
+            <div class="bg-gray-200 rounded-lg h-32 w-32 mx-auto mb-4 flex items-center justify-center">
+              <span class="text-gray-500">ICON</span>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Authenticity</h3>
+            <p class="text-gray-700">PLACEHOLDER_AUTHENTICITY_VALUE</p>
+          </div>
+          <div class="text-center">
+            <div class="bg-gray-200 rounded-lg h-32 w-32 mx-auto mb-4 flex items-center justify-center">
+              <span class="text-gray-500">ICON</span>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Quality</h3>
+            <p class="text-gray-700">PLACEHOLDER_QUALITY_VALUE</p>
+          </div>
+          <div class="text-center">
+            <div class="bg-gray-200 rounded-lg h-32 w-32 mx-auto mb-4 flex items-center justify-center">
+              <span class="text-gray-500">ICON</span>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Community</h3>
+            <p class="text-gray-700">PLACEHOLDER_COMMUNITY_VALUE</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
 useSeoMeta({
-  title: 'Bred to Rise - Community Initiative | Take Me Away by KIKUZUKI',
-  description: 'Bred to Rise is a non-profit initiative supporting mental wellness, nutrition, and personal development in Thailand. Learn about our community programs and how we help individuals rise to their full potential.',
-  ogTitle: 'Bred to Rise - Community Initiative | Take Me Away by KIKUZUKI',
-  ogDescription: 'Supporting communities through mental wellness, nutrition, and personal development programs in southern Thailand.',
+  title: 'About | Take Me Away by KIKUZUKI | Japanese Robatayaki Krabi',
+  description: 'Learn about KIKUZUKI, our authentic Japanese robatayaki restaurant in Krabi, Thailand. Discover our story, Japanese culinary traditions, and commitment to authentic dining experiences.',
+  ogTitle: 'About | Take Me Away by KIKUZUKI',
+  ogDescription: 'Authentic Japanese robatayaki restaurant in Krabi, Thailand. Learn our story and culinary philosophy.',
   ogImage: '/og-image.jpg',
   ogUrl: 'https://www.kikuzuki-thailand.com/about',
   ogType: 'website',
   twitterCard: 'summary_large_image',
-  twitterTitle: 'Bred to Rise - Community Initiative',
-  twitterDescription: 'Non-profit initiative supporting mental wellness and personal development in Thailand.',
+  twitterTitle: 'About - Take Me Away by KIKUZUKI',
+  twitterDescription: 'Japanese robatayaki restaurant in Krabi, Thailand with authentic culinary traditions.',
   twitterImage: '/og-image.jpg'
 })
+
+useSchemaOrg([{
+  '@type': 'Restaurant',
+  name: 'Take Me Away by KIKUZUKI',
+  description: 'Authentic Japanese robatayaki izakaya in Krabi, Thailand offering traditional Japanese grilling experiences with a focus on quality ingredients and culinary craftsmanship.'
+}])
 </script>

@@ -6,6 +6,9 @@ export interface MenuItem {
   priceCurrency: string
   image: string
   available: boolean
+  slug: string
+  allergens: string[]
+  featured: boolean
 }
 
 export interface MenuSection {
@@ -33,7 +36,10 @@ export const menuData: MenuData = {
           price: 0,
           priceCurrency: 'THB',
           image: '/images/menu/PLACEHOLDER_APPETIZER_1.png',
-          available: true
+          available: true,
+          slug: 'placeholder-appetizer-1',
+          allergens: ['PLACEHOLDER_ALLERGEN'],
+          featured: false
         },
         {
           id: 'app-2',
@@ -42,7 +48,10 @@ export const menuData: MenuData = {
           price: 0,
           priceCurrency: 'THB',
           image: '/images/menu/PLACEHOLDER_APPETIZER_2.png',
-          available: true
+          available: true,
+          slug: 'placeholder-appetizer-2',
+          allergens: ['PLACEHOLDER_ALLERGEN'],
+          featured: false
         },
         {
           id: 'app-3',
@@ -51,7 +60,10 @@ export const menuData: MenuData = {
           price: 0,
           priceCurrency: 'THB',
           image: '/images/menu/PLACEHOLDER_APPETIZER_3.png',
-          available: true
+          available: true,
+          slug: 'placeholder-appetizer-3',
+          allergens: ['PLACEHOLDER_ALLERGEN'],
+          featured: false
         }
       ]
     },
@@ -67,7 +79,10 @@ export const menuData: MenuData = {
           price: 0,
           priceCurrency: 'THB',
           image: '/images/menu/PLACEHOLDER_ROBATAYAKI_1.png',
-          available: true
+          available: true,
+          slug: 'placeholder-robatayaki-1',
+          allergens: ['PLACEHOLDER_ALLERGEN'],
+          featured: false
         },
         {
           id: 'rob-2',
@@ -76,7 +91,10 @@ export const menuData: MenuData = {
           price: 0,
           priceCurrency: 'THB',
           image: '/images/menu/PLACEHOLDER_ROBATAYAKI_2.png',
-          available: true
+          available: true,
+          slug: 'placeholder-robatayaki-2',
+          allergens: ['PLACEHOLDER_ALLERGEN'],
+          featured: false
         },
         {
           id: 'rob-3',
@@ -85,7 +103,10 @@ export const menuData: MenuData = {
           price: 0,
           priceCurrency: 'THB',
           image: '/images/menu/PLACEHOLDER_ROBATAYAKI_3.png',
-          available: true
+          available: true,
+          slug: 'placeholder-robatayaki-3',
+          allergens: ['PLACEHOLDER_ALLERGEN'],
+          featured: false
         }
       ]
     },
@@ -101,7 +122,10 @@ export const menuData: MenuData = {
           price: 0,
           priceCurrency: 'THB',
           image: '/images/menu/PLACEHOLDER_DRINK_1.png',
-          available: true
+          available: true,
+          slug: 'placeholder-drink-1',
+          allergens: ['PLACEHOLDER_ALLERGEN'],
+          featured: false
         },
         {
           id: 'drink-2',
@@ -110,7 +134,10 @@ export const menuData: MenuData = {
           price: 0,
           priceCurrency: 'THB',
           image: '/images/menu/PLACEHOLDER_DRINK_2.png',
-          available: true
+          available: true,
+          slug: 'placeholder-drink-2',
+          allergens: ['PLACEHOLDER_ALLERGEN'],
+          featured: false
         },
         {
           id: 'drink-3',
@@ -119,7 +146,10 @@ export const menuData: MenuData = {
           price: 0,
           priceCurrency: 'THB',
           image: '/images/menu/PLACEHOLDER_DRINK_3.png',
-          available: true
+          available: true,
+          slug: 'placeholder-drink-3',
+          allergens: ['PLACEHOLDER_ALLERGEN'],
+          featured: false
         }
       ]
     }

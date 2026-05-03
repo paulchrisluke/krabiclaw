@@ -19,10 +19,11 @@
 
         <!-- Menu Items -->
         <div class="space-y-6">
-          <div 
+          <NuxtLink 
             v-for="item in category.items" 
             :key="item.id"
-            class="flex items-center justify-between p-6 border-b border-gray-200 hover:bg-gray-50 transition-colors"
+            :to="`/menu/${item.slug}`"
+            class="flex items-center justify-between p-6 border-b border-gray-200 hover:bg-gray-50 transition-colors block"
           >
             <div class="flex-1">
               <div class="flex items-center gap-4">
@@ -46,7 +47,7 @@
                 Not Available
               </div>
             </div>
-          </div>
+          </NuxtLink>
         </div>
       </div>
     </div>
@@ -94,6 +95,13 @@ useSchemaOrg([
         }))
       }))
     }
+  },
+  {
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.kikuzuki-thailand.com' },
+      { '@type': 'ListItem', position: 2, name: 'Menu', item: 'https://www.kikuzuki-thailand.com/menu' }
+    ]
   }
 ])
 
