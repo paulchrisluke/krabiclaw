@@ -1,61 +1,61 @@
 <template>
   <div class="min-h-screen bg-white">
-    <!-- Hero Section -->
-    <div class="bg-black text-white py-16 px-4">
-      <div class="max-w-6xl mx-auto text-center">
-        <h1 class="text-4xl md:text-6xl font-bold mb-4">Menu</h1>
-        <p class="text-lg md:text-xl opacity-90">Authentic Japanese Robatayaki Izakaya</p>
-      </div>
-    </div>
+    <AppHero
+      title="Our Menu"
+      subtitle="Authentic Japanese Robatayaki Izakaya"
+    />
 
-    <!-- Menu Categories -->
-    <div class="max-w-6xl mx-auto px-4 py-12">
-      <div v-for="category in menuData.categories" :key="category.id" class="mb-16">
-        <!-- Category Header -->
-        <div class="bg-black text-white p-6 mb-8">
-          <h2 class="text-2xl md:text-3xl font-bold">{{ category.name }}</h2>
-          <p v-if="category.description" class="mt-2 opacity-90">{{ category.description }}</p>
-        </div>
-
-        <!-- Menu Items -->
-        <div class="space-y-6">
-          <NuxtLink 
-            v-for="item in category.items" 
-            :key="item.id"
-            :to="`/menu/${item.slug}`"
-            class="flex items-center justify-between p-6 border-b border-gray-200 hover:bg-gray-50 transition-colors block"
-          >
-            <div class="flex-1">
-              <div class="flex items-center gap-4">
-                <div v-if="item.image && item.image !== '/images/menu/PLACEHOLDER_IMAGE.png'" class="w-20 h-20 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                  <img :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
-                </div>
-                <div v-else class="w-20 h-20 bg-gray-200 rounded-lg flex-shrink-0 flex items-center justify-center">
-                  <span class="text-gray-400 text-xs text-center">No Image</span>
-                </div>
-                <div class="flex-1">
-                  <h3 class="text-xl font-semibold text-gray-900">{{ item.name }}</h3>
-                  <p class="text-gray-600 mt-1">{{ item.description }}</p>
-                </div>
-              </div>
-            </div>
-            <div class="text-right ml-6">
-              <div v-if="item.available" class="text-2xl font-bold text-gray-900">
-                ฿{{ item.price }}
-              </div>
-              <div v-else class="text-lg text-red-500 font-medium">
-                Not Available
-              </div>
-            </div>
-          </NuxtLink>
-        </div>
+    <!-- Menu Introduction -->
+    <AppSection bg="gray" padding="py-12">
+      <div class="max-w-4xl mx-auto prose prose-lg">
+        <p class="text-gray-700 mb-4 leading-relaxed">
+          Indulge in the culinary artistry of our base Japanese menu, a symphony of flavors featuring your favourite Japanese Izakaya and Robatayaki Cusine.
+        </p>
+        <p class="text-gray-700 mb-4 leading-relaxed">
+          Our sushi and Sashimi selection showcases the freshest, highest-quality ingredients expertly crafted into delectable bites. From classic favorites like California rolls to innovative creations, each bite is a journey through the delicate balance of textures and tastes. Immerse yourself in the rich umami of our sashimi, featuring pristine slices of raw fish that melt in your mouth, a testament to the precision and dedication of our skilled sushi chefs.
+        </p>
+        <p class="text-gray-700 mb-4 leading-relaxed">
+          For noodle enthusiasts, our menu offers an array of soul-satisfying options. Slurp your way through steaming bowls of ramen, where hand-pulled noodles swim in flavorful broth, topped with an assortment of ingredients that dance harmoniously on your palate. Udon lovers will find comfort in our thick, chewy noodles served in hearty broths, with an array of toppings to customize your bowl to perfection.
+        </p>
+        <p class="text-gray-700 mb-4 leading-relaxed">
+          The robatayaki section of our menu introduces the ancient Japanese grilling technique, where skewers of succulent meats, seafood, and vegetables are meticulously grilled over an open flame. Revel in the smoky aroma and charred perfection of each skewer, as our chefs showcase their expertise in capturing the essence of flame-kissed flavors.
+        </p>
+        <p class="text-gray-700 leading-relaxed">
+          Complementing our menu is a curated selection of sauces and condiments, enhancing the authenticity of every dish. Whether you're a sushi connoisseur, noodle enthusiast, or robatayaki aficionado, our base Japanese menu is a celebration of culinary excellence, inviting you to embark on a gastronomic journey through the heart of Japan's diverse and exquisite culinary landscape.
+        </p>
       </div>
-    </div>
+    </AppSection>
+
+    <MenuCategoryNav
+      :categories="menuData.categories"
+      :active="activeCategory"
+      @select="activeCategory = $event"
+    />
+
+    <AppSection
+      v-for="category in menuData.categories"
+      :key="category.id"
+      :id="category.id"
+      bg="white"
+      padding="py-12"
+    >
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">{{ category.name }}</h2>
+      <p v-if="category.description && !category.description.includes('PLACEHOLDER')" class="text-gray-500 mb-8">{{ category.description }}</p>
+      <div class="divide-y divide-gray-100">
+        <MenuItemCard
+          v-for="item in category.items"
+          :key="item.id"
+          :item="item"
+        />
+      </div>
+    </AppSection>
   </div>
 </template>
 
 <script setup>
 import { menuData } from '~/data/menu'
+
+const activeCategory = ref(menuData.categories[0]?.id ?? '')
 
 // SEO Meta
 useSeoMeta({

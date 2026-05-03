@@ -1,43 +1,112 @@
 <template>
-  <div class="overflow-hidden">
-    <hero />
-    <MenuSections
-      :weekText="weekText"
-      :title="title"
-      :sections="menuSections"
-    />
-    <!-- View Full Menu CTA -->
-    <div class="bg-black text-white py-16 px-4 text-center">
-      <div class="max-w-4xl mx-auto">
-        <h2 class="text-3xl md:text-4xl font-bold mb-4">Discover Our Full Menu</h2>
-        <p class="text-lg mb-8 opacity-90">Explore our complete selection of authentic Japanese robatayaki dishes</p>
-        <NuxtLink 
-          to="/menu" 
-          class="inline-block bg-white text-black px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-200 transition-colors"
-        >
-          View Full Menu →
-        </NuxtLink>
+  <div>
+    <!-- Hero -->
+    <AppHero
+      title="Take Me Away by KIKUZUKI"
+      subtitle="Authentic Japanese Robatayaki Izakaya in Krabi, Thailand"
+      height="100vh"
+      video="/videos/hero-video.mp4"
+    >
+      <template #cta>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <AppButton to="/menu" variant="primary" size="lg">View Menu</AppButton>
+          <AppButton to="/reservations" variant="secondary" size="lg">Reserve a Table</AppButton>
+        </div>
+      </template>
+    </AppHero>
+
+    <!-- Featured dishes -->
+    <AppSection bg="white" padding="py-16">
+      <h2 class="text-3xl font-bold text-gray-900 mb-2">Featured Dishes</h2>
+      <p class="text-gray-500 mb-8">Signature robatayaki from our kitchen</p>
+      <div class="divide-y divide-gray-100">
+        <MenuItemCard
+          v-for="item in featuredItems"
+          :key="item.id"
+          :item="item"
+        />
       </div>
-    </div>
-    <buy-on-amazon />
+      <div class="mt-8">
+        <AppButton to="/menu" variant="secondary" size="md"
+          class="border-black text-black hover:bg-black hover:text-white">
+          View Full Menu →
+        </AppButton>
+      </div>
+    </AppSection>
+
+    <!-- About teaser -->
+    <AppSection bg="black" padding="py-16">
+      <div class="grid md:grid-cols-2 gap-12 items-center">
+        <div>
+          <h2 class="text-3xl font-bold text-white mb-4">The Art of Robatayaki</h2>
+          <p class="text-white/70 mb-6 leading-relaxed">
+            Robatayaki — meaning "fireside cooking" — is a centuries-old Japanese grilling tradition.
+            At KIKUZUKI, skilled chefs grill premium meats, fresh seafood, and seasonal vegetables
+            over an open charcoal flame, right before your eyes.
+          </p>
+          <AppButton to="/about" variant="secondary" size="md">Our Story</AppButton>
+        </div>
+        <div class="bg-white/10 rounded-lg h-64 flex items-center justify-center">
+          <span class="text-white/30 text-sm">PLACEHOLDER_ABOUT_IMAGE</span>
+        </div>
+      </div>
+    </AppSection>
+
+    <!-- Location teaser -->
+    <AppSection bg="gray" padding="py-16">
+      <div class="grid md:grid-cols-2 gap-12 items-center">
+        <div>
+          <h2 class="text-3xl font-bold text-gray-900 mb-4">Find Us in Krabi</h2>
+          <div class="space-y-3 text-gray-600 mb-6">
+            <p>📍 Krabi Province, Southern Thailand 81000</p>
+            <p>🕙 Daily: 10:00 – 22:00</p>
+            <p>📞 +66-76-XXX-XXXX</p>
+          </div>
+          <div class="flex gap-4">
+            <AppButton to="/location" variant="primary"
+              class="bg-black text-white hover:bg-black/90" size="md">
+              Get Directions
+            </AppButton>
+            <AppButton to="/reservations" variant="ghost"
+              class="text-black hover:text-black" size="md">
+              Reserve →
+            </AppButton>
+          </div>
+        </div>
+        <div class="rounded-lg h-64 overflow-hidden">
+          <iframe 
+            src="https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d3950.432413181305!2d98.7493211!3d8.0572977!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x305195cf958f130b%3A0xd8ce9d779ecb9325!2sTake%20Me%20Away%20by%20KIKUZUKI!5e0!3m2!1sen!2sth!4v1777770384431!5m2!1sen!2sth" 
+            width="100%" 
+            height="100%" 
+            style="border:0;" 
+            allowfullscreen="" 
+            loading="lazy" 
+            referrerpolicy="no-referrer-when-downgrade">
+          </iframe>
+        </div>
+      </div>
+    </AppSection>
   </div>
 </template>
 
 <script setup>
-import { filename } from 'pathe/utils'
-import MenuSections from '~/components/menu/MenuSections.vue'
-
-const glob = import.meta.glob('@/assets/images/menu/*.png', { eager: true })
-
-const images = Object.fromEntries(
-  Object.entries(glob).map(([key, value]) => [filename(key), value.default])
-)
+import { menuData } from '~/data/menu'
+import AppHero from '~/components/ui/AppHero.vue'
+import AppButton from '~/components/ui/AppButton.vue'
+import AppSection from '~/components/ui/AppSection.vue'
+import MenuItemCard from '~/components/menu/MenuItemCard.vue'
 
 definePageMeta({
   layout: 'home'
 })
 
-// SEO Meta for home page
+const featuredItems = computed(() =>
+  menuData.categories
+    .flatMap(c => c.items)
+    .filter(i => i.featured)
+    .slice(0, 4)
+)
+
 useSeoMeta({
   title: 'Take Me Away by KIKUZUKI | Japanese Robatayaki Izakaya in Krabi',
   description: 'Experience authentic Japanese robatayaki at Take Me Away by KIKUZUKI in Krabi, Thailand. Fresh ingredients, traditional flavors, and unforgettable dining experience in southern Thailand.',
@@ -52,69 +121,38 @@ useSeoMeta({
   twitterImage: '/og-image.jpg'
 })
 
-useSchemaOrg([
-  {
-    '@type': 'Restaurant',
-    name: 'Take Me Away by KIKUZUKI',
-    description: 'Authentic Japanese robatayaki izakaya in Krabi, Thailand offering fresh ingredients and traditional flavors',
-    url: 'https://www.kikuzuki-thailand.com',
-    telephone: '+66-76-XXX-XXXX',
-    email: 'info@kikuzuki-thailand.com',
-    address: {
-      '@type': 'PostalAddress',
-      streetAddress: 'Southern Thailand',
-      addressLocality: 'Krabi',
-      addressRegion: 'Krabi Province',
-      postalCode: '81000',
-      addressCountry: 'TH'
-    },
-    geo: {
-      '@type': 'GeoCoordinates',
-      latitude: 8.0572977,
-      longitude: 98.7493211
-    },
-    openingHoursSpecification: [{
-      '@type': 'OpeningHoursSpecification',
-      dayOfWeek: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
-      opens: '10:00',
-      closes: '22:00'
-    }],
-    priceRange: '$$',
-    servesCuisine: ['Japanese', 'Robatayaki', 'Izakaya'],
-    hasMap: 'https://maps.app.goo.gl/2KJfCAfH1idnRBqz6',
-    sameAs: [
-      'https://www.facebook.com/kikuzuki-thailand',
-      'https://www.instagram.com/kikuzuki-thailand'
-    ]
-  }
-])
-
-const weekText = "Week of Dec 09-15 (rotating sandos)"
-const title = "Featured Flavors"
-const menuSections = [
-  {
-    id: "Chicken",
-    title: "Chicken Katsu",
-    description: "The Chicken Katsu Sand-O is a tasty chicken sandwich featuring a crispy or grilled chicken fillet on a soft bun, topped with fresh lettuce, tomatoes, and your choice of sauce. It's a satisfying option for a quick meal.",
-    image: images['chicken']
+useSchemaOrg([{
+  '@type': 'Restaurant',
+  name: 'Take Me Away by KIKUZUKI',
+  description: 'Authentic Japanese robatayaki izakaya in Krabi, Thailand offering fresh ingredients and traditional flavors',
+  url: 'https://www.kikuzuki-thailand.com',
+  telephone: '+66-76-XXX-XXXX',
+  email: 'info@kikuzuki-thailand.com',
+  address: {
+    '@type': 'PostalAddress',
+    streetAddress: 'Southern Thailand',
+    addressLocality: 'Krabi',
+    addressRegion: 'Krabi Province',
+    postalCode: '81000',
+    addressCountry: 'TH'
   },
-  {
-    id: "pork",
-    title: "Pork Katsu",
-    description: "The Pork Katsu is a delicious Japanese-style breaded and fried pork cutlet, served with a tangy tonkatsu sauce, fresh cabbage, and steamed rice. It's a hearty and flavorful dish that's perfect for lunch or dinner.",
-    image: images['pork']
+  geo: {
+    '@type': 'GeoCoordinates',
+    latitude: 8.0572977,
+    longitude: 98.7493211
   },
-  {
-    id: "Potato",
-    title: "Potato Korokke Katsu",
-    description: "Our potato sandwich is a classic comfort food made with creamy, perfectly seasoned egg salad on your choice of bread. It's topped with crisp lettuce and served with a side of pickles for a satisfying meal.",
-    image: images['potato-katsu']
-  },
-  {
-    id: "steak",
-    title: "Steak Katsu",
-    description: "The Steak Katsu is a premium dish featuring a tender, breaded and fried beef steak cutlet. It's served with a rich katsu sauce, a side of crisp vegetables, and your choice of steamed rice or fries for a luxurious dining experience.",
-    image: images['steak']
-  }
-]
+  openingHoursSpecification: [{
+    '@type': 'OpeningHoursSpecification',
+    dayOfWeek: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+    opens: '10:00',
+    closes: '22:00'
+  }],
+  priceRange: '$$',
+  servesCuisine: ['Japanese', 'Robatayaki', 'Izakaya'],
+  hasMap: 'https://maps.app.goo.gl/2KJfCAfH1idnRBqz6',
+  sameAs: [
+    'https://www.facebook.com/kikuzuki-thailand',
+    'https://www.instagram.com/kikuzuki-thailand'
+  ]
+}])
 </script>

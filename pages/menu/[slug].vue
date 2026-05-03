@@ -1,12 +1,11 @@
 <template>
   <div class="min-h-screen bg-white">
-    <!-- Hero Section -->
-    <div class="bg-black text-white py-16 px-4">
-      <div class="max-w-6xl mx-auto text-center">
-        <h1 class="text-4xl md:text-6xl font-bold mb-4">{{ item?.name }}</h1>
-        <p class="text-lg md:text-xl opacity-90">{{ category?.name }}</p>
-      </div>
-    </div>
+    <AppHero :title="item?.name ?? 'Menu Item'" :subtitle="category?.name" />
+    <AppBreadcrumb :crumbs="[
+      { to: '/', label: 'Home' },
+      { to: '/menu', label: 'Menu' },
+      { to: `/menu/${item?.slug}`, label: item?.name }
+    ]" />
 
     <!-- Item Details -->
     <div class="max-w-6xl mx-auto px-4 py-12" v-if="item">

@@ -8,8 +8,22 @@
       </div>
     </div>
 
-    <!-- Contact Information Section -->
+    <!-- Culinary Experience Message -->
     <div class="max-w-6xl mx-auto px-4 py-12">
+      <div class="bg-gray-50 rounded-lg p-8 mb-12">
+        <div class="prose prose-lg max-w-none">
+          <p class="text-gray-700 mb-4 leading-relaxed">
+            For an unparalleled Japanese culinary experience in Krabi, Kikuzuki beckons you to transcend the virtual and savor the exquisite reality. Our website offers a mere glimpse of the gastronomic symphony that awaits—robust robatayaki grills and artful sushi creations.
+          </p>
+          <p class="text-gray-700 mb-4 leading-relaxed">
+            Contact us to transform your online curiosity into a reservation, immersing yourself in the warm ambiance, skilled craftsmanship, and tantalizing flavors that define Kikuzuki. Whether celebrating milestones or seeking a memorable dining escape, our team stands ready to ensure your visit is a seamless fusion of authenticity and culinary delight.
+          </p>
+          <p class="text-gray-700 font-semibold leading-relaxed">
+            Elevate your senses; contact Kikuzuki for an unforgettable Japanese dining adventure.
+          </p>
+        </div>
+      </div>
+
       <div class="grid md:grid-cols-2 gap-12">
         <!-- Contact Details -->
         <div>

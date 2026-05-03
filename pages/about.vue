@@ -11,13 +11,50 @@
     <!-- Brand Story Section -->
     <div class="max-w-6xl mx-auto px-4 py-12">
       <div class="mb-16">
+        <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">About Us</h2>
+        <div class="prose prose-lg max-w-none">
+          <p class="text-gray-700 mb-4">
+            <strong>Finding Inspiration in Every Turn</strong>
+          </p>
+          <p class="text-gray-700 mb-4">
+            Kikuzuki Japanese Restaurant, nestled in the heart of Krabi, Thailand, is a culinary haven that specializes in the artful fusion of robatayaki and sushi. This gastronomic gem offers a unique dining experience, combining traditional Japanese techniques with a modern twist. The restaurant's ambiance reflects a harmonious blend of contemporary elegance and authentic Japanese charm.
+          </p>
+          <p class="text-gray-700 mb-4">
+            Renowned for its robatayaki, Kikuzuki showcases a mastery of grilling techniques, presenting a delectable array of skewered delights, from succulent meats to vibrant vegetables. Each dish is meticulously prepared and grilled to perfection, ensuring a symphony of flavors that tantalize the taste buds.
+          </p>
+          <p class="text-gray-700 mb-4">
+            Complementing the robatayaki experience is Kikuzuki's sushi selection, where skilled chefs artfully craft a variety of sushi rolls using the freshest seafood and highest-quality ingredients. The sushi bar provides a front-row seat to the culinary spectacle, allowing patrons to witness the precision and creativity that goes into each roll.
+          </p>
+          <p class="text-gray-700">
+            With a commitment to authenticity and innovation, Kikuzuki Japanese Restaurant in Krabi has earned a reputation as a premier destination for those seeking an unforgettable journey into the world of Japanese cuisine. It stands as a testament to the marriage of tradition and innovation, offering an unforgettable dining experience for both connoisseurs and casual diners alike.
+          </p>
+        </div>
+      </div>
+
+      <!-- Our Story Section -->
+      <div class="mb-16">
         <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Our Story</h2>
         <div class="prose prose-lg max-w-none">
           <p class="text-gray-700 mb-4">
-            <strong>PLACEHOLDER_BRAND_STORY_TEXT</strong> - This section will contain the authentic story of KIKUZUKI, our journey in bringing traditional Japanese robatayaki to Krabi, and our commitment to preserving the art of Japanese grilling culture in Southern Thailand.
+            <strong>Its great to dress up, Kikuzuki Style</strong>
+          </p>
+          <p class="text-gray-700 mb-4">
+            Enjoy the Japanese style booth dining. Nestled amidst the tropical allure of Krabi, Thailand, Kikuzuki has an enchanting culinary tale. Beyond the sliding glazed door entrance and our Kikuzuki Giant red lucky cat, you are welcomed into a little piece of Japan, step into a haven where the aroma of robatayaki and the artistry of sushi converge.
+          </p>
+          <p class="text-gray-700 mb-4">
+            The restaurant, a symphony of warm wood and subtle lighting, immerses diners in an ambiance that transports them to the heart of Japan. At the heart of Kikuzuki's prowess lies our robatayaki, where we aim to provide delicious seasoned delights by our skilled grill Chef where he prepares an array of skewers over an open flame, infusing each morsel with smoky perfection. From yakitori to grilled vegetables. We wanted to provide an amazing menu combined with an open grill in order all can view the preparation of the freshest ingredients which we hope show cases our testament to the precision and passion that defines the robatayaki tradition.
+          </p>
+          <p class="text-gray-700 mb-4">
+            Equally enticing is our sushi bar, a stage where culinary craftsmen orchestrate amazing flavors and textures. We are commitment to the freshest seafood, our sushi chefs weave magic into every dish, also visually stunning preparation is very much part off your experience presenting a canvas of color and taste.
+          </p>
+          <p class="text-gray-700 mb-4">
+            Kikuzuki we hope and wish stands as a beacon of gastronomic delight, where the legacy of robatayaki and the allure of sushi come together in a culinary tapestry that captures the essence of Japanese cuisine. It's not just a meal; it's a sensory journey through the heart of Japan, an experience that lingers long after the last bite.
           </p>
           <p class="text-gray-700">
-            PLACEHOLDER_BRAND_MISSION_TEXT - Our mission is to create an authentic Japanese dining experience that honors tradition while embracing the vibrant culture of Krabi. Every dish tells a story of craftsmanship, quality ingredients, and the art of robatayaki grilling.
+            This is also accompanied by wonderful Saki and Cocktails to help enjoy, not to mention our flavoured beer selection, sit back listen to the great music and immerse yourself in Kikuzuki.
+          </p>
+          <p class="text-gray-700 font-semibold mt-4">
+            Happy Guest Happy Kikuzuki
           </p>
         </div>
       </div>
