@@ -13,6 +13,8 @@ export interface GoogleBusinessSyncResult {
   reviews: unknown[]
   media: unknown[]
   posts: unknown[]
+  products: unknown[]
+  qa: unknown[]
   errors: Array<{ source: string; message: string }>
 }
 
@@ -115,6 +117,8 @@ export const syncGoogleBusiness = async (env: GoogleBusinessEnv): Promise<Google
   let reviews: unknown[] = []
   let media: unknown[] = []
   let posts: unknown[] = []
+  let products: unknown[] = []
+  let qa: unknown[] = []
 
   if (!accountId || !locName) {
     throw new Error('Missing GOOGLE_BUSINESS_ACCOUNT_ID or GOOGLE_BUSINESS_LOCATION_ID.')
@@ -143,11 +147,19 @@ export const syncGoogleBusiness = async (env: GoogleBusinessEnv): Promise<Google
   }
 
   try {
-    const response = await googleJson<{ reviews?: unknown[] }>(
+    const response = await googleJson<{ reviews?: unknown[]; averageRating?: number; totalReviewCount?: number }>(
       `https://mybusiness.googleapis.com/v4/accounts/${accountId}/${locName}/reviews?pageSize=50`,
       accessToken
     )
     reviews = response.reviews ?? []
+    
+    // Inject aggregate data into business object if it exists
+    if (business && typeof business === 'object') {
+      (business as any).reviewSummary = {
+        averageRating: response.averageRating,
+        totalReviewCount: response.totalReviewCount
+      }
+    }
   } catch (error) {
     errors.push({ source: 'reviews', message: error instanceof Error ? error.message : String(error) })
   }
@@ -172,15 +184,37 @@ export const syncGoogleBusiness = async (env: GoogleBusinessEnv): Promise<Google
     errors.push({ source: 'posts', message: error instanceof Error ? error.message : String(error) })
   }
 
+  try {
+    const response = await googleJson<{ products?: unknown[] }>(
+      `https://mybusiness.googleapis.com/v4/accounts/${accountId}/${locName}/products?pageSize=50`,
+      accessToken
+    )
+    products = response.products ?? []
+  } catch (error) {
+    errors.push({ source: 'products', message: error instanceof Error ? error.message : String(error) })
+  }
+
+  try {
+    const response = await googleJson<{ questions?: unknown[] }>(
+      `https://mybusiness.googleapis.com/v4/accounts/${accountId}/${locName}/questions?pageSize=50`,
+      accessToken
+    )
+    qa = response.questions ?? []
+  } catch (error) {
+    errors.push({ source: 'qa', message: error instanceof Error ? error.message : String(error) })
+  }
+
   const syncedAt = new Date().toISOString()
   await env.REVIEWS_DB.prepare(
-    `INSERT INTO google_business_snapshots (id, business_json, reviews_json, media_json, posts_json, errors_json, synced_at)
-     VALUES ('current', ?, ?, ?, ?, ?, ?)
+    `INSERT INTO google_business_snapshots (id, business_json, reviews_json, media_json, posts_json, products_json, qa_json, errors_json, synced_at)
+     VALUES ('current', ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        business_json = excluded.business_json,
        reviews_json = excluded.reviews_json,
        media_json = excluded.media_json,
        posts_json = excluded.posts_json,
+       products_json = excluded.products_json,
+       qa_json = excluded.qa_json,
        errors_json = excluded.errors_json,
        synced_at = excluded.synced_at`
   ).bind(
@@ -188,11 +222,13 @@ export const syncGoogleBusiness = async (env: GoogleBusinessEnv): Promise<Google
     JSON.stringify(reviews),
     JSON.stringify(media),
     JSON.stringify(posts),
+    JSON.stringify(products),
+    JSON.stringify(qa),
     JSON.stringify(errors),
     syncedAt
   ).run()
 
-  return { syncedAt, business, reviews, media, posts, errors }
+  return { syncedAt, business, reviews, media, posts, products, qa, errors }
 }
 
 export const getGoogleBusinessSnapshot = async (env: GoogleBusinessEnv) => {
@@ -201,6 +237,8 @@ export const getGoogleBusinessSnapshot = async (env: GoogleBusinessEnv) => {
             reviews_json AS reviewsJson,
             media_json AS mediaJson,
             posts_json AS postsJson,
+            products_json AS productsJson,
+            qa_json AS qaJson,
             errors_json AS errorsJson,
             synced_at AS syncedAt
      FROM google_business_snapshots
@@ -210,6 +248,8 @@ export const getGoogleBusinessSnapshot = async (env: GoogleBusinessEnv) => {
     reviewsJson: string | null
     mediaJson: string | null
     postsJson: string | null
+    productsJson: string | null
+    qaJson: string | null
     errorsJson: string | null
     syncedAt: string
   }>()
@@ -221,6 +261,8 @@ export const getGoogleBusinessSnapshot = async (env: GoogleBusinessEnv) => {
     reviews: row.reviewsJson ? JSON.parse(row.reviewsJson) : [],
     media: row.mediaJson ? JSON.parse(row.mediaJson) : [],
     posts: row.postsJson ? JSON.parse(row.postsJson) : [],
+    products: row.productsJson ? JSON.parse(row.productsJson) : [],
+    qa: row.qaJson ? JSON.parse(row.qaJson) : [],
     errors: row.errorsJson ? JSON.parse(row.errorsJson) : [],
     syncedAt: row.syncedAt
   }

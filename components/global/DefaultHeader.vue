@@ -193,6 +193,10 @@ onMounted(() => {
 
 const navLinks = [
   { to: '/menu', label: 'Menu' },
+  { to: '/reviews', label: 'Reviews' },
+  { to: '/photos', label: 'Photos' },
+  { to: '/posts', label: 'Posts' },
+  { to: '/qa', label: 'Q&A' },
   { to: '/location', label: 'Location' },
   { to: '/about', label: 'About' },
   { to: '/contact', label: 'Contact' },

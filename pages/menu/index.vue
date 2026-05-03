@@ -6,48 +6,58 @@
       size="page"
     />
 
-    <!-- Menu Introduction -->
-    <AppSection bg="gray" padding="default">
-      <div class="max-w-4xl mx-auto prose prose-lg">
-        <p class="text-gray-700 mb-4 leading-relaxed">
-          Indulge in the culinary artistry of our base Japanese menu, a symphony of flavors featuring your favourite Japanese Izakaya and Robatayaki Cusine.
-        </p>
-        <p class="text-gray-700 mb-4 leading-relaxed">
-          Our sushi and Sashimi selection showcases the freshest, highest-quality ingredients expertly crafted into delectable bites. From classic favorites like California rolls to innovative creations, each bite is a journey through the delicate balance of textures and tastes. Immerse yourself in the rich umami of our sashimi, featuring pristine slices of raw fish that melt in your mouth, a testament to the precision and dedication of our skilled sushi chefs.
-        </p>
-        <p class="text-gray-700 mb-4 leading-relaxed">
-          For noodle enthusiasts, our menu offers an array of soul-satisfying options. Slurp your way through steaming bowls of ramen, where hand-pulled noodles swim in flavorful broth, topped with an assortment of ingredients that dance harmoniously on your palate. Udon lovers will find comfort in our thick, chewy noodles served in hearty broths, with an array of toppings to customize your bowl to perfection.
-        </p>
-        <p class="text-gray-700 mb-4 leading-relaxed">
-          The robatayaki section of our menu introduces the ancient Japanese grilling technique, where skewers of succulent meats, seafood, and vegetables are meticulously grilled over an open flame. Revel in the smoky aroma and charred perfection of each skewer, as our chefs showcase their expertise in capturing the essence of flame-kissed flavors.
-        </p>
-        <p class="text-gray-700 leading-relaxed">
-          Complementing our menu is a curated selection of sauces and condiments, enhancing the authenticity of every dish. Whether you're a sushi connoisseur, noodle enthusiast, or robatayaki aficionado, our base Japanese menu is a celebration of culinary excellence, inviting you to embark on a gastronomic journey through the heart of Japan's diverse and exquisite culinary landscape.
-        </p>
+    <!-- Google Business Products -->
+    <AppSection v-if="googleProducts.length" bg="white" padding="default">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Products & Services</h2>
+      <p class="text-gray-500 mb-8">From Google Business Profile</p>
+      <div class="divide-y divide-gray-100">
+        <div v-for="product in googleProducts" :key="product.name" class="p-6 border-b border-gray-100 last:border-b-0">
+          <div class="flex justify-between items-start">
+            <div class="flex-1">
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ product.title || product.name }}</h3>
+              <p v-if="product.description" class="text-gray-600 mb-2">{{ product.description }}</p>
+              <p v-if="product.price" class="text-lg font-bold text-gray-900">{{ product.price }}</p>
+            </div>
+            <div v-if="product.photoUrls?.[0]" class="ml-6">
+              <img :src="product.photoUrls[0]" :alt="product.title || product.name" class="w-24 h-24 object-cover rounded-lg">
+            </div>
+          </div>
+        </div>
       </div>
     </AppSection>
 
-    <MenuCategoryNav
-      :categories="menuData.categories"
-      :active="activeCategory"
-      @select="activeCategory = $event"
-    />
+    <!-- Fallback to static menu if no products -->
+    <template v-else>
+      <MenuCategoryNav
+        :categories="menuData.categories"
+        :active="activeCategory"
+        @select="activeCategory = $event"
+      />
 
-    <AppSection
-      v-for="category in menuData.categories"
-      :key="category.id"
-      :id="category.id"
-      bg="white"
-      padding="default"
-    >
-      <h2 class="text-2xl font-bold text-gray-900 mb-2">{{ category.name }}</h2>
-      <p v-if="category.description && !category.description.includes('PLACEHOLDER')" class="text-gray-500 mb-8">{{ category.description }}</p>
-      <div class="divide-y divide-gray-100">
-        <MenuItemCard
-          v-for="item in category.items"
-          :key="item.id"
-          :item="item"
-        />
+      <AppSection
+        v-for="category in menuData.categories"
+        :key="category.id"
+        :id="category.id"
+        bg="white"
+        padding="default"
+      >
+        <h2 class="text-2xl font-bold text-gray-900 mb-2">{{ category.name }}</h2>
+        <p v-if="category.description && !category.description.includes('PLACEHOLDER')" class="text-gray-500 mb-8">{{ category.description }}</p>
+        <div class="divide-y divide-gray-100">
+          <MenuItemCard
+            v-for="item in category.items"
+            :key="item.id"
+            :item="item"
+          />
+        </div>
+      </AppSection>
+    </template>
+
+    <!-- No products placeholder -->
+    <AppSection v-if="!googleProducts.length && !menuData.categories.length" bg="white" padding="default">
+      <div class="text-center text-gray-500 p-8">
+        <p>PLACEHOLDER: Products from Google Business API (/api/google-business/public -> products)</p>
+        <p class="text-sm mt-2">This section will display products and services from your Google Business Profile</p>
       </div>
     </AppSection>
   </div>
@@ -61,6 +71,23 @@ import MenuCategoryNav from '~/components/menu/MenuCategoryNav.vue'
 import MenuItemCard from '~/components/menu/MenuItemCard.vue'
 
 const activeCategory = ref(menuData.categories[0]?.id ?? '')
+
+const { data: googleBusiness } = await useFetch('/api/google-business/public', {
+  default: () => ({
+    business: null,
+    reviews: [],
+    media: [],
+    posts: [],
+    products: [],
+    qa: [],
+    errors: [],
+    syncedAt: null
+  })
+})
+
+// Business data computed properties
+const businessDescription = computed(() => googleBusiness.value?.business?.profile?.description || '')
+const googleProducts = computed(() => googleBusiness.value?.products || [])
 
 // SEO Meta
 useSeoMeta({

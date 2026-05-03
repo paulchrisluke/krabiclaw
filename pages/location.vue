@@ -1,12 +1,10 @@
 <template>
   <div class="min-h-screen bg-white">
-    <!-- Hero Section -->
-    <div class="bg-black text-white py-16 px-4">
-      <div class="max-w-6xl mx-auto text-center">
-        <h1 class="text-4xl md:text-6xl font-bold mb-4">Location & Hours</h1>
-        <p class="text-lg md:text-xl opacity-90">Visit Us in Krabi, Thailand</p>
-      </div>
-    </div>
+    <AppHero
+      title="Location & Hours"
+      subtitle="Visit Us in Krabi, Thailand"
+      size="page"
+    />
 
     <!-- Map Section -->
     <div class="max-w-6xl mx-auto px-4 py-12">
@@ -39,22 +37,18 @@
       <div class="grid md:grid-cols-2 gap-12 mb-12">
         <div>
           <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Contact Information</h2>
-          <div class="space-y-4">
-            <div>
-              <h3 class="font-semibold text-gray-900 mb-1">Restaurant Name</h3>
-              <p class="text-gray-700">Take Me Away by KIKUZUKI</p>
+          <div class="space-y-6">
+            <div v-if="businessName">
+              <h3 class="font-semibold text-gray-900 mb-1 uppercase tracking-wider text-xs">Restaurant</h3>
+              <p class="text-gray-700 text-lg">{{ businessName }}</p>
             </div>
-            <div>
-              <h3 class="font-semibold text-gray-900 mb-1">Address</h3>
-              <p class="text-gray-700">
-                Southern Thailand<br>
-                Krabi, Krabi Province<br>
-                81000, Thailand
-              </p>
+            <div v-if="businessAddress">
+              <h3 class="font-semibold text-gray-900 mb-1 uppercase tracking-wider text-xs">Address</h3>
+              <p class="text-gray-700 text-lg">{{ businessAddress }}</p>
             </div>
-            <div>
-              <h3 class="font-semibold text-gray-900 mb-1">Phone</h3>
-              <p class="text-gray-700">+66-76-XXX-XXXX</p>
+            <div v-if="businessPhone">
+              <h3 class="font-semibold text-gray-900 mb-1 uppercase tracking-wider text-xs">Phone</h3>
+              <p class="text-gray-700 text-lg">{{ businessPhone }}</p>
             </div>
           </div>
         </div>
@@ -62,45 +56,18 @@
         <!-- Hours Section -->
         <div>
           <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Opening Hours</h2>
-          <div class="bg-gray-50 rounded-lg p-6">
+          <div v-if="businessHoursFormatted" class="bg-stone-50 rounded-2xl p-8 border border-stone-200">
             <table class="w-full">
-              <thead>
-                <tr class="border-b border-gray-200">
-                  <th class="text-left py-2 font-semibold text-gray-900">Day</th>
-                  <th class="text-right py-2 font-semibold text-gray-900">Hours</th>
-                </tr>
-              </thead>
               <tbody>
-                <tr class="border-b border-gray-100">
-                  <td class="py-2 text-gray-700">Monday</td>
-                  <td class="py-2 text-right text-gray-700">10:00 - 22:00</td>
-                </tr>
-                <tr class="border-b border-gray-100">
-                  <td class="py-2 text-gray-700">Tuesday</td>
-                  <td class="py-2 text-right text-gray-700">10:00 - 22:00</td>
-                </tr>
-                <tr class="border-b border-gray-100">
-                  <td class="py-2 text-gray-700">Wednesday</td>
-                  <td class="py-2 text-right text-gray-700">10:00 - 22:00</td>
-                </tr>
-                <tr class="border-b border-gray-100">
-                  <td class="py-2 text-gray-700">Thursday</td>
-                  <td class="py-2 text-right text-gray-700">10:00 - 22:00</td>
-                </tr>
-                <tr class="border-b border-gray-100">
-                  <td class="py-2 text-gray-700">Friday</td>
-                  <td class="py-2 text-right text-gray-700">10:00 - 22:00</td>
-                </tr>
-                <tr class="border-b border-gray-100">
-                  <td class="py-2 text-gray-700">Saturday</td>
-                  <td class="py-2 text-right text-gray-700">10:00 - 22:00</td>
-                </tr>
-                <tr>
-                  <td class="py-2 text-gray-700">Sunday</td>
-                  <td class="py-2 text-right text-gray-700">10:00 - 22:00</td>
+                <tr v-for="hour in businessHoursFormatted" :key="hour.day" class="border-b border-stone-100 last:border-0">
+                  <td class="py-3 text-gray-600 font-medium">{{ hour.day }}</td>
+                  <td class="py-3 text-right text-gray-900">{{ hour.hours }}</td>
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div v-else class="bg-gray-50 rounded-2xl p-8 text-center border border-dashed border-gray-200">
+            <p class="text-gray-400 italic">Hours updated via Google Business Profile</p>
           </div>
         </div>
       </div>
@@ -109,6 +76,30 @@
 </template>
 
 <script setup>
+import AppHero from '~/components/ui/AppHero.vue'
+const { data: googleBusiness } = await useFetch('/api/google-business/public', {
+  default: () => ({
+    business: null,
+    reviews: [],
+    media: [],
+    posts: [],
+    products: [],
+    qa: [],
+    errors: [],
+    syncedAt: null
+  })
+})
+
+// Business data computed properties
+const businessName = computed(() => googleBusiness.value?.business?.title || '')
+const businessAddress = computed(() => {
+  const addr = googleBusiness.value?.business?.storefrontAddress
+  if (!addr) return ''
+  return `${addr.addressLines?.[0] || ''}, ${addr.locality || ''}, ${addr.administrativeArea || ''} ${addr.postalCode || ''}`
+})
+const businessPhone = computed(() => googleBusiness.value?.business?.phoneNumbers?.[0]?.phoneNumber || '')
+const businessHoursFormatted = computed(() => formatGoogleHours(googleBusiness.value?.business?.regularHours))
+
 // SEO Meta
 useSeoMeta({
   title: 'Location & Hours | Take Me Away by KIKUZUKI | Krabi, Thailand',
@@ -126,20 +117,20 @@ useSeoMeta({
 
 useSchemaOrg([{
   '@type': 'Restaurant',
-  name: 'Take Me Away by KIKUZUKI',
+  name: businessName.value || 'Take Me Away by KIKUZUKI',
   hasMap: 'https://maps.app.goo.gl/2KJfCAfH1idnRBqz6',
   address: {
     '@type': 'PostalAddress',
-    streetAddress: 'Southern Thailand',
-    addressLocality: 'Krabi',
-    addressRegion: 'Krabi Province',
-    postalCode: '81000',
+    streetAddress: businessAddress.value || 'Southern Thailand',
+    addressLocality: googleBusiness.value?.business?.storefrontAddress?.locality || 'Krabi',
+    addressRegion: googleBusiness.value?.business?.storefrontAddress?.administrativeArea || 'Krabi Province',
+    postalCode: googleBusiness.value?.business?.storefrontAddress?.postalCode || '81000',
     addressCountry: 'TH'
   },
   geo: { 
     '@type': 'GeoCoordinates', 
-    latitude: 8.0572977, 
-    longitude: 98.7493211 
+    latitude: googleBusiness.value?.business?.latlng?.latitude || 8.0572977, 
+    longitude: googleBusiness.value?.business?.latlng?.longitude || 98.7493211 
   },
   openingHoursSpecification: [{
     '@type': 'OpeningHoursSpecification',
@@ -147,6 +138,6 @@ useSchemaOrg([{
     opens: '10:00',
     closes: '22:00'
   }],
-  telephone: '+66-76-XXX-XXXX'
+  telephone: businessPhone.value || '+66-76-XXX-XXXX'
 }])
 </script>

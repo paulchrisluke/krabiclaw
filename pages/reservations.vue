@@ -1,12 +1,10 @@
 <template>
   <div class="min-h-screen bg-white">
-    <!-- Hero Section -->
-    <div class="bg-black text-white py-16 px-4">
-      <div class="max-w-6xl mx-auto text-center">
-        <h1 class="text-4xl md:text-6xl font-bold mb-4">Reserve a Table at KIKUZUKI</h1>
-        <p class="text-lg md:text-xl opacity-90">Book Your Authentic Japanese Robatayaki Experience</p>
-      </div>
-    </div>
+    <AppHero
+      title="Reserve a Table at KIKUZUKI"
+      subtitle="Book Your Authentic Japanese Robatayaki Experience"
+      size="page"
+    />
 
     <!-- Reservation Form Section -->
     <div class="max-w-6xl mx-auto px-4 py-12">
@@ -149,6 +147,7 @@
 </template>
 
 <script setup>
+import AppHero from '~/components/ui/AppHero.vue'
 useSeoMeta({
   title: 'Reserve a Table | Take Me Away by KIKUZUKI | Krabi Thailand',
   description: 'Reserve a table at KIKUZUKI, our authentic Japanese robatayaki restaurant in Krabi, Thailand. Book online or call us directly for the best Japanese dining experience.',

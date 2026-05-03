@@ -1,12 +1,11 @@
 <template>
-  <div class="min-h-screen bg-white">
+  <div>
     <!-- Hero Section -->
-    <div class="bg-black text-white py-16 px-4">
-      <div class="max-w-6xl mx-auto text-center">
-        <h1 class="text-4xl md:text-6xl font-bold mb-4">Contact Us</h1>
-        <p class="text-lg md:text-xl opacity-90">Get in Touch with KIKUZUKI</p>
-      </div>
-    </div>
+    <AppHero
+      title="Contact Us"
+      subtitle="Get in Touch with KIKUZUKI"
+      size="page"
+    />
 
     <!-- Culinary Experience Message -->
     <div class="max-w-6xl mx-auto px-4 py-12">
@@ -29,29 +28,25 @@
         <div>
           <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Contact Information</h2>
           <div class="space-y-6">
-            <div>
-              <h3 class="font-semibold text-gray-900 mb-2">Restaurant</h3>
-              <p class="text-gray-700">Take Me Away by KIKUZUKI</p>
+            <div v-if="businessName">
+              <h3 class="font-semibold text-gray-900 mb-1 uppercase tracking-wider text-xs">Restaurant</h3>
+              <p class="text-gray-700">{{ businessName }}</p>
             </div>
-            <div>
-              <h3 class="font-semibold text-gray-900 mb-2">Address</h3>
-              <p class="text-gray-700">
-                Southern Thailand<br>
-                Krabi, Krabi Province<br>
-                81000, Thailand
-              </p>
+            <div v-if="businessAddress">
+              <h3 class="font-semibold text-gray-900 mb-1 uppercase tracking-wider text-xs">Address</h3>
+              <p class="text-gray-700">{{ businessAddress }}</p>
             </div>
-            <div>
-              <h3 class="font-semibold text-gray-900 mb-2">Phone</h3>
-              <p class="text-gray-700">+66-76-XXX-XXXX</p>
+            <div v-if="businessPhone">
+              <h3 class="font-semibold text-gray-900 mb-1 uppercase tracking-wider text-xs">Phone</h3>
+              <p class="text-gray-700">{{ businessPhone }}</p>
             </div>
-            <div>
-              <h3 class="font-semibold text-gray-900 mb-2">Email</h3>
-              <p class="text-gray-700">info@kikuzuki-thailand.com</p>
+            <div v-if="businessEmail">
+              <h3 class="font-semibold text-gray-900 mb-1 uppercase tracking-wider text-xs">Email</h3>
+              <p class="text-gray-700">{{ businessEmail }}</p>
             </div>
-            <div>
-              <h3 class="font-semibold text-gray-900 mb-2">Hours</h3>
-              <p class="text-gray-700">Daily: 10:00 - 22:00</p>
+            <div v-if="businessHours">
+              <h3 class="font-semibold text-gray-900 mb-1 uppercase tracking-wider text-xs">Opening Hours</h3>
+              <p class="text-gray-700">{{ businessHours }}</p>
             </div>
           </div>
 
@@ -128,6 +123,31 @@
 </template>
 
 <script setup>
+import AppHero from '~/components/ui/AppHero.vue'
+const { data: googleBusiness } = await useFetch('/api/google-business/public', {
+  default: () => ({
+    business: null,
+    reviews: [],
+    media: [],
+    posts: [],
+    products: [],
+    qa: [],
+    errors: [],
+    syncedAt: null
+  })
+})
+
+// Business data computed properties
+const businessName = computed(() => googleBusiness.value?.business?.title || '')
+const businessEmail = computed(() => googleBusiness.value?.business?.email || '')
+const businessAddress = computed(() => {
+  const addr = googleBusiness.value?.business?.storefrontAddress
+  if (!addr) return ''
+  return `${addr.addressLines?.[0] || ''}, ${addr.locality || ''}, ${addr.administrativeArea || ''} ${addr.postalCode || ''}`
+})
+const businessPhone = computed(() => googleBusiness.value?.business?.phoneNumbers?.[0]?.phoneNumber || '')
+const businessHours = computed(() => getTodayGoogleHours(googleBusiness.value?.business?.regularHours))
+
 useSeoMeta({
   title: 'Contact | Take Me Away by KIKUZUKI | Krabi Thailand',
   description: 'Contact Take Me Away by KIKUZUKI in Krabi, Thailand. Get our phone number, address, email, and send us a message. Make reservations or inquire about our Japanese robatayaki restaurant.',
@@ -144,14 +164,14 @@ useSeoMeta({
 
 useSchemaOrg([{
   '@type': 'Restaurant',
-  name: 'Take Me Away by KIKUZUKI',
-  telephone: '+66-76-XXX-XXXX',
+  name: businessName.value || 'Take Me Away by KIKUZUKI',
+  telephone: businessPhone.value || '+66-76-XXX-XXXX',
   address: {
     '@type': 'PostalAddress',
-    streetAddress: 'Southern Thailand',
-    addressLocality: 'Krabi',
-    addressRegion: 'Krabi Province',
-    postalCode: '81000',
+    streetAddress: businessAddress.value || 'Southern Thailand',
+    addressLocality: googleBusiness.value?.business?.storefrontAddress?.locality || 'Krabi',
+    addressRegion: googleBusiness.value?.business?.storefrontAddress?.administrativeArea || 'Krabi Province',
+    postalCode: googleBusiness.value?.business?.storefrontAddress?.postalCode || '81000',
     addressCountry: 'TH'
   },
   email: 'info@kikuzuki-thailand.com',

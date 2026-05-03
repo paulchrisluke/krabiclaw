@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS google_business_snapshots (
   reviews_json TEXT,
   media_json TEXT,
   posts_json TEXT,
+  products_json TEXT,
+  qa_json TEXT,
   errors_json TEXT,
   synced_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
