@@ -64,6 +64,33 @@
       </div>
     </div>
 
+    <!-- Top Pages -->
+    <div class="bg-white rounded-3xl border border-stone-200 p-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-6">Top Pages</h2>
+      <div v-if="analyticsData?.topPages?.length" class="overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b border-stone-100">
+              <th class="text-left text-sm font-medium text-stone-400 pb-3">Page</th>
+              <th class="text-right text-sm font-medium text-stone-400 pb-3">Sessions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="page in analyticsData.topPages" :key="page.path" class="border-b border-stone-50">
+              <td class="py-3 text-sm text-gray-900">{{ page.path }}</td>
+              <td class="py-3 text-sm text-gray-900 text-right">{{ page.sessions }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="text-center py-8 text-stone-400">
+        No data yet
+      </div>
+      <div class="mt-4 text-xs text-stone-400">
+        Powered by Google Analytics
+      </div>
+    </div>
+
     <!-- Traffic Sources -->
     <div class="bg-white rounded-3xl border border-stone-200 p-8">
       <h2 class="text-xl font-bold text-gray-900 mb-6">Traffic Sources</h2>
