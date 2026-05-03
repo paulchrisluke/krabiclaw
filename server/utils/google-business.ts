@@ -1,3 +1,5 @@
+import type { D1Database } from '@cloudflare/workers-types'
+
 export interface GoogleBusinessEnv {
   REVIEWS_DB: D1Database
   GOOGLE_CLIENT_ID?: string
@@ -5,6 +7,7 @@ export interface GoogleBusinessEnv {
   GOOGLE_BUSINESS_ACCOUNT_ID?: string
   GOOGLE_BUSINESS_LOCATION_ID?: string
   GOOGLE_PUBSUB_TOPIC?: string
+  GOOGLE_REFRESH_TOKEN?: string
 }
 
 export interface GoogleBusinessSyncResult {
@@ -31,7 +34,7 @@ const googleJson = async <T>(url: string, accessToken: string): Promise<T> => {
     throw new Error(`${response.status} ${response.statusText}: ${text.slice(0, 300)}`)
   }
 
-  return response.json<T>()
+  return (await response.json()) as T
 }
 
 const googlePatch = async <T>(url: string, accessToken: string, body: unknown): Promise<T> => {
@@ -49,7 +52,7 @@ const googlePatch = async <T>(url: string, accessToken: string, body: unknown): 
     throw new Error(`${response.status} ${response.statusText}: ${text.slice(0, 300)}`)
   }
 
-  return response.json<T>()
+  return (await response.json()) as T
 }
 
 export const locationName = (env: GoogleBusinessEnv) => {
@@ -59,6 +62,8 @@ export const locationName = (env: GoogleBusinessEnv) => {
 }
 
 export const getGoogleRefreshToken = async (env: GoogleBusinessEnv) => {
+  if (env.GOOGLE_REFRESH_TOKEN) return env.GOOGLE_REFRESH_TOKEN
+  if (!env.REVIEWS_DB) return ''
   const row = await env.REVIEWS_DB.prepare(
     `SELECT refresh_token AS refreshToken FROM google_oauth_tokens WHERE provider = 'google'`
   ).first<{ refreshToken: string }>()
@@ -67,6 +72,29 @@ export const getGoogleRefreshToken = async (env: GoogleBusinessEnv) => {
 
 export const saveGoogleRefreshToken = async (env: GoogleBusinessEnv, refreshToken: string, scope = '') => {
   if (!refreshToken) return
+  
+  // Auto-update .env in local development
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      const fs = await import('node:fs')
+      const path = await import('node:path')
+      const envPath = path.join(process.cwd(), '.env')
+      let envContent = fs.readFileSync(envPath, 'utf8')
+      
+      if (envContent.includes('GOOGLE_REFRESH_TOKEN=')) {
+        envContent = envContent.replace(/GOOGLE_REFRESH_TOKEN=.*/, `GOOGLE_REFRESH_TOKEN=${refreshToken}`)
+        fs.writeFileSync(envPath, envContent)
+      } else {
+        fs.appendFileSync(envPath, `\nGOOGLE_REFRESH_TOKEN=${refreshToken}\n`)
+      }
+      console.log('✅ Successfully updated .env with new GOOGLE_REFRESH_TOKEN')
+    } catch (e) {
+      console.warn('Failed to auto-update .env:', e)
+    }
+  }
+
+  if (!env.REVIEWS_DB) return
+
   await env.REVIEWS_DB.prepare(
     `INSERT INTO google_oauth_tokens (provider, refresh_token, scope)
      VALUES ('google', ?, ?)
@@ -103,7 +131,7 @@ export const getGoogleAccessToken = async (env: GoogleBusinessEnv) => {
     throw new Error(`Could not refresh Google token: ${text.slice(0, 300)}`)
   }
 
-  const token = await response.json<{ access_token?: string }>()
+  const token = (await response.json()) as { access_token?: string }
   if (!token.access_token) throw new Error('Google token response did not include access_token.')
   return token.access_token
 }
@@ -132,9 +160,13 @@ export const syncGoogleBusiness = async (env: GoogleBusinessEnv): Promise<Google
     'phoneNumbers',
     'websiteUri',
     'regularHours',
+    'specialHours',
     'categories',
     'latlng',
-    'metadata'
+    'metadata',
+    'priceLevel',
+    'labels',
+    'serviceItems'
   ].join(',')
 
   try {
@@ -205,6 +237,24 @@ export const syncGoogleBusiness = async (env: GoogleBusinessEnv): Promise<Google
   }
 
   const syncedAt = new Date().toISOString()
+  const result = { business, reviews, media, posts, products, qa, errors, syncedAt }
+
+  // Auto-update local cache in development
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      const fs = await import('node:fs')
+      const path = await import('node:path')
+      const cachePath = path.join(process.cwd(), 'public', 'google-business-cache.json')
+      fs.writeFileSync(cachePath, JSON.stringify(result, null, 2))
+      console.log('✅ Successfully updated local Google Business cache')
+    } catch (e) {
+      console.warn('Failed to update local cache:', e)
+    }
+  }
+
+  if (!env.REVIEWS_DB) {
+    return result
+  }
   await env.REVIEWS_DB.prepare(
     `INSERT INTO google_business_snapshots (id, business_json, reviews_json, media_json, posts_json, products_json, qa_json, errors_json, synced_at)
      VALUES ('current', ?, ?, ?, ?, ?, ?, ?, ?)

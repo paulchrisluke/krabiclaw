@@ -77,6 +77,15 @@
               </div>
             </div>
             
+            <!-- Special Hours Notice -->
+            <div v-if="specialHoursNotice" class="flex items-start gap-4 p-4 bg-amber-50 rounded-2xl border border-amber-100 mb-6">
+              <span class="text-2xl">🗓️</span>
+              <div>
+                <h3 class="font-bold text-amber-900 text-sm uppercase tracking-wider mb-1">Holiday Update</h3>
+                <p class="text-amber-800 text-sm font-medium">{{ specialHoursNotice }}</p>
+              </div>
+            </div>
+
             <div v-if="businessHours" class="flex items-start gap-4">
               <span class="text-2xl">🕙</span>
               <div>
@@ -157,6 +166,7 @@ import RestaurantReviews from '~/components/google/RestaurantReviews.vue'
 import RestaurantPosts from '~/components/google/RestaurantPosts.vue'
 import RestaurantQA from '~/components/google/RestaurantQA.vue'
 import RestaurantAbout from '~/components/google/RestaurantAbout.vue'
+import { getTodayGoogleHours, getSchemaOpeningHours, getSpecialHoursNotice } from '~/utils/formatters'
 
 definePageMeta({
   layout: 'home'
@@ -253,6 +263,7 @@ const businessAddress = computed(() => {
 const businessCity = computed(() => googleBusiness.value?.business?.storefrontAddress?.locality || '')
 const businessPhone = computed(() => googleBusiness.value?.business?.phoneNumbers?.[0]?.phoneNumber || '')
 const businessHours = computed(() => getTodayGoogleHours(googleBusiness.value?.business?.regularHours))
+const specialHoursNotice = computed(() => getSpecialHoursNotice(googleBusiness.value?.business?.specialHours))
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
 const latestPosts = computed(() => googlePosts.value.slice(0, 3))
 const businessCoordinates = computed(() => {
@@ -308,48 +319,77 @@ useSeoMeta({
 })
 
 const restaurantStructuredData = computed(() => {
+  const business = googleBusiness.value?.business
+  const addr = business?.storefrontAddress
+  const coords = business?.latlng
+
   const schema = {
     '@context': 'https://schema.org',
     '@type': 'Restaurant',
-    name: 'Take Me Away by KIKUZUKI',
-    description: 'Authentic Japanese robatayaki izakaya in Krabi, Thailand offering fresh ingredients and traditional flavors',
+    name: business?.title || 'Take Me Away by KIKUZUKI',
+    image: googleBusiness.value?.media?.slice(0, 5).map(m => m.googleUrl) || ['/og-image.jpg'],
+    '@id': 'https://www.kikuzuki-thailand.com',
     url: 'https://www.kikuzuki-thailand.com',
-    telephone: '+66-81-154-3606',
-    email: 'info@kikuzuki-thailand.com',
+    telephone: business?.phoneNumbers?.[0]?.phoneNumber || '+66 81 154 3606',
     address: {
       '@type': 'PostalAddress',
-      streetAddress: '117, Nong Thale',
-      addressLocality: 'Krabi',
-      addressRegion: 'Krabi Province',
-      postalCode: '81000',
+      streetAddress: addr?.addressLines?.[0] || '117, Nong Thale',
+      addressLocality: addr?.locality || 'Krabi',
+      addressRegion: addr?.administrativeArea || 'Krabi Province',
+      postalCode: addr?.postalCode || '81000',
       addressCountry: 'TH'
     },
-    geo: {
+    geo: coords ? {
+      '@type': 'GeoCoordinates',
+      latitude: coords.latitude,
+      longitude: coords.longitude
+    } : {
       '@type': 'GeoCoordinates',
       latitude: 8.0572977,
       longitude: 98.7493211
     },
-    openingHoursSpecification: [
-      {
-        '@type': 'OpeningHoursSpecification',
-        dayOfWeek: ['Sunday'],
-        opens: '12:00',
-        closes: '22:30'
-      },
-      {
-        '@type': 'OpeningHoursSpecification',
-        dayOfWeek: ['Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-        opens: '12:00',
-        closes: '22:30'
-      }
-    ],
-    priceRange: '$$',
-    servesCuisine: ['Japanese', 'Robatayaki', 'Izakaya'],
-    hasMap: 'https://maps.app.goo.gl/2KJfCAfH1idnRBqz6',
+    openingHoursSpecification: getSchemaOpeningHours(business?.regularHours),
+    priceRange: business?.priceLevel === 'PRICE_LEVEL_VERY_EXPENSIVE' ? '$$$$' :
+                business?.priceLevel === 'PRICE_LEVEL_EXPENSIVE' ? '$$$' :
+                business?.priceLevel === 'PRICE_LEVEL_MODERATE' ? '$$' : '$',
+    servesCuisine: [
+      business?.categories?.primaryCategory?.displayName,
+      ...(business?.categories?.additionalCategories?.map(c => c.displayName) || [])
+    ].filter(Boolean),
+    hasMap: business?.metadata?.mapsUri || 'https://maps.app.goo.gl/2KJfCAfH1idnRBqz6',
+    hasMenu: 'https://www.kikuzuki-thailand.com/menu',
+    mainEntityOfPage: 'https://www.kikuzuki-thailand.com',
     sameAs: [
       'https://www.facebook.com/kikuzuki-thailand',
       'https://www.instagram.com/kikuzuki-thailand'
     ]
+  }
+
+  // Add Menu Schema if products exist
+  const products = googleBusiness.value?.products || []
+  if (products.length > 0) {
+    schema.hasMenu = {
+      '@type': 'Menu',
+      name: 'KIKUZUKI Menu',
+      mainEntityOfPage: 'https://www.kikuzuki-thailand.com/menu',
+      hasMenuSection: [
+        {
+          '@type': 'MenuSection',
+          name: 'Signature Dishes',
+          hasMenuItem: products.slice(0, 10).map(p => ({
+            '@type': 'MenuItem',
+            name: p.title,
+            description: p.description,
+            offers: p.price ? {
+              '@type': 'Offer',
+              price: p.price.toString(),
+              priceCurrency: 'THB'
+            } : undefined,
+            image: p.media?.[0]?.googleUrl
+          }))
+        }
+      ]
+    }
   }
 
   if (googleReviewSummary.value) {

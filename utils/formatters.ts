@@ -33,3 +33,52 @@ export const getTodayGoogleHours = (regularHours: any) => {
   
   return `Open today: ${formatGoogleTime(period.openTime)} – ${formatGoogleTime(period.closeTime)}`
 }
+
+export const getSchemaOpeningHours = (regularHours: any) => {
+  if (!regularHours || !regularHours.periods) return []
+
+  const dayMap: Record<string, string> = {
+    MONDAY: 'Monday',
+    TUESDAY: 'Tuesday',
+    WEDNESDAY: 'Wednesday',
+    THURSDAY: 'Thursday',
+    FRIDAY: 'Friday',
+    SATURDAY: 'Saturday',
+    SUNDAY: 'Sunday'
+  }
+
+  return regularHours.periods.map((p: any) => {
+    const pad = (n?: number) => n?.toString().padStart(2, '0') || '00'
+    return {
+      '@type': 'OpeningHoursSpecification',
+      dayOfWeek: [dayMap[p.openDay]],
+      opens: `${pad(p.openTime.hours)}:${pad(p.openTime.minutes)}`,
+      closes: `${pad(p.closeTime.hours)}:${pad(p.closeTime.minutes)}`
+    }
+  })
+}
+
+export const getSpecialHoursNotice = (specialHours: any) => {
+  if (!specialHours || !specialHours.specialHourPeriods) return null
+
+  const now = new Date()
+  const todayDate = {
+    year: now.getFullYear(),
+    month: now.getMonth() + 1,
+    day: now.getDate()
+  }
+
+  const special = specialHours.specialHourPeriods.find((p: any) => 
+    p.startDate.year === todayDate.year && 
+    p.startDate.month === todayDate.month && 
+    p.startDate.day === todayDate.day
+  )
+
+  if (!special) return null
+
+  if (special.isClosed) {
+    return 'Closed today for holiday/special event'
+  }
+
+  return `Special holiday hours today: ${formatGoogleTime(special.openTime)} – ${formatGoogleTime(special.closeTime)}`
+}

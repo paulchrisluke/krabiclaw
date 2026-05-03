@@ -10,4 +10,7 @@ export const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
 export const cleanString = (value: unknown, maxLength: number) =>
   typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 
-export const cloudflareEnv = (event: any) => event.context.cloudflare?.env ?? {}
+export const cloudflareEnv = (event: any) => ({
+  ...process.env,
+  ...(event.context.cloudflare?.env ?? {})
+})

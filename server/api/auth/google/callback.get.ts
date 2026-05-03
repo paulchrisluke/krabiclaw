@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Could not verify Google sign-in.' }, { status: 401 })
   }
 
-  const tokenBody = await tokenResponse.json<{ id_token?: string; refresh_token?: string; scope?: string }>()
+  const tokenBody = (await tokenResponse.json()) as { id_token?: string; refresh_token?: string; scope?: string }
   const [, payload] = tokenBody.id_token?.split('.') ?? []
   if (!payload) return jsonResponse({ error: 'Google did not return an identity token.' }, { status: 401 })
 
@@ -84,7 +84,7 @@ export default defineEventHandler(async (event) => {
   return new Response(null, {
     status: 302,
     headers: {
-      Location: '/admin/reviews',
+      Location: '/admin',
       'Set-Cookie': [
         await createAdminSessionCookie(email, env),
         'kikuzuki_oauth_state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'

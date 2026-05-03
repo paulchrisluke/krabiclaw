@@ -9,7 +9,9 @@
     "postinstall": "nuxt prepare"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260503.1",
     "@tailwindcss/typography": "^0.5.19",
+    "@types/node": "^25.6.0",
     "autoprefixer": "^10.5.0",
     "nuxt": "^4.4.2",
     "nuxt-gtag": "^4.1.0",

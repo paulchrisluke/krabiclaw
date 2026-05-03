@@ -27,6 +27,11 @@ export default defineEventHandler(async (event) => {
        ORDER BY created_at DESC
        LIMIT 100`
 
+  if (!env.REVIEWS_DB) {
+    console.warn('REVIEWS_DB not available in Cloudflare environment, returning mock data')
+    return jsonResponse({ reviews: [] })
+  }
+
   const statement = env.REVIEWS_DB.prepare(query)
   const { results } = slug ? await statement.bind(status, slug).all() : await statement.bind(status).all()
 

@@ -23,7 +23,7 @@ const verifyTurnstile = async (request: Request, token: string, secret?: string)
     })
   })
 
-  const result = await response.json<{ success?: boolean }>()
+  const result = (await response.json()) as { success?: boolean }
   return Boolean(result.success)
 }
 
