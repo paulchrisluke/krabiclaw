@@ -91,55 +91,7 @@ export default defineNuxtConfig({
   // Sitemap configuration
   sitemap: {},
 
-  // Schema.org configuration for local business
-  schemaOrg: {
-    identity: {
-      type: 'Restaurant',
-      name: 'Take Me Away by KIKUZUKI',
-      description: 'Modern izakaya restaurant in Krabi, Thailand. Experience authentic Japanese robatayaki with fresh ingredients and traditional flavors.',
-      url: 'https://www.kikuzuki-thailand.com',
-      logo: '/og-image.jpg',
-      image: '/og-image.jpg',
-      address: {
-        streetAddress: '117, Nong Thale',
-        addressLocality: 'Krabi',
-        addressRegion: 'Krabi Province',
-        postalCode: '81000',
-        addressCountry: 'TH'
-      },
-      geo: {
-        latitude: 8.0572977,
-        longitude: 98.7493211
-      },
-      telephone: '+66-81-154-3606',
-      email: 'info@kikuzuki-thailand.com',
-      openingHoursSpecification: [
-        {
-          dayOfWeek: ['Sunday'],
-          opens: '12:00',
-          closes: '22:30'
-        },
-        {
-          dayOfWeek: ['Monday'],
-          opens: 'Closed',
-          closes: 'Closed'
-        },
-        {
-          dayOfWeek: ['Tuesday','Wednesday','Thursday','Friday','Saturday'],
-          opens: '12:00',
-          closes: '22:30'
-        }
-      ],
-      priceRange: '$$',
-      servesCuisine: ['Japanese', 'Robatayaki', 'Izakaya'],
-      hasMap: 'https://maps.app.goo.gl/2KJfCAfH1idnRBqz6',
-      sameAs: [
-        'https://www.facebook.com/kikuzuki-thailand',
-        'https://www.instagram.com/kikuzuki-thailand'
-      ]
-    }
-  },
-
+  
   // Nitro configuration for Cloudflare deployment
   nitro: {
     preset: 'cloudflare-module',
