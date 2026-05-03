@@ -5,6 +5,7 @@
   "scripts": {
     "build": "nuxi build --preset=cloudflare_pages",
     "dev": "nuxt dev",
+    "dev:cf": "nuxt build && wrangler pages dev dist",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare"
   },

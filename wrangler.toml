@@ -1,0 +1,8 @@
+name = "kikuzuki-thailand-marketing"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "REVIEWS_DB"
+database_name = "kikuzuki-reviews"
+database_id = "57cc9c44-1a23-41c3-8ec9-6b404c12ca2c"

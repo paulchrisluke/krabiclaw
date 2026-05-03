@@ -56,7 +56,6 @@ export const useEditMode = () => {
       pendingChanges.value = {}
       hasChanges.value = false
       hasDrafts.value = true
-      addToast('Draft saved', 'success')
     } catch {
       addToast('Failed to save draft', 'error')
     } finally {
