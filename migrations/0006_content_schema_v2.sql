@@ -1,10 +1,10 @@
 -- Add type and source columns to site_content (backward compatible)
-ALTER TABLE site_content ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'text';
-ALTER TABLE site_content ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual';
+ALTER TABLE site_content ADD COLUMN type TEXT NOT NULL DEFAULT 'text';
+ALTER TABLE site_content ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
 
 -- Add type and source columns to site_content_drafts (backward compatible)
-ALTER TABLE site_content_drafts ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'text';
-ALTER TABLE site_content_drafts ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual';
+ALTER TABLE site_content_drafts ADD COLUMN type TEXT NOT NULL DEFAULT 'text';
+ALTER TABLE site_content_drafts ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
 
 -- Seed default published content for all pages (idempotent)
 INSERT OR IGNORE INTO site_content (id, page, field, content, type, source) VALUES

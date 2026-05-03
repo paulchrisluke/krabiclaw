@@ -6,12 +6,20 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
 
+  const body = await readBody(event)
+  const { path, all } = body
+
   if (!await isAdminRequest(toWebRequest(event), env)) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
-
-  const { path, all } = await readBody(event)
   const db = env.REVIEWS_DB
+
+  if (!db) {
+    throw createError({ 
+      statusCode: 500, 
+      statusMessage: 'Database not available. Ensure you are running with Wrangler or D1 binding is configured.' 
+    })
+  }
 
   if (all) {
     await discardAllDrafts(db)

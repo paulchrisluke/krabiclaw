@@ -6,17 +6,19 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
 
-  // if (!await isAdminRequest(toWebRequest(event), env)) {
-  //   throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  // }
+  const body = await readBody(event)
+  const { path, all } = body
 
-  const { path, all } = await readBody(event)
+  if (!await isAdminRequest(toWebRequest(event), env)) {
+    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  }
   const db = env.REVIEWS_DB
 
-  // Handle missing database in development
   if (!db) {
-    console.warn('Database not available in development mode, mocking publish')
-    return { success: true, mocked: true }
+    throw createError({ 
+      statusCode: 500, 
+      statusMessage: 'Database not available. Ensure you are running with Wrangler or D1 binding is configured.' 
+    })
   }
 
   try {

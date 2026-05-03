@@ -22,11 +22,8 @@ export const usePageContent = (pageName?: string) => {
     return name.replace(/^\//, '').replace(/\//g, '-')
   })
 
-  const { data, refresh } = useFetch(() => {
-    const isEditMode = route.query.edit === 'true'
-    return `/api/content/${page.value}${isEditMode ? '?edit=true' : ''}`
-  }, {
-    key: computed(() => `content-${page.value}${route.query.edit === 'true' ? '-edit' : ''}`),
+  const { data, refresh } = useFetch(() => `/api/content/${page.value}`, {
+    key: computed(() => `content-${page.value}`),
     server: true
   })
 

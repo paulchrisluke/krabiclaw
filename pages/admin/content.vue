@@ -59,6 +59,15 @@
         </button>
       </div>
 
+      <!-- Discard Confirmation Prompt -->
+      <div v-if="discardPending" class="px-5 py-3 bg-red-50 border-b border-red-100 flex-shrink-0">
+        <p class="text-xs text-red-700 font-medium mb-2">Discard all draft changes?</p>
+        <div class="flex gap-2">
+          <button @click="handleDiscard" class="text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg font-semibold">Yes, discard</button>
+          <button @click="discardPending = false" class="text-xs text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-100">Cancel</button>
+        </div>
+      </div>
+
       <!-- Field groups list -->
       <div class="flex-1 overflow-y-auto py-2">
 
@@ -424,11 +433,12 @@ const localHasChanges = ref(false)
 const serverHasDrafts = ref(false)
 const saving = ref(false)
 const publishing = ref(false)
+const discardPending = ref(false)
 
 const loadPageContent = async () => {
   try {
     const res = await $fetch<{ content: any[]; hasDrafts: boolean }>(
-      `/api/content/${selectedPageId.value}?edit=true`
+      `/api/content/${selectedPageId.value}`
     )
     const map: Record<string, string> = {}
     for (const row of res.content || []) {
@@ -448,7 +458,7 @@ const loadPageContent = async () => {
 // Load on mount
 onMounted(() => {
   loadPageContent()
-  iframeSrc.value = currentPagePath.value + '?edit=true'
+  iframeSrc.value = currentPagePath.value
 })
 
 // ─── Actions ──────────────────────────────────────────────────────────
@@ -458,13 +468,13 @@ const handleSaveDraft = async () => {
   try {
     await $fetch('/api/admin/content/draft', {
       method: 'POST',
-      body: { path: currentPagePath.value, changes: currentValues.value }
+      body: { path: currentPagePath.value, changes: currentValues.value },
+      credentials: 'include'
     })
     localHasChanges.value = false
     serverHasDrafts.value = true
-    addToast('Draft saved', 'success')
     iframeLoading.value = true
-    iframeSrc.value = currentPagePath.value + '?edit=true&t=' + Date.now()
+    iframeSrc.value = currentPagePath.value + '?t=' + Date.now()
   } catch (error: any) {
     const msg = error?.response?._data?.statusMessage || error.message || 'Unknown error'
     addToast(`Save failed: ${msg}`, 'error')
@@ -486,7 +496,7 @@ const handlePublish = async () => {
     localHasChanges.value = false
     addToast('Published live!', 'success')
     iframeLoading.value = true
-    iframeSrc.value = currentPagePath.value + '?edit=true&t=' + Date.now()
+    iframeSrc.value = currentPagePath.value + '?t=' + Date.now()
   } catch (error: any) {
     const msg = error?.response?._data?.statusMessage || error.message || 'Unknown error'
     addToast(`Publish failed: ${msg}`, 'error')
@@ -496,7 +506,11 @@ const handlePublish = async () => {
 }
 
 const handleDiscard = async () => {
-  if (!confirm(`Discard all draft changes for the ${selectedPageLabel.value} page?`)) return
+  if (!discardPending.value) {
+    discardPending.value = true
+    return
+  }
+  discardPending.value = false
   try {
     await $fetch('/api/admin/content/discard', {
       method: 'POST',
@@ -507,7 +521,7 @@ const handleDiscard = async () => {
     await loadPageContent()
     addToast('Drafts discarded', 'info')
     iframeLoading.value = true
-    iframeSrc.value = currentPagePath.value + '?edit=true&t=' + Date.now()
+    iframeSrc.value = currentPagePath.value + '?t=' + Date.now()
   } catch {
     addToast('Failed to discard', 'error')
   }
