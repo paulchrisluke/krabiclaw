@@ -1,4 +1,4 @@
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useFetch } from '#app'
 import { getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
@@ -24,7 +24,8 @@ export const usePageContent = (pageName?: string) => {
 
   const { data, refresh } = useFetch(() => `/api/content/${page.value}`, {
     key: computed(() => `content-${page.value}`),
-    server: true
+    server: false,
+    getCachedData: () => undefined
   })
 
   /** Map of field → ContentRow for quick lookup */
@@ -44,15 +45,15 @@ export const usePageContent = (pageName?: string) => {
    * Returns null when both are absent — callers can use this to show placeholder UI.
    */
   const getField = (field: string, defaultValue: string | null = null): string | null => {
+    if (field === 'hero.title' || field === 'hero.subtitle' || field === 'hero.video') {
+      const row = contentMap.value['hero']
+      if (!row) return defaultValue
+      if (field === 'hero.title') return row.hero_title || defaultValue
+      if (field === 'hero.subtitle') return row.hero_subtitle || defaultValue
+      if (field === 'hero.video') return row.hero_video_url || defaultValue
+    }
     const row = contentMap.value[field]
-
     if (!row) return defaultValue
-
-    // Legacy hero_* columns (backward compat)
-    if (field === 'hero.title' && row.hero_title) return row.hero_title
-    if (field === 'hero.subtitle' && row.hero_subtitle) return row.hero_subtitle
-    if (field === 'hero.video' && row.hero_video_url) return row.hero_video_url
-
     const val = row.content
     if (val && val.trim() !== '') return val
     return defaultValue
@@ -81,7 +82,16 @@ export const usePageContent = (pageName?: string) => {
   const getFieldDef_ = (field: string): FieldDefinition | undefined =>
     getFieldDef(page.value, field)
 
-  return {
+  // Add postMessage listener for admin refresh requests
+onMounted(() => {
+  window.addEventListener('message', (e) => {
+    if (e.data?.type === 'admin:refresh-content') {
+      refresh()
+    }
+  })
+})
+
+return {
     page,
     contentMap,
     hasDrafts,

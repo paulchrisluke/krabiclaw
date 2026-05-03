@@ -70,35 +70,47 @@ bun run build
 
 ### Cloudflare Pages (Recommended)
 
-This application is configured for Cloudflare Pages deployment with D1 database:
+This application uses a root `wrangler.toml` configuration for Cloudflare Pages deployment with D1 database:
 
 ```bash
 # Build and deploy
 yarn build
-npx wrangler --cwd dist pages deploy
+npx wrangler pages deploy dist
 ```
 
-The Nuxt configuration automatically generates the required Wrangler configuration in `dist/_worker.js/wrangler.json`.
+### Local Development
 
-### Local Development with D1
+Two development modes are available:
 
-For local development with the D1 database:
-
+#### Fast Development (Vite only)
 ```bash
-# Create local D1 database
-npx wrangler d1 create kikuzuki-reviews
+yarn dev
+```
+- Fast hot-reload development without D1 bindings
+- Uses mock data for database operations
+- Best for UI/styling changes
 
-# Run migrations locally
+#### Full Cloudflare Development (with D1)
+```bash
+# Initial setup (run once)
 npx wrangler d1 execute kikuzuki-reviews --local --file migrations/0001_reviews.sql
 npx wrangler d1 execute kikuzuki-reviews --local --file migrations/0002_google_business_sync.sql
 npx wrangler d1 execute kikuzuki-reviews --local --file migrations/0003_site_config.sql
 npx wrangler d1 execute kikuzuki-reviews --local --file migrations/0004_content_management.sql
 npx wrangler d1 execute kikuzuki-reviews --local --file migrations/0005_content_drafts.sql
-npx wrangler d1 execute kikuzuki-reviews --local --file migrations/0006_content_schema_v2.sql
+# Note: 0006_content_schema_v2.sql may not be needed locally if columns already exist
 
-# Start local development with D1
-npx wrangler dev
+# Build once
+yarn build:cf
+
+# Start with D1 bindings
+yarn dev:cf
 ```
+- Full Cloudflare Workers environment with D1 database
+- Real database operations and API testing
+- **New workflow**: Build once, then run dev server separately to avoid SIGTERM crashes
+- When making code changes: Stop wrangler, run `yarn build:cf`, then `yarn dev:cf`
+- Access at http://localhost:8788 (may vary if port in use)
 
 ### Remote Database Management
 
@@ -116,12 +128,13 @@ npx wrangler d1 execute kikuzuki-reviews --remote --file migrations/0004_content
 
 ### Nuxt Configuration
 
-The application uses Nuxt 3 with Cloudflare module preset. Key configurations in `nuxt.config.ts`:
+The application uses Nuxt 3 with Cloudflare Pages preset. Key configurations:
 
-- **D1 Database**: Configured via Nitro preset with automatic Wrangler config generation
+- **D1 Database**: Configured via root `wrangler.toml` with `REVIEWS_DB` binding
 - **Modules**: Google Analytics, robots.txt, sitemap, schema.org, i18n
 - **SEO**: Multi-language support with proper meta tags and structured data
 - **Components**: Auto-import from `components/ui`, `components/global`, `components/google`, `components/menu`
+- **Nitro Preset**: `cloudflare-pages` for optimal Pages compatibility
 
 ### Database Schema
 

@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "build": "nuxi build --preset=cloudflare_pages",
+    "build:cf": "nuxt build",
     "dev": "nuxt dev",
-    "dev:cf": "nuxt build && wrangler pages dev dist",
+    "dev:cf": "wrangler pages dev dist --persist-to=.wrangler/state/v3",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare"
   },
