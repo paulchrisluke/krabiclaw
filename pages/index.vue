@@ -9,14 +9,14 @@
     >
       <template #cta>
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
-          <AppButton to="/menu" variant="primary" size="lg">View Menu</AppButton>
-          <AppButton to="/reservations" variant="secondary" size="lg">Reserve a Table</AppButton>
+          <AppButton to="/menu" variant="white" size="lg">View Menu</AppButton>
+          <AppButton to="/reservations" variant="black" size="lg">Reserve a Table</AppButton>
         </div>
       </template>
     </AppHero>
 
     <!-- Featured dishes -->
-    <AppSection bg="white" padding="py-16">
+    <AppSection bg="white" padding="default">
       <h2 class="text-3xl font-bold text-gray-900 mb-2">Featured Dishes</h2>
       <p class="text-gray-500 mb-8">Signature robatayaki from our kitchen</p>
       <div class="divide-y divide-gray-100">
@@ -27,15 +27,14 @@
         />
       </div>
       <div class="mt-8">
-        <AppButton to="/menu" variant="secondary" size="md"
-          class="border-black text-black hover:bg-black hover:text-white">
+        <AppButton to="/menu" variant="primary" size="md">
           View Full Menu →
         </AppButton>
       </div>
     </AppSection>
 
     <!-- About teaser -->
-    <AppSection bg="black" padding="py-16">
+    <AppSection bg="black" padding="default">
       <div class="grid md:grid-cols-2 gap-12 items-center">
         <div>
           <h2 class="text-3xl font-bold text-white mb-4">The Art of Robatayaki</h2>
@@ -44,7 +43,7 @@
             At KIKUZUKI, skilled chefs grill premium meats, fresh seafood, and seasonal vegetables
             over an open charcoal flame, right before your eyes.
           </p>
-          <AppButton to="/about" variant="secondary" size="md">Our Story</AppButton>
+          <AppButton to="/about" variant="white" size="md">Our Story</AppButton>
         </div>
         <div class="bg-white/10 rounded-lg h-64 flex items-center justify-center">
           <span class="text-white/30 text-sm">PLACEHOLDER_ABOUT_IMAGE</span>
@@ -53,7 +52,7 @@
     </AppSection>
 
     <!-- Location teaser -->
-    <AppSection bg="gray" padding="py-16">
+    <AppSection bg="gray" padding="default">
       <div class="grid md:grid-cols-2 gap-12 items-center">
         <div>
           <h2 class="text-3xl font-bold text-gray-900 mb-4">Find Us in Krabi</h2>
@@ -63,12 +62,10 @@
             <p>📞 +66-76-XXX-XXXX</p>
           </div>
           <div class="flex gap-4">
-            <AppButton to="/location" variant="primary"
-              class="bg-black text-white hover:bg-black/90" size="md">
+            <AppButton to="/location" variant="primary" size="md">
               Get Directions
             </AppButton>
-            <AppButton to="/reservations" variant="ghost"
-              class="text-black hover:text-black" size="md">
+            <AppButton to="/reservations" variant="secondary" size="md">
               Reserve →
             </AppButton>
           </div>

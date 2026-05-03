@@ -6,7 +6,7 @@
     />
 
     <!-- Menu Introduction -->
-    <AppSection bg="gray" padding="py-12">
+    <AppSection bg="gray" padding="lg">
       <div class="max-w-4xl mx-auto prose prose-lg">
         <p class="text-gray-700 mb-4 leading-relaxed">
           Indulge in the culinary artistry of our base Japanese menu, a symphony of flavors featuring your favourite Japanese Izakaya and Robatayaki Cusine.
@@ -37,7 +37,7 @@
       :key="category.id"
       :id="category.id"
       bg="white"
-      padding="py-12"
+      padding="default"
     >
       <h2 class="text-2xl font-bold text-gray-900 mb-2">{{ category.name }}</h2>
       <p v-if="category.description && !category.description.includes('PLACEHOLDER')" class="text-gray-500 mb-8">{{ category.description }}</p>
@@ -54,6 +54,10 @@
 
 <script setup>
 import { menuData } from '~/data/menu'
+import AppHero from '~/components/ui/AppHero.vue'
+import AppSection from '~/components/ui/AppSection.vue'
+import MenuCategoryNav from '~/components/menu/MenuCategoryNav.vue'
+import MenuItemCard from '~/components/menu/MenuItemCard.vue'
 
 const activeCategory = ref(menuData.categories[0]?.id ?? '')
 

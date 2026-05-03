@@ -23,7 +23,7 @@ defineProps({
   variant: {
     type: String,
     default: 'primary',
-    validator: v => ['primary', 'secondary', 'ghost'].includes(v)
+    validator: v => ['primary', 'secondary', 'ghost', 'white', 'black'].includes(v)
   },
   size: {
     type: String,
@@ -36,9 +36,11 @@ defineProps({
 })
 
 const variants = {
-  primary: 'bg-white text-black hover:bg-white/90',
-  secondary: 'bg-transparent text-white border border-white hover:bg-white hover:text-black',
-  ghost: 'bg-transparent text-white/80 hover:text-white underline-offset-4 hover:underline'
+  primary: 'bg-black text-white hover:bg-gray-800 border-2 border-black',
+  secondary: 'bg-white text-black hover:bg-gray-100 border-2 border-black',
+  ghost: 'bg-transparent text-black hover:bg-black/10 underline-offset-4 hover:underline',
+  white: 'bg-white text-black hover:bg-gray-100 border-2 border-white',
+  black: 'bg-black text-white hover:bg-gray-800 border-2 border-black'
 }
 
 const sizes = {
