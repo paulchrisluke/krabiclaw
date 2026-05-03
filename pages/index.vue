@@ -33,7 +33,10 @@
       </div>
     </AppSection>
 
-    <RestaurantReviews />
+    <RestaurantReviews
+      :reviews="googleReviews"
+      :rating-summary="googleReviewSummary"
+    />
 
     <!-- About teaser -->
     <AppSection bg="black" padding="default">
@@ -107,6 +110,41 @@ const featuredItems = computed(() =>
     .slice(0, 4)
 )
 
+const { data: googleBusiness } = await useFetch('/api/google-business/public', {
+  default: () => ({
+    business: null,
+    reviews: [],
+    media: [],
+    posts: [],
+    errors: [],
+    syncedAt: null
+  })
+})
+
+const starRatingMap = {
+  ONE: 1,
+  TWO: 2,
+  THREE: 3,
+  FOUR: 4,
+  FIVE: 5
+}
+
+const googleReviews = computed(() => googleBusiness.value?.reviews ?? [])
+const googleReviewRating = review => starRatingMap[review.starRating] ?? Number(review.starRating ?? 0)
+const googleReviewText = review => typeof review.comment === 'string'
+  ? review.comment
+  : review.comment?.text ?? ''
+
+const googleReviewSummary = computed(() => {
+  const ratings = googleReviews.value.map(googleReviewRating).filter(Boolean)
+  if (ratings.length === 0) return null
+
+  return {
+    average: (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1),
+    count: ratings.length
+  }
+})
+
 useSeoMeta({
   title: 'Take Me Away by KIKUZUKI | Japanese Robatayaki Izakaya in Krabi',
   description: 'Experience authentic Japanese robatayaki at Take Me Away by KIKUZUKI in Krabi, Thailand. Fresh ingredients, traditional flavors, and unforgettable dining experience in southern Thailand.',
@@ -121,38 +159,86 @@ useSeoMeta({
   twitterImage: '/og-image.jpg'
 })
 
-useSchemaOrg([{
-  '@type': 'Restaurant',
-  name: 'Take Me Away by KIKUZUKI',
-  description: 'Authentic Japanese robatayaki izakaya in Krabi, Thailand offering fresh ingredients and traditional flavors',
-  url: 'https://www.kikuzuki-thailand.com',
-  telephone: '+66-76-XXX-XXXX',
-  email: 'info@kikuzuki-thailand.com',
-  address: {
-    '@type': 'PostalAddress',
-    streetAddress: 'Southern Thailand',
-    addressLocality: 'Krabi',
-    addressRegion: 'Krabi Province',
-    postalCode: '81000',
-    addressCountry: 'TH'
-  },
-  geo: {
-    '@type': 'GeoCoordinates',
-    latitude: 8.0572977,
-    longitude: 98.7493211
-  },
-  openingHoursSpecification: [{
-    '@type': 'OpeningHoursSpecification',
-    dayOfWeek: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
-    opens: '10:00',
-    closes: '22:00'
-  }],
-  priceRange: '$$',
-  servesCuisine: ['Japanese', 'Robatayaki', 'Izakaya'],
-  hasMap: 'https://maps.app.goo.gl/2KJfCAfH1idnRBqz6',
-  sameAs: [
-    'https://www.facebook.com/kikuzuki-thailand',
-    'https://www.instagram.com/kikuzuki-thailand'
+const restaurantStructuredData = computed(() => {
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'Restaurant',
+    name: 'Take Me Away by KIKUZUKI',
+    description: 'Authentic Japanese robatayaki izakaya in Krabi, Thailand offering fresh ingredients and traditional flavors',
+    url: 'https://www.kikuzuki-thailand.com',
+    telephone: '+66-81-154-3606',
+    email: 'info@kikuzuki-thailand.com',
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: '117, Nong Thale',
+      addressLocality: 'Krabi',
+      addressRegion: 'Krabi Province',
+      postalCode: '81000',
+      addressCountry: 'TH'
+    },
+    geo: {
+      '@type': 'GeoCoordinates',
+      latitude: 8.0572977,
+      longitude: 98.7493211
+    },
+    openingHoursSpecification: [
+      {
+        '@type': 'OpeningHoursSpecification',
+        dayOfWeek: ['Sunday'],
+        opens: '12:00',
+        closes: '22:30'
+      },
+      {
+        '@type': 'OpeningHoursSpecification',
+        dayOfWeek: ['Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+        opens: '12:00',
+        closes: '22:30'
+      }
+    ],
+    priceRange: '$$',
+    servesCuisine: ['Japanese', 'Robatayaki', 'Izakaya'],
+    hasMap: 'https://maps.app.goo.gl/2KJfCAfH1idnRBqz6',
+    sameAs: [
+      'https://www.facebook.com/kikuzuki-thailand',
+      'https://www.instagram.com/kikuzuki-thailand'
+    ]
+  }
+
+  if (googleReviewSummary.value) {
+    schema.aggregateRating = {
+      '@type': 'AggregateRating',
+      ratingValue: googleReviewSummary.value.average,
+      reviewCount: String(googleReviewSummary.value.count)
+    }
+    schema.review = googleReviews.value
+      .filter(review => googleReviewText(review))
+      .slice(0, 3)
+      .map(review => ({
+        '@type': 'Review',
+        author: {
+          '@type': 'Person',
+          name: review.reviewer?.displayName ?? 'Google guest'
+        },
+        datePublished: review.createTime,
+        reviewBody: googleReviewText(review),
+        reviewRating: {
+          '@type': 'Rating',
+          ratingValue: googleReviewRating(review),
+          bestRating: 5
+        }
+      }))
+  }
+
+  return schema
+})
+
+useHead(() => ({
+  script: [
+    {
+      key: 'restaurant-google-business-schema',
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify(restaurantStructuredData.value)
+    }
   ]
-}])
+}))
 </script>

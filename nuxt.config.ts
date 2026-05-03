@@ -136,12 +136,7 @@ export default defineNuxtConfig({
       sameAs: [
         'https://www.facebook.com/kikuzuki-thailand',
         'https://www.instagram.com/kikuzuki-thailand'
-      ],
-      aggregateRating: {
-        '@type': 'AggregateRating',
-        ratingValue: '4.9',
-        reviewCount: '50'
-      }
+      ]
     }
   }
 })

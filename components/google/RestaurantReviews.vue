@@ -1,5 +1,5 @@
 <template>
-  <section v-if="reviews.length > 0" class="bg-white">
+  <section v-if="displayedReviews.length > 0" class="bg-white">
     <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
       <div class="flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-end md:justify-between">
         <div>
@@ -32,8 +32,16 @@
 </template>
 
 <script setup>
-const reviews = ref([])
-const ratingSummary = ref(null)
+const props = defineProps({
+  reviews: {
+    type: Array,
+    default: () => []
+  },
+  ratingSummary: {
+    type: Object,
+    default: null
+  }
+})
 
 const starRatingMap = {
   ONE: 1,
@@ -44,11 +52,13 @@ const starRatingMap = {
 }
 
 const reviewAuthor = review => review.reviewer?.displayName ?? 'Google guest'
-const reviewText = review => review.comment ?? review.comment?.text ?? ''
+const reviewText = review => typeof review.comment === 'string'
+  ? review.comment
+  : review.comment?.text ?? ''
 const reviewRating = review => starRatingMap[review.starRating] ?? Number(review.starRating ?? 0)
 
 const displayedReviews = computed(() =>
-  reviews.value
+  props.reviews
     .filter(review => reviewText(review))
     .slice(0, 3)
 )
@@ -59,23 +69,4 @@ const formatDate = value =>
     month: 'long',
     day: 'numeric'
   }).format(new Date(value))
-
-const loadGoogleBusiness = async () => {
-  try {
-    const data = await $fetch('/api/google-business/public')
-    reviews.value = data.reviews ?? []
-    const ratings = reviews.value.map(reviewRating).filter(Boolean)
-    ratingSummary.value = ratings.length > 0
-      ? {
-          average: (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1),
-          count: ratings.length
-        }
-      : null
-  } catch {
-    reviews.value = []
-    ratingSummary.value = null
-  }
-}
-
-onMounted(loadGoogleBusiness)
 </script>

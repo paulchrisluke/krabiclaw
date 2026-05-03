@@ -1,23 +1,7 @@
-interface Env {
-  REVIEWS_DB: D1Database
-  TURNSTILE_SECRET_KEY?: string
-}
+import { toWebRequest } from 'h3'
+import { cleanString, cloudflareEnv, jsonResponse } from '../utils/api-response'
 
 type ReviewStatus = 'pending' | 'approved' | 'rejected'
-
-const json = (body: unknown, init: ResponseInit = {}) =>
-  new Response(JSON.stringify(body), {
-    ...init,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      ...init.headers
-    }
-  })
-
-const badRequest = (message: string) => json({ error: message }, { status: 400 })
-
-const cleanString = (value: unknown, maxLength: number) =>
-  typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 
 const hashIp = async (ip: string) => {
   if (!ip) return null
@@ -43,30 +27,15 @@ const verifyTurnstile = async (request: Request, token: string, secret?: string)
   return Boolean(result.success)
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
-  const url = new URL(request.url)
-  const slug = cleanString(url.searchParams.get('slug'), 120)
-
-  if (!slug) return badRequest('Missing menu item slug.')
-
-  const { results } = await env.REVIEWS_DB.prepare(
-    `SELECT id, menu_item_slug AS menuItemSlug, author, rating, title, content, created_at AS createdAt
-     FROM reviews
-     WHERE menu_item_slug = ? AND status = 'approved'
-     ORDER BY created_at DESC
-     LIMIT 50`
-  ).bind(slug).all()
-
-  return json({ reviews: results ?? [] })
-}
-
-export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
+export default defineEventHandler(async (event) => {
+  const env = cloudflareEnv(event)
+  const request = toWebRequest(event)
   let body: Record<string, unknown>
 
   try {
-    body = await request.json()
+    body = await readBody(event)
   } catch {
-    return badRequest('Invalid JSON body.')
+    return jsonResponse({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
   const menuItemSlug = cleanString(body.menuItemSlug, 120)
@@ -76,14 +45,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   const rating = Number(body.rating)
   const turnstileToken = cleanString(body.turnstileToken, 2048)
 
-  if (!menuItemSlug) return badRequest('Missing menu item slug.')
-  if (!author) return badRequest('Please enter your name.')
-  if (!title) return badRequest('Please add a short review title.')
-  if (content.length < 10) return badRequest('Review text must be at least 10 characters.')
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return badRequest('Rating must be between 1 and 5.')
+  if (!menuItemSlug) return jsonResponse({ error: 'Missing menu item slug.' }, { status: 400 })
+  if (!author) return jsonResponse({ error: 'Please enter your name.' }, { status: 400 })
+  if (!title) return jsonResponse({ error: 'Please add a short review title.' }, { status: 400 })
+  if (content.length < 10) return jsonResponse({ error: 'Review text must be at least 10 characters.' }, { status: 400 })
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return jsonResponse({ error: 'Rating must be between 1 and 5.' }, { status: 400 })
 
   const turnstileOk = await verifyTurnstile(request, turnstileToken, env.TURNSTILE_SECRET_KEY)
-  if (!turnstileOk) return json({ error: 'Turnstile verification failed.' }, { status: 403 })
+  if (!turnstileOk) return jsonResponse({ error: 'Turnstile verification failed.' }, { status: 403 })
 
   const id = crypto.randomUUID()
   const ipHash = await hashIp(request.headers.get('CF-Connecting-IP') ?? '')
@@ -95,8 +64,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(id, menuItemSlug, author, rating, title, content, status, ipHash, userAgent).run()
 
-  return json({
+  return jsonResponse({
     review: { id, menuItemSlug, author, rating, title, content, status },
     message: 'Thanks. Your review is pending moderation.'
   }, { status: 201 })
-}
+})

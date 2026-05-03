@@ -1,13 +1,5 @@
-import { syncGoogleBusiness } from '../../_shared/google-business'
-
-interface Env {
-  GOOGLE_BUSINESS_ACCOUNT_ID?: string
-  GOOGLE_BUSINESS_LOCATION_ID?: string
-  GOOGLE_CLIENT_ID?: string
-  GOOGLE_CLIENT_SECRET?: string
-  GOOGLE_PUBSUB_PUSH_TOKEN?: string
-  REVIEWS_DB: D1Database
-}
+import { syncGoogleBusiness } from '../../utils/google-business'
+import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 
 const decodePubSubData = (data?: string) => {
   if (!data) return null
@@ -18,24 +10,16 @@ const decodePubSubData = (data?: string) => {
   }
 }
 
-const json = (body: unknown, init: ResponseInit = {}) =>
-  new Response(JSON.stringify(body), {
-    ...init,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      ...init.headers
-    }
-  })
-
-export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
-  const url = new URL(request.url)
+export default defineEventHandler(async (event) => {
+  const env = cloudflareEnv(event)
+  const url = getRequestURL(event)
   const expectedToken = env.GOOGLE_PUBSUB_PUSH_TOKEN
 
   if (expectedToken && url.searchParams.get('token') !== expectedToken) {
-    return json({ error: 'Unauthorized' }, { status: 401 })
+    return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await request.json<{
+  const body = await readBody<{
     message?: {
       data?: string
       attributes?: Record<string, string>
@@ -43,7 +27,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       publishTime?: string
     }
     subscription?: string
-  }>()
+  }>(event)
   const decoded = decodePubSubData(body.message?.data)
   const payload = typeof decoded === 'object' && decoded !== null ? decoded as Record<string, unknown> : {}
   const eventType = String(payload.notificationType ?? body.message?.attributes?.notificationType ?? 'UNKNOWN')
@@ -61,14 +45,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     await env.REVIEWS_DB.prepare(
       `UPDATE google_business_events SET status = 'synced' WHERE id = ?`
     ).bind(eventId).run()
-    return json({ ok: true })
+    return jsonResponse({ ok: true })
   } catch (error) {
     await env.REVIEWS_DB.prepare(
       `UPDATE google_business_events SET status = 'sync_failed' WHERE id = ?`
     ).bind(eventId).run()
-    return json({
+    return jsonResponse({
       ok: false,
       error: error instanceof Error ? error.message : String(error)
     }, { status: 202 })
   }
-}
+})

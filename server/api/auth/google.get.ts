@@ -1,18 +1,14 @@
-interface Env {
-  GOOGLE_CLIENT_ID?: string
-  GOOGLE_REDIRECT_URI?: string
-}
+import { cloudflareEnv } from '../../utils/api-response'
 
-const randomState = () => crypto.randomUUID()
-
-export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
+export default defineEventHandler(async (event) => {
+  const env = cloudflareEnv(event)
   if (!env.GOOGLE_CLIENT_ID) {
     return new Response('Missing GOOGLE_CLIENT_ID', { status: 500 })
   }
 
-  const url = new URL(request.url)
+  const url = getRequestURL(event)
   const redirectUri = env.GOOGLE_REDIRECT_URI || `${url.origin}/api/auth/google/callback`
-  const state = randomState()
+  const state = crypto.randomUUID()
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
 
   authUrl.searchParams.set('client_id', env.GOOGLE_CLIENT_ID)
@@ -30,4 +26,4 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       'Set-Cookie': `kikuzuki_oauth_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`
     }
   })
-}
+})
