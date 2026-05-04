@@ -24,8 +24,7 @@ export const usePageContent = (pageName?: string) => {
 
   const { data, refresh } = useFetch(() => `/api/content/${page.value}`, {
     key: computed(() => `content-${page.value}`),
-    server: false,
-    getCachedData: () => null
+    server: true
   })
 
   /** Map of field → ContentRow for quick lookup */
