@@ -23,7 +23,7 @@ export function createAuth(env: CloudflareEnv) {
   const db = new Kysely({ dialect: new D1Dialect({ database: d1 }) })
 
   const instance = betterAuth({
-    baseURL: env.BETTER_AUTH_URL || 'http://localhost:8788',
+    baseURL: env.BETTER_AUTH_URL,
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
     database: {

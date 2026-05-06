@@ -134,9 +134,7 @@ definePageMeta({
   ssr: false
 })
 
-import { useAuth } from '~/composables/useAuth'
 
-const { data: session, isPending } = useAuth()
 const router = useRouter()
 
 // Form state
@@ -265,27 +263,17 @@ async function handleSubmit() {
 }
 
 // Check if user already has organization/site and redirect
-onMounted(() => {
-  watch(isPending, async (pending) => {
-    if (pending) return
-    
-    if (!session.value?.user) {
-      await navigateTo('/login')
-      return
+onMounted(async () => {
+  try {
+    // Check onboarding status
+    const status = await $fetch('/api/onboarding/status')
+    if (!status.needsOnboarding && status.sites.length > 0) {
+      // User already has active site, redirect to dashboard
+      await navigateTo('/dashboard')
     }
-
-    try {
-      // Check onboarding status
-      const status = await $fetch('/api/onboarding/status')
-      
-      if (!status.needsOnboarding && status.sites.length > 0) {
-        // User already has active site, redirect to dashboard
-        await navigateTo('/dashboard')
-      }
-    } catch (error) {
-      console.error('Error checking onboarding status:', error)
-      // Stay on onboarding page if status check fails
-    }
-  }, { immediate: true })
+  } catch (error) {
+    console.error('Error checking onboarding status:', error)
+    // Stay on onboarding page if status check fails
+  }
 })
 </script>

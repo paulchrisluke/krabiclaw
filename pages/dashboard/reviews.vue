@@ -114,12 +114,12 @@
 <script setup>
 import { useAuth } from '~/composables/useAuth'
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ 
+  layout: 'dashboard'
+})
 import { menuData } from '~/data/menu'
 
-const { data: sessionData, isPending: sessionLoading } = useAuth()
-const session = computed(() => sessionData.value?.session)
-const isAuthenticated = computed(() => !!sessionData.value?.user)
+const { user } = useAuth()
 
 const selectedStatus = ref('pending')
 const reviews = ref([])
@@ -162,8 +162,6 @@ const formatDate = value =>
   }).format(new Date(value))
 
 const loadReviews = async () => {
-  if (!isAuthenticated.value) return
-
   try {
     const response = await $fetch('/api/dashboard/reviews', {
       query: { status: selectedStatus.value }
@@ -175,7 +173,7 @@ const loadReviews = async () => {
 }
 
 const updateReview = async (id, status) => {
-  if (!isAuthenticated.value || updatingId.value) return
+  if (updatingId.value) return
 
   updatingId.value = id
 

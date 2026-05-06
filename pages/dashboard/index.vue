@@ -188,10 +188,8 @@ definePageMeta({
   auth: true
 })
 
-const { data: sessionData, isPending: sessionLoading } = useAuth()
+const { user, isAuthenticated, sessionLoading } = useAuth()
 const { data: organizationsData, isPending: orgsLoading } = authClient.organization.useList()
-
-const user = computed(() => sessionData.value?.user)
 const organizations = computed(() => organizationsData.value || [])
 const sites = ref([])
 const sitesLoading = ref(false)
@@ -252,7 +250,7 @@ watch(organizations, async (newOrgs) => {
 async function handleSignOut() {
   try {
     await authClient.signOut()
-    navigateTo('/login')
+    await navigateTo('/login')
   } catch (error) {
     console.error('Sign out failed:', error)
   }

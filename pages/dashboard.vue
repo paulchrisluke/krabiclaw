@@ -126,7 +126,7 @@
               class="block p-4 border border-stone-200 rounded-lg hover:bg-stone-50 transition-colors"
             >
               <div class="flex items-center">
-                <div class="flex-shrink-0">
+                <div class="shrink-0">
                   <svg class="w-6 h-6 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
                   </svg>
@@ -144,7 +144,7 @@
               class="block p-4 border border-stone-200 rounded-lg hover:bg-stone-50 transition-colors"
             >
               <div class="flex items-center">
-                <div class="flex-shrink-0">
+                <div class="shrink-0">
                   <svg class="w-6 h-6 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                   </svg>
@@ -158,7 +158,7 @@
             
             <div class="block p-4 border border-stone-200 rounded-lg">
               <div class="flex items-center">
-                <div class="flex-shrink-0">
+                <div class="shrink-0">
                   <svg class="w-6 h-6 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                   </svg>
@@ -177,57 +177,31 @@
 </template>
 
 <script setup>
-import { useAuth } from '~/composables/useAuth'
 import { authClient } from '~/utils/auth-client'
 
 definePageMeta({
-  layout: 'dashboard',
-  auth: true
+  layout: 'dashboard'
 })
 
-
-const { data: sessionData, isPending: sessionLoading } = useAuth()
-console.log('[dashboard] sessionData:', sessionData)
-console.log('[dashboard] sessionLoading:', sessionLoading)
-const user = computed(() => sessionData.value?.user)
-
-// State
-const dataLoading = ref(true)
 const sites = ref([])
+const loading = ref(true)
 
-// Computed
-const loading = computed(() => sessionLoading.value || dataLoading.value)
-
-// Load sites data
-async function loadSites() {
+onMounted(async () => {
   try {
-    if (!user.value && !sessionLoading.value) {
-      await navigateTo('/login')
-      return
-    }
-
     const response = await $fetch('/api/sites')
     sites.value = response.sites || []
-  } catch (error) {
-    console.error('Failed to load sites:', error)
-    sites.value = []
   } finally {
-    dataLoading.value = false
+    loading.value = false
   }
-}
+})
 
 // Handle logout
 async function handleLogout() {
   try {
     await authClient.signOut()
-    navigateTo('/login')
+    await navigateTo('/login')
   } catch (error) {
     console.error('Logout failed:', error)
   }
 }
-
-// Load data on mount
-onMounted(() => {
-  loadSites()
-})
 </script>

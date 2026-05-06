@@ -63,13 +63,13 @@
 </template>
 
 <script setup>
+
 definePageMeta({
-  layout: 'platform',
-  auth: false
+  layout: 'platform'
 })
 
-const router = useRouter()
 
+const router = useRouter()
 const loading = ref(false)
 
 // Handle Google Sign In

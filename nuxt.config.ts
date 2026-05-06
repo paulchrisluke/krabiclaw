@@ -1,6 +1,11 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   modules: ['nitro-cloudflare-dev', 'nuxt-gtag', '@nuxtjs/robots', '@nuxtjs/sitemap', 'nuxt-schema-org', '@nuxtjs/i18n', '@nuxt/ui'],
+  
+  // Nuxt UI configuration
+  '@nuxt/ui': {
+    components: true
+  },
   gtag: {
     id: 'G-Z18L1Y4G7K'
   },

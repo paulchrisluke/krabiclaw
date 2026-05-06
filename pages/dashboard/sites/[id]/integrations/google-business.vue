@@ -297,66 +297,75 @@ async function loadData() {
     const auth = await useAuth()
     user.value = auth.user
     
-    if (!user.value) {
-      await router.push('/login')
-      return
-    }
 
-    // Get site details
-    const siteResponse = await $fetch(`/api/sites/${siteId.value}`)
-    site.value = siteResponse
+    const router = useRouter()
+    const route = useRoute()
+    const { user, sessionLoading } = useAuth()
+    const hasLoaded = ref(false)
 
-    // Check Google Business entitlement
-    const billingResponse = await $fetch('/api/billing/status')
-    hasGoogleBusinessEntitlement.value = billingResponse.billing.entitlements.google_business || false
+    // State
+    const loading = ref(true)
+    const site = ref(null)
+    const connection = ref(null)
+    const accounts = ref([])
+    const locations = ref([])
+    const hasGoogleBusinessEntitlement = ref(false)
 
-    if (hasGoogleBusinessEntitlement.value) {
-      // Get existing connection
+    // Form state
+    const connecting = ref(false)
+    const loadingAccounts = ref(false)
+    const showLocationPicker = ref(false)
+    const selectedLocations = ref([])
+    const syncing = ref(false)
+    const refreshing = ref(null)
+
+    // Message state
+    const successMessage = ref('')
+    const errorMessage = ref('')
+
+    // Computed
+    const siteId = computed(() => route.params.id)
+
+    watch([
+      user,
+      sessionLoading
+    ], async ([currentUser, loadingSession]) => {
+      if (loadingSession) return
+      if (!currentUser) {
+        await router.push('/login')
+        return
+      }
+      if (hasLoaded.value) return
+      hasLoaded.value = true
+      await loadData()
+    }, { immediate: true })
+
+    // Load site and integration data (no auth check)
+    async function loadData() {
+      loading.value = true
       try {
-        const connectionResponse = await $fetch(`/api/integrations/google-business/accounts`)
+        // Get site details
+        const siteResponse = await $fetch(`/api/sites/${siteId.value}`)
+        site.value = siteResponse
+
+        // Check Google Business entitlement
+        const billingResponse = await $fetch('/api/billing/status')
+        hasGoogleBusinessEntitlement.value = billingResponse.billing.entitlements.google_business || false
+
+        // Get Google Business connection
+        const connectionResponse = await $fetch(`/api/sites/${siteId.value}/google-business/connection`)
         connection.value = connectionResponse.connection
-      } catch (error) {
-        // No connection exists
-        connection.value = null
-      }
 
-      // Get imported locations
-      try {
+        // Get imported locations
         const locationsResponse = await $fetch(`/api/sites/${siteId.value}/locations`)
-        locations.value = locationsResponse.locations || []
+        locations.value = locationsResponse.locations
       } catch (error) {
-        locations.value = []
+        console.error('Failed to load data:', error)
+        errorMessage.value = 'Failed to load integration data'
+      } finally {
+        loading.value = false
       }
     }
-    
-  } catch (error) {
-    console.error('Failed to load data:', error)
-    errorMessage.value = 'Failed to load integration data'
-  } finally {
-    loading.value = false
-  }
-}
-
-// Connect Google Business
-async function connectGoogleBusiness() {
-  if (connecting.value) return
-  
-  connecting.value = true
-  successMessage.value = ''
-  errorMessage.value = ''
-  
-  try {
-    const response = await $fetch(`/api/integrations/google-business/auth`, {
-      method: 'POST'
-    })
-    
-    if (response.success) {
-      // Redirect to Google OAuth
-      window.location.href = response.authUrl
-    } else {
-      errorMessage.value = response.error || 'Failed to start Google Business authorization'
-    }
-  } catch (error) {
     console.error('Failed to connect Google Business:', error)
     errorMessage.value = 'Failed to connect Google Business. Please try again.'
   } finally {

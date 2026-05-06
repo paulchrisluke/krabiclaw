@@ -273,15 +273,17 @@ definePageMeta({
   auth: true
 })
 
+
 const router = useRouter()
 const route = useRoute()
+const { user, sessionLoading } = useAuth()
+const hasLoaded = ref(false)
 
 // State
 const loading = ref(true)
 const site = ref(null)
 const domains = ref([])
 const hasCustomDomainsEntitlement = ref(false)
-const user = ref(null)
 
 // Form state
 const newDomain = ref('')
@@ -298,17 +300,24 @@ const siteId = computed(() => route.params.id)
 const systemDomain = computed(() => domains.value.find(d => d.type === 'subdomain'))
 const customDomains = computed(() => domains.value.filter(d => d.type === 'custom'))
 
-// Load site and domains data
-async function loadData() {
-  try {
-    const auth = await useAuth()
-    user.value = auth.user
-    
-    if (!user.value) {
-      await router.push('/login')
-      return
-    }
+watch([
+  user,
+  sessionLoading
+], async ([currentUser, loadingSession]) => {
+  if (loadingSession) return
+  if (!currentUser) {
+    await router.push('/login')
+    return
+  }
+  if (hasLoaded.value) return
+  hasLoaded.value = true
+  await loadData()
+}, { immediate: true })
 
+// Load site and domains data (no auth check)
+async function loadData() {
+  loading.value = true
+  try {
     // Get site details
     const siteResponse = await $fetch(`/api/sites/${siteId.value}`)
     site.value = siteResponse
@@ -320,7 +329,6 @@ async function loadData() {
     // Check custom domains entitlement
     const billingResponse = await $fetch('/api/billing/status')
     hasCustomDomainsEntitlement.value = billingResponse.billing.entitlements.custom_domains || false
-    
   } catch (error) {
     console.error('Failed to load data:', error)
     errorMessage.value = 'Failed to load site data'
