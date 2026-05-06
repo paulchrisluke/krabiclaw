@@ -131,9 +131,12 @@
 
 definePageMeta({
   layout: 'platform',
-  auth: true
+  ssr: false
 })
 
+import { useAuth } from '~/composables/useAuth'
+
+const { data: session, isPending } = useAuth()
 const router = useRouter()
 
 // Form state
@@ -262,23 +265,27 @@ async function handleSubmit() {
 }
 
 // Check if user already has organization/site and redirect
-onMounted(async () => {
-  const { data: sessionData } = await authClient.useSession()
-  if (!sessionData.value?.user) {
-    await navigateTo('/login')
-    return
-  }
-
-  try {
-    // Check if user already has organizations
-    const { data: organizations } = await authClient.organization.useList()
-    if (organizations.value?.length > 0) {
-      // User already has organization, redirect to dashboard
-      await navigateTo('/dashboard')
+onMounted(() => {
+  watch(isPending, async (pending) => {
+    if (pending) return
+    
+    if (!session.value?.user) {
+      await navigateTo('/login')
+      return
     }
-  } catch (error) {
-    // User might not be authenticated or API error
-    console.error('Error checking organizations:', error)
-  }
+
+    try {
+      // Check onboarding status
+      const status = await $fetch('/api/onboarding/status')
+      
+      if (!status.needsOnboarding && status.sites.length > 0) {
+        // User already has active site, redirect to dashboard
+        await navigateTo('/dashboard')
+      }
+    } catch (error) {
+      console.error('Error checking onboarding status:', error)
+      // Stay on onboarding page if status check fails
+    }
+  }, { immediate: true })
 })
 </script>

@@ -7,7 +7,6 @@
     "build": "nuxi build --preset=cloudflare_pages",
     "build:cf": "nuxt build",
     "dev": "nuxt dev",
-    "dev:cf": "npx wrangler pages dev dist --persist-to=.wrangler/state",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "migrate:local": "npx wrangler d1 migrations apply REVIEWS_DB --local",
@@ -18,12 +17,14 @@
     "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^25.6.0",
     "autoprefixer": "^10.5.0",
+    "nitro-cloudflare-dev": "^0.2.2",
     "nuxt": "^4.4.2",
     "nuxt-gtag": "^4.1.0",
     "postcss": "^8.5.13",
     "tailwindcss": "^4.2.4",
     "vue": "^3.5.33",
-    "vue-router": "^5.0.6"
+    "vue-router": "^5.0.6",
+    "wrangler": "^4.88.0"
   },
   "dependencies": {
     "@atinux/kysely-d1": "^0.3.1",

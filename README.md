@@ -24,10 +24,9 @@ There is **no separate Worker** — everything runs as Pages Functions inside th
 
 | Command | What it does |
 |---|---|
-| `yarn dev` | Nuxt dev server (localhost:3000). No D1 bindings — DB calls will error. Use for UI/styling only. |
+| `yarn dev` | Nuxt dev server (localhost:3000, or next available port). **D1 bindings and Cloudflare context are available via `nitro-cloudflare-dev` — full local emulation, hot reload, no build step required.** |
 | `yarn build` | Production build with `cloudflare_pages` preset → outputs to `dist/` |
 | `yarn build:cf` | Alias for `nuxt build` (same preset) |
-| `yarn dev:cf` | Run `dist/` through Wrangler Pages dev with real D1 bindings (localhost:8788). Requires a prior build. |
 | `yarn preview` | Nuxt preview server |
 
 ## Local Development with D1
@@ -51,25 +50,18 @@ Create a `.env` file with the following (see `.env.example`):
 - `BETTER_AUTH_URL`: `http://localhost:8788` (for local dev)
 - `GOOGLE_CLIENT_ID` / `SECRET`: From Google Cloud Console
 
-### 3. Development Server
+### 3. Development Server (with D1)
 
-We use `wrangler pages dev` to simulate the Cloudflare environment locally, including D1 bindings.
-
-```bash
-# 1. Build the project
-yarn build
-
-# 2. Run the local Cloudflare Pages server
-yarn dev:cf
-```
-
-The app will be available at `http://localhost:8788`.
-
-When you change server code, stop wrangler, rebuild, then restart:
+For local development with D1 and Cloudflare emulation, just run:
 
 ```bash
-yarn build && yarn dev:cf
+yarn dev
 ```
+
+The app will be available at `http://localhost:3000` (or the next available port). Hot reload is supported. D1 is available via `event.context.cloudflare.env.REVIEWS_DB`.
+
+> [!NOTE]
+> No build step or wrangler pages dev is needed for local dev. The `nitro-cloudflare-dev` module automatically reads your `wrangler.toml` and emulates bindings.
 
 ### EMFILE fix (macOS)
 
@@ -107,23 +99,55 @@ All schema lives in `migrations/`. Files are applied in numeric order.
 
 | File | What it creates |
 |---|---|
-| `0001_reviews.sql` | `reviews` table |
-| `0002_google_business_sync.sql` | `google_business_snapshots`, `google_oauth_tokens` |
-| `0003_site_config.sql` | `site_config` table |
-| `0004_content_management.sql` | `site_content`, `staff_profiles`, `awards_recognition` |
-| `0005_content_drafts.sql` | `site_content_drafts` |
-| `0006_content_schema_v2.sql` | Schema v2 columns |
-| `0007_saas_platform_foundation.sql` | Multi-tenant: `organizations`, `sites`, `users` |
-| `0008_google_business_integration.sql` | `google_business_connections`, `business_locations` |
-| `0009_billing_entitlements.sql` | `subscriptions`, `entitlements` |
-| `0010_domains_onboarding.sql` | `custom_domains`, `onboarding_state` |
-| `0011_menu_management.sql` | `menu_items`, `menu_categories` |
+| `0001_initial_schema.sql` | Core Better Auth tables: `user`, `organization`, `member`, `account`, `session`, `verification`, plus app tables |
+| `0002_fix_account_table.sql` | Account table columns fix |
+| `0003_fix_better_auth_schema.sql` | Better Auth schema consistency |
+| ... | ... |
+| (see migrations/ for full list) |
 
 ### Apply locally
 
 ```bash
+yarn migrate:local
+# or
 wrangler d1 migrations apply REVIEWS_DB --local
 ```
+## Seeding Demo Data (Local Only)
+
+After running migrations, if your database is empty (first setup or after reset), seed demo data:
+
+```bash
+npx wrangler d1 execute REVIEWS_DB --local --file scripts/seed-krabiclaw.sql
+```
+
+You only need to seed if you reset/drop the database or clear `.wrangler/state`. Seeding is not required for every server restart.
+
+## Local Development Flows
+
+### Fast Hot-Reload Dev (Recommended)
+
+```bash
+yarn dev
+```
+
+Runs Nuxt with `nitro-cloudflare-dev` for full Cloudflare emulation, D1 bindings, and hot reload. App available at http://localhost:3000 (or next available port).
+
+### SSR/Edge Emulation (Cloudflare Pages Preview)
+
+To test the actual Cloudflare Pages build and edge runtime:
+
+```bash
+yarn build
+npx wrangler pages dev ./dist --local --port 8788
+```
+
+App available at http://localhost:8788
+
+## Testing Auth/Login
+
+- Open http://localhost:3000 (yarn dev) or http://localhost:8788 (wrangler pages dev)
+- Use the login/signup button to start Google OAuth
+- Or test directly: http://localhost:8788/api/auth/sign-in/social?provider=google
 
 ### Apply to production
 
@@ -192,7 +216,7 @@ Access at `/admin` — requires Google OAuth sign-in via better-auth.
 - `business_locations` — synced location data
 - `site_content` / `site_content_drafts` — CMS draft/publish workflow
 - `staff_profiles` / `awards_recognition` — team and achievements content
-- `organizations` / `sites` / `users` — multi-tenant SaaS foundation
+- `organization` / `site` / `user` / `member` — multi-tenant SaaS foundation (Better Auth tables are singular)
 - `subscriptions` / `entitlements` — billing and plan management
 - `custom_domains` — custom domain management per site
 - `menu_items` / `menu_categories` — restaurant menu management

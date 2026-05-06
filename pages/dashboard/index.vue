@@ -180,12 +180,15 @@
 </template>
 
 <script setup>
+import { useAuth } from '~/composables/useAuth'
+import { authClient } from '~/utils/auth-client'
+
 definePageMeta({
   layout: 'dashboard',
   auth: true
 })
 
-const { data: sessionData, isPending: sessionLoading } = authClient.useSession()
+const { data: sessionData, isPending: sessionLoading } = useAuth()
 const { data: organizationsData, isPending: orgsLoading } = authClient.organization.useList()
 
 const user = computed(() => sessionData.value?.user)

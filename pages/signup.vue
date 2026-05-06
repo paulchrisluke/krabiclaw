@@ -93,7 +93,7 @@
 </template>
 
 <script setup>
-import { authClient } from '~/composables/useAuth'
+import { signInWithGoogle } from '~/composables/useAuth'
 
 definePageMeta({
   layout: 'platform',
@@ -112,12 +112,9 @@ const form = ref({
 const handleGoogleSignIn = async () => {
   loading.value = true
   try {
-    await authClient.signIn.social({
-      provider: 'google',
-      callbackURL: '/dashboard/onboarding'
-    })
+    await signInWithGoogle('/dashboard')
   } catch (error) {
-    console.error('Google sign in error:', error)
+    console.error('Sign in error:', error)
   } finally {
     loading.value = false
   }

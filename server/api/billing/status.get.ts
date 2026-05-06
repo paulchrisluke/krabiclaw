@@ -34,9 +34,9 @@ export default defineEventHandler(async (event) => {
   if (!organizationId) {
     // Get user's first organization
     const userOrg = await db.prepare(`
-      SELECT o.id FROM organizations o
-      JOIN organization_members om ON o.id = om.organization_id
-      WHERE om.user_id = ?
+      SELECT o.id FROM organization o
+      JOIN member m ON o.id = m.organizationId
+      WHERE m.userId = ?
       LIMIT 1
     `).bind(session.user.id).first()
     
@@ -52,8 +52,8 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user is member of organization
     const membership = await db.prepare(`
-      SELECT role FROM organization_members 
-      WHERE organization_id = ? AND user_id = ?
+      SELECT role FROM member 
+      WHERE organizationId = ? AND userId = ?
       LIMIT 1
     `).bind(organizationId, session.user.id).first()
     

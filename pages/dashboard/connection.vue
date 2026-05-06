@@ -171,9 +171,11 @@
 </template>
 
 <script setup>
+import { useAuth } from '~/composables/useAuth'
+
 definePageMeta({ layout: 'dashboard' })
 
-const { data: sessionData } = authClient.useSession()
+const { data: sessionData } = useAuth()
 const session = computed(() => sessionData.value?.user)
 const { data: publicData, refresh: refreshPublic } = await useFetch('/api/google-business/public', { key: 'google-business-public' })
 const { data: configData, refresh: refreshConfig } = await useFetch('/api/dashboard/config', { key: 'dashboard-config' })

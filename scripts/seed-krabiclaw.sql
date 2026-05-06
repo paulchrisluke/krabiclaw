@@ -2,12 +2,15 @@
 -- Creates a default demo restaurant
 
 -- 1. Create a demo user
-DELETE FROM users WHERE id = 'user_demo';
-INSERT INTO users (id, name, email) VALUES ('user_demo', 'Demo User', 'demo@krabiclaw.com');
+DELETE FROM user WHERE id = 'user_demo';
+INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES ('user_demo', 'Demo User', 'demo@krabiclaw.com', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- 2. Create an organization
-DELETE FROM organizations WHERE id = 'org_demo';
-INSERT INTO organizations (id, name, slug) VALUES ('org_demo', 'Demo Organization', 'demo-org');
+DELETE FROM organization WHERE id = 'org_demo';
+INSERT INTO organization (id, name, slug, createdAt) VALUES ('org_demo', 'Demo Organization', 'demo-org', CURRENT_TIMESTAMP);
+-- 2.1. Add demo user as member of organization
+DELETE FROM member WHERE id = 'member_demo';
+INSERT INTO member (id, organizationId, userId, role, createdAt) VALUES ('member_demo', 'org_demo', 'user_demo', 'owner', CURRENT_TIMESTAMP);
 
 -- 3. Create a theme if not exists
 INSERT INTO themes (id, name, slug, version, description, status) 

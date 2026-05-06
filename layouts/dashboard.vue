@@ -108,7 +108,10 @@
 </template>
 
 <script setup>
-const { data: sessionData, signOut } = authClient.useSession()
+import { useAuth } from '~/composables/useAuth'
+import { authClient } from '~/utils/auth-client'
+
+const { data: sessionData, signOut } = useAuth()
 const session = computed(() => sessionData.value?.session)
 
 const userMenuItems = [

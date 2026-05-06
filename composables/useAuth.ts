@@ -1,17 +1,10 @@
-import { createAuthClient } from 'better-auth/client'
-import { organizationClient } from 'better-auth/client/plugins'
+import { authClient, useSession } from '~/utils/auth-client'
 
-export const authClient = createAuthClient({
-  baseURL: typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8788',
-  plugins: [organizationClient()]
-})
-
-// Compatibility wrappers if needed, but better to use authClient directly
 export const useAuth = () => {
-  return authClient.useSession()
+  return useSession()
 }
 
-export const signOut = async () => {
+export const signOutUser = async () => {
   await authClient.signOut()
   await navigateTo('/login')
 }

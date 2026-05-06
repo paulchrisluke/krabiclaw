@@ -48,9 +48,9 @@ export default defineEventHandler(async (event) => {
   try {
     // Step 1: Check if user already has organization membership via Better Auth
     let userOrganizations = await db.prepare(`
-      SELECT o.* FROM organizations o
-      JOIN organization_members om ON o.id = om.organization_id
-      WHERE om.user_id = ?
+      SELECT o.* FROM organization o
+      JOIN member m ON o.id = m.organizationId
+      WHERE m.userId = ?
       LIMIT 1
     `).bind(userId).first()
     
@@ -100,36 +100,35 @@ export default defineEventHandler(async (event) => {
       
       try {
         await db.prepare(`
-          INSERT INTO organizations (
-            id, name, slug, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?)
+          INSERT INTO organization (
+            id, name, slug, createdAt
+          ) VALUES (?, ?, ?, ?)
         `).bind(
           organizationId,
           restaurantName,
           restaurantName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-          new Date().toISOString(),
           new Date().toISOString()
         ).run()
         
         // Add user as organization member
         await db.prepare(`
-          INSERT INTO organization_members (
-            organization_id, user_id, role, created_at, updated_at
+          INSERT INTO member (
+            id, organizationId, userId, role, createdAt
           ) VALUES (?, ?, ?, ?, ?)
         `).bind(
+          `member-${organizationId}-${userId}-${Date.now()}`,
           organizationId,
           userId,
           'owner',
-          new Date().toISOString(),
           new Date().toISOString()
         ).run()
         
       } catch (orgError) {
         // Handle potential race condition where organization was created by another request
         const existingOrg = await db.prepare(`
-          SELECT o.* FROM organizations o
-          JOIN organization_members om ON o.id = om.organization_id
-          WHERE om.user_id = ?
+          SELECT o.* FROM organization o
+          JOIN member m ON o.id = m.organizationId
+          WHERE m.userId = ?
           LIMIT 1
         `).bind(userId).first()
         
