@@ -1,197 +1,200 @@
 <template>
-  <div class="min-h-screen bg-stone-50">
-    <!-- Site Header -->
-    <UHeader>
-      <template #left>
-        <div class="flex items-center space-x-4">
-          <UButton
-            to="/dashboard"
-            variant="ghost"
-            color="neutral"
-            size="sm"
-            icon="i-heroicons-arrow-left"
-          >
-            Dashboard
-          </UButton>
-          <h1 class="text-xl font-semibold text-stone-900">
-            {{ site?.name || 'Loading...' }}
-          </h1>
-        </div>
-      </template>
-      <template #right>
-        <UButton
-          :href="`https://${site?.subdomain}.krabiclaw.com`"
-          target="_blank"
-          variant="outline"
-          size="sm"
-        >
-          View Live Site
-        </UButton>
-      </template>
-    </UHeader>
+  <UDashboardPanel>
+    <template #header>
+      <UDashboardNavbar :title="site?.name || 'Site Details'" icon="i-heroicons-globe-alt">
+        <template #right>
+          <div class="flex items-center gap-2">
+            <UBadge 
+              :color="site?.onboarding_status === 'active' ? 'green' : 'amber'" 
+              variant="subtle"
+              size="sm"
+            >
+              {{ site?.onboarding_status }}
+            </UBadge>
+            <UButton
+              v-if="site"
+              :to="`https://${site.subdomain}.krabiclaw.com`"
+              target="_blank"
+              variant="outline"
+              color="primary"
+              icon="i-heroicons-arrow-top-right-on-square"
+              size="sm"
+            >
+              View Live Site
+            </UButton>
+          </div>
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <!-- Main Content -->
-    <UContainer class="py-8">
+    <template #body>
       <!-- Loading State -->
-      <div v-if="loading" class="text-center py-12">
-        <USkeleton class="h-8 w-8 mx-auto mb-4" />
-        <p class="text-stone-600">Loading site...</p>
+      <div v-if="loading" class="flex items-center justify-center h-64">
+        <div class="text-center">
+          <USkeleton class="h-8 w-8 mx-auto mb-4" />
+          <p class="text-muted-foreground">Loading site...</p>
+        </div>
       </div>
 
       <!-- Site Content -->
-      <div v-else-if="site" class="space-y-8">
-        <!-- Site Info -->
+      <div v-else-if="site" class="space-y-6">
+        <!-- Site Info Card -->
         <UCard>
-          <h2 class="text-lg font-semibold text-stone-900 mb-4">Site Information</h2>
+          <template #header>
+            <h3 class="font-semibold">Site Information</h3>
+          </template>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p class="text-sm text-stone-600">Restaurant Name</p>
-              <p class="font-medium text-stone-900">{{ site.name }}</p>
+            <div class="space-y-1">
+              <p class="text-sm font-medium text-muted-foreground">Restaurant Name</p>
+              <p class="font-semibold">{{ site.name }}</p>
             </div>
-            <div>
-              <p class="text-sm text-stone-600">Website Address</p>
-              <p class="font-medium text-stone-900">{{ site.subdomain }}.krabiclaw.com</p>
+            <div class="space-y-1">
+              <p class="text-sm font-medium text-muted-foreground">Website Address</p>
+              <p class="font-semibold">{{ site.subdomain }}.krabiclaw.com</p>
             </div>
-            <div>
-              <p class="text-sm text-stone-600">Theme</p>
-              <p class="font-medium text-stone-900">Saya</p>
+            <div class="space-y-1">
+              <p class="text-sm font-medium text-muted-foreground">Theme</p>
+              <p class="font-semibold">Saya</p>
             </div>
-            <div>
-              <p class="text-sm text-stone-600">Plan</p>
-              <p class="font-medium text-stone-900">{{ site.plan === 'free' ? 'Free Plan' : 'Premium Plan' }}</p>
+            <div class="space-y-1">
+              <p class="text-sm font-medium text-muted-foreground">Plan</p>
+              <div class="flex items-center gap-2">
+                <p class="font-semibold">{{ site.plan === 'free' ? 'Free' : 'Premium' }}</p>
+                <UBadge 
+                  :color="site.plan === 'free' ? 'gray' : 'primary'" 
+                  variant="soft"
+                  size="xs"
+                >
+                  {{ site.plan === 'free' ? 'Limited' : 'Full Access' }}
+                </UBadge>
+              </div>
             </div>
           </div>
         </UCard>
 
-        <!-- Quick Actions -->
-        <div class="bg-white rounded-lg shadow-sm border border-stone-200 p-6">
-          <h2 class="text-lg font-semibold text-stone-900 mb-4">Quick Actions</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button
-              @click="editContent"
-              class="flex items-center justify-center px-4 py-3 bg-stone-900 text-white rounded-lg hover:bg-stone-800 transition-colors"
-            >
-              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-              </svg>
-              Edit Content
-            </button>
-            <button
-              @click="manageMenu"
-              class="flex items-center justify-center px-4 py-3 border border-stone-300 text-stone-700 rounded-lg hover:bg-stone-50 transition-colors"
-            >
-              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-              </svg>
-              Manage Menu
-            </button>
-          </div>
+        <!-- Quick Actions Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <UCard class="hover:shadow-md transition-shadow cursor-pointer" @click="editContent">
+            <div class="flex flex-col items-center text-center p-4">
+              <div class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-3">
+                <UIcon name="i-heroicons-pencil-square" class="w-6 h-6 text-primary" />
+              </div>
+              <h4 class="font-semibold mb-1">Edit Content</h4>
+              <p class="text-sm text-muted-foreground">Update restaurant info</p>
+            </div>
+          </UCard>
+
+          <UCard class="hover:shadow-md transition-shadow cursor-pointer" @click="manageMenu">
+            <div class="flex flex-col items-center text-center p-4">
+              <div class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-3">
+                <UIcon name="i-heroicons-clipboard-document-list" class="w-6 h-6 text-primary" />
+              </div>
+              <h4 class="font-semibold mb-1">Manage Menu</h4>
+              <p class="text-sm text-muted-foreground">Edit menu items</p>
+            </div>
+          </UCard>
+
+          <UCard class="hover:shadow-md transition-shadow cursor-pointer" @click="$router.push('/dashboard/sites/' + site.id + '/analytics')">
+            <div class="flex flex-col items-center text-center p-4">
+              <div class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-3">
+                <UIcon name="i-heroicons-chart-bar" class="w-6 h-6 text-primary" />
+              </div>
+              <h4 class="font-semibold mb-1">Analytics</h4>
+              <p class="text-sm text-muted-foreground">View site stats</p>
+            </div>
+          </UCard>
+
+          <UCard class="hover:shadow-md transition-shadow cursor-pointer" @click="$router.push('/dashboard/sites/' + site.id + '/settings')">
+            <div class="flex flex-col items-center text-center p-4">
+              <div class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-3">
+                <UIcon name="i-heroicons-cog-6-tooth" class="w-6 h-6 text-primary" />
+              </div>
+              <h4 class="font-semibold mb-1">Settings</h4>
+              <p class="text-sm text-muted-foreground">Site configuration</p>
+            </div>
+          </UCard>
         </div>
 
-        <!-- Recent Activity -->
-        <div class="bg-white rounded-lg shadow-sm border border-stone-200 p-6">
-          <h2 class="text-lg font-semibold text-stone-900 mb-4">Getting Started</h2>
-          <div class="space-y-4">
-            <div class="flex items-center">
-              <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                <svg class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                </svg>
+        <!-- Status & Actions -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Site Status -->
+          <UCard>
+            <template #header>
+              <h3 class="font-semibold">Site Status</h3>
+            </template>
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium">Status</span>
+                <UBadge 
+                  :color="site.onboarding_status === 'active' ? 'green' : 'amber'" 
+                  variant="subtle"
+                >
+                  {{ site.onboarding_status }}
+                </UBadge>
               </div>
-              <div>
-                <p class="font-medium text-stone-900">Site Created</p>
-                <p class="text-sm text-stone-600">Your restaurant website is ready</p>
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium">Last Updated</span>
+                <span class="text-sm text-muted-foreground">{{ new Date(site.updated_at).toLocaleDateString() }}</span>
               </div>
-            </div>
-            
-            <div class="flex items-center">
-              <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                </svg>
-              </div>
-              <div>
-                <p class="font-medium text-stone-900">Customize Content</p>
-                <p class="text-sm text-stone-600">Edit your restaurant information and hours</p>
-              </div>
-            </div>
-            
-            <div class="flex items-center">
-              <div class="w-8 h-8 bg-stone-100 rounded-full flex items-center justify-center mr-3">
-                <svg class="w-4 h-4 text-stone-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-                </svg>
-              </div>
-              <div>
-                <p class="font-medium text-stone-900">Update Menu</p>
-                <p class="text-sm text-stone-600">Add your restaurant's menu items and prices</p>
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium">Created</span>
+                <span class="text-sm text-muted-foreground">{{ new Date(site.created_at).toLocaleDateString() }}</span>
               </div>
             </div>
-            
-            <div class="flex items-center">
-              <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9 9m9-9H3m9 9a9 9 0 01-9 9m9-9c-2.5 0-4.8-1.1-6.3-2.9"></path>
-                </svg>
-              </div>
-              <div>
-                <p class="font-medium text-stone-900">Manage Domains</p>
-                <p class="text-sm text-stone-600">Configure custom domains and DNS settings</p>
-              </div>
+          </UCard>
+
+          <!-- Quick Actions -->
+          <UCard>
+            <template #header>
+              <h3 class="font-semibold">Quick Actions</h3>
+            </template>
+            <div class="space-y-3">
+              <UButton 
+                :to="`https://${site.subdomain}.krabiclaw.com`"
+                target="_blank"
+                variant="outline"
+                color="primary"
+                icon="i-heroicons-arrow-top-right-on-square"
+                block
+              >
+                View Live Site
+              </UButton>
+              <UButton 
+                to="/billing"
+                variant="outline"
+                icon="i-heroicons-credit-card"
+                block
+              >
+                Manage Billing
+              </UButton>
             </div>
-          </div>
+          </UCard>
         </div>
 
         <!-- Onboarding Status Alert -->
-        <div v-if="site.onboarding_status === 'pending' || site.onboarding_status === 'failed'" class="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-          <div class="flex items-start">
-            <div class="flex-shrink-0">
-              <svg class="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-              </svg>
-            </div>
-            <div class="ml-3 flex-1">
-              <h3 class="text-lg font-medium text-yellow-800">
-                {{ site.onboarding_status === 'failed' ? 'Site Setup Failed' : 'Site Setup In Progress' }}
-              </h3>
-              <div class="mt-2 text-sm text-yellow-700">
-                <p v-if="site.onboarding_status === 'failed'">
-                  Your site setup encountered an error. You can retry the setup process.
-                </p>
-                <p v-else>
-                  Your site is being set up. This usually takes a few seconds.
-                </p>
-              </div>
-              <div class="mt-4">
-                <button
-                  @click="retryOnboarding"
-                  :disabled="retrying"
-                  class="inline-flex items-center px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <svg v-if="retrying" class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  {{ retrying ? 'Retrying...' : 'Retry Setup' }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Upgrade Prompt (for free plans) -->
-        <div v-if="site.plan === 'free' && site.onboarding_status === 'active'" class="bg-gradient-to-r from-stone-600 to-stone-800 rounded-lg p-6 text-white">
-          <h2 class="text-lg font-semibold mb-2">Upgrade to Premium</h2>
-          <p class="mb-4 text-stone-200">
-            Unlock custom domains, Google Business integration, and advanced features.
-          </p>
-          <button class="bg-white text-stone-900 px-4 py-2 rounded-lg font-medium hover:bg-stone-100 transition-colors">
-            Learn More
-          </button>
-        </div>
+        <UAlert
+          v-if="site.onboarding_status === 'pending' || site.onboarding_status === 'failed'"
+          :title="site.onboarding_status === 'failed' ? 'Site Setup Failed' : 'Site Setup In Progress'"
+          :description="site.onboarding_status === 'failed' ? 'Your site setup encountered an error. You can retry the setup process.' : 'Your site is being set up. This usually takes a few seconds.'"
+          color="amber"
+          variant="subtle"
+        >
+          <template #actions>
+            <UButton
+              @click="retryOnboarding"
+              :disabled="retrying"
+              :loading="retrying"
+              color="amber"
+              variant="solid"
+              size="sm"
+            >
+              {{ retrying ? 'Retrying...' : 'Retry Setup' }}
+            </UButton>
+          </template>
+        </UAlert>
       </div>
-    </UContainer>
-  </div>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup>

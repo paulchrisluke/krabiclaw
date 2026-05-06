@@ -318,10 +318,11 @@
 </template>
 
 <script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue'
 import { contentRegistry, editablePages, getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'editor' })
 
 const route = useRoute()
 const siteId = route.params.siteId as string
@@ -338,7 +339,7 @@ const loadSiteData = async () => {
     siteData.value = await $fetch(`/api/sites/${siteId}`)
   } catch (error) {
     console.error('Failed to load site:', error)
-    toast.add({ description: 'Failed to load site data', color: 'error' })
+    toast.add({ description: 'Failed to load site data', color: 'red' })
   }
 }
 
@@ -461,7 +462,7 @@ const applyField = async () => {
   
   // Automatically save and refresh preview for immediate feedback
   await handleSaveDraft()
-  toast.add({ description: `"${activeFieldDef.value?.label}" updated`, color: 'success' })
+  toast.add({ description: `"${activeFieldDef.value?.label}" updated`, color: 'green' })
 }
 
 // ─── Content state ────────────────────────────────────────────────────
@@ -475,7 +476,7 @@ const discardPending = ref(false)
 const loadPageContent = async () => {
   try {
     const res = await $fetch<{ content: any[]; hasDrafts: boolean }>(
-      `/api/content/${selectedPageId.value}?site_id=${siteId}`
+      `/api/content/${selectedPageId.value}?siteId=${siteId}`
     )
     const map: Record<string, string> = {}
     for (const row of res.content || []) {
@@ -492,7 +493,7 @@ const loadPageContent = async () => {
     serverHasDrafts.value = res.hasDrafts ?? false
   } catch (error) {
     console.error('Failed to load page content:', error)
-    toast.add({ description: 'Failed to load content', color: 'error' })
+    toast.add({ description: 'Failed to load content', color: 'red' })
   }
 }
 
@@ -510,7 +511,7 @@ const handleSaveDraft = async () => {
   try {
     await $fetch('/api/dashboard/content/draft', {
       method: 'POST',
-      body: { path: currentPagePath.value, changes: currentValues.value, site_id: siteId },
+      body: { path: currentPagePath.value, changes: currentValues.value, siteId: siteId },
       credentials: 'include'
     })
     localHasChanges.value = false
@@ -519,7 +520,7 @@ const handleSaveDraft = async () => {
     iframeSrc.value = currentPagePath.value + '?t=' + Date.now()
   } catch (error: any) {
     const msg = error?.response?._data?.statusMessage || error.message || 'Unknown error'
-    toast.add({ description: `Save failed: ${msg}`, color: 'error' })
+    toast.add({ description: `Save failed: ${msg}`, color: 'red' })
     throw error // Re-throw so callers like handlePublish know it failed
   } finally {
     saving.value = false
@@ -532,16 +533,16 @@ const handlePublish = async () => {
     if (localHasChanges.value) await handleSaveDraft()
     await $fetch('/api/dashboard/content/publish', {
       method: 'POST',
-      body: { path: currentPagePath.value, site_id: siteId }
+      body: { path: currentPagePath.value, siteId: siteId }
     })
     serverHasDrafts.value = false
     localHasChanges.value = false
-    toast.add({ description: 'Published live!', color: 'success' })
+    toast.add({ description: 'Published live!', color: 'green' })
     iframeLoading.value = true
     iframeSrc.value = currentPagePath.value + '?t=' + Date.now()
   } catch (error: any) {
     const msg = error?.response?._data?.statusMessage || error.message || 'Unknown error'
-    toast.add({ description: `Publish failed: ${msg}`, color: 'error' })
+    toast.add({ description: `Publish failed: ${msg}`, color: 'red' })
   } finally {
     publishing.value = false
   }
@@ -556,16 +557,16 @@ const handleDiscard = async () => {
   try {
     await $fetch('/api/dashboard/content/discard', {
       method: 'POST',
-      body: { path: currentPagePath.value, site_id: siteId }
+      body: { path: currentPagePath.value, siteId: siteId }
     })
     localHasChanges.value = false
     serverHasDrafts.value = false
     await loadPageContent()
-    toast.add({ description: 'Drafts discarded', color: 'info' })
+    toast.add({ description: 'Drafts discarded', color: 'blue' })
     iframeLoading.value = true
     iframeSrc.value = currentPagePath.value + '?t=' + Date.now()
   } catch {
-    toast.add({ description: 'Failed to discard', color: 'error' })
+    toast.add({ description: 'Failed to discard', color: 'red' })
   }
 }
 
