@@ -4,7 +4,7 @@ import { D1Dialect } from '@atinux/kysely-d1'
 import { Kysely } from 'kysely'
 
 export interface CloudflareEnv {
-  REVIEWS_DB: D1Database
+  REVIEWS_DB: any // Using any to avoid D1Database type conflicts
   BETTER_AUTH_SECRET: string
   BETTER_AUTH_URL?: string
   GOOGLE_CLIENT_ID: string

@@ -198,7 +198,7 @@
 import { useAuth } from '~/composables/useAuth'
 
 definePageMeta({
-  layout: 'admin'
+  layout: 'dashboard'
 })
 
 const router = useRouter()
@@ -219,25 +219,12 @@ async function loadSiteData() {
       return
     }
 
-    // Get user session for authorization
-    const auth = await useAuth()
-    if (!auth.user) {
-      await router.push('/login')
-      return
-    }
-
-    // Get site details
+    // Get site details (API handles authorization)
     const siteData = await $fetch(`/api/sites/${siteId}`)
     site.value = siteData
-
-    // Verify user owns this site
-    if (!site.value || !auth.organizations?.some(org => org.id === site.value.organization_id)) {
-      await router.push('/dashboard')
-      return
-    }
   } catch (error) {
     console.error('Failed to load site:', error)
-    await router.push('/dashboard')
+    // Don't redirect automatically - let the user see the error
   } finally {
     loading.value = false
   }
