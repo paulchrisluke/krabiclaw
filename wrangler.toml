@@ -8,7 +8,3 @@ binding = "REVIEWS_DB"
 database_name = "thaiclaw-reviews"
 database_id = "57cc9c44-1a23-41c3-8ec9-6b404c12ca2c"
 migrations_dir = "migrations"
-
-# Ensure D1 database persistence across dev server restarts
-[env]
-D1_PERSIST = ".wrangler/state/v3/d1"

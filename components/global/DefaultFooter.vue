@@ -110,5 +110,5 @@ const businessAddress = computed(() => {
 })
 
 const businessPhone = computed(() => googleBusiness.value?.business?.phoneNumbers?.[0]?.phoneNumber || '')
-const restaurantName = computed(() => site.value?.name || 'Your Restaurant')
+const restaurantName = computed(() => site?.name || 'Your Restaurant')
 </script>

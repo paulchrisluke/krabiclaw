@@ -38,7 +38,7 @@ const getLocaleFlag = (code) => {
 
 const getCurrentLocaleFlag = () => getLocaleFlag(currentLocale.value)
 
-const restaurantName = computed(() => site.value?.name || 'Restaurant Website')
+const restaurantName = computed(() => site?.name || 'Restaurant Website')
 
 const restaurantNavItems = [
   { label: 'Menu', to: '/menu' },

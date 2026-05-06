@@ -1,7 +1,9 @@
 // Get sites for authenticated user's organizations
 import { cloudflareEnv, jsonResponse } from '../utils/api-response'
+import { createAuth } from '../utils/auth'
+import { defineEventHandler, getHeaders } from 'h3'
 
-export default eventHandler(async (event) => {
+export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.REVIEWS_DB
   
@@ -11,13 +13,9 @@ export default eventHandler(async (event) => {
     }, { status: 500 })
   }
   
-  // Get authenticated user from Better Auth session
-  const headers = getHeaders(event)
-  const session = await $fetch('/api/auth/get-session', {
-    headers: {
-      cookie: headers.cookie || '',
-      authorization: headers.authorization || ''
-    }
+  const auth = createAuth(env)
+  const session = await auth.api.getSession({
+    headers: getHeaders(event)
   })
   
   if (!session?.user?.id) {

@@ -10,7 +10,7 @@
         <div class="p-4 border border-stone-200 rounded-lg">
           <h3 class="font-semibold text-stone-900 mb-2">Google Business</h3>
           <p class="text-sm text-stone-600 mb-3">Connect your Google Business Profile</p>
-          <UButton variant="ghost" color="blue" size="sm">
+          <UButton variant="ghost" color="info" size="sm">
             Connect
           </UButton>
         </div>
@@ -18,7 +18,7 @@
         <div class="p-4 border border-stone-200 rounded-lg">
           <h3 class="font-semibold text-stone-900 mb-2">Social Media</h3>
           <p class="text-sm text-stone-600 mb-3">Link your social media accounts</p>
-          <UButton variant="ghost" color="blue" size="sm">
+          <UButton variant="ghost" color="info" size="sm">
             Configure
           </UButton>
         </div>

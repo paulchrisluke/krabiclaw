@@ -77,7 +77,7 @@
           <UButton
             to="/signup"
             variant="solid"
-            color="white"
+            color="neutral"
             size="lg"
             class="bg-white text-black hover:bg-white/90"
           >
@@ -145,7 +145,7 @@
             <div class="p-6">
               <div class="flex items-start justify-between mb-2">
                 <h3 class="text-lg font-semibold text-gray-900">{{ location.title }}</h3>
-                <UBadge color="blue" variant="soft" size="sm">Primary</UBadge>
+                <UBadge color="info" variant="soft" size="sm">Primary</UBadge>
               </div>
 
               <p v-if="location.address" class="text-gray-600 text-sm mb-3">{{ location.address }}</p>
@@ -350,10 +350,10 @@
             {{ getField('cta.description', "Whether you're joining us for a casual dinner or a special celebration, we look forward to serving you the finest cuisine.") }}
           </p>
           <div class="flex flex-col md:flex-row items-center justify-center gap-6">
-            <UButton to="/reservations" variant="solid" color="white" size="lg" class="bg-white text-black hover:bg-stone-200">
+            <UButton to="/reservations" variant="solid" color="neutral" size="lg" class="bg-white text-black hover:bg-stone-200">
               Book Now
             </UButton>
-            <UButton to="/contact" variant="outline" color="white" size="lg" class="border-2 border-white/20 hover:bg-white/10">
+            <UButton to="/contact" variant="outline" color="neutral" size="lg" class="border-2 border-white/20 hover:bg-white/10">
               Contact Us
             </UButton>
           </div>

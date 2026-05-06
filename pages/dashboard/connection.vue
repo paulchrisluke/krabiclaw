@@ -2,22 +2,22 @@
   <div class="space-y-8">
     <div>
       <h1 class="text-3xl font-bold text-gray-900">Connections</h1>
-      <p class="text-stone-400 mt-2">Manage your Google service integrations.</p>
+      <p class="text-gray-600 dark:text-gray-400 mt-2">Manage your Google service integrations.</p>
     </div>
 
     <!-- Google Account -->
     <UCard>
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
-          <div class="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center">
+          <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
             <Icon name="i-heroicons-globe-alt" class="text-lg" />
           </div>
           <div>
             <h2 class="font-bold text-gray-900">Google Account</h2>
-            <p class="text-sm text-stone-400">{{ session?.email }}</p>
+            <p class="text-sm text-gray-600 dark:text-gray-400">{{ session?.email }}</p>
           </div>
         </div>
-        <UBadge color="green" variant="soft">Connected</UBadge>
+        <UBadge color="success" variant="soft">Connected</UBadge>
       </div>
     </UCard>
 
@@ -29,11 +29,11 @@
           <p v-if="gbpConnected" class="text-sm text-green-600">
             ✓ {{ publicData?.business?.title || 'Connected' }}
           </p>
-          <p v-else class="text-sm text-stone-400">Sync your restaurant info, reviews, photos and posts</p>
+          <p v-else class="text-sm text-gray-600 dark:text-gray-400">Sync your restaurant info, reviews, photos and posts</p>
         </div>
         <div v-if="gbpConnected" class="flex items-center gap-3">
-          <span class="text-xs text-stone-400">{{ publicData?.syncedAt ? `Updated ${formatRelative(publicData.syncedAt)}` : 'Never synced' }}</span>
-          <UButton @click="confirmUnlink" size="sm" variant="ghost" color="red">
+          <span class="text-xs text-gray-600 dark:text-gray-400">{{ publicData?.syncedAt ? `Updated ${formatRelative(publicData.syncedAt)}` : 'Never synced' }}</span>
+          <UButton @click="confirmUnlink" size="sm" variant="ghost" color="error">
             Unlink
           </UButton>
         </div>
@@ -46,23 +46,23 @@
           Link →
         </UButton>
       </div>
-      <UAlert v-if="unlinkPending" color="red" variant="soft" class="mt-4">
+      <UAlert v-if="unlinkPending" color="error" variant="soft" class="mt-4">
         <template #title>Unlink Google Business Profile?</template>
         <template #description>Your site will stop receiving updates.</template>
         <template #actions>
-          <UButton @click="doUnlink" size="sm" color="red">Yes, unlink</UButton>
+          <UButton @click="doUnlink" size="sm" color="error">Yes, unlink</UButton>
           <UButton @click="unlinkPending = false" size="sm" variant="ghost">Cancel</UButton>
         </template>
       </UAlert>
       <!-- Developer details -->
-      <details v-if="gbpConnected" class="mt-6 border-t border-stone-100 pt-4">
-        <summary class="text-xs font-medium text-stone-400 cursor-pointer">Developer details</summary>
+      <details v-if="gbpConnected" class="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+        <summary class="text-xs font-medium text-gray-600 dark:text-gray-400 cursor-pointer">Developer details</summary>
         <dl class="mt-3 grid grid-cols-2 gap-3 text-xs">
-          <div><dt class="text-stone-400">Reviews</dt><dd class="font-medium">{{ publicData?.reviews?.length ?? 0 }}</dd></div>
-          <div><dt class="text-stone-400">Media</dt><dd class="font-medium">{{ publicData?.media?.length ?? 0 }}</dd></div>
-          <div><dt class="text-stone-400">Posts</dt><dd class="font-medium">{{ publicData?.posts?.length ?? 0 }}</dd></div>
+          <div><dt class="text-gray-600 dark:text-gray-400">Reviews</dt><dd class="font-medium">{{ publicData?.reviews?.length ?? 0 }}</dd></div>
+          <div><dt class="text-gray-600 dark:text-gray-400">Media</dt><dd class="font-medium">{{ publicData?.media?.length ?? 0 }}</dd></div>
+          <div><dt class="text-gray-600 dark:text-gray-400">Posts</dt><dd class="font-medium">{{ publicData?.posts?.length ?? 0 }}</dd></div>
           <div>
-            <dt class="text-stone-400">Sync errors</dt>
+            <dt class="text-gray-600 dark:text-gray-400">Sync errors</dt>
             <dd :class="syncErrors.length ? 'text-red-600 font-medium' : 'font-medium'">{{ syncErrors.length }}</dd>
           </div>
         </dl>
@@ -74,7 +74,7 @@
         <UButton @click="triggerSync" :disabled="syncing" size="xs" variant="outline">
           {{ syncing ? 'Syncing...' : 'Force sync' }}
         </UButton>
-        <UBadge v-if="syncMessage" :color="syncError ? 'red' : 'green'" variant="soft" class="ml-2">
+        <UBadge v-if="syncMessage" :color="syncError ? 'error' : 'success'" variant="soft" class="ml-2">
           {{ syncMessage }}
         </UBadge>
       </details>
@@ -88,10 +88,10 @@
           <p v-if="config?.ga4_property_id" class="text-sm text-green-600">
             ✓ Property {{ config.ga4_property_id }}
           </p>
-          <p v-else class="text-sm text-stone-400">View sessions, traffic sources and top pages in Insights</p>
+          <p v-else class="text-sm text-gray-600 dark:text-gray-400">View sessions, traffic sources and top pages in Insights</p>
         </div>
         <div v-if="config?.ga4_property_id" class="flex items-center gap-3">
-          <UButton @click="unlinkService('ga4_property_id')" size="sm" variant="ghost" color="red">
+          <UButton @click="unlinkService('ga4_property_id')" size="sm" variant="ghost" color="error">
             Unlink
           </UButton>
         </div>
@@ -100,7 +100,7 @@
           @click="discoverAndLink('analytics')"
           :disabled="discovering"
           size="sm"
-          color="black"
+          color="neutral"
         >
           {{ discovering === 'analytics' ? 'Loading...' : 'Link →' }}
         </UButton>
@@ -132,10 +132,10 @@
           <p v-if="config?.search_console_site_url" class="text-sm text-green-600">
             ✓ {{ config.search_console_site_url }}
           </p>
-          <p v-else class="text-sm text-stone-400">View search queries, clicks and rankings in Insights</p>
+          <p v-else class="text-sm text-gray-600 dark:text-gray-400">View search queries, clicks and rankings in Insights</p>
         </div>
         <div v-if="config?.search_console_site_url" class="flex items-center gap-3">
-          <UButton @click="unlinkService('search_console_site_url')" size="sm" variant="ghost" color="red">
+          <UButton @click="unlinkService('search_console_site_url')" size="sm" variant="ghost" color="error">
             Unlink
           </UButton>
         </div>
@@ -172,8 +172,12 @@
 
 <script setup>
 import { useAuth } from '~/composables/useAuth'
+import { authClient } from '~/lib/auth-client'
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({
+  layout: 'dashboard',
+  middleware: 'auth'
+})
 
 const { user } = useAuth()
 const { data: publicData, refresh: refreshPublic } = await useFetch('/api/google-business/public', { key: 'google-business-public' })

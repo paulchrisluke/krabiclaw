@@ -101,7 +101,7 @@
             <UButton 
               v-if="item.action_url"
               :to="item.action_url"
-              color="blue"
+              color="info"
               size="sm"
               class="ml-4"
             >
@@ -251,7 +251,7 @@
           <div class="flex space-x-4 justify-center">
             <UButton 
               :to="`/dashboard/sites/${siteId}`"
-              color="green"
+              color="success"
             >
               Back to Dashboard
             </UButton>
@@ -259,7 +259,7 @@
               :href="siteUrl"
               target="_blank"
               variant="outline"
-              color="green"
+              color="success"
             >
               Preview Site →
             </UButton>
@@ -291,8 +291,7 @@
 
 <script setup>
 definePageMeta({
-  layout: 'dashboard',
-  auth: true
+  layout: 'dashboard'
 })
 import { ref, onMounted } from 'vue'
 

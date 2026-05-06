@@ -1,5 +1,7 @@
 // Get onboarding status for authenticated user
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
+import { createAuth } from '../../utils/auth'
+import { defineEventHandler, getHeaders } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -11,13 +13,11 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
   
-  // Get authenticated user from Better Auth session
-  const headers = getHeaders(event)
-  const session = await $fetch('/api/auth/get-session', {
-    headers: {
-      cookie: headers.cookie || '',
-      authorization: headers.authorization || ''
-    }
+  // Get authenticated user from Better Auth session using server-side API
+  const auth = createAuth(cloudflareEnv(event))
+  
+  const session = await auth.api.getSession({
+    headers: getHeaders(event)
   })
   
   if (!session?.user?.id) {
@@ -51,12 +51,14 @@ export default defineEventHandler(async (event) => {
     }
     
     // Get sites for this organization
-    const sites = await db.prepare(`
+    const sitesResult = await db.prepare(`
       SELECT id, name, subdomain, status, onboarding_status, created_at
       FROM sites 
       WHERE organization_id = ?
       ORDER BY created_at DESC
     `).bind(membership.id).all()
+    
+    const sites = sitesResult.results || []
     
     // Check if any site is active
     const activeSite = sites.find((site: any) => site.onboarding_status === 'active')

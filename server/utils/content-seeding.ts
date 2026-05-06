@@ -7,6 +7,11 @@ export interface SeedContentData {
   restaurantName: string
 }
 
+// Generate unique ID helper
+function generateId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
 // Generic Saya theme content for new restaurants
 export const getSayaThemeSeedContent = (data: SeedContentData) => {
   const now = new Date().toISOString()
@@ -19,9 +24,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       location_id: null, // Site-wide content
       page: 'home',
       field_key: 'hero.title',
-      field_value: `Welcome to ${data.restaurantName}`,
-      field_type: 'text',
-      created_at: now,
+      value: `Welcome to ${data.restaurantName}`,
+      type: 'text',
       updated_at: now
     },
     {
@@ -30,9 +34,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       location_id: null,
       page: 'home',
       field_key: 'hero.subtitle',
-      field_value: 'Experience authentic flavors and warm hospitality',
-      field_type: 'text',
-      created_at: now,
+      value: 'Experience authentic flavors and warm hospitality',
+      type: 'text',
       updated_at: now
     },
     {
@@ -41,9 +44,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       location_id: null,
       page: 'home',
       field_key: 'hero.cta_title',
-      field_value: 'Reserve Your Table',
-      field_type: 'text',
-      created_at: now,
+      value: 'Reserve Your Table',
+      type: 'text',
       updated_at: now
     },
     {
@@ -52,9 +54,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       location_id: null,
       page: 'home',
       field_key: 'hero.cta_description',
-      field_value: 'Join us for an unforgettable dining experience',
-      field_type: 'text',
-      created_at: now,
+      value: 'Join us for an unforgettable dining experience',
+      type: 'text',
       updated_at: now
     },
     {
@@ -63,9 +64,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       location_id: null,
       page: 'home',
       field_key: 'about.title',
-      field_value: 'Our Story',
-      field_type: 'text',
-      created_at: now,
+      value: 'Our Story',
+      type: 'text',
       updated_at: now
     },
     {
@@ -74,9 +74,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       location_id: null,
       page: 'home',
       field_key: 'about.description',
-      field_value: 'We are passionate about creating exceptional dining experiences using the finest ingredients and traditional techniques.',
-      field_type: 'textarea',
-      created_at: now,
+      value: 'We are passionate about creating exceptional dining experiences using the finest ingredients and traditional techniques.',
+      type: 'textarea',
       updated_at: now
     },
     // Contact page content
@@ -86,9 +85,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       location_id: null,
       page: 'contact',
       field_key: 'contact.phone',
-      field_value: '+1 (555) 123-4567',
-      field_type: 'text',
-      created_at: now,
+      value: '+1 (555) 123-4567',
+      type: 'text',
       updated_at: now
     },
     {
@@ -97,9 +95,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       location_id: null,
       page: 'contact',
       field_key: 'contact.email',
-      field_value: 'info@' + data.siteId + '.krabiclaw.com',
-      field_type: 'text',
-      created_at: now,
+      value: 'info@' + data.siteId + '.krabiclaw.com',
+      type: 'text',
       updated_at: now
     },
     {
@@ -108,9 +105,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       location_id: null,
       page: 'contact',
       field_key: 'contact.address',
-      field_value: '123 Restaurant Street, City, State 12345',
-      field_type: 'text',
-      created_at: now,
+      value: '123 Restaurant Street, City, State 12345',
+      type: 'text',
       updated_at: now
     },
     {
@@ -119,9 +115,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       location_id: null,
       page: 'contact',
       field_key: 'contact.hours',
-      field_value: 'Mon-Sun: 11:00 AM - 10:00 PM',
-      field_type: 'text',
-      created_at: now,
+      value: 'Mon-Sun: 11:00 AM - 10:00 PM',
+      type: 'text',
       updated_at: now
     },
     // SEO content
@@ -131,9 +126,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       location_id: null,
       page: 'seo',
       field_key: 'meta.title',
-      field_value: `${data.restaurantName} | Restaurant`,
-      field_type: 'text',
-      created_at: now,
+      value: `${data.restaurantName} | Restaurant`,
+      type: 'text',
       updated_at: now
     },
     {
@@ -142,9 +136,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       location_id: null,
       page: 'seo',
       field_key: 'meta.description',
-      field_value: `Experience exceptional dining at ${data.restaurantName}. Reserve your table today!`,
-      field_type: 'text',
-      created_at: now,
+      value: `Experience exceptional dining at ${data.restaurantName}. Reserve your table today!`,
+      type: 'text',
       updated_at: now
     }
   ]
@@ -170,7 +163,7 @@ export const getDefaultMenuSeedData = (data: SeedContentData) => {
     items: [
       // Appetizers
       {
-        id: crypto.randomUUID(),
+        id: generateId('item'),
         menu_id: menuId,
         section: 'Appetizers',
         name: 'Fresh Spring Rolls',
@@ -182,7 +175,7 @@ export const getDefaultMenuSeedData = (data: SeedContentData) => {
         updated_at: now
       },
       {
-        id: crypto.randomUUID(),
+        id: generateId('item'),
         menu_id: menuId,
         section: 'Appetizers',
         name: 'Soup of the Day',
@@ -195,7 +188,7 @@ export const getDefaultMenuSeedData = (data: SeedContentData) => {
       },
       // Main Courses
       {
-        id: crypto.randomUUID(),
+        id: generateId('item'),
         menu_id: menuId,
         section: 'Main Courses',
         name: 'Grilled Salmon',
@@ -207,7 +200,7 @@ export const getDefaultMenuSeedData = (data: SeedContentData) => {
         updated_at: now
       },
       {
-        id: crypto.randomUUID(),
+        id: generateId('item'),
         menu_id: menuId,
         section: 'Main Courses',
         name: 'Beef Stir-Fry',
@@ -219,7 +212,7 @@ export const getDefaultMenuSeedData = (data: SeedContentData) => {
         updated_at: now
       },
       {
-        id: crypto.randomUUID(),
+        id: generateId('item'),
         menu_id: menuId,
         section: 'Main Courses',
         name: 'Vegetable Pad Thai',
@@ -232,7 +225,7 @@ export const getDefaultMenuSeedData = (data: SeedContentData) => {
       },
       // Desserts
       {
-        id: crypto.randomUUID(),
+        id: generateId('item'),
         menu_id: menuId,
         section: 'Desserts',
         name: 'Chocolate Lava Cake',
@@ -244,7 +237,7 @@ export const getDefaultMenuSeedData = (data: SeedContentData) => {
         updated_at: now
       },
       {
-        id: crypto.randomUUID(),
+        id: generateId('item'),
         menu_id: menuId,
         section: 'Desserts',
         name: 'Fresh Fruit Sorbet',
@@ -257,7 +250,7 @@ export const getDefaultMenuSeedData = (data: SeedContentData) => {
       },
       // Beverages
       {
-        id: crypto.randomUUID(),
+        id: generateId('item'),
         menu_id: menuId,
         section: 'Beverages',
         name: 'House Wine',
@@ -269,7 +262,7 @@ export const getDefaultMenuSeedData = (data: SeedContentData) => {
         updated_at: now
       },
       {
-        id: crypto.randomUUID(),
+        id: generateId('item'),
         menu_id: menuId,
         section: 'Beverages',
         name: 'Craft Beer Selection',
@@ -281,7 +274,7 @@ export const getDefaultMenuSeedData = (data: SeedContentData) => {
         updated_at: now
       },
       {
-        id: crypto.randomUUID(),
+        id: generateId('item'),
         menu_id: menuId,
         section: 'Beverages',
         name: 'Fresh Juice',

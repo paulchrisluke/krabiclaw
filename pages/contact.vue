@@ -47,16 +47,16 @@
           <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Send Us a Message</h2>
           <UCard>
             <UForm class="space-y-4" @submit.prevent>
-              <UFormGroup label="Name">
+              <UFormField label="Name">
                 <UInput type="text" id="name" name="name" />
-              </UFormGroup>
-              <UFormGroup label="Email">
+              </UFormField>
+              <UFormField label="Email">
                 <UInput type="email" id="email" name="email" />
-              </UFormGroup>
-              <UFormGroup label="Message">
+              </UFormField>
+              <UFormField label="Message">
                 <UTextarea id="message" name="message" :rows="4" />
-              </UFormGroup>
-              <UButton type="submit" color="black" size="md" block>
+              </UFormField>
+              <UButton type="submit" color="neutral" size="md" block>
                 Send Message
               </UButton>
             </UForm>

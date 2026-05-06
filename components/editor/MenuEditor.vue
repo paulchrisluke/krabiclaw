@@ -15,7 +15,7 @@
             v-if="hasMenus"
             v-model="selectedMenuId"
             @update:model-value="handleMenuChange"
-            :options="menuOptions"
+            :items="menuOptions"
             size="sm"
           />
         </div>
@@ -42,7 +42,7 @@
           <h3 class="text-lg font-medium">{{ currentMenu.name }}</h3>
           <div class="flex items-center gap-2">
             <UBadge 
-              :color="currentMenu.status === 'published' ? 'green' : 'yellow'" 
+              :color="currentMenu.status === 'published' ? 'success' : 'warning'" 
               variant="soft" 
               size="xs"
             >
@@ -51,7 +51,7 @@
             <UButton
               @click="showEditMenuModal = true"
               variant="ghost"
-              color="blue"
+              color="info"
               size="sm"
             >
               Edit

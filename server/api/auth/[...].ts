@@ -2,12 +2,6 @@
 import { createAuth } from '~/server/utils/auth'
 
 export default defineEventHandler(async (event) => {
-  // DEBUG: Log cloudflare context and env to verify D1 binding in dev
-  // eslint-disable-next-line no-console
-  console.log('[auth handler] event.context.cloudflare:', event.context.cloudflare)
-  // eslint-disable-next-line no-console
-  console.log('[auth handler] event.context.cloudflare?.env:', event.context.cloudflare?.env)
-
   const env = event.context.cloudflare?.env
   if (!env?.REVIEWS_DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
 
@@ -15,19 +9,7 @@ export default defineEventHandler(async (event) => {
   
   try {
     const request = toWebRequest(event)
-    console.log('Auth request:', {
-      method: request.method,
-      url: request.url,
-      headers: Object.fromEntries(request.headers.entries())
-    })
-    
     const response = await auth.handler(request)
-    
-    console.log('Auth response:', {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries())
-    })
     
     // Check for error responses
     if (response.status >= 400) {

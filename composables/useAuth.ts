@@ -1,6 +1,6 @@
 
 import { computed, ref, isRef } from 'vue'
-import { authClient } from '~/utils/auth-client'
+import { authClient } from '~/lib/auth-client'
 
 export function useAuth() {
   const session = authClient.useSession()

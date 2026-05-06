@@ -4,7 +4,10 @@ export default defineNuxtConfig({
   
   // Nuxt UI configuration
   '@nuxt/ui': {
-    components: true
+    components: true,
+    theme: {
+      colors: ['primary', 'secondary', 'accent', 'neutral', 'success', 'warning', 'error', 'info'],
+    }
   },
   gtag: {
     id: 'G-Z18L1Y4G7K'

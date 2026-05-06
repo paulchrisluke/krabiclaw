@@ -28,7 +28,7 @@
           <UBadge
             v-for="a in item.allergens"
             :key="a"
-            color="yellow"
+            color="warning"
             variant="soft"
             size="xs"
           >

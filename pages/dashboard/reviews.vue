@@ -23,7 +23,7 @@
         </div>
 
         <!-- Authentication Required -->
-        <UAlert v-if="!session.authenticated" color="amber" variant="soft" class="mb-4">
+        <UAlert v-if="!session.authenticated" color="warning" variant="soft" class="mb-4">
           <template #title>Authentication Required</template>
           <template #description>Sign in to load reviews. The moderation API stays locked until Google verifies the admin account.</template>
         </UAlert>
@@ -58,7 +58,7 @@
                     <div class="text-sm text-stone-600">{{ menuItemName(review.menuItemSlug) }}</div>
                   </td>
                   <td class="py-3">
-                    <UBadge color="amber" variant="soft" size="xs">
+                    <UBadge color="warning" variant="soft" size="xs">
                       {{ review.rating }} / 5
                     </UBadge>
                   </td>
@@ -76,7 +76,7 @@
                       <UButton
                         v-if="review.status !== 'approved'"
                         :disabled="updatingId === review.id"
-                        color="green"
+                        color="success"
                         size="xs"
                         @click="updateReview(review.id, 'approved')"
                       >
@@ -85,7 +85,7 @@
                       <UButton
                         v-if="review.status !== 'rejected'"
                         :disabled="updatingId === review.id"
-                        color="red"
+                        color="error"
                         size="xs"
                         @click="updateReview(review.id, 'rejected')"
                       >
@@ -112,14 +112,12 @@
 </template>
 
 <script setup>
-import { useAuth } from '~/composables/useAuth'
-
 definePageMeta({ 
   layout: 'dashboard'
 })
 import { menuData } from '~/data/menu'
 
-const { user } = useAuth()
+
 
 const selectedStatus = ref('pending')
 const reviews = ref([])
@@ -190,20 +188,13 @@ const updateReview = async (id, status) => {
   }
 }
 
-onMounted(async () => {
-  if (isAuthenticated.value) {
-    loadReviews()
-  }
-})
 
-watch(isAuthenticated, (val) => {
-  if (val) loadReviews()
+onMounted(() => {
+  loadReviews()
 })
 
 watch(selectedStatus, () => {
-  if (isAuthenticated.value) {
-    loadReviews()
-  }
+  loadReviews()
 })
 
 useSeoMeta({

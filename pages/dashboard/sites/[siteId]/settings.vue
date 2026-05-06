@@ -87,7 +87,7 @@
             <UButton
               @click="copyToClipboard(settings.public_url)"
               variant="outline"
-              color="gray"
+              color="neutral"
               size="sm"
             >
               Copy
@@ -197,7 +197,7 @@
             <span class="text-sm font-medium text-gray-700">Free Subdomain</span>
             <div class="flex items-center space-x-2">
               <span class="text-sm text-gray-600">{{ settings.subdomain }}.{{ freeDomain }}</span>
-              <UBadge color="green" variant="soft" size="sm">Active</UBadge>
+              <UBadge color="success" variant="soft" size="sm">Active</UBadge>
             </div>
           </div>
           
@@ -205,7 +205,7 @@
             <span class="text-sm font-medium text-gray-700">Custom Domain</span>
             <div class="flex items-center space-x-2">
               <span class="text-sm text-gray-600">Not configured</span>
-              <UBadge color="gray" variant="soft" size="sm">Optional</UBadge>
+              <UBadge color="neutral" variant="soft" size="sm">Optional</UBadge>
             </div>
           </div>
           
@@ -239,7 +239,7 @@
           <UButton
             @click="resetForm"
             variant="outline"
-            color="gray"
+            color="neutral"
           >
             Reset
           </UButton>
@@ -248,7 +248,7 @@
             @click="saveSettings"
             :disabled="saving"
             :loading="saving"
-            color="blue"
+            color="info"
           >
             {{ saving ? 'Saving...' : 'Save Settings' }}
           </UButton>
@@ -260,8 +260,7 @@
 
 <script setup>
 definePageMeta({
-  layout: 'dashboard',
-  auth: true
+  layout: 'dashboard'
 })
 import { ref, reactive, onMounted } from 'vue'
 

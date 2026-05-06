@@ -7,7 +7,7 @@
           <UButton
             to="/dashboard"
             variant="ghost"
-            color="gray"
+            color="neutral"
             size="sm"
             icon="i-heroicons-arrow-left"
           >
@@ -198,8 +198,7 @@
 import { useAuth } from '~/composables/useAuth'
 
 definePageMeta({
-  layout: 'admin',
-  auth: true
+  layout: 'admin'
 })
 
 const router = useRouter()

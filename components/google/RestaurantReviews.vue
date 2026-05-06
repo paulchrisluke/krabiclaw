@@ -104,7 +104,7 @@ const props = defineProps({
   },
   bg: {
     type: String,
-    default: 'gray'
+    default: 'neutral'
   },
   padding: {
     type: String,

@@ -40,9 +40,9 @@
           
           <!-- Type Badge Overlay -->
           <div class="absolute top-4 left-4 flex gap-2">
-            <UBadge v-if="post.event" color="white" variant="solid" size="xs" class="bg-white/90 backdrop-blur shadow-sm text-black">Event</UBadge>
-            <UBadge v-else-if="post.offer" color="white" variant="solid" size="xs" class="bg-white/90 backdrop-blur shadow-sm text-black">Offer</UBadge>
-            <UBadge v-else color="white" variant="solid" size="xs" class="bg-white/90 backdrop-blur shadow-sm text-black">Update</UBadge>
+            <UBadge v-if="post.event" color="neutral" variant="solid" size="xs" class="bg-white/90 backdrop-blur shadow-sm text-black">Event</UBadge>
+            <UBadge v-else-if="post.offer" color="neutral" variant="solid" size="xs" class="bg-white/90 backdrop-blur shadow-sm text-black">Offer</UBadge>
+            <UBadge v-else color="neutral" variant="solid" size="xs" class="bg-white/90 backdrop-blur shadow-sm text-black">Update</UBadge>
           </div>
         </div>
         

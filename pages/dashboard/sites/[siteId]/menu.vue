@@ -17,8 +17,7 @@
 
 <script setup>
 definePageMeta({
-  layout: 'dashboard',
-  auth: true
+  layout: 'dashboard'
 })
 import { useTenantSite } from '~/composables/useTenantSite'
 

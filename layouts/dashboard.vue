@@ -53,7 +53,7 @@
       <template #header>
         <UDashboardNavbar>
           <template #right>
-            <UColorModeButton variant="ghost" color="gray" size="sm" />
+            <UColorModeButton variant="ghost" color="neutral" size="sm" />
           </template>
         </UDashboardNavbar>
       </template>
@@ -67,7 +67,6 @@
 
 <script setup>
 import { useAuth } from '~/composables/useAuth'
-import { authClient } from '~/utils/auth-client'
 
 const { data: sessionData, signOut } = useAuth()
 const session = useSession()

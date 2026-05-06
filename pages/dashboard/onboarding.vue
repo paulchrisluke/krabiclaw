@@ -1,241 +1,86 @@
 <template>
-  <div class="max-w-2xl mx-auto">
-    <!-- Header -->
-    <div class="mb-8">
-      <h1 class="text-2xl font-bold text-stone-900 mb-2">
-        Create your restaurant website
-      </h1>
-      <p class="text-stone-600">
-        Set up your professional restaurant presence in minutes
-      </p>
-    </div>
-
-    <!-- Progress Steps -->
-    <div class="mb-8">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center">
-          <div 
-            :class="[
-              'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
-              currentStep >= 1 ? 'bg-stone-900 text-white' : 'bg-stone-200 text-stone-600'
-            ]"
-          >
-            1
-          </div>
-          <span class="ml-2 text-sm font-medium text-stone-900">Restaurant Name</span>
-        </div>
-        <div class="flex-1 h-0.5 bg-stone-200 mx-4"></div>
-        <div class="flex items-center">
-          <div 
-            :class="[
-              'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
-              currentStep >= 2 ? 'bg-stone-900 text-white' : 'bg-stone-200 text-stone-600'
-            ]"
-          >
-            2
-          </div>
-          <span class="ml-2 text-sm font-medium text-stone-900">Website Address</span>
-        </div>
-        <div class="flex-1 h-0.5 bg-stone-200 mx-4"></div>
-        <div class="flex items-center">
-          <div 
-            :class="[
-              'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
-              currentStep >= 3 ? 'bg-stone-900 text-white' : 'bg-stone-200 text-stone-600'
-            ]"
-          >
-            3
-          </div>
-          <span class="ml-2 text-sm font-medium text-stone-900">Confirm</span>
-        </div>
+  <div class="min-h-screen bg-stone-50">
+    <div class="max-w-2xl mx-auto pt-16 pb-12 px-4">
+      <!-- KrabiClaw Branding -->
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-stone-900 mb-2">
+          Welcome to KrabiClaw
+        </h1>
+        <p class="text-stone-600">
+          Let's set up your restaurant website
+        </p>
       </div>
-    </div>
 
-    <!-- Onboarding Form -->
-    <div class="bg-white rounded-lg shadow-sm border border-stone-200 p-6">
-      <form @submit.prevent="handleSubmit" class="space-y-6">
-        <!-- Step 1: Restaurant Name -->
-        <div v-if="currentStep === 1">
-          <div class="mb-6">
-            <h3 class="text-lg font-semibold text-stone-900 mb-2">What's your restaurant name?</h3>
-            <p class="text-stone-600">This will be displayed as your brand name across the website.</p>
-          </div>
-          
+      <!-- Onboarding Form -->
+      <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-8">
+        <form @submit.prevent="handleSubmit" class="space-y-6">
+          <!-- Restaurant Name -->
           <div>
-            <UFormGroup label="Restaurant Name" required>
-              <UInput
-                v-model="form.restaurantName"
-                size="lg"
-                placeholder="Your Restaurant Name"
+            <label for="restaurantName" class="block text-sm font-medium text-stone-700 mb-2">
+              Restaurant Name
+            </label>
+            <input
+              id="restaurantName"
+              v-model="form.restaurantName"
+              type="text"
+              required
+              :disabled="loading"
+              class="w-full px-4 py-3 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-900 focus:border-transparent disabled:opacity-50"
+              placeholder="Your Restaurant Name"
+            />
+            <p class="mt-1 text-sm text-stone-500">
+              This will be your brand name across your website
+            </p>
+          </div>
+
+          <!-- Subdomain -->
+          <div>
+            <label for="subdomain" class="block text-sm font-medium text-stone-700 mb-2">
+              Website Address
+            </label>
+            <div class="flex">
+              <input
+                id="subdomain"
+                v-model="form.subdomain"
+                type="text"
+                required
                 :disabled="loading"
-                autofocus
+                @input="validateSubdomain"
+                class="flex-1 px-4 py-3 border border-stone-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-stone-900 focus:border-transparent disabled:opacity-50"
+                placeholder="your-restaurant"
               />
-            </UFormGroup>
-          </div>
-
-          <div class="mt-8 flex justify-end">
-            <UButton
-              @click="nextStep"
-              :disabled="!form.restaurantName.trim()"
-              color="black"
-              size="lg"
-            >
-              Next
-              <Icon name="i-heroicons-arrow-right" class="w-4 h-4 ml-1" />
-            </UButton>
-          </div>
-        </div>
-
-        <!-- Step 2: Subdomain -->
-        <div v-if="currentStep === 2">
-          <div class="mb-6">
-            <h3 class="text-lg font-semibold text-stone-900 mb-2">Choose your website address</h3>
-            <p class="text-stone-600">This will be your unique URL for the restaurant website.</p>
-          </div>
-          
-          <div>
-            <UFormGroup label="Website Address" required>
-              <div class="flex">
-                <UInput
-                  v-model="form.subdomain"
-                  size="lg"
-                  placeholder="your-restaurant"
-                  :disabled="loading"
-                  @input="validateSubdomain"
-                  class="rounded-r-none"
-                />
-                <div class="px-4 py-2.5 bg-stone-100 border border-l-0 border-stone-300 rounded-r-lg text-stone-600 flex items-center">
-                  .krabiclaw.com
-                </div>
+              <div class="px-4 py-3 bg-stone-100 border border-l-0 border-stone-300 rounded-r-lg text-stone-600">
+                .krabiclaw.com
               </div>
-            </UFormGroup>
-            
-            <!-- Live URL Preview -->
-            <div class="mt-4 p-3 bg-stone-50 rounded-lg">
-              <p class="text-sm text-stone-600">Your website will be available at:</p>
-              <p class="text-lg font-medium text-stone-900 mt-1">
-                {{ form.subdomain || 'your-restaurant' }}.krabiclaw.com
-              </p>
             </div>
             
             <!-- Subdomain Validation Messages -->
-            <div class="mt-2">
-              <UAlert
-                v-if="subdomainStatus.available === false"
-                color="red"
-                variant="soft"
-                icon="i-heroicons-x-circle"
-              >
+            <div class="mt-2 space-y-1">
+              <p v-if="subdomainStatus.available === false" class="text-sm text-red-600">
                 {{ subdomainStatus.message }}
-              </UAlert>
-              <UAlert
-                v-else-if="subdomainStatus.available === true"
-                color="green"
-                variant="soft"
-                icon="i-heroicons-check-circle"
-              >
+              </p>
+              <p v-else-if="subdomainStatus.available === true" class="text-sm text-green-600">
                 {{ subdomainStatus.message }}
-              </UAlert>
+              </p>
               <p v-else class="text-sm text-stone-500">
                 {{ subdomainStatus.message }}
               </p>
             </div>
             
-            <p class="mt-2 text-xs text-stone-500">
+            <div class="mt-2 text-xs text-stone-500">
               Use 3-63 characters: lowercase letters, numbers, and hyphens
-            </p>
-          </div>
-
-          <div class="mt-8 flex justify-between">
-            <UButton
-              @click="previousStep"
-              variant="ghost"
-              color="gray"
-              size="lg"
-            >
-              <Icon name="i-heroicons-arrow-left" class="w-4 h-4 mr-1" />
-              Back
-            </UButton>
-            <UButton
-              @click="nextStep"
-              :disabled="!form.subdomain.trim() || subdomainStatus.available !== true"
-              color="black"
-              size="lg"
-            >
-              Next
-              <Icon name="i-heroicons-arrow-right" class="w-4 h-4 ml-1" />
-            </UButton>
-          </div>
-        </div>
-
-        <!-- Step 3: Confirm -->
-        <div v-if="currentStep === 3">
-          <div class="mb-6">
-            <h3 class="text-lg font-semibold text-stone-900 mb-2">Review and create</h3>
-            <p class="text-stone-600">Please review your details before creating the website.</p>
-          </div>
-          
-          <!-- Review Summary -->
-          <div class="space-y-4">
-            <div class="p-4 bg-stone-50 rounded-lg">
-              <h4 class="font-medium text-stone-900 mb-2">Restaurant Details</h4>
-              <div class="space-y-2">
-                <div class="flex justify-between">
-                  <span class="text-sm text-stone-600">Name:</span>
-                  <span class="text-sm font-medium text-stone-900">{{ form.restaurantName }}</span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="text-sm text-stone-600">Website:</span>
-                  <span class="text-sm font-medium text-stone-900">{{ form.subdomain }}.krabiclaw.com</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Features -->
-            <div class="p-4 bg-blue-50 rounded-lg">
-              <h4 class="font-medium text-stone-900 mb-3">What you'll get:</h4>
-              <div class="space-y-2">
-                <div class="flex items-center text-sm text-stone-700">
-                  <Icon name="i-heroicons-check-circle" class="w-4 h-4 text-green-500 mr-2" />
-                  Beautiful restaurant website
-                </div>
-                <div class="flex items-center text-sm text-stone-700">
-                  <Icon name="i-heroicons-check-circle" class="w-4 h-4 text-green-500 mr-2" />
-                  Free subdomain ({{ form.subdomain }}.krabiclaw.com)
-                </div>
-                <div class="flex items-center text-sm text-stone-700">
-                  <Icon name="i-heroicons-check-circle" class="w-4 h-4 text-green-500 mr-2" />
-                  Easy content editing
-                </div>
-                <div class="flex items-center text-sm text-stone-700">
-                  <Icon name="i-heroicons-check-circle" class="w-4 h-4 text-green-500 mr-2" />
-                  Mobile-friendly design
-                </div>
-              </div>
-            </div>
-
-            <div class="text-sm text-stone-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <Icon name="i-heroicons-light-bulb" class="w-4 h-4 text-amber-600 mr-1" />
-              You can connect Google Business and edit everything manually for free after creation.
             </div>
           </div>
 
-          <div class="mt-8 flex justify-between">
-            <UButton
-              @click="previousStep"
-              variant="ghost"
-              color="gray"
-              size="lg"
-            >
-              <Icon name="i-heroicons-arrow-left" class="w-4 h-4 mr-1" />
-              Back
-            </UButton>
+          <!-- Submit Button -->
+          <div class="pt-4">
             <UButton
               type="submit"
               :disabled="loading || !isFormValid"
               :loading="loading"
-              color="black"
+              color="neutral"
               size="lg"
+              block
             >
               <template v-if="loading">
                 Creating your website...
@@ -245,8 +90,39 @@
               </template>
             </UButton>
           </div>
+        </form>
+
+        <!-- Features -->
+        <div class="mt-8 pt-8 border-t border-stone-200">
+          <h3 class="text-sm font-medium text-stone-900 mb-4">What you'll get:</h3>
+          <div class="space-y-3">
+            <div class="flex items-center text-sm text-stone-600">
+              <svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+              </svg>
+              Beautiful restaurant website
+            </div>
+            <div class="flex items-center text-sm text-stone-600">
+              <svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+              </svg>
+              Free subdomain ({{ form.subdomain || 'your-restaurant' }}.krabiclaw.com)
+            </div>
+            <div class="flex items-center text-sm text-stone-600">
+              <svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+              </svg>
+              Easy content editing
+            </div>
+            <div class="flex items-center text-sm text-stone-600">
+              <svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+              </svg>
+              Mobile-friendly design
+            </div>
+          </div>
         </div>
-      </form>
+      </div>
     </div>
   </div>
 </template>
@@ -257,7 +133,6 @@ definePageMeta({
   layout: 'dashboard',
   ssr: false
 })
-
 
 const router = useRouter()
 
@@ -270,27 +145,11 @@ const form = ref({
 // Loading state
 const loading = ref(false)
 
-// Step state
-const currentStep = ref(1)
-
 // Subdomain validation state
 const subdomainStatus = ref({
   available: null,
   message: 'Enter your desired subdomain'
 })
-
-// Navigation functions
-function nextStep() {
-  if (currentStep.value < 3) {
-    currentStep.value++
-  }
-}
-
-function previousStep() {
-  if (currentStep.value > 1) {
-    currentStep.value--
-  }
-}
 
 // Reserved subdomains
 const reservedSubdomains = [
@@ -407,8 +266,9 @@ onMounted(async () => {
   try {
     // Check onboarding status
     const status = await $fetch('/api/onboarding/status')
-    if (!status.needsOnboarding && status.sites.length > 0) {
-      // User already has active site, redirect to dashboard
+    // Only redirect if user has no organization at all (first-time setup)
+    // Allow users with existing organizations to create additional sites
+    if (!status.organization) {
       await navigateTo('/dashboard')
     }
   } catch (error) {

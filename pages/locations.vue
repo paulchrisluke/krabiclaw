@@ -32,7 +32,7 @@
                     {{ location.title }}
                   </h3>
                   <div v-if="location.is_primary" class="mt-1">
-                    <UBadge color="blue" variant="soft" size="sm">
+                    <UBadge color="info" variant="soft" size="sm">
                       Primary Location
                     </UBadge>
                   </div>
@@ -96,7 +96,7 @@
               <div class="flex space-x-2">
                 <UButton
                   :to="`/locations/${location.slug}`"
-                  color="black"
+                  color="neutral"
                   size="sm"
                   block
                 >
@@ -105,7 +105,7 @@
                 <UButton
                   :to="`/locations/${location.slug}/menu`"
                   variant="outline"
-                  color="black"
+                  color="neutral"
                   size="sm"
                   block
                 >

@@ -1,42 +1,21 @@
 <template>
-  <div class="min-h-screen bg-stone-50">
-    <!-- Dashboard Header -->
-    <UHeader>
-      <template #left>
-        <h1 class="text-xl font-semibold text-stone-900">
-          KrabiClaw Dashboard
-        </h1>
-      </template>
-      <template #right>
-        <div class="flex items-center space-x-4">
-          <span class="text-sm text-stone-600">
-            {{ user?.email }}
-          </span>
-          <UDropdownMenu :items="userMenuItems">
-            <UButton variant="ghost" color="neutral" size="sm">
-              <Icon name="i-heroicons-user-circle" class="w-5 h-5" />
-            </UButton>
-          </UDropdownMenu>
-        </div>
-      </template>
-    </UHeader>
-
+  <div>
     <!-- Main Content -->
     <UContainer class="py-8">
       <!-- Loading State -->
       <div v-if="loading" class="text-center py-12">
         <USkeleton class="h-8 w-8 mx-auto mb-4" />
-        <p class="text-stone-600">Loading...</p>
+        <p class="text-gray-600 dark:text-gray-400">Loading...</p>
       </div>
 
       <!-- Onboarding State -->
       <UCard v-else-if="!hasOrganization" class="max-w-md mx-auto">
         <div class="text-center py-12">
-          <Icon name="i-heroicons-building-storefront" class="w-16 h-16 mx-auto mb-4 text-stone-400" />
-          <h2 class="text-2xl font-bold text-stone-900 mb-4">
+          <Icon name="i-heroicons-building-storefront" class="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600" />
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">
             Create Your Restaurant Website
           </h2>
-          <p class="text-stone-600 mb-8">
+          <p class="text-gray-600 dark:text-gray-400 mb-8">
             Let's get your restaurant online with a beautiful website.
           </p>
           <UButton
@@ -54,7 +33,7 @@
       <div v-else>
         <!-- Admin Stats Section -->
         <div class="mb-8">
-          <h2 class="text-2xl font-bold text-stone-900 mb-6">
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">
             Business Overview
           </h2>
           
@@ -63,19 +42,19 @@
             <UCard>
               <div class="text-center">
                 <UBadge variant="subtle" class="mb-2">Reviews</UBadge>
-                <p class="text-3xl font-bold text-gray-900">{{ publicData?.reviews?.length ?? '—' }}</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ publicData?.reviews?.length ?? '—' }}</p>
               </div>
             </UCard>
             <UCard>
               <div class="text-center">
                 <UBadge variant="subtle" class="mb-2">Media</UBadge>
-                <p class="text-3xl font-bold text-gray-900">{{ publicData?.media?.length ?? '—' }}</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ publicData?.media?.length ?? '—' }}</p>
               </div>
             </UCard>
             <UCard>
               <div class="text-center">
                 <UBadge variant="subtle" class="mb-2">Posts</UBadge>
-                <p class="text-3xl font-bold text-gray-900">{{ publicData?.posts?.length ?? '—' }}</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ publicData?.posts?.length ?? '—' }}</p>
               </div>
             </UCard>
           </div>
@@ -84,7 +63,7 @@
           <UCard>
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 class="text-lg font-bold text-gray-900">Google Business Data</h2>
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white">Google Business Data</h2>
                 <p class="text-sm text-gray-500 mt-1">
                   {{ publicData?.syncedAt ? `Last synced ${formatDate(publicData.syncedAt)}` : 'Never synced' }}
                 </p>
@@ -104,10 +83,10 @@
         </div>
 
         <div class="mb-8">
-          <h2 class="text-2xl font-bold text-stone-900 mb-2">
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Your Restaurant Websites
           </h2>
-          <p class="text-stone-600">
+          <p class="text-gray-600 dark:text-gray-400">
             Manage your restaurant websites and content
           </p>
         </div>
@@ -122,10 +101,10 @@
           >
             <div class="flex justify-between items-start mb-4">
               <div>
-                <h3 class="text-lg font-semibold text-stone-900">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
                   {{ site.name }}
                 </h3>
-                <p class="text-sm text-stone-600">
+                <p class="text-sm text-gray-600 dark:text-gray-400">
                   {{ site.subdomain }}.krabiclaw.com
                 </p>
               </div>
@@ -157,11 +136,11 @@
           <!-- Add Site Card -->
           <UCard class="hover:shadow-md transition-shadow">
             <div class="text-center">
-              <Icon name="i-heroicons-plus" class="w-12 h-12 mx-auto mb-4 text-stone-400" />
-              <h3 class="text-lg font-semibold text-stone-900 mb-2">
+              <Icon name="i-heroicons-plus" class="w-12 h-12 mx-auto mb-4 text-gray-400 dark:text-gray-600" />
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                 Add Another Site
               </h3>
-              <p class="text-sm text-stone-600 mb-4">
+              <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Create another restaurant website
               </p>
               <UButton
@@ -180,29 +159,27 @@
 </template>
 
 <script setup>
-import { useAuth } from '~/composables/useAuth'
-import { authClient } from '~/utils/auth-client'
+import { authClient } from '~/lib/auth-client'
 
 definePageMeta({
   layout: 'dashboard',
-  auth: true
+  middleware: 'auth'
 })
 
-const { user, isAuthenticated, sessionLoading } = useAuth()
-const { data: organizationsData, isPending: orgsLoading } = authClient.organization.useList()
-const organizations = computed(() => organizationsData.value || [])
+const organizationsState = authClient.useListOrganizations()
+const organizations = computed(() => unref(organizationsState)?.data ?? [])
 const sites = ref([])
 const sitesLoading = ref(false)
 
 // Admin stats data
-const { data: publicData } = await useFetch('/api/google-business/public', { key: 'google-business-public' })
+const publicData = ref(null)
 const syncErrors = computed(() => publicData.value?.errors?.filter(e => e.source !== 'db') ?? [])
 
 const averageRating = computed(() => {
   const reviews = publicData.value?.reviews ?? []
   if (!reviews.length) return null
   const map = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
-  const ratings = reviews.map(r => map[r.starRating] ?? 0).filter(Boolean)
+  const ratings = reviews.map(r => r.rating ?? map[r.starRating] ?? 0).filter(Boolean)
   if (!ratings.length) return null
   return (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
 })
@@ -214,30 +191,17 @@ const formatDate = (iso) => new Date(iso).toLocaleDateString('en-US', {
 
 // Computed
 const hasOrganization = computed(() => organizations.value.length > 0)
-const loading = computed(() => sessionLoading.value || orgsLoading.value || sitesLoading.value)
+const loading = computed(() => Boolean(unref(organizationsState)?.isPending) || sitesLoading.value)
 
-const userMenuItems = computed(() => [
-  [{
-    label: 'Profile',
-    icon: 'i-heroicons-user',
-    onSelect: () => navigateTo('/dashboard/profile')
-  }],
-  [{
-    label: 'Sign Out',
-    icon: 'i-heroicons-arrow-right-on-rectangle',
-    color: 'error',
-    onSelect: handleSignOut
-  }]
-])
 
 // Load sites when organizations are ready
 watch(organizations, async (newOrgs) => {
   if (newOrgs.length > 0) {
     sitesLoading.value = true
     try {
-      const orgIds = newOrgs.map(org => org.id).join(',')
-      const userSites = await $fetch(`/api/sites?organization_ids=${orgIds}`)
-      sites.value = userSites || []
+      const userSites = await $fetch('/api/sites')
+      sites.value = userSites.sites
+      publicData.value = await $fetch('/api/google-business/public')
     } catch (error) {
       console.error('Failed to load sites:', error)
     } finally {

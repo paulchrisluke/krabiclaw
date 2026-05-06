@@ -1,6 +1,8 @@
 // Site creation API with idempotency and rollback safety
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getSayaThemeSeedContent, getDefaultMenuSeedData } from '../../utils/content-seeding'
+import { createAuth } from '../../utils/auth'
+import { defineEventHandler, getHeaders, readBody } from 'h3'
 
 interface CreateSiteRequest {
   restaurantName: string
@@ -26,13 +28,11 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
   
-  // Get authenticated user from Better Auth session
-  const headers = getHeaders(event)
-  const session = await $fetch('/api/auth/get-session', {
-    headers: {
-      cookie: headers.cookie || '',
-      authorization: headers.authorization || ''
-    }
+  // Get authenticated user from Better Auth session using server-side API
+  const auth = createAuth(cloudflareEnv(event))
+  
+  const session = await auth.api.getSession({
+    headers: getHeaders(event)
   })
   
   if (!session?.user?.id) {
@@ -220,17 +220,16 @@ async function performRequiredSeeding(db: any, siteId: string, organizationId: s
       await db.prepare(`
         INSERT OR REPLACE INTO site_content (
           organization_id, site_id, location_id, page, field_key, 
-          field_value, field_type, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          value, type, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         content.organization_id,
         content.site_id,
         content.location_id,
         content.page,
         content.field_key,
-        content.field_value,
-        content.field_type,
-        content.created_at,
+        content.value,
+        content.type,
         content.updated_at
       ).run()
     }
@@ -246,15 +245,14 @@ async function performRequiredSeeding(db: any, siteId: string, organizationId: s
     await db.prepare(`
       INSERT OR REPLACE INTO menus (
         id, organization_id, site_id, location_id, name, 
-        is_default, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       menuSeedData.menu.id,
       menuSeedData.menu.organization_id,
       menuSeedData.menu.site_id,
       menuSeedData.menu.location_id,
       menuSeedData.menu.name,
-      menuSeedData.menu.is_default,
       menuSeedData.menu.status,
       menuSeedData.menu.created_at,
       menuSeedData.menu.updated_at
