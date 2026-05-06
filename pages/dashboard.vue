@@ -1,178 +1,169 @@
 <template>
-  <div class="min-h-screen bg-stone-50">
-    <!-- Dashboard Header -->
-    <UHeader class="bg-white border-b border-stone-200">
-      <template #left>
-        <h1 class="text-xl font-semibold text-stone-900">Dashboard</h1>
-      </template>
-      <template #right>
-        <div class="flex items-center space-x-4">
-          <span class="text-sm text-stone-600">
-            {{ user?.email }}
-          </span>
+  <!-- Loading State -->
+  <div v-if="loading" class="text-center py-12">
+    <USkeleton class="h-8 w-8 rounded-full mx-auto mb-2" />
+    <p class="mt-2 text-stone-600">Loading dashboard...</p>
+  </div>
+
+  <!-- Dashboard Content -->
+  <div v-else class="space-y-8">
+    <!-- Welcome Section -->
+    <div class="bg-white rounded-lg shadow-sm border border-stone-200 p-6">
+      <h2 class="text-lg font-semibold text-stone-900 mb-2">Welcome back, {{ user?.name || user?.email }}</h2>
+      <p class="text-stone-600">
+        Manage your restaurant websites, domains, and integrations from this dashboard.
+      </p>
+    </div>
+
+    <!-- Sites Overview -->
+    <div class="bg-white rounded-lg shadow-sm border border-stone-200 p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-stone-900">Your Sites</h3>
+        <UButton
+          to="/dashboard/onboarding"
+          color="stone"
+          variant="soft"
+          size="sm"
+        >
+          <Icon name="i-heroicons-plus" class="w-4 h-4 mr-1" />
+          Create New Site
+        </UButton>
+      </div>
+      
+      <div v-if="sites.length === 0" class="text-center py-8">
+        <Icon name="i-heroicons-globe-alt" class="w-12 h-12 text-stone-400 mx-auto" />
+        <h3 class="mt-2 text-lg font-medium text-stone-900">No sites yet</h3>
+        <p class="mt-1 text-stone-500">Get started by creating your first restaurant website.</p>
+        <div class="mt-6">
           <UButton
-            @click="handleLogout"
-            variant="ghost"
-            color="stone"
-            size="sm"
+            to="/dashboard/onboarding"
+            color="black"
+            size="lg"
           >
-            Sign out
+            Create Your First Site
           </UButton>
         </div>
-      </template>
-    </UHeader>
-
-    <!-- Main Content -->
-    <UContainer class="py-8">
-      <!-- Loading State -->
-      <div v-if="loading" class="text-center py-12">
-        <USkeleton class="h-8 w-8 rounded-full mx-auto mb-2" />
-        <p class="mt-2 text-stone-600">Loading dashboard...</p>
       </div>
-
-      <!-- Dashboard Content -->
-      <div v-else class="space-y-8">
-        <!-- Welcome Section -->
-        <div class="bg-white rounded-lg shadow-sm border border-stone-200 p-6">
-          <h2 class="text-lg font-semibold text-stone-900 mb-2">Welcome to KrabiClaw</h2>
-          <p class="text-stone-600">
-            Manage your restaurant websites, domains, and integrations from this dashboard.
-          </p>
-        </div>
-
-        <!-- Sites Overview -->
-        <div class="bg-white rounded-lg shadow-sm border border-stone-200 p-6">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-semibold text-stone-900">Your Sites</h3>
-            <NuxtLink
-              to="/dashboard/sites/new"
-              class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-stone-700 bg-stone-100 hover:bg-stone-200"
-            >
-              Create New Site
-            </NuxtLink>
-          </div>
-          
-          <div v-if="sites.length === 0" class="text-center py-8">
-            <svg class="mx-auto h-12 w-12 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-            </svg>
-            <h3 class="mt-2 text-lg font-medium text-stone-900">No sites yet</h3>
-            <p class="mt-1 text-stone-500">Get started by creating your first restaurant website.</p>
-            <div class="mt-6">
-              <NuxtLink
-                to="/dashboard/sites/new"
-                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-stone-900 hover:bg-stone-800"
-              >
-                Create Your First Site
-              </NuxtLink>
-            </div>
-          </div>
-          
-          <div v-else class="space-y-4">
-            <div
-              v-for="site in sites"
-              :key="site.id"
-              class="flex items-center justify-between p-4 border border-stone-200 rounded-lg hover:bg-stone-50"
-            >
+      
+      <div v-else class="space-y-4">
+        <div
+          v-for="site in sites"
+          :key="site.id"
+          class="flex items-center justify-between p-4 border border-stone-200 rounded-lg hover:bg-stone-50"
+        >
+          <div class="flex-1">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-stone-100 rounded-lg flex items-center justify-center">
+                <Icon name="i-heroicons-globe-alt" class="w-5 h-5 text-stone-600" />
+              </div>
               <div>
                 <h4 class="font-medium text-stone-900">{{ site.name }}</h4>
                 <p class="text-sm text-stone-600">
                   {{ site.subdomain }}.krabiclaw.com
                 </p>
                 <div class="flex items-center space-x-2 mt-1">
-                  <span
-                    :class="[
-                      'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-                      site.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                    ]"
+                  <UBadge
+                    :color="site.status === 'active' ? 'green' : 'yellow'"
+                    variant="soft"
+                    size="xs"
                   >
                     {{ site.status === 'active' ? 'Active' : 'Pending' }}
-                  </span>
-                  <span
+                  </UBadge>
+                  <UBadge
                     v-if="site.onboarding_status === 'active'"
-                    class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                    color="blue"
+                    variant="soft"
+                    size="xs"
                   >
-                    Ready
-                  </span>
+                    Ready to launch
+                  </UBadge>
                 </div>
-              </div>
-              
-              <div class="flex items-center space-x-2">
-                <NuxtLink
-                  :to="`/dashboard/sites/${site.id}`"
-                  class="text-blue-600 hover:text-blue-800 text-sm"
-                >
-                  Manage
-                </NuxtLink>
-                <a
-                  :href="`https://${site.subdomain}.krabiclaw.com`"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="text-stone-600 hover:text-stone-800 text-sm"
-                >
-                  View
-                </a>
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="bg-white rounded-lg shadow-sm border border-stone-200 p-6">
-          <h3 class="text-lg font-semibold text-stone-900 mb-4">Quick Actions</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <NuxtLink
-              to="/dashboard/billing"
-              class="block p-4 border border-stone-200 rounded-lg hover:bg-stone-50 transition-colors"
+          
+          <div class="flex items-center space-x-2">
+            <UButton
+              :to="`/dashboard/sites/${site.id}`"
+              variant="ghost"
+              color="blue"
+              size="sm"
             >
-              <div class="flex items-center">
-                <div class="shrink-0">
-                  <svg class="w-6 h-6 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
-                  </svg>
-                </div>
-                <div class="ml-3">
-                  <p class="font-medium text-stone-900">Billing</p>
-                  <p class="text-sm text-stone-600">Manage your subscription</p>
-                </div>
-              </div>
-            </NuxtLink>
-            
-            <NuxtLink
-              v-if="sites.length > 0"
-              to="/dashboard/sites"
-              class="block p-4 border border-stone-200 rounded-lg hover:bg-stone-50 transition-colors"
+              Manage
+            </UButton>
+            <UButton
+              :href="`https://${site.subdomain}.krabiclaw.com`"
+              target="_blank"
+              rel="noopener noreferrer"
+              variant="ghost"
+              color="gray"
+              size="sm"
             >
-              <div class="flex items-center">
-                <div class="shrink-0">
-                  <svg class="w-6 h-6 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                  </svg>
-                </div>
-                <div class="ml-3">
-                  <p class="font-medium text-stone-900">All Sites</p>
-                  <p class="text-sm text-stone-600">View and manage sites</p>
-                </div>
-              </div>
-            </NuxtLink>
-            
-            <div class="block p-4 border border-stone-200 rounded-lg">
-              <div class="flex items-center">
-                <div class="shrink-0">
-                  <svg class="w-6 h-6 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                </div>
-                <div class="ml-3">
-                  <p class="font-medium text-stone-900">Help</p>
-                  <p class="text-sm text-stone-600">Get support</p>
-                </div>
-              </div>
-            </div>
+              <Icon name="i-heroicons-arrow-top-right-on-square" class="w-4 h-4" />
+              View Live
+            </UButton>
           </div>
         </div>
       </div>
-    </UContainer>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="bg-white rounded-lg shadow-sm border border-stone-200 p-6">
+      <h3 class="text-lg font-semibold text-stone-900 mb-4">Quick Actions</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <UButton
+          to="/dashboard/onboarding"
+          color="stone"
+          variant="outline"
+          class="h-auto p-4"
+        >
+          <div class="text-left">
+            <Icon name="i-heroicons-plus" class="w-6 h-6 text-stone-600 mb-2" />
+            <p class="font-medium text-stone-900">Create Site</p>
+            <p class="text-sm text-stone-600">Add new restaurant</p>
+          </div>
+        </UButton>
+        
+        <UButton
+          to="/dashboard/billing"
+          color="stone"
+          variant="outline"
+          class="h-auto p-4"
+        >
+          <div class="text-left">
+            <Icon name="i-heroicons-credit-card" class="w-6 h-6 text-stone-600 mb-2" />
+            <p class="font-medium text-stone-900">Billing</p>
+            <p class="text-sm text-stone-600">Manage subscription</p>
+          </div>
+        </UButton>
+        
+        <UButton
+          to="/dashboard/integrations"
+          color="stone"
+          variant="outline"
+          class="h-auto p-4"
+        >
+          <div class="text-left">
+            <Icon name="i-heroicons-link" class="w-6 h-6 text-stone-600 mb-2" />
+            <p class="font-medium text-stone-900">Integrations</p>
+            <p class="text-sm text-stone-600">Connect services</p>
+          </div>
+        </UButton>
+        
+        <UButton
+          to="/dashboard/help"
+          color="stone"
+          variant="outline"
+          class="h-auto p-4"
+        >
+          <div class="text-left">
+            <Icon name="i-heroicons-question-mark-circle" class="w-6 h-6 text-stone-600 mb-2" />
+            <p class="font-medium text-stone-900">Help</p>
+            <p class="text-sm text-stone-600">Get support</p>
+          </div>
+        </UButton>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -185,11 +176,24 @@ definePageMeta({
 
 const sites = ref([])
 const loading = ref(true)
+const user = ref(null)
 
 onMounted(async () => {
   try {
-    const response = await $fetch('/api/sites')
-    sites.value = response.sites || []
+    // Check onboarding status first
+    const status = await $fetch('/api/onboarding/status')
+    user.value = status.user
+    
+    if (status.needsOnboarding) {
+      // User has no sites, redirect to onboarding
+      await navigateTo('/dashboard/onboarding')
+      return
+    }
+    
+    // User has sites, load them
+    sites.value = status.sites || []
+  } catch (error) {
+    console.error('Failed to load dashboard:', error)
   } finally {
     loading.value = false
   }

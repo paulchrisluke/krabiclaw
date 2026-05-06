@@ -1,107 +1,65 @@
 <template>
-  <UDashboardGroup>
+  <UDashboardGroup 
+    unit="rem" 
+    :min-size="3" 
+    :default-size="4" 
+    :max-size="8" 
+    storage="local" 
+    storage-key="dashboard-sidebar"
+  >
     <UDashboardSidebar 
       resizable 
-      collapsible 
-      :min-size="20" 
-      :default-size="32" 
-      :max-size="40"
-      mode="drawer"
+      collapsible
     >
-      <template #header>
-        <div class="flex items-center gap-2 p-4">
-          <Icon name="i-heroicons-clipboard-document-list" class="w-5 h-5" />
-          <h2 class="font-semibold text-gray-900">KrabiClaw Admin</h2>
+      <template #header="{ collapsed }">
+        <div v-if="!collapsed" class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+            <span class="text-white font-bold text-sm">K</span>
+          </div>
+          <h2 class="font-semibold text-gray-900 dark:text-white">KrabiClaw</h2>
+        </div>
+        <div v-else class="flex items-center justify-center">
+          <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+            <span class="text-white font-bold text-sm">K</span>
+          </div>
         </div>
       </template>
 
-      <template #body>
-        <div class="space-y-1">
-          <UButton
-            to="/dashboard"
-            variant="ghost"
-            color="gray"
-            class="w-full justify-start"
-            :class="{ 'bg-gray-100': $route.path === '/dashboard' }"
-          >
-            <Icon name="i-heroicons-home" class="w-4 h-4" />
-            Dashboard
-          </UButton>
-
-          <UButton
-            to="/dashboard/reviews"
-            variant="ghost"
-            color="gray"
-            class="w-full justify-start"
-            :class="{ 'bg-gray-100': $route.path === '/dashboard/reviews' }"
-          >
-            <Icon name="i-heroicons-star" class="w-4 h-4" />
-            Reviews
-          </UButton>
-
-          <UButton
-            to="/dashboard/insights"
-            variant="ghost"
-            color="gray"
-            class="w-full justify-start"
-            :class="{ 'bg-gray-100': $route.path === '/dashboard/insights' }"
-          >
-            <Icon name="i-heroicons-chart-bar" class="w-4 h-4" />
-            Insights
-          </UButton>
-
-          <UButton
-            to="/dashboard/connection"
-            variant="ghost"
-            color="gray"
-            class="w-full justify-start"
-            :class="{ 'bg-gray-100': $route.path === '/dashboard/connection' }"
-          >
-            <Icon name="i-heroicons-link" class="w-4 h-4" />
-            Connections
-          </UButton>
-        </div>
+      <template #default="{ collapsed }">
+        <UNavigationMenu
+          :collapsed="collapsed"
+          :items="navigationItems"
+          orientation="vertical"
+        />
       </template>
 
-      <template #footer>
-        <div class="p-4 border-t border-gray-200">
-          <UButton
-            @click="handleSignOut"
-            variant="ghost"
-            color="red"
-            size="sm"
-            class="w-full justify-start"
-          >
-            <Icon name="i-heroicons-arrow-right-on-rectangle" class="w-4 h-4" />
-            Sign Out
-          </UButton>
-        </div>
+      <template #footer="{ collapsed }">
+        <UButton
+          :avatar="{
+            src: session.data?.user?.image,
+            loading: 'lazy'
+          }"
+          :label="collapsed ? undefined : session.data?.user?.name"
+          color="neutral"
+          variant="ghost"
+          class="w-full"
+          :block="collapsed"
+          @click="handleSignOut"
+        />
       </template>
     </UDashboardSidebar>
 
     <UDashboardPanel>
       <template #header>
         <UDashboardNavbar>
-          <template #left>
-            <DashboardSidebarToggle />
-          </template>
-          
           <template #right>
-            <DashboardSearchButton />
-            <UDropdown :items="userMenuItems">
-              <UButton variant="ghost" color="gray" size="sm">
-                <Icon name="i-heroicons-user-circle" class="w-4 h-4" />
-                {{ session?.email }}
-              </UButton>
-            </UDropdown>
+            <UColorModeButton variant="ghost" color="gray" size="sm" />
           </template>
         </UDashboardNavbar>
       </template>
 
       <template #body>
-        <div class="p-6">
-          <slot />
-        </div>
+        <slot />
       </template>
     </UDashboardPanel>
   </UDashboardGroup>
@@ -112,20 +70,47 @@ import { useAuth } from '~/composables/useAuth'
 import { authClient } from '~/utils/auth-client'
 
 const { data: sessionData, signOut } = useAuth()
-const session = computed(() => sessionData.value?.session)
+const session = useSession()
 
-const userMenuItems = [
-  [{
-    label: 'Profile',
-    icon: 'i-heroicons-user',
-    click: () => navigateTo('/dashboard/profile')
-  }],
-  [{
-    label: 'Sign out',
-    icon: 'i-heroicons-arrow-right-on-rectangle',
-    click: handleSignOut
-  }]
-]
+
+const navigationItems = [[
+  {
+    label: 'Dashboard',
+    icon: 'i-heroicons-home',
+    to: '/dashboard',
+    active: true
+  },
+  {
+    label: 'Sites',
+    icon: 'i-heroicons-globe-alt',
+    to: '/dashboard/sites'
+  },
+  {
+    label: 'Billing',
+    icon: 'i-heroicons-credit-card',
+    to: '/dashboard/billing'
+  },
+  {
+    label: 'Integrations',
+    icon: 'i-heroicons-link',
+    to: '/dashboard/integrations'
+  }
+]]
+
+const footerItems = [[
+  {
+    label: 'Feedback',
+    icon: 'i-heroicons-chat-bubble-left-right',
+    to: 'https://github.com/nuxt-ui-templates/dashboard',
+    target: '_blank'
+  },
+  {
+    label: 'Help & Support',
+    icon: 'i-heroicons-information-circle',
+    to: 'https://github.com/nuxt/ui',
+    target: '_blank'
+  }
+]]
 
 async function handleSignOut() {
   await signOut()

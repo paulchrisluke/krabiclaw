@@ -1,16 +1,7 @@
-// Get sites for organizations
+// Get sites for authenticated user's organizations
 import { cloudflareEnv, jsonResponse } from '../utils/api-response'
 
-export default defineEventHandler(async (event) => {
-  const query = getQuery(event)
-  const { organization_ids } = query
-  
-  if (!organization_ids || typeof organization_ids !== 'string') {
-    return jsonResponse({ 
-      error: 'Organization IDs are required' 
-    }, { status: 400 })
-  }
-  
+export default eventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.REVIEWS_DB
   
@@ -20,18 +11,49 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
   
+  // Get authenticated user from Better Auth session
+  const headers = getHeaders(event)
+  const session = await $fetch('/api/auth/get-session', {
+    headers: {
+      cookie: headers.cookie || '',
+      authorization: headers.authorization || ''
+    }
+  })
+  
+  if (!session?.user?.id) {
+    return jsonResponse({ 
+      error: 'Authentication required' 
+    }, { status: 401 })
+  }
+  
+  const userId = session.user.id
+  
   try {
-    const orgIdList = organization_ids.split(',')
+    // Get user's organizations
+    const organizations = await db.prepare(`
+      SELECT o.id FROM organization o
+      JOIN member m ON o.id = m.organizationId
+      WHERE m.userId = ?
+    `).bind(userId).all()
+    
+    if (!organizations.results || organizations.results.length === 0) {
+      return jsonResponse({
+        sites: []
+      })
+    }
+    
+    const orgIds = organizations.results.map((org: any) => org.id)
     
     // Build WHERE clause for multiple organization IDs
-    const placeholders = orgIdList.map(() => '?').join(',')
+    const placeholders = orgIds.map(() => '?').join(',')
     const sites = await db.prepare(`
       SELECT id, organization_id, theme_id, name, slug, subdomain, 
-             custom_domain, status, plan, created_at, updated_at
+             custom_domain, status, plan, created_at, updated_at,
+             onboarding_status
       FROM sites 
       WHERE organization_id IN (${placeholders})
       ORDER BY created_at DESC
-    `).bind(...orgIdList).all()
+    `).bind(...orgIds).all()
     
     return jsonResponse({
       sites: sites.results || []

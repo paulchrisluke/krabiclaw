@@ -88,7 +88,7 @@ if (!tenant.siteId || tenant.isPlatform) {
 }
 
 // Check if user is authenticated
-const { data: session } = await useFetch('/api/auth/session')
+const { data: session } = await useFetch('/api/auth/get-session')
 const isAuthenticated = computed(() => !!session.value?.user?.id)
 
 // Get brand menu (locationId = null for brand page)

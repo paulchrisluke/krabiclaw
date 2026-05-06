@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
 
   // Get authenticated user
   const headers = getHeaders(event)
-  const session = await $fetch('/api/auth/session', {
+  const session = await $fetch('/api/auth/get-session', {
     headers: {
       cookie: headers.cookie || '',
       authorization: headers.authorization || ''
