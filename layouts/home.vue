@@ -1,10 +1,10 @@
 <template>
   <div class="font-poppins overflow-x-hidden">
-    <DefaultHeader />
+    <SayaHeader />
     <main>
       <slot />
     </main>
-    <DefaultFooter />
+    <SayaFooter />
     <AppToast />
   </div>
 </template>

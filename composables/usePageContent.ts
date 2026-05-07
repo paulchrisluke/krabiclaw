@@ -23,18 +23,18 @@ export const usePageContent = (pageName?: string) => {
   })
 
   const { isPlatform, siteId } = useTenantSite()
+  const isPreview = computed(() => route.query.preview === 'true')
 
   const { data, refresh } = useFetch(() => {
     if (isPlatform) return null
     if (!siteId) return null
     const url = `/api/public/sites/${siteId}/content/${page.value}`
-    const query = useRoute().query
-    if (query.preview === 'true') {
+    if (route.query.preview === 'true') {
       return `${url}?preview=true`
     }
     return url
   }, {
-    key: computed(() => `content-${siteId}-${page.value}`),
+    key: computed(() => `content-${siteId}-${page.value}-${isPreview.value ? 'preview' : 'published'}`),
     server: true,
     immediate: !isPlatform && !!siteId
   })
@@ -59,9 +59,9 @@ export const usePageContent = (pageName?: string) => {
     if (field === 'hero.title' || field === 'hero.subtitle' || field === 'hero.video') {
       const heroRow = contentMap.value['hero']
       const fieldRow = contentMap.value[field]
-      if (field === 'hero.title') return heroRow?.hero_title || fieldRow?.content || defaultValue
-      if (field === 'hero.subtitle') return heroRow?.hero_subtitle || fieldRow?.content || defaultValue
-      if (field === 'hero.video') return heroRow?.hero_video_url || fieldRow?.content || defaultValue
+      if (field === 'hero.title') return heroRow?.hero_title ?? fieldRow?.content ?? defaultValue
+      if (field === 'hero.subtitle') return heroRow?.hero_subtitle ?? fieldRow?.content ?? defaultValue
+      if (field === 'hero.video') return heroRow?.hero_video_url ?? fieldRow?.content ?? defaultValue
     }
     const row = contentMap.value[field]
     if (!row) return defaultValue
@@ -83,9 +83,9 @@ export const usePageContent = (pageName?: string) => {
   const getHero = (defaults = { title: '', subtitle: '', video: '' }) => {
     const row = contentMap.value['hero']
     return {
-      title: getField('hero.title', row?.hero_title || defaults.title) || defaults.title,
-      subtitle: getField('hero.subtitle', row?.hero_subtitle || defaults.subtitle) || defaults.subtitle,
-      video: getField('hero.video', row?.hero_video_url || defaults.video) || defaults.video
+      title: getField('hero.title', row?.hero_title ?? defaults.title) ?? defaults.title,
+      subtitle: getField('hero.subtitle', row?.hero_subtitle ?? defaults.subtitle) ?? defaults.subtitle,
+      video: getField('hero.video', row?.hero_video_url ?? defaults.video) ?? defaults.video
     }
   }
 

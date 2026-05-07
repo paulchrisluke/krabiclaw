@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen bg-white">
-    <AppHero
+    <SayaHero
       :title="getField('hero.title', 'Reserve a Table')"
       :subtitle="getField('hero.subtitle', 'Book Your Authentic Dining Experience')"
       size="page"
@@ -10,7 +10,7 @@
         <!-- Reservation Form -->
         <div>
           <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Make a Reservation</h2>
-          <UCard class="bg-gray-50 rounded-lg">
+          <UCard class="rounded-lg bg-(--ui-bg-muted)">
             <UForm @submit="handleReservation" class="space-y-6">
               <UInput
                 id="res-name"
@@ -70,7 +70,7 @@
                 placeholder="Dietary restrictions, seating preferences…"
                 :rows="3"
               />
-              <UButton type="submit" color="primary" size="lg" class="w-full">
+              <UButton type="submit" color="neutral" variant="solid" class="w-full">
                 Make Reservation
               </UButton>
             </UForm>
@@ -81,7 +81,7 @@
         <div>
           <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Reservation Details</h2>
 
-          <UCard class="bg-gray-50 rounded-lg mb-6">
+          <UCard class="mb-6 rounded-lg bg-(--ui-bg-muted)">
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Contact Information</h3>
             <div class="space-y-2">
               <p class="text-gray-700"><strong>Phone:</strong> {{ contactPhone }}</p>
@@ -89,19 +89,19 @@
             </div>
           </UCard>
 
-          <UCard class="bg-gray-50 rounded-lg mb-6">
+          <UCard class="mb-6 rounded-lg bg-(--ui-bg-muted)">
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Reservation Policies</h3>
             <div v-html="policiesBody" />
           </UCard>
 
           <div class="space-y-4">
-            <UButton :to="`tel:${contactPhone.replace(/\s/g, '')}`" variant="outline" size="lg" class="w-full">
-              Call: {{ contactPhone }}
+            <UButton :to="`tel:${contactPhone.replace(/\s/g, '')}`" color="neutral" variant="outline" class="w-full">
+              Call {{ contactPhone }}
             </UButton>
-            <UButton to="/contact" variant="ghost" size="lg" class="w-full">
-              Send Message
+            <UButton to="/contact" color="neutral" variant="outline" class="w-full">
+              Contact Form
             </UButton>
-            <UButton to="/menu" variant="ghost" size="lg" class="w-full">
+            <UButton to="/menu" color="neutral" variant="outline" class="w-full">
               View Menu
             </UButton>
           </div>
@@ -160,10 +160,10 @@ const handleReservation = () => {
 const { site } = await useTenantSite()
 
 const config = useRuntimeConfig()
-const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
+const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '').replace(/\/$/, '') || 'krabiclaw.com'
 useSeoMeta({
-  title: 'Reserve a Table | Restaurant',
-  description: 'Reserve a table at our restaurant.',
+  title: 'Reserve a Table | Saya Kitchen',
+  description: 'Reserve a table at Saya Kitchen in Krabi.',
   ogImage: '/og-image.jpg',
   ogUrl: `https://${site?.subdomain || 'restaurant'}.${platformHostname}/reservations`,
   ogType: 'website'

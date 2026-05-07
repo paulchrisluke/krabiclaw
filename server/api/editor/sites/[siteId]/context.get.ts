@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user belongs to organization that owns the site
     const site = await db.prepare(`
-      SELECT s.id, s.name, s.organization_id, s.status, s.onboarding_status,
+      SELECT s.id, s.name, s.subdomain, s.organization_id, s.status, s.onboarding_status,
              o.name as organization_name
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
@@ -61,6 +61,17 @@ export default defineEventHandler(async (event) => {
       is_primary: Boolean(location.is_primary)
     }))
 
+    const entitlementsResult = await db.prepare(`
+      SELECT key, value
+      FROM organization_entitlements
+      WHERE organization_id = ?
+    `).bind(site.organization_id).all()
+
+    const entitlements = (entitlementsResult.results || []).reduce((acc: Record<string, string | boolean>, row: any) => {
+      acc[row.key] = row.value === 'true' ? true : row.value === 'false' ? false : row.value
+      return acc
+    }, {})
+
     // Get content registry for this site/theme
     const { contentRegistry } = await import('../../../../../config/content-registry')
 
@@ -84,12 +95,14 @@ export default defineEventHandler(async (event) => {
         site: {
           id: site.id,
           name: site.name,
+          subdomain: site.subdomain,
           status: site.status,
           onboarding_status: site.onboarding_status
         },
         organization: {
           id: site.organization_id,
-          name: site.organization_name
+          name: site.organization_name,
+          entitlements
         },
         locations: parsedLocations,
         scopes,

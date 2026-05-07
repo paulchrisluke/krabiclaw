@@ -10,13 +10,19 @@
       }
     ]"
     @click="handleClick"
-    v-bind="hoverable ? { role: 'button', tabindex: 0, 'aria-pressed': false } : {}"
+    v-bind="hoverable ? { role: 'button', tabindex: 0 } : {}"
     @keydown="hoverable ? handleKeydown : undefined"
   >
     <slot />
   </div>
 </template>
 
+/**
+ * AppCard Component
+ * @props variant - 'default', 'elevated' (with shadow+border), 'outlined' (with border)
+ * @props border - Optional additional border weight/color
+ * @props hoverable - Enables button role and hover effects
+ */
 <script setup>
 const props = defineProps({
   variant: {
@@ -39,8 +45,8 @@ const emit = defineEmits(['click'])
 
 const variantClasses = {
   default: 'bg-white',
-  elevated: 'bg-white shadow-md', // shadow only, no border
-  outlined: 'bg-white' // no border here
+  elevated: 'bg-white shadow-md border border-stone-200',
+  outlined: 'bg-white border border-stone-200'
 }
 
 const borderClasses = {
@@ -60,7 +66,8 @@ const handleKeydown = (event) => {
   if (!props.hoverable) return
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()
-    handleClick(event)
+    // Synthesize a MouseEvent to ensure consumers get consistent event types
+    handleClick(new MouseEvent('click', { bubbles: true, cancelable: true }))
   }
 }
 </script>

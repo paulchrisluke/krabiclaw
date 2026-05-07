@@ -9,6 +9,12 @@ export default defineNuxtConfig({
       colors: ['primary', 'secondary', 'accent', 'neutral', 'success', 'warning', 'error', 'info'],
     }
   },
+  ui: {
+    colors: {
+      primary: 'neutral',
+      neutral: 'zinc'
+    }
+  },
   gtag: {
     id: 'G-Z18L1Y4G7K'
   },
@@ -111,15 +117,15 @@ export default defineNuxtConfig({
   // Components configuration
   components: [
     {
+      path: '~/components/saya',
+      prefix: 'Saya',
+    },
+    {
+      path: '~/components/platform',
+      prefix: 'Platform',
+    },
+    {
       path: '~/components/ui',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/global',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/google',
       pathPrefix: false,
     },
     {

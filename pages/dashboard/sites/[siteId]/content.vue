@@ -121,17 +121,16 @@
                   :color="activeField === fieldKey ? 'primary' : 'neutral'"
                   size="sm"
                   class="justify-start"
-                  @click="getFieldDef(selectedPageId, fieldKey)?.source === 'google' ? null : selectField(fieldKey)"
+                  @click="selectField(fieldKey)"
                 >
                   <span class="flex min-w-0 flex-1 items-start gap-2 text-left">
                     <UIcon
-                      :name="getFieldDef(selectedPageId, fieldKey)?.source === 'google' ? 'i-heroicons-circle-stack' : 'i-heroicons-bars-3-bottom-left'"
+                      :name="fieldSupportsGoogle(fieldKey) ? 'i-heroicons-lock-closed' : 'i-heroicons-bars-3-bottom-left'"
                       class="mt-0.5 size-4 shrink-0 text-gray-400"
                     />
                     <span class="min-w-0 flex-1">
                       <span class="flex items-center gap-2">
                         <span class="truncate text-sm font-medium">{{ getFieldDef(selectedPageId, fieldKey)?.label }}</span>
-                        <UBadge v-if="getFieldDef(selectedPageId, fieldKey)?.source === 'google'" color="info" variant="soft" size="xs">Google</UBadge>
                       </span>
                       <span class="block truncate text-xs text-gray-500 dark:text-gray-400">{{ fieldPreview(fieldKey) }}</span>
                     </span>
@@ -219,6 +218,19 @@
             <p v-if="activeFieldDef?.defaultValue" class="text-xs text-gray-500 dark:text-gray-400">Default: {{ activeFieldDef.defaultValue }}</p>
           </div>
 
+          <div v-else-if="activeFieldDef?.type === 'textarea'" class="space-y-2">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ activeFieldDef.label }}</label>
+            <UTextarea
+              v-model="editingValue"
+              :placeholder="activeFieldDef?.placeholder || activeFieldDef?.defaultValue || 'Enter value...'"
+              :rows="5"
+              autoresize
+              :maxrows="12"
+              size="sm"
+            />
+            <p v-if="activeFieldDef?.defaultValue" class="text-xs text-gray-500 dark:text-gray-400">Default: {{ activeFieldDef.defaultValue }}</p>
+          </div>
+
           <div v-else-if="activeFieldDef?.type === 'richtext'" class="space-y-2">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ activeFieldDef.label }}</label>
             <div class="flex flex-wrap gap-1 rounded-md border border-gray-200 bg-gray-50 p-1 dark:border-gray-800 dark:bg-gray-950">
@@ -237,9 +249,36 @@
               contenteditable="true"
               class="prose prose-sm min-h-40 w-full max-w-none rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-gray-800 dark:bg-gray-950 dark:text-white"
               :data-placeholder="activeFieldDef?.placeholder || 'Start typing...'"
-              v-html="editingValue || ''"
+              v-html="DOMPurify.sanitize(editingValue || '')"
               @blur="onRichTextBlur"
             />
+          </div>
+
+          <UCard v-if="activeFieldRequiresGoogleUpgrade">
+            <div class="space-y-4">
+              <div class="flex items-start gap-3">
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300">
+                  <UIcon name="i-simple-icons-google" class="size-5" />
+                </div>
+                <div>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white">Auto-sync from Google Business</p>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Save hours keeping your site updated — connect once, sync forever.</p>
+                </div>
+              </div>
+              <UButton to="/dashboard/billing" color="primary" block>
+                Upgrade to Pro — $25/mo
+              </UButton>
+            </div>
+          </UCard>
+
+          <div
+            v-else-if="activeFieldDef?.googleLocked"
+            class="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-200"
+          >
+            <UBadge color="neutral" variant="soft" size="sm">
+              Synced from Google Business
+            </UBadge>
+            <span class="text-xs text-gray-500 dark:text-gray-400">Manual edits remain available.</span>
           </div>
 
           <UButton
@@ -257,7 +296,7 @@
             <p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Current value</p>
             <div
               v-if="activeFieldDef?.type === 'richtext'"
-              v-html="currentValues[activeField]"
+              v-html="DOMPurify.sanitize(currentValues[activeField])"
               class="prose prose-sm max-w-none text-sm text-gray-700 dark:text-gray-200"
             />
             <p v-else class="text-sm text-gray-700 dark:text-gray-200">{{ currentValues[activeField] }}</p>
@@ -285,6 +324,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import DOMPurify from 'dompurify'
 import { contentRegistry, editablePages, getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
 
@@ -301,7 +341,8 @@ const platformHostname = computed(() => {
 })
 
 // ─── Site Context ───────────────────────────────────────────────────────
-const siteData = ref(null)
+const siteData = ref<any>(null)
+const organizationEntitlements = ref<Record<string, any>>({})
 const siteName = computed(() => siteData.value?.name || 'Loading...')
 const siteDomain = computed(() => siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : 'localhost:3000')
 const sitePreviewBaseUrl = computed(() => {
@@ -315,13 +356,15 @@ const sitePreviewBaseUrl = computed(() => {
   return `${base.protocol}//${hostname}${base.port ? `:${base.port}` : ''}`
 })
 
-// Load site data
-const loadSiteData = async () => {
+// Load editor context
+const loadEditorContext = async () => {
   try {
-    siteData.value = await $fetch(`/api/sites/${siteId}`)
+    const response = await $fetch<{ context: any }>(`/api/editor/sites/${siteId}/context`)
+    siteData.value = response.context.site
+    organizationEntitlements.value = response.context.organization.entitlements || {}
   } catch (error) {
-    console.error('Failed to load site:', error)
-    toast.add({ description: 'Failed to load site data', color: 'red' })
+    console.error('Failed to load editor context:', error)
+    toast.add({ description: 'Failed to load editor context', color: 'red' })
   }
 }
 
@@ -365,29 +408,33 @@ const groupConfig: Record<string, Array<{ id: string; label: string; icon: strin
   home: [
     { id: 'hero',   label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.video'] },
     { id: 'cta',    label: 'Call to Action',  icon: 'i-heroicons-megaphone', fields: ['cta.title', 'cta.description'] },
-    { id: 'google', label: 'Google Business', icon: 'i-heroicons-circle-stack', fields: ['business.name', 'business.establishment_year', 'business.description', 'business.address', 'business.phone', 'business.hours'] }
+    { id: 'business', label: 'Business Info', icon: 'i-heroicons-building-storefront', fields: ['business.name', 'business.description', 'business.establishment_year'] },
+    { id: 'contact', label: 'Contact & Hours', icon: 'i-heroicons-clock', fields: ['business.address', 'business.phone', 'business.hours'] },
+    { id: 'media', label: 'Gallery & Media', icon: 'i-heroicons-photo', fields: ['business.photos'] }
   ],
   about: [
     { id: 'hero',    label: 'Hero Section', icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
     { id: 'story',   label: 'Story',        icon: 'i-heroicons-book-open', fields: ['story.intro', 'journey.title', 'journey.body', 'experience.body'] },
     { id: 'cuisine', label: 'Cuisine',      icon: 'i-heroicons-sparkles', fields: ['grill.title', 'grill.description', 'sushi.title', 'sushi.description'] },
-    { id: 'google',  label: 'Google Business', icon: 'i-heroicons-circle-stack', fields: ['business.establishment_year', 'business.description'] }
+    { id: 'business',  label: 'Business Info', icon: 'i-heroicons-building-storefront', fields: ['business.description', 'business.establishment_year'] }
   ],
   contact: [
     { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
     { id: 'content', label: 'Page Content',    icon: 'i-heroicons-document-text', fields: ['intro.body'] },
     { id: 'social',  label: 'Social Links',    icon: 'i-heroicons-link', fields: ['social.facebook', 'social.instagram'] },
-    { id: 'google',  label: 'Google Business', icon: 'i-heroicons-circle-stack', fields: ['business.name', 'business.establishment_year', 'business.address', 'business.phone', 'business.hours'] }
+    { id: 'business', label: 'Business Info', icon: 'i-heroicons-building-storefront', fields: ['business.name', 'business.establishment_year'] },
+    { id: 'contact-hours', label: 'Contact & Hours', icon: 'i-heroicons-clock', fields: ['business.address', 'business.phone', 'business.hours'] }
   ],
   location: [
     { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
     { id: 'content', label: 'Additional Info', icon: 'i-heroicons-document-text', fields: ['parking.info', 'extra.notes'] },
-    { id: 'google',  label: 'Google Business', icon: 'i-heroicons-circle-stack', fields: ['business.name', 'business.establishment_year', 'business.address', 'business.phone', 'business.hours'] }
+    { id: 'business', label: 'Business Info', icon: 'i-heroicons-building-storefront', fields: ['business.name', 'business.establishment_year'] },
+    { id: 'contact-hours', label: 'Contact & Hours', icon: 'i-heroicons-clock', fields: ['business.address', 'business.phone', 'business.hours'] }
   ],
   menu: [
     { id: 'hero',    label: 'Hero Section',      icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
     { id: 'content', label: 'Menu Introduction', icon: 'i-heroicons-document-text', fields: ['description'] },
-    { id: 'google',  label: 'Google Products',   icon: 'i-heroicons-circle-stack', fields: ['business.products'] }
+    { id: 'media',  label: 'Gallery & Media',   icon: 'i-heroicons-photo', fields: ['business.products'] }
   ],
   reservations: [
     { id: 'hero',     label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
@@ -412,6 +459,14 @@ const activeFieldDef = computed<FieldDefinition | undefined>(() =>
   activeField.value ? getFieldDef(selectedPageId.value, activeField.value) : undefined
 )
 
+const hasGoogleBusinessEntitlement = computed(() => organizationEntitlements.value.google_business === true)
+const activeFieldRequiresGoogleUpgrade = computed(() =>
+  activeFieldDef.value?.googleLocked === true && !hasGoogleBusinessEntitlement.value
+)
+
+const fieldSupportsGoogle = (fieldKey: string): boolean =>
+  getFieldDef(selectedPageId.value, fieldKey)?.sources.includes('google') === true
+
 const selectField = (key: string) => {
   activeField.value = key
   editingValue.value = currentValues.value[key] || ''
@@ -428,7 +483,7 @@ const selectField = (key: string) => {
 }
 
 const onRichTextBlur = (e: FocusEvent) => {
-  editingValue.value = (e.target as HTMLElement).innerHTML
+  editingValue.value = DOMPurify.sanitize((e.target as HTMLElement).innerHTML)
 }
 
 const richtextCommands = [
@@ -485,7 +540,7 @@ const loadPageContent = async () => {
 
 // Load on mount
 onMounted(async () => {
-  await loadSiteData()
+  await loadEditorContext()
   await loadPageContent()
 })
 
@@ -559,10 +614,10 @@ const handleDiscard = async () => {
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '').trim()
 
 const fieldPreview = (fieldKey: string): string => {
-  const raw = currentValues.value[fieldKey]
-  if (!raw) return '— not set'
+  const raw = currentValues.value[fieldKey] || getFieldDef(selectedPageId.value, fieldKey)?.defaultValue
+  if (!raw) return fieldSupportsGoogle(fieldKey) ? 'Syncs from Google Business' : 'Add content'
   const text = stripHtml(raw)
-  return text.length > 48 ? text.substring(0, 45) + '…' : text || '— not set'
+  return text.length > 48 ? text.substring(0, 45) + '…' : text || 'Add content'
 }
 
 useSeoMeta({ title: 'Content Editor | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

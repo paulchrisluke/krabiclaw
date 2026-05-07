@@ -1,5 +1,5 @@
 export type FieldSource = 'manual' | 'google' | 'static' | 'computed'
-export type FieldType = 'text' | 'richtext' | 'image' | 'menu_items' | 'business_hours' | 'location'
+export type FieldType = 'text' | 'textarea' | 'richtext' | 'image' | 'menu_items' | 'business_hours' | 'location'
 
 export interface FieldDefinition {
   label: string
@@ -15,6 +15,8 @@ export interface FieldDefinition {
   integrationConfig?: IntegrationConfig
   /** Feature gating */
   requiredEntitlement?: string
+  /** Google Business upsell gate for fields that can sync from Google */
+  googleLocked?: boolean
 }
 
 export interface ManualInputConfig {
@@ -50,14 +52,14 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Hero Title',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'Your Restaurant',
+        defaultValue: 'Saya Kitchen',
         placeholder: 'Enter hero title...'
       },
       'hero.subtitle': {
         label: 'Hero Subtitle',
-        type: 'text',
+        type: 'textarea',
         sources: ['manual'],
-        defaultValue: 'Authentic Experience in your city',
+        defaultValue: 'Authentic Japanese Robatayaki in Krabi, Thailand',
         placeholder: 'Enter hero subtitle...'
       },
       'hero.video': {
@@ -70,19 +72,20 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'CTA Heading',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'Ready to Experience OUR RESTAURANT?'
+        defaultValue: 'Ready to Experience Saya Kitchen?'
       },
       'cta.description': {
         label: 'CTA Description',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: "Whether you're joining us for a casual dinner or a special celebration, we look forward to serving you the finest authentic cuisine in your city."
+        defaultValue: "From our open-flame robatayaki grill to hand-rolled sushi, every dish at Saya is crafted with intention. Join us for an evening you won't forget."
       },
       'business.name': {
         label: 'Business Name',
         type: 'text',
         sources: ['manual', 'google'],
         googlePath: 'title',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -94,6 +97,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text',
         sources: ['manual', 'google'],
         googlePath: 'establishmentYear',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -105,6 +109,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'richtext',
         sources: ['manual', 'google'],
         googlePath: 'profile.description',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -116,6 +121,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text',
         sources: ['manual', 'google'],
         googlePath: 'storefrontAddress',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -127,6 +133,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text',
         sources: ['manual', 'google'],
         googlePath: 'phoneNumbers.0.phoneNumber',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -138,6 +145,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'business_hours',
         sources: ['manual', 'google'],
         googlePath: 'regularHours',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -149,6 +157,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'image',
         sources: ['manual', 'google'],
         googlePath: 'media',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'import',
@@ -166,19 +175,19 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Page Title',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'About OUR RESTAURANT'
+        defaultValue: 'About Saya Kitchen'
       },
       'hero.subtitle': {
         label: 'Page Subtitle',
-        type: 'text',
+        type: 'textarea',
         sources: ['manual'],
-        defaultValue: 'Authentic Experience in your city'
+        defaultValue: 'Japanese fire, Southern Thai hospitality'
       },
       'story.intro': {
         label: 'Story Introduction',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: '<p class="text-xl font-medium text-gray-900 border-l-4 border-black pl-6 py-2">Our Restaurant authentic Restaurant, nestled in the heart of your city, is a culinary haven that specializes in the artful fusion of fine dining.</p>'
+        defaultValue: '<p class="text-xl font-medium text-gray-900 border-l-4 border-black pl-6 py-2">Saya Kitchen brings the warmth of Japanese robatayaki to Krabi, pairing open-flame cooking with pristine seafood, seasonal produce, and generous island hospitality.</p>'
       },
       'grill.title': {
         label: 'Grill Section Title',
@@ -190,7 +199,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Grill Description',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: 'Renowned for its authentic cuisine, Our Restaurant showcases a mastery of grilling techniques, presenting a delectable array of skewered delights.'
+        defaultValue: 'Our chefs work over glowing charcoal, turning seafood, vegetables, and skewers slowly so each dish carries smoke, texture, and quiet precision.'
       },
       'sushi.title': {
         label: 'Sushi Section Title',
@@ -202,7 +211,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Sushi Description',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: "Complementing the authentic cuisine experience is Our Restaurant's sushi selection, where skilled chefs artfully craft a variety of sushi rolls."
+        defaultValue: "Alongside the grill, Saya's sushi counter serves clean, balanced rolls and sashimi shaped by fresh ingredients and careful hands."
       },
       'journey.title': {
         label: 'Journey Section Title',
@@ -214,19 +223,20 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Journey Body',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: '<p>Nestled amidst the tropical allure of your city, Our Restaurant has an enchanting culinary tale.</p>'
+        defaultValue: '<p>Founded as a neighborhood dining room for travelers and locals, Saya Kitchen was created around one simple idea: honest Japanese cooking served with the ease of Krabi nights.</p>'
       },
       'experience.body': {
         label: 'Experience Description',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: '<p>Equally enticing is our sushi bar, a stage where culinary craftsmen orchestrate amazing flavors and textures.</p>'
+        defaultValue: '<p>Settle in for grilled skewers, chilled sake, bright sushi, and a room that moves at the pace of a long dinner with friends.</p>'
       },
       'business.establishment_year': { 
         label: 'Establishment Year', 
         type: 'text', 
         sources: ['manual', 'google'], 
         googlePath: 'establishmentYear',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -238,6 +248,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'richtext', 
         sources: ['manual', 'google'], 
         googlePath: 'profile.description',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -255,19 +266,19 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Page Title',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'Contact Us'
+        defaultValue: 'Contact Saya Kitchen'
       },
       'hero.subtitle': {
         label: 'Page Subtitle',
-        type: 'text',
+        type: 'textarea',
         sources: ['manual'],
-        defaultValue: 'Get in Touch with OUR RESTAURANT'
+        defaultValue: 'Book a table or ask us anything'
       },
       'intro.body': {
         label: 'Introduction Text',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: '<p>For an unparalleled authentic culinary experience in your city, Our Restaurant beckons you to transcend the virtual and savor the exquisite reality.</p>'
+        defaultValue: '<p>Whether you are planning dinner, a celebration, or a quiet seat at the counter, the Saya team is here to help.</p>'
       },
       'social.facebook': {
         label: 'Facebook URL',
@@ -286,6 +297,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text', 
         sources: ['manual', 'google'], 
         googlePath: 'title',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -297,6 +309,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text', 
         sources: ['manual', 'google'], 
         googlePath: 'establishmentYear',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -308,6 +321,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text', 
         sources: ['manual', 'google'], 
         googlePath: 'storefrontAddress',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -319,6 +333,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text', 
         sources: ['manual', 'google'], 
         googlePath: 'phoneNumbers.0.phoneNumber',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -330,6 +345,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'business_hours', 
         sources: ['manual', 'google'], 
         googlePath: 'regularHours',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -344,7 +360,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
     path: '/location',
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Location & Hours' },
-      'hero.subtitle': { label: 'Page Subtitle', type: 'text', sources: ['manual'], defaultValue: 'Visit Us in your city' },
+      'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Visit us in Ao Nang, Krabi' },
       'parking.info': {
         label: 'Parking Information',
         type: 'richtext',
@@ -362,6 +378,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text', 
         sources: ['manual', 'google'], 
         googlePath: 'title',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -373,6 +390,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text', 
         sources: ['manual', 'google'], 
         googlePath: 'establishmentYear',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -384,6 +402,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text', 
         sources: ['manual', 'google'], 
         googlePath: 'storefrontAddress',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -395,6 +414,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text', 
         sources: ['manual', 'google'], 
         googlePath: 'phoneNumbers.0.phoneNumber',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -406,6 +426,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'business_hours', 
         sources: ['manual', 'google'], 
         googlePath: 'regularHours',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'two_way',
@@ -419,14 +440,14 @@ export const contentRegistry: Record<string, PageDefinition> = {
     label: 'Menu',
     path: '/menu',
     groups: [
-      { id: 'hero',    label: 'Hero Section',      icon: '🎯', fields: ['hero.title', 'hero.subtitle'] },
-      { id: 'content', label: 'Menu Introduction', icon: '📝', fields: ['description'] },
-      { id: 'items',   label: 'Menu Items',        icon: '🍽', fields: ['menu_items'] },
-      { id: 'google',  label: 'Google Products',   icon: '🔵', fields: ['business.products'] }
+      { id: 'hero',    label: 'Hero Section',      icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
+      { id: 'content', label: 'Menu Introduction', icon: 'i-heroicons-document-text', fields: ['description'] },
+      { id: 'items',   label: 'Menu Items',        icon: 'i-heroicons-list-bullet', fields: ['menu_items'] },
+      { id: 'google',  label: 'Google Products',   icon: 'i-heroicons-circle-stack', fields: ['business.products'] }
     ],
     fields: {
-      'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Our Menu' },
-      'hero.subtitle': { label: 'Page Subtitle', type: 'text', sources: ['manual'], defaultValue: 'Authentic Dining' },
+      'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Saya Menu' },
+      'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Robatayaki, sushi, and seasonal plates' },
       'description': {
         label: 'Menu Introduction',
         type: 'richtext',
@@ -443,6 +464,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'text', 
         sources: ['manual', 'google'], 
         googlePath: 'products',
+        googleLocked: true,
         integrationConfig: {
           type: 'google_business',
           syncDirection: 'import',
@@ -456,8 +478,8 @@ export const contentRegistry: Record<string, PageDefinition> = {
     label: 'Reservations',
     path: '/reservations',
     fields: {
-      'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Reserve a Table at OUR RESTAURANT' },
-      'hero.subtitle': { label: 'Page Subtitle', type: 'text', sources: ['manual'], defaultValue: 'Book Your Authentic Experience' },
+      'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Reserve a Table at Saya Kitchen' },
+      'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Plan your evening around the grill' },
       'policies.body': {
         label: 'Reservation Policies',
         type: 'richtext',
@@ -474,7 +496,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Contact Email',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'info@your-restaurant.com'
+        defaultValue: 'hello@sayakitchen.example'
       }
     }
   }

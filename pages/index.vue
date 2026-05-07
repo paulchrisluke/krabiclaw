@@ -2,7 +2,7 @@
   <NuxtLayout :name="isPlatform ? 'platform' : 'tenant'">
     <!-- KrabiClaw Platform Homepage -->
     <div v-if="isPlatform" class="krabiclaw-platform">
-      <AppHero
+      <SayaHero
         id="section-hero"
         title="KrabiClaw"
         subtitle="The AI-powered restaurant platform. Build your digital presence in minutes."
@@ -23,7 +23,7 @@
             <UButton to="/pricing" size="lg" color="neutral">View Pricing</UButton>
           </div>
         </template>
-      </AppHero>
+      </SayaHero>
 
       <!-- Platform features section -->
       <AppSection id="features" bg="white" padding="xl">
@@ -89,28 +89,28 @@
 
     <!-- Saya Restaurant Theme (Tenant Site) -->
     <div v-else class="saya-restaurant-theme">
-      <AppHero
+      <SayaHero
         id="section-hero"
-        :title="getField('hero.title', 'Your Restaurant Name')"
-        :subtitle="getField('hero.subtitle', 'An Authentic Dining Experience')"
+        :title="getField('hero.title', 'Saya Kitchen')"
+        :subtitle="getField('hero.subtitle', 'Authentic Japanese Robatayaki in Krabi, Thailand')"
         size="home"
         :video="getFieldStr('hero.video', '/videos/hero-video.mp4')"
         :establishment-year="googleBusiness.value?.business?.establishmentYear"
       >
         <template #cta>
           <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <UButton to="/menu" variant="solid" color="neutral" size="lg" class="bg-white text-black hover:bg-white/90">
+            <UButton to="/menu" variant="solid" color="neutral" size="lg">
               View Menu
             </UButton>
-            <UButton v-if="hasLocations" :to="locationsCtaUrl" variant="solid" color="neutral" size="lg">
+            <UButton v-if="hasLocations" :to="locationsCtaUrl" variant="outline" color="neutral" size="lg">
               {{ locationsCtaText }}
             </UButton>
-            <UButton v-else to="/reservations" variant="solid" color="neutral" size="lg">
+            <UButton v-else to="/reservations" variant="outline" color="neutral" size="lg">
               Reserve a Table
             </UButton>
           </div>
         </template>
-      </AppHero>
+      </SayaHero>
 
       <!-- Location Cards/Picker -->
       <AppSection v-if="hasLocations" bg="white" padding="default">
@@ -145,7 +145,7 @@
             <div class="p-6">
               <div class="flex items-start justify-between mb-2">
                 <h3 class="text-lg font-semibold text-gray-900">{{ location.title }}</h3>
-                <UBadge color="info" variant="soft" size="sm">Primary</UBadge>
+                <UBadge color="neutral" variant="soft" size="sm">Primary</UBadge>
               </div>
 
               <p v-if="location.address" class="text-gray-600 text-sm mb-3">{{ location.address }}</p>
@@ -163,7 +163,7 @@
       </AppSection>
 
       <!-- Featured Menu Preview -->
-      <AppSection v-if="hasMenu" bg="gray" padding="default">
+      <AppSection v-if="hasMenu" bg="alt" padding="default">
         <div class="text-center mb-12">
           <h2 class="text-3xl font-bold text-gray-900 mb-4">Featured Menu</h2>
           <p class="text-xl text-gray-600">Taste our signature dishes</p>
@@ -192,14 +192,14 @@
                 :class="[
                   'inline-flex items-center px-2 py-1 text-xs font-medium rounded',
                   item.available
-                    ? 'bg-green-100 text-green-800'
+                    ? 'bg-stone-100 text-stone-800'
                     : 'bg-red-100 text-red-800'
                 ]"
               >
                 {{ item.available ? 'Available' : 'Unavailable' }}
               </span>
 
-              <UButton to="/menu" variant="outline" size="sm">View Full Menu</UButton>
+              <UButton to="/menu" color="neutral" variant="outline" size="sm">View Full Menu</UButton>
             </div>
           </AppCard>
         </div>
@@ -242,15 +242,45 @@
           </div>
         </div>
       </AppSection>
+      <AppSection v-else bg="white" padding="default">
+        <div class="mb-8 text-center">
+          <h2 class="mb-3 text-3xl font-bold text-gray-900">What Our Guests Say</h2>
+          <p class="text-gray-600">Connect Google Business to display fresh guest reviews.</p>
+        </div>
+        <div class="grid gap-8 md:grid-cols-3">
+          <UCard v-for="i in 3" :key="`review-placeholder-${i}`" class="flex flex-col bg-white p-8 shadow-sm border border-gray-100">
+            <div class="mb-4 flex items-center gap-1">
+              <span v-for="star in 5" :key="star" class="h-4 w-4 rounded bg-stone-200 animate-pulse" />
+            </div>
+            <div class="flex-grow space-y-3">
+              <div class="h-3 rounded bg-stone-200 animate-pulse" />
+              <div class="h-3 w-4/5 rounded bg-stone-200 animate-pulse" />
+              <div class="h-3 w-3/4 rounded bg-stone-200 animate-pulse" />
+            </div>
+            <div class="mt-6 flex items-center gap-3 border-t border-gray-50 pt-6">
+              <div class="h-10 w-10 rounded-full bg-stone-200 animate-pulse" />
+              <div class="flex-1 space-y-2">
+                <div class="h-4 w-28 rounded bg-stone-200 animate-pulse" />
+                <div class="h-3 w-20 rounded bg-stone-200 animate-pulse" />
+              </div>
+            </div>
+          </UCard>
+        </div>
+        <div class="mt-8 text-center">
+          <NuxtLink to="/dashboard/connection" class="font-semibold text-gray-900 underline decoration-gray-300 underline-offset-4 hover:decoration-gray-900">
+            Connect Google Business →
+          </NuxtLink>
+        </div>
+      </AppSection>
 
       <!-- Posts/News -->
       <ClientOnly>
-        <RestaurantPosts :posts="googlePosts" :limit="3" show-view-more description="News, events and special offers" />
+        <SayaPosts :posts="googlePosts" :limit="3" show-view-more description="News, events and special offers" />
       </ClientOnly>
 
       <!-- About teaser -->
       <ClientOnly>
-        <RestaurantAbout
+        <SayaAbout
           :title="getField('about-teaser-title', businessTitle)"
           :image="businessPrimaryPhoto?.googleUrl"
           is-teaser
@@ -260,7 +290,7 @@
           <p class="text-white/80 text-lg font-light leading-relaxed">
             {{ getField('cta.description', businessSubtitle) }}
           </p>
-        </RestaurantAbout>
+        </SayaAbout>
       </ClientOnly>
 
       <!-- Gallery -->
@@ -282,15 +312,19 @@
           </template>
           <!-- Empty state placeholders -->
           <template v-else>
-            <div v-for="i in 4" :key="i" class="aspect-square bg-stone-100 rounded-2xl flex items-center justify-center">
-              <span class="text-stone-300 text-xs font-medium text-center px-2">Photo from<br>Google Business</span>
+            <div v-for="photo in sayaGalleryPlaceholders" :key="photo.src" class="aspect-square overflow-hidden rounded-2xl shadow-sm">
+              <img
+                :src="photo.src"
+                :alt="photo.alt"
+                class="h-full w-full object-cover transition-transform duration-500 hover:scale-110"
+              >
             </div>
           </template>
         </div>
       </AppSection>
 
       <!-- Location & Hours -->
-      <AppSection id="section-google" bg="gray" padding="default">
+      <AppSection id="section-google" bg="alt" padding="default">
         <div class="grid md:grid-cols-2 gap-12 items-center">
           <div>
             <h2 class="text-3xl font-bold text-gray-900 mb-4 italic">
@@ -301,7 +335,7 @@
               <div v-if="businessAddress">
                 <p>{{ businessAddress }}</p>
               </div>
-              <div v-else class="h-5 bg-stone-200 rounded animate-pulse w-64" />
+              <p v-else>123 Beach Road, Ao Nang, Krabi 81180</p>
 
               <div v-if="specialHoursNotice" class="flex items-start gap-4 p-4 bg-amber-50 rounded-2xl border border-amber-100">
                 <span class="text-2xl">🗓️</span>
@@ -312,14 +346,14 @@
               </div>
 
               <p v-if="businessHours">{{ businessHours }}</p>
-              <div v-else class="h-5 bg-stone-200 rounded animate-pulse w-48" />
+              <p v-else>Open daily, 5:00 PM - 10:30 PM</p>
 
               <p v-if="businessPhone">{{ businessPhone }}</p>
-              <div v-else class="h-5 bg-stone-200 rounded animate-pulse w-36" />
+              <p v-else>+66 81 154 3606</p>
             </div>
             <div class="flex gap-4">
-              <UButton to="/location" variant="solid" color="primary" size="md">Full Location Details</UButton>
-              <UButton to="/reservations" variant="outline" size="md">Reserve a Table →</UButton>
+              <UButton to="/location" variant="solid" color="neutral" size="md">Full Location Details</UButton>
+              <UButton to="/reservations" variant="outline" color="neutral" size="md">Reserve a Table →</UButton>
             </div>
           </div>
           <div class="rounded-3xl h-80 overflow-hidden shadow-2xl bg-stone-100">
@@ -333,8 +367,14 @@
               loading="lazy"
               referrerpolicy="no-referrer-when-downgrade"
             />
-            <div v-else class="w-full h-full flex items-center justify-center">
-              <p class="text-stone-400 text-sm text-center px-4">Map will appear once<br>Google Business is linked</p>
+            <div v-else class="flex h-full w-full items-center justify-center bg-white">
+              <div class="px-8 text-center">
+                <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-(--ui-bg-muted) text-gray-900">
+                  <UIcon name="i-simple-icons-googlemaps" class="size-7" />
+                </div>
+                <p class="text-base font-semibold text-gray-900">Google Maps will appear here</p>
+                <p class="mt-2 text-sm text-gray-500">Connect Google Business to sync your verified location and directions.</p>
+              </div>
             </div>
           </div>
         </div>
@@ -344,16 +384,16 @@
       <AppSection id="section-cta" bg="black" padding="xl">
         <div class="text-center">
           <h2 class="text-3xl md:text-5xl font-bold text-white mb-6 italic">
-            {{ getField('cta.title', 'Ready to Experience Our Restaurant?') }}
+            {{ getField('cta.title', 'Ready to Experience Saya Kitchen?') }}
           </h2>
           <p class="text-white/60 mb-10 max-w-2xl mx-auto font-light">
-            {{ getField('cta.description', "Whether you're joining us for a casual dinner or a special celebration, we look forward to serving you the finest cuisine.") }}
+            {{ getField('cta.description', "From our open-flame robatayaki grill to hand-rolled sushi, every dish at Saya is crafted with intention. Join us for an evening you won't forget.") }}
           </p>
           <div class="flex flex-col md:flex-row items-center justify-center gap-6">
-            <UButton to="/reservations" variant="solid" color="neutral" size="lg" class="bg-white text-black hover:bg-stone-200">
-              Book Now
+            <UButton to="/reservations" variant="solid" color="neutral" size="lg">
+              Reserve a Table
             </UButton>
-            <UButton to="/contact" variant="outline" color="neutral" size="lg" class="border-2 border-white/20 hover:bg-white/10">
+            <UButton to="/contact" variant="outline" color="neutral" size="lg">
               Contact Us
             </UButton>
           </div>
@@ -462,9 +502,27 @@ const { data: googleBusiness } = isPlatform
     })
 
 const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
+const sayaGalleryPlaceholders = [
+  {
+    src: 'https://images.unsplash.com/photo-1553621042-f6e147245754?auto=format&fit=crop&w=900&q=80',
+    alt: 'Assorted sushi on a dark plate'
+  },
+  {
+    src: 'https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&w=900&q=80',
+    alt: 'Grilled skewers over flame'
+  },
+  {
+    src: 'https://images.unsplash.com/photo-1617196034796-73dfa7b1fd56?auto=format&fit=crop&w=900&q=80',
+    alt: 'Japanese ramen and side dishes'
+  },
+  {
+    src: 'https://images.unsplash.com/photo-1611143669185-af224c5e3252?auto=format&fit=crop&w=900&q=80',
+    alt: 'Fresh sushi rolls with garnish'
+  }
+]
 
-const businessTitle = computed(() => googleBusiness.value?.business?.title || 'Your Restaurant')
-const businessSubtitle = computed(() => googleBusiness.value?.business?.profile?.description || 'Authentic Japanese Robatayaki Experience in Krabi')
+const businessTitle = computed(() => googleBusiness.value?.business?.title || 'Saya Kitchen')
+const businessSubtitle = computed(() => googleBusiness.value?.business?.profile?.description || 'Authentic Japanese Robatayaki in Krabi, Thailand')
 const businessPrimaryPhoto = computed(() => googleBusiness.value?.media?.[0])
 const businessAddress = computed(() => {
   const addr = googleBusiness.value?.business?.storefrontAddress

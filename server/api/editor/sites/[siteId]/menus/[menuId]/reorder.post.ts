@@ -40,9 +40,7 @@ export default defineEventHandler(async (event) => {
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND (
-        INSTR(om.role, 'owner') > 0 OR INSTR(om.role, 'admin') > 0 OR INSTR(om.role, 'editor') > 0
-      )
+      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
     `).bind(siteId, session.user.id).first()
     

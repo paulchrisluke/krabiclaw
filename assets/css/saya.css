@@ -1,0 +1,17 @@
+:root {
+  --saya-radius: 9999px;
+  --saya-font-display: sans-serif;
+}
+
+.saya-pill {
+  border-radius: var(--saya-radius);
+}
+
+.tenant-layout {
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+
+.tenant-layout .rounded-md {
+  border-radius: var(--saya-radius);
+}

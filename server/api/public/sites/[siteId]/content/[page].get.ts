@@ -6,7 +6,17 @@ export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const page = getRouterParam(event, 'page')
   const locationSlug = getQuery(event).location as string || undefined
+  
+  // Explicit preview authorization check
   const preview = getQuery(event).preview === 'true'
+  const previewToken = getQuery(event).token as string || undefined
+  const isPreviewAuthorized = preview && previewToken === env.PREVIEW_SECRET
+  
+  if (preview && !isPreviewAuthorized) {
+    return jsonResponse({ 
+      error: 'Unauthorized preview access' 
+    }, { status: 401 })
+  }
   
   if (!siteId || !page) {
     return jsonResponse({ 
@@ -57,7 +67,7 @@ export default defineEventHandler(async (event) => {
     
     // In preview mode, also fetch and merge drafts
     let content = publishedContent
-    if (preview) {
+    if (isPreviewAuthorized) {
       const drafts = await getDraftContent(db, site.organization_id, siteId, page, locationId)
       content = [...publishedContent]
       for (const draft of drafts) {

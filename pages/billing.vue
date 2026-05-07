@@ -96,13 +96,35 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const currentPlan = ref('free')
+const loading = ref(true)
+
+onMounted(async () => {
+  try {
+    const res = await $fetch('/api/billing/status')
+    currentPlan.value = res.billing?.plan || 'free'
+  } catch (error) {
+    console.error('Failed to fetch plan:', error)
+  } finally {
+    loading.value = false
+  }
+})
 
 function isCurrentPlan(plan: string) {
   return currentPlan.value === plan
 }
 
-function selectPlan(plan: string) {
-  currentPlan.value = plan
+async function selectPlan(plan: string) {
+  try {
+    const res = await $fetch('/api/billing/checkout', {
+      method: 'POST',
+      body: { plan }
+    })
+    if (res.checkoutUrl) {
+      window.location.href = res.checkoutUrl
+    }
+  } catch (error: any) {
+    alert(error.data?.message || 'Failed to initiate checkout')
+  }
 }
 
 useSeoMeta({

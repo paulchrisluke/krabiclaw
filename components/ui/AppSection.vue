@@ -1,5 +1,5 @@
 <template>
-  <section :class="['w-full', backgrounds[bg], paddings[padding]]">
+  <section :class="['w-full', bgClass, paddings[padding]]">
     <div class="max-w-6xl mx-auto px-4">
       <slot />
     </div>
@@ -7,11 +7,11 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   bg: {
     type: String,
     default: 'white',
-    validator: v => ['white', 'black', 'gray', 'stone'].includes(v)
+    validator: v => ['white', 'black', 'dark', 'alt', 'gray', 'stone'].includes(v)
   },
   padding: {
     type: String,
@@ -21,11 +21,15 @@ defineProps({
 })
 
 const backgrounds = {
-  white: 'bg-white text-black',
-  black: 'bg-black text-white',
-  gray: 'bg-gray-50 text-black',
-  stone: 'bg-stone-50 text-black'
+  white: 'bg-(--ui-bg) text-(--ui-text)',
+  alt: 'bg-(--ui-bg-elevated) text-(--ui-text)',
+  black: 'bg-(--ui-bg-inverted) text-(--ui-text-inverted)',
+  dark: 'bg-(--ui-bg-inverted) text-(--ui-text-inverted)',
+  gray: 'bg-(--ui-bg-elevated) text-(--ui-text)',
+  stone: 'bg-(--ui-bg-elevated) text-(--ui-text)'
 }
+
+const bgClass = computed(() => backgrounds[props.bg])
 
 const paddings = {
   none: 'py-0',

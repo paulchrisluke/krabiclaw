@@ -191,15 +191,14 @@ function getPlanEntitlements(plan: string): Record<string, any> {
 export async function requireBillingAccess(
   env: BillingEnv, 
   db: any, 
-  organization_id: string, 
-  user_id: string
+  organizationId: string, 
+  userId: string
 ): Promise<void> {
-  // Check if user is member of organization
   const membership = await db.prepare(`
       SELECT role FROM member
       WHERE organizationId = ? AND userId = ?
       LIMIT 1
-    `).bind(organization_id, user_id).first()
+    `).bind(organizationId, userId).first()
   
   if (!membership) {
     throw new Error('Access denied: Not a member of this organization')

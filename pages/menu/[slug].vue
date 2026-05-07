@@ -20,7 +20,7 @@
             <span
               :class="[
                 'inline-flex items-center rounded-full px-3 py-1 text-sm font-medium',
-                item.available ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                item.available ? 'bg-stone-100 text-stone-800' : 'bg-red-50 text-red-700'
               ]"
             >
               {{ item.available ? 'Available today' : 'Currently unavailable' }}
@@ -99,19 +99,19 @@
             <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               <UCard v-for="note in diningNotes" :key="note.name" class="border border-gray-200 bg-gray-50 p-5">
                 <dt class="text-sm font-medium text-gray-900">{{ note.name }}</dt>
-                <dd class="mt-1 text-sm leading-6 text-gray-500">{{ note.description }}</dd>
               </UCard>
             </dl>
           </section>
 
           <div class="mt-8">
-            <UButton to="/menu" color="primary" size="lg">
-              Back to menu
+            <UButton to="/menu" color="neutral" variant="outline">
+              Back to Menu
             </UButton>
           </div>
         </section>
       </div>
 
+      <!-- ... -->
       <section v-if="reviews.length > 0" aria-labelledby="reviews-heading" class="mt-16 border-t border-gray-200 pt-12 sm:mt-24">
         <div class="flex items-center justify-between gap-6">
           <h2 id="reviews-heading" class="text-lg font-medium text-gray-900">Guest reviews</h2>
@@ -339,8 +339,8 @@ const diningNotes = computed(() => [
 const relatedItems = computed(() => {
   const current = item.value
   const sameCategory = category.value?.items ?? []
-  const fallbackItems = menuData.categories.flatMap(cat => cat.items)
-  return (sameCategory.length > 1 ? sameCategory : fallbackItems)
+  const allCategoryItems = menuData.categories.flatMap(cat => cat.items)
+  return (sameCategory.length > 1 ? sameCategory : allCategoryItems)
     .filter(related => related.slug !== current?.slug)
     .slice(0, 3)
 })
@@ -484,9 +484,9 @@ watch(() => item.value?.slug, async () => {
 
 // SEO Meta
 useSeoMeta({
-  title: () => item.value ? `${item.value.name} | Menu | Restaurant Website` : 'Menu Item Not Found | Restaurant Website',
+  title: () => item.value ? `${item.value.name} | Menu | Saya Kitchen` : 'Menu Item Not Found | Saya Kitchen',
   description: () => item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.',
-  ogTitle: () => item.value ? `${item.value.name} | Menu | Restaurant Website` : 'Menu Item Not Found',
+  ogTitle: () => item.value ? `${item.value.name} | Menu | Saya Kitchen` : 'Menu Item Not Found',
   ogDescription: () => item.value ? item.value.description : 'Menu item not found',
   ogImage: () => schemaImage.value || '/og-image.jpg',
   ogUrl: () => item.value ? `/menu/${item.value.slug}` : '/menu',

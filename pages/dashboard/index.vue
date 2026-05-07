@@ -212,7 +212,10 @@ watch(organizations, async (newOrgs) => {
     try {
       const userSites = await $fetch('/api/sites')
       sites.value = userSites.sites
-      publicData.value = await $fetch('/api/google-business/public')
+      // Fetch Google Business data for the first site
+      if (sites.value?.[0]?.id) {
+        publicData.value = await $fetch(`/api/public/sites/${sites.value[0].id}/google-business`)
+      }
     } catch (error) {
       console.error('Failed to load sites:', error)
     } finally {

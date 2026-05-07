@@ -1,27 +1,34 @@
 <template>
   <div class="min-h-screen bg-white">
-    <AppHero
+    <SayaHero
       title="Customer Reviews"
       subtitle="What Our Guests Say About Our Restaurant"
       size="page"
     />
 
-    <RestaurantReviews
+    <SayaReviews
       :reviews="googleReviews"
       :rating-summary="googleReviewSummary"
       bg="white"
       padding="default"
       :show-title="false"
     />
+    <AppSection v-if="googleReviews.length === 0" bg="alt" padding="sm">
+      <div class="text-center">
+        <NuxtLink to="/dashboard/connection" class="font-semibold text-gray-900 underline decoration-gray-300 underline-offset-4 hover:decoration-gray-900">
+          Connect Google Business →
+        </NuxtLink>
+      </div>
+    </AppSection>
   </div>
 </template>
 
 <script setup>
 definePageMeta({ layout: 'tenant' })
-import AppHero from '~/components/ui/AppHero.vue'
-import RestaurantReviews from '~/components/google/RestaurantReviews.vue'
-const { data: googleBusiness } = await useFetch('/api/google-business/public', {
-  key: 'google-business-public',
+const { siteId } = await useTenantSite()
+
+const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/google-business`, {
+  key: `reviews-google-business-${siteId}`,
   default: () => ({
     business: null,
     reviews: [],
@@ -49,7 +56,6 @@ const googleReviewText = review => typeof review.comment === 'string'
 const googleReviewSummary = computed(() => {
   const summary = googleBusiness.value?.business?.reviewSummary
   if (!summary) {
-    // Fallback to calculation if official summary is missing
     const ratings = googleReviews.value.map(googleReviewRating).filter(Boolean)
     if (ratings.length === 0) return null
     return {
@@ -75,23 +81,23 @@ const formatDate = (dateString) => {
 
 // SEO Meta
 useSeoMeta({
-  title: 'Reviews | Your Restaurant | Customer Testimonials',
-  description: 'Read authentic customer reviews and testimonials for Your Restaurant in your city. See what our guests say about our authentic restaurant.',
-  ogTitle: 'Reviews | Your Restaurant',
-  ogDescription: 'Customer reviews and testimonials for our authentic restaurant in your city.',
+  title: 'Reviews | Saya Kitchen',
+  description: 'Read guest reviews and testimonials for Saya Kitchen in Krabi.',
+  ogTitle: 'Reviews | Saya Kitchen',
+  ogDescription: 'Guest reviews and testimonials for Saya Kitchen in Krabi.',
   ogImage: '/og-image.jpg',
-  ogUrl: 'https://www.kikuzuki-thailand.com/reviews',
+  ogUrl: '/reviews',
   ogType: 'website',
   twitterCard: 'summary_large_image',
-  twitterTitle: 'Reviews - Your Restaurant',
-  twitterDescription: 'Customer reviews for our Japanese restaurant in your city.',
+  twitterTitle: 'Reviews - Saya Kitchen',
+  twitterDescription: 'Guest reviews for Saya Kitchen in Krabi.',
   twitterImage: '/og-image.jpg'
 })
 
 useSchemaOrg([
   computed(() => ({
     '@type': 'Restaurant',
-    name: 'Your Restaurant',
+    name: 'Saya Kitchen',
     review: googleReviews.value.map(review => ({
       '@type': 'Review',
       author: {

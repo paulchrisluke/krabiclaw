@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- Hero Section -->
-    <AppHero
+    <SayaHero
       title="Business Updates"
       subtitle="Latest News & Announcements"
       size="page"
@@ -9,7 +9,7 @@
 
 
 
-    <RestaurantPosts
+    <SayaPosts
       :posts="googlePosts"
       bg="white"
       padding="default"
@@ -20,11 +20,13 @@
 
 <script setup>
 definePageMeta({ layout: 'tenant' })
-import AppHero from '~/components/ui/AppHero.vue'
-import RestaurantPosts from '~/components/google/RestaurantPosts.vue'
+import { useTenantSite } from '~/composables/useTenantSite'
 
-const { data: googleBusiness } = await useFetch('/api/google-business/public', {
-  key: 'google-business-public',
+const { siteId } = await useTenantSite()
+if (!siteId) throw createError({ statusCode: 404 })
+
+const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/google-business`, {
+  key: `posts-google-business-${siteId}`,
   default: () => ({
     business: null,
     reviews: [],

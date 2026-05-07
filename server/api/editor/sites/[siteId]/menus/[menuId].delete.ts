@@ -32,20 +32,17 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Verify user belongs to organization that owns this site (owner/dashboard only for delete)
+    // Verify user belongs to organization that owns this site.
     const site = await db.prepare(`
       SELECT s.id, s.organization_id, s.name, s.status, s.onboarding_status
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND (
-        INSTR(om.role, 'owner') > 0 OR INSTR(om.role, 'admin') > 0 OR INSTR(om.role, 'editor') > 0
-      )
+      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
     `).bind(siteId, session.user.id).first()
     
     if (!site) {
-      console.error('Membership check failed: possible schema mismatch or user not authorized', { siteId, userId: session.user.id })
       return jsonResponse({ 
         error: 'Site not found or access denied' 
       }, { status: 404 })

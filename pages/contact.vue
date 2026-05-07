@@ -1,10 +1,10 @@
 <template>
   <div>
-    <AppHero
+    <SayaHero
       :title="getField('hero.title', 'Contact Us')"
-      :subtitle="getField('hero.subtitle', 'Get in Touch with Your Restaurant')"
+      :subtitle="getField('hero.subtitle', 'Get in Touch with Saya Kitchen')"
       size="page"
-      :establishment-year="googleBusiness.value?.business?.establishmentYear"
+      :establishment-year="googleBusiness?.business?.establishmentYear"
     />
     <UContainer class="py-12">
       <UCard class="mb-12">
@@ -56,7 +56,7 @@
               <UFormField label="Message">
                 <UTextarea id="message" name="message" :rows="4" />
               </UFormField>
-              <UButton type="submit" color="neutral" size="md" block>
+              <UButton type="submit" color="neutral" size="lg" block>
                 Send Message
               </UButton>
             </UForm>
@@ -83,12 +83,16 @@
 definePageMeta({ layout: 'tenant' })
 import { getTodayGoogleHours } from '~/utils/formatters'
 import { usePageContent } from '~/composables/usePageContent'
+import { useTenantSite } from '~/composables/useTenantSite'
 
 const { getField } = usePageContent('contact')
 
-const { data: googleBusiness } = await useFetch('/api/google-business/public', {
-  key: 'google-business-public',
-  default: () => ({ business: null })
+const { siteId } = await useTenantSite()
+if (!siteId) throw createError({ statusCode: 404 })
+
+const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/google-business`, {
+  key: `contact-google-business-${siteId}`,
+  default: () => ({ business: null, media: [] })
 })
 
 const businessName = computed(() => googleBusiness.value?.business?.title || '')
@@ -107,8 +111,8 @@ const introBody = computed(() => getField('intro.body',
 ))
 
 useSeoMeta({
-  title: 'Contact | Restaurant Website',
-  description: 'Contact our restaurant. Get our phone number, address, and send us a message.',
+  title: 'Contact | Saya Kitchen',
+  description: 'Contact Saya Kitchen in Krabi for reservations, location details, hours, and guest questions.',
   ogImage: '/og-image.jpg',
   ogUrl: '/contact'
 })

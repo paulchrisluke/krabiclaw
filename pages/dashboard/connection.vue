@@ -180,7 +180,28 @@ definePageMeta({
 })
 
 const { user } = useAuth()
-const { data: publicData, refresh: refreshPublic } = await useFetch('/api/google-business/public', { key: 'google-business-public' })
+const organizationsState = authClient.useListOrganizations()
+const organizations = computed(() => unref(organizationsState)?.data ?? [])
+const sites = ref([])
+
+// Load sites to get siteId for scoped endpoint
+watch(organizations, async (newOrgs) => {
+  if (newOrgs.length > 0) {
+    try {
+      const userSites = await $fetch('/api/sites')
+      sites.value = userSites.sites
+    } catch (error) {
+      console.error('Failed to load sites:', error)
+    }
+  }
+}, { immediate: true })
+
+const firstSiteId = computed(() => sites.value?.[0]?.id)
+
+const { data: publicData, refresh: refreshPublic } = await useFetch(
+  computed(() => firstSiteId.value ? `/api/public/sites/${firstSiteId.value}/google-business` : null),
+  { key: computed(() => `connection-google-business-${firstSiteId.value}`) }
+)
 const { data: configData, refresh: refreshConfig } = await useFetch('/api/dashboard/config', { key: 'dashboard-config' })
 
 const config = computed(() => configData.value?.config ?? {})

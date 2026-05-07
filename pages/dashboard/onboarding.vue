@@ -86,7 +86,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 
 definePageMeta({
   layout: 'dashboard',
@@ -141,26 +141,51 @@ const subdomainError = ref('')
 
 // Debounced check for subdomain availability
 let subdomainCheckTimeout
+let subdomainAbortController: AbortController | null = null
+
 watch(() => form.value.subdomain, (newSubdomain) => {
   clearTimeout(subdomainCheckTimeout)
+  if (subdomainAbortController) {
+    subdomainAbortController.abort()
+  }
+  
   subdomainError.value = ''
   if (!newSubdomain) {
     subdomainAvailable.value = true
     return
   }
+  
   subdomainCheckTimeout = setTimeout(async () => {
+    subdomainAbortController = new AbortController()
+    const requested = newSubdomain
+    
     try {
-      // Replace with your real API endpoint
-      const { available } = await $fetch(`/api/onboarding/check-subdomain?subdomain=${encodeURIComponent(newSubdomain)}`)
-      subdomainAvailable.value = available
-      if (!available) {
-        subdomainError.value = 'Subdomain is already taken.'
+      const { available } = await $fetch(`/api/onboarding/check-subdomain?subdomain=${encodeURIComponent(newSubdomain)}`, {
+        signal: subdomainAbortController.signal
+      })
+      
+      if (requested === form.value.subdomain) {
+        subdomainAvailable.value = available
+        if (!available) {
+          subdomainError.value = 'Subdomain is already taken.'
+        }
       }
-    } catch (e) {
-      subdomainAvailable.value = false
-      subdomainError.value = 'Error checking subdomain availability.'
+    } catch (e: any) {
+      if (e.name === 'AbortError') return
+      
+      if (requested === form.value.subdomain) {
+        subdomainAvailable.value = false
+        subdomainError.value = 'Error checking subdomain availability.'
+      }
     }
   }, 400)
+})
+
+onUnmounted(() => {
+  clearTimeout(subdomainCheckTimeout)
+  if (subdomainAbortController) {
+    subdomainAbortController.abort()
+  }
 })
 
 // Form validation
@@ -195,10 +220,15 @@ async function handleSubmit() {
     }
     // Redirect to dashboard or site editor
     await router.push(`/dashboard/sites/${response.siteId}`)
-  } catch (error) {
+  } catch (error: any) {
     loading.value = false
-    subdomainAvailable.value = false
-    subdomainError.value = 'Error creating site.'
+    const isTaken = error.response?.status === 409 || error.data?.message?.includes('taken')
+    if (isTaken) {
+      subdomainAvailable.value = false
+      subdomainError.value = 'Subdomain is already taken.'
+    } else {
+      subdomainError.value = error.data?.message || error.message || 'Error creating site.'
+    }
   }
 }
 
