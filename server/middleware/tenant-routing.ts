@@ -1,6 +1,8 @@
 // Tenant routing middleware based on onboarding status
 // Routes tenant requests to appropriate pages
 
+import { defineEventHandler, sendRedirect } from 'h3'
+
 export default defineEventHandler(async (event) => {
   const tenantType = event.context.tenantType
   const onboardingStatus = event.context.onboardingStatus

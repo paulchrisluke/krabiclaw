@@ -1,12 +1,13 @@
-import { defineEventHandler } from 'h3'
+import { defineEventHandler, setHeader, getRouterParam, getQuery, getHeaders, getRequestURL } from 'h3'
 import { getPageContent, getDraftContent } from '~/server/utils/content-management'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { createAuth } from '~/server/utils/auth'
 
 export default defineEventHandler(async (event) => {
   setHeader(event, 'cache-control', 'no-store')
   
   const page = getRouterParam(event, 'page')
-  const siteId = getRouterParam(event, 'siteId')
+  const siteId = getRouterParam(event, 'siteId') || getQuery(event).siteId as string
   
   if (!page || !siteId) {
     return jsonResponse({ 
@@ -23,13 +24,10 @@ export default defineEventHandler(async (event) => {
     }, { status: 503 })
   }
 
-  // Get authenticated user
-  const headers = getHeaders(event)
-  const session = await $fetch('/api/auth/get-session', {
-    headers: {
-      cookie: headers.cookie || '',
-      authorization: headers.authorization || ''
-    }
+  // Get authenticated user from existing session
+  const auth = createAuth(env)
+  const session = await auth.api.getSession({
+    headers: getHeaders(event)
   })
   
   if (!session?.user?.id) {
@@ -41,9 +39,9 @@ export default defineEventHandler(async (event) => {
   // Verify user belongs to organization that owns the site
   const site = await db.prepare(`
     SELECT s.id, s.organization_id FROM sites s
-    JOIN organizations o ON s.organization_id = o.id
-    JOIN organization_members om ON o.id = om.organization_id
-    WHERE s.id = ? AND om.user_id = ?
+    JOIN organization o ON s.organization_id = o.id
+    JOIN member om ON o.id = om.organizationId
+    WHERE s.id = ? AND om.userId = ?
     LIMIT 1
   `).bind(siteId, session.user.id).first()
   

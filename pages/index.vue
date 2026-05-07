@@ -384,13 +384,22 @@ if (!isPlatform && !siteId) {
 
 // SEO for KrabiClaw Platform
 if (isPlatform) {
+  const config = useRuntimeConfig()
+  
+  // Extract hostname from config for URLs
+  const platformHostname = computed(() => {
+    const domain = config.public.freeSiteDomain
+    // Remove protocol if present to get just the hostname
+    return domain.replace(/^https?:\/\//, '')
+  })
+  
   useSeoMeta({
     title: 'KrabiClaw | AI Restaurant Website Builder',
     description: 'Build your restaurant website in minutes with AI. No coding required.',
     ogTitle: 'KrabiClaw | AI Restaurant Website Builder',
     ogDescription: 'Professional restaurant websites with AI content and Google Business integration.',
     ogImage: '/og-krabiclaw.jpg',
-    ogUrl: 'https://krabiclaw.com',
+    ogUrl: `https://${platformHostname}`,
     ogType: 'website'
   })
 }
@@ -483,14 +492,21 @@ const navigateToLocation = (location) => {
   navigateTo(`/locations/${location.slug}`)
 }
 
-if (!isPlatform) {
+if (!isPlatform && siteId) {
+  const config = useRuntimeConfig()
+  
+  // Extract hostname from config for URLs
+  const platformHostname = computed(() => {
+    const domain = config.public.freeSiteDomain
+    // Remove protocol if present to get just the hostname
+    return domain.replace(/^https?:\/\//, '')
+  })
+  
   useSeoMeta({
     title: 'KrabiClaw | Beautiful Restaurant Websites. Powered by AI.',
-    description: 'Build your restaurant website in minutes with KrabiClaw. Professional themes, Google Business integration, and AI-powered content.',
-    ogTitle: 'KrabiClaw | Beautiful Restaurant Websites. Powered by AI.',
-    ogDescription: 'Professional restaurant websites with AI-powered content and Google Business integration.',
+    description: 'Professional restaurant websites with AI-powered content and Google Business integration.',
     ogImage: '/og-image.jpg',
-    ogUrl: 'https://krabiclaw.com',
+    ogUrl: `https://${platformHostname}`,
     ogType: 'website'
   })
 }

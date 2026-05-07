@@ -13,7 +13,7 @@
             </UBadge>
             <UButton
               v-if="site"
-              :to="`https://${site.subdomain}.krabiclaw.com`"
+              :to="`https://${site.subdomain}.${platformHostname}`"
               target="_blank"
               variant="outline"
               color="primary"
@@ -50,7 +50,7 @@
             </div>
             <div class="space-y-1">
               <p class="text-sm font-medium text-muted-foreground">Website Address</p>
-              <p class="font-semibold">{{ site.subdomain }}.krabiclaw.com</p>
+              <p class="font-semibold">{{ site.subdomain }}.{{ platformHostname }}</p>
             </div>
             <div class="space-y-1">
               <p class="text-sm font-medium text-muted-foreground">Theme</p>
@@ -150,7 +150,7 @@
             </template>
             <div class="space-y-3">
               <UButton 
-                :to="`https://${site.subdomain}.krabiclaw.com`"
+                :to="`https://${site.subdomain}.${platformHostname}`"
                 target="_blank"
                 variant="outline"
                 color="primary"
@@ -206,6 +206,14 @@ definePageMeta({
 
 const router = useRouter()
 const route = useRoute()
+const config = useRuntimeConfig()
+
+// Extract hostname from config for URLs
+const platformHostname = computed(() => {
+  const domain = config.public.freeSiteDomain
+  // Remove protocol if present to get just the hostname
+  return domain.replace(/^https?:\/\//, '')
+})
 
 // State
 const loading = ref(true)

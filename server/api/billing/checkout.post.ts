@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) => {
     
     // Get organization details
     const organization = await db.prepare(`
-      SELECT o.name, b.stripe_customer_id FROM organizations o
+      SELECT o.name, b.stripe_customer_id FROM organization o
       LEFT JOIN organization_billing b ON o.id = b.organization_id
       WHERE o.id = ?
     `).bind(organizationId).first()

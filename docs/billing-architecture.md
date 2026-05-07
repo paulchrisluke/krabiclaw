@@ -21,8 +21,8 @@ KrabiClaw uses a **custom Stripe integration** for billing, not the Better Auth 
 
 ### Better Auth Tables
 ```sql
-organizations          -- Core organization data
-organization_members   -- User membership and roles
+organization           -- Core organization data
+member                 -- User membership and roles
 ```
 
 ### Custom Billing Tables
@@ -117,8 +117,8 @@ STRIPE_PRICE_BUSINESS=price_...
 
 ### Local Development
 - **Free tier works** without Stripe configuration
-- **Paid features** show clear "not configured" state
-- **Checkout fails gracefully** when Stripe is missing
+- **Paid features** require Stripe configuration
+- **Checkout requires** Stripe secrets and price IDs
 
 ## Integration Benefits
 
@@ -134,10 +134,6 @@ STRIPE_PRICE_BUSINESS=price_...
 - **Role-based access**: Organization owners only for billing
 - **Webhook safety**: Duplicate prevention and signature verification
 
-## Migration Path
+## Schema Workflow
 
-The custom Stripe integration can be migrated to Better Auth Stripe plugin if needed, but current architecture provides:
-- Better separation of concerns
-- More flexible entitlement system
-- Cloudflare Workers compatibility
-- Full control over webhook processing
+Billing schema changes live in the root `schema.sql` file. Keep billing tables and Better Auth table references aligned there instead of adding numbered migration files.

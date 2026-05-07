@@ -327,11 +327,19 @@ definePageMeta({ layout: 'editor' })
 const route = useRoute()
 const siteId = route.params.siteId as string
 const toast = useToast()
+const config = useRuntimeConfig()
+
+// Extract hostname from config for URLs
+const platformHostname = computed(() => {
+  const domain = config.public.freeSiteDomain
+  // Remove protocol if present to get just the hostname
+  return domain.replace(/^https?:\/\//, '')
+})
 
 // ─── Site Context ───────────────────────────────────────────────────────
 const siteData = ref(null)
 const siteName = computed(() => siteData.value?.name || 'Loading...')
-const siteDomain = computed(() => siteData.value?.subdomain ? `${siteData.value.subdomain}.krabiclaw.com` : 'localhost:3000')
+const siteDomain = computed(() => siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname}` : 'localhost:3000')
 
 // Load site data
 const loadSiteData = async () => {

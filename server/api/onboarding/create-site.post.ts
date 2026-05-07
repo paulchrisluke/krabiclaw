@@ -219,16 +219,16 @@ async function performRequiredSeeding(db: any, siteId: string, organizationId: s
     for (const content of contentSeedData) {
       await db.prepare(`
         INSERT OR REPLACE INTO site_content (
-          organization_id, site_id, location_id, page, field_key, 
-          value, type, updated_at
+          organization_id, site_id, location_id, page, field,
+          content, type, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         content.organization_id,
         content.site_id,
         content.location_id,
         content.page,
-        content.field_key,
-        content.value,
+        content.field,
+        content.content,
         content.type,
         content.updated_at
       ).run()

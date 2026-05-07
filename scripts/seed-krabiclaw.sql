@@ -29,10 +29,10 @@ VALUES ('domain_demo', 'org_demo', 'site_demo', 'demo.localhost', 'subdomain', '
 
 -- 6. Create some basic content
 DELETE FROM site_content WHERE site_id = 'site_demo';
-INSERT INTO site_content (id, organization_id, site_id, page, field_key, value, type, source)
+INSERT INTO site_content (id, organization_id, site_id, page, field, content, type, source)
 VALUES ('content_hero_title', 'org_demo', 'site_demo', 'home', 'hero_title', 'Welcome to Our Restaurant', 'text', 'manual');
 
-INSERT INTO site_content (id, organization_id, site_id, page, field_key, value, type, source)
+INSERT INTO site_content (id, organization_id, site_id, page, field, content, type, source)
 VALUES ('content_hero_subtitle', 'org_demo', 'site_demo', 'home', 'hero_subtitle', 'Experience the finest flavors with KrabiClaw.', 'text', 'manual');
 
 -- 7. Create a menu

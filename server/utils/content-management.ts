@@ -7,6 +7,9 @@ export interface SiteContent {
   location_id?: string
   page: string
   field: string
+  value?: string
+  type: string
+  source: string
   content?: string
   hero_title?: string
   hero_subtitle?: string
@@ -125,21 +128,24 @@ export const getDraftContent = async (db: D1Database, organizationId: string, si
 
 export const buildUpsertDraftStmt = (db: D1Database, content: Omit<SiteContent, 'updated_at'>) => {
   return db.prepare(`
-    INSERT INTO site_content_drafts (id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_video_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO site_content_drafts (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(organization_id, site_id, location_id, page, field) DO UPDATE SET 
       content = excluded.content,
       hero_title = excluded.hero_title,
       hero_subtitle = excluded.hero_subtitle,
       hero_video_url = excluded.hero_video_url,
       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).bind(
+    `).bind(
     content.id || crypto.randomUUID(),
     content.organization_id,
     content.site_id,
     content.location_id || null,
     content.page,
     content.field,
+    content.value || null,
+    content.type || 'text',
+    content.source || 'manual',
     content.content || null,
     content.hero_title || null,
     content.hero_subtitle || null,
@@ -153,21 +159,27 @@ export const upsertDraftContent = async (db: D1Database, content: Omit<SiteConte
 
 export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, 'updated_at'>) => {
   return db.prepare(`
-    INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_video_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(organization_id, site_id, location_id, page, field) DO UPDATE SET 
       content = excluded.content,
       hero_title = excluded.hero_title,
       hero_subtitle = excluded.hero_subtitle,
       hero_video_url = excluded.hero_video_url,
+      value = excluded.value,
+      type = excluded.type,
+      source = excluded.source,
       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).bind(
+    `).bind(
     content.id || crypto.randomUUID(),
     content.organization_id,
     content.site_id,
     content.location_id || null,
     content.page,
     content.field,
+    content.value || null,
+    content.type || 'text',
+    content.source || 'manual',
     content.content || null,
     content.hero_title || null,
     content.hero_subtitle || null,

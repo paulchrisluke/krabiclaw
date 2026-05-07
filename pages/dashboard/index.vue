@@ -105,7 +105,7 @@
                   {{ site.name }}
                 </h3>
                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                  {{ site.subdomain }}.krabiclaw.com
+                  {{ site.subdomain }}.{{ platformHostname }}
                 </p>
               </div>
               <UBadge :color="site.status === 'active' ? 'success' : 'warning'" variant="soft" size="xs">
@@ -122,7 +122,7 @@
                 Manage Site
               </UButton>
               <UButton
-                :href="`https://${site.subdomain}.krabiclaw.com`"
+                :href="`https://${site.subdomain}.${platformHostname}`"
                 target="_blank"
                 variant="ghost"
                 size="sm"
@@ -164,6 +164,15 @@ import { authClient } from '~/lib/auth-client'
 definePageMeta({
   layout: 'dashboard',
   middleware: 'auth'
+})
+
+const config = useRuntimeConfig()
+
+// Extract hostname from config for URLs
+const platformHostname = computed(() => {
+  const domain = config.public.freeSiteDomain
+  // Remove protocol if present to get just the hostname
+  return domain.replace(/^https?:\/\//, '')
 })
 
 const organizationsState = authClient.useListOrganizations()

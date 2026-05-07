@@ -4,6 +4,11 @@ export interface DomainEnv {
   CLOUDFLARE_API_TOKEN?: string
 }
 
+// Get platform domain from environment
+function getPlatformDomain(): string {
+  return process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN
+}
+
 export interface DomainRecord {
   id: string
   organization_id: string
@@ -30,12 +35,13 @@ const reservedDomains = [
 ]
 
 // Platform domains that cannot be used as custom domains
-const platformDomains = [
-  'krabiclaw.com',
-  'thaiclaw.ai',
-  'thaiclaw-thailand.com',
-  'thaiclaw-thailand.ai'
-]
+function getPlatformDomains(): string[] {
+  const platformDomain = getPlatformDomain()
+  return [
+    platformDomain,
+    'krabiclaw.com'
+  ]
+}
 
 // Normalize and validate domain
 export function normalizeDomain(domain: string): string {
@@ -71,6 +77,7 @@ export function validateCustomDomain(domain: string): { valid: boolean; reason?:
   }
   
   // Check platform domains
+  const platformDomains = getPlatformDomains()
   for (const platformDomain of platformDomains) {
     if (normalized === platformDomain || normalized.endsWith('.' + platformDomain)) {
       return { valid: false, reason: 'This domain is reserved for the platform' }
@@ -123,7 +130,7 @@ export function generateVerificationToken(): string {
 
 // Get DNS TXT record name for verification
 export function getVerificationRecordName(domain: string): string {
-  return `_thaiclawai.${normalizeDomain(domain)}`
+  return `_krabiclaw.${normalizeDomain(domain)}`
 }
 
 // Check if user has custom domains entitlement
@@ -283,7 +290,8 @@ export async function createSystemSubdomain(
   organizationId: string,
   subdomain: string
 ): Promise<DomainRecord> {
-  const domain = `${subdomain}.krabiclaw.com`
+  const platformDomain = getPlatformDomain()
+  const domain = `${subdomain}.${platformDomain}`
   const now = new Date().toISOString()
   const domainId = `domain-${siteId}-subdomain`
   

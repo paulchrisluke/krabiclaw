@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user is member of organization
     const membership = await db.prepare(`
-      SELECT role FROM member 
+      SELECT role FROM member
       WHERE organizationId = ? AND userId = ?
       LIMIT 1
     `).bind(organizationId, session.user.id).first()

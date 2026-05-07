@@ -40,9 +40,9 @@ export default defineEventHandler(async (event) => {
     // Verify user has access to the site
     const site = await db.prepare(`
       SELECT s.id, s.organization_id FROM sites s
-      JOIN organizations o ON s.organization_id = o.id
-      JOIN organization_members om ON o.id = om.organization_id
-      WHERE s.id = ? AND om.user_id = ? AND om.role = 'owner'
+      JOIN organization o ON s.organization_id = o.id
+      JOIN member om ON o.id = om.organizationId
+      WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
       LIMIT 1
     `).bind(siteId, session.user.id).first()
     

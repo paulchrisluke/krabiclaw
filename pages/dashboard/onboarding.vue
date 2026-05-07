@@ -1,76 +1,40 @@
 <template>
-  <div class="min-h-screen bg-stone-50">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
     <div class="max-w-2xl mx-auto pt-16 pb-12 px-4">
       <!-- KrabiClaw Branding -->
       <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-stone-900 mb-2">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
           Welcome to KrabiClaw
         </h1>
-        <p class="text-stone-600">
+        <p class="text-gray-600 dark:text-gray-400">
           Let's set up your restaurant website
         </p>
       </div>
 
       <!-- Onboarding Form -->
-      <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-8">
+      <UCard class="shadow-sm">
         <form @submit.prevent="handleSubmit" class="space-y-6">
           <!-- Restaurant Name -->
-          <div>
-            <label for="restaurantName" class="block text-sm font-medium text-stone-700 mb-2">
-              Restaurant Name
-            </label>
-            <input
-              id="restaurantName"
+          <UFormField label="Restaurant Name" description="This will be your brand name across your website">
+            <UInput
               v-model="form.restaurantName"
               type="text"
               required
               :disabled="loading"
-              class="w-full px-4 py-3 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-900 focus:border-transparent disabled:opacity-50"
               placeholder="Your Restaurant Name"
+              size="lg"
             />
-            <p class="mt-1 text-sm text-stone-500">
-              This will be your brand name across your website
-            </p>
-          </div>
+          </UFormField>
 
-          <!-- Subdomain -->
-          <div>
-            <label for="subdomain" class="block text-sm font-medium text-stone-700 mb-2">
-              Website Address
-            </label>
-            <div class="flex">
-              <input
-                id="subdomain"
-                v-model="form.subdomain"
-                type="text"
-                required
-                :disabled="loading"
-                @input="validateSubdomain"
-                class="flex-1 px-4 py-3 border border-stone-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-stone-900 focus:border-transparent disabled:opacity-50"
-                placeholder="your-restaurant"
-              />
-              <div class="px-4 py-3 bg-stone-100 border border-l-0 border-stone-300 rounded-r-lg text-stone-600">
-                .krabiclaw.com
-              </div>
+          <!-- Website Address -->
+          <UFormField 
+            label="Website Address" 
+            description="Your website will be automatically created at this address"
+          >
+            <div class="flex items-center px-4 py-3 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400">
+              <span class="font-mono">{{ generatedSubdomain || 'your-restaurant' }}.{{ platformHostname }}</span>
             </div>
-            
-            <!-- Subdomain Validation Messages -->
-            <div class="mt-2 space-y-1">
-              <p v-if="subdomainStatus.available === false" class="text-sm text-red-600">
-                {{ subdomainStatus.message }}
-              </p>
-              <p v-else-if="subdomainStatus.available === true" class="text-sm text-green-600">
-                {{ subdomainStatus.message }}
-              </p>
-              <p v-else class="text-sm text-stone-500">
-                {{ subdomainStatus.message }}
-              </p>
-            </div>
-            
-            <div class="mt-2 text-xs text-stone-500">
-              Use 3-63 characters: lowercase letters, numbers, and hyphens
-            </div>
-          </div>
+          </UFormField>
 
           <!-- Submit Button -->
           <div class="pt-4">
@@ -78,7 +42,7 @@
               type="submit"
               :disabled="loading || !isFormValid"
               :loading="loading"
-              color="neutral"
+              color="primary"
               size="lg"
               block
             >
@@ -93,36 +57,30 @@
         </form>
 
         <!-- Features -->
-        <div class="mt-8 pt-8 border-t border-stone-200">
-          <h3 class="text-sm font-medium text-stone-900 mb-4">What you'll get:</h3>
-          <div class="space-y-3">
-            <div class="flex items-center text-sm text-stone-600">
-              <svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-              </svg>
-              Beautiful restaurant website
-            </div>
-            <div class="flex items-center text-sm text-stone-600">
-              <svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-              </svg>
-              Free subdomain ({{ form.subdomain || 'your-restaurant' }}.krabiclaw.com)
-            </div>
-            <div class="flex items-center text-sm text-stone-600">
-              <svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-              </svg>
-              Easy content editing
-            </div>
-            <div class="flex items-center text-sm text-stone-600">
-              <svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-              </svg>
-              Mobile-friendly design
+        <template #footer>
+          <div class="space-y-4">
+            <h3 class="text-sm font-medium text-gray-900 dark:text-white">What you'll get:</h3>
+            <div class="space-y-3">
+              <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                <UIcon name="i-lucide-check" class="w-4 h-4 text-green-500 mr-2" />
+                Beautiful restaurant website
+              </div>
+              <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                <UIcon name="i-lucide-check" class="w-4 h-4 text-green-500 mr-2" />
+                Free subdomain ({{ form.subdomain || 'your-restaurant' }}.{{ platformHostname }})
+              </div>
+              <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                <UIcon name="i-lucide-check" class="w-4 h-4 text-green-500 mr-2" />
+                Easy content editing
+              </div>
+              <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                <UIcon name="i-lucide-check" class="w-4 h-4 text-green-500 mr-2" />
+                Mobile-friendly design
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </template>
+      </UCard>
     </div>
   </div>
 </template>
@@ -135,6 +93,16 @@ definePageMeta({
 })
 
 const router = useRouter()
+const config = useRuntimeConfig()
+
+// Extract hostname from config for URLs
+const platformHostname = computed(() => {
+  const domain = config.public.freeSiteDomain
+  console.log('Raw domain from config:', domain)
+  const cleanDomain = domain.replace(/^https?:\/\//, '')
+  console.log('Clean hostname:', cleanDomain)
+  return cleanDomain
+})
 
 // Form state
 const form = ref({
@@ -142,97 +110,37 @@ const form = ref({
   subdomain: ''
 })
 
-// Loading state
-const loading = ref(false)
+// Auto-generate subdomain from restaurant name
+const generateSubdomain = (name) => {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .substring(0, 63)
+}
 
-// Subdomain validation state
-const subdomainStatus = ref({
-  available: null,
-  message: 'Enter your desired subdomain'
+// Generated subdomain computed property
+const generatedSubdomain = computed(() => {
+  if (!form.value.restaurantName) return ''
+  return generateSubdomain(form.value.restaurantName)
 })
 
-// Reserved subdomains
-const reservedSubdomains = [
-  'www', 'app', 'api', 'admin', 'dashboard', 'login', 'signup', 
-  'pricing', 'billing', 'support', 'help', 'docs', 'blog', 'posts', 
-  'qa', 'legal', 'terms', 'privacy', 'static', 'assets', 'cdn', 
-  'mail', 'status'
-]
-
-// Validate subdomain format
-function validateSubdomainFormat(subdomain) {
-  if (!subdomain) return false
-  if (subdomain.length < 3 || subdomain.length > 63) return false
-  if (reservedSubdomains.includes(subdomain.toLowerCase())) return false
-  if (!/^[a-z0-9-]+$/.test(subdomain.toLowerCase())) return false
-  if (subdomain.startsWith('-') || subdomain.endsWith('-')) return false
-  
-  return true
-}
-
-// Check subdomain availability
-async function checkSubdomainAvailability(subdomain) {
-  if (!validateSubdomainFormat(subdomain)) {
-    subdomainStatus.value = {
-      available: false,
-      message: 'Invalid subdomain format'
-    }
-    return
+// Watch restaurant name changes and update subdomain
+watch(() => form.value.restaurantName, (newName) => {
+  if (newName) {
+    form.value.subdomain = generateSubdomain(newName)
   }
+})
 
-  try {
-    const response = await $fetch('/api/onboarding/validate-subdomain', {
-      method: 'POST',
-      body: { subdomain: subdomain.toLowerCase() }
-    })
-
-    subdomainStatus.value = {
-      available: response.available,
-      message: response.available 
-        ? 'Available!' 
-        : 'This subdomain is already taken'
-    }
-  } catch (error) {
-    subdomainStatus.value = {
-      available: false,
-      message: 'Error checking availability'
-    }
-  }
-}
-
-// Debounced subdomain validation
-let validationTimeout
-function validateSubdomain() {
-  const subdomain = form.value.subdomain.toLowerCase()
-  
-  clearTimeout(validationTimeout)
-  
-  if (!subdomain) {
-    subdomainStatus.value = {
-      available: null,
-      message: 'Enter your desired subdomain'
-    }
-    return
-  }
-
-  if (!validateSubdomainFormat(subdomain)) {
-    subdomainStatus.value = {
-      available: false,
-      message: 'Invalid subdomain format'
-    }
-    return
-  }
-
-  validationTimeout = setTimeout(() => {
-    checkSubdomainAvailability(subdomain)
-  }, 500)
-}
+// Loading state
+const loading = ref(false)
 
 // Form validation
 const isFormValid = computed(() => {
   return form.value.restaurantName.trim() && 
-         form.value.subdomain.trim() && 
-         subdomainStatus.value.available === true
+         form.value.subdomain.trim()
 })
 
 // Handle form submission

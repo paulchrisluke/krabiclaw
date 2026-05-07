@@ -1,4 +1,4 @@
-// Get sites for authenticated user's organizations
+// Get sites for authenticated user's organization
 import { cloudflareEnv, jsonResponse } from '../utils/api-response'
 import { createAuth } from '../utils/auth'
 import { defineEventHandler, getHeaders } from 'h3'
@@ -27,20 +27,20 @@ export default defineEventHandler(async (event) => {
   const userId = session.user.id
   
   try {
-    // Get user's organizations
-    const organizations = await db.prepare(`
+    // Get user's organization
+    const organization = await db.prepare(`
       SELECT o.id FROM organization o
       JOIN member m ON o.id = m.organizationId
       WHERE m.userId = ?
     `).bind(userId).all()
     
-    if (!organizations.results || organizations.results.length === 0) {
+    if (!organization.results || organization.results.length === 0) {
       return jsonResponse({
         sites: []
       })
     }
     
-    const orgIds = organizations.results.map((org: any) => org.id)
+    const orgIds = organization.results.map((org: any) => org.id)
     
     // Build WHERE clause for multiple organization IDs
     const placeholders = orgIds.map(() => '?').join(',')

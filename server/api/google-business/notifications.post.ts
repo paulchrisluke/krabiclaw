@@ -36,9 +36,9 @@ export default defineEventHandler(async (event) => {
   const eventId = body.message?.messageId ?? crypto.randomUUID()
 
   await env.REVIEWS_DB.prepare(
-    `INSERT OR IGNORE INTO google_business_events (id, source, event_type, location_name, review_name, raw_json, status)
-     VALUES (?, 'google-pubsub', ?, ?, ?, ?, 'received')`
-  ).bind(eventId, eventType, locationName, reviewName, JSON.stringify({ body, decoded })).run()
+    `INSERT OR IGNORE INTO google_business_events (id, google_location_id, event_type, payload, status)
+     VALUES (?, ?, ?, ?, 'received')`
+  ).bind(eventId, locationName, eventType, JSON.stringify({ body, decoded, reviewName })).run()
 
   try {
     // Get location from event data for sync

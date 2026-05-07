@@ -43,9 +43,9 @@ export default defineEventHandler(async (event) => {
              s.last_published_at, s.created_at, s.updated_at,
              o.name as organization_name
       FROM sites s
-      JOIN organizations o ON s.organization_id = o.id
-      JOIN organization_members om ON o.id = om.organization_id
-      WHERE s.id = ? AND om.user_id = ? AND om.role IN ('owner', 'admin', 'editor')
+      JOIN organization o ON s.organization_id = o.id
+      JOIN member om ON o.id = om.organizationId
+      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
     `).bind(siteId, session.user.id).first()
     

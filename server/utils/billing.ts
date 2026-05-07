@@ -196,7 +196,7 @@ export async function requireBillingAccess(
 ): Promise<void> {
   // Check if user is member of organization
   const membership = await db.prepare(`
-    SELECT role FROM member 
+    SELECT role FROM member
     WHERE organizationId = ? AND userId = ?
     LIMIT 1
   `).bind(organizationId, userId).first()
