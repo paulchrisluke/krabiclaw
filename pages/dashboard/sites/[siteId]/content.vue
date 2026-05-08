@@ -215,6 +215,7 @@
               v-model="editingValue"
               :placeholder="activeFieldDef?.placeholder || activeFieldDef?.defaultValue || 'Enter value...'"
               size="sm"
+              class="w-full"
             />
             <p v-if="activeFieldDef?.defaultValue" class="text-xs text-gray-500 dark:text-gray-400">Default: {{ activeFieldDef.defaultValue }}</p>
           </div>
@@ -229,6 +230,7 @@
               autoresize
               :maxrows="12"
               size="sm"
+              class="w-full"
             />
             <p v-if="activeFieldDef?.defaultValue" class="text-xs text-gray-500 dark:text-gray-400">Default: {{ activeFieldDef.defaultValue }}</p>
           </div>
@@ -294,20 +296,7 @@
             Apply
           </UButton>
 
-          <UCard v-if="currentValues[activeField]">
-            <p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Current value</p>
-            <div
-              v-if="activeFieldDef?.type === 'richtext'"
-              v-html="DOMPurify.sanitize(activeField ? currentValues[activeField] || '' : '')"
-              class="prose prose-sm max-w-none text-sm text-gray-700 dark:text-gray-200"
-            />
-            <p v-else class="text-sm text-gray-700 dark:text-gray-200">{{ currentValues[activeField] }}</p>
-          </UCard>
-
-          <UCard v-else>
-            <p class="text-sm text-gray-500 dark:text-gray-400">No saved value yet.</p>
-          </UCard>
-        </div>
+                  </div>
 
         <div v-else class="flex min-h-0 flex-1 items-center justify-center p-6 text-center">
           <div>
