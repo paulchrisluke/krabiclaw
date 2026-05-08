@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-stone-50 flex items-center justify-center px-4">
+  <div class="min-h-screen bg-(--ui-bg-muted) flex items-center justify-center px-4">
     <div class="max-w-md w-full text-center">
       <!-- Error Icon -->
       <div class="mb-8">
@@ -11,11 +11,11 @@
       </div>
 
       <!-- Error Message -->
-      <h1 class="text-3xl font-bold text-stone-900 mb-4">
+      <h1 class="text-3xl font-bold text-(--ui-text-highlighted) mb-4">
         Setup Incomplete
       </h1>
       
-      <p class="text-stone-600 mb-8">
+      <p class="text-(--ui-text-muted) mb-8">
         There was an issue setting up your restaurant website. You can retry the setup from your dashboard.
       </p>
 
@@ -34,9 +34,9 @@
       </div>
 
       <!-- Help Text -->
-      <div class="mt-8 p-4 bg-stone-100 rounded-lg">
-        <h3 class="text-sm font-medium text-stone-900 mb-2">What happened?</h3>
-        <p class="text-xs text-stone-600">
+      <div class="mt-8 p-4 bg-(--ui-bg-elevated) rounded-lg">
+        <h3 class="text-sm font-medium text-(--ui-text-highlighted) mb-2">What happened?</h3>
+        <p class="text-xs text-(--ui-text-muted)">
           Your site setup encountered an error during the content or menu configuration process. 
           This can usually be resolved by retrying the setup from your dashboard.
         </p>

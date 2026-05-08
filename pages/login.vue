@@ -1,19 +1,19 @@
 <template>
-  <div class="min-h-screen bg-stone-50">
+  <div class="min-h-screen bg-(--ui-bg-muted)">
     <div class="max-w-md mx-auto pt-16 pb-12 px-4">
       <!-- KrabiClaw Branding -->
       <div class="text-center mb-8">
-        <h1 class="text-2xl font-bold text-stone-900 mb-2">
+        <h1 class="text-2xl font-bold text-(--ui-text-highlighted) mb-2">
           KrabiClaw
         </h1>
-        <p class="text-stone-600">
+        <p class="text-(--ui-text-muted)">
           Sign in to your restaurant website dashboard
         </p>
       </div>
 
       <!-- Login Card -->
-      <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-8">
-        <h2 class="text-xl font-semibold text-stone-900 mb-6">
+      <div class="bg-(--ui-bg) rounded-xl shadow-sm border border-(--ui-border) p-8">
+        <h2 class="text-xl font-semibold text-(--ui-text-highlighted) mb-6">
           Sign In
         </h2>
 
@@ -22,7 +22,7 @@
           <button
             @click="handleGoogleSignIn"
             :disabled="loading"
-            class="w-full flex items-center justify-center gap-3 px-4 py-3 border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full flex items-center justify-center gap-3 px-4 py-3 border border-stone-300 rounded-lg hover:bg-(--ui-bg-muted) transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg class="w-5 h-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -40,7 +40,7 @@
               <div class="w-full border-t border-stone-300"></div>
             </div>
             <div class="relative flex justify-center text-sm">
-              <span class="px-2 bg-white text-stone-500">or</span>
+              <span class="px-2 bg-(--ui-bg) text-stone-500">or</span>
             </div>
           </div>
 
@@ -51,9 +51,9 @@
         </div>
 
         <!-- Sign Up Link -->
-        <div class="mt-6 text-center text-sm text-stone-600">
+        <div class="mt-6 text-center text-sm text-(--ui-text-muted)">
           Don't have an account?
-          <NuxtLink to="/signup" class="text-stone-900 hover:underline font-medium">
+          <NuxtLink to="/signup" class="text-(--ui-text-highlighted) hover:underline font-medium">
             Start free
           </NuxtLink>
         </div>

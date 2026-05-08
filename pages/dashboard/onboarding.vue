@@ -166,14 +166,16 @@ watch(() => form.value.subdomain, (newSubdomain) => {
     const requested = newSubdomain
     
     try {
-      const { available } = await $fetch<{ available: boolean }>(`/api/onboarding/check-subdomain?subdomain=${encodeURIComponent(newSubdomain)}`, {
+      const { available, message } = await $fetch<{ available: boolean, message?: string }>('/api/onboarding/validate-subdomain', {
+        method: 'POST',
+        body: { subdomain: newSubdomain },
         signal: subdomainAbortController.signal
       })
       
       if (requested === form.value.subdomain) {
         subdomainAvailable.value = available
         if (!available) {
-          subdomainError.value = 'Subdomain is already taken.'
+          subdomainError.value = message || 'Subdomain is not available.'
         }
       }
     } catch (e: any) {
@@ -181,7 +183,7 @@ watch(() => form.value.subdomain, (newSubdomain) => {
       
       if (requested === form.value.subdomain) {
         subdomainAvailable.value = false
-        subdomainError.value = 'Error checking subdomain availability.'
+        subdomainError.value = e.data?.message || e.message || 'Error checking subdomain availability.'
       }
     }
   }, 400)

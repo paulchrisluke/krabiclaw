@@ -163,8 +163,7 @@
 import { authClient } from '~/lib/auth-client'
 
 definePageMeta({
-  layout: 'dashboard',
-  middleware: 'auth'
+  layout: 'dashboard'
 })
 
 const config = useRuntimeConfig()

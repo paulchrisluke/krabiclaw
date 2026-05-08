@@ -175,8 +175,7 @@ import { useAuth } from '~/composables/useAuth'
 import { authClient } from '~/lib/auth-client'
 
 definePageMeta({
-  layout: 'dashboard',
-  middleware: 'auth'
+  layout: 'dashboard'
 })
 
 const { user } = useAuth()

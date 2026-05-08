@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user has admin/owner permissions for settings
     const site = await db.prepare(`
-      SELECT s.id, s.organization_id FROM sites s
+      SELECT s.id, s.organization_id, s.settings FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
@@ -78,8 +78,34 @@ export default defineEventHandler(async (event) => {
       params.push(body.contact_email)
     }
     if (body.primary_location_id !== undefined) {
+      if (body.primary_location_id) {
+        const location = await db.prepare(`
+          SELECT id
+          FROM business_locations
+          WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active'
+          LIMIT 1
+        `).bind(body.primary_location_id, site.organization_id, siteId).first()
+
+        if (!location) {
+          return jsonResponse({
+            error: 'Primary location not found'
+          }, { status: 400 })
+        }
+      }
       setParts.push('primary_location_id = ?')
       params.push(body.primary_location_id)
+    }
+    if (body.url_structure !== undefined) {
+      if (!['location_subdirectories', 'brand_pages'].includes(body.url_structure)) {
+        return jsonResponse({
+          error: 'Invalid URL structure'
+        }, { status: 400 })
+      }
+
+      const settings = site.settings ? JSON.parse(String(site.settings)) : {}
+      settings.url_structure = body.url_structure
+      setParts.push('settings = ?')
+      params.push(JSON.stringify(settings))
     }
 
     setParts.push('updated_at = ?')
@@ -103,7 +129,7 @@ export default defineEventHandler(async (event) => {
       SELECT id, organization_id, name, subdomain, theme, status, 
              primary_location_id, public_url, custom_domain_status,
              brand_name, brand_description, logo_url, contact_email,
-             last_published_at, created_at, updated_at
+             settings, last_published_at, created_at, updated_at
       FROM sites 
       WHERE id = ? AND organization_id = ?
       LIMIT 1
@@ -112,6 +138,8 @@ export default defineEventHandler(async (event) => {
     if (!updatedSite) {
       throw new Error('Site not found after update')
     }
+
+    const siteSettings = updatedSite.settings ? JSON.parse(String(updatedSite.settings)) : {}
 
     const settings = {
       id: updatedSite.id,
@@ -128,6 +156,7 @@ export default defineEventHandler(async (event) => {
       brand_description: updatedSite.brand_description,
       logo_url: updatedSite.logo_url,
       contact_email: updatedSite.contact_email,
+      url_structure: siteSettings.url_structure || 'location_subdirectories',
       last_published_at: updatedSite.last_published_at,
       created_at: updatedSite.created_at,
       updated_at: updatedSite.updated_at

@@ -1,6 +1,7 @@
 // Get editor context: organization, site, locations, active scope
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { createPreviewToken } from '~/server/utils/preview-token'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -37,7 +38,7 @@ export default defineEventHandler(async (event) => {
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
+      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
     `).bind(siteId, session.user.id).first()
     
@@ -51,9 +52,9 @@ export default defineEventHandler(async (event) => {
     const locations = await db.prepare(`
       SELECT id, slug, title, is_primary, status
       FROM business_locations 
-      WHERE site_id = ? AND status = 'active'
+      WHERE organization_id = ? AND site_id = ? AND status = 'active'
       ORDER BY is_primary DESC, title ASC
-    `).bind(siteId).all()
+    `).bind(site.organization_id, siteId).all()
     
     // Parse locations
     const parsedLocations = (locations.results || []).map((location: any) => ({
@@ -71,6 +72,18 @@ export default defineEventHandler(async (event) => {
       acc[row.key] = row.value === 'true' ? true : row.value === 'false' ? false : row.value
       return acc
     }, {})
+
+    if (typeof env.PREVIEW_SECRET !== 'string' || !env.PREVIEW_SECRET) {
+      return jsonResponse({
+        error: 'PREVIEW_SECRET is required for editor previews'
+      }, { status: 500 })
+    }
+
+    const previewToken = await createPreviewToken(
+      env.PREVIEW_SECRET,
+      siteId,
+      Date.now() + 60 * 60 * 1000
+    )
 
     // Get content registry for this site/theme
     const { contentRegistry } = await import('../../../../../config/content-registry')
@@ -106,6 +119,7 @@ export default defineEventHandler(async (event) => {
         },
         locations: parsedLocations,
         scopes,
+        previewToken,
         contentRegistry
       }
     })

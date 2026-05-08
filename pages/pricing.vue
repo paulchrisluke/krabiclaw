@@ -1,11 +1,11 @@
 <template>
-  <div class="min-h-screen bg-stone-50">
+  <div class="min-h-screen bg-(--ui-bg-muted)">
     <div class="container mx-auto px-4 py-16">
       <div class="max-w-6xl mx-auto">
         <!-- Header -->
         <div class="text-center mb-16">
-          <h1 class="text-5xl font-bold text-stone-900 mb-6">Simple, Transparent Pricing</h1>
-          <p class="text-xl text-stone-600 max-w-3xl mx-auto">
+          <h1 class="text-5xl font-bold text-(--ui-text-highlighted) mb-6">Simple, Transparent Pricing</h1>
+          <p class="text-xl text-(--ui-text-muted) max-w-3xl mx-auto">
             Choose the perfect plan for your restaurant. Start free and upgrade as you grow.
           </p>
         </div>
@@ -13,14 +13,14 @@
         <!-- Pricing Cards -->
         <div class="grid md:grid-cols-3 gap-8 mb-16">
           <!-- Free Plan -->
-          <div class="bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
-            <h3 class="text-2xl font-bold text-stone-900 mb-2">Free</h3>
-            <p class="text-stone-600 mb-6">Perfect for getting started</p>
+          <div class="bg-(--ui-bg) rounded-2xl shadow-sm border border-(--ui-border) p-8">
+            <h3 class="text-2xl font-bold text-(--ui-text-highlighted) mb-2">Free</h3>
+            <p class="text-(--ui-text-muted) mb-6">Perfect for getting started</p>
             <div class="mb-6">
-              <span class="text-4xl font-bold text-stone-900">$0</span>
-              <span class="text-stone-600">/month</span>
+              <span class="text-4xl font-bold text-(--ui-text-highlighted)">$0</span>
+              <span class="text-(--ui-text-muted)">/month</span>
             </div>
-            <ul class="space-y-3 text-stone-600 mb-8">
+            <ul class="space-y-3 text-(--ui-text-muted) mb-8">
               <li class="flex items-start">
                 <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
@@ -59,7 +59,7 @@
           <div class="bg-black text-white rounded-2xl shadow-lg p-8 transform scale-105">
             <div class="flex items-center justify-between mb-2">
               <h3 class="text-2xl font-bold">Pro</h3>
-              <span class="bg-white text-black px-3 py-1 text-sm font-medium rounded-full">Most Popular</span>
+              <span class="bg-(--ui-bg) text-black px-3 py-1 text-sm font-medium rounded-full">Most Popular</span>
             </div>
             <p class="text-stone-300 mb-6">For growing restaurants</p>
             <div class="mb-6">
@@ -104,17 +104,17 @@
                 <span>Priority customer support</span>
               </li>
             </ul>
-            <UButton color="neutral" size="xl" class="w-full bg-white text-black hover:bg-stone-200">Start Pro Trial</UButton>
+            <UButton color="neutral" size="xl" class="w-full bg-(--ui-bg) text-black hover:bg-stone-200">Start Pro Trial</UButton>
           </div>
 
           <!-- Enterprise Plan -->
-          <div class="bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
-            <h3 class="text-2xl font-bold text-stone-900 mb-2">Enterprise</h3>
-            <p class="text-stone-600 mb-6">For restaurant chains</p>
+          <div class="bg-(--ui-bg) rounded-2xl shadow-sm border border-(--ui-border) p-8">
+            <h3 class="text-2xl font-bold text-(--ui-text-highlighted) mb-2">Enterprise</h3>
+            <p class="text-(--ui-text-muted) mb-6">For restaurant chains</p>
             <div class="mb-6">
-              <span class="text-4xl font-bold text-stone-900">Custom</span>
+              <span class="text-4xl font-bold text-(--ui-text-highlighted)">Custom</span>
             </div>
-            <ul class="space-y-3 text-stone-600 mb-8">
+            <ul class="space-y-3 text-(--ui-text-muted) mb-8">
               <li class="flex items-start">
                 <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
@@ -152,19 +152,19 @@
 
         <!-- FAQ Section -->
         <div class="max-w-3xl mx-auto">
-          <h2 class="text-3xl font-bold text-stone-900 text-center mb-12">Frequently Asked Questions</h2>
+          <h2 class="text-3xl font-bold text-(--ui-text-highlighted) text-center mb-12">Frequently Asked Questions</h2>
           <div class="space-y-6">
-            <div class="bg-white rounded-xl p-6 border border-stone-200">
-              <h3 class="text-lg font-semibold text-stone-900 mb-2">Can I change plans anytime?</h3>
-              <p class="text-stone-600">Yes, you can upgrade or downgrade your plan at any time. Changes take effect immediately.</p>
+            <div class="bg-(--ui-bg) rounded-xl p-6 border border-(--ui-border)">
+              <h3 class="text-lg font-semibold text-(--ui-text-highlighted) mb-2">Can I change plans anytime?</h3>
+              <p class="text-(--ui-text-muted)">Yes, you can upgrade or downgrade your plan at any time. Changes take effect immediately.</p>
             </div>
-            <div class="bg-white rounded-xl p-6 border border-stone-200">
-              <h3 class="text-lg font-semibold text-stone-900 mb-2">Do you offer refunds?</h3>
-              <p class="text-stone-600">We offer a 30-day money-back guarantee for all paid plans.</p>
+            <div class="bg-(--ui-bg) rounded-xl p-6 border border-(--ui-border)">
+              <h3 class="text-lg font-semibold text-(--ui-text-highlighted) mb-2">Do you offer refunds?</h3>
+              <p class="text-(--ui-text-muted)">We offer a 30-day money-back guarantee for all paid plans.</p>
             </div>
-            <div class="bg-white rounded-xl p-6 border border-stone-200">
-              <h3 class="text-lg font-semibold text-stone-900 mb-2">What payment methods do you accept?</h3>
-              <p class="text-stone-600">We accept all major credit cards, PayPal, and bank transfers for enterprise plans.</p>
+            <div class="bg-(--ui-bg) rounded-xl p-6 border border-(--ui-border)">
+              <h3 class="text-lg font-semibold text-(--ui-text-highlighted) mb-2">What payment methods do you accept?</h3>
+              <p class="text-(--ui-text-muted)">We accept all major credit cards, PayPal, and bank transfers for enterprise plans.</p>
             </div>
           </div>
         </div>

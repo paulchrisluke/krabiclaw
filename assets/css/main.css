@@ -22,6 +22,23 @@
   --color-orange-600: #FB553C;
 }
 
+/* Platform theme tokens */
+:root {
+  --ui-radius: 0.5rem;
+}
+
+/* Saya tenant theme tokens */
+.saya-theme {
+  --ui-radius: 9999px;
+  --ui-primary: var(--color-zinc-900);
+}
+
+/* Platform uses coral accent */
+.platform-theme {
+  --ui-primary: #FF6B4A;
+  --ui-radius: 0.5rem;
+}
+
 
 .hide {
     bottom: -115%;

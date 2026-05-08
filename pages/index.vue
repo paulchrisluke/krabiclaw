@@ -16,7 +16,7 @@
               variant="outline"
               size="xl"
               color="neutral"
-              class="text-white ring-white/50 hover:bg-white/10"
+              class="text-white ring-white/50 hover:bg-(--ui-bg)/10"
             >
               Start Free
             </UButton>
@@ -28,41 +28,41 @@
       <!-- Platform features section -->
       <AppSection id="features" bg="white" padding="xl">
         <div class="text-center mb-16">
-          <h2 class="text-4xl font-bold text-stone-900 mb-4 tracking-tight">
+          <h2 class="text-4xl font-bold text-(--ui-text-highlighted) mb-4 tracking-tight">
             Everything your restaurant needs to thrive online
           </h2>
-          <p class="text-xl text-stone-600 max-w-2xl mx-auto">
+          <p class="text-xl text-(--ui-text-muted) max-w-2xl mx-auto">
             Professional websites with AI-powered content, Google Business integration, and seamless reservation management.
           </p>
         </div>
 
         <div class="grid md:grid-cols-3 gap-12">
-          <UCard class="bg-stone-50 border border-stone-100">
+          <UCard class="bg-(--ui-bg-muted) border border-stone-100">
             <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center mb-6">
               <span class="text-white text-2xl">🎨</span>
             </div>
-            <h3 class="text-xl font-bold mb-3 text-stone-900">Beautiful Themes</h3>
-            <p class="text-stone-600 leading-relaxed">
+            <h3 class="text-xl font-bold mb-3 text-(--ui-text-highlighted)">Beautiful Themes</h3>
+            <p class="text-(--ui-text-muted) leading-relaxed">
               Choose from premium, conversion-optimized restaurant themes that look stunning on any device.
             </p>
           </UCard>
 
-          <UCard class="bg-stone-50 border border-stone-100">
+          <UCard class="bg-(--ui-bg-muted) border border-stone-100">
             <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center mb-6">
               <span class="text-white text-2xl">🤖</span>
             </div>
-            <h3 class="text-xl font-bold mb-3 text-stone-900">AI-Powered Content</h3>
-            <p class="text-stone-600 leading-relaxed">
+            <h3 class="text-xl font-bold mb-3 text-(--ui-text-highlighted)">AI-Powered Content</h3>
+            <p class="text-(--ui-text-muted) leading-relaxed">
               Our AI helps you write compelling copy, generate mouth-watering descriptions, and optimize for SEO.
             </p>
           </UCard>
 
-          <UCard class="bg-stone-50 border border-stone-100">
+          <UCard class="bg-(--ui-bg-muted) border border-stone-100">
             <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center mb-6">
               <span class="text-white text-2xl">📊</span>
             </div>
-            <h3 class="text-xl font-bold mb-3 text-stone-900">Google Sync</h3>
-            <p class="text-stone-600 leading-relaxed">
+            <h3 class="text-xl font-bold mb-3 text-(--ui-text-highlighted)">Google Sync</h3>
+            <p class="text-(--ui-text-muted) leading-relaxed">
               Automatically sync your reviews, photos, and business hours directly from your Google Business Profile.
             </p>
           </UCard>
@@ -79,7 +79,7 @@
             variant="solid"
             color="neutral"
             size="xl"
-            class="bg-white text-black hover:bg-white/90"
+            class="bg-(--ui-bg) text-black hover:bg-(--ui-bg)/90"
           >
             Get Started for Free
           </UButton>
@@ -115,8 +115,8 @@
       <!-- Location Cards/Picker -->
       <AppSection v-if="hasLocations" bg="white" padding="default">
         <div class="text-center mb-12">
-          <h2 class="text-3xl font-bold text-gray-900 mb-4">Our Locations</h2>
-          <p class="text-xl text-gray-600">Visit us at any of our convenient locations</p>
+          <h2 class="text-3xl font-bold text-(--ui-text-highlighted) mb-4">Our Locations</h2>
+          <p class="text-xl text-(--ui-text-muted)">Visit us at any of our convenient locations</p>
         </div>
 
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -128,15 +128,15 @@
             hoverable
             @click="navigateToLocation(location)"
           >
-            <div v-if="location.image_url" class="aspect-video bg-gray-100 rounded-t-lg overflow-hidden">
+            <div v-if="location.image_url" class="aspect-video bg-(--ui-bg-elevated) rounded-t-lg overflow-hidden">
               <img
                 :src="location.image_url"
                 :alt="location.title"
                 class="w-full h-full object-cover"
               >
             </div>
-            <div v-else class="aspect-video bg-gray-100 rounded-t-lg flex items-center justify-center">
-              <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div v-else class="aspect-video bg-(--ui-bg-elevated) rounded-t-lg flex items-center justify-center">
+              <svg class="w-12 h-12 text-(--ui-text-dimmed)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
@@ -144,13 +144,13 @@
 
             <div class="p-6">
               <div class="flex items-start justify-between mb-2">
-                <h3 class="text-lg font-semibold text-gray-900">{{ location.title }}</h3>
+                <h3 class="text-lg font-semibold text-(--ui-text-highlighted)">{{ location.title }}</h3>
                 <UBadge color="neutral" variant="soft" size="sm">Primary</UBadge>
               </div>
 
-              <p v-if="location.address" class="text-gray-600 text-sm mb-3">{{ location.address }}</p>
+              <p v-if="location.address" class="text-(--ui-text-muted) text-sm mb-3">{{ location.address }}</p>
 
-              <div class="flex items-center text-sm text-gray-500">
+              <div class="flex items-center text-sm text-(--ui-text-muted)">
                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -165,8 +165,8 @@
       <!-- Featured Menu Preview -->
       <AppSection v-if="hasMenu" bg="alt" padding="default">
         <div class="text-center mb-12">
-          <h2 class="text-3xl font-bold text-gray-900 mb-4">Featured Menu</h2>
-          <p class="text-xl text-gray-600">Taste our signature dishes</p>
+          <h2 class="text-3xl font-bold text-(--ui-text-highlighted) mb-4">Featured Menu</h2>
+          <p class="text-xl text-(--ui-text-muted)">Taste our signature dishes</p>
         </div>
 
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -179,10 +179,10 @@
           >
             <div class="flex justify-between items-start mb-4">
               <div>
-                <h3 class="text-lg font-semibold text-gray-900">{{ item.name }}</h3>
-                <p v-if="item.description" class="text-gray-600 text-sm mt-1">{{ item.description }}</p>
+                <h3 class="text-lg font-semibold text-(--ui-text-highlighted)">{{ item.name }}</h3>
+                <p v-if="item.description" class="text-(--ui-text-muted) text-sm mt-1">{{ item.description }}</p>
               </div>
-              <div v-if="item.price" class="text-lg font-bold text-gray-900 ml-4">
+              <div v-if="item.price" class="text-lg font-bold text-(--ui-text-highlighted) ml-4">
                 {{ item.price }}
               </div>
             </div>
@@ -192,7 +192,7 @@
                 :class="[
                   'inline-flex items-center px-2 py-1 text-xs font-medium rounded',
                   item.available
-                    ? 'bg-stone-100 text-stone-800'
+                    ? 'bg-(--ui-bg-elevated) text-stone-800'
                     : 'bg-red-100 text-red-800'
                 ]"
               >
@@ -208,7 +208,7 @@
       <!-- Reviews Summary -->
       <AppSection v-if="hasGoogleBusiness && googleReviewSummary" bg="white" padding="default">
         <div class="text-center mb-12">
-          <h2 class="text-3xl font-bold text-gray-900 mb-4">What Our Guests Say</h2>
+          <h2 class="text-3xl font-bold text-(--ui-text-highlighted) mb-4">What Our Guests Say</h2>
           <div class="flex items-center justify-center gap-4">
             <div class="flex items-center">
               <div class="flex text-yellow-400">
@@ -216,9 +216,9 @@
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
               </div>
-              <span class="text-2xl font-bold text-gray-900 ml-2">{{ googleReviewSummary.average }}</span>
+              <span class="text-2xl font-bold text-(--ui-text-highlighted) ml-2">{{ googleReviewSummary.average }}</span>
             </div>
-            <span class="text-gray-600">({{ googleReviewSummary.count }} reviews)</span>
+            <span class="text-(--ui-text-muted)">({{ googleReviewSummary.count }} reviews)</span>
           </div>
         </div>
 
@@ -226,7 +226,7 @@
           <div
             v-for="review in featuredReviews"
             :key="review.id"
-            class="bg-gray-50 rounded-lg p-6"
+            class="bg-(--ui-bg-muted) rounded-lg p-6"
           >
             <div class="flex items-center mb-4">
               <div class="flex text-yellow-400">
@@ -234,21 +234,21 @@
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
               </div>
-              <span class="ml-2 text-sm text-gray-600">{{ review.rating }}/5</span>
+              <span class="ml-2 text-sm text-(--ui-text-muted)">{{ review.rating }}/5</span>
             </div>
 
-            <p class="text-gray-700 mb-3">{{ review.content }}</p>
-            <p class="text-sm text-gray-600 font-medium">{{ review.author }}</p>
+            <p class="text-(--ui-text) mb-3">{{ review.content }}</p>
+            <p class="text-sm text-(--ui-text-muted) font-medium">{{ review.author }}</p>
           </div>
         </div>
       </AppSection>
       <AppSection v-else bg="white" padding="default">
         <div class="mb-8 text-center">
-          <h2 class="mb-3 text-3xl font-bold text-gray-900">What Our Guests Say</h2>
-          <p class="text-gray-600">Connect Google Business to display fresh guest reviews.</p>
+          <h2 class="mb-3 text-3xl font-bold text-(--ui-text-highlighted)">What Our Guests Say</h2>
+          <p class="text-(--ui-text-muted)">Connect Google Business to display fresh guest reviews.</p>
         </div>
         <div class="grid gap-8 md:grid-cols-3">
-          <UCard v-for="i in 3" :key="`review-placeholder-${i}`" class="flex flex-col bg-white p-8 shadow-sm border border-gray-100">
+          <UCard v-for="i in 3" :key="`review-placeholder-${i}`" class="flex flex-col bg-(--ui-bg) p-8 shadow-sm border border-(--ui-border-muted)">
             <div class="mb-4 flex items-center gap-1">
               <span v-for="star in 5" :key="star" class="h-4 w-4 rounded bg-stone-200 animate-pulse" />
             </div>
@@ -267,7 +267,7 @@
           </UCard>
         </div>
         <div v-if="isAuthenticated" class="mt-8 text-center">
-          <NuxtLink to="/dashboard/connection" class="font-semibold text-gray-900 underline decoration-gray-300 underline-offset-4 hover:decoration-gray-900">
+          <NuxtLink to="/dashboard/connection" class="font-semibold text-(--ui-text-highlighted) underline decoration-gray-300 underline-offset-4 hover:decoration-gray-900">
             Connect Google Business →
           </NuxtLink>
         </div>
@@ -296,7 +296,7 @@
       <!-- Gallery -->
       <AppSection bg="white" padding="default">
         <div class="flex items-center justify-between mb-8">
-          <h2 class="text-3xl font-bold text-gray-900 italic">Gallery</h2>
+          <h2 class="text-3xl font-bold text-(--ui-text-highlighted) italic">Gallery</h2>
           <NuxtLink to="/photos" class="text-black font-semibold hover:underline">View All Photos →</NuxtLink>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -327,10 +327,10 @@
       <AppSection id="section-google" bg="alt" padding="default">
         <div class="grid md:grid-cols-2 gap-12 items-center">
           <div>
-            <h2 class="text-3xl font-bold text-gray-900 mb-4 italic">
+            <h2 class="text-3xl font-bold text-(--ui-text-highlighted) mb-4 italic">
               Find Us{{ businessCity ? ` in ${businessCity}` : ' at Our Location' }}
             </h2>
-            <div class="space-y-4 text-gray-600 mb-8">
+            <div class="space-y-4 text-(--ui-text-muted) mb-8">
               <!-- Address placeholder if not yet synced -->
               <div v-if="businessAddress">
                 <p>{{ businessAddress }}</p>
@@ -356,7 +356,7 @@
               <UButton to="/reservations" variant="outline" color="neutral" size="xl">Reserve a Table →</UButton>
             </div>
           </div>
-          <div class="rounded-3xl h-80 overflow-hidden shadow-2xl bg-stone-100">
+          <div class="rounded-3xl h-80 overflow-hidden shadow-2xl bg-(--ui-bg-elevated)">
             <iframe
               v-if="businessCoordinates"
               :src="`https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d3950.432413181305!2d${businessCoordinates.lng}!3d${businessCoordinates.lat}!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x305195cf958f130b%3A0xd8ce9d779ecb9325!2sYour%20Restaurant!5e0!3m2!1sen!2sth!4v1777770384431!5m2!1sen!2sth`"
@@ -367,13 +367,13 @@
               loading="lazy"
               referrerpolicy="no-referrer-when-downgrade"
             />
-            <div v-else class="flex h-full w-full items-center justify-center bg-white">
+            <div v-else class="flex h-full w-full items-center justify-center bg-(--ui-bg)">
               <div class="px-8 text-center">
-                <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-(--ui-bg-muted) text-gray-900">
+                <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-(--ui-bg-muted) text-(--ui-text-highlighted)">
                   <UIcon name="i-simple-icons-googlemaps" class="size-7" />
                 </div>
-                <p class="text-base font-semibold text-gray-900">Google Maps will appear here</p>
-                <p class="mt-2 text-sm text-gray-500">Connect Google Business to sync your verified location and directions.</p>
+                <p class="text-base font-semibold text-(--ui-text-highlighted)">Google Maps will appear here</p>
+                <p class="mt-2 text-sm text-(--ui-text-muted)">Connect Google Business to sync your verified location and directions.</p>
               </div>
             </div>
           </div>

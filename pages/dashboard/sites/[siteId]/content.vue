@@ -18,6 +18,16 @@
 
       <div class="hidden min-w-0 items-center gap-2 md:flex">
         <USelect
+          id="content-location-selector"
+          v-model="selectedLocationId"
+          :items="locationOptions"
+          value-key="id"
+          label-key="label"
+          class="w-52"
+          icon="i-heroicons-map-pin"
+          @update:model-value="onLocationChange"
+        />
+        <USelect
           id="content-page-selector"
           v-model="selectedPageId"
           :items="pages"
@@ -67,13 +77,23 @@
     <div class="grid min-h-0 flex-1 grid-cols-[20rem_minmax(0,1fr)_22rem] overflow-hidden">
       <aside class="flex min-h-0 flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
         <div class="border-b border-gray-200 p-3 dark:border-gray-800 md:hidden">
-          <USelect
-            v-model="selectedPageId"
-            :items="pages"
-            value-key="id"
-            label-key="label"
-            @update:model-value="onPageChange"
-          />
+          <div class="space-y-2">
+            <USelect
+              v-model="selectedLocationId"
+              :items="locationOptions"
+              value-key="id"
+              label-key="label"
+              icon="i-heroicons-map-pin"
+              @update:model-value="onLocationChange"
+            />
+            <USelect
+              v-model="selectedPageId"
+              :items="pages"
+              value-key="id"
+              label-key="label"
+              @update:model-value="onPageChange"
+            />
+          </div>
         </div>
 
         <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
@@ -193,7 +213,7 @@
               {{ activeFieldDef?.label || 'Content settings' }}
             </p>
             <p class="truncate text-xs text-gray-500 dark:text-gray-400">
-              {{ activeFieldDef ? `${selectedPageLabel} / ${activeFieldDef.label}` : selectedPageLabel }}
+              {{ activeFieldDef ? `${selectedPageLabel} / ${selectedLocationLabel} / ${activeFieldDef.label}` : `${selectedPageLabel} / ${selectedLocationLabel}` }}
             </p>
           </div>
           <UButton
@@ -333,7 +353,9 @@ const platformHostname = computed(() => {
 
 // ─── Site Context ───────────────────────────────────────────────────────
 const siteData = ref<any>(null)
+const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
 const organizationEntitlements = ref<Record<string, any>>({})
+const previewToken = ref('')
 const siteName = computed(() => siteData.value?.name || 'Loading...')
 const siteDomain = computed(() => siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : 'localhost:3000')
 const sitePreviewBaseUrl = computed(() => {
@@ -352,11 +374,40 @@ const loadEditorContext = async () => {
   try {
     const response = await $fetch<{ context: any }>(`/api/editor/sites/${siteId}/context`)
     siteData.value = response.context.site
+    siteLocations.value = response.context.locations || []
     organizationEntitlements.value = response.context.organization.entitlements || {}
+    previewToken.value = response.context.previewToken
   } catch (error) {
     console.error('Failed to load editor context:', error)
     toast.add({ description: 'Failed to load editor context', color: 'error' })
   }
+}
+
+// ─── Location Scope ───────────────────────────────────────────────────
+const selectedLocationId = ref<string | null>(null)
+const locationOptions = computed(() => [
+  { id: null, label: 'All Locations' },
+  ...siteLocations.value.map(location => ({
+    id: location.id,
+    label: location.is_primary ? `${location.title} (Primary)` : location.title
+  }))
+])
+const selectedLocation = computed(() =>
+  siteLocations.value.find(location => location.id === selectedLocationId.value) || null
+)
+const selectedLocationLabel = computed(() => selectedLocation.value?.title || 'All Locations')
+const contentQuery = computed(() => {
+  const params = new URLSearchParams()
+  if (selectedLocationId.value) params.set('locationId', selectedLocationId.value)
+  return params.toString()
+})
+const endpointWithContentScope = (path: string) =>
+  contentQuery.value ? `${path}?${contentQuery.value}` : path
+
+const onLocationChange = () => {
+  iframeLoading.value = true
+  activeField.value = null
+  loadPageContent()
 }
 
 // ─── Pages ────────────────────────────────────────────────────────────
@@ -369,6 +420,12 @@ const pages = editablePages.map(p => ({
 const selectedPageId = ref('home')
 const currentPagePath = computed(() => pages.find(p => p.id === selectedPageId.value)?.path || '/')
 const selectedPageLabel = computed(() => pages.find(p => p.id === selectedPageId.value)?.label || '')
+const previewPagePath = computed(() => {
+  if (!selectedLocation.value) return currentPagePath.value
+  if (selectedPageId.value === 'location') return `/locations/${selectedLocation.value.slug}`
+  if (selectedPageId.value === 'menu') return `/locations/${selectedLocation.value.slug}/menu`
+  return currentPagePath.value
+})
 
 // ─── Iframe ───────────────────────────────────────────────────────────
 const previewFrame = ref<HTMLIFrameElement>()
@@ -376,8 +433,10 @@ const iframeLoading = ref(true)
 const previewReloadToken = ref(0)
 const iframeSrc = computed(() => {
   if (!sitePreviewBaseUrl.value) return ''
-  const url = new URL(currentPagePath.value, sitePreviewBaseUrl.value)
+  const url = new URL(previewPagePath.value, sitePreviewBaseUrl.value)
   url.searchParams.set('preview', 'true')
+  if (previewToken.value) url.searchParams.set('token', previewToken.value)
+  if (selectedLocation.value) url.searchParams.set('location', selectedLocation.value.slug)
   if (previewReloadToken.value) url.searchParams.set('t', String(previewReloadToken.value))
   return url.toString()
 })
@@ -390,6 +449,10 @@ const onPageChange = () => {
 
 watch(selectedPageId, () => {
   onPageChange()
+})
+
+watch(selectedLocationId, () => {
+  onLocationChange()
 })
 
 // ─── Groups ───────────────────────────────────────────────────────────
@@ -521,7 +584,7 @@ const discardPending = ref(false)
 const loadPageContent = async () => {
   try {
     const res = await $fetch<{ content: any[]; hasDrafts: boolean }>(
-      `/api/editor/sites/${siteId}/content/${selectedPageId.value}`
+      endpointWithContentScope(`/api/editor/sites/${siteId}/content/${selectedPageId.value}`)
     )
     const map: Record<string, string> = {}
     for (const row of res.content || []) {
@@ -556,6 +619,7 @@ const handleSaveDraft = async () => {
     await $fetch(`/api/editor/sites/${siteId}/content/draft`, {
       method: 'POST',
       body: { page: selectedPageId.value, changes: currentValues.value },
+      query: selectedLocationId.value ? { locationId: selectedLocationId.value } : {},
       credentials: 'include'
     })
     localHasChanges.value = false
@@ -577,7 +641,7 @@ const handlePublish = async () => {
     if (localHasChanges.value) await handleSaveDraft()
     await $fetch(`/api/editor/sites/${siteId}/content/publish`, {
       method: 'POST',
-      body: { page: selectedPageId.value }
+      body: { page: selectedPageId.value, locationId: selectedLocationId.value }
     })
     serverHasDrafts.value = false
     localHasChanges.value = false
@@ -601,7 +665,8 @@ const handleDiscard = async () => {
   try {
     await $fetch(`/api/editor/sites/${siteId}/content/discard`, {
       method: 'POST',
-      body: { page: selectedPageId.value }
+      body: { page: selectedPageId.value },
+      query: selectedLocationId.value ? { locationId: selectedLocationId.value } : {}
     })
     localHasChanges.value = false
     serverHasDrafts.value = false

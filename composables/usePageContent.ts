@@ -24,17 +24,23 @@ export const usePageContent = (pageName?: string) => {
 
   const { isPlatform, siteId } = useTenantSite()
   const isPreview = computed(() => route.query.preview === 'true')
+  const locationSlug = computed(() => {
+    if (typeof route.query.location === 'string' && route.query.location) return route.query.location
+    if (typeof route.params.slug === 'string' && route.path.startsWith('/locations/')) return route.params.slug
+    return ''
+  })
 
   const contentFetch = isPlatform || !siteId
     ? { data: ref(null), refresh: async () => undefined }
     : useFetch(() => {
         const url = `/api/public/sites/${siteId}/content/${page.value}`
-        if (route.query.preview === 'true') {
-          return `${url}?preview=true`
-        }
-        return url
+        const params = new URLSearchParams()
+        if (route.query.preview === 'true') params.set('preview', 'true')
+        if (locationSlug.value) params.set('location', locationSlug.value)
+        const query = params.toString()
+        return query ? `${url}?${query}` : url
       }, {
-        key: computed(() => `content-${siteId}-${page.value}-${isPreview.value ? 'preview' : 'published'}`),
+        key: computed(() => `content-${siteId}-${page.value}-${locationSlug.value || 'site'}-${isPreview.value ? 'preview' : 'published'}`),
         server: true,
         immediate: true
       })

@@ -1,10 +1,12 @@
 <template>
-  <div class="tenant-layout min-h-screen flex flex-col font-sans">
-    <SayaHeader />
-    <main class="flex-grow">
-      <slot />
-    </main>
-    <SayaFooter />
+  <div class="tenant-layout saya-theme min-h-screen flex flex-col font-sans">
+    <UTheme :ui="{}" :props="{ button: { color: 'neutral' } }">
+      <SayaHeader />
+      <main class="grow">
+        <slot />
+      </main>
+      <SayaFooter />
+    </UTheme>
   </div>
 </template>
 

@@ -1,14 +1,14 @@
 <template>
-  <div class="min-h-screen bg-white">
+  <div class="min-h-screen bg-(--ui-bg)">
     <SayaHero :title="getField('hero.title', 'Our Menu')" :subtitle="getField('hero.subtitle', 'Authentic Japanese Robatayaki Izakaya')" size="page" :establishment-year="googleBusiness?.business?.establishmentYear" />
     <AppSection v-if="getField('description', '')" bg="alt" padding="default">
-      <div v-html="getField('description', '')" class="prose prose-lg max-w-3xl mx-auto text-center text-gray-700" />
+      <div v-html="getField('description', '')" class="prose prose-lg max-w-3xl mx-auto text-center text-(--ui-text)" />
     </AppSection>
     
     <!-- Loading state -->
     <AppSection v-if="menuLoading" bg="white" padding="default">
       <div class="text-center py-8">
-        <p class="text-gray-600">Loading menu...</p>
+        <p class="text-(--ui-text-muted)">Loading menu...</p>
       </div>
     </AppSection>
     
@@ -24,7 +24,7 @@
     <template v-else-if="hasMenu">
       <MenuCategoryNav :categories="menuSections" :active="activeSection" @select="activeSection = $event" />
       <AppSection v-for="(items, section) in menuItemsBySection" :key="section" :id="section" bg="white" padding="default">
-        <h2 class="text-2xl font-bold text-gray-900 mb-4">{{ section }}</h2>
+        <h2 class="text-2xl font-bold text-(--ui-text-highlighted) mb-4">{{ section }}</h2>
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <MenuItemCard v-for="item in items" :key="item.id" :item="item" />
         </div>

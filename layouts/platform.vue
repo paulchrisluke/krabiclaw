@@ -1,10 +1,12 @@
 <template>
-  <div class="platform-layout min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
-    <PlatformHeader />
-    <main class="grow pt-16">
-      <slot />
-    </main>
-    <PlatformFooter />
+  <div class="platform-layout platform-theme min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
+    <UTheme :ui="{}" :props="{ button: { color: 'primary' } }">
+      <PlatformHeader />
+      <main class="grow pt-16">
+        <slot />
+      </main>
+      <PlatformFooter />
+    </UTheme>
   </div>
 </template>
 

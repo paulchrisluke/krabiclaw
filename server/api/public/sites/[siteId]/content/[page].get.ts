@@ -1,6 +1,7 @@
 // Get published content for public tenant rendering (no auth required)
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPageContent, getDraftContent } from '~/server/utils/content-management'
+import { verifyPreviewToken } from '~/server/utils/preview-token'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -10,11 +11,9 @@ export default defineEventHandler(async (event) => {
   // Initialize env first
   const env = cloudflareEnv(event)
   
-  // Explicit preview authorization check with proper validation
   const preview = getQuery(event).preview === 'true'
   const previewToken = getQuery(event).token as string || undefined
   
-  // Ensure PREVIEW_SECRET exists and use constant-time comparison
   let isPreviewAuthorized = false
   if (preview && previewToken) {
     const previewSecret = env.PREVIEW_SECRET
@@ -23,20 +22,7 @@ export default defineEventHandler(async (event) => {
         error: 'Preview not configured' 
       }, { status: 500 })
     }
-    
-    // Use constant-time comparison to prevent timing attacks
-    try {
-      const crypto = require('crypto')
-      const secretBuffer = Buffer.from(previewSecret, 'utf8')
-      const tokenBuffer = Buffer.from(previewToken, 'utf8')
-      
-      if (secretBuffer.length === tokenBuffer.length) {
-        isPreviewAuthorized = crypto.timingSafeEqual(secretBuffer, tokenBuffer)
-      }
-    } catch (error) {
-      // If crypto comparison fails, deny access
-      isPreviewAuthorized = false
-    }
+    isPreviewAuthorized = await verifyPreviewToken(String(previewSecret), String(siteId), previewToken)
   }
   
   if (preview && !isPreviewAuthorized) {
