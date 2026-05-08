@@ -1,12 +1,12 @@
 <template>
   <div class="min-h-screen bg-white">
-    <AppHero
+    <SayaHero
       title="Questions & Answers"
       subtitle="Customer Inquiries About Our Restaurant"
       size="page"
     />
 
-    <RestaurantQA
+    <SayaQA
       :qa="googleQA"
       bg="white"
       padding="default"
@@ -17,10 +17,13 @@
 
 <script setup>
 definePageMeta({ layout: 'tenant' })
-import AppHero from '~/components/ui/AppHero.vue'
-import RestaurantQA from '~/components/google/RestaurantQA.vue'
-const { data: googleBusiness } = await useFetch('/api/google-business/public', {
-  key: 'google-business-public',
+import { useTenantSite } from '~/composables/useTenantSite'
+
+const { siteId } = await useTenantSite()
+if (!siteId) throw createError({ statusCode: 404 })
+
+const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/google-business`, {
+  key: `qa-google-business-${siteId}`,
   default: () => ({
     business: null,
     reviews: [],

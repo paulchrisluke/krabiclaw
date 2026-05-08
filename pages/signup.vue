@@ -20,7 +20,7 @@
             @click="handleGoogleSignIn"
             :disabled="loading"
             variant="outline"
-            size="lg"
+            size="xl"
             class="w-full"
           >
             <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24">
@@ -65,7 +65,7 @@
               type="submit"
               :disabled="loading"
               color="primary"
-              size="lg"
+              size="xl"
               class="w-full"
             >
               Create Account

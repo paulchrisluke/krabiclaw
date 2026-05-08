@@ -21,7 +21,7 @@
           <UButton
             to="/dashboard/onboarding"
             color="neutral"
-            size="lg"
+            size="xl"
             block
           >
             Get Started
@@ -105,7 +105,7 @@
                   {{ site.name }}
                 </h3>
                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                  {{ site.subdomain }}.krabiclaw.com
+                  {{ site.subdomain }}{{ platformHostname ? `.${platformHostname}` : '' }}
                 </p>
               </div>
               <UBadge :color="site.status === 'active' ? 'success' : 'warning'" variant="soft" size="xs">
@@ -122,11 +122,12 @@
                 Manage Site
               </UButton>
               <UButton
-                :href="`https://${site.subdomain}.krabiclaw.com`"
+                :href="platformHostname ? `https://${site.subdomain}.${platformHostname}` : undefined"
                 target="_blank"
                 variant="ghost"
                 size="sm"
                 block
+                :disabled="!platformHostname"
               >
                 View Live Site
               </UButton>
@@ -166,6 +167,22 @@ definePageMeta({
   middleware: 'auth'
 })
 
+const config = useRuntimeConfig()
+
+// Extract hostname from config for URLs
+const platformHostname = computed(() => {
+  const domain = config.public.freeSiteDomain
+  if (!domain) return ''
+  try {
+    // URL API is the most robust way to parse hostnames
+    const urlStr = domain.startsWith('http') ? domain : `https://${domain}`
+    return new URL(urlStr).hostname
+  } catch (e) {
+    // Fallback to simple replace if URL parsing fails
+    return domain.replace(/^https?:\/\//, '').split('/')[0].replace(/\.+$/, '')
+  }
+})
+
 const organizationsState = authClient.useListOrganizations()
 const organizations = computed(() => unref(organizationsState)?.data ?? [])
 const sites = ref([])
@@ -201,7 +218,10 @@ watch(organizations, async (newOrgs) => {
     try {
       const userSites = await $fetch('/api/sites')
       sites.value = userSites.sites
-      publicData.value = await $fetch('/api/google-business/public')
+      // Fetch Google Business data for the first site
+      if (sites.value?.[0]?.id) {
+        publicData.value = await $fetch(`/api/public/sites/${sites.value[0].id}/google-business`)
+      }
     } catch (error) {
       console.error('Failed to load sites:', error)
     } finally {

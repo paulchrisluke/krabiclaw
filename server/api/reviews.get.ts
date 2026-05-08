@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   if (!slug) return jsonResponse({ error: 'Missing menu item slug.' }, { status: 400 })
 
   const { results } = await env.REVIEWS_DB.prepare(
-    `SELECT id, menu_item_slug AS menuItemSlug, author, rating, title, content, created_at AS createdAt
+    `SELECT id, menu_item_slug AS menuItemSlug, author_name AS author, rating, title, content, created_at AS createdAt
      FROM reviews
      WHERE menu_item_slug = ? AND status = 'approved'
      ORDER BY created_at DESC

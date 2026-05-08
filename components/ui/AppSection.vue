@@ -1,5 +1,5 @@
 <template>
-  <section :class="['w-full', backgrounds[bg], paddings[padding]]">
+  <section :class="['w-full', bgClass, paddings[padding]]">
     <div class="max-w-6xl mx-auto px-4">
       <slot />
     </div>
@@ -7,11 +7,12 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+const props = defineProps({
   bg: {
     type: String,
     default: 'white',
-    validator: v => ['white', 'black', 'gray', 'stone'].includes(v)
+    validator: v => ['white', 'black', 'dark', 'alt', 'gray', 'stone'].includes(v)
   },
   padding: {
     type: String,
@@ -21,11 +22,15 @@ defineProps({
 })
 
 const backgrounds = {
-  white: 'bg-white text-black',
-  black: 'bg-black text-white',
-  gray: 'bg-gray-50 text-black',
-  stone: 'bg-stone-50 text-black'
+  white: 'bg-[color:var(--ui-bg)] text-[color:var(--ui-text)]',
+  alt: 'bg-[color:var(--ui-bg-elevated)] text-[color:var(--ui-text)]',
+  black: 'bg-[color:var(--ui-bg-inverted)] text-[color:var(--ui-text-inverted)]',
+  dark: 'bg-[color:var(--ui-bg-inverted)] text-[color:var(--ui-text-inverted)]',
+  gray: 'bg-[color:var(--ui-bg-elevated)] text-[color:var(--ui-text)]',
+  stone: 'bg-[color:var(--ui-bg-elevated)] text-[color:var(--ui-text)]'
 }
+
+const bgClass = computed(() => backgrounds[props.bg])
 
 const paddings = {
   none: 'py-0',

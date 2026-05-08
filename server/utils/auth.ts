@@ -2,6 +2,8 @@ import { betterAuth } from 'better-auth'
 import { organization } from 'better-auth/plugins'
 import { D1Dialect } from '@atinux/kysely-d1'
 import { Kysely } from 'kysely'
+import { getHeaders } from 'h3'
+import type { H3Event } from 'h3'
 
 export interface CloudflareEnv {
   REVIEWS_DB: any // Using any to avoid D1Database type conflicts
@@ -51,4 +53,10 @@ export function createAuth(env: CloudflareEnv) {
 
   authCache.set(d1, instance)
   return instance
+}
+
+export async function getAuthSession(event: H3Event, env: CloudflareEnv): Promise<any> {
+  return await createAuth(env).api.getSession({
+    headers: getHeaders(event)
+  })
 }

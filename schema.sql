@@ -1,8 +1,10 @@
--- Initial Schema for ThaiClaw AI SaaS Platform
--- Greenfield Multi-Tenant Architecture
+-- KrabiClaw canonical D1 schema.
+-- Edit this file directly when the database shape changes.
+
+PRAGMA foreign_keys = ON;
 
 --------------------------------------------------------------------------------
--- 1. Core Users and Organizations (Better Auth)
+-- Better Auth
 --------------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS user (
@@ -23,6 +25,8 @@ CREATE TABLE IF NOT EXISTS session (
   updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   ipAddress TEXT,
   userAgent TEXT,
+  activeOrganizationId TEXT,
+  activeTeamId TEXT,
   userId TEXT NOT NULL,
   FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE
 );
@@ -36,6 +40,9 @@ CREATE TABLE IF NOT EXISTS account (
   refreshToken TEXT,
   idToken TEXT,
   expiresAt TEXT,
+  accessTokenExpiresAt TEXT,
+  refreshTokenExpiresAt TEXT,
+  scope TEXT,
   password TEXT,
   createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -84,7 +91,7 @@ CREATE TABLE IF NOT EXISTS invitation (
 );
 
 --------------------------------------------------------------------------------
--- 2. Platform Structure (Themes, Sites, Domains)
+-- Platform
 --------------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS themes (
@@ -101,19 +108,34 @@ CREATE TABLE IF NOT EXISTS themes (
 CREATE TABLE IF NOT EXISTS sites (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
-  theme_id TEXT NOT NULL,
+  theme_id TEXT NOT NULL DEFAULT 'saya-theme-v1',
+  theme TEXT NOT NULL DEFAULT 'saya',
   name TEXT NOT NULL,
   slug TEXT UNIQUE NOT NULL,
   subdomain TEXT UNIQUE,
+  custom_domain TEXT,
+  custom_domain_status TEXT DEFAULT 'none',
+  primary_location_id TEXT,
+  public_url TEXT,
+  brand_name TEXT,
+  brand_description TEXT,
+  logo_url TEXT,
+  contact_email TEXT,
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),
-  plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'paid')),
+  plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'paid', 'starter', 'pro', 'business')),
   onboarding_status TEXT DEFAULT 'pending' CHECK (onboarding_status IN ('pending', 'active', 'failed')),
-  settings TEXT, -- JSON for site-specific settings
+  settings TEXT,
+  last_published_at TEXT,
   created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_by TEXT,
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (theme_id) REFERENCES themes(id)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_custom_domain_unique
+  ON sites(custom_domain)
+  WHERE custom_domain IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS site_domains (
   id TEXT PRIMARY KEY,
@@ -121,9 +143,13 @@ CREATE TABLE IF NOT EXISTS site_domains (
   site_id TEXT NOT NULL,
   domain TEXT UNIQUE NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('subdomain', 'custom')),
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'verification_required', 'failed')),
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'verifying', 'active', 'verification_required', 'failed', 'disabled')),
+  verification_token TEXT,
   verification_method TEXT,
   ssl_status TEXT DEFAULT 'pending',
+  last_checked_at TEXT,
+  verified_at TEXT,
+  error_message TEXT,
   created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
@@ -131,8 +157,27 @@ CREATE TABLE IF NOT EXISTS site_domains (
 );
 
 --------------------------------------------------------------------------------
--- 3. Business Locations & Integrations
+-- Business Locations and Google Business
 --------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS google_business_connections (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  connected_by_user_id TEXT,
+  provider_account_email TEXT NOT NULL,
+  encrypted_access_token TEXT NOT NULL,
+  encrypted_refresh_token TEXT NOT NULL,
+  scopes TEXT NOT NULL,
+  expires_at TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled', 'error')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (connected_by_user_id) REFERENCES user(id) ON DELETE SET NULL,
+  UNIQUE(organization_id, site_id)
+);
 
 CREATE TABLE IF NOT EXISTS business_locations (
   id TEXT PRIMARY KEY,
@@ -140,7 +185,7 @@ CREATE TABLE IF NOT EXISTS business_locations (
   site_id TEXT NOT NULL,
   slug TEXT NOT NULL,
   google_location_id TEXT,
-  google_connection_id TEXT, -- Link to google_business_connections
+  google_connection_id TEXT,
   title TEXT NOT NULL,
   address TEXT,
   city TEXT,
@@ -150,8 +195,8 @@ CREATE TABLE IF NOT EXISTS business_locations (
   maps_url TEXT,
   latitude REAL,
   longitude REAL,
-  opening_hours TEXT, -- JSON object
-  categories TEXT, -- JSON array
+  opening_hours TEXT,
+  categories TEXT,
   rating REAL,
   review_count INTEGER,
   is_primary BOOLEAN DEFAULT false,
@@ -165,17 +210,15 @@ CREATE TABLE IF NOT EXISTS business_locations (
   UNIQUE(organization_id, site_id, slug)
 );
 
-CREATE TABLE IF NOT EXISTS google_business_connections (
+CREATE TABLE IF NOT EXISTS google_business_events (
   id TEXT PRIMARY KEY,
-  organization_id TEXT NOT NULL,
-  site_id TEXT NOT NULL,
-  connected_by_user_id TEXT NOT NULL,
-  provider_account_email TEXT NOT NULL,
-  encrypted_access_token TEXT NOT NULL,
-  encrypted_refresh_token TEXT NOT NULL,
-  scopes TEXT NOT NULL,
-  expires_at TEXT,
-  status TEXT DEFAULT 'active',
+  organization_id TEXT,
+  site_id TEXT,
+  google_location_id TEXT,
+  event_type TEXT,
+  payload TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  error TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
@@ -183,16 +226,20 @@ CREATE TABLE IF NOT EXISTS google_business_connections (
 );
 
 --------------------------------------------------------------------------------
--- 4. Content Management System (CMS)
+-- Content
 --------------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS site_content (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
   site_id TEXT NOT NULL,
-  location_id TEXT, -- NULL for site-wide content
+  location_id TEXT,
   page TEXT NOT NULL,
-  field_key TEXT NOT NULL,
+  field TEXT NOT NULL,
+  content TEXT,
+  hero_title TEXT,
+  hero_subtitle TEXT,
+  hero_video_url TEXT,
   value TEXT,
   type TEXT NOT NULL DEFAULT 'text',
   source TEXT NOT NULL DEFAULT 'manual',
@@ -201,8 +248,12 @@ CREATE TABLE IF NOT EXISTS site_content (
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE,
-  UNIQUE(organization_id, site_id, location_id, page, field_key)
+  UNIQUE(organization_id, site_id, location_id, page, field)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_site_content_site_level_unique
+  ON site_content(organization_id, site_id, page, field)
+  WHERE location_id IS NULL;
 
 CREATE TABLE IF NOT EXISTS site_content_drafts (
   id TEXT PRIMARY KEY,
@@ -210,7 +261,11 @@ CREATE TABLE IF NOT EXISTS site_content_drafts (
   site_id TEXT NOT NULL,
   location_id TEXT,
   page TEXT NOT NULL,
-  field_key TEXT NOT NULL,
+  field TEXT NOT NULL,
+  content TEXT,
+  hero_title TEXT,
+  hero_subtitle TEXT,
+  hero_video_url TEXT,
   value TEXT,
   type TEXT NOT NULL DEFAULT 'text',
   source TEXT NOT NULL DEFAULT 'manual',
@@ -219,8 +274,12 @@ CREATE TABLE IF NOT EXISTS site_content_drafts (
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE,
-  UNIQUE(organization_id, site_id, location_id, page, field_key)
+  UNIQUE(organization_id, site_id, location_id, page, field)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_site_content_drafts_site_level_unique
+  ON site_content_drafts(organization_id, site_id, page, field)
+  WHERE location_id IS NULL;
 
 CREATE TABLE IF NOT EXISTS site_config (
   organization_id TEXT NOT NULL,
@@ -233,32 +292,52 @@ CREATE TABLE IF NOT EXISTS site_config (
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS reviews (
+CREATE TABLE IF NOT EXISTS staff_profiles (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
   site_id TEXT NOT NULL,
   location_id TEXT,
-  author_name TEXT NOT NULL,
-  rating INTEGER NOT NULL,
-  comment TEXT,
-  status TEXT DEFAULT 'pending',
-  source TEXT DEFAULT 'direct',
-  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  bio TEXT,
+  image_url TEXT,
+  order_index INTEGER NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS awards_recognition (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  location_id TEXT,
+  title TEXT NOT NULL,
+  description TEXT,
+  year INTEGER,
+  issuer TEXT,
+  image_url TEXT,
+  order_index INTEGER NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE
 );
 
 --------------------------------------------------------------------------------
--- 5. Menus & Menu Items
+-- Menus and Reviews
 --------------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS menus (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
   site_id TEXT NOT NULL,
-  location_id TEXT, -- NULL for site-wide menu
+  location_id TEXT,
   name TEXT NOT NULL,
   description TEXT,
   status TEXT NOT NULL DEFAULT 'draft',
@@ -288,16 +367,38 @@ CREATE TABLE IF NOT EXISTS menu_items (
   FOREIGN KEY (menu_id) REFERENCES menus(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS reviews (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT,
+  site_id TEXT,
+  location_id TEXT,
+  menu_item_slug TEXT,
+  author_name TEXT,
+  rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  title TEXT,
+  content TEXT,
+  status TEXT DEFAULT 'pending',
+  source TEXT DEFAULT 'direct',
+  ip_hash TEXT,
+  user_agent TEXT,
+  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE
+);
+
 --------------------------------------------------------------------------------
--- 6. Billing & Entitlements
+-- Billing
 --------------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS organization_billing (
+  id TEXT UNIQUE,
   organization_id TEXT PRIMARY KEY,
   stripe_customer_id TEXT UNIQUE,
   stripe_subscription_id TEXT UNIQUE,
-  status TEXT NOT NULL,
-  plan_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'free',
+  plan TEXT NOT NULL DEFAULT 'free',
   current_period_end TEXT,
   cancel_at_period_end BOOLEAN DEFAULT false,
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -305,17 +406,21 @@ CREATE TABLE IF NOT EXISTS organization_billing (
 );
 
 CREATE TABLE IF NOT EXISTS organization_entitlements (
+  id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
-  feature_key TEXT NOT NULL,
-  value TEXT, -- JSON or raw value
+  key TEXT NOT NULL,
+  value TEXT,
+  source TEXT NOT NULL DEFAULT 'system',
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  PRIMARY KEY (organization_id, feature_key),
-  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  UNIQUE(organization_id, key)
 );
 
 CREATE TABLE IF NOT EXISTS stripe_webhook_events (
   id TEXT PRIMARY KEY,
-  type TEXT NOT NULL,
+  stripe_event_id TEXT UNIQUE,
+  event_type TEXT,
   status TEXT DEFAULT 'pending',
   payload TEXT,
   error TEXT,
@@ -323,7 +428,7 @@ CREATE TABLE IF NOT EXISTS stripe_webhook_events (
 );
 
 --------------------------------------------------------------------------------
--- 7. Onboarding & Lifecycle
+-- Onboarding
 --------------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS onboarding_steps (
@@ -333,7 +438,7 @@ CREATE TABLE IF NOT EXISTS onboarding_steps (
   status TEXT NOT NULL CHECK (status IN ('pending', 'in_progress', 'completed', 'skipped', 'failed')),
   completed_at TEXT,
   error_message TEXT,
-  metadata TEXT, -- JSON object with step-specific data
+  metadata TEXT,
   created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
@@ -341,9 +446,22 @@ CREATE TABLE IF NOT EXISTS onboarding_steps (
 );
 
 --------------------------------------------------------------------------------
--- 8. Core Seed Data
+-- Seed Data
 --------------------------------------------------------------------------------
 
-INSERT INTO themes (id, name, slug, version, description, status) 
-VALUES ('saya-theme-v1', 'Saya Restaurant Theme', 'saya', '1.0.0', 'Default restaurant website theme with inline editing, multi-location support, and Google Business integration', 'active') 
-ON CONFLICT(id) DO NOTHING;
+INSERT INTO themes (id, name, slug, version, description, status)
+VALUES (
+  'saya-theme-v1',
+  'Saya Restaurant Theme',
+  'saya',
+  '1.0.0',
+  'Default restaurant website theme with inline editing, multi-location support, and Google Business integration',
+  'active'
+)
+ON CONFLICT(id) DO UPDATE SET
+  name = excluded.name,
+  slug = excluded.slug,
+  version = excluded.version,
+  description = excluded.description,
+  status = excluded.status,
+  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');

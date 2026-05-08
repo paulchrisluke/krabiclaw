@@ -2,13 +2,6 @@
 export default defineNuxtConfig({
   modules: ['nitro-cloudflare-dev', 'nuxt-gtag', '@nuxtjs/robots', '@nuxtjs/sitemap', 'nuxt-schema-org', '@nuxtjs/i18n', '@nuxt/ui'],
   
-  // Nuxt UI configuration
-  '@nuxt/ui': {
-    components: true,
-    theme: {
-      colors: ['primary', 'secondary', 'accent', 'neutral', 'success', 'warning', 'error', 'info'],
-    }
-  },
   gtag: {
     id: 'G-Z18L1Y4G7K'
   },
@@ -36,13 +29,13 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
     public: {
-      platformDomain: process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com',
-      freeSiteDomain: process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN || 'krabiclaw.com',
-      appName: process.env.NUXT_PUBLIC_APP_NAME || 'KrabiClaw',
+      platformDomain: process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || '',
+      freeSiteDomain: process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN || '',
+      appName: process.env.NUXT_PUBLIC_APP_NAME || '',
+      turnstileEnabled: process.env.NUXT_PUBLIC_TURNSTILE_ENABLED === 'true',
       turnstileSiteKey: process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY || ''
     },
-    // Server-only
-    platformDomain: process.env.PLATFORM_DOMAIN || 'krabiclaw.com'
+    turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || ''
   },
 
   vite: {
@@ -111,15 +104,15 @@ export default defineNuxtConfig({
   // Components configuration
   components: [
     {
+      path: '~/components/saya',
+      prefix: 'Saya',
+    },
+    {
+      path: '~/components/platform',
+      prefix: 'Platform',
+    },
+    {
       path: '~/components/ui',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/global',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/google',
       pathPrefix: false,
     },
     {
@@ -131,7 +124,7 @@ export default defineNuxtConfig({
   // Global watcher exclusions
   watchers: {
     chokidar: {
-      ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**', '**/migrations/**']
+      ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
     }
   },
 

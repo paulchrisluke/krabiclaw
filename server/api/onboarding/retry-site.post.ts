@@ -1,5 +1,6 @@
 // Retry onboarding for failed/incomplete sites
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
 import { getSayaThemeSeedContent, getDefaultMenuSeedData } from '../../utils/content-seeding'
 
 interface RetrySiteRequest {
@@ -26,13 +27,7 @@ export default defineEventHandler(async (event) => {
   }
   
   // Get authenticated user from Better Auth session
-  const headers = getHeaders(event)
-  const session = await $fetch('/api/auth/get-session', {
-    headers: {
-      cookie: headers.cookie || '',
-      authorization: headers.authorization || ''
-    }
-  })
+  const session = await getAuthSession(event, env)
   
   if (!session?.user?.id) {
     return jsonResponse({ 
@@ -44,9 +39,9 @@ export default defineEventHandler(async (event) => {
     // Get site details and verify ownership
     const site = await db.prepare(`
       SELECT s.*, o.name as organization_name FROM sites s
-      JOIN organizations o ON s.organization_id = o.id
+      JOIN organization o ON s.organization_id = o.id
       WHERE s.id = ? AND o.id IN (
-        SELECT organization_id FROM organization_members WHERE user_id = ?
+        SELECT organizationId FROM member WHERE userId = ?
       )
       LIMIT 1
     `).bind(siteId, session.user.id).first()
@@ -82,18 +77,17 @@ export default defineEventHandler(async (event) => {
     for (const content of contentSeedData) {
       await db.prepare(`
         INSERT OR REPLACE INTO site_content (
-          organization_id, site_id, location_id, page, field_key, 
-          field_value, field_type, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          organization_id, site_id, location_id, page, field,
+          content, type, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         content.organization_id,
         content.site_id,
         content.location_id,
         content.page,
-        content.field_key,
-        content.field_value,
-        content.field_type,
-        content.created_at,
+        content.field,
+        content.content,
+        content.type,
         content.updated_at
       ).run()
     }
@@ -106,21 +100,20 @@ export default defineEventHandler(async (event) => {
     })
     
     // Insert menu
-    await db.prepare(`
-      INSERT OR REPLACE INTO menus (
-        id, organization_id, site_id, location_id, name, 
-        is_default, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      menuSeedData.menu.id,
-      menuSeedData.menu.organization_id,
-      menuSeedData.menu.site_id,
-      menuSeedData.menu.location_id,
-      menuSeedData.menu.name,
-      menuSeedData.menu.is_default,
-      menuSeedData.menu.status,
-      menuSeedData.menu.created_at,
-      menuSeedData.menu.updated_at
+      await db.prepare(`
+        INSERT OR REPLACE INTO menus (
+          id, organization_id, site_id, location_id, name, 
+          status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        menuSeedData.menu.id,
+        menuSeedData.menu.organization_id,
+        menuSeedData.menu.site_id,
+        menuSeedData.menu.location_id,
+        menuSeedData.menu.name,
+        menuSeedData.menu.status,
+        menuSeedData.menu.created_at,
+        menuSeedData.menu.updated_at
     ).run()
     
     // Insert required menu items

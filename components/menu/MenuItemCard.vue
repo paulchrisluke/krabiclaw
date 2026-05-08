@@ -1,47 +1,80 @@
 <template>
-  <UCard :to="`/menu/${item.slug}`" class="group hover:shadow-md transition-shadow cursor-pointer">
-    <div class="flex gap-4 p-4">
+  <NuxtLink :to="`/menu/${item.slug}`" class="group block">
+    <div class="aspect-square w-full overflow-hidden rounded-2xl bg-(--ui-bg-elevated) relative">
+
+      <!-- Video support -->
+      <video
+        v-if="isVideo"
+        :src="item.image_url"
+        :poster="item.poster"
+        autoplay
+        muted
+        loop
+        playsinline
+        class="w-full h-full object-cover"
+        @error="handleVideoError"
+        controls
+      />
+
       <!-- Image -->
-      <div class="w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-200">
-        <img
-          v-if="item.image && !item.image.includes('PLACEHOLDER')"
-          :src="item.image"
-          :alt="item.name"
-          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          loading="lazy"
-        />
-        <div v-else class="w-full h-full flex items-center justify-center">
-          <span class="text-gray-400 text-xs text-center px-2">No image yet</span>
-        </div>
+      <img
+        v-else-if="item.image_url"
+        :src="item.image_url"
+        :alt="item.name"
+        class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+      />
+
+      <!-- No media placeholder -->
+      <div v-else class="w-full h-full flex items-center justify-center">
+        <span class="text-4xl">🍽</span>
       </div>
 
-      <!-- Info -->
-      <div class="flex-1 min-w-0">
-        <div class="flex items-start justify-between gap-2">
-          <h3 class="font-semibold text-gray-900 group-hover:text-black leading-tight">{{ item.name }}</h3>
-          <UBadge color="neutral" variant="solid" size="sm">
-            {{ item.price > 0 ? `฿${item.price}` : 'TBD' }}
-          </UBadge>
-        </div>
-        <p class="text-sm text-gray-500 mt-1 line-clamp-2">{{ item.description }}</p>
-        <div v-if="item.allergens?.length && !item.allergens.includes('PLACEHOLDER_ALLERGEN')" class="flex gap-1 mt-2 flex-wrap">
-          <UBadge
-            v-for="a in item.allergens"
-            :key="a"
-            color="warning"
-            variant="soft"
-            size="xs"
-          >
-            {{ a }}
-          </UBadge>
-        </div>
+      <!-- Price badge -->
+      <div class="absolute top-3 right-3">
+        <span class="bg-black/80 text-white text-sm font-semibold px-3 py-1 rounded-full">
+          {{ item.price != null ? `฿${item.price}` : 'TBD' }}
+        </span>
+      </div>
+
+      <!-- Unavailable overlay -->
+      <div v-if="!item.available" class="absolute inset-0 bg-black/50 flex items-center justify-center">
+        <span class="text-white text-sm font-medium">Currently unavailable</span>
       </div>
     </div>
-  </UCard>
+
+    <!-- Content below image -->
+    <div class="mt-3 px-1">
+      <h3 class="font-semibold text-(--ui-text) text-base leading-tight">{{ item.name }}</h3>
+      <p v-if="item.description" class="mt-1 text-sm text-(--ui-text-muted) line-clamp-2">
+        {{ item.description }}
+      </p>
+    </div>
+  </NuxtLink>
 </template>
 
-<script setup>
-defineProps({
-  item: { type: Object, required: true }
+<script setup lang="ts">
+interface MenuItem {
+  slug: string
+  name: string
+  image_url?: string
+  poster?: string
+  price?: string
+  available?: boolean
+  description?: string
+}
+
+const props = defineProps<{
+  item: MenuItem
+}>()
+
+const isVideo = computed(() => {
+  const url = props.item?.image_url || ''
+  // Only check for video file extensions, not generic 'video' in URL
+  return /\.(mp4|webm|mov)$/i.test(url)
 })
+
+const handleVideoError = () => {
+  // Handle video loading errors - could emit event or show fallback
+  console.warn('[MenuItemCard] Video failed to load:', props.item?.image_url)
+}
 </script>

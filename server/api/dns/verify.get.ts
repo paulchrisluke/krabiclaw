@@ -1,5 +1,6 @@
 // DNS verification API for checking TXT records
-import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
+import { jsonResponse } from '../../utils/api-response'
+import { defineEventHandler, getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -26,9 +27,10 @@ export default defineEventHandler(async (event) => {
       message: 'Manual DNS verification required',
       instructions: {
         type: 'TXT',
-        name: `_thaiclawai.${domain}`,
+        name: `_krabiclaw.${domain}`,
         value: 'Please use the verification token from your domain settings',
-        note: 'DNS records may take time to propagate. Check back in a few minutes after adding the record.'
+        note: 'DNS records may take time to propagate. Check back in a few minutes after adding the record. Note: We also support the legacy _thaiclawai prefix during transition.',
+        legacyName: `_thaiclawai.${domain}`
       }
     })
     

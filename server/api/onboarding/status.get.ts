@@ -1,7 +1,7 @@
 // Get onboarding status for authenticated user
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
-import { createAuth } from '../../utils/auth'
-import { defineEventHandler, getHeaders } from 'h3'
+import { getAuthSession } from '../../utils/auth'
+import { defineEventHandler } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -14,11 +14,7 @@ export default defineEventHandler(async (event) => {
   }
   
   // Get authenticated user from Better Auth session using server-side API
-  const auth = createAuth(cloudflareEnv(event))
-  
-  const session = await auth.api.getSession({
-    headers: getHeaders(event)
-  })
+  const session = await getAuthSession(event, env)
   
   if (!session?.user?.id) {
     return jsonResponse({ 

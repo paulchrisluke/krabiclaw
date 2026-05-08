@@ -1,5 +1,6 @@
 // Get billing status for organization
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
 import { getOrganizationBillingStatus } from '../../utils/billing'
 
 export default defineEventHandler(async (event) => {
@@ -13,13 +14,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Get authenticated user
-  const headers = getHeaders(event)
-  const session = await $fetch('/api/auth/get-session', {
-    headers: {
-      cookie: headers.cookie || '',
-      authorization: headers.authorization || ''
-    }
-  })
+  const session = await getAuthSession(event, env)
   
   if (!session?.user?.id) {
     return jsonResponse({ 
@@ -52,7 +47,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user is member of organization
     const membership = await db.prepare(`
-      SELECT role FROM member 
+      SELECT role FROM member
       WHERE organizationId = ? AND userId = ?
       LIMIT 1
     `).bind(organizationId, session.user.id).first()

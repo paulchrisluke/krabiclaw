@@ -1,8 +1,8 @@
 // Site creation API with idempotency and rollback safety
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getSayaThemeSeedContent, getDefaultMenuSeedData } from '../../utils/content-seeding'
-import { createAuth } from '../../utils/auth'
-import { defineEventHandler, getHeaders, readBody } from 'h3'
+import { getAuthSession } from '../../utils/auth'
+import { defineEventHandler, readBody } from 'h3'
 
 interface CreateSiteRequest {
   restaurantName: string
@@ -29,11 +29,7 @@ export default defineEventHandler(async (event) => {
   }
   
   // Get authenticated user from Better Auth session using server-side API
-  const auth = createAuth(cloudflareEnv(event))
-  
-  const session = await auth.api.getSession({
-    headers: getHeaders(event)
-  })
+  const session = await getAuthSession(event, env)
   
   if (!session?.user?.id) {
     return jsonResponse({ 
@@ -219,16 +215,16 @@ async function performRequiredSeeding(db: any, siteId: string, organizationId: s
     for (const content of contentSeedData) {
       await db.prepare(`
         INSERT OR REPLACE INTO site_content (
-          organization_id, site_id, location_id, page, field_key, 
-          value, type, updated_at
+          organization_id, site_id, location_id, page, field,
+          content, type, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         content.organization_id,
         content.site_id,
         content.location_id,
         content.page,
-        content.field_key,
-        content.value,
+        content.field,
+        content.content,
         content.type,
         content.updated_at
       ).run()

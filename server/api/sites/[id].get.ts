@@ -1,7 +1,7 @@
 // Get single site details
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
-import { createAuth } from '../../utils/auth'
-import { defineEventHandler, getRouterParam, getHeaders } from 'h3'
+import { getAuthSession } from '../../utils/auth'
+import { defineEventHandler, getRouterParam } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'id')
@@ -22,10 +22,7 @@ export default defineEventHandler(async (event) => {
   }
   
   // Get authenticated user
-  const auth = createAuth(env)
-  const session = await auth.api.getSession({
-    headers: getHeaders(event)
-  })
+  const session = await getAuthSession(event, env)
   
   if (!session?.user?.id) {
     return jsonResponse({ 

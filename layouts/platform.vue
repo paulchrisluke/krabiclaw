@@ -1,7 +1,7 @@
 <template>
   <div class="platform-layout min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
     <PlatformHeader />
-    <main class="flex-grow pt-16">
+    <main class="grow pt-16">
       <slot />
     </main>
     <PlatformFooter />

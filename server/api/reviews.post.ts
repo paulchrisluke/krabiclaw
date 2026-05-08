@@ -11,7 +11,7 @@ const hashIp = async (ip: string) => {
 }
 
 const verifyTurnstile = async (request: Request, token: string, secret?: string) => {
-  if (!secret) return true
+  if (!secret) throw new Error('TURNSTILE_SECRET_KEY is required when Turnstile is enabled.')
   if (!token) return false
 
   const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
@@ -29,6 +29,7 @@ const verifyTurnstile = async (request: Request, token: string, secret?: string)
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
+  const config = useRuntimeConfig()
   const request = toWebRequest(event)
   let body: Record<string, unknown>
 
@@ -51,8 +52,11 @@ export default defineEventHandler(async (event) => {
   if (content.length < 10) return jsonResponse({ error: 'Review text must be at least 10 characters.' }, { status: 400 })
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) return jsonResponse({ error: 'Rating must be between 1 and 5.' }, { status: 400 })
 
-  const turnstileOk = await verifyTurnstile(request, turnstileToken, env.TURNSTILE_SECRET_KEY)
-  if (!turnstileOk) return jsonResponse({ error: 'Turnstile verification failed.' }, { status: 403 })
+  const turnstileEnabled = config.public.turnstileEnabled === true
+  if (turnstileEnabled) {
+    const turnstileOk = await verifyTurnstile(request, turnstileToken, env.TURNSTILE_SECRET_KEY)
+    if (!turnstileOk) return jsonResponse({ error: 'Turnstile verification failed.' }, { status: 403 })
+  }
 
   const id = crypto.randomUUID()
   const ipHash = await hashIp(request.headers.get('CF-Connecting-IP') ?? '')
@@ -60,7 +64,7 @@ export default defineEventHandler(async (event) => {
   const status: ReviewStatus = 'pending'
 
   await env.REVIEWS_DB.prepare(
-    `INSERT INTO reviews (id, menu_item_slug, author, rating, title, content, status, ip_hash, user_agent)
+    `INSERT INTO reviews (id, menu_item_slug, author_name, rating, title, content, status, ip_hash, user_agent)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(id, menuItemSlug, author, rating, title, content, status, ipHash, userAgent).run()
 

@@ -1,6 +1,8 @@
 // POST save draft
 import { cloudflareEnv, jsonResponse } from '../../../../../utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
 import { upsertDraftContent } from '../../../../../utils/content-management'
+import { getFieldDef } from '~/config/content-registry'
 
 interface DraftRequest {
   page: string
@@ -28,13 +30,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Get authenticated user
-  const headers = getHeaders(event)
-  const session = await $fetch('/api/auth/get-session', {
-    headers: {
-      cookie: headers.cookie || '',
-      authorization: headers.authorization || ''
-    }
-  })
+  const session = await getAuthSession(event, env)
   
   if (!session?.user?.id) {
     return jsonResponse({ 
@@ -47,9 +43,9 @@ export default defineEventHandler(async (event) => {
     const site = await db.prepare(`
       SELECT s.id, s.organization_id, s.name, s.status, s.onboarding_status
       FROM sites s
-      JOIN organizations o ON s.organization_id = o.id
-      JOIN organization_members om ON o.id = om.organization_id
-      WHERE s.id = ? AND om.user_id = ? AND om.role = 'owner'
+      JOIN organization o ON s.organization_id = o.id
+      JOIN member om ON o.id = om.organizationId
+      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
     `).bind(siteId, session.user.id).first()
     
@@ -60,8 +56,14 @@ export default defineEventHandler(async (event) => {
     }
 
     const locationId = getQuery(event).locationId as string || undefined
+    const draftIdPrefix = [
+      'draft',
+      site.organization_id,
+      siteId,
+      locationId || 'site',
+      page
+    ].join('::')
 
-    // Handle hero fields specially (from legacy code)
     const heroFields = ['hero.title', 'hero.subtitle', 'hero.video']
     const heroChange: Record<string, string | undefined> = {}
     let hasHeroChange = false
@@ -73,13 +75,17 @@ export default defineEventHandler(async (event) => {
         if (field === 'hero.subtitle') heroChange.hero_subtitle = value || undefined
         if (field === 'hero.video')    heroChange.hero_video_url = value || undefined
       } else {
+        const fieldDef = getFieldDef(page, field)
         await upsertDraftContent(db, {
-          id: `${page}-${field}`,
+          id: `${draftIdPrefix}::${field}`,
           organization_id: site.organization_id,
           site_id: siteId,
           location_id: locationId,
           page,
           field,
+          value,
+          type: fieldDef?.type || 'text',
+          source: 'manual',
           content: value,
           hero_title: undefined,
           hero_subtitle: undefined,
@@ -91,12 +97,14 @@ export default defineEventHandler(async (event) => {
     // Handle hero field changes
     if (hasHeroChange) {
       await upsertDraftContent(db, {
-        id: `${page}-hero`,
+        id: `${draftIdPrefix}::hero`,
         organization_id: site.organization_id,
         site_id: siteId,
         location_id: locationId,
         page,
         field: 'hero',
+        type: 'text',
+        source: 'manual',
         content: undefined,
         ...heroChange
       })

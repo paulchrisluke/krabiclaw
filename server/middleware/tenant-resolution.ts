@@ -4,6 +4,15 @@
 import { defineEventHandler, getRequestURL, getHeader } from 'h3'
 import { cloudflareEnv } from '../utils/api-response'
 
+// Get platform domain from runtime config
+function getPlatformDomain(): string {
+  const domain = process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN
+  // Return empty string if domain is not defined
+  if (!domain) return ''
+  // Remove protocol if present
+  return domain.replace(/^https?:\/\//, '')
+}
+
 export default defineEventHandler(async (event) => {
   const url = getRequestURL(event)
   const host = getHeader(event, 'host') || ''
@@ -40,11 +49,12 @@ export default defineEventHandler(async (event) => {
 
 function isPlatformHost(host: string): boolean {
   const hostname = host?.split(':')[0] || ''
+  const platformDomain = getPlatformDomain()
   const platformHosts = [
     'localhost',
     '127.0.0.1',
-    'krabiclaw.com',
-    'www.krabiclaw.com'
+    platformDomain,
+    `www.${platformDomain}`
   ]
   return platformHosts.includes(hostname)
 }
@@ -71,7 +81,7 @@ async function resolveTenantSite(host: string, event: any): Promise<any> {
   
   if (!db) return null
 
-  // Local development support (e.g., demo.localhost:8788)
+  // Local development support (e.g., demo.localhost)
   if (host.includes('.localhost')) {
     const subdomain = host.split('.')[0]
     return await db.prepare(`
@@ -95,7 +105,8 @@ async function resolveTenantSite(host: string, event: any): Promise<any> {
   if (customDomainSite) return customDomainSite
   
   // Try subdomains
-  const subdomain = host.replace('.krabiclaw.com', '').replace(':8788', '')
+  const platformDomain = getPlatformDomain()
+  const subdomain = host.replace(`.${platformDomain}`, '').replace(':8788', '')
   if (subdomain && subdomain !== 'www' && subdomain !== host) {
     const subdomainSite = await db.prepare(`
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain
@@ -104,7 +115,7 @@ async function resolveTenantSite(host: string, event: any): Promise<any> {
       WHERE sd.domain = ? AND sd.type = 'subdomain' AND sd.status = 'active' 
         AND s.status = 'active' AND s.onboarding_status = 'active'
       LIMIT 1
-    `).bind(`${subdomain}.krabiclaw.com`).first()
+    `).bind(`${subdomain}.${platformDomain}`).first()
     
     if (subdomainSite) return subdomainSite
   }

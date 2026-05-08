@@ -1,5 +1,6 @@
 // Get editor context: organization, site, locations, active scope
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -20,13 +21,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Get authenticated user
-  const headers = getHeaders(event)
-  const session = await $fetch('/api/auth/get-session', {
-    headers: {
-      cookie: headers.cookie || '',
-      authorization: headers.authorization || ''
-    }
-  })
+  const session = await getAuthSession(event, env)
   
   if (!session?.user?.id) {
     return jsonResponse({ 
@@ -37,12 +32,12 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user belongs to organization that owns the site
     const site = await db.prepare(`
-      SELECT s.id, s.name, s.organization_id, s.status, s.onboarding_status,
+      SELECT s.id, s.name, s.subdomain, s.organization_id, s.status, s.onboarding_status,
              o.name as organization_name
       FROM sites s
-      JOIN organizations o ON s.organization_id = o.id
-      JOIN organization_members om ON o.id = om.organization_id
-      WHERE s.id = ? AND om.user_id = ? AND om.role = 'owner'
+      JOIN organization o ON s.organization_id = o.id
+      JOIN member om ON o.id = om.organizationId
+      WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
       LIMIT 1
     `).bind(siteId, session.user.id).first()
     
@@ -65,6 +60,17 @@ export default defineEventHandler(async (event) => {
       ...location,
       is_primary: Boolean(location.is_primary)
     }))
+
+    const entitlementsResult = await db.prepare(`
+      SELECT key, value
+      FROM organization_entitlements
+      WHERE organization_id = ?
+    `).bind(site.organization_id).all()
+
+    const entitlements = (entitlementsResult.results || []).reduce((acc: Record<string, string | boolean>, row: any) => {
+      acc[row.key] = row.value === 'true' ? true : row.value === 'false' ? false : row.value
+      return acc
+    }, {})
 
     // Get content registry for this site/theme
     const { contentRegistry } = await import('../../../../../config/content-registry')
@@ -89,12 +95,14 @@ export default defineEventHandler(async (event) => {
         site: {
           id: site.id,
           name: site.name,
+          subdomain: site.subdomain,
           status: site.status,
           onboarding_status: site.onboarding_status
         },
         organization: {
           id: site.organization_id,
-          name: site.organization_name
+          name: site.organization_name,
+          entitlements
         },
         locations: parsedLocations,
         scopes,

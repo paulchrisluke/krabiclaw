@@ -1,5 +1,6 @@
 // Get business locations for a site
 import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -20,13 +21,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Get authenticated user
-  const headers = getHeaders(event)
-  const session = await $fetch('/api/auth/get-session', {
-    headers: {
-      cookie: headers.cookie || '',
-      authorization: headers.authorization || ''
-    }
-  })
+  const session = await getAuthSession(event, env)
   
   if (!session?.user?.id) {
     return jsonResponse({ 
@@ -38,9 +33,9 @@ export default defineEventHandler(async (event) => {
     // Verify user has access to the site
     const site = await db.prepare(`
       SELECT s.id, s.organization_id FROM sites s
-      JOIN organizations o ON s.organization_id = o.id
-      JOIN organization_members om ON o.id = om.organization_id
-      WHERE s.id = ? AND om.user_id = ?
+      JOIN organization o ON s.organization_id = o.id
+      JOIN member om ON o.id = om.organizationId
+      WHERE s.id = ? AND om.userId = ?
       LIMIT 1
     `).bind(siteId, session.user.id).first()
     

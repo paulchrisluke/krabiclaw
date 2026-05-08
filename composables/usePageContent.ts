@@ -23,13 +23,19 @@ export const usePageContent = (pageName?: string) => {
   })
 
   const { isPlatform, siteId } = useTenantSite()
+  const isPreview = computed(() => route.query.preview === 'true')
 
   const { data, refresh } = useFetch(() => {
-    if (isPlatform) return null
-    if (!siteId) return null
-    return `/api/public/sites/${siteId}/content/${page.value}`
+    if (isPlatform || !siteId) {
+      throw new Error('Site context is required to load page content')
+    }
+    const url = `/api/public/sites/${siteId}/content/${page.value}`
+    if (route.query.preview === 'true') {
+      return `${url}?preview=true`
+    }
+    return url
   }, {
-    key: computed(() => `content-${siteId}-${page.value}`),
+    key: computed(() => `content-${siteId}-${page.value}-${isPreview.value ? 'preview' : 'published'}`),
     server: true,
     immediate: !isPlatform && !!siteId
   })
@@ -52,11 +58,11 @@ export const usePageContent = (pageName?: string) => {
    */
   const getField = (field: string, defaultValue: string | null = null): string | null => {
     if (field === 'hero.title' || field === 'hero.subtitle' || field === 'hero.video') {
-      const row = contentMap.value['hero']
-      if (!row) return defaultValue
-      if (field === 'hero.title') return row.hero_title || defaultValue
-      if (field === 'hero.subtitle') return row.hero_subtitle || defaultValue
-      if (field === 'hero.video') return row.hero_video_url || defaultValue
+      const heroRow = contentMap.value['hero']
+      const fieldRow = contentMap.value[field]
+      if (field === 'hero.title') return heroRow?.hero_title ?? fieldRow?.content ?? defaultValue
+      if (field === 'hero.subtitle') return heroRow?.hero_subtitle ?? fieldRow?.content ?? defaultValue
+      if (field === 'hero.video') return heroRow?.hero_video_url ?? fieldRow?.content ?? defaultValue
     }
     const row = contentMap.value[field]
     if (!row) return defaultValue
@@ -78,9 +84,9 @@ export const usePageContent = (pageName?: string) => {
   const getHero = (defaults = { title: '', subtitle: '', video: '' }) => {
     const row = contentMap.value['hero']
     return {
-      title: getField('hero.title', row?.hero_title || defaults.title) || defaults.title,
-      subtitle: getField('hero.subtitle', row?.hero_subtitle || defaults.subtitle) || defaults.subtitle,
-      video: getField('hero.video', row?.hero_video_url || defaults.video) || defaults.video
+      title: getField('hero.title', row?.hero_title ?? defaults.title) ?? defaults.title,
+      subtitle: getField('hero.subtitle', row?.hero_subtitle ?? defaults.subtitle) ?? defaults.subtitle,
+      video: getField('hero.video', row?.hero_video_url ?? defaults.video) ?? defaults.video
     }
   }
 

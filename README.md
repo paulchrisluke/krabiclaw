@@ -33,15 +33,15 @@ There is **no separate Worker** — everything runs as Pages Functions inside th
 
 ### 1. Database Setup (D1)
 
-The project uses Cloudflare D1. For local development, migrations are applied to a local SQLite file managed by Wrangler.
+The project uses Cloudflare D1. The schema is consolidated in the root `schema.sql` file and applied directly with Wrangler.
 
 ```bash
-# Apply migrations locally
-yarn wrangler d1 migrations apply REVIEWS_DB --local
+# Apply the schema locally
+yarn schema:local
 ```
 
 > [!NOTE]
-> Since this is a greenfield project, migrations have been consolidated into `0001_initial_schema.sql` for stability.
+> Since this is a greenfield project, schema changes are consolidated in `schema.sql` instead of kept as numbered migration history.
 
 ### 2. Environment Variables
 
@@ -93,28 +93,20 @@ EOF
 sudo launchctl load -w /Library/LaunchDaemons/limit.maxfiles.plist
 ```
 
-## Migrations
+## Schema
 
-All schema lives in `migrations/`. Files are applied in numeric order.
+All database structure lives in `schema.sql`. Edit that file directly when the app needs a table, column, index, or seed row change.
 
-| File | What it creates |
-|---|---|
-| `0001_initial_schema.sql` | Core Better Auth tables: `user`, `organization`, `member`, `account`, `session`, `verification`, plus app tables |
-| `0002_fix_account_table.sql` | Account table columns fix |
-| `0003_fix_better_auth_schema.sql` | Better Auth schema consistency |
-| ... | ... |
-| (see migrations/ for full list) |
+The schema keeps Better Auth's expected singular tables (`user`, `session`, `account`, `verification`, `organization`, `member`, `invitation`) alongside KrabiClaw's app tables for sites, domains, content, Google Business, menus, reviews, and billing.
 
 ### Apply locally
 
 ```bash
-yarn migrate:local
-# or
-wrangler d1 migrations apply REVIEWS_DB --local
+yarn schema:local
 ```
 ## Seeding Demo Data (Local Only)
 
-After running migrations, if your database is empty (first setup or after reset), seed demo data:
+After applying the schema, if your database is empty (first setup or after reset), seed demo data:
 
 ```bash
 npx wrangler d1 execute REVIEWS_DB --local --file scripts/seed-krabiclaw.sql
@@ -152,14 +144,12 @@ App available at http://localhost:8788
 ### Apply to production
 
 ```bash
-wrangler d1 migrations apply REVIEWS_DB --remote
+yarn schema:remote
 ```
 
-### Run a specific migration manually (if needed)
+### Rebuild a greenfield database
 
-```bash
-wrangler d1 execute REVIEWS_DB --local --file migrations/0011_menu_management.sql
-```
+For a fresh rebuild, clear the target database first, then apply `schema.sql`. Do not recreate numbered migration files for schema drift cleanup.
 
 ## Deployment
 
@@ -209,14 +199,14 @@ Access at `/admin` — requires Google OAuth sign-in via better-auth.
 
 ## Database Schema (summary)
 
-- `reviews` — customer reviews with moderation status
-- `google_business_snapshots` — cached Google Business API data
-- `google_oauth_tokens` — stored OAuth refresh tokens
+- `schema.sql` — canonical source of truth for all D1 tables
+- `user`, `session`, `account`, `verification`, `organization`, `member`, `invitation` — Better Auth tables
 - `google_business_connections` — per-organization Google Business connections
+- `google_business_events` — queued Google Business notification events
 - `business_locations` — synced location data
 - `site_content` / `site_content_drafts` — CMS draft/publish workflow
 - `staff_profiles` / `awards_recognition` — team and achievements content
-- `organization` / `site` / `user` / `member` — multi-tenant SaaS foundation (Better Auth tables are singular)
-- `subscriptions` / `entitlements` — billing and plan management
-- `custom_domains` — custom domain management per site
-- `menu_items` / `menu_categories` — restaurant menu management
+- `sites` / `site_domains` / `site_config` — multi-tenant site and domain management
+- `organization_billing` / `organization_entitlements` / `stripe_webhook_events` — billing and plan management
+- `menus` / `menu_items` — restaurant menu management
+- `reviews` — customer reviews with moderation status

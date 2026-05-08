@@ -1,6 +1,6 @@
 <template>
-  <div class="min-h-screen bg-white">
-    <AppHero
+  <div class="min-h-screen bg-(--ui-bg) text-(--ui-text)">
+    <SayaHero
       :title="getField('hero.title', 'Reserve a Table')"
       :subtitle="getField('hero.subtitle', 'Book Your Authentic Dining Experience')"
       size="page"
@@ -9,68 +9,92 @@
       <div class="grid md:grid-cols-2 gap-12">
         <!-- Reservation Form -->
         <div>
-          <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Make a Reservation</h2>
-          <UCard class="bg-gray-50 rounded-lg">
-            <UForm @submit="handleReservation" class="space-y-6">
-              <UInput
-                id="res-name"
-                v-model="reservationForm.name"
-                label="Name"
-                required
-              />
-              <UInput
-                id="res-email"
-                v-model="reservationForm.email"
-                type="email"
-                label="Email"
-                required
-              />
-              <UInput
-                id="res-phone"
-                v-model="reservationForm.phone"
-                type="tel"
-                label="Phone"
-                required
-              />
-              <div class="grid md:grid-cols-2 gap-4">
-                <UInput
-                  id="res-date"
-                  v-model="reservationForm.date"
-                  type="date"
-                  label="Date"
-                  required
-                />
-                <UInput
-                  id="res-time"
-                  v-model="reservationForm.time"
-                  label="Time"
-                  required
-                >
-                  <select v-model="reservationForm.time" class="w-full h-full bg-transparent">
-                    <option value="">Select time</option>
-                    <option v-for="h in timeSlots" :key="h" :value="h">{{ h }}</option>
-                  </select>
-                </UInput>
+          <h2 class="text-2xl md:text-3xl font-bold text-(--ui-text) mb-6">Make a Reservation</h2>
+          <UCard class="rounded-lg bg-(--ui-bg-muted)">
+            <UForm :state="reservationForm" :validate="validateReservation" class="space-y-6" @submit="handleReservation">
+              <div class="grid gap-5 md:grid-cols-2">
+                <UFormField label="Name" name="name" required>
+                  <UInput
+                    id="res-name"
+                    v-model="reservationForm.name"
+                    class="w-full"
+                    size="lg"
+                    placeholder="Your name"
+                  />
+                </UFormField>
+
+                <UFormField label="Email" name="email" required>
+                  <UInput
+                    id="res-email"
+                    v-model="reservationForm.email"
+                    class="w-full"
+                    size="lg"
+                    type="email"
+                    placeholder="you@example.com"
+                  />
+                </UFormField>
+
+                <UFormField label="Phone" name="phone" required>
+                  <UInput
+                    id="res-phone"
+                    v-model="reservationForm.phone"
+                    class="w-full"
+                    size="lg"
+                    type="tel"
+                    placeholder="+66 81 234 5678"
+                  />
+                </UFormField>
+
+                <UFormField label="Date" name="date" required>
+                  <UInput
+                    id="res-date"
+                    v-model="reservationForm.date"
+                    class="w-full"
+                    size="lg"
+                    type="date"
+                    :min="today"
+                  />
+                </UFormField>
+
+                <UFormField label="Time" name="time" required>
+                  <USelect
+                    id="res-time"
+                    v-model="reservationForm.time"
+                    class="w-full"
+                    size="lg"
+                    :items="timeSelectOptions"
+                    placeholder="Select time"
+                  />
+                </UFormField>
+
+                <UFormField label="Guests" name="guests" required>
+                  <USelect
+                    id="res-guests"
+                    v-model="reservationForm.guests"
+                    class="w-full"
+                    size="lg"
+                    :items="guestOptions"
+                    placeholder="Select guests"
+                  />
+                </UFormField>
               </div>
-              <UInput
-                id="res-guests"
-                v-model="reservationForm.guests"
-                label="Guests"
-                required
+
+              <UFormField
+                label="Special requests"
+                name="requests"
+                description="Dietary needs, accessibility requests, preferred seating, or celebration notes."
               >
-                <select v-model="reservationForm.guests" class="w-full h-full bg-transparent">
-                  <option value="">Select guests</option>
-                  <option v-for="n in guestOptions" :key="n.value" :value="n.value">{{ n.label }}</option>
-                </select>
-              </UInput>
-              <UTextarea
-                id="res-requests"
-                v-model="reservationForm.requests"
-                label="Special Requests"
-                placeholder="Dietary restrictions, seating preferences…"
-                :rows="3"
-              />
-              <UButton type="submit" color="primary" size="lg" class="w-full">
+                <UTextarea
+                  id="res-requests"
+                  v-model="reservationForm.requests"
+                  class="w-full"
+                  size="lg"
+                  placeholder="Tell us anything that will help us prepare for your visit."
+                  :rows="4"
+                />
+              </UFormField>
+
+              <UButton type="submit" color="neutral" variant="solid" size="xl" block>
                 Make Reservation
               </UButton>
             </UForm>
@@ -79,29 +103,29 @@
 
         <!-- Sidebar Info -->
         <div>
-          <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Reservation Details</h2>
+          <h2 class="text-2xl md:text-3xl font-bold text-(--ui-text) mb-6">Reservation Details</h2>
 
-          <UCard class="bg-gray-50 rounded-lg mb-6">
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">Contact Information</h3>
+          <UCard class="mb-6 rounded-lg bg-(--ui-bg-muted)">
+            <h3 class="text-lg font-semibold text-(--ui-text) mb-4">Contact Information</h3>
             <div class="space-y-2">
-              <p class="text-gray-700"><strong>Phone:</strong> {{ contactPhone }}</p>
-              <p class="text-gray-700"><strong>Email:</strong> {{ contactEmail }}</p>
+              <p class="text-(--ui-text-muted)"><strong class="text-(--ui-text)">Phone:</strong> {{ contactPhone }}</p>
+              <p class="text-(--ui-text-muted)"><strong class="text-(--ui-text)">Email:</strong> {{ contactEmail }}</p>
             </div>
           </UCard>
 
-          <UCard class="bg-gray-50 rounded-lg mb-6">
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">Reservation Policies</h3>
-            <div v-html="policiesBody" />
+          <UCard class="mb-6 rounded-lg bg-(--ui-bg-muted)">
+            <h3 class="text-lg font-semibold text-(--ui-text) mb-4">Reservation Policies</h3>
+            <div v-html="policiesBody" class="text-(--ui-text-muted)" />
           </UCard>
 
           <div class="space-y-4">
-            <UButton :to="`tel:${contactPhone.replace(/\s/g, '')}`" variant="outline" size="lg" class="w-full">
-              Call: {{ contactPhone }}
+            <UButton :to="`tel:${contactPhone.replace(/\s/g, '')}`" color="neutral" variant="outline" class="w-full">
+              Call {{ contactPhone }}
             </UButton>
-            <UButton to="/contact" variant="ghost" size="lg" class="w-full">
-              Send Message
+            <UButton to="/contact" color="neutral" variant="outline" class="w-full">
+              Contact Form
             </UButton>
-            <UButton to="/menu" variant="ghost" size="lg" class="w-full">
+            <UButton to="/menu" color="neutral" variant="outline" class="w-full">
               View Menu
             </UButton>
           </div>
@@ -118,6 +142,7 @@ import { usePageContent } from '~/composables/usePageContent'
 const { getField } = usePageContent('reservations')
 
 const timeSlots = ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00']
+const timeSelectOptions = timeSlots.map(time => ({ label: time, value: time }))
 const guestOptions = [
   { value: '1', label: '1 Guest' },
   { value: '2', label: '2 Guests' },
@@ -129,19 +154,35 @@ const guestOptions = [
   { value: '8+', label: '8+ Guests' },
 ]
 
-// Defaults in computed to avoid parse errors from embedded HTML in template expressions
-const contactPhone = computed(() => getField('contact.phone', '+66 81 154 3606'))
-const contactEmail = computed(() => getField('contact.email', 'info@kikuzuki-thailand.com'))
-const policiesBody = computed(() => getField('policies.body',
-  '<ul class="space-y-2 text-gray-700">' +
+// Sanitized policies body to prevent XSS
+const policiesBody = ref('')
+const rawPoliciesHtml = getField('policies.body',
+  '<ul class="space-y-2">' +
   '<li>• Reservations are held for 15 minutes</li>' +
   '<li>• Cancellations required 2 hours in advance</li>' +
   '<li>• Large parties (6+ guests) may require deposit</li>' +
   '<li>• Special dietary requests accommodated with advance notice</li>' +
   '</ul>'
-))
+)
 
-// Reservation form data
+// Sanitize on client side only
+onMounted(async () => {
+  if (process.client) {
+    const DOMPurify = await import('dompurify')
+    policiesBody.value = DOMPurify.default.sanitize(rawPoliciesHtml)
+  } else {
+    policiesBody.value = rawPoliciesHtml
+  }
+})
+
+// Set initial value for SSR
+if (!process.client) {
+  policiesBody.value = rawPoliciesHtml
+}
+
+// Defaults in computed to avoid parse errors from embedded HTML in template expressions
+const contactPhone = computed(() => getField('contact.phone', '+66 81 154 3606'))
+const contactEmail = computed(() => getField('contact.email', 'info@kikuzuki-thailand.com'))
 const reservationForm = ref({
   name: '',
   email: '',
@@ -152,17 +193,39 @@ const reservationForm = ref({
   requests: ''
 })
 
+const today = new Date().toISOString().slice(0, 10)
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+const validateReservation = (state) => {
+  const errors = []
+  if (!state.name) errors.push({ name: 'name', message: 'Please enter your name.' })
+  if (!state.email) {
+    errors.push({ name: 'email', message: 'Please enter your email.' })
+  } else if (!emailPattern.test(state.email)) {
+    errors.push({ name: 'email', message: 'Please enter a valid email address.' })
+  }
+  if (!state.phone) errors.push({ name: 'phone', message: 'Please enter your phone number.' })
+  if (!state.date) errors.push({ name: 'date', message: 'Please choose a date.' })
+  if (!state.time) errors.push({ name: 'time', message: 'Please choose a time.' })
+  if (!state.guests) errors.push({ name: 'guests', message: 'Please choose your party size.' })
+  return errors
+}
+
 const handleReservation = () => {
   // Handle reservation submission
   console.log('Reservation submitted:', reservationForm.value)
 }
 
-const { site } = await useTenantSite()
+const { site } = useTenantSite()
 
+const config = useRuntimeConfig()
+const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '').replace(/\/$/, '') || 'krabiclaw.com'
 useSeoMeta({
-  title: 'Reserve a Table | Restaurant',
-  description: 'Reserve a table at our restaurant.',
+  title: 'Reserve a Table | Saya Kitchen',
+  description: 'Reserve a table at Saya Kitchen in Krabi.',
   ogImage: '/og-image.jpg',
-  ogUrl: `https://${site?.subdomain || 'restaurant'}.krabiclaw.com/reservations`
+  ogUrl: `https://${site?.subdomain || 'restaurant'}.${platformHostname}/reservations`,
+  ogType: 'website'
 })
 </script>

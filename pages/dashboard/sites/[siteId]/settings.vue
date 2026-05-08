@@ -366,7 +366,10 @@ const copyToClipboard = async (text) => {
 // Get free domain from environment
 const freeDomain = computed(() => {
   const config = useRuntimeConfig()
-  return config.public.freeSiteDomain || 'krabiclaw.com'
+  const domain = config.public.freeSiteDomain
+  if (!domain) return ''
+  // Remove protocol if present to get just the hostname
+  return domain.replace(/^https?:\/\//, '')
 })
 
 // Load settings on mount

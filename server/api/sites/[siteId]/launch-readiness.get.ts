@@ -1,5 +1,6 @@
 // GET launch readiness assessment
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
 import type { LaunchReadiness } from '~/server/types/site'
 
 export default defineEventHandler(async (event) => {
@@ -21,13 +22,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Get authenticated user
-  const headers = getHeaders(event)
-  const session = await $fetch('/api/auth/get-session', {
-    headers: {
-      cookie: headers.cookie || '',
-      authorization: headers.authorization || ''
-    }
-  })
+  const session = await getAuthSession(event, env)
   
   if (!session?.user?.id) {
     return jsonResponse({ 
@@ -41,9 +36,9 @@ export default defineEventHandler(async (event) => {
       SELECT s.id, s.organization_id, s.name, s.subdomain, s.status, s.public_url,
              s.brand_name, s.brand_description, s.contact_email, s.last_published_at
       FROM sites s
-      JOIN organizations o ON s.organization_id = o.id
-      JOIN organization_members om ON o.id = om.organization_id
-      WHERE s.id = ? AND om.user_id = ? AND om.role IN ('owner', 'admin', 'editor')
+      JOIN organization o ON s.organization_id = o.id
+      JOIN member om ON o.id = om.organizationId
+      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
     `).bind(siteId, session.user.id).first()
     
@@ -97,7 +92,7 @@ export default defineEventHandler(async (event) => {
     // Check integrations
     const googleBusinessConnection = await db.prepare(`
       SELECT id FROM google_business_connections 
-      WHERE organization_id = ? AND status = 'connected'
+      WHERE organization_id = ? AND status = 'active'
       LIMIT 1
     `).bind(site.organization_id).first()
 

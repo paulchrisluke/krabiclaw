@@ -1,6 +1,6 @@
 <template>
   <div>
-    <AppHero
+    <SayaHero
       title="Privacy Policy"
       subtitle="How we protect your data"
       size="compact"
@@ -63,7 +63,6 @@
 </template>
 
 <script setup>
-import AppHero from '~/components/ui/AppHero.vue'
 
 definePageMeta({
   layout: 'platform'

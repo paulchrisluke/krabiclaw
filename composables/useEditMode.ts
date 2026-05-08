@@ -2,12 +2,13 @@ import { ref, computed } from 'vue'
 import { useRoute, navigateTo } from '#app'
 import { useTenantSite } from './useTenantSite'
 import { useEditorContext } from './useEditorContext'
+import { useToast as useAppToast } from './useToast'
 
 type PendingChanges = Record<string, string>
 
 export const useEditMode = (siteId?: string, locationId?: string | null) => {
   const route = useRoute()
-  const { addToast } = useToast()
+  const { addToast } = useAppToast()
   const { currentLocationId, setScope } = useEditorContext(siteId)
 
   const editMode = computed(() => route.query.edit === 'true')

@@ -36,10 +36,11 @@
       <template #footer="{ collapsed }">
         <UButton
           :avatar="{
-            src: session.data?.user?.image,
-            loading: 'lazy'
+            src: sessionData?.user?.image,
+            loading: 'lazy',
+            alt: sessionData?.user?.name || 'User avatar'
           }"
-          :label="collapsed ? undefined : session.data?.user?.name"
+          :label="collapsed ? undefined : sessionData?.user?.name"
           color="neutral"
           variant="ghost"
           class="w-full"
@@ -69,8 +70,6 @@
 import { useAuth } from '~/composables/useAuth'
 
 const { data: sessionData, signOut } = useAuth()
-const session = useSession()
-
 
 const navigationItems = [[
   {

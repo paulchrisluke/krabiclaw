@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
 
     // Verify user still has access
     const user = await db.prepare(`
-      SELECT email FROM users WHERE id = ?
+      SELECT email FROM user WHERE id = ?
     `).bind(userId).first()
     
     if (!user) {
@@ -59,8 +59,8 @@ export default defineEventHandler(async (event) => {
 
     // Verify user belongs to organization
     const membership = await db.prepare(`
-      SELECT role FROM organization_members 
-      WHERE organization_id = ? AND user_id = ? AND role = 'owner'
+      SELECT role FROM member
+      WHERE organizationId = ? AND userId = ? AND role = 'owner'
       LIMIT 1
     `).bind(organizationId, userId).first()
     

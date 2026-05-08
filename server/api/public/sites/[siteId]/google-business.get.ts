@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
 
     // Get reviews for this site/location
     const reviews = await db.prepare(`
-      SELECT author_name AS author, rating, comment AS content, created_at AS date
+      SELECT author_name AS author, rating, COALESCE(content, comment) AS content, created_at AS date
       FROM reviews
       WHERE site_id = ? AND (location_id = ? OR location_id IS NULL) AND status = 'active'
       ORDER BY created_at DESC

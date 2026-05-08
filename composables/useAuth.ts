@@ -1,26 +1,19 @@
 
-import { computed, ref, isRef } from 'vue'
+import { computed } from 'vue'
 import { authClient } from '~/lib/auth-client'
 
 export function useAuth() {
   const session = authClient.useSession()
 
-  const sessionData = isRef(session?.data)
-    ? session.data
-    : ref(null)
-
-  const sessionLoading = isRef(session?.isPending)
-    ? session.isPending
-    : ref(false)
-
-  const sessionError = isRef(session?.error)
-    ? session.error
-    : ref(null)
+  const sessionData = computed(() => session.value?.data ?? null)
+  const sessionLoading = computed(() => session.value?.isPending ?? true)
+  const sessionError = computed(() => session.value?.error ?? null)
 
   const user = computed(() => sessionData.value?.user ?? null)
   const isAuthenticated = computed(() => !!user.value)
 
   return {
+    session,
     data: sessionData,
     sessionData,
     sessionLoading,

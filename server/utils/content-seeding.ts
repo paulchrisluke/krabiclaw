@@ -7,6 +7,15 @@ export interface SeedContentData {
   restaurantName: string
 }
 
+// Get platform domain from environment
+function getPlatformDomain(): string {
+  const domain = process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN
+  if (!domain) {
+    throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN environment variable is required for content seeding')
+  }
+  return domain
+}
+
 // Generate unique ID helper
 function generateId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -23,8 +32,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null, // Site-wide content
       page: 'home',
-      field_key: 'hero.title',
-      value: `Welcome to ${data.restaurantName}`,
+      field: 'hero.title',
+      content: `Welcome to ${data.restaurantName}`,
       type: 'text',
       updated_at: now
     },
@@ -33,8 +42,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null,
       page: 'home',
-      field_key: 'hero.subtitle',
-      value: 'Experience authentic flavors and warm hospitality',
+      field: 'hero.subtitle',
+      content: 'Experience authentic flavors and warm hospitality',
       type: 'text',
       updated_at: now
     },
@@ -43,8 +52,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null,
       page: 'home',
-      field_key: 'hero.cta_title',
-      value: 'Reserve Your Table',
+      field: 'hero.cta_title',
+      content: 'Reserve Your Table',
       type: 'text',
       updated_at: now
     },
@@ -53,8 +62,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null,
       page: 'home',
-      field_key: 'hero.cta_description',
-      value: 'Join us for an unforgettable dining experience',
+      field: 'hero.cta_description',
+      content: 'Join us for an unforgettable dining experience',
       type: 'text',
       updated_at: now
     },
@@ -63,8 +72,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null,
       page: 'home',
-      field_key: 'about.title',
-      value: 'Our Story',
+      field: 'about.title',
+      content: 'Our Story',
       type: 'text',
       updated_at: now
     },
@@ -73,8 +82,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null,
       page: 'home',
-      field_key: 'about.description',
-      value: 'We are passionate about creating exceptional dining experiences using the finest ingredients and traditional techniques.',
+      field: 'about.description',
+      content: 'We are passionate about creating exceptional dining experiences using the finest ingredients and traditional techniques.',
       type: 'textarea',
       updated_at: now
     },
@@ -84,8 +93,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null,
       page: 'contact',
-      field_key: 'contact.phone',
-      value: '+1 (555) 123-4567',
+      field: 'contact.phone',
+      content: '+1 (555) 123-4567',
       type: 'text',
       updated_at: now
     },
@@ -94,8 +103,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null,
       page: 'contact',
-      field_key: 'contact.email',
-      value: 'info@' + data.siteId + '.krabiclaw.com',
+      field: 'contact.email',
+      content: 'info@' + data.siteId + '.' + getPlatformDomain(),
       type: 'text',
       updated_at: now
     },
@@ -104,8 +113,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null,
       page: 'contact',
-      field_key: 'contact.address',
-      value: '123 Restaurant Street, City, State 12345',
+      field: 'contact.address',
+      content: '123 Restaurant Street, City, State 12345',
       type: 'text',
       updated_at: now
     },
@@ -114,8 +123,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null,
       page: 'contact',
-      field_key: 'contact.hours',
-      value: 'Mon-Sun: 11:00 AM - 10:00 PM',
+      field: 'contact.hours',
+      content: 'Mon-Sun: 11:00 AM - 10:00 PM',
       type: 'text',
       updated_at: now
     },
@@ -125,8 +134,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null,
       page: 'seo',
-      field_key: 'meta.title',
-      value: `${data.restaurantName} | Restaurant`,
+      field: 'meta.title',
+      content: `${data.restaurantName} | Restaurant`,
       type: 'text',
       updated_at: now
     },
@@ -135,8 +144,8 @@ export const getSayaThemeSeedContent = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null,
       page: 'seo',
-      field_key: 'meta.description',
-      value: `Experience exceptional dining at ${data.restaurantName}. Reserve your table today!`,
+      field: 'meta.description',
+      content: `Experience exceptional dining at ${data.restaurantName}. Reserve your table today!`,
       type: 'text',
       updated_at: now
     }
@@ -155,7 +164,6 @@ export const getDefaultMenuSeedData = (data: SeedContentData) => {
       site_id: data.siteId,
       location_id: null, // Site-wide menu
       name: 'Main Menu',
-      is_default: 1,
       status: 'active',
       created_at: now,
       updated_at: now

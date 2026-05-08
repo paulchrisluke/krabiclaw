@@ -1,5 +1,6 @@
 // Create Stripe checkout session for organization
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, getPriceId, requireBillingAccess } from '../../utils/billing'
 
 interface CheckoutRequest {
@@ -36,13 +37,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Get authenticated user
-  const headers = getHeaders(event)
-  const session = await $fetch('/api/auth/get-session', {
-    headers: {
-      cookie: headers.cookie || '',
-      authorization: headers.authorization || ''
-    }
-  })
+  const session = await getAuthSession(event, env)
   
   if (!session?.user?.id) {
     return jsonResponse({ 
@@ -56,7 +51,7 @@ export default defineEventHandler(async (event) => {
     
     // Get organization details
     const organization = await db.prepare(`
-      SELECT o.name, b.stripe_customer_id FROM organizations o
+      SELECT o.name, b.stripe_customer_id FROM organization o
       LEFT JOIN organization_billing b ON o.id = b.organization_id
       WHERE o.id = ?
     `).bind(organizationId).first()

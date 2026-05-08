@@ -7,6 +7,9 @@ export interface SiteContent {
   location_id?: string
   page: string
   field: string
+  value?: string
+  type: string
+  source: string
   content?: string
   hero_title?: string
   hero_subtitle?: string
@@ -40,7 +43,7 @@ export interface AwardRecognition {
 // Site Content
 export const getSiteContent = async (db: D1Database, organizationId: string, siteId: string, locationId?: string): Promise<SiteContent[]> => {
   let query = `
-    SELECT id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_video_url, updated_at 
+    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url, updated_at 
      FROM site_content 
      WHERE organization_id = ? AND site_id = ?
   `
@@ -61,7 +64,7 @@ export const getSiteContent = async (db: D1Database, organizationId: string, sit
 
 export const getPageContent = async (db: D1Database, organizationId: string, siteId: string, page: string, locationId?: string): Promise<SiteContent[]> => {
   let query = `
-    SELECT id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_video_url, updated_at 
+    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url, updated_at 
      FROM site_content 
      WHERE organization_id = ? AND site_id = ? AND page = ?
   `
@@ -82,7 +85,7 @@ export const getPageContent = async (db: D1Database, organizationId: string, sit
 
 export const getSiteContentField = async (db: D1Database, organizationId: string, siteId: string, locationId: string | null, page: string, field: string): Promise<SiteContent | null> => {
   let query = `
-    SELECT id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_video_url, updated_at 
+    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url, updated_at 
      FROM site_content 
      WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ?
   `
@@ -104,7 +107,7 @@ export const getSiteContentField = async (db: D1Database, organizationId: string
 // Draft Management
 export const getDraftContent = async (db: D1Database, organizationId: string, siteId: string, page: string, locationId?: string): Promise<SiteContent[]> => {
   let query = `
-    SELECT id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_video_url, updated_at 
+    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url, updated_at 
      FROM site_content_drafts 
      WHERE organization_id = ? AND site_id = ? AND page = ?
   `
@@ -125,21 +128,32 @@ export const getDraftContent = async (db: D1Database, organizationId: string, si
 
 export const buildUpsertDraftStmt = (db: D1Database, content: Omit<SiteContent, 'updated_at'>) => {
   return db.prepare(`
-    INSERT INTO site_content_drafts (id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_video_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(organization_id, site_id, location_id, page, field) DO UPDATE SET 
+    INSERT INTO site_content_drafts (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET 
+      organization_id = excluded.organization_id,
+      site_id = excluded.site_id,
+      location_id = excluded.location_id,
+      page = excluded.page,
+      field = excluded.field,
+      value = excluded.value,
+      type = excluded.type,
+      source = excluded.source,
       content = excluded.content,
       hero_title = excluded.hero_title,
       hero_subtitle = excluded.hero_subtitle,
       hero_video_url = excluded.hero_video_url,
       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).bind(
+    `).bind(
     content.id || crypto.randomUUID(),
     content.organization_id,
     content.site_id,
     content.location_id || null,
     content.page,
     content.field,
+    content.value || null,
+    content.type || 'text',
+    content.source || 'manual',
     content.content || null,
     content.hero_title || null,
     content.hero_subtitle || null,
@@ -153,21 +167,32 @@ export const upsertDraftContent = async (db: D1Database, content: Omit<SiteConte
 
 export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, 'updated_at'>) => {
   return db.prepare(`
-    INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_video_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(organization_id, site_id, location_id, page, field) DO UPDATE SET 
+    INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET 
+      organization_id = excluded.organization_id,
+      site_id = excluded.site_id,
+      location_id = excluded.location_id,
+      page = excluded.page,
+      field = excluded.field,
       content = excluded.content,
       hero_title = excluded.hero_title,
       hero_subtitle = excluded.hero_subtitle,
       hero_video_url = excluded.hero_video_url,
+      value = excluded.value,
+      type = excluded.type,
+      source = excluded.source,
       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).bind(
+    `).bind(
     content.id || crypto.randomUUID(),
     content.organization_id,
     content.site_id,
     content.location_id || null,
     content.page,
     content.field,
+    content.value || null,
+    content.type || 'text',
+    content.source || 'manual',
     content.content || null,
     content.hero_title || null,
     content.hero_subtitle || null,
@@ -364,4 +389,3 @@ export const upsertAwardRecognition = async (db: D1Database, award: Omit<AwardRe
 export const deleteAwardRecognition = async (db: D1Database, organizationId: string, siteId: string, id: string) => {
   await db.prepare(`DELETE FROM awards_recognition WHERE organization_id = ? AND site_id = ? AND id = ?`).bind(organizationId, siteId, id).run()
 }
-

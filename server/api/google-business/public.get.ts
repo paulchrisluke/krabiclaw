@@ -1,6 +1,6 @@
 import { cloudflareEnv } from '../../utils/api-response'
-import { createAuth } from '../../utils/auth'
-import { createError, defineEventHandler, getHeaders } from 'h3'
+import { getAuthSession } from '../../utils/auth'
+import { createError, defineEventHandler } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -10,10 +10,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 503, message: 'Database unavailable' })
   }
 
-  const auth = createAuth(env)
-  const session = await auth.api.getSession({
-    headers: getHeaders(event)
-  })
+  const session = await getAuthSession(event, env)
 
   if (!session?.user?.id) {
     throw createError({ statusCode: 401, message: 'Authentication required' })
@@ -70,7 +67,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const reviews = await db.prepare(`
-    SELECT id, author_name AS author, rating, comment AS content, status, source, created_at AS createdAt
+    SELECT id, author_name AS author, rating, content, status, source, created_at AS createdAt
     FROM reviews
     WHERE organization_id = ? AND site_id = ? AND (location_id = ? OR location_id IS NULL)
     ORDER BY created_at DESC

@@ -1,12 +1,12 @@
 <template>
   <div>
-    <AppHero
-      :title="getField('hero.title', 'About Your Restaurant')"
+    <SayaHero
+      :title="getField('hero.title', 'About Saya Kitchen')"
       :subtitle="getField('hero.subtitle', 'Authentic Japanese Robatayaki Experience in Krabi')"
       size="page"
       :establishment-year="googleBusiness.value?.business?.establishmentYear"
     />
-    <RestaurantAbout
+    <SayaAbout
       :title="getField('story-title', 'Finding Inspiration in Every Turn')"
       :image="googleMedia[0]?.googleUrl"
       bg="white"
@@ -38,7 +38,7 @@
           <p>{{ businessDescription }}</p>
         </div>
       </div>
-    </RestaurantAbout>
+    </SayaAbout>
   </div>
 </template>
 
@@ -48,8 +48,10 @@ import { usePageContent } from '~/composables/usePageContent'
 
 const { getField } = usePageContent('about')
 
-const { data: googleBusiness } = await useFetch('/api/google-business/public', {
-  key: 'google-business-public',
+const { siteId } = await useTenantSite()
+
+const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/google-business`, {
+  key: `about-google-business-${siteId}`,
   default: () => ({ business: null, media: [] })
 })
 
@@ -59,12 +61,12 @@ const googleMedia = computed(() => googleBusiness.value?.media || [])
 // Defaults moved to computeds to avoid inline template quote-escaping issues
 const storyIntro = computed(() => getField('story.intro',
   '<p class="text-xl font-medium text-gray-900 border-l-4 border-black pl-6 py-2">' +
-  'Your Restaurant, nestled in the heart of your city, is a culinary haven that specializes in the artful fusion of robatayaki and sushi.' +
+  'Saya Kitchen, nestled in the heart of Krabi, is a culinary haven that specializes in the artful fusion of robatayaki and sushi.' +
   '</p>'
 ))
 
 const journeyBody = computed(() => getField('journey.body',
-  '<p>Nestled amidst the tropical allure of your city, our restaurant has an enchanting culinary tale. ' +
+  '<p>Nestled amidst the tropical allure of Krabi, Saya Kitchen has an enchanting culinary tale. ' +
   'Beyond the sliding glazed door entrance and our giant red lucky cat, you are welcomed into a little piece of Japan.</p>' +
   '<p>The restaurant, a symphony of warm wood and subtle lighting, immerses diners in an ambiance that transports them to the heart of Japan.</p>'
 ))
@@ -72,12 +74,12 @@ const journeyBody = computed(() => getField('journey.body',
 const experienceBody = computed(() => getField('experience.body',
   '<p>Equally enticing is our sushi bar, a stage where culinary craftsmen orchestrate amazing flavors and textures. ' +
   'Committed to the freshest seafood, our sushi chefs weave magic into every dish.</p>' +
-  '<p>Our restaurant stands as a beacon of gastronomic delight, where the legacy of robatayaki and the allure of sushi come together in a culinary tapestry.</p>'
+  '<p>Saya Kitchen brings the legacy of robatayaki and the allure of sushi together in a focused, warm dining experience.</p>'
 ))
 
 useSeoMeta({
-  title: 'About | Restaurant Website',
-  description: 'Learn about our restaurant and our authentic dining experience.',
+  title: 'About | Saya Kitchen',
+  description: 'Learn about Saya Kitchen and our authentic Japanese robatayaki dining experience in Krabi.',
   ogImage: '/og-image.jpg',
   ogUrl: '/about'
 })
