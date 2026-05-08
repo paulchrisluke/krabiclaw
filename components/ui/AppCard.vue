@@ -23,46 +23,37 @@
  * @props border - Optional additional border weight/color
  * @props hoverable - Enables button role and hover effects
  */
-<script setup>
-const props = defineProps({
-  variant: {
-    type: String,
-    default: 'default',
-    validator: (value) => ['default', 'elevated', 'outlined'].includes(value)
-  },
-  border: {
-    type: String,
-    default: 'none',
-    validator: (value) => ['none', 'light', 'medium', 'dark'].includes(value)
-  },
-  hoverable: {
-    type: Boolean,
-    default: false
-  }
-})
+<script setup lang="ts">
+const props = defineProps<{
+  variant: 'default' | 'elevated' | 'outlined'
+  border: 'none' | 'light' | 'medium' | 'dark'
+  hoverable: boolean
+}>()
 
-const emit = defineEmits(['click'])
+const emit = defineEmits<{
+  click: [event: MouseEvent]
+}>()
 
 const variantClasses = {
-  default: 'bg-white',
-  elevated: 'bg-white shadow-md border border-stone-200',
-  outlined: 'bg-white border border-stone-200'
+  default: 'bg-[color:var(--ui-bg)] text-[color:var(--ui-text)]',
+  elevated: 'bg-[color:var(--ui-bg)] text-[color:var(--ui-text)] shadow-md border-[color:var(--ui-border)]',
+  outlined: 'bg-[color:var(--ui-bg)] text-[color:var(--ui-text)] border-[color:var(--ui-border)]'
 }
 
 const borderClasses = {
   none: '',
-  light: 'border border-stone-200',
-  medium: 'border-2 border-stone-300',
-  dark: 'border-2 border-stone-900'
+  light: 'border-[color:var(--ui-border)]',
+  medium: 'border-2 border-[color:var(--ui-border)]',
+  dark: 'border-2 border-[color:var(--ui-border)]'
 }
 
-const handleClick = (event) => {
+const handleClick = (event: MouseEvent) => {
   if (props.hoverable) {
     emit('click', event)
   }
 }
 
-const handleKeydown = (event) => {
+const handleKeydown = (event: KeyboardEvent) => {
   if (!props.hoverable) return
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()

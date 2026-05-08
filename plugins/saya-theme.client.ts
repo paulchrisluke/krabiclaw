@@ -1,4 +1,10 @@
 // Nuxt plugin to handle dark mode for Saya theme
+declare global {
+  interface Window {
+    toggleSayaDark: () => void
+  }
+}
+
 export default defineNuxtPlugin(() => {
   const setDarkClass = (isDark: boolean) => {
     const html = document.documentElement

@@ -16,7 +16,7 @@
           <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
             <div class="md:flex">
               <div class="md:w-1/2">
-                <div class="h-96 bg-linear-to-br from-stone-100 to-stone-200 flex items-center justify-center">
+                <div class="h-96 bg-gradient-to-br from-stone-100 to-stone-200 flex items-center justify-center">
                   <div class="text-center">
                     <div class="w-24 h-24 bg-black rounded-2xl mx-auto mb-4 flex items-center justify-center">
                       <span class="text-white text-3xl font-bold">S</span>
@@ -75,7 +75,7 @@
           <div class="grid md:grid-cols-3 gap-8">
             <!-- Theme 2 -->
             <div class="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
-              <div class="h-48 bg-linear-to-br from-amber-50 to-amber-100 flex items-center justify-center">
+              <div class="h-48 bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center">
                 <div class="text-center">
                   <div class="w-16 h-16 bg-amber-600 rounded-xl mx-auto mb-2 flex items-center justify-center">
                     <span class="text-white text-2xl font-bold">M</span>
@@ -89,7 +89,7 @@
                   Bold design with vibrant colors and dynamic layouts perfect for contemporary restaurants.
                 </p>
                 <div class="flex items-center justify-between">
-                  <span class="text-stone-500 text-sm">Coming Q2 2026</span>
+                  <span class="text-stone-500 text-sm">{{ releaseLabels.modern }}</span>
                   <UButton variant="outline" size="sm" disabled>Notify Me</UButton>
                 </div>
               </div>
@@ -97,7 +97,7 @@
 
             <!-- Theme 3 -->
             <div class="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
-              <div class="h-48 bg-linear-to-br from-emerald-50 to-emerald-100 flex items-center justify-center">
+              <div class="h-48 bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center">
                 <div class="text-center">
                   <div class="w-16 h-16 bg-emerald-600 rounded-xl mx-auto mb-2 flex items-center justify-center">
                     <span class="text-white text-2xl font-bold">R</span>
@@ -111,7 +111,7 @@
                   Warm, traditional design perfect for farm-to-table and family-style restaurants.
                 </p>
                 <div class="flex items-center justify-between">
-                  <span class="text-stone-500 text-sm">Coming Q3 2026</span>
+                  <span class="text-stone-500 text-sm">{{ releaseLabels.rustic }}</span>
                   <UButton variant="outline" size="sm" disabled>Notify Me</UButton>
                 </div>
               </div>
@@ -119,7 +119,7 @@
 
             <!-- Theme 4 -->
             <div class="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
-              <div class="h-48 bg-linear-to-br from-indigo-50 to-indigo-100 flex items-center justify-center">
+              <div class="h-48 bg-gradient-to-br from-indigo-50 to-indigo-100 flex items-center justify-center">
                 <div class="text-center">
                   <div class="w-16 h-16 bg-indigo-600 rounded-xl mx-auto mb-2 flex items-center justify-center">
                     <span class="text-white text-2xl font-bold">F</span>
@@ -133,7 +133,7 @@
                   Contemporary design blending Eastern and Western aesthetics for fusion cuisine.
                 </p>
                 <div class="flex items-center justify-between">
-                  <span class="text-stone-500 text-sm">Coming Q4 2026</span>
+                  <span class="text-stone-500 text-sm">{{ releaseLabels.fusion }}</span>
                   <UButton variant="outline" size="sm" disabled>Notify Me</UButton>
                 </div>
               </div>
@@ -189,6 +189,27 @@
 </template>
 
 <script setup>
+// Reactive release labels based on current date
+const currentYear = new Date().getFullYear()
+const currentQuarter = Math.ceil((new Date().getMonth() + 1) / 3)
+
+const getReleaseLabel = (targetQuarter, targetYear = currentYear) => {
+  const yearDiff = targetYear - currentYear
+  const quarterDiff = targetQuarter - currentQuarter
+  
+  if (yearDiff === 0 && quarterDiff === 0) return 'Coming this quarter'
+  if (yearDiff === 0 && quarterDiff === 1) return `Coming Q${targetQuarter}`
+  if (yearDiff === 0 && quarterDiff > 1) return `Coming Q${targetQuarter}`
+  if (yearDiff === 1) return `Coming Q${targetQuarter} ${targetYear}`
+  return 'Coming soon'
+}
+
+const releaseLabels = {
+  modern: getReleaseLabel(2),
+  rustic: getReleaseLabel(3),
+  fusion: getReleaseLabel(4)
+}
+
 const config = useRuntimeConfig()
 const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
 useSeoMeta({

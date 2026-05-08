@@ -1,5 +1,5 @@
 export type FieldSource = 'manual' | 'google' | 'static' | 'computed'
-export type FieldType = 'text' | 'textarea' | 'richtext' | 'image' | 'menu_items' | 'business_hours' | 'location'
+export type FieldType = 'text' | 'textarea' | 'richtext' | 'image' | 'menu_items' | 'business_hours' | 'location' | 'products'
 
 export interface FieldDefinition {
   label: string
@@ -17,6 +17,8 @@ export interface FieldDefinition {
   requiredEntitlement?: string
   /** Google Business upsell gate for fields that can sync from Google */
   googleLocked?: boolean
+  /** Custom validation function */
+  validate?: (value: string) => string | boolean
 }
 
 export interface ManualInputConfig {
@@ -41,6 +43,28 @@ export interface PageDefinition {
   path: string
   fields: Record<string, FieldDefinition>
   groups?: Array<{ id: string; label: string; icon: string; fields: string[] }>
+}
+
+/** Shared validator for social URLs to reject common placeholder patterns */
+const socialUrlValidator = (value: string) => {
+  if (!value) return true
+  const lowerValue = value.toLowerCase()
+  if (lowerValue.includes('your-restaurant')) {
+    return 'Please replace the placeholder with your actual profile name/ID'
+  }
+  
+  try {
+    const url = new URL(value)
+    // Reject if it's just the domain e.g. "https://facebook.com/"
+    if (url.pathname === '/' || url.pathname === '') {
+      return 'Please enter the full URL to your social media profile'
+    }
+    return true
+  } catch {
+    // If it's not a valid URL yet, we'll let the built-in 'url' validator (if any) handle it, 
+    // but here we just check for placeholder patterns.
+    return true
+  }
 }
 
 export const contentRegistry: Record<string, PageDefinition> = {
@@ -284,20 +308,27 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Facebook URL',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'https://www.facebook.com/your-restaurant'
+        defaultValue: '',
+        placeholder: 'https://www.facebook.com/your-restaurant',
+        validate: socialUrlValidator
       },
       'social.instagram': {
         label: 'Instagram URL',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'https://www.instagram.com/your-restaurant'
+        defaultValue: '',
+        placeholder: 'https://www.instagram.com/your-restaurant',
+        validate: socialUrlValidator
       },
       'social.tiktok': {
         label: 'TikTok URL',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'https://www.tiktok.com/@your-restaurant'
+        defaultValue: '',
+        placeholder: 'https://www.tiktok.com/@your-restaurant',
+        validate: socialUrlValidator
       },
+
       'business.name': { 
         label: 'Business Name', 
         type: 'text', 
@@ -467,7 +498,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
       },
       'business.products': { 
         label: 'Google Products', 
-        type: 'text', 
+        type: 'products', 
         sources: ['manual', 'google'], 
         googlePath: 'products',
         googleLocked: true,

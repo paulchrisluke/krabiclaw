@@ -130,15 +130,12 @@ CREATE TABLE IF NOT EXISTS sites (
   updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_by TEXT,
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
-  FOREIGN KEY (theme_id) REFERENCES themes(id),
-  FOREIGN KEY (primary_location_id) REFERENCES business_locations(id) ON DELETE SET NULL
+  FOREIGN KEY (theme_id) REFERENCES themes(id)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_custom_domain_unique
   ON sites(custom_domain)
   WHERE custom_domain IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_sites_custom_domain ON sites(custom_domain);
 
 CREATE TABLE IF NOT EXISTS site_domains (
   id TEXT PRIMARY KEY,

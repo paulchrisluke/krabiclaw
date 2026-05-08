@@ -100,7 +100,7 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const res = await $fetch('/api/billing/status')
+    const res = await $fetch<{ billing?: { plan?: string } }>('/api/billing/status')
     currentPlan.value = res.billing?.plan || 'free'
   } catch (error) {
     console.error('Failed to fetch plan:', error)
@@ -115,7 +115,7 @@ function isCurrentPlan(plan: string) {
 
 async function selectPlan(plan: string) {
   try {
-    const res = await $fetch('/api/billing/checkout', {
+    const res = await $fetch<{ checkoutUrl?: string }>('/api/billing/checkout', {
       method: 'POST',
       body: { plan }
     })

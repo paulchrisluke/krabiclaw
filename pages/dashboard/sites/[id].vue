@@ -211,8 +211,13 @@ const config = useRuntimeConfig()
 // Extract hostname from config for URLs
 const platformHostname = computed(() => {
   const domain = config.public.freeSiteDomain
-  // Remove protocol if present to get just the hostname
-  return domain.replace(/^https?:\/\//, '')
+  if (!domain) return ''
+  try {
+    const urlStr = domain.startsWith('http') ? domain : `https://${domain}`
+    return new URL(urlStr).hostname
+  } catch (e) {
+    return domain.replace(/^https?:\/\//, '').split('/')[0]
+  }
 })
 
 // State

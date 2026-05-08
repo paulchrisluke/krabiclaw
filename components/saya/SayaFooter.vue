@@ -74,6 +74,7 @@
             class="text-(--ui-text-inverted)"
             :to="facebookUrl"
             target="_blank"
+            rel="noopener noreferrer"
             aria-label="Visit our Facebook"
           />
           <UButton
@@ -96,6 +97,7 @@
             class="text-(--ui-text-inverted)"
             :to="instagramUrl"
             target="_blank"
+            rel="noopener noreferrer"
             aria-label="Visit our Instagram"
           />
           <UButton
@@ -118,6 +120,7 @@
             class="text-(--ui-text-inverted)"
             :to="tiktokUrl"
             target="_blank"
+            rel="noopener noreferrer"
             aria-label="Visit our TikTok"
           />
           <UButton

@@ -13,6 +13,20 @@
       <p class="text-gray-600 dark:text-gray-400">Loading your sites...</p>
     </div>
 
+    <!-- Error state -->
+    <div v-else-if="error" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
+      <div class="max-w-md mx-auto">
+        <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Icon name="i-heroicons-exclamation-triangle" class="w-8 h-8 text-red-500" />
+        </div>
+        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">Failed to load sites</h3>
+        <p class="text-gray-600 dark:text-gray-400 mb-4">{{ error.data?.message || error.message || 'An unexpected error occurred.' }}</p>
+        <UButton @click="refresh" color="neutral" variant="outline">
+          Retry
+        </UButton>
+      </div>
+    </div>
+
     <!-- Sites list -->
     <div v-else-if="sites.length > 0" class="grid gap-4">
       <div v-for="site in sites" :key="site.id" 
@@ -21,7 +35,7 @@
           <div>
             <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ site.name }}</h3>
             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              <span v-if="site.subdomain">{{ site.subdomain }}.{{ platformHostname }}</span>
+              <span v-if="site.subdomain">{{ site.subdomain }}{{ platformHostname ? `.${platformHostname}` : '' }}</span>
               <span v-else-if="site.custom_domain">{{ site.custom_domain }}</span>
               <span v-else>Unconfigured</span>
             </p>
@@ -70,34 +84,33 @@ definePageMeta({
 })
 
 const config = useRuntimeConfig()
-const { data: response, pending, error } = await useFetch('/api/sites')
+const { data: response, pending, error, refresh } = await useFetch('/api/sites')
 const sites = computed(() => response.value?.sites || [])
 
 // Extract hostname for URLs
 const platformHostname = computed(() => {
-  const domain = config.public?.freeSiteDomain || ''
-  return typeof domain === 'string' ? domain.replace(/^https?:\/\//, '') : ''
+  const domain = config.public?.freeSiteDomain
+  if (!domain) return ''
+  try {
+    const urlStr = domain.startsWith('http') ? domain : `https://${domain}`
+    return new URL(urlStr).hostname
+  } catch (e) {
+    return domain.replace(/^https?:\/\//, '').split('/')[0]
+  }
 })
 
 // Get site URL based on subdomain or custom domain
 const getSiteUrl = (site) => {
   const domain = config.public?.freeSiteDomain || ''
   if (site.subdomain && platformHostname.value) {
-    const protocol = domain.startsWith('https://') ? 'https://' : 'http://'
+    // Default to https unless explicitly http
+    const protocol = domain.startsWith('http://') ? 'http://' : 'https://'
     return `${protocol}${site.subdomain}.${platformHostname.value}`
   }
   if (site.custom_domain) {
     return `https://${site.custom_domain}`
   }
   return null
-}
-
-// Get error message
-const getErrorMessage = (error) => {
-  if (error && (error.message || error)) {
-    return error.message || error
-  }
-  return 'Failed to load sites'
 }
 
 // Get status styling

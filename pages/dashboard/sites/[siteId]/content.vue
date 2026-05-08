@@ -209,8 +209,9 @@
 
         <div v-if="activeField" class="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
           <div v-if="activeFieldDef?.type === 'text'" class="space-y-2">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ activeFieldDef.label }}</label>
+            <label :for="`field-${activeField}`" class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ activeFieldDef.label }}</label>
             <UInput
+              :id="`field-${activeField}`"
               v-model="editingValue"
               :placeholder="activeFieldDef?.placeholder || activeFieldDef?.defaultValue || 'Enter value...'"
               size="sm"
@@ -219,8 +220,9 @@
           </div>
 
           <div v-else-if="activeFieldDef?.type === 'textarea'" class="space-y-2">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ activeFieldDef.label }}</label>
+            <label :for="`field-${activeField}`" class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ activeFieldDef.label }}</label>
             <UTextarea
+              :id="`field-${activeField}`"
               v-model="editingValue"
               :placeholder="activeFieldDef?.placeholder || activeFieldDef?.defaultValue || 'Enter value...'"
               :rows="5"
@@ -232,7 +234,7 @@
           </div>
 
           <div v-else-if="activeFieldDef?.type === 'richtext'" class="space-y-2">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ activeFieldDef.label }}</label>
+            <label :for="`field-${activeField}`" class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ activeFieldDef.label }}</label>
             <div class="flex flex-wrap gap-1 rounded-md border border-gray-200 bg-gray-50 p-1 dark:border-gray-800 dark:bg-gray-950">
               <UButton
                 v-for="cmd in richtextCommands"
@@ -245,7 +247,7 @@
               </UButton>
             </div>
             <div
-              id="richtext-editor"
+              :id="`field-${activeField}`"
               contenteditable="true"
               class="prose prose-sm min-h-40 w-full max-w-none rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-gray-800 dark:bg-gray-950 dark:text-white"
               :data-placeholder="activeFieldDef?.placeholder || 'Start typing...'"
@@ -296,7 +298,7 @@
             <p class="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Current value</p>
             <div
               v-if="activeFieldDef?.type === 'richtext'"
-              v-html="DOMPurify.sanitize(currentValues[activeField])"
+              v-html="DOMPurify.sanitize(activeField ? currentValues[activeField] || '' : '')"
               class="prose prose-sm max-w-none text-sm text-gray-700 dark:text-gray-200"
             />
             <p v-else class="text-sm text-gray-700 dark:text-gray-200">{{ currentValues[activeField] }}</p>
@@ -495,15 +497,28 @@ const richtextCommands = [
 const execCmd = (cmd: string) => document.execCommand(cmd, false)
 
 const applyField = async () => {
-  if (!activeField.value) return
+  if (!activeField.value || !activeFieldDef.value) return
   
+  // Validation check
+  if (activeFieldDef.value.validate) {
+    const validationResult = activeFieldDef.value.validate(editingValue.value)
+    if (validationResult !== true) {
+      toast.add({ 
+        title: 'Validation Error',
+        description: typeof validationResult === 'string' ? validationResult : 'Invalid value', 
+        color: 'error' 
+      })
+      return
+    }
+  }
+
   // Handle regular content fields
   currentValues.value = { ...currentValues.value, [activeField.value]: editingValue.value }
   localHasChanges.value = true
   
   // Automatically save and refresh preview for immediate feedback
   await handleSaveDraft()
-  toast.add({ description: `"${activeFieldDef.value?.label}" updated`, color: 'success' })
+  toast.add({ description: `"${activeFieldDef.value.label}" updated`, color: 'success' })
 }
 
 // ─── Content state ────────────────────────────────────────────────────

@@ -78,10 +78,10 @@ const getCurrentLocaleFlag = () => getLocaleFlag(currentLocale.value)
 
 const restaurantName = computed(() => site?.name || 'Saya Kitchen')
 
-const languageItems = computed(() => [
+const languageItems = computed(() =>
   availableLocales.value.map(locale => ({
     label: `${getLocaleFlag(locale.code)} ${locale.name}`,
     onSelect: () => switchLocale(locale.code)
   }))
-])
+)
 </script>

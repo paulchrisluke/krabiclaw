@@ -105,7 +105,7 @@
                   {{ site.name }}
                 </h3>
                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                  {{ site.subdomain }}.{{ platformHostname }}
+                  {{ site.subdomain }}{{ platformHostname ? `.${platformHostname}` : '' }}
                 </p>
               </div>
               <UBadge :color="site.status === 'active' ? 'success' : 'warning'" variant="soft" size="xs">
@@ -171,10 +171,16 @@ const config = useRuntimeConfig()
 
 // Extract hostname from config for URLs
 const platformHostname = computed(() => {
-  const domain = config.public.freeSiteDomain || ''
+  const domain = config.public.freeSiteDomain
   if (!domain) return ''
-  // Remove protocol if present to get just the hostname
-  return domain.replace(/^https?:\/\//, '').replace(/\.+$/, '')
+  try {
+    // URL API is the most robust way to parse hostnames
+    const urlStr = domain.startsWith('http') ? domain : `https://${domain}`
+    return new URL(urlStr).hostname
+  } catch (e) {
+    // Fallback to simple replace if URL parsing fails
+    return domain.replace(/^https?:\/\//, '').split('/')[0].replace(/\.+$/, '')
+  }
 })
 
 const organizationsState = authClient.useListOrganizations()

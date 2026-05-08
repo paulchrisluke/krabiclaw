@@ -9,7 +9,11 @@ export interface SeedContentData {
 
 // Get platform domain from environment
 function getPlatformDomain(): string {
-  return process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN
+  const domain = process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN
+  if (!domain) {
+    throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN environment variable is required for content seeding')
+  }
+  return domain
 }
 
 // Generate unique ID helper

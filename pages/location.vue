@@ -25,20 +25,20 @@
           <div class="space-y-6">
             <div>
               <h3 class="font-semibold text-gray-900 mb-1 uppercase tracking-wider text-xs">Restaurant</h3>
-              <p class="text-gray-700 text-lg">{{ businessName || 'Saya Kitchen' }}</p>
+              <p class="text-gray-700 text-lg">{{ getField('businessName', businessName) || 'Connect Google Business' }}</p>
             </div>
             <div>
               <h3 class="font-semibold text-gray-900 mb-1 uppercase tracking-wider text-xs">Address</h3>
               <p class="text-gray-700 text-lg">
-                {{ businessAddress || 'Ao Nang, Krabi, Thailand' }}
-                <span v-if="!businessAddress" class="text-sm text-gray-400 block">Connect Google Business to sync the verified address.</span>
+                {{ getField('address', businessAddress) || 'Connect Google Business' }}
+                <span v-if="!getField('address', businessAddress)" class="text-sm text-gray-400 block">Connect Google Business to sync the verified address.</span>
               </p>
             </div>
             <div>
               <h3 class="font-semibold text-gray-900 mb-1 uppercase tracking-wider text-xs">Phone</h3>
               <p class="text-gray-700 text-lg">
-                {{ businessPhone || '+66 81 154 3606' }}
-                <span v-if="!businessPhone" class="text-sm text-gray-400 block">Connect Google Business to sync the verified phone number.</span>
+                {{ getField('phoneNumber', businessPhone) || 'Connect Google Business' }}
+                <span v-if="!getField('phoneNumber', businessPhone)" class="text-sm text-gray-400 block">Connect Google Business to sync the verified phone number.</span>
               </p>
             </div>
           </div>
@@ -104,5 +104,10 @@ const defaultHours = [
 
 const parkingInfo = computed(() => getField('parking.info', ''))
 const extraNotes = computed(() => getField('extra.notes', ''))
-useSeoMeta({ title: 'Location & Hours | Saya Kitchen', description: 'Find Saya Kitchen in Krabi and view current opening hours.', ogImage: '/og-image.jpg', ogUrl: '/location' })
+useSeoMeta({ 
+  title: `Location & Hours | ${getField('businessName', businessName) || 'Restaurant'}`, 
+  description: `Find ${getField('businessName', businessName) || 'our restaurant'} in ${getField('city', googleBusiness.value?.business?.storefrontAddress?.locality) || 'your area'} and view current opening hours.`, 
+  ogImage: getField('ogImage', '/og-image.jpg'), 
+  ogUrl: '/location' 
+})
 </script>

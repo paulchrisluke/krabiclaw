@@ -7,6 +7,8 @@ import { cloudflareEnv } from '../utils/api-response'
 // Get platform domain from runtime config
 function getPlatformDomain(): string {
   const domain = process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN
+  // Return empty string if domain is not defined
+  if (!domain) return ''
   // Remove protocol if present
   return domain.replace(/^https?:\/\//, '')
 }

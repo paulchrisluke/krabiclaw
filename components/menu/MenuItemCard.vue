@@ -6,11 +6,14 @@
       <video
         v-if="isVideo"
         :src="item.image_url"
+        :poster="item.poster"
         autoplay
         muted
         loop
         playsinline
         class="w-full h-full object-cover"
+        @error="handleVideoError"
+        controls
       />
 
       <!-- Image -->
@@ -49,11 +52,29 @@
   </NuxtLink>
 </template>
 
-<script setup>
-const props = defineProps({ item: Object })
+<script setup lang="ts">
+interface MenuItem {
+  slug: string
+  name: string
+  image_url?: string
+  poster?: string
+  price?: string
+  available?: boolean
+  description?: string
+}
+
+const props = defineProps<{
+  item: MenuItem
+}>()
 
 const isVideo = computed(() => {
   const url = props.item?.image_url || ''
-  return url.match(/\.(mp4|webm|mov)$/i) || url.includes('video')
+  // Only check for video file extensions, not generic 'video' in URL
+  return /\.(mp4|webm|mov)$/i.test(url)
 })
+
+const handleVideoError = () => {
+  // Handle video loading errors - could emit event or show fallback
+  console.warn('[MenuItemCard] Video failed to load:', props.item?.image_url)
+}
 </script>

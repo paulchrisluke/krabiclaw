@@ -367,6 +367,7 @@ const copyToClipboard = async (text) => {
 const freeDomain = computed(() => {
   const config = useRuntimeConfig()
   const domain = config.public.freeSiteDomain
+  if (!domain) return ''
   // Remove protocol if present to get just the hostname
   return domain.replace(/^https?:\/\//, '')
 })

@@ -44,10 +44,10 @@ export function getStripe(env: BillingEnv): Stripe {
 export async function getOrganizationBillingStatus(
   env: BillingEnv, 
   db: any, 
-  organization_id: string
+  organizationId: string
 ): Promise<BillingStatus> {
   // Get entitlements
-  const entitlements = await getOrganizationEntitlements(env, db, organization_id)
+  const entitlements = await getOrganizationEntitlements(env, db, organizationId)
   
   // Get billing metadata from organization_billing table
   const billing = await db.prepare(`
@@ -55,7 +55,7 @@ export async function getOrganizationBillingStatus(
            current_period_end, cancel_at_period_end
     FROM organization_billing 
     WHERE organization_id = ?
-  `).bind(organization_id).first()
+  `).bind(organizationId).first()
   
   return {
     plan: billing?.plan || entitlements.plan || 'free',
@@ -72,12 +72,12 @@ export async function getOrganizationBillingStatus(
 export async function getOrganizationEntitlements(
   env: BillingEnv, 
   db: any, 
-  organization_id: string
+  organizationId: string
 ): Promise<Record<string, any>> {
   const entitlements = await db.prepare(`
     SELECT key, value FROM organization_entitlements 
     WHERE organization_id = ?
-  `).bind(organization_id).all()
+  `).bind(organizationId).all()
   
   const result: Record<string, any> = {}
   for (const entitlement of entitlements.results || []) {
@@ -116,7 +116,7 @@ export async function hasEntitlement(
 export async function setOrganizationEntitlementsFromPlan(
   env: BillingEnv, 
   db: any, 
-  organization_id: string, 
+  organizationId: string, 
   plan: string
 ): Promise<void> {
   const planEntitlements = getPlanEntitlements(plan)
@@ -127,15 +127,15 @@ export async function setOrganizationEntitlementsFromPlan(
       INSERT OR REPLACE INTO organization_entitlements 
       (id, organization_id, key, value, source, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        `ent-${organization_id}-${key}`,
-        organization_id,
-        key,
-        String(value),
-        'system',
-        now,
-        now
-      ).run()
+    `).bind(
+      `ent-${organizationId}-${key}`,
+      organizationId,
+      key,
+      String(value),
+      'system',
+      now,
+      now
+    ).run()
   }
 }
 

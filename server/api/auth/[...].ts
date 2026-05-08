@@ -1,8 +1,10 @@
 
 import { createAuth } from '~/server/utils/auth'
+import { cloudflareEnv } from '~/server/utils/api-response'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 export default defineEventHandler(async (event) => {
-  const env = event.context.cloudflare?.env
+  const env = cloudflareEnv(event) as CloudflareEnv
   if (!env?.REVIEWS_DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
 
   const auth = createAuth(env)

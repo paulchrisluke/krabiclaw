@@ -1,11 +1,6 @@
 <template>
   <div class="relative w-full bg-(--ui-bg-inverted) text-(--ui-text-inverted) overflow-hidden" :style="heroStyle">
-    <!-- Background image slot -->
-    <div v-if="image" class="absolute inset-0">
-      <img :src="image" :alt="title" class="w-full h-full object-cover opacity-50" />
-    </div>
-
-    <!-- Background video slot -->
+    <!-- Background video slot (takes precedence over image) -->
     <div v-if="video" class="absolute inset-0">
       <video
         :src="video"
@@ -17,8 +12,13 @@
       />
     </div>
 
+    <!-- Background image slot (only rendered if no video) -->
+    <div v-else-if="image" class="absolute inset-0">
+      <img :src="image" :alt="title" class="w-full h-full object-cover opacity-50" />
+    </div>
+
     <!-- Content -->
-    <div class="relative z-10 max-w-6xl mx-auto px-4 flex flex-col items-center justify-center text-center h-full" :style="heroStyle">
+    <div class="relative z-10 max-w-6xl mx-auto px-4 flex flex-col items-center justify-center text-center h-full">
       <!-- Establishment Year -->
       <div v-if="establishmentYear" class="inline-flex items-center gap-2 mb-6">
         <span class="w-8 h-px bg-(--ui-border) opacity-30"></span>
@@ -74,6 +74,11 @@ const props = defineProps({
 })
 
 defineEmits(['update:title', 'update:subtitle'])
+
+// Warn if both image and video are provided (video takes precedence)
+if (props.image && props.video) {
+  console.warn('[SayaHero] Both image and video props provided. Video will take precedence over image.')
+}
 
 const heights = {
   home: '100vh',

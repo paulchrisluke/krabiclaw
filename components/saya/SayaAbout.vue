@@ -5,7 +5,7 @@
         <img
           v-if="image"
           :src="image"
-          :alt="title || 'Restaurant'"
+          :alt="title || 'About our restaurant'"
           class="w-full h-full object-cover hover:scale-105 transition-transform duration-1000"
         >
         <div v-else class="w-full h-full bg-(--ui-bg-muted) flex items-center justify-center border-2 border-dashed border-(--ui-border)">

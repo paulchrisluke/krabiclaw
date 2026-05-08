@@ -266,7 +266,7 @@
             </div>
           </UCard>
         </div>
-        <div class="mt-8 text-center">
+        <div v-if="isAuthenticated" class="mt-8 text-center">
           <NuxtLink to="/dashboard/connection" class="font-semibold text-gray-900 underline decoration-gray-300 underline-offset-4 hover:decoration-gray-900">
             Connect Google Business →
           </NuxtLink>
@@ -408,11 +408,13 @@ import { getTodayGoogleHours, getSpecialHoursNotice } from '~/utils/formatters'
 import { usePageContent } from '~/composables/usePageContent'
 import { useTenantSite } from '~/composables/useTenantSite'
 import { usePublicMenu } from '~/composables/usePublicMenu'
+import { useAuth } from '~/composables/useAuth'
 
 definePageMeta({ layout: false })
 
 const { isPlatform, siteId } = useTenantSite()
 const { getField, getFieldStr } = usePageContent('home')
+const { isAuthenticated } = useAuth()
 
 // Validate tenant context ONLY for tenant sites
 if (!isPlatform && !siteId) {
@@ -559,16 +561,4 @@ const navigateToLocation = (location) => {
   navigateTo(`/locations/${location.slug}`)
 }
 
-if (!isPlatform && siteId) {
-  const config = useRuntimeConfig()
-  // Extract hostname from config for URLs as a plain string
-  const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
-  useSeoMeta({
-    title: 'KrabiClaw | Beautiful Restaurant Websites. Powered by AI.',
-    description: 'Professional restaurant websites with AI-powered content and Google Business integration.',
-    ogImage: '/og-image.jpg',
-    ogUrl: `https://${platformHostname}`,
-    ogType: 'website'
-  })
-}
 </script>

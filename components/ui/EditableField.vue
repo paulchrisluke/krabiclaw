@@ -39,15 +39,13 @@ const fieldDef = computed(() => getFieldDef(props.page, props.field))
 
 const source = computed(() => {
   if (props.isGoogleManaged) return 'google'
-  return fieldDef.value?.source ?? 'manual'
+  return 'manual'
 })
 
 const fieldType = computed<FieldType>(() => fieldDef.value?.type ?? 'text')
 
 const isEditable = computed(() => editMode.value && source.value === 'manual')
 const isGoogle = computed(() => editMode.value && source.value === 'google')
-const isComputed = computed(() => editMode.value && source.value === 'computed')
-const isStatic = computed(() => source.value === 'static')
 
 // The namespaced change key sent to the composable
 const changeKey = computed(() => `${props.page}.${props.field}`)
@@ -86,16 +84,6 @@ const placeholder = computed(
     </button>
   </div>
 
-  <!-- ─── EDIT MODE: Computed overlay ────────────────────────────────── -->
-  <div v-else-if="isComputed" class="relative inline-block w-full group">
-    <component :is="tag" v-html="modelValue" />
-    <div class="absolute inset-0 z-20 flex items-center justify-center bg-stone-500/10 border-2 border-stone-500/40 border-dashed rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-      <span class="inline-flex items-center gap-1.5 bg-stone-600 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-lg">
-        Generated automatically
-      </span>
-    </div>
-  </div>
-
   <!-- ─── EDIT MODE: Inline editable (richtext / text) ─────────────── -->
   <component
     :is="tag"
@@ -115,15 +103,7 @@ const placeholder = computed(
   <!-- ─── NORMAL VIEW (non-edit mode) ──────────────────────────────── -->
   <component
     :is="tag"
-    v-else-if="modelValue && !isStatic"
-    :class="props.class"
-    v-html="modelValue"
-  />
-
-  <!-- ─── STATIC MODE: Always render normally, no editor outline ─────── -->
-  <component
-    :is="tag"
-    v-else-if="modelValue && isStatic"
+    v-else-if="modelValue"
     :class="props.class"
     v-html="modelValue"
   />

@@ -67,8 +67,8 @@
       <template v-if="reviews.length === 0">
         <UCard v-for="i in (limit || 3)" :key="`placeholder-${i}`" class="flex flex-col bg-(--ui-bg) p-8 shadow-sm border border-(--ui-border)">
           <div class="flex items-center gap-1 text-yellow-400 mb-4">
-            <span v-for="i in 5" :key="i" class="text-sm">☆</span>
-          </div>
+          <span v-for="starIndex in 5" :key="starIndex" class="text-sm">☆</span>
+        </div>
           <div class="flex-grow space-y-3">
             <USkeleton class="h-3" />
             <USkeleton class="h-3 w-4/5" />
@@ -147,7 +147,12 @@ const reviewText = review => {
   }
   return text
 }
-const reviewRating = review => starRatingMap[review.starRating] ?? Number(review.starRating ?? 0)
+const reviewRating = review => {
+  const mapped = starRatingMap[review.starRating]
+  if (mapped !== undefined) return mapped
+  const numeric = Number(review.starRating ?? 0)
+  return isNaN(numeric) ? 0 : numeric
+}
 
 const displayedReviews = computed(() => {
   const filtered = props.reviews.filter(review => reviewText(review))

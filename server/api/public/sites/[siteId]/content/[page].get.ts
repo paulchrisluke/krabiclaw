@@ -7,10 +7,37 @@ export default defineEventHandler(async (event) => {
   const page = getRouterParam(event, 'page')
   const locationSlug = getQuery(event).location as string || undefined
   
-  // Explicit preview authorization check
+  // Initialize env first
+  const env = cloudflareEnv(event)
+  
+  // Explicit preview authorization check with proper validation
   const preview = getQuery(event).preview === 'true'
   const previewToken = getQuery(event).token as string || undefined
-  const isPreviewAuthorized = preview && previewToken === env.PREVIEW_SECRET
+  
+  // Ensure PREVIEW_SECRET exists and use constant-time comparison
+  let isPreviewAuthorized = false
+  if (preview && previewToken) {
+    const previewSecret = env.PREVIEW_SECRET
+    if (!previewSecret) {
+      return jsonResponse({ 
+        error: 'Preview not configured' 
+      }, { status: 500 })
+    }
+    
+    // Use constant-time comparison to prevent timing attacks
+    try {
+      const crypto = require('crypto')
+      const secretBuffer = Buffer.from(previewSecret, 'utf8')
+      const tokenBuffer = Buffer.from(previewToken, 'utf8')
+      
+      if (secretBuffer.length === tokenBuffer.length) {
+        isPreviewAuthorized = crypto.timingSafeEqual(secretBuffer, tokenBuffer)
+      }
+    } catch (error) {
+      // If crypto comparison fails, deny access
+      isPreviewAuthorized = false
+    }
+  }
   
   if (preview && !isPreviewAuthorized) {
     return jsonResponse({ 
@@ -24,7 +51,6 @@ export default defineEventHandler(async (event) => {
     }, { status: 400 })
   }
   
-  const env = cloudflareEnv(event)
   const db = env.REVIEWS_DB
   
   if (!db) {

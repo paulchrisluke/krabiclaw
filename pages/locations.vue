@@ -82,10 +82,7 @@
               </p>
               <p v-else class="flex gap-3">
                 <UIcon name="i-heroicons-map-pin" class="mt-0.5 size-5 shrink-0" />
-                <span class="space-y-2">
-                  <span class="block h-3 w-56 rounded bg-(--ui-bg-elevated)" />
-                  <span class="block h-3 w-36 rounded bg-(--ui-bg-elevated)" />
-                </span>
+                <span>Not available</span>
               </p>
               <a v-if="location.phone" :href="`tel:${location.phone}`" class="flex gap-3 font-medium text-(--ui-text)">
                 <UIcon name="i-heroicons-phone" class="mt-0.5 size-5 shrink-0" />
@@ -93,7 +90,7 @@
               </a>
               <p v-else class="flex gap-3">
                 <UIcon name="i-heroicons-phone" class="mt-0.5 size-5 shrink-0" />
-                <span class="block h-3 w-32 rounded bg-(--ui-bg-elevated)" />
+                <span>Not available</span>
               </p>
             </div>
 
@@ -184,7 +181,7 @@
 definePageMeta({ layout: 'tenant' })
 import { usePageContent } from '~/composables/usePageContent'
 
-const { siteId } = await useTenantSite()
+const { siteId, site } = await useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 const { getField } = usePageContent('locations')
 const { isAuthenticated } = useAuth()
@@ -226,7 +223,7 @@ const placeholderLocations = [
 ]
 
 useSeoMeta({
-  title: 'Locations | Saya Kitchen',
+  title: `Locations | ${site?.title || 'Restaurant'}`,
   description: 'Visit our restaurant locations.',
   ogUrl: '/locations'
 })

@@ -34,15 +34,15 @@ export default defineEventHandler(async (event) => {
   const locationName = String(payload.locationName ?? payload.location_name ?? body.message?.attributes?.locationName ?? '')
   const reviewName = String(payload.reviewName ?? payload.review_name ?? body.message?.attributes?.reviewName ?? '')
   const eventId = body.message?.messageId ?? crypto.randomUUID()
+  const locationId = locationName ? locationName.split('/').pop() : locationName
 
   await env.REVIEWS_DB.prepare(
     `INSERT OR IGNORE INTO google_business_events (id, google_location_id, event_type, payload, status)
      VALUES (?, ?, ?, ?, 'received')`
-  ).bind(eventId, locationName, eventType, JSON.stringify({ body, decoded, reviewName })).run()
+  ).bind(eventId, locationId, eventType, JSON.stringify({ body, decoded, reviewName })).run()
 
   try {
     // Get location from event data for sync
-    const locationId = locationName ? locationName.split('/').pop() : undefined
     await getGoogleBusinessData(env, locationId)
     await env.REVIEWS_DB.prepare(
       `UPDATE google_business_events SET status = 'synced' WHERE id = ?`

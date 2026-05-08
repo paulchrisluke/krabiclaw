@@ -95,6 +95,9 @@ KrabiClaw is a **Shopify for restaurants** — a multi-tenant SaaS where restaur
 3. Apply remotely: `yarn schema:remote`
 4. Keep schema changes consolidated in `schema.sql`; do not add numbered migration files
 5. Greenfield project — no data migration concerns yet; drop and recreate freely when a rebuild is cleaner
+6. Do not add inline migration blocks, compatibility columns, duplicate indexes, or legacy aliases to `schema.sql`
+7. Better Auth tables (`user`, `session`, `account`, `verification`, `organization`, `member`, `invitation`) must use Better Auth's camelCase column names exactly; app-owned tables use the existing snake_case convention
+8. Any schema change must be checked against current server queries before finishing; update the code or the schema so names match exactly
 
 ### Dev Workflow
 - `yarn dev` — standard Nuxt dev server (port 3000), uses `.env`, hot reload

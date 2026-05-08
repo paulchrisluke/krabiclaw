@@ -10,9 +10,9 @@
 
     <div :class="['grid gap-8', layoutClass]">
       <article
-        v-for="post in displayedPosts"
-        :id="getPostSlug(post.name)"
-        :key="getPostSlug(post.name)"
+        v-for="(post, index) in displayedPosts"
+        :id="getPostSlug(post.name) || `post-${index}`"
+        :key="getPostSlug(post.name) || `post-${index}`"
         class="flex flex-col bg-(--ui-bg) border border-(--ui-border) rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group"
       >
         <div class="aspect-[4/5] overflow-hidden bg-(--ui-bg-muted) relative">

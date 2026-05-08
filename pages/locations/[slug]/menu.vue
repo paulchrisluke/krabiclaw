@@ -138,11 +138,30 @@ const menuSections = computed(() => {
 
 const activeSection = ref(menuSections.value[0]?.id ?? '')
 
+// Safe domain computation for ogUrl
+const canonicalDomain = computed(() => {
+  if (tenant.site?.domain) {
+    return tenant.site.domain
+  }
+  
+  if (tenant.site?.subdomain) {
+    const freeSiteDomain = useRuntimeConfig().public.freeSiteDomain
+    if (freeSiteDomain && typeof freeSiteDomain === 'string') {
+      const baseDomain = freeSiteDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
+      if (baseDomain) {
+        return `${tenant.site.subdomain}.${baseDomain}`
+      }
+    }
+  }
+  
+  return 'krabiclaw.com'
+})
+
 // SEO
 useSeoMeta({
   title: `${location?.title || 'Menu'} | ${tenant.site?.title || 'Restaurant'}`,
   description: `View the menu for ${location?.title || 'this location'} at ${tenant.site?.title || 'our restaurant'}.`,
   ogImage: '/og-image.jpg',
-  ogUrl: `https://${tenant.site?.domain || (tenant.site?.subdomain ? `${tenant.site.subdomain}.${useRuntimeConfig().public.freeSiteDomain?.replace(/^https?:\/\//, '').replace(/\/$/, '')}` : 'krabiclaw.com')}/locations/${route.params.slug}/menu`
+  ogUrl: `https://${canonicalDomain.value}/locations/${route.params.slug}/menu`
 })
 </script>

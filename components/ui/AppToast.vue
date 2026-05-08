@@ -14,15 +14,15 @@
           :key="toast.id"
           class="pointer-events-auto min-w-70"
           :class="[
-            toast.color === 'success' ? 'bg-black text-white border-white/10' : 
-            toast.color === 'error' ? 'bg-red-600 text-white border-red-500' : 
+            toast.type === 'success' ? 'bg-black text-white border-white/10' : 
+            toast.type === 'error' ? 'bg-red-600 text-white border-red-500' : 
             'bg-stone-800 text-white border-white/5'
           ]"
         >
           <div class="flex items-center justify-between gap-4">
-            <span>{{ toast.description }}</span>
+            <span>{{ toast.message }}</span>
             <UButton 
-              @click="remove(toast.id)"
+              @click="removeToast(toast.id)"
               variant="ghost"
               color="neutral"
               size="xs"
@@ -42,5 +42,5 @@
 import { useToast } from '@/composables/useToast'
 const toast = useToast()
 const toasts = toast.toasts
-const remove = toast.remove
+const removeToast = toast.removeToast
 </script>

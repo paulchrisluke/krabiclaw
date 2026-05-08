@@ -193,6 +193,8 @@ watch(organizations, async (newOrgs) => {
     } catch (error) {
       console.error('Failed to load sites:', error)
     }
+  } else {
+    sites.value = []
   }
 }, { immediate: true })
 
@@ -200,7 +202,7 @@ const firstSiteId = computed(() => sites.value?.[0]?.id)
 
 const { data: publicData, refresh: refreshPublic } = await useFetch(
   computed(() => firstSiteId.value ? `/api/public/sites/${firstSiteId.value}/google-business` : null),
-  { key: computed(() => `connection-google-business-${firstSiteId.value}`) }
+  { key: computed(() => firstSiteId.value ? `connection-google-business-${firstSiteId.value}` : undefined) }
 )
 const { data: configData, refresh: refreshConfig } = await useFetch('/api/dashboard/config', { key: 'dashboard-config' })
 

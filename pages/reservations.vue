@@ -114,6 +114,7 @@
 <script setup>
 definePageMeta({ layout: 'tenant' })
 import { usePageContent } from '~/composables/usePageContent'
+import DOMPurify from 'dompurify'
 
 const { getField } = usePageContent('reservations')
 
@@ -129,19 +130,22 @@ const guestOptions = [
   { value: '8+', label: '8+ Guests' },
 ]
 
+// Sanitized policies body to prevent XSS
+const policiesBody = computed(() => {
+  const rawHtml = getField('policies.body',
+    '<ul class="space-y-2 text-gray-700">' +
+    '<li>• Reservations are held for 15 minutes</li>' +
+    '<li>• Cancellations required 2 hours in advance</li>' +
+    '<li>• Large parties (6+ guests) may require deposit</li>' +
+    '<li>• Special dietary requests accommodated with advance notice</li>' +
+    '</ul>'
+  )
+  return DOMPurify.sanitize(rawHtml)
+})
+
 // Defaults in computed to avoid parse errors from embedded HTML in template expressions
 const contactPhone = computed(() => getField('contact.phone', '+66 81 154 3606'))
 const contactEmail = computed(() => getField('contact.email', 'info@kikuzuki-thailand.com'))
-const policiesBody = computed(() => getField('policies.body',
-  '<ul class="space-y-2 text-gray-700">' +
-  '<li>• Reservations are held for 15 minutes</li>' +
-  '<li>• Cancellations required 2 hours in advance</li>' +
-  '<li>• Large parties (6+ guests) may require deposit</li>' +
-  '<li>• Special dietary requests accommodated with advance notice</li>' +
-  '</ul>'
-))
-
-// Reservation form data
 const reservationForm = ref({
   name: '',
   email: '',

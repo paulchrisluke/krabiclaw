@@ -68,7 +68,7 @@
       </template>
     </div>
 
-    <div v-if="showViewMore && limit && qa.length > 0" class="mt-12 text-center">
+    <div v-if="showViewMore && limit && qa.length > limit" class="mt-12 text-center">
       <UButton to="/qa" color="neutral" variant="outline" size="xl">
         View All Q&A
       </UButton>

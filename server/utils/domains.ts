@@ -6,7 +6,11 @@ export interface DomainEnv {
 
 // Get platform domain from environment
 function getPlatformDomain(): string {
-  return process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN
+  const domain = process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN
+  if (!domain) {
+    throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN environment variable is required')
+  }
+  return domain
 }
 
 export interface DomainRecord {
@@ -40,7 +44,7 @@ function getPlatformDomains(): string[] {
   return [
     platformDomain,
     'krabiclaw.com'
-  ]
+  ].filter(Boolean) // Remove any falsy values
 }
 
 // Normalize and validate domain
@@ -131,6 +135,11 @@ export function generateVerificationToken(): string {
 // Get DNS TXT record name for verification
 export function getVerificationRecordName(domain: string): string {
   return `_krabiclaw.${normalizeDomain(domain)}`
+}
+
+// Get legacy DNS TXT record name for backward compatibility
+export function getLegacyVerificationRecordName(domain: string): string {
+  return `_thaiclawai.${normalizeDomain(domain)}`
 }
 
 // Check if user has custom domains entitlement
@@ -291,6 +300,9 @@ export async function createSystemSubdomain(
   subdomain: string
 ): Promise<DomainRecord> {
   const platformDomain = getPlatformDomain()
+  if (!platformDomain) {
+    throw new Error('Platform domain is required for subdomain creation')
+  }
   const domain = `${subdomain}.${platformDomain}`
   const now = new Date().toISOString()
   const domainId = `domain-${siteId}-subdomain`

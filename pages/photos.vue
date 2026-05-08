@@ -68,15 +68,15 @@ const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/goo
 const googleMedia = computed(() => googleBusiness.value?.media || [])
 
 const sayaGalleryPlaceholders = [
-  { src: 'https://images.unsplash.com/photo-1553621042-f6e147245754?auto=format&fit=crop&w=900&q=80', alt: 'Saya sushi platter' },
-  { src: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=900&q=80', alt: 'Robatayaki grill at Saya' },
-  { src: 'https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=900&q=80', alt: 'Warm restaurant dining room' },
-  { src: 'https://images.unsplash.com/photo-1562436260-8c9216eeb703?auto=format&fit=crop&w=900&q=80', alt: 'Japanese izakaya dishes' },
-  { src: 'https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?auto=format&fit=crop&w=900&q=80', alt: 'Fresh sushi rolls' },
-  { src: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=80', alt: 'Restaurant tables ready for dinner' },
-  { src: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80', alt: 'Shared plates at Saya Kitchen' },
-  { src: 'https://images.unsplash.com/photo-1514517220033-cc8c0a7fb7f9?auto=format&fit=crop&w=900&q=80', alt: 'Chef preparing dinner' },
-  { src: 'https://images.unsplash.com/photo-1521017432531-fbd92d768814?auto=format&fit=crop&w=900&q=80', alt: 'Evening restaurant atmosphere' }
+  { src: '/images/gallery/sushi-platter.jpg', alt: 'Sushi platter', attribution: 'Photo by Unsplash' },
+  { src: '/images/gallery/robatayaki-grill.jpg', alt: 'Grill dishes', attribution: 'Photo by Unsplash' },
+  { src: '/images/gallery/dining-room.jpg', alt: 'Restaurant dining room', attribution: 'Photo by Unsplash' },
+  { src: '/images/gallery/izakaya-dishes.jpg', alt: 'Japanese dishes', attribution: 'Photo by Unsplash' },
+  { src: '/images/gallery/fresh-sushi.jpg', alt: 'Fresh sushi rolls', attribution: 'Photo by Unsplash' },
+  { src: '/images/gallery/restaurant-tables.jpg', alt: 'Restaurant seating', attribution: 'Photo by Unsplash' },
+  { src: '/images/gallery/shared-plates.jpg', alt: 'Shared plates', attribution: 'Photo by Unsplash' },
+  { src: '/images/gallery/chef-preparing.jpg', alt: 'Chef at work', attribution: 'Photo by Unsplash' },
+  { src: '/images/gallery/evening-atmosphere.jpg', alt: 'Evening ambiance', attribution: 'Photo by Unsplash' }
 ]
 
 const formatDate = (dateString) => {
@@ -88,18 +88,20 @@ const formatDate = (dateString) => {
   })
 }
 
+const { site } = await useTenantSite()
+
 // SEO Meta
 useSeoMeta({
-  title: 'Photos | Saya Kitchen',
-  description: 'Browse Saya Kitchen photos, from robatayaki grill dishes to our warm Krabi dining room.',
-  ogTitle: 'Photos | Saya Kitchen',
-  ogDescription: 'Photo gallery for Saya Kitchen in Krabi.',
+  title: `Photos | ${site?.title || 'Restaurant'}`,
+  description: `Browse photos from ${site?.title || 'our restaurant'}, featuring our dishes and dining atmosphere.`,
+  ogTitle: `Photos | ${site?.title || 'Restaurant'}`,
+  ogDescription: `Photo gallery for ${site?.title || 'our restaurant'}.`,
   ogImage: '/og-image.jpg',
   ogUrl: '/photos',
   ogType: 'website',
   twitterCard: 'summary_large_image',
-  twitterTitle: 'Photos - Saya Kitchen',
-  twitterDescription: 'Browse photos of Saya Kitchen in Krabi.',
+  twitterTitle: `Photos - ${site?.title || 'Restaurant'}`,
+  twitterDescription: `Browse photos of ${site?.title || 'our restaurant'}.`,
   twitterImage: '/og-image.jpg'
 })
 

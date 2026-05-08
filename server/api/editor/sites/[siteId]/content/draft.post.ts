@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../../../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { upsertDraftContent } from '../../../../../utils/content-management'
+import { getFieldDef } from '~/config/content-registry'
 
 interface DraftRequest {
   page: string
@@ -74,6 +75,7 @@ export default defineEventHandler(async (event) => {
         if (field === 'hero.subtitle') heroChange.hero_subtitle = value || undefined
         if (field === 'hero.video')    heroChange.hero_video_url = value || undefined
       } else {
+        const fieldDef = getFieldDef(page, field)
         await upsertDraftContent(db, {
           id: `${draftIdPrefix}::${field}`,
           organization_id: site.organization_id,
@@ -82,7 +84,7 @@ export default defineEventHandler(async (event) => {
           page,
           field,
           value,
-          type: 'text',
+          type: fieldDef?.type || 'text',
           source: 'manual',
           content: value,
           hero_title: undefined,

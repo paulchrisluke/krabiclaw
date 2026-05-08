@@ -175,12 +175,23 @@
 
 <script setup>
 const config = useRuntimeConfig()
-const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
+const platformHostname = computed(() => {
+  const freeSiteDomain = config.public.freeSiteDomain
+  if (!freeSiteDomain) return 'krabiclaw.com'
+  
+  try {
+    const url = new URL(freeSiteDomain.startsWith('http') ? freeSiteDomain : `https://${freeSiteDomain}`)
+    return url.hostname
+  } catch {
+    // Fallback to regex if URL parsing fails
+    return freeSiteDomain.replace(/^https?:\/\//, '').split('/')[0] || 'krabiclaw.com'
+  }
+})
 useSeoMeta({
   title: 'Pricing | KrabiClaw',
   description: 'Simple, transparent pricing for restaurant websites. Choose the perfect plan for your needs.',
   ogImage: '/og-image.jpg',
-  ogUrl: `https://${platformHostname}/pricing`,
+  ogUrl: computed(() => `https://${platformHostname.value}/pricing`),
   ogType: 'website'
 })
 </script>

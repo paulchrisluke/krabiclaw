@@ -98,8 +98,14 @@ const config = useRuntimeConfig()
 
 // Extract hostname from config for URLs
 const platformHostname = computed(() => {
-  const domain = config.public.freeSiteDomain || ''
-  return domain.replace(/^https?:\/\//, '')
+  const domain = config.public.freeSiteDomain
+  if (!domain) return ''
+  try {
+    const urlStr = domain.startsWith('http') ? domain : `https://${domain}`
+    return new URL(urlStr).hostname
+  } catch (e) {
+    return domain.replace(/^https?:\/\//, '').split('/')[0]
+  }
 })
 
 // Form state
@@ -109,7 +115,7 @@ const form = ref({
 })
 
 // Auto-generate subdomain from restaurant name
-const generateSubdomain = (name) => {
+const generateSubdomain = (name: string) => {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, '')
@@ -140,7 +146,7 @@ const subdomainAvailable = ref(true)
 const subdomainError = ref('')
 
 // Debounced check for subdomain availability
-let subdomainCheckTimeout
+let subdomainCheckTimeout: ReturnType<typeof setTimeout> | undefined
 let subdomainAbortController: AbortController | null = null
 
 watch(() => form.value.subdomain, (newSubdomain) => {
@@ -160,7 +166,7 @@ watch(() => form.value.subdomain, (newSubdomain) => {
     const requested = newSubdomain
     
     try {
-      const { available } = await $fetch(`/api/onboarding/check-subdomain?subdomain=${encodeURIComponent(newSubdomain)}`, {
+      const { available } = await $fetch<{ available: boolean }>(`/api/onboarding/check-subdomain?subdomain=${encodeURIComponent(newSubdomain)}`, {
         signal: subdomainAbortController.signal
       })
       
@@ -204,25 +210,19 @@ async function handleSubmit() {
   loading.value = true
 
   try {
-    const response = await $fetch('/api/onboarding/create-site', {
+    const response = await $fetch<{ siteId: string }>('/api/onboarding/create-site', {
       method: 'POST',
       body: {
         restaurantName: form.value.restaurantName.trim(),
         subdomain: form.value.subdomain.toLowerCase().trim()
       }
     })
-    // If API returns subdomain taken error
-    if (response?.error === 'subdomain_taken') {
-      subdomainAvailable.value = false
-      subdomainError.value = 'Subdomain is already taken.'
-      loading.value = false
-      return
-    }
+    
     // Redirect to dashboard or site editor
     await router.push(`/dashboard/sites/${response.siteId}`)
   } catch (error: any) {
     loading.value = false
-    const isTaken = error.response?.status === 409 || error.data?.message?.includes('taken')
+    const isTaken = error.response?.status === 409 || error.data?.code === 'subdomain_taken' || error.data?.message?.includes('taken')
     if (isTaken) {
       subdomainAvailable.value = false
       subdomainError.value = 'Subdomain is already taken.'

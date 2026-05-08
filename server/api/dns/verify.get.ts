@@ -29,7 +29,8 @@ export default defineEventHandler(async (event) => {
         type: 'TXT',
         name: `_krabiclaw.${domain}`,
         value: 'Please use the verification token from your domain settings',
-        note: 'DNS records may take time to propagate. Check back in a few minutes after adding the record.'
+        note: 'DNS records may take time to propagate. Check back in a few minutes after adding the record. Note: We also support the legacy _thaiclawai prefix during transition.',
+        legacyName: `_thaiclawai.${domain}`
       }
     })
     

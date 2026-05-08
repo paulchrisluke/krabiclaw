@@ -26,8 +26,9 @@ export const usePageContent = (pageName?: string) => {
   const isPreview = computed(() => route.query.preview === 'true')
 
   const { data, refresh } = useFetch(() => {
-    if (isPlatform) return null
-    if (!siteId) return null
+    if (isPlatform || !siteId) {
+      throw new Error('Site context is required to load page content')
+    }
     const url = `/api/public/sites/${siteId}/content/${page.value}`
     if (route.query.preview === 'true') {
       return `${url}?preview=true`

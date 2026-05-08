@@ -13,7 +13,7 @@
       padding="default"
       :show-title="false"
     />
-    <AppSection v-if="googleReviews.length === 0" bg="alt" padding="sm">
+    <AppSection v-if="googleReviews.length === 0 && isAuthenticated" bg="alt" padding="sm">
       <div class="text-center">
         <NuxtLink to="/dashboard/connection" class="font-semibold text-gray-900 underline decoration-gray-300 underline-offset-4 hover:decoration-gray-900">
           Connect Google Business →
@@ -24,8 +24,16 @@
 </template>
 
 <script setup>
+import { useAuth } from '~/composables/useAuth'
+
 definePageMeta({ layout: 'tenant' })
 const { siteId } = await useTenantSite()
+const { isAuthenticated } = useAuth()
+
+// Validate siteId before useFetch
+if (!siteId) {
+  throw new Error('Missing tenant siteId')
+}
 
 const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/google-business`, {
   key: `reviews-google-business-${siteId}`,
@@ -80,17 +88,18 @@ const formatDate = (dateString) => {
 }
 
 // SEO Meta
+const { site } = await useTenantSite()
 useSeoMeta({
-  title: 'Reviews | Saya Kitchen',
-  description: 'Read guest reviews and testimonials for Saya Kitchen in Krabi.',
-  ogTitle: 'Reviews | Saya Kitchen',
-  ogDescription: 'Guest reviews and testimonials for Saya Kitchen in Krabi.',
+  title: `Reviews | ${site?.title || 'Restaurant'}`,
+  description: `Read guest reviews and testimonials for ${site?.title || 'our restaurant'}.`,
+  ogTitle: `Reviews | ${site?.title || 'Restaurant'}`,
+  ogDescription: `Guest reviews and testimonials for ${site?.title || 'our restaurant'}.`,
   ogImage: '/og-image.jpg',
   ogUrl: '/reviews',
   ogType: 'website',
   twitterCard: 'summary_large_image',
-  twitterTitle: 'Reviews - Saya Kitchen',
-  twitterDescription: 'Guest reviews for Saya Kitchen in Krabi.',
+  twitterTitle: `Reviews - ${site?.title || 'Restaurant'}`,
+  twitterDescription: `Guest reviews for ${site?.title || 'our restaurant'}.`,
   twitterImage: '/og-image.jpg'
 })
 

@@ -112,10 +112,16 @@ const menuSections = computed(() => {
 const activeSection = ref(menuSections.value[0]?.id ?? '')
 
 const skeletonSections = [
-  { name: 'Robatayaki', count: 4 },
-  { name: 'Sushi', count: 3 },
-  { name: 'Shared Plates', count: 4 },
+  { name: 'Category 1', count: 4 },
+  { name: 'Category 2', count: 3 },
+  { name: 'Category 3', count: 4 },
 ]
 
-useSeoMeta({ title: 'Menu | Saya Kitchen', description: 'Explore the Saya Kitchen menu, from robatayaki grill dishes to sushi and shared plates.', ogImage: '/og-image.jpg', ogUrl: '/menu' })
+const { site } = await useTenantSite()
+useSeoMeta({ 
+  title: `Menu | ${site?.title || 'Restaurant'}`, 
+  description: `Explore the ${site?.title || 'restaurant'} menu, featuring our signature dishes and culinary offerings.`, 
+  ogImage: '/og-image.jpg', 
+  ogUrl: '/menu' 
+})
 </script>

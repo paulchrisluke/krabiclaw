@@ -2,19 +2,6 @@
 export default defineNuxtConfig({
   modules: ['nitro-cloudflare-dev', 'nuxt-gtag', '@nuxtjs/robots', '@nuxtjs/sitemap', 'nuxt-schema-org', '@nuxtjs/i18n', '@nuxt/ui'],
   
-  // Nuxt UI configuration
-  '@nuxt/ui': {
-    components: true,
-    theme: {
-      colors: ['primary', 'secondary', 'accent', 'neutral', 'success', 'warning', 'error', 'info'],
-    }
-  },
-  ui: {
-    colors: {
-      primary: 'neutral',
-      neutral: 'zinc'
-    }
-  },
   gtag: {
     id: 'G-Z18L1Y4G7K'
   },

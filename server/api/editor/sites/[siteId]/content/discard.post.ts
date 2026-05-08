@@ -1,7 +1,7 @@
 // POST discard draft
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { discardDrafts } from '~/server/utils/content-management'
+import { discardDrafts, discardAllDrafts } from '~/server/utils/content-management'
 
 interface DiscardRequest {
   page: string
