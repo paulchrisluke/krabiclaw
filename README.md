@@ -27,6 +27,7 @@ There is **no separate Worker** — everything runs as Pages Functions inside th
 | `yarn dev` | Nuxt dev server (localhost:3000, or next available port). **D1 bindings and Cloudflare context are available via `nitro-cloudflare-dev` — full local emulation, hot reload, no build step required.** |
 | `yarn build` | Production build with `cloudflare_pages` preset → outputs to `dist/` |
 | `yarn build:cf` | Alias for `nuxt build` (same preset) |
+| `yarn deploy` | Build, patch the generated Cloudflare/Nitro process shim, and deploy `dist/` to Cloudflare Pages |
 | `yarn preview` | Nuxt preview server |
 
 ## Local Development with D1
@@ -154,10 +155,16 @@ For a fresh rebuild, clear the target database first, then apply `schema.sql`. D
 ## Deployment
 
 ```bash
-# Build
-yarn build
+yarn deploy
+```
 
-# Deploy to Cloudflare Pages
+`yarn deploy` runs the production build, applies the required generated-bundle patch for the current Nitro/Cloudflare `nodejs_compat_v2` process shim, then publishes `dist/` with Wrangler.
+
+If deploying manually, run the same steps in order:
+
+```bash
+yarn build
+perl -0pi -e 's/Reflect\\.get\\(g,r,s\\)/Reflect.get(g,r,g)/g' dist/_worker.js/chunks/nitro/nitro.mjs
 npx wrangler pages deploy dist
 ```
 

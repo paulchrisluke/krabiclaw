@@ -39,13 +39,14 @@ KrabiClaw is a **Shopify for restaurants** — a multi-tenant SaaS where restaur
 - Use `yarn dev` for local Nuxt development, `yarn build` for production build
 - **Wrangler** is used for schema application through the `schema:*` scripts in package.json
 - **D1** (SQLite) via `@atinux/kysely-d1` adapter — single database binding: `REVIEWS_DB`
-- Deploy: `nuxt build --preset=cloudflare_pages` → `wrangler pages deploy dist`
+- Deploy: `yarn deploy`
 
 ### Critical Wrangler Rules
 - Always use `nodejs_compat_v2` (not `nodejs_compat`) in `wrangler.toml` — Better Auth 1.6+ requires it
 - Local secrets go in `.dev.vars` (NOT `.env`) — Wrangler ignores `.env` at the CF Workers runtime layer
 - Schema application: `yarn schema:local` / `yarn schema:remote`
 - Never rely on `process.env` alone in server code — always merge with `event.context.cloudflare?.env` via the `cloudflareEnv()` helper in `server/utils/api-response.ts`
+- Current deploys require patching the generated Nitro/Cloudflare process shim before `wrangler pages deploy`; use `yarn deploy` so this step is not skipped
 
 ### Auth: Better Auth 1.6+
 - Single catch-all handler: `server/api/auth/[...].ts`
@@ -101,9 +102,8 @@ KrabiClaw is a **Shopify for restaurants** — a multi-tenant SaaS where restaur
 
 ### Dev Workflow
 - `yarn dev` — standard Nuxt dev server (port 3000), uses `.env`, hot reload
-- `yarn dev:cf` — wrangler pages dev against `dist/` (port 8788), uses `.dev.vars`, mirrors CF runtime
-- Always test auth and D1 queries via `dev:cf` — `yarn dev` does not simulate CF Workers env
-- Build before `dev:cf`: `yarn build` then `yarn dev:cf`
+- `yarn build` then `npx wrangler pages dev ./dist --local --port 8788` — preview the built Cloudflare Pages output locally
+- `yarn deploy` — build, patch the generated Nitro/Cloudflare process shim, and deploy `dist/` to Cloudflare Pages
 
 ---
 

@@ -1,11 +1,12 @@
 // Tenant routing middleware based on onboarding status
 // Routes tenant requests to appropriate pages
 
-import { defineEventHandler, sendRedirect } from 'h3'
+import { defineEventHandler, getRequestURL, sendRedirect } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const tenantType = event.context.tenantType
   const onboardingStatus = event.context.onboardingStatus
+  const pathname = getRequestURL(event).pathname
 
   // Only process tenant requests
   if (!tenantType?.startsWith('tenant')) {
@@ -15,6 +16,9 @@ export default defineEventHandler(async (event) => {
   // Handle unknown tenant (404)
   if (tenantType === 'tenant-404') {
     event.node.res.statusCode = 404
+    if (pathname === '/tenant-404') {
+      return
+    }
     return sendRedirect(event, '/tenant-404')
   }
 

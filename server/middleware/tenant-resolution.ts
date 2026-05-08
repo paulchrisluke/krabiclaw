@@ -50,6 +50,9 @@ export default defineEventHandler(async (event) => {
 function isPlatformHost(host: string): boolean {
   const hostname = host?.split(':')[0] || ''
   const platformDomain = getPlatformDomain()
+  if (hostname === 'kikuzuki-thailand-marketing.pages.dev' || hostname.endsWith('.kikuzuki-thailand-marketing.pages.dev')) {
+    return true
+  }
   const platformHosts = [
     'localhost',
     '127.0.0.1',

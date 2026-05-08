@@ -6,6 +6,7 @@
   "scripts": {
     "build": "nuxi build --preset=cloudflare_pages",
     "build:cf": "nuxt build",
+    "deploy": "yarn build && node -e \"const fs=require('fs'); const p='dist/_worker.js/chunks/nitro/nitro.mjs'; fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replaceAll('Reflect.get(g,r,s)', 'Reflect.get(g,r,g)'))\" && wrangler pages deploy dist",
     "dev": "nuxt dev",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",

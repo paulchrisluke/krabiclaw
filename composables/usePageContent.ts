@@ -1,4 +1,4 @@
-import { computed, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useFetch } from '#app'
 import { getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
@@ -25,20 +25,21 @@ export const usePageContent = (pageName?: string) => {
   const { isPlatform, siteId } = useTenantSite()
   const isPreview = computed(() => route.query.preview === 'true')
 
-  const { data, refresh } = useFetch(() => {
-    if (isPlatform || !siteId) {
-      throw new Error('Site context is required to load page content')
-    }
-    const url = `/api/public/sites/${siteId}/content/${page.value}`
-    if (route.query.preview === 'true') {
-      return `${url}?preview=true`
-    }
-    return url
-  }, {
-    key: computed(() => `content-${siteId}-${page.value}-${isPreview.value ? 'preview' : 'published'}`),
-    server: true,
-    immediate: !isPlatform && !!siteId
-  })
+  const contentFetch = isPlatform || !siteId
+    ? { data: ref(null), refresh: async () => undefined }
+    : useFetch(() => {
+        const url = `/api/public/sites/${siteId}/content/${page.value}`
+        if (route.query.preview === 'true') {
+          return `${url}?preview=true`
+        }
+        return url
+      }, {
+        key: computed(() => `content-${siteId}-${page.value}-${isPreview.value ? 'preview' : 'published'}`),
+        server: true,
+        immediate: true
+      })
+
+  const { data, refresh } = contentFetch
 
   /** Map of field → ContentRow for quick lookup */
   const contentMap = computed<Record<string, ContentRow>>(() => {
