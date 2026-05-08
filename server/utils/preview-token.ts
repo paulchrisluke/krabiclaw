@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto'
+
 const textEncoder = new TextEncoder()
 
 const base64UrlEncode = (bytes: ArrayBuffer) =>
@@ -32,5 +34,16 @@ export async function verifyPreviewToken(secret: string, siteId: string, token: 
   if (Date.now() > expiresAt) return false
 
   const expected = await createPreviewToken(secret, siteId, expiresAt)
-  return token === expected
+
+  const tokenBuf = textEncoder.encode(token)
+  const expectedBuf = textEncoder.encode(expected)
+
+  // Always compare equal-length buffers to avoid timing leaks
+  if (tokenBuf.length !== expectedBuf.length) {
+    // Perform a dummy comparison to prevent early exit timing differences
+    timingSafeEqual(expectedBuf, expectedBuf)
+    return false
+  }
+
+  return timingSafeEqual(tokenBuf, expectedBuf)
 }

@@ -22,7 +22,7 @@ useHead({
 <style>
 /* Platform-specific base styles */
 .platform-layout {
-  background-color: #ffffff;
-  color: #1c1917; /* stone-900 */
+  background-color: var(--ui-bg);
+  color: var(--ui-text);
 }
 </style>

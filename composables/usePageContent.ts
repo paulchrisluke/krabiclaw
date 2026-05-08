@@ -1,5 +1,6 @@
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useFetch } from '#app'
+import DOMPurify from 'dompurify'
 import { getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
 
@@ -24,6 +25,8 @@ export const usePageContent = (pageName?: string) => {
 
   const { isPlatform, siteId } = useTenantSite()
   const isPreview = computed(() => route.query.preview === 'true')
+  const previewToken = computed(() => typeof route.query.token === 'string' ? route.query.token : '')
+  const reloadToken = computed(() => typeof route.query.t === 'string' ? route.query.t : '')
   const locationSlug = computed(() => {
     if (typeof route.query.location === 'string' && route.query.location) return route.query.location
     if (typeof route.params.slug === 'string' && route.path.startsWith('/locations/')) return route.params.slug
@@ -36,16 +39,83 @@ export const usePageContent = (pageName?: string) => {
         const url = `/api/public/sites/${siteId}/content/${page.value}`
         const params = new URLSearchParams()
         if (route.query.preview === 'true') params.set('preview', 'true')
+        if (previewToken.value) params.set('token', previewToken.value)
         if (locationSlug.value) params.set('location', locationSlug.value)
         const query = params.toString()
         return query ? `${url}?${query}` : url
       }, {
-        key: computed(() => `content-${siteId}-${page.value}-${locationSlug.value || 'site'}-${isPreview.value ? 'preview' : 'published'}`),
+        key: computed(() => `content-${siteId}-${page.value}-${locationSlug.value || 'site'}-${isPreview.value ? 'preview' : 'published'}-${previewToken.value}-${reloadToken.value}`),
         server: true,
         immediate: true
       })
 
   const { data, refresh } = contentFetch
+  const previewOverrides = ref<Record<string, string>>({})
+
+  const trustedOrigins = computed(() => {
+    if (!process.client) return []
+
+    const origins = new Set<string>([window.location.origin])
+    const runtimeConfig = useRuntimeConfig()
+    const candidates = [runtimeConfig.public?.siteUrl, runtimeConfig.public?.appUrl, runtimeConfig.public?.adminUrl]
+
+    for (const candidate of candidates) {
+      if (typeof candidate !== 'string' || !candidate) continue
+      try {
+        origins.add(new URL(candidate).origin)
+      } catch {
+        // Ignore invalid configured URLs.
+      }
+    }
+
+    return Array.from(origins)
+  })
+
+  const isTrustedOrigin = (origin: string) => {
+    if (!process.client) return false
+
+    return trustedOrigins.value.some((trusted) => {
+      try {
+        const incoming = new URL(origin)
+        const allowed = new URL(trusted)
+        return incoming.protocol === allowed.protocol
+          && (incoming.host === allowed.host || incoming.hostname.endsWith(`.${allowed.hostname}`))
+      } catch {
+        return false
+      }
+    })
+  }
+
+  const needsSanitization = (field: string) => {
+    const def = getFieldDef(page.value, field)
+    return def?.type === 'rich_text'
+  }
+
+  const handlePreviewUpdate = (event: MessageEvent) => {
+    if (!isTrustedOrigin(event.origin)) return
+    if (!isPreview.value) return
+    const message = event.data
+    if (message?.type !== 'admin:content-update') return
+    if (message.page !== page.value) return
+    if (typeof message.field !== 'string' || typeof message.value !== 'string') return
+
+    const value = needsSanitization(message.field)
+      ? DOMPurify.sanitize(message.value)
+      : message.value
+
+    previewOverrides.value = {
+      ...previewOverrides.value,
+      [message.field]: value
+    }
+  }
+
+  onMounted(() => {
+    window.addEventListener('message', handlePreviewUpdate)
+  })
+
+  onUnmounted(() => {
+    window.removeEventListener('message', handlePreviewUpdate)
+  })
 
   /** Map of field → ContentRow for quick lookup */
   const contentMap = computed<Record<string, ContentRow>>(() => {
@@ -64,6 +134,10 @@ export const usePageContent = (pageName?: string) => {
    * Returns null when both are absent — callers can use this to show placeholder UI.
    */
   const getField = (field: string, defaultValue: string | null = null): string | null => {
+    if (Object.prototype.hasOwnProperty.call(previewOverrides.value, field)) {
+      return previewOverrides.value[field]
+    }
+
     if (field === 'hero.title' || field === 'hero.subtitle' || field === 'hero.video') {
       const heroRow = contentMap.value['hero']
       const fieldRow = contentMap.value[field]

@@ -19,7 +19,6 @@
   --radius-2xl: 16px;
   --radius-3xl: 24px;
 
-  --color-orange-600: #FB553C;
 }
 
 /* Platform theme tokens */
@@ -29,7 +28,6 @@
 
 /* Saya tenant theme tokens */
 .saya-theme {
-  --ui-radius: 9999px;
   --ui-primary: var(--color-zinc-900);
 }
 

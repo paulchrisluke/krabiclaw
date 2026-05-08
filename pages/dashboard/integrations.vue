@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-6">
-    <div class="bg-white rounded-lg shadow-sm border border-stone-200 p-6">
+    <div class="bg-(--ui-bg) rounded-lg shadow-sm border border-stone-200 p-6">
       <h1 class="text-2xl font-bold text-stone-900 mb-4">Integrations</h1>
       <p class="text-stone-600 mb-6">
         Connect your restaurant website with external services.

@@ -22,7 +22,7 @@
           <button
             @click="handleGoogleSignIn"
             :disabled="loading"
-            class="w-full flex items-center justify-center gap-3 px-4 py-3 border border-stone-300 rounded-lg hover:bg-(--ui-bg-muted) transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full flex items-center justify-center gap-3 px-4 py-3 border border-(--ui-border) rounded-lg hover:bg-(--ui-bg-muted) transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg class="w-5 h-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -37,10 +37,10 @@
 
           <div class="relative">
             <div class="absolute inset-0 flex items-center">
-              <div class="w-full border-t border-stone-300"></div>
+              <div class="w-full border-t border-(--ui-border)"></div>
             </div>
             <div class="relative flex justify-center text-sm">
-              <span class="px-2 bg-(--ui-bg) text-stone-500">or</span>
+              <span class="px-2 bg-(--ui-bg) text-(--ui-text-muted)">or</span>
             </div>
           </div>
 

@@ -1,13 +1,13 @@
 <template>
     <div class="space-y-8">
       <div>
-        <h1 class="text-3xl font-bold text-gray-900">Review Moderation</h1>
+        <h1 class="text-3xl font-bold text-(--ui-text-highlighted)">Review Moderation</h1>
         <p class="text-stone-400 mt-2">Approve guest reviews before they appear on menu detail pages and in review schema.</p>
       </div>
 
       <!-- Status Filters -->
       <UCard>
-        <h2 class="font-bold text-gray-900 mb-4">Filter by Status</h2>
+        <h2 class="font-bold text-(--ui-text-highlighted) mb-4">Filter by Status</h2>
         <UTabs v-model="selectedStatus" :items="statusTabItems" class="w-full" />
       </UCard>
 
@@ -15,7 +15,7 @@
       <UCard>
         <div class="flex items-center justify-between mb-4">
           <div>
-            <h2 class="font-bold text-gray-900">{{ currentStatusLabel }}</h2>
+            <h2 class="font-bold text-(--ui-text-highlighted)">{{ currentStatusLabel }}</h2>
             <p class="text-sm text-stone-400 mt-1">
               {{ reviews.length }} {{ reviews.length === 1 ? 'review' : 'reviews' }}
             </p>
@@ -52,7 +52,7 @@
               <tbody>
                 <tr v-for="review in reviews" :key="review.id" class="border-b border-stone-100 hover:bg-stone-50">
                   <td class="py-3">
-                    <div class="text-sm font-medium text-gray-900">{{ review.author }}</div>
+                    <div class="text-sm font-medium text-(--ui-text-highlighted)">{{ review.author }}</div>
                   </td>
                   <td class="py-3">
                     <div class="text-sm text-stone-600">{{ menuItemName(review.menuItemSlug) }}</div>
@@ -63,10 +63,10 @@
                     </UBadge>
                   </td>
                   <td class="py-3">
-                    <div class="text-sm font-medium text-gray-900">{{ review.title }}</div>
+                    <div class="text-sm font-medium text-(--ui-text-highlighted)">{{ review.title }}</div>
                   </td>
                   <td class="py-3">
-                    <div class="text-sm text-gray-600 max-w-xs truncate">{{ review.content }}</div>
+                    <div class="text-sm text-(--ui-text-muted) max-w-xs truncate">{{ review.content }}</div>
                   </td>
                   <td class="py-3">
                     <div class="text-sm text-stone-500">{{ formatDate(review.createdAt) }}</div>

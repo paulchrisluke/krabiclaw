@@ -1,11 +1,11 @@
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+  <div class="min-h-screen bg-(--ui-bg-muted) ">
     <!-- Main Content -->
     <UContainer class="py-8">
       <!-- Loading State -->
       <div v-if="loading" class="text-center py-12">
         <USkeleton class="h-8 w-8 mx-auto mb-4" />
-        <p class="text-gray-600 dark:text-gray-400">Loading billing information...</p>
+        <p class="text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">Loading billing information...</p>
       </div>
 
       <!-- Billing Content -->
@@ -14,7 +14,7 @@
         <UCard>
           <div class="flex items-center justify-between">
             <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Current Plan</h2>
+              <h2 class="text-lg font-semibold text-(--ui-text-highlighted)  mb-2">Current Plan</h2>
               <div class="flex items-center space-x-2">
                 <UBadge :color="billing.plan === 'free' ? 'neutral' : 'success'" variant="soft">
                   {{ billing.plan.charAt(0).toUpperCase() + billing.plan.slice(1) }}
@@ -23,37 +23,37 @@
                   {{ getStatusText(billing.subscriptionStatus) }}
                 </UBadge>
               </div>
-              <p v-if="billing.currentPeriodEnd" class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              <p v-if="billing.currentPeriodEnd" class="text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed) mt-1">
                 Next billing date: {{ formatDate(billing.currentPeriodEnd) }}
               </p>
             </div>
 
             <div class="text-right">
-              <div v-if="billing.plan === 'free'" class="text-3xl font-bold text-gray-900 dark:text-white">
+              <div v-if="billing.plan === 'free'" class="text-3xl font-bold text-(--ui-text-highlighted) ">
                 Free
               </div>
-              <div v-else class="text-3xl font-bold text-gray-900 dark:text-white">
+              <div v-else class="text-3xl font-bold text-(--ui-text-highlighted) ">
                 {{ getPlanPrice(billing.plan) }}
-                <span class="text-lg font-normal text-gray-600 dark:text-gray-400">/month</span>
+                <span class="text-lg font-normal text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">/month</span>
               </div>
             </div>
           </div>
         </UCard>
 
         <!-- Plan Features -->
-        <div class="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Plan Features</h2>
+        <div class="bg-(--ui-bg)  rounded-lg shadow-sm border border-(--ui-border) dark:border-gray-700 p-6">
+          <h2 class="text-lg font-semibold text-(--ui-text-highlighted)  mb-4">Plan Features</h2>
           
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <!-- Free Plan -->
             <div
               :class="[
                 'rounded-lg border p-6',
-                billing.plan === 'free' ? 'border-gray-900 dark:border-gray-100 bg-gray-50 dark:bg-gray-800' : 'border-gray-200 dark:border-gray-700'
+                billing.plan === 'free' ? 'border-gray-900 dark:border-(--ui-border-muted) bg-(--ui-bg-muted) ' : 'border-(--ui-border) dark:border-gray-700'
               ]"
             >
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Free</h3>
-              <div class="text-2xl font-bold text-gray-900 dark:text-white mb-4">$0<span class="text-lg font-normal text-gray-600 dark:text-gray-400">/month</span></div>
+              <h3 class="text-lg font-semibold text-(--ui-text-highlighted)  mb-2">Free</h3>
+              <div class="text-2xl font-bold text-(--ui-text-highlighted)  mb-4">$0<span class="text-lg font-normal text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">/month</span></div>
               
               <ul class="space-y-2 text-sm">
                 <li class="flex items-center">
@@ -83,11 +83,11 @@
             <div
               :class="[
                 'rounded-lg border p-6',
-                billing.plan === 'pro' ? 'border-gray-900 dark:border-gray-100 bg-gray-50 dark:bg-gray-800' : 'border-gray-200 dark:border-gray-700'
+                billing.plan === 'pro' ? 'border-gray-900 dark:border-(--ui-border-muted) bg-(--ui-bg-muted) ' : 'border-(--ui-border) dark:border-gray-700'
               ]"
             >
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Pro</h3>
-              <div class="text-2xl font-bold text-gray-900 dark:text-white mb-4">$29<span class="text-lg font-normal text-gray-600 dark:text-gray-400">/month</span></div>
+              <h3 class="text-lg font-semibold text-(--ui-text-highlighted)  mb-2">Pro</h3>
+              <div class="text-2xl font-bold text-(--ui-text-highlighted)  mb-4">$29<span class="text-lg font-normal text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">/month</span></div>
               
               <ul class="space-y-2 text-sm">
                 <li class="flex items-center">
@@ -127,11 +127,11 @@
             <div
               :class="[
                 'rounded-lg border p-6',
-                billing.plan === 'business' ? 'border-gray-900 dark:border-gray-100 bg-gray-50 dark:bg-gray-800' : 'border-gray-200 dark:border-gray-700'
+                billing.plan === 'business' ? 'border-gray-900 dark:border-(--ui-border-muted) bg-(--ui-bg-muted) ' : 'border-(--ui-border) dark:border-gray-700'
               ]"
             >
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Business</h3>
-              <div class="text-2xl font-bold text-gray-900 dark:text-white mb-4">$99<span class="text-lg font-normal text-gray-600 dark:text-gray-400">/month</span></div>
+              <h3 class="text-lg font-semibold text-(--ui-text-highlighted)  mb-2">Business</h3>
+              <div class="text-2xl font-bold text-(--ui-text-highlighted)  mb-4">$99<span class="text-lg font-normal text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">/month</span></div>
               
               <ul class="space-y-2 text-sm">
                 <li class="flex items-center">
@@ -166,8 +166,8 @@
         </div>
 
         <!-- Billing Actions -->
-        <div v-if="billing.plan !== 'free'" class="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Billing Management</h2>
+        <div v-if="billing.plan !== 'free'" class="bg-(--ui-bg)  rounded-lg shadow-sm border border-(--ui-border) dark:border-gray-700 p-6">
+          <h2 class="text-lg font-semibold text-(--ui-text-highlighted)  mb-4">Billing Management</h2>
           
           <div class="space-y-4">
             <UButton
@@ -180,7 +180,7 @@
               {{ portalLoading ? 'Opening...' : 'Manage Subscription' }}
             </UButton>
             
-            <div class="text-xs text-gray-500 dark:text-gray-400 text-center">
+            <div class="text-xs text-(--ui-text-muted) dark:text-(--ui-text-dimmed) text-center">
               Update payment method, view invoices, or cancel subscription
             </div>
           </div>

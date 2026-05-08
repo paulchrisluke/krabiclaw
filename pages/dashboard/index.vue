@@ -5,17 +5,17 @@
       <!-- Loading State -->
       <div v-if="loading" class="text-center py-12">
         <USkeleton class="h-8 w-8 mx-auto mb-4" />
-        <p class="text-gray-600 dark:text-gray-400">Loading...</p>
+        <p class="text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">Loading...</p>
       </div>
 
       <!-- Onboarding State -->
       <UCard v-else-if="!hasOrganization" class="max-w-md mx-auto">
         <div class="text-center py-12">
-          <Icon name="i-heroicons-building-storefront" class="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600" />
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <Icon name="i-heroicons-building-storefront" class="w-16 h-16 mx-auto mb-4 text-(--ui-text-dimmed) dark:text-(--ui-text-muted)" />
+          <h2 class="text-2xl font-bold text-(--ui-text-highlighted)  mb-4">
             Create Your Restaurant Website
           </h2>
-          <p class="text-gray-600 dark:text-gray-400 mb-8">
+          <p class="text-(--ui-text-muted) dark:text-(--ui-text-dimmed) mb-8">
             Let's get your restaurant online with a beautiful website.
           </p>
           <UButton
@@ -33,7 +33,7 @@
       <div v-else>
         <!-- Admin Stats Section -->
         <div class="mb-8">
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+          <h2 class="text-2xl font-bold text-(--ui-text-highlighted)  mb-6">
             Business Overview
           </h2>
           
@@ -42,19 +42,19 @@
             <UCard>
               <div class="text-center">
                 <UBadge variant="subtle" class="mb-2">Reviews</UBadge>
-                <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ publicData?.reviews?.length ?? '—' }}</p>
+                <p class="text-3xl font-bold text-(--ui-text-highlighted) ">{{ publicData?.reviews?.length ?? '—' }}</p>
               </div>
             </UCard>
             <UCard>
               <div class="text-center">
                 <UBadge variant="subtle" class="mb-2">Media</UBadge>
-                <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ publicData?.media?.length ?? '—' }}</p>
+                <p class="text-3xl font-bold text-(--ui-text-highlighted) ">{{ publicData?.media?.length ?? '—' }}</p>
               </div>
             </UCard>
             <UCard>
               <div class="text-center">
                 <UBadge variant="subtle" class="mb-2">Posts</UBadge>
-                <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ publicData?.posts?.length ?? '—' }}</p>
+                <p class="text-3xl font-bold text-(--ui-text-highlighted) ">{{ publicData?.posts?.length ?? '—' }}</p>
               </div>
             </UCard>
           </div>
@@ -63,8 +63,8 @@
           <UCard>
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 class="text-lg font-bold text-gray-900 dark:text-white">Google Business Data</h2>
-                <p class="text-sm text-gray-500 mt-1">
+                <h2 class="text-lg font-bold text-(--ui-text-highlighted) ">Google Business Data</h2>
+                <p class="text-sm text-(--ui-text-muted) mt-1">
                   {{ publicData?.syncedAt ? `Last synced ${formatDate(publicData.syncedAt)}` : 'Never synced' }}
                 </p>
                 <p v-if="syncErrors.length" class="text-sm text-red-500 mt-1">
@@ -83,10 +83,10 @@
         </div>
 
         <div class="mb-8">
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          <h2 class="text-2xl font-bold text-(--ui-text-highlighted)  mb-2">
             Your Restaurant Websites
           </h2>
-          <p class="text-gray-600 dark:text-gray-400">
+          <p class="text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">
             Manage your restaurant websites and content
           </p>
         </div>
@@ -101,10 +101,10 @@
           >
             <div class="flex justify-between items-start mb-4">
               <div>
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                <h3 class="text-lg font-semibold text-(--ui-text-highlighted) ">
                   {{ site.name }}
                 </h3>
-                <p class="text-sm text-gray-600 dark:text-gray-400">
+                <p class="text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">
                   {{ site.subdomain }}{{ platformHostname ? `.${platformHostname}` : '' }}
                 </p>
               </div>
@@ -137,11 +137,11 @@
           <!-- Add Site Card -->
           <UCard class="hover:shadow-md transition-shadow">
             <div class="text-center">
-              <Icon name="i-heroicons-plus" class="w-12 h-12 mx-auto mb-4 text-gray-400 dark:text-gray-600" />
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <Icon name="i-heroicons-plus" class="w-12 h-12 mx-auto mb-4 text-(--ui-text-dimmed) dark:text-(--ui-text-muted)" />
+              <h3 class="text-lg font-semibold text-(--ui-text-highlighted)  mb-2">
                 Add Another Site
               </h3>
-              <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <p class="text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed) mb-4">
                 Create another restaurant website
               </p>
               <UButton

@@ -56,7 +56,7 @@
           <div class="bg-(--ui-bg-muted) rounded-2xl p-8 border border-(--ui-border)">
             <table class="w-full">
               <tbody>
-                <tr v-for="hour in (businessHoursFormatted.length > 0 ? businessHoursFormatted : defaultHours)" :key="hour.day" class="border-b border-stone-100 last:border-0">
+                <tr v-for="hour in (businessHoursFormatted.length > 0 ? businessHoursFormatted : defaultHours)" :key="hour.day" class="border-b border-(--ui-border) last:border-0">
                   <td class="py-3 text-(--ui-text-muted) font-medium">{{ hour.day }}</td>
                   <td class="py-3 text-right text-(--ui-text-highlighted)">
                     {{ hour.hours }}

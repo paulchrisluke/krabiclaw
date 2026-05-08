@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS sites (
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),
   plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'paid', 'starter', 'pro', 'business')),
   onboarding_status TEXT DEFAULT 'pending' CHECK (onboarding_status IN ('pending', 'active', 'failed')),
+  url_structure TEXT NOT NULL DEFAULT 'location_subdirectories' CHECK (url_structure IN ('location_subdirectories', 'brand_pages')),
   settings TEXT,
   last_published_at TEXT,
   created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),

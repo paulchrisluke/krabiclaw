@@ -1,8 +1,8 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useEditorContext } from './useEditorContext'
 import type { Menu, MenuItem, MenuWithItems, CreateMenuRequest, UpdateMenuRequest, CreateMenuItemRequest, UpdateMenuItemRequest } from '~/server/types/menu'
 
-export const useMenuEditor = (siteId: string) => {
+export const useMenuEditor = (siteId: string, locationId?: string | null) => {
   const { currentLocationId, isBrandScope } = useEditorContext(siteId)
   
   // State
@@ -15,7 +15,8 @@ export const useMenuEditor = (siteId: string) => {
   // Computed
   const hasMenus = computed(() => menus.value.length > 0)
   const hasCurrentMenu = computed(() => !!currentMenu.value)
-  const isEditingBrandMenu = computed(() => isBrandScope.value)
+  const effectiveLocationId = computed(() => locationId !== undefined ? locationId : currentLocationId.value)
+  const isEditingBrandMenu = computed(() => locationId !== undefined ? !locationId : isBrandScope.value)
 
   // Load menus for current scope
   const loadMenus = async () => {
@@ -23,13 +24,16 @@ export const useMenuEditor = (siteId: string) => {
     error.value = null
 
     try {
+      const params = new URLSearchParams()
+      if (effectiveLocationId.value) params.set('locationId', effectiveLocationId.value)
       const response = await $fetch<{
         success: boolean
         menus: Menu[]
-      }>(`/api/editor/sites/${siteId}/menus?locationId=${currentLocationId.value || ''}`)
+      }>(`/api/editor/sites/${siteId}/menus${params.toString() ? `?${params.toString()}` : ''}`)
 
       if (response.success) {
         menus.value = response.menus
+        currentMenu.value = null
         
         // Auto-select first menu if none selected
         if (response.menus.length > 0 && !currentMenu.value) {
@@ -81,7 +85,7 @@ export const useMenuEditor = (siteId: string) => {
         method: 'POST',
         body: {
           ...menuData,
-          locationId: currentLocationId.value
+          locationId: effectiveLocationId.value
         }
       })
 
@@ -303,7 +307,7 @@ export const useMenuEditor = (siteId: string) => {
   })
 
   // Auto-load when scope changes
-  watch(currentLocationId, () => {
+  watch(effectiveLocationId, () => {
     loadMenus()
   }, { immediate: true })
 

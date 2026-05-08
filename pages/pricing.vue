@@ -59,7 +59,7 @@
           <div class="bg-black text-white rounded-2xl shadow-lg p-8 transform scale-105">
             <div class="flex items-center justify-between mb-2">
               <h3 class="text-2xl font-bold">Pro</h3>
-              <span class="bg-(--ui-bg) text-black px-3 py-1 text-sm font-medium rounded-full">Most Popular</span>
+              <span class="bg-(--ui-bg) text-(--ui-foreground) px-3 py-1 text-sm font-medium rounded-full">Most Popular</span>
             </div>
             <p class="text-stone-300 mb-6">For growing restaurants</p>
             <div class="mb-6">
@@ -104,7 +104,7 @@
                 <span>Priority customer support</span>
               </li>
             </ul>
-            <UButton color="neutral" size="xl" class="w-full bg-(--ui-bg) text-black hover:bg-stone-200">Start Pro Trial</UButton>
+            <UButton color="neutral" size="xl" class="w-full bg-(--ui-bg) text-(--ui-foreground) hover:bg-(--ui-bg-muted)">Start Pro Trial</UButton>
           </div>
 
           <!-- Enterprise Plan -->

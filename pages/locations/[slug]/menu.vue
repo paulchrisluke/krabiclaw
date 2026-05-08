@@ -44,7 +44,7 @@
           <h3 class="mb-2 text-xl font-semibold text-(--ui-text-highlighted)">Menu Coming Soon</h3>
           <p class="text-(--ui-text-muted)">Our menu for {{ location?.title || 'this location' }} is being prepared.</p>
         </div>
-        <div class="mx-auto mb-8 max-w-3xl divide-y divide-gray-100 rounded-lg border border-(--ui-border-muted) bg-(--ui-bg)">
+        <div class="mx-auto mb-8 max-w-3xl divide-y divide-[var(--ui-border-muted)] rounded-lg border border-(--ui-border-muted) bg-(--ui-bg)">
           <div v-for="i in 4" :key="`location-menu-skeleton-${i}`" class="flex items-start justify-between gap-6 p-6">
             <div class="flex-1 space-y-3">
               <div class="h-5 w-40 animate-pulse rounded bg-stone-200" />

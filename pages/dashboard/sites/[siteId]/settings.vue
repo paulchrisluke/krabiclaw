@@ -2,22 +2,22 @@
   <div class="space-y-6">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div>
-        <h1 class="text-3xl font-bold text-gray-900">Site Settings</h1>
-        <p class="mt-2 text-gray-600">Manage site-wide settings, locations, SEO, and integrations.</p>
+        <h1 class="text-3xl font-bold text-(--ui-text-highlighted)">Site Settings</h1>
+        <p class="mt-2 text-(--ui-text-muted)">Manage site-wide settings, locations, SEO, and integrations.</p>
       </div>
       <UButton :to="`/dashboard/sites/${siteId}`" icon="i-heroicons-arrow-left" variant="ghost" color="neutral">
         Dashboard
       </UButton>
     </div>
 
-    <div v-if="loading" class="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-600">
+    <div v-if="loading" class="rounded-lg border border-(--ui-border) bg-(--ui-bg) p-8 text-center text-(--ui-text-muted)">
       Loading settings...
     </div>
 
     <UAlert v-else-if="error" color="error" variant="soft" :description="error" />
 
     <div v-else-if="settings" class="space-y-6">
-      <div class="flex flex-wrap gap-2 border-b border-gray-200">
+      <div class="flex flex-wrap gap-2 border-b border-(--ui-border)">
         <UButton
           v-for="tab in tabs"
           :key="tab.id"
@@ -25,15 +25,15 @@
           :variant="activeTab === tab.id ? 'soft' : 'ghost'"
           :color="activeTab === tab.id ? 'primary' : 'neutral'"
           class="rounded-b-none"
-          @click="activeTab = tab.id"
+          @click="setActiveTab(tab.id)"
         >
           {{ tab.label }}
         </UButton>
       </div>
 
       <section v-if="activeTab === 'general'" class="space-y-6">
-        <div class="rounded-lg border border-gray-200 bg-white p-6">
-          <h2 class="text-xl font-semibold text-gray-900">General</h2>
+        <div class="rounded-lg border border-(--ui-border) bg-(--ui-bg) p-6">
+          <h2 class="text-xl font-semibold text-(--ui-text-highlighted)">General</h2>
           <div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
             <UFormField label="Site Name">
               <UInput v-model="form.name" placeholder="Your restaurant name" />
@@ -66,7 +66,7 @@
             </UFormField>
 
             <div>
-              <p class="mb-2 block text-sm font-medium text-gray-700">Status</p>
+              <p class="mb-2 block text-sm font-medium text-(--ui-text)">Status</p>
               <UBadge :color="settings.status === 'active' ? 'success' : 'warning'" variant="soft">
                 {{ settings.status }}
               </UBadge>
@@ -74,8 +74,8 @@
           </div>
         </div>
 
-        <div class="rounded-lg border border-gray-200 bg-white p-6">
-          <h2 class="text-xl font-semibold text-gray-900">Brand Basics</h2>
+        <div class="rounded-lg border border-(--ui-border) bg-(--ui-bg) p-6">
+          <h2 class="text-xl font-semibold text-(--ui-text-highlighted)">Brand Basics</h2>
           <div class="mt-6 space-y-6">
             <UFormField label="Restaurant/Brand Name" help="Displayed prominently on your website.">
               <UInput v-model="form.brand_name" placeholder="Your Restaurant Name" />
@@ -99,19 +99,19 @@
       </section>
 
       <section v-else-if="activeTab === 'locations'" class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
-        <div class="rounded-lg border border-gray-200 bg-white p-6">
+        <div class="rounded-lg border border-(--ui-border) bg-(--ui-bg) p-6">
           <div class="flex items-center justify-between gap-4">
             <div>
-              <h2 class="text-xl font-semibold text-gray-900">Locations</h2>
-              <p class="mt-1 text-sm text-gray-500">Each location can have its own address, hours, photos, menu, and Google Business connection.</p>
+              <h2 class="text-xl font-semibold text-(--ui-text-highlighted)">Locations</h2>
+              <p class="mt-1 text-sm text-(--ui-text-muted)">Each location can have its own address, hours, photos, menu, and Google Business connection.</p>
             </div>
             <UButton icon="i-heroicons-plus" @click="startNewLocation">Add</UButton>
           </div>
 
-          <div v-if="locationsLoading" class="mt-6 text-sm text-gray-500">Loading locations...</div>
+          <div v-if="locationsLoading" class="mt-6 text-sm text-(--ui-text-muted)">Loading locations...</div>
           <div v-else-if="locations.length === 0" class="mt-6 rounded-lg border border-dashed border-gray-300 p-8 text-center">
-            <p class="text-sm font-medium text-gray-900">No locations yet</p>
-            <p class="mt-1 text-sm text-gray-500">Add your first restaurant location to unlock location-specific content.</p>
+            <p class="text-sm font-medium text-(--ui-text-highlighted)">No locations yet</p>
+            <p class="mt-1 text-sm text-(--ui-text-muted)">Add your first restaurant location to unlock location-specific content.</p>
           </div>
           <div v-else class="mt-6 divide-y divide-gray-100">
             <button
@@ -123,20 +123,20 @@
             >
               <span class="min-w-0">
                 <span class="flex items-center gap-2">
-                  <span class="truncate text-sm font-semibold text-gray-900">{{ location.title }}</span>
+                  <span class="truncate text-sm font-semibold text-(--ui-text-highlighted)">{{ location.title }}</span>
                   <UBadge v-if="location.is_primary" color="success" variant="soft" size="xs">Primary</UBadge>
                   <UBadge color="neutral" variant="subtle" size="xs">{{ location.status }}</UBadge>
                 </span>
-                <span class="mt-1 block truncate text-sm text-gray-500">/{{ location.slug }}</span>
-                <span v-if="addressLabel(location)" class="mt-1 block truncate text-sm text-gray-500">{{ addressLabel(location) }}</span>
+                <span class="mt-1 block truncate text-sm text-(--ui-text-muted)">/{{ location.slug }}</span>
+                <span v-if="addressLabel(location)" class="mt-1 block truncate text-sm text-(--ui-text-muted)">{{ addressLabel(location) }}</span>
               </span>
-              <UIcon name="i-heroicons-chevron-right-20-solid" class="mt-1 size-5 shrink-0 text-gray-400" />
+              <UIcon name="i-heroicons-chevron-right-20-solid" class="mt-1 size-5 shrink-0 text-(--ui-text-dimmed)" />
             </button>
           </div>
         </div>
 
-        <div class="rounded-lg border border-gray-200 bg-white p-6">
-          <h2 class="text-lg font-semibold text-gray-900">{{ editingLocationId ? 'Edit Location' : 'Add Location' }}</h2>
+        <div class="rounded-lg border border-(--ui-border) bg-(--ui-bg) p-6">
+          <h2 class="text-lg font-semibold text-(--ui-text-highlighted)">{{ editingLocationId ? 'Edit Location' : 'Add Location' }}</h2>
           <div class="mt-5 space-y-4">
             <UFormField label="Location Name">
               <UInput v-model="locationForm.title" placeholder="Kikuzuki Thonglor" />
@@ -192,7 +192,7 @@
               block
               :loading="locationDeleting"
               :disabled="locationDeleting"
-              @click="deleteLocation"
+              @click="confirmDeleteLocation"
             >
               Delete Location
             </UButton>
@@ -200,30 +200,30 @@
         </div>
       </section>
 
-      <section v-else-if="activeTab === 'seo'" class="rounded-lg border border-gray-200 bg-white p-6">
-        <h2 class="text-xl font-semibold text-gray-900">SEO</h2>
-        <p class="mt-2 text-sm text-gray-500">Global defaults use the brand basics above. Location pages use each location's name, address, and URL slug.</p>
+      <section v-else-if="activeTab === 'seo'" class="rounded-lg border border-(--ui-border) bg-(--ui-bg) p-6">
+        <h2 class="text-xl font-semibold text-(--ui-text-highlighted)">SEO</h2>
+        <p class="mt-2 text-sm text-(--ui-text-muted)">Global defaults use the brand basics above. Location pages use each location's name, address, and URL slug.</p>
         <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div class="rounded-lg border border-gray-200 p-4">
-            <p class="text-sm font-medium text-gray-900">Global defaults</p>
-            <p class="mt-1 text-sm text-gray-500">{{ form.brand_name || form.name }}</p>
-            <p class="mt-2 text-sm text-gray-500">{{ form.brand_description || 'Add a short description in General.' }}</p>
+          <div class="rounded-lg border border-(--ui-border) p-4">
+            <p class="text-sm font-medium text-(--ui-text-highlighted)">Global defaults</p>
+            <p class="mt-1 text-sm text-(--ui-text-muted)">{{ form.brand_name || form.name }}</p>
+            <p class="mt-2 text-sm text-(--ui-text-muted)">{{ form.brand_description || 'Add a short description in General.' }}</p>
           </div>
-          <div class="rounded-lg border border-gray-200 p-4">
-            <p class="text-sm font-medium text-gray-900">Location overrides</p>
-            <p class="mt-1 text-sm text-gray-500">{{ locations.length }} active location{{ locations.length === 1 ? '' : 's' }}</p>
-            <p class="mt-2 text-sm text-gray-500">Use the Locations tab to control per-location titles and paths.</p>
+          <div class="rounded-lg border border-(--ui-border) p-4">
+            <p class="text-sm font-medium text-(--ui-text-highlighted)">Location overrides</p>
+            <p class="mt-1 text-sm text-(--ui-text-muted)">{{ locations.length }} active location{{ locations.length === 1 ? '' : 's' }}</p>
+            <p class="mt-2 text-sm text-(--ui-text-muted)">Use the Locations tab to control per-location titles and paths.</p>
           </div>
         </div>
       </section>
 
-      <section v-else class="rounded-lg border border-gray-200 bg-white p-6">
-        <h2 class="text-xl font-semibold text-gray-900">Integrations</h2>
+      <section v-else class="rounded-lg border border-(--ui-border) bg-(--ui-bg) p-6">
+        <h2 class="text-xl font-semibold text-(--ui-text-highlighted)">Integrations</h2>
         <div class="mt-6 divide-y divide-gray-100">
           <div v-for="location in locations" :key="location.id" class="flex items-center justify-between gap-4 py-4">
             <div class="min-w-0">
-              <p class="truncate text-sm font-semibold text-gray-900">{{ location.title }}</p>
-              <p class="truncate text-sm text-gray-500">{{ location.google_location_id ? 'Google Business linked' : 'Google Business not linked' }}</p>
+              <p class="truncate text-sm font-semibold text-(--ui-text-highlighted)">{{ location.title }}</p>
+              <p class="truncate text-sm text-(--ui-text-muted)">{{ location.google_location_id ? 'Google Business linked' : 'Google Business not linked' }}</p>
             </div>
             <UBadge :color="location.google_location_id ? 'success' : 'neutral'" variant="soft">
               {{ location.google_location_id ? 'Connected' : 'Manual' }}
@@ -232,7 +232,7 @@
         </div>
       </section>
 
-      <div class="flex items-center justify-end gap-3 border-t border-gray-200 pt-6">
+      <div class="flex items-center justify-end gap-3 border-t border-(--ui-border) pt-6">
         <UButton variant="outline" color="neutral" @click="resetForm">Reset</UButton>
         <UButton :loading="saving" :disabled="saving" @click="saveSettings">Save Settings</UButton>
       </div>
@@ -264,6 +264,7 @@ interface BusinessLocation {
 }
 
 const route = useRoute()
+const router = useRouter()
 const siteId = route.params.siteId as string
 const toast = useToast()
 
@@ -279,7 +280,12 @@ const urlStructureOptions = [
   { label: 'Brand pages only', value: 'brand_pages' }
 ]
 
-const activeTab = ref<SettingsTab>('general')
+const tabFromQuery = (value: unknown): SettingsTab =>
+  typeof value === 'string' && tabs.some(tab => tab.id === value)
+    ? value as SettingsTab
+    : 'general'
+
+const activeTab = ref<SettingsTab>(tabFromQuery(route.query.tab))
 const loading = ref(true)
 const locationsLoading = ref(false)
 const error = ref<string | null>(null)
@@ -325,6 +331,11 @@ const hoursFromText = (value: string) =>
 const addressLabel = (location: BusinessLocation) =>
   location.address?.addressLines?.join(', ') || ''
 
+const setActiveTab = (tab: SettingsTab) => {
+  activeTab.value = tab
+  router.replace({ query: { ...route.query, tab } })
+}
+
 const loadSettings = async () => {
   loading.value = true
   error.value = null
@@ -348,6 +359,14 @@ const loadLocations = async () => {
     const response = await $fetch<{ success: boolean; locations: BusinessLocation[] }>(`/api/sites/${siteId}/locations`)
     if (!response.success) throw new Error('Failed to load locations')
     locations.value = response.locations
+    const queryLocationId = route.query.locationId
+    if (typeof queryLocationId === 'string') {
+      const queryLocation = locations.value.find(location => location.id === queryLocationId)
+      if (queryLocation) {
+        activeTab.value = 'locations'
+        editLocation(queryLocation)
+      }
+    }
   } catch (err) {
     toast.add({ description: err instanceof Error ? err.message : 'Failed to load locations', color: 'error' })
   } finally {
@@ -420,11 +439,21 @@ const saveLocation = async () => {
     return
   }
 
+  const trimmedSlug = locationForm.slug.trim()
+  if (!trimmedSlug) {
+    toast.add({ description: 'Location slug is required', color: 'error' })
+    return
+  }
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(trimmedSlug)) {
+    toast.add({ description: 'Slug must contain only lowercase letters, numbers, and hyphens', color: 'error' })
+    return
+  }
+
   locationSaving.value = true
   try {
     const body = {
       title: locationForm.title,
-      slug: locationForm.slug,
+      slug: trimmedSlug,
       address: addressFromText(locationForm.addressText),
       city: locationForm.city,
       phone: locationForm.phone,
@@ -456,6 +485,12 @@ const saveLocation = async () => {
   }
 }
 
+const confirmDeleteLocation = () => {
+  if (!editingLocationId.value) return
+  if (!confirm(`Delete location "${locationForm.title}"? This cannot be undone.`)) return
+  deleteLocation()
+}
+
 const deleteLocation = async () => {
   if (!editingLocationId.value) return
   locationDeleting.value = true
@@ -478,8 +513,13 @@ const deleteLocation = async () => {
 }
 
 const copyToClipboard = async (text: string) => {
-  await navigator.clipboard.writeText(text)
-  toast.add({ description: 'URL copied', color: 'success' })
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.add({ description: 'URL copied', color: 'success' })
+  } catch (err) {
+    console.error('Failed to copy to clipboard:', err)
+    toast.add({ description: 'Failed to copy URL', color: 'error' })
+  }
 }
 
 onMounted(() => {

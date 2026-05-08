@@ -15,6 +15,19 @@ interface CreateLocationBody {
   is_primary?: boolean
 }
 
+const isPlainObjectOrArray = (v: unknown): v is object | unknown[] =>
+  v !== null && typeof v === 'object'
+
+const safeJsonParse = (raw: string | null | undefined, context: string): unknown => {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)
+  } catch (err) {
+    console.error(`Failed to parse JSON for ${context}:`, err)
+    return null
+  }
+}
+
 const slugify = (value: string) =>
   value
     .toLowerCase()
@@ -32,6 +45,13 @@ export default defineEventHandler(async (event) => {
 
   if (!body.title?.trim()) {
     return jsonResponse({ error: 'Location title is required' }, { status: 400 })
+  }
+
+  if (body.address !== undefined && body.address !== null && !isPlainObjectOrArray(body.address)) {
+    return jsonResponse({ error: 'address must be an object or array' }, { status: 400 })
+  }
+  if (body.opening_hours !== undefined && body.opening_hours !== null && !isPlainObjectOrArray(body.opening_hours)) {
+    return jsonResponse({ error: 'opening_hours must be an object or array' }, { status: 400 })
   }
 
   const slug = slugify(body.slug || body.title)
@@ -139,12 +159,16 @@ export default defineEventHandler(async (event) => {
       success: true,
       location: {
         ...location,
-        address: location.address ? JSON.parse(location.address) : null,
-        opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null,
+        address: safeJsonParse(location.address, `location.address (id=${locationId})`),
+        opening_hours: safeJsonParse(location.opening_hours, `location.opening_hours (id=${locationId})`),
         is_primary: Boolean(location.is_primary)
       }
     }, { status: 201 })
   } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error)
+    if (errMsg.includes('UNIQUE') || errMsg.includes('unique')) {
+      return jsonResponse({ error: 'A primary location already exists for this site' }, { status: 409 })
+    }
     console.error('Failed to create business location:', error)
     return jsonResponse({ error: 'Failed to create business location' }, { status: 500 })
   }

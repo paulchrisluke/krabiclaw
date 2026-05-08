@@ -187,6 +187,10 @@ const props = defineProps({
   siteId: {
     type: String,
     required: true
+  },
+  locationId: {
+    type: String,
+    default: null
   }
 })
 
@@ -201,13 +205,14 @@ const {
   hasCurrentMenu,
   isEditingBrandMenu,
   menuItemsBySection,
+  loadMenu,
   createMenu,
   updateMenu,
   deleteMenu,
   createMenuItem,
   updateMenuItem,
   deleteMenuItem
-} = useMenuEditor(props.siteId)
+} = useMenuEditor(props.siteId, props.locationId)
 
 // Local state
 const selectedMenuId = ref<string | null>(null)
@@ -271,10 +276,6 @@ const handleDeleteMenuItem = async (itemId) => {
   }
 }
 
-const loadMenu = async (menuId) => {
-  // This would be implemented in the composable
-  console.log('Load menu:', menuId)
-}
 </script>
 
 <style scoped>

@@ -1,10 +1,5 @@
 :root {
-  --saya-radius: 9999px;
   --saya-font-display: sans-serif;
-}
-
-.saya-pill {
-  border-radius: var(--saya-radius);
 }
 
 .tenant-layout {
@@ -28,6 +23,3 @@
   background-color: var(--ui-bg-muted);
 }
 
-.dark .tenant-layout :where(.bg-white) {
-  background-color: var(--ui-bg);
-}

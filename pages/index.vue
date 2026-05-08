@@ -16,7 +16,7 @@
               variant="outline"
               size="xl"
               color="neutral"
-              class="text-white ring-white/50 hover:bg-(--ui-bg)/10"
+              class="border-(--ui-border) text-(--ui-text-inverted) hover:bg-(--ui-bg)/10"
             >
               Start Free
             </UButton>
@@ -37,7 +37,7 @@
         </div>
 
         <div class="grid md:grid-cols-3 gap-12">
-          <UCard class="bg-(--ui-bg-muted) border border-stone-100">
+          <UCard class="bg-(--ui-bg-muted) border border-(--ui-border-muted)">
             <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center mb-6">
               <span class="text-white text-2xl">🎨</span>
             </div>
@@ -47,7 +47,7 @@
             </p>
           </UCard>
 
-          <UCard class="bg-(--ui-bg-muted) border border-stone-100">
+          <UCard class="bg-(--ui-bg-muted) border border-(--ui-border-muted)">
             <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center mb-6">
               <span class="text-white text-2xl">🤖</span>
             </div>
@@ -57,7 +57,7 @@
             </p>
           </UCard>
 
-          <UCard class="bg-(--ui-bg-muted) border border-stone-100">
+          <UCard class="bg-(--ui-bg-muted) border border-(--ui-border-muted)">
             <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center mb-6">
               <span class="text-white text-2xl">📊</span>
             </div>
@@ -73,13 +73,13 @@
       <AppSection bg="black" padding="xl">
         <div class="text-center">
           <h2 class="text-4xl font-bold mb-6 italic text-white">Ready to grow your restaurant?</h2>
-          <p class="text-stone-400 text-xl mb-10">Join hundreds of restaurants building their future with KrabiClaw.</p>
+          <p class="text-(--ui-text-dimmed) text-xl mb-10">Join hundreds of restaurants building their future with KrabiClaw.</p>
           <UButton
             to="/signup"
             variant="solid"
             color="neutral"
             size="xl"
-            class="bg-(--ui-bg) text-black hover:bg-(--ui-bg)/90"
+            class="bg-(--ui-bg) text-(--ui-text) hover:bg-(--ui-bg-elevated)"
           >
             Get Started for Free
           </UButton>
@@ -287,7 +287,7 @@
           bg="black"
           padding="xl"
         >
-          <p class="text-white/80 text-lg font-light leading-relaxed">
+          <p class="text-(--ui-text-inverted) opacity-80 text-lg font-light leading-relaxed">
             {{ getField('cta.description', businessSubtitle) }}
           </p>
         </SayaAbout>
@@ -390,10 +390,10 @@
             {{ getField('cta.description', "From our open-flame robatayaki grill to hand-rolled sushi, every dish at Saya is crafted with intention. Join us for an evening you won't forget.") }}
           </p>
           <div class="flex flex-col md:flex-row items-center justify-center gap-6">
-            <UButton to="/reservations" variant="solid" color="neutral" size="xl">
+            <UButton to="/reservations" variant="solid" color="neutral" size="xl" class="bg-(--ui-bg) text-(--ui-text) hover:bg-(--ui-bg-elevated)">
               Reserve a Table
             </UButton>
-            <UButton to="/contact" variant="outline" color="neutral" size="xl">
+            <UButton to="/contact" variant="outline" color="neutral" size="xl" class="border-(--ui-border) text-(--ui-text-inverted) hover:bg-(--ui-bg)/10">
               Contact Us
             </UButton>
           </div>

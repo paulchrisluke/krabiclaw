@@ -131,6 +131,10 @@ export default defineEventHandler(async (event) => {
       params.push(body.opening_hours ? JSON.stringify(body.opening_hours) : null)
     }
     if (body.status !== undefined) {
+      const allowedStatuses = ['active', 'inactive', 'sync_error']
+      if (!allowedStatuses.includes(body.status)) {
+        return jsonResponse({ error: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}` }, { status: 400 })
+      }
       setParts.push('status = ?')
       params.push(body.status)
     }
@@ -156,7 +160,7 @@ export default defineEventHandler(async (event) => {
       `).bind(locationId, now, session.user.id, siteId, site.organization_id))
     }
 
-    statements.unshift(db.prepare(`
+    statements.push(db.prepare(`
       UPDATE business_locations
       SET ${setParts.join(', ')}
       WHERE id = ? AND organization_id = ? AND site_id = ?
@@ -176,8 +180,8 @@ export default defineEventHandler(async (event) => {
       success: true,
       location: {
         ...location,
-        address: location.address ? JSON.parse(location.address) : null,
-        opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null,
+        address: (() => { try { return location.address ? JSON.parse(location.address) : null } catch { return null } })(),
+        opening_hours: (() => { try { return location.opening_hours ? JSON.parse(location.opening_hours) : null } catch { return null } })(),
         is_primary: Boolean(location.is_primary)
       }
     })

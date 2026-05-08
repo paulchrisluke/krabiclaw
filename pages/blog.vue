@@ -130,7 +130,7 @@
               class="flex-1 px-4 py-3 rounded-lg text-(--ui-text-highlighted)"
               aria-label="Enter your email for the newsletter"
             >
-            <UButton color="neutral" class="bg-(--ui-bg) text-black hover:bg-stone-200">Subscribe</UButton>
+            <UButton color="neutral" variant="outline">Subscribe</UButton>
           </div>
         </div>
 

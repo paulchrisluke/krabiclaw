@@ -1,12 +1,12 @@
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+  <div class="min-h-screen bg-(--ui-bg-muted) ">
     <div class="max-w-2xl mx-auto pt-16 pb-12 px-4">
       <!-- KrabiClaw Branding -->
       <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+        <h1 class="text-3xl font-bold text-(--ui-text-highlighted)  mb-2">
           Welcome to KrabiClaw
         </h1>
-        <p class="text-gray-600 dark:text-gray-400">
+        <p class="text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">
           Let's set up your restaurant website
         </p>
       </div>
@@ -32,7 +32,7 @@
             description="Your website will be automatically created at this address"
             :error="subdomainError"
           >
-            <div class="flex items-center px-4 py-3 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400">
+            <div class="flex items-center px-4 py-3 bg-(--ui-bg-elevated)  border border-gray-300 dark:border-gray-700 rounded-lg text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">
               <span class="font-mono">{{ generatedSubdomain || 'your-restaurant' }}.{{ platformHostname }}</span>
             </div>
           </UFormField>
@@ -60,21 +60,21 @@
         <!-- Features -->
         <template #footer>
           <div class="space-y-4">
-            <h3 class="text-sm font-medium text-gray-900 dark:text-white">What you'll get:</h3>
+            <h3 class="text-sm font-medium text-(--ui-text-highlighted) ">What you'll get:</h3>
             <div class="space-y-3">
-              <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+              <div class="flex items-center text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">
                 <UIcon name="i-lucide-check" class="w-4 h-4 text-green-500 mr-2" />
                 Beautiful restaurant website
               </div>
-              <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+              <div class="flex items-center text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">
                 <UIcon name="i-lucide-check" class="w-4 h-4 text-green-500 mr-2" />
                 Free subdomain ({{ generatedSubdomain || 'your-restaurant' }}.{{ platformHostname }})
               </div>
-              <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+              <div class="flex items-center text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">
                 <UIcon name="i-lucide-check" class="w-4 h-4 text-green-500 mr-2" />
                 Easy content editing
               </div>
-              <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+              <div class="flex items-center text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">
                 <UIcon name="i-lucide-check" class="w-4 h-4 text-green-500 mr-2" />
                 Mobile-friendly design
               </div>

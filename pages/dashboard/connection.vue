@@ -1,20 +1,20 @@
 <template>
   <div class="space-y-8">
     <div>
-      <h1 class="text-3xl font-bold text-gray-900">Connections</h1>
-      <p class="text-gray-600 dark:text-gray-400 mt-2">Manage your Google service integrations.</p>
+      <h1 class="text-3xl font-bold text-(--ui-text-highlighted)">Connections</h1>
+      <p class="text-(--ui-text-muted) dark:text-(--ui-text-dimmed) mt-2">Manage your Google service integrations.</p>
     </div>
 
     <!-- Google Account -->
     <UCard>
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
-          <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+          <div class="w-10 h-10 rounded-full bg-(--ui-bg-elevated)  flex items-center justify-center">
             <Icon name="i-heroicons-globe-alt" class="text-lg" />
           </div>
           <div>
-            <h2 class="font-bold text-gray-900">Google Account</h2>
-            <p class="text-sm text-gray-600 dark:text-gray-400">{{ session?.email }}</p>
+            <h2 class="font-bold text-(--ui-text-highlighted)">Google Account</h2>
+            <p class="text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">{{ session?.email }}</p>
           </div>
         </div>
         <UBadge color="success" variant="soft">Connected</UBadge>
@@ -25,14 +25,14 @@
     <UCard>
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 class="font-bold text-gray-900 mb-1">Google Business Profile</h2>
+          <h2 class="font-bold text-(--ui-text-highlighted) mb-1">Google Business Profile</h2>
           <p v-if="gbpConnected" class="text-sm text-green-600">
             ✓ {{ publicData?.business?.title || 'Connected' }}
           </p>
-          <p v-else class="text-sm text-gray-600 dark:text-gray-400">Sync your restaurant info, reviews, photos and posts</p>
+          <p v-else class="text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">Sync your restaurant info, reviews, photos and posts</p>
         </div>
         <div v-if="gbpConnected" class="flex items-center gap-3">
-          <span class="text-xs text-gray-600 dark:text-gray-400">{{ publicData?.syncedAt ? `Updated ${formatRelative(publicData.syncedAt)}` : 'Never synced' }}</span>
+          <span class="text-xs text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">{{ publicData?.syncedAt ? `Updated ${formatRelative(publicData.syncedAt)}` : 'Never synced' }}</span>
           <UButton @click="confirmUnlink" size="sm" variant="ghost" color="error">
             Unlink
           </UButton>
@@ -55,14 +55,14 @@
         </template>
       </UAlert>
       <!-- Developer details -->
-      <details v-if="gbpConnected" class="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
-        <summary class="text-xs font-medium text-gray-600 dark:text-gray-400 cursor-pointer">Developer details</summary>
+      <details v-if="gbpConnected" class="mt-6 border-t border-(--ui-border) dark:border-gray-700 pt-4">
+        <summary class="text-xs font-medium text-(--ui-text-muted) dark:text-(--ui-text-dimmed) cursor-pointer">Developer details</summary>
         <dl class="mt-3 grid grid-cols-2 gap-3 text-xs">
-          <div><dt class="text-gray-600 dark:text-gray-400">Reviews</dt><dd class="font-medium">{{ publicData?.reviews?.length ?? 0 }}</dd></div>
-          <div><dt class="text-gray-600 dark:text-gray-400">Media</dt><dd class="font-medium">{{ publicData?.media?.length ?? 0 }}</dd></div>
-          <div><dt class="text-gray-600 dark:text-gray-400">Posts</dt><dd class="font-medium">{{ publicData?.posts?.length ?? 0 }}</dd></div>
+          <div><dt class="text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">Reviews</dt><dd class="font-medium">{{ publicData?.reviews?.length ?? 0 }}</dd></div>
+          <div><dt class="text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">Media</dt><dd class="font-medium">{{ publicData?.media?.length ?? 0 }}</dd></div>
+          <div><dt class="text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">Posts</dt><dd class="font-medium">{{ publicData?.posts?.length ?? 0 }}</dd></div>
           <div>
-            <dt class="text-gray-600 dark:text-gray-400">Sync errors</dt>
+            <dt class="text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">Sync errors</dt>
             <dd :class="syncErrors.length ? 'text-red-600 font-medium' : 'font-medium'">{{ syncErrors.length }}</dd>
           </div>
         </dl>
@@ -84,11 +84,11 @@
     <UCard>
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 class="font-bold text-gray-900 mb-1">Google Analytics</h2>
+          <h2 class="font-bold text-(--ui-text-highlighted) mb-1">Google Analytics</h2>
           <p v-if="config?.ga4_property_id" class="text-sm text-green-600">
             ✓ Property {{ config.ga4_property_id }}
           </p>
-          <p v-else class="text-sm text-gray-600 dark:text-gray-400">View sessions, traffic sources and top pages in Insights</p>
+          <p v-else class="text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">View sessions, traffic sources and top pages in Insights</p>
         </div>
         <div v-if="config?.ga4_property_id" class="flex items-center gap-3">
           <UButton @click="unlinkService('ga4_property_id')" size="sm" variant="ghost" color="error">
@@ -107,7 +107,7 @@
       </div>
       <!-- Property picker -->
       <UCard v-if="ga4Properties.length" class="mt-4">
-        <p class="text-sm font-medium text-gray-900 mb-3">Select your GA4 property:</p>
+        <p class="text-sm font-medium text-(--ui-text-highlighted) mb-3">Select your GA4 property:</p>
         <div class="space-y-2">
           <UButton
             v-for="prop in ga4Properties"
@@ -118,7 +118,7 @@
             class="justify-start"
           >
             <span class="font-medium">{{ prop.name }}</span>
-            <span class="text-gray-400 text-xs ml-2">{{ prop.id }}</span>
+            <span class="text-(--ui-text-dimmed) text-xs ml-2">{{ prop.id }}</span>
           </UButton>
         </div>
       </UCard>
@@ -128,11 +128,11 @@
     <UCard>
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 class="font-bold text-gray-900 mb-1">Google Search Console</h2>
+          <h2 class="font-bold text-(--ui-text-highlighted) mb-1">Google Search Console</h2>
           <p v-if="config?.search_console_site_url" class="text-sm text-green-600">
             ✓ {{ config.search_console_site_url }}
           </p>
-          <p v-else class="text-sm text-gray-600 dark:text-gray-400">View search queries, clicks and rankings in Insights</p>
+          <p v-else class="text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">View search queries, clicks and rankings in Insights</p>
         </div>
         <div v-if="config?.search_console_site_url" class="flex items-center gap-3">
           <UButton @click="unlinkService('search_console_site_url')" size="sm" variant="ghost" color="error">
@@ -151,7 +151,7 @@
       </div>
       <!-- Site picker -->
       <UCard v-if="gscSites.length" class="mt-4">
-        <p class="text-sm font-medium text-gray-900 mb-3">Select your verified site:</p>
+        <p class="text-sm font-medium text-(--ui-text-highlighted) mb-3">Select your verified site:</p>
         <div class="space-y-2">
           <UButton
             v-for="site in gscSites"
@@ -162,7 +162,7 @@
             class="justify-start"
           >
             <span class="font-medium">{{ site.url }}</span>
-            <span class="text-gray-400 ml-2 text-xs">{{ site.permission }}</span>
+            <span class="text-(--ui-text-dimmed) ml-2 text-xs">{{ site.permission }}</span>
           </UButton>
         </div>
       </UCard>
