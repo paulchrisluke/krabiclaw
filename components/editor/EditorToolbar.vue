@@ -1,12 +1,12 @@
 <template>
   <UCard v-if="editMode" class="editor-toolbar fixed top-4 right-4 z-50 min-w-80">
     <!-- Site and Scope Info -->
-    <div class="mb-4 pb-4 border-b border-stone-200">
-      <div class="text-sm font-medium text-stone-900 mb-2">
+    <div class="mb-4 pb-4 border-b border-(--ui-border)">
+      <div class="text-sm font-medium text-(--ui-text-highlighted) mb-2">
         {{ context?.site?.name }}
       </div>
       <div class="flex items-center justify-between">
-        <div class="text-sm text-stone-600">Editing:</div>
+        <div class="text-sm text-(--ui-text-muted)">Editing:</div>
         <USelect 
           v-model="selectedScopeId" 
           :items="scopeOptions"
@@ -19,7 +19,7 @@
     <!-- Draft Status -->
     <div class="mb-4">
       <div class="flex items-center justify-between text-sm">
-        <span class="text-stone-600">Draft Status:</span>
+        <span class="text-(--ui-text-muted)">Draft Status:</span>
         <UBadge :color="hasDrafts ? 'warning' : 'success'" variant="soft" size="sm">
           {{ hasDrafts ? 'Has drafts' : 'No drafts' }}
         </UBadge>
@@ -32,7 +32,7 @@
       <UButton
         @click="saveDraft"
         :disabled="!hasChanges || saving"
-        color="info"
+        color="neutral"
         size="sm"
         block
         :loading="saving"
@@ -44,7 +44,7 @@
       <UButton
         @click="publishChanges"
         :disabled="!hasDrafts || publishing || !canPublish"
-        color="success"
+        color="primary"
         size="sm"
         block
         :loading="publishing"
@@ -68,7 +68,7 @@
     </div>
 
     <!-- Exit Edit Mode -->
-    <div class="mt-4 pt-4 border-t border-stone-200">
+    <div class="mt-4 pt-4 border-t border-(--ui-border)">
       <UButton
         @click="exitEditMode"
         variant="outline"

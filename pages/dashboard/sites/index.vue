@@ -7,12 +7,11 @@
     />
 
     <UPageBody>
-      <UCard v-if="pending">
-        <div class="flex items-center gap-3 text-sm text-(--ui-text-muted)">
-          <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
-          Loading websites...
-        </div>
-      </UCard>
+      <div v-if="pending" class="grid gap-4">
+        <USkeleton class="h-24 w-full" />
+        <USkeleton class="h-24 w-full" />
+        <USkeleton class="h-24 w-full" />
+      </div>
 
       <UAlert
         v-else-if="error"

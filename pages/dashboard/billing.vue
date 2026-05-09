@@ -6,12 +6,14 @@
     />
 
     <UPageBody>
-      <UCard v-if="loading">
-        <div class="flex items-center gap-3 text-sm text-(--ui-text-muted)">
-          <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
-          Loading billing...
+      <div v-if="loading" class="space-y-6">
+        <USkeleton class="h-28 w-full" />
+        <div class="grid gap-4 lg:grid-cols-3">
+          <USkeleton class="h-64" />
+          <USkeleton class="h-64" />
+          <USkeleton class="h-64" />
         </div>
-      </UCard>
+      </div>
 
       <div v-else class="space-y-6">
         <UAlert

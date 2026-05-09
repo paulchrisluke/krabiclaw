@@ -319,7 +319,7 @@
           <UCard v-if="activeFieldRequiresGoogleUpgrade">
             <div class="space-y-4">
               <div class="flex items-start gap-3">
-                <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300">
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-(--ui-bg-elevated) text-(--ui-primary)">
                   <UIcon name="i-simple-icons-google" class="size-5" />
                 </div>
                 <div>

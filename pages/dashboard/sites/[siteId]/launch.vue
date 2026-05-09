@@ -7,12 +7,14 @@
     />
 
     <UPageBody>
-      <UCard v-if="loading">
-        <div class="flex items-center gap-3 text-sm text-(--ui-text-muted)">
-          <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
-          Checking launch readiness...
+      <div v-if="loading" class="space-y-4">
+        <USkeleton class="h-32 w-full" />
+        <USkeleton class="h-48 w-full" />
+        <div class="grid gap-4 lg:grid-cols-2">
+          <USkeleton class="h-40" />
+          <USkeleton class="h-40" />
         </div>
-      </UCard>
+      </div>
 
       <UAlert
         v-else-if="error"

@@ -7,12 +7,10 @@
     />
 
     <UPageBody>
-      <UCard v-if="loading">
-        <div class="flex items-center gap-3 text-sm text-(--ui-text-muted)">
-          <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
-          Loading locations...
-        </div>
-      </UCard>
+      <div v-if="loading" class="space-y-4">
+        <USkeleton class="h-24 w-full" />
+        <USkeleton class="h-48 w-full" />
+      </div>
 
       <UAlert
         v-else-if="error"

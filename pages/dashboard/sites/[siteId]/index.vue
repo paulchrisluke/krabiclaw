@@ -7,9 +7,14 @@
     />
 
     <UPageBody>
-      <div v-if="loading" class="grid gap-4">
+      <div v-if="loading" class="space-y-4">
         <USkeleton class="h-32 w-full" />
         <USkeleton class="h-48 w-full" />
+        <div class="grid gap-4 md:grid-cols-3">
+          <USkeleton class="h-20" />
+          <USkeleton class="h-20" />
+          <USkeleton class="h-20" />
+        </div>
       </div>
 
       <UAlert
@@ -21,23 +26,18 @@
       />
 
       <div v-else-if="site" class="space-y-6">
+        <!-- No locations prompt -->
         <UCard v-if="locations.length === 0">
           <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-center">
             <div>
               <UBadge color="warning" variant="soft">Location required</UBadge>
-              <h2 class="mt-4 text-2xl font-semibold text-[var(--ui-text-highlighted)]">Add your first location</h2>
-              <p class="mt-2 max-w-2xl text-sm text-[var(--ui-text-muted)]">
+              <h2 class="mt-4 text-2xl font-semibold text-(--ui-text-highlighted)">Add your first location</h2>
+              <p class="mt-2 max-w-2xl text-sm text-(--ui-text-muted)">
                 Location content, menus, hours, addresses, and Google Business sync all start with a physical location.
               </p>
             </div>
-
             <div class="flex flex-col gap-2">
-              <UButton
-                :to="`/dashboard/sites/${siteId}/settings?tab=locations`"
-                icon="i-heroicons-plus"
-                size="lg"
-                block
-              >
+              <UButton :to="`/dashboard/sites/${siteId}/locations`" icon="i-heroicons-plus" size="lg" block>
                 Add Location
               </UButton>
               <UButton
@@ -53,70 +53,74 @@
           </div>
         </UCard>
 
-        <div v-else>
-          <UCard>
-            <template #header>
-              <div class="flex items-center justify-between gap-4">
-                <div>
-                  <h2 class="font-semibold text-[var(--ui-text-highlighted)]">Locations</h2>
-                  <p class="mt-1 text-sm text-[var(--ui-text-muted)]">Choose a location to edit local content, menu, and details.</p>
+        <!-- Locations card -->
+        <UCard v-else>
+          <template #header>
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <h2 class="font-semibold text-(--ui-text-highlighted)">Locations</h2>
+                <p class="mt-1 text-sm text-(--ui-text-muted)">
+                  Choose a location to edit local content, menu, and details.
+                </p>
+              </div>
+              <UButton
+                :to="`/dashboard/sites/${siteId}/locations`"
+                icon="i-heroicons-arrow-right"
+                trailing
+                color="neutral"
+                variant="soft"
+              >
+                Manage All
+              </UButton>
+            </div>
+          </template>
+
+          <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <NuxtLink
+              v-for="location in locations"
+              :key="location.id"
+              :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`"
+              class="group relative rounded-lg border border-(--ui-border) p-4 transition hover:bg-(--ui-bg-elevated)"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <p class="truncate font-medium text-(--ui-text-highlighted)">{{ location.title }}</p>
+                    <UBadge v-if="location.is_primary" color="primary" variant="soft" size="xs">Primary</UBadge>
+                  </div>
+                  <p class="mt-1 truncate text-sm text-(--ui-text-muted)">
+                    {{ addressLabel(location) || location.city || `/${location.slug}` }}
+                  </p>
                 </div>
+                <UIcon name="i-heroicons-arrow-right" class="size-4 shrink-0 text-(--ui-text-muted) transition group-hover:text-(--ui-primary)" />
+              </div>
+              <div class="mt-3 flex items-center gap-2">
+                <UButton
+                  :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`"
+                  size="xs"
+                  block
+                >
+                  Edit Menu
+                </UButton>
                 <UButton
                   :to="`/dashboard/sites/${siteId}/locations`"
-                  icon="i-heroicons-arrow-right"
-                  trailing
+                  size="xs"
                   color="neutral"
-                  variant="soft"
-                >
-                  Manage All
-                </UButton>
+                  variant="ghost"
+                  icon="i-heroicons-cog-6-tooth"
+                />
               </div>
-            </template>
+            </NuxtLink>
+          </div>
+        </UCard>
 
-            <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <NuxtLink
-                v-for="location in locations"
-                :key="location.id"
-                :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`"
-                class="group relative rounded-lg border border-[var(--ui-border)] p-4 transition hover:border-[var(--ui-border-muted)] hover:bg-[var(--ui-bg-muted)]"
-              >
-                <div class="flex items-start justify-between gap-3">
-                  <div class="min-w-0 flex-1">
-                    <div class="flex items-center gap-2">
-                      <p class="truncate font-medium text-[var(--ui-text-highlighted)]">{{ location.title }}</p>
-                      <UBadge v-if="location.is_primary" color="primary" variant="soft" size="xs">Primary</UBadge>
-                    </div>
-                    <p class="mt-1 truncate text-sm text-[var(--ui-text-muted)]">{{ addressLabel(location) || location.city || `/${location.slug}` }}</p>
-                  </div>
-                  <UIcon name="i-heroicons-arrow-right" class="size-4 shrink-0 text-[var(--ui-text-muted) transition group-hover:text-[var(--ui-primary)]" />
-                </div>
-                <div class="mt-3 flex items-center gap-2">
-                  <UButton
-                    :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`"
-                    size="xs"
-                    block
-                  >
-                    Edit Menu
-                  </UButton>
-                  <UButton
-                    :to="`/dashboard/sites/${siteId}/settings?tab=locations&locationId=${location.id}`"
-                    size="xs"
-                    color="neutral"
-                    variant="ghost"
-                    icon="i-heroicons-cog-6-tooth"
-                  />
-                </div>
-              </NuxtLink>
-            </div>
-          </UCard>
-        </div>
-
+        <!-- Launch Readiness card -->
         <UCard>
           <template #header>
             <div class="flex items-center justify-between gap-4">
               <div>
-                <h2 class="font-semibold text-[var(--ui-text-highlighted)]">Launch Readiness</h2>
-                <p class="mt-1 text-sm text-[var(--ui-text-muted)]">Complete these steps to go live</p>
+                <h2 class="font-semibold text-(--ui-text-highlighted)">Launch Readiness</h2>
+                <p class="mt-1 text-sm text-(--ui-text-muted)">Complete these steps to go live</p>
               </div>
               <UBadge :color="launchProgress === 100 ? 'success' : 'warning'" variant="soft" size="lg">
                 {{ launchProgress }}%
@@ -132,13 +136,19 @@
                 v-for="item in requiredFields"
                 :key="item.label"
                 class="flex items-center justify-between gap-3 rounded-lg border p-4"
-                :class="item.done ? 'border-[var(--ui-border)] bg-[var(--ui-bg)]' : 'border-[var(--ui-border-muted)] bg-[var(--ui-bg-muted)]'"
+                :class="item.done ? 'border-(--ui-border) bg-(--ui-bg)' : 'border-(--ui-border) bg-(--ui-bg-elevated)'"
               >
                 <div class="flex items-center gap-3">
-                  <div class="size-5 rounded-full flex items-center justify-center" :class="item.done ? 'bg-green-500' : 'bg-[var(--ui-border-muted)]'">
-                    <UIcon v-if="item.done" name="i-heroicons-check" class="size-3 text-white" />
+                  <div
+                    class="flex size-5 items-center justify-center rounded-full"
+                    :class="item.done ? 'bg-(--ui-success)' : 'bg-(--ui-border)'"
+                  >
+                    <UIcon v-if="item.done" name="i-heroicons-check" class="size-3 text-(--ui-bg)" />
                   </div>
-                  <span class="text-sm font-medium" :class="item.done ? 'text-[var(--ui-text-highlighted)]' : 'text-[var(--ui-text-muted)]'">
+                  <span
+                    class="text-sm font-medium"
+                    :class="item.done ? 'text-(--ui-text-highlighted)' : 'text-(--ui-text-muted)'"
+                  >
                     {{ item.label }}
                   </span>
                 </div>
@@ -156,18 +166,19 @@
           </div>
         </UCard>
 
+        <!-- Stats row -->
         <div class="grid gap-4 md:grid-cols-3">
           <UCard>
-            <p class="text-sm text-[var(--ui-text-muted)]">Locations</p>
-            <p class="mt-2 text-3xl font-semibold text-[var(--ui-text-highlighted)]">{{ locations.length }}</p>
+            <p class="text-sm text-(--ui-text-muted)">Locations</p>
+            <p class="mt-2 text-3xl font-semibold text-(--ui-text-highlighted)">{{ locations.length }}</p>
           </UCard>
           <UCard>
-            <p class="text-sm text-[var(--ui-text-muted)]">Menu items</p>
-            <p class="mt-2 text-3xl font-semibold text-[var(--ui-text-highlighted)]">{{ menuItemsCount }}</p>
+            <p class="text-sm text-(--ui-text-muted)">Menu items</p>
+            <p class="mt-2 text-3xl font-semibold text-(--ui-text-highlighted)">{{ menuItemsCount }}</p>
           </UCard>
           <UCard>
-            <p class="text-sm text-[var(--ui-text-muted)]">Reviews</p>
-            <p class="mt-2 text-3xl font-semibold text-[var(--ui-text-highlighted)]">{{ reviewCount }}</p>
+            <p class="text-sm text-(--ui-text-muted)">Reviews</p>
+            <p class="mt-2 text-3xl font-semibold text-(--ui-text-highlighted)">{{ reviewCount }}</p>
           </UCard>
         </div>
       </div>
@@ -196,7 +207,6 @@ const siteId = route.params.siteId as string
 const loading = ref(true)
 const error = ref<string | null>(null)
 const site = ref<any>(null)
-const launchReadiness = ref<any>(null)
 const locations = ref<BusinessLocation[]>([])
 const menuItemsCount = ref(0)
 const reviewCount = ref(0)
@@ -204,7 +214,7 @@ const reviewCount = ref(0)
 const requiredFields = computed(() => [
   { label: 'Restaurant name', done: !!site.value?.brand_name, to: `/dashboard/sites/${siteId}/settings` },
   { label: 'Primary location', done: locations.value.length > 0, to: `/dashboard/sites/${siteId}/locations` },
-  { label: 'Phone number', done: !!primaryLocation.value?.phone, to: `/dashboard/sites/${siteId}/settings?tab=locations&locationId=${primaryLocation.value?.id || locations.value[0]?.id}` },
+  { label: 'Phone number', done: !!primaryLocation.value?.phone, to: `/dashboard/sites/${siteId}/locations` },
   { label: 'At least 3 menu items', done: menuItemsCount.value >= 3, to: { path: `/dashboard/sites/${siteId}/menu`, query: { locationId: primaryLocation.value?.id || locations.value[0]?.id } } }
 ])
 
@@ -259,8 +269,11 @@ const loadSiteData = async () => {
 
     site.value = settingsResponse.settings
     locations.value = locationsResponse.locations
-    menuItemsCount.value = menuResponse.success && menuResponse.menu?.items && Array.isArray(menuResponse.menu.items) ? menuResponse.menu.items.length : 0
-    reviewCount.value = googleResponse.reviews ? googleResponse.reviews.length : 0
+    menuItemsCount.value =
+      menuResponse.success && Array.isArray(menuResponse.menu?.items)
+        ? menuResponse.menu.items.length
+        : 0
+    reviewCount.value = Array.isArray(googleResponse.reviews) ? googleResponse.reviews.length : 0
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load dashboard data'
   } finally {

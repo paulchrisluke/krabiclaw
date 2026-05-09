@@ -6,11 +6,10 @@
     />
 
     <UPageBody>
-      <div v-if="loading" class="flex items-center justify-center py-12">
-        <div class="flex items-center gap-3 text-sm text-[var(--ui-text-muted)]">
-          <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
-          Loading settings...
-        </div>
+      <div v-if="loading" class="space-y-6">
+        <USkeleton class="h-48 w-full" />
+        <USkeleton class="h-56 w-full" />
+        <USkeleton class="h-40 w-full" />
       </div>
 
       <UAlert v-else-if="error" color="error" variant="soft" icon="i-heroicons-exclamation-triangle" :description="error" />
@@ -49,12 +48,11 @@
               </div>
             </UFormField>
 
-            <div>
-              <p class="mb-2 block text-sm font-medium text-[var(--ui-text)]">Status</p>
+            <UFormField label="Status">
               <UBadge :color="settings.status === 'active' ? 'success' : 'warning'" variant="soft">
                 {{ settings.status }}
               </UBadge>
-            </div>
+            </UFormField>
           </div>
         </UCard>
 
@@ -94,7 +92,7 @@
 
             <UFormField label="Brand Color" help="Primary color used for buttons and accents on your site.">
               <div class="flex items-center gap-3">
-                <input type="color" v-model="form.brand_color" class="h-9 w-16 cursor-pointer rounded border border-[var(--ui-border)]" />
+                <UInput v-model="form.brand_color" type="color" class="h-9 w-16 cursor-pointer p-1" />
                 <UInput v-model="form.brand_color" placeholder="#e87f67" class="w-32 font-mono text-sm" />
               </div>
             </UFormField>
