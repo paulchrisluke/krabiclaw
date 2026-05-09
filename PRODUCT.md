@@ -56,6 +56,43 @@ First actions:
 - **Post to Google Business** — generate copy from a menu item, call existing GMB posts utility once API is approved
 - **Blog/event post** — generate content from prompt, save to site content via existing draft/publish flow
 
+#### Menu Extraction — Key Design Notes
+
+**Input friction is the #1 problem.** Owners send photos and PDFs. Photos are increasingly AI-generated (Midjourney/DALL-E food shots with text overlay) — OCR/vision must handle this, not just scanned documents. Approach:
+- Use a vision-capable model (Claude claude-sonnet-4-6 via AI Gateway) for both photos and PDF-converted images
+- For PDFs: convert pages to images server-side (pdf-to-image via Wasm or Cloudflare Worker), then pass to vision model
+- Structured output: model returns JSON matching `menu_items` schema (section, name, description, price) — validated before writing
+- AI-generated food photography often has stylized/embedded text; prompt must instruct model to extract visible text only, not infer
+
+**Draft-first, always.** Agent writes to the draft layer (`menus.status = 'draft'`, `site_content_drafts`), never directly to published. Owner sees a preview diff in the dashboard before confirming. No AI action publishes without an explicit owner approval click.
+
+**Preview/approval flow:**
+1. Owner uploads PDF/photo → agent extracts → creates draft menu items
+2. Dashboard shows side-by-side: extracted items vs. current published menu
+3. Owner edits inline if needed, then clicks "Publish" — calls existing publish endpoint
+4. Agent actions that fail validation are surfaced as warnings, not silent drops
+
+#### Credit / Token Billing System
+
+All AI calls route through **Cloudflare AI Gateway** — this is the single metering point. Gateway logs tokens in/out per request with metadata we attach (org_id, site_id, action_type).
+
+**Credit model:**
+- 1 credit = 1,000 tokens (input + output combined, weighted — output costs ~3× more, so normalize)
+- Free tier: 500 credits on signup (~500K tokens, enough for ~10 menu extractions)
+- Paid tier ($25/mo): 5,000 credits/mo included; overage billed at cost + markup
+- Image/video generation: paid tier only; charged at a higher credit rate (images are expensive)
+- Multiplier on Anthropic/CF cost: target ~2–3× pass-through (covers infra margin + support)
+
+**Schema additions needed:**
+- `ai_credits` table: `org_id`, `balance`, `lifetime_used`, `last_topped_up_at`
+- `ai_usage_log` table: `org_id`, `site_id`, `action`, `model`, `input_tokens`, `output_tokens`, `credits_charged`, `cf_gateway_log_id`, `created_at`
+  - `cf_gateway_log_id` links back to Cloudflare AI Gateway log entry for reconciliation
+
+**Gateway tracking:**  
+Cloudflare AI Gateway exposes per-request logs via the REST API (`GET /accounts/{id}/ai-gateway/gateways/{gateway}/logs`). A nightly worker reconciles gateway logs → `ai_usage_log` to catch any drift. Custom metadata (org_id, action) is passed as request headers through the gateway so logs are attributable.
+
+**Enforcement:** Middleware on all `/api/ai/*` routes checks `ai_credits.balance > 0` before forwarding to gateway. On credit exhaustion, return a 402 with upgrade prompt.
+
 ### 2. WhatsApp notification foundation
 **Why second:** Unblocks the agent confirmation loop (agent acts → tenant gets WhatsApp message). Start with send-only, no login yet.
 

@@ -63,9 +63,12 @@
             </UBadge>
           </div>
         </div>
-        <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-plus" @click="showCreateMenuForm = true">
-          New menu
-        </UButton>
+        <div class="flex items-center gap-2">
+          <AiMenuImport :site-id="props.siteId" :menu-id="currentMenu?.id" @imported="handleAiImport" />
+          <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-plus" @click="showCreateMenuForm = true">
+            New menu
+          </UButton>
+        </div>
       </div>
 
       <!-- Inline create menu form -->
@@ -231,6 +234,10 @@ watch(currentMenu, (menu: any) => {
 
 const handleMenuChange = async (id: string) => {
   await loadMenu(id)
+}
+
+const handleAiImport = async (menuId: string) => {
+  await loadMenu(menuId)
 }
 
 // Create menu inline form

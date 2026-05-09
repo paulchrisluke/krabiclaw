@@ -447,6 +447,37 @@ CREATE TABLE IF NOT EXISTS onboarding_steps (
 );
 
 --------------------------------------------------------------------------------
+-- AI Credits & Usage
+--------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS ai_credits (
+  organization_id TEXT PRIMARY KEY,
+  balance INTEGER NOT NULL DEFAULT 0,
+  lifetime_used INTEGER NOT NULL DEFAULT 0,
+  last_topped_up_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE
+);
+
+-- Each AI call: one row, linked to CF Gateway log for reconciliation
+CREATE TABLE IF NOT EXISTS ai_usage_log (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT,
+  action TEXT NOT NULL,
+  model TEXT NOT NULL,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  credits_charged INTEGER NOT NULL DEFAULT 0,
+  cf_gateway_log_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_usage_log_org ON ai_usage_log(organization_id, created_at DESC);
+
+--------------------------------------------------------------------------------
 -- Seed Data
 --------------------------------------------------------------------------------
 
