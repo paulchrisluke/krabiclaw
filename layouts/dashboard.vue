@@ -10,30 +10,50 @@
     >
       <UDashboardSidebar resizable collapsible>
         <template #header="{ collapsed }">
-          <div v-if="collapsed" class="flex items-center justify-center">
-            <div class="flex size-8 items-center justify-center rounded-lg bg-primary-600">
-              <span class="text-sm font-bold text-white">K</span>
+          <!-- Org level -->
+          <template v-if="!inSiteWorkspace">
+            <div v-if="collapsed" class="flex items-center justify-center">
+              <div class="flex size-8 items-center justify-center rounded-lg bg-primary-600">
+                <span class="text-sm font-bold text-white">K</span>
+              </div>
             </div>
-          </div>
-
-          <div v-else class="space-y-1">
-            <UDropdownMenu
-              :items="siteMenuItems"
-              :content="{ align: 'start', collisionPadding: 12 }"
-              :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-52' }"
-            >
-              <UButton
-                v-bind="selectedSiteButton"
-                trailing-icon="i-lucide-chevrons-up-down"
-                color="neutral"
-                variant="ghost"
-                square
-                class="w-full data-[state=open]:bg-elevated overflow-hidden"
-                :ui="{ trailingIcon: 'text-dimmed ms-auto' }"
+            <div v-else class="space-y-1">
+              <UDropdownMenu
+                :items="siteMenuItems"
+                :content="{ align: 'start', collisionPadding: 12 }"
+                :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-52' }"
+              >
+                <UButton
+                  v-bind="selectedSiteButton"
+                  trailing-icon="i-lucide-chevrons-up-down"
+                  color="neutral"
+                  variant="ghost"
+                  square
+                  class="w-full data-[state=open]:bg-elevated overflow-hidden"
+                  :ui="{ trailingIcon: 'text-dimmed ms-auto' }"
+                />
+              </UDropdownMenu>
+            </div>
+          </template>
+          
+          <!-- Site level — show site name with back button -->
+          <template v-else>
+            <div v-if="collapsed" class="flex items-center justify-center">
+              <div class="flex size-8 items-center justify-center rounded-lg bg-primary-600">
+                <span class="text-sm font-bold text-white">K</span>
+              </div>
+            </div>
+            <div v-else class="flex items-center gap-2 px-2">
+              <UButton 
+                to="/dashboard/sites" 
+                icon="i-heroicons-arrow-left" 
+                variant="ghost" 
+                color="neutral" 
+                size="xs"
               />
-            </UDropdownMenu>
-
-          </div>
+              <span class="font-semibold text-sm truncate">{{ siteContext?.name }}</span>
+            </div>
+          </template>
         </template>
 
         <template #default="{ collapsed }">
@@ -119,10 +139,15 @@ const selectedSiteLabel = computed(() =>
     || 'Choose a website'
 )
 
-const sitePath = (path = '', query?: Record<string, string>) => ({
-  path: `/dashboard/sites/${activeSiteId.value}${path}`,
-  query
-})
+const sitePath = (path = '', query?: Record<string, string>) => {
+  if (!activeSiteId.value) {
+    throw new Error('sitePath requires an active site ID')
+  }
+  return {
+    path: `/dashboard/sites/${activeSiteId.value}${path}`,
+    query
+  }
+}
 
 const navbarTitle = computed(() => {
   if (!inSiteWorkspace.value || !siteContext.value) return 'Dashboard'
@@ -181,25 +206,35 @@ const navigationItems = computed(() => {
 })
 
 const loadSites = async () => {
-  const response = await $fetch<{ sites: DashboardSite[] }>('/api/sites')
-  sites.value = response.sites || []
+  try {
+    const response = await $fetch<{ sites: DashboardSite[] }>('/api/sites')
+    sites.value = response.sites || []
 
-  if (routeSiteId.value) {
-    selectedSiteId.value = routeSiteId.value
-  } else if (!selectedSiteId.value && sites.value.length > 0) {
-    selectedSiteId.value = sites.value[0]!.id
+    if (routeSiteId.value) {
+      selectedSiteId.value = routeSiteId.value
+    } else if (!selectedSiteId.value && sites.value.length > 0) {
+      selectedSiteId.value = sites.value[0]!.id
+    }
+  } catch (err) {
+    console.error('Failed to load sites:', err)
+    sites.value = []
   }
 }
 
 const loadSiteContext = async () => {
-  if (!activeSiteId.value) {
+  if (!routeSiteId.value) {
     siteContext.value = null
     return
   }
 
-  const settingsResponse = await $fetch<any>(`/api/sites/${activeSiteId.value}/settings`)
+  try {
+    const settingsResponse = await $fetch<any>(`/api/sites/${routeSiteId.value}/settings`)
 
-  if (settingsResponse.success) siteContext.value = settingsResponse.settings
+    if (settingsResponse.success) siteContext.value = settingsResponse.settings
+  } catch (err) {
+    console.error('Failed to load site context:', err)
+    siteContext.value = null
+  }
 }
 
 const handleSiteChange = async (siteId: string) => {
@@ -218,7 +253,6 @@ watch(
 
 onMounted(async () => {
   await loadSites()
-  await loadSiteContext()
 })
 
 async function handleSignOut() {

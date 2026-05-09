@@ -135,35 +135,80 @@ const plans = [
 
 const loadBillingData = async () => {
   loading.value = true
-  const response = await $fetch<any>('/api/billing/status')
-  billing.value = response.billing
-  loading.value = false
+  try {
+    const response = await $fetch<any>('/api/billing/status')
+    billing.value = response.billing
+  } catch (err) {
+    console.error('Failed to load billing data:', err)
+    billing.value = null
+  } finally {
+    loading.value = false
+  }
 }
 
 const upgradeToPlan = async (plan: string) => {
   upgrading.value = plan
   errorMessage.value = ''
-  const response = await $fetch<any>('/api/billing/checkout', {
-    method: 'POST',
-    body: { organizationId: billing.value.organizationId || '', plan }
-  })
-  upgrading.value = null
-  if (response.checkoutUrl) await navigateTo(response.checkoutUrl, { external: true })
+  try {
+    if (!billing.value) {
+      errorMessage.value = 'Billing data not loaded'
+      return
+    }
+    const orgId = billing.value.organizationId || ''
+    if (!orgId) {
+      errorMessage.value = 'Organization ID not found'
+      return
+    }
+    const response = await $fetch<any>('/api/billing/checkout', {
+      method: 'POST',
+      body: { organizationId: orgId, plan }
+    })
+    if (response?.checkoutUrl) {
+      await navigateTo(response.checkoutUrl, { external: true })
+    } else {
+      errorMessage.value = 'Failed to create checkout session'
+    }
+  } catch (err) {
+    errorMessage.value = err instanceof Error ? err.message : 'Failed to create checkout session'
+  } finally {
+    upgrading.value = null
+  }
 }
 
 const openBillingPortal = async () => {
   portalLoading.value = true
   errorMessage.value = ''
-  const response = await $fetch<any>('/api/billing/portal', {
-    method: 'POST',
-    body: { organizationId: billing.value.organizationId || '' }
-  })
-  portalLoading.value = false
-  if (response.portalUrl) await navigateTo(response.portalUrl, { external: true })
+  try {
+    const orgId = billing.value?.organizationId ?? ''
+    if (!orgId) {
+      errorMessage.value = 'Organization ID not found'
+      return
+    }
+    const response = await $fetch<any>('/api/billing/portal', {
+      method: 'POST',
+      body: { organizationId: orgId }
+    })
+    if (response?.portalUrl) {
+      await navigateTo(response.portalUrl, { external: true })
+    } else {
+      errorMessage.value = 'Failed to open billing portal'
+    }
+  } catch (err) {
+    errorMessage.value = err instanceof Error ? err.message : 'Failed to open billing portal'
+  } finally {
+    portalLoading.value = false
+  }
 }
 
-const formatDate = (dateString: string) =>
-  new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+const formatDate = (dateString: string) => {
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime()) || date.toString() === 'Invalid Date') return '-'
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  } catch {
+    return '-'
+  }
+}
 
 onMounted(async () => {
   if (route.query.success === 'true') successMessage.value = 'Payment successful. Your plan has been updated.'

@@ -55,11 +55,12 @@
               </UButton>
               <UButton
                 v-if="siteUrl(site)"
-                :href="siteUrl(site)"
+                :to="siteUrl(site)!"
                 target="_blank"
                 icon="i-heroicons-arrow-top-right-on-square"
                 color="neutral"
                 variant="soft"
+                external
               >
                 View Site
               </UButton>
@@ -86,12 +87,27 @@ interface DashboardSite {
 const config = useRuntimeConfig()
 const { data: response, pending, error } = await useFetch<{ sites: DashboardSite[] }>('/api/sites')
 const sites = computed(() => response.value?.sites || [])
-const platformUrl = computed(() => new URL(config.public.freeSiteDomain))
+const platformUrl = computed(() => {
+  try {
+    const domain = config.public.freeSiteDomain
+    if (!domain) return null
+    return new URL(domain)
+  } catch {
+    return null
+  }
+})
 
-const siteUrlLabel = (site: DashboardSite) => site.custom_domain || `${site.subdomain}.${platformUrl.value.hostname}`
-const siteUrl = (site: DashboardSite) => {
+const siteUrlLabel = (site: DashboardSite) => {
+  if (site.custom_domain) return site.custom_domain
+  if (site.subdomain && platformUrl.value) return `${site.subdomain}.${platformUrl.value.hostname}`
+  return null
+}
+const siteUrl = (site: DashboardSite): string | null => {
   if (site.custom_domain) return `https://${site.custom_domain}`
-  return `${platformUrl.value.protocol}//${site.subdomain}.${platformUrl.value.hostname}${platformUrl.value.port ? `:${platformUrl.value.port}` : ''}`
+  if (site.subdomain && platformUrl.value) {
+    return `${platformUrl.value.protocol}//${site.subdomain}.${platformUrl.value.hostname}${platformUrl.value.port ? `:${platformUrl.value.port}` : ''}`
+  }
+  return null
 }
 
 useSeoMeta({ title: 'Websites | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

@@ -1,6 +1,7 @@
 // PATCH update site settings
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 
 export default defineEventHandler(async (event) => {
@@ -77,8 +78,15 @@ export default defineEventHandler(async (event) => {
       setParts.push('contact_email = ?')
       params.push(body.contact_email)
     }
+    if (body.brand_color !== undefined) {
+      if (body.brand_color) {
+        await setConfig(db, site.organization_id as string, siteId, 'brand_color', body.brand_color)
+      } else {
+        await deleteConfig(db, site.organization_id as string, siteId, 'brand_color')
+      }
+    }
     if (body.primary_location_id !== undefined) {
-      if (body.primary_location_id) {
+      if (body.primary_location_id !== null && body.primary_location_id !== '') {
         const location = await db.prepare(`
           SELECT id
           FROM business_locations
@@ -93,7 +101,7 @@ export default defineEventHandler(async (event) => {
         }
       }
       setParts.push('primary_location_id = ?')
-      params.push(body.primary_location_id)
+      params.push(body.primary_location_id || null)
     }
     if (body.url_structure !== undefined) {
       if (!['location_subdirectories', 'brand_pages'].includes(body.url_structure)) {
@@ -140,6 +148,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const siteSettings = updatedSite.settings ? JSON.parse(String(updatedSite.settings)) : {}
+    const siteConfig = await getConfig(db, updatedSite.organization_id as string, updatedSite.id as string)
 
     const settings = {
       id: updatedSite.id,
@@ -156,6 +165,7 @@ export default defineEventHandler(async (event) => {
       brand_description: updatedSite.brand_description,
       logo_url: updatedSite.logo_url,
       contact_email: updatedSite.contact_email,
+      brand_color: siteConfig.brand_color || '',
       url_structure: siteSettings.url_structure || 'location_subdirectories',
       last_published_at: updatedSite.last_published_at,
       created_at: updatedSite.created_at,

@@ -1,351 +1,194 @@
 <template>
-  <div class="launch-readiness">
-    <!-- Header -->
-    <div class="mb-8">
-      <h1 class="text-3xl font-bold text-(--ui-text-highlighted)">Launch Readiness</h1>
-      <p class="text-(--ui-text-muted) mt-2">Check what's configured and what needs attention before launching</p>
-    </div>
+  <UPage>
+    <UPageHeader
+      title="Launch"
+      description="Check what is ready before this website goes live."
+      :links="headerLinks"
+    />
 
-    <!-- Loading state -->
-    <div v-if="loading" class="text-center py-12">
-      <p class="text-(--ui-text-muted)">Checking launch readiness...</p>
-    </div>
-
-    <!-- Error state -->
-    <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-lg p-6">
-      <p class="text-red-800">{{ error }}</p>
-    </div>
-
-    <!-- Launch readiness content -->
-    <div v-else-if="readiness" class="space-y-8">
-      <!-- Overall Status -->
-      <div class="bg-(--ui-bg) rounded-lg border border-(--ui-border) p-6">
-        <div class="flex items-center justify-between mb-6">
-          <h2 class="text-xl font-semibold text-(--ui-text-highlighted)">Overall Status</h2>
-          <span 
-            :class="[
-              'px-3 py-2 text-sm font-medium rounded-lg',
-              readiness.overall_ready 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-yellow-100 text-yellow-800'
-            ]"
-          >
-            {{ readiness.overall_ready ? '🎉 Ready to Launch!' : '⚠️ Not Ready Yet' }}
-          </span>
+    <UPageBody>
+      <UCard v-if="loading">
+        <div class="flex items-center gap-3 text-sm text-(--ui-text-muted)">
+          <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
+          Checking launch readiness...
         </div>
+      </UCard>
 
-        <div class="mb-6">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-medium text-(--ui-text)">Progress</span>
-            <span class="text-sm text-(--ui-text-muted)">
-              {{ Math.max(0, 100 - (readiness.missing_critical * 20)) }}% Complete
-            </span>
-          </div>
-          <div class="w-full bg-gray-200 rounded-full h-3">
-            <div 
-              class="bg-blue-600 h-3 rounded-full transition-all duration-500"
-              :style="{ width: `${Math.max(0, 100 - (readiness.missing_critical * 20))}%` }"
-            ></div>
-          </div>
-        </div>
+      <UAlert
+        v-else-if="error"
+        color="error"
+        variant="soft"
+        icon="i-heroicons-exclamation-triangle"
+        :description="error"
+      />
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div class="text-center">
-            <div class="text-2xl font-bold text-(--ui-text-highlighted)">{{ readiness.missing_critical }}</div>
-            <div class="text-sm text-(--ui-text-muted)">Critical Items</div>
-          </div>
-          <div class="text-center">
-            <div class="text-2xl font-bold text-(--ui-text-highlighted)">{{ readiness.missing_optional }}</div>
-            <div class="text-sm text-(--ui-text-muted)">Optional Items</div>
-          </div>
-          <div class="text-center">
-            <div class="text-2xl font-bold text-green-600">
-              {{ 6 - readiness.missing_critical - readiness.missing_optional }}
+      <div v-else-if="readiness" class="space-y-6">
+        <UCard>
+          <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <UBadge :color="readiness.overall_ready ? 'success' : 'warning'" variant="soft">
+                {{ readiness.overall_ready ? 'Ready' : 'Needs work' }}
+              </UBadge>
+              <h2 class="mt-3 text-3xl font-semibold text-(--ui-text-highlighted)">{{ readinessScore }}% complete</h2>
+              <p class="mt-2 text-sm text-(--ui-text-muted)">
+                {{ readiness.missing_critical }} critical and {{ readiness.missing_optional }} optional item{{ readiness.missing_optional === 1 ? '' : 's' }} remaining.
+              </p>
             </div>
-            <div class="text-sm text-(--ui-text-muted)">Completed</div>
-          </div>
-        </div>
-      </div>
 
-      <!-- Action Items -->
-      <div v-if="readiness.action_items.length > 0" class="bg-(--ui-bg) rounded-lg border border-(--ui-border) p-6">
-        <h2 class="text-xl font-semibold text-(--ui-text-highlighted) mb-6">Action Items</h2>
-        
-        <div class="space-y-4">
-          <div 
-            v-for="item in readiness.action_items" 
-            :key="item.section + item.item"
-            class="flex items-start justify-between p-4 border border-(--ui-border) rounded-lg"
-            :class="{
-              'border-red-200 bg-red-50': item.priority === 'critical',
-              'border-yellow-200 bg-yellow-50': item.priority === 'optional'
-            }"
-          >
-            <div class="flex-1">
-              <div class="flex items-center mb-2">
-                <span 
-                  :class="[
-                    'px-2 py-1 text-xs font-medium rounded mr-2',
-                    item.priority === 'critical' 
-                      ? 'bg-red-100 text-red-800' 
-                      : 'bg-yellow-100 text-yellow-800'
-                  ]"
-                >
-                  {{ item.priority === 'critical' ? 'Critical' : 'Optional' }}
-                </span>
-                <span class="text-sm text-(--ui-text-muted)">{{ item.section }}</span>
+            <div class="w-full max-w-sm">
+              <UProgress :model-value="readinessScore" />
+              <div class="mt-4 grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <p class="text-2xl font-semibold text-(--ui-text-highlighted)">{{ completedCount }}</p>
+                  <p class="text-xs text-(--ui-text-muted)">Done</p>
+                </div>
+                <div>
+                  <p class="text-2xl font-semibold text-(--ui-text-highlighted)">{{ readiness.missing_critical }}</p>
+                  <p class="text-xs text-(--ui-text-muted)">Critical</p>
+                </div>
+                <div>
+                  <p class="text-2xl font-semibold text-(--ui-text-highlighted)">{{ readiness.missing_optional }}</p>
+                  <p class="text-xs text-(--ui-text-muted)">Optional</p>
+                </div>
               </div>
-              <p class="text-(--ui-text-highlighted) font-medium">{{ item.description }}</p>
             </div>
-            
-            <UButton 
-              v-if="item.action_url"
-              :to="item.action_url"
-              color="info"
-              size="sm"
-              class="ml-4"
+          </div>
+        </UCard>
+
+        <UCard v-if="readiness.action_items.length > 0">
+          <template #header>
+            <h2 class="font-semibold text-(--ui-text-highlighted)">Action Items</h2>
+          </template>
+
+          <div class="divide-y divide-(--ui-border)">
+            <div
+              v-for="item in readiness.action_items"
+              :key="`${item.section}-${item.item}`"
+              class="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 md:flex-row md:items-center md:justify-between"
             >
-              Fix →
-            </UButton>
-          </div>
-        </div>
-      </div>
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <UBadge :color="item.priority === 'critical' ? 'error' : 'warning'" variant="soft" size="xs">
+                    {{ item.priority }}
+                  </UBadge>
+                  <span class="text-xs text-(--ui-text-muted)">{{ item.section }}</span>
+                </div>
+                <p class="mt-2 font-medium text-(--ui-text-highlighted)">{{ item.description }}</p>
+              </div>
 
-      <!-- Detailed Status -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Site Identity -->
-        <div class="bg-(--ui-bg) rounded-lg border border-(--ui-border) p-6">
-          <h3 class="text-lg font-semibold text-(--ui-text-highlighted) mb-4">Site Identity</h3>
-          <div class="space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Site Name</span>
-              <CheckIcon :checked="readiness.sections.site_identity.items.name" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Subdomain</span>
-              <CheckIcon :checked="readiness.sections.site_identity.items.subdomain" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Theme</span>
-              <CheckIcon :checked="readiness.sections.site_identity.items.theme" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Status Active</span>
-              <CheckIcon :checked="readiness.sections.site_identity.items.status" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Primary Location</span>
-              <CheckIcon :checked="readiness.sections.site_identity.items.primary_location" />
+              <UButton
+                v-if="item.action_url"
+                :to="item.action_url"
+                icon="i-heroicons-arrow-right"
+                trailing
+                color="neutral"
+                variant="soft"
+              >
+                Fix
+              </UButton>
             </div>
           </div>
-        </div>
+        </UCard>
 
-        <!-- Brand Basics -->
-        <div class="bg-(--ui-bg) rounded-lg border border-(--ui-border) p-6">
-          <h3 class="text-lg font-semibold text-(--ui-text-highlighted) mb-4">Brand Basics</h3>
-          <div class="space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Brand Name</span>
-              <CheckIcon :checked="readiness.sections.brand_basics.items.brand_name" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Description</span>
-              <CheckIcon :checked="readiness.sections.brand_basics.items.description" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Contact Email</span>
-              <CheckIcon :checked="readiness.sections.brand_basics.items.contact_email" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Publishing Status -->
-        <div class="bg-(--ui-bg) rounded-lg border border-(--ui-border) p-6">
-          <h3 class="text-lg font-semibold text-(--ui-text-highlighted) mb-4">Publishing Status</h3>
-          <div class="space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Site Active</span>
-              <CheckIcon :checked="readiness.sections.publishing_status.items.site_active" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Public URL</span>
-              <CheckIcon :checked="readiness.sections.publishing_status.items.public_url" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Last Published</span>
-              <CheckIcon :checked="readiness.sections.publishing_status.items.last_published" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Domain Status -->
-        <div class="bg-(--ui-bg) rounded-lg border border-(--ui-border) p-6">
-          <h3 class="text-lg font-semibold text-(--ui-text-highlighted) mb-4">Domain Status</h3>
-          <div class="space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Subdomain</span>
-              <CheckIcon :checked="readiness.sections.domain_status.items.subdomain" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Custom Domain</span>
-              <CheckIcon :checked="readiness.sections.domain_status.items.custom_domain" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Integrations -->
-        <div class="bg-(--ui-bg) rounded-lg border border-(--ui-border) p-6">
-          <h3 class="text-lg font-semibold text-(--ui-text-highlighted) mb-4">Integrations</h3>
-          <div class="space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Google Business Connected</span>
-              <CheckIcon :checked="readiness.sections.integrations.items.google_business_connected" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Locations Imported</span>
-              <CheckIcon :checked="readiness.sections.integrations.items.locations_imported" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Content Readiness -->
-        <div class="bg-(--ui-bg) rounded-lg border border-(--ui-border) p-6">
-          <h3 class="text-lg font-semibold text-(--ui-text-highlighted) mb-4">Content Readiness</h3>
-          <div class="space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Homepage Hero</span>
-              <CheckIcon :checked="readiness.sections.content_readiness.items.homepage_hero" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Menu Exists</span>
-              <CheckIcon :checked="readiness.sections.content_readiness.items.menu_exists" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Menu Items</span>
-              <CheckIcon :checked="readiness.sections.content_readiness.items.menu_items_exist" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Contact Details</span>
-              <CheckIcon :checked="readiness.sections.content_readiness.items.contact_details" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">Locations Exist</span>
-              <CheckIcon :checked="readiness.sections.content_readiness.items.locations_exist" />
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-(--ui-text)">SEO Metadata</span>
-              <CheckIcon :checked="readiness.sections.content_readiness.items.seo_metadata" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Success State -->
-      <div v-if="readiness.overall_ready" class="bg-green-50 border border-green-200 rounded-lg p-6">
-        <div class="text-center">
-          <div class="text-4xl mb-4">🎉</div>
-          <h3 class="text-xl font-semibold text-green-900 mb-2">Ready to Launch!</h3>
-          <p class="text-green-800 mb-6">
-            Your site is fully configured and ready to go live. All critical items have been completed.
-          </p>
-          <div class="flex space-x-4 justify-center">
-            <UButton 
-              :to="`/dashboard/sites/${siteId}`"
-              color="success"
-            >
-              Back to Dashboard
-            </UButton>
-            <UButton 
-              :href="siteUrl"
-              target="_blank"
-              variant="outline"
-              color="success"
-            >
-              Preview Site →
-            </UButton>
-          </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Navigation -->
-      <div class="flex items-center justify-between">
-        <NuxtLink 
-          :to="`/dashboard/sites/${siteId}`"
-          class="px-4 py-2 text-(--ui-text-muted) hover:text-(--ui-text-highlighted) font-medium"
-        >
-          ← Back to Dashboard
-        </NuxtLink>
-        
-        <div class="space-x-4">
-          <NuxtLink 
-            :to="`/dashboard/sites/${siteId}/settings`"
-            class="px-4 py-2 border border-(--ui-border) text-(--ui-text) rounded-md hover:bg-(--ui-bg-muted) transition-colors"
+        <div class="grid gap-4 lg:grid-cols-2">
+          <UCard
+            v-for="section in readinessSections"
+            :key="section.key"
           >
-            Settings
-          </NuxtLink>
+            <template #header>
+              <div class="flex items-center justify-between gap-4">
+                <h2 class="font-semibold text-(--ui-text-highlighted)">{{ section.label }}</h2>
+                <UBadge :color="section.complete ? 'success' : 'warning'" variant="soft">
+                  {{ section.complete ? 'Complete' : 'Incomplete' }}
+                </UBadge>
+              </div>
+            </template>
+
+            <div class="space-y-3">
+              <div
+                v-for="item in section.items"
+                :key="item.label"
+                class="flex items-center justify-between gap-4"
+              >
+                <span class="text-sm text-(--ui-text)">{{ item.label }}</span>
+                <UIcon
+                  :name="item.checked ? 'i-heroicons-check-circle' : 'i-heroicons-x-circle'"
+                  :class="item.checked ? 'text-(--ui-success)' : 'text-(--ui-text-muted)'"
+                  class="size-5 shrink-0"
+                />
+              </div>
+            </div>
+          </UCard>
         </div>
       </div>
-    </div>
+    </UPageBody>
+  </UPage>
 </template>
 
-<script setup>
-definePageMeta({
-  layout: 'dashboard'
-})
-import { ref, onMounted } from 'vue'
-
-// Check icon component
-const CheckIcon = ({ checked }) => {
-  return h('div', {
-    class: [
-      'w-5 h-5 rounded-full flex items-center justify-center',
-      checked ? 'bg-green-100' : 'bg-(--ui-bg-elevated)'
-    ]
-  }, [
-    h('svg', {
-      class: 'w-3 h-3',
-      fill: 'none',
-      stroke: checked ? '#10b981' : '#9ca3af',
-      viewBox: '0 0 24 24'
-    }, [
-      h('path', {
-        'stroke-linecap': 'round',
-        'stroke-linejoin': 'round',
-        'stroke-width': '2',
-        d: checked ? 'M5 13l4 4L19 7' : 'M6 18L18 6M6 6l12 12'
-      })
-    ])
-  ])
-}
+<script setup lang="ts">
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
-const siteId = route.params.siteId
+const siteId = route.params.siteId as string
 
-// State
 const loading = ref(true)
-const error = ref(null)
-const readiness = ref(null)
+const error = ref<string | null>(null)
+const readiness = ref<any>(null)
 const siteUrl = ref('')
 
-// Load launch readiness
+const headerLinks = computed(() => [
+  { label: 'Settings', icon: 'i-heroicons-cog-6-tooth', to: `/dashboard/sites/${siteId}/settings`, color: 'neutral' as const, variant: 'soft' as const },
+  { label: 'View Site', icon: 'i-heroicons-arrow-top-right-on-square', to: siteUrl.value, target: '_blank', color: 'neutral' as const, variant: 'outline' as const, disabled: !siteUrl.value }
+])
+
+const totalLaunchItems = computed(() =>
+  readinessSections.value.reduce((total, section) => total + section.items.length, 0)
+)
+
+const completedCount = computed(() =>
+  readinessSections.value.reduce((total, section) => total + section.items.filter(item => item.checked).length, 0)
+)
+
+const readinessScore = computed(() => {
+  if (!totalLaunchItems.value) return 0
+  return Math.round((completedCount.value / totalLaunchItems.value) * 100)
+})
+
+const labelize = (key: string) =>
+  key.split('_').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+
+const readinessSections = computed(() => {
+  if (!readiness.value?.sections) return []
+
+  return Object.entries(readiness.value.sections).map(([key, section]: [string, any]) => {
+    const items = Object.entries(section.items || {}).map(([itemKey, checked]) => ({
+      label: labelize(itemKey),
+      checked: Boolean(checked)
+    }))
+
+    return {
+      key,
+      label: labelize(key),
+      items,
+      complete: items.every(item => item.checked)
+    }
+  })
+})
+
 const loadReadiness = async () => {
   loading.value = true
   error.value = null
-
   try {
-    const response = await $fetch(`/api/sites/${siteId}/launch-readiness`)
-    if (response.success) {
-      readiness.value = response.launch_readiness
-      
-      // Get site URL for preview
-      const settingsResponse = await $fetch(`/api/sites/${siteId}/settings`)
-      if (settingsResponse.success) {
-        siteUrl.value = settingsResponse.settings.public_url
-      }
-    } else {
-      throw new Error('Failed to load launch readiness')
-    }
+    const [readinessResponse, settingsResponse] = await Promise.all([
+      $fetch<any>(`/api/sites/${siteId}/launch-readiness`),
+      $fetch<any>(`/api/sites/${siteId}/settings`)
+    ])
+
+    if (!readinessResponse.success) throw new Error('Failed to load launch readiness')
+    if (!settingsResponse.success) throw new Error('Failed to load site settings')
+
+    readiness.value = readinessResponse.launch_readiness
+    siteUrl.value = settingsResponse.settings.public_url
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load launch readiness'
   } finally {
@@ -353,8 +196,7 @@ const loadReadiness = async () => {
   }
 }
 
-// Load data on mount
-onMounted(() => {
-  loadReadiness()
-})
+onMounted(loadReadiness)
+
+useSeoMeta({ title: 'Launch | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

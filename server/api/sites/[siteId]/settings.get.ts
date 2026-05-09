@@ -1,6 +1,7 @@
 // GET site settings
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { getConfig } from '~/server/utils/site-config'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -50,7 +51,16 @@ export default defineEventHandler(async (event) => {
       }, { status: 404 })
     }
 
-    const siteSettings = site.settings ? JSON.parse(String(site.settings)) : {}
+    const siteSettings = (() => {
+      if (!site.settings) return {}
+      try {
+        return JSON.parse(String(site.settings))
+      } catch {
+        return {}
+      }
+    })()
+
+    const siteConfig = await getConfig(db, site.organization_id as string, site.id as string)
 
     const settings = {
       id: site.id,
@@ -67,6 +77,7 @@ export default defineEventHandler(async (event) => {
       brand_description: site.brand_description,
       logo_url: site.logo_url,
       contact_email: site.contact_email,
+      brand_color: siteConfig.brand_color || '',
       url_structure: siteSettings.url_structure || 'location_subdirectories',
       last_published_at: site.last_published_at,
       created_at: site.created_at,

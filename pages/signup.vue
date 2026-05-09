@@ -37,7 +37,7 @@
               <div class="w-full border-t border-stone-300"></div>
             </div>
             <div class="relative flex justify-center text-sm">
-              <span class="px-2 bg-(--ui-bg) text-stone-500">or</span>
+              <span class="px-2 bg-[var(--ui-bg)] text-[var(--ui-text-muted)]">or</span>
             </div>
           </div>
 

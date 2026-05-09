@@ -92,10 +92,14 @@ import { authClient } from '~/lib/auth-client'
 definePageMeta({ layout: 'dashboard' })
 
 const connectGoogle = async () => {
-  await authClient.signIn.social({
-    provider: 'google',
-    callbackURL: '/dashboard/integrations'
-  })
+  try {
+    await authClient.signIn.social({
+      provider: 'google',
+      callbackURL: '/dashboard/integrations'
+    })
+  } catch (err) {
+    console.error('Failed to connect Google:', err)
+  }
 }
 
 useSeoMeta({ title: 'Integrations | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

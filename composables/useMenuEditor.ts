@@ -15,8 +15,9 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
   // Computed
   const hasMenus = computed(() => menus.value.length > 0)
   const hasCurrentMenu = computed(() => !!currentMenu.value)
+  // When locationId is explicitly provided (including null or empty string), it's treated differently from undefined context default
   const effectiveLocationId = computed(() => locationId !== undefined ? locationId : currentLocationId.value)
-  const isEditingBrandMenu = computed(() => locationId !== undefined ? !locationId : isBrandScope.value)
+  const isEditingBrandMenu = computed(() => locationId !== undefined ? (locationId === null || locationId === '') : isBrandScope.value)
 
   // Load menus for current scope
   const loadMenus = async () => {

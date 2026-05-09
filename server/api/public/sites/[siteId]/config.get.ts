@@ -1,0 +1,40 @@
+// GET public site config
+import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { getConfig } from '~/server/utils/site-config'
+
+export default defineEventHandler(async (event) => {
+  const siteId = getRouterParam(event, 'siteId')
+  
+  if (!siteId) {
+    return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
+  }
+
+  const env = cloudflareEnv(event)
+  const db = env.REVIEWS_DB
+  
+  if (!db) {
+    return jsonResponse({ error: 'Database not available' }, { status: 500 })
+  }
+
+  try {
+    const site = await db.prepare(`
+      SELECT id, organization_id
+      FROM sites
+      WHERE id = ? AND status = 'active'
+      LIMIT 1
+    `).bind(siteId).first<{ id: string; organization_id: string }>()
+
+    if (!site) {
+      return jsonResponse({ error: 'Site not found' }, { status: 404 })
+    }
+
+    const config = await getConfig(db, site.organization_id, site.id)
+    return jsonResponse({
+      success: true,
+      config
+    })
+  } catch (error) {
+    console.error('Failed to get site config:', error)
+    return jsonResponse({ error: 'Failed to get site config' }, { status: 500 })
+  }
+})

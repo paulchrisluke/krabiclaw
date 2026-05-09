@@ -137,7 +137,15 @@ const sites = ref<DashboardSite[]>([])
 const billing = ref<any>(null)
 const sitesLoading = ref(false)
 
-const platformHostname = computed(() => new URL(config.public.freeSiteDomain).hostname)
+const platformHostname = computed(() => {
+  try {
+    const domain = config.public.freeSiteDomain
+    if (!domain) return ''
+    return new URL(domain).hostname
+  } catch {
+    return ''
+  }
+})
 const hasOrganization = computed(() => organizations.value.length > 0)
 const loading = computed(() => Boolean(unref(organizationsState)?.isPending) || sitesLoading.value)
 const connectedSitesCount = computed(() => 0)
@@ -155,13 +163,20 @@ watch(organizations, async newOrgs => {
   }
 
   sitesLoading.value = true
-  const [sitesResponse, billingResponse] = await Promise.all([
-    $fetch<{ sites: DashboardSite[] }>('/api/sites'),
-    $fetch<any>('/api/billing/status')
-  ])
-  sites.value = sitesResponse.sites
-  billing.value = billingResponse.billing
-  sitesLoading.value = false
+  try {
+    const [sitesResponse, billingResponse] = await Promise.all([
+      $fetch<{ sites: DashboardSite[] }>('/api/sites'),
+      $fetch<any>('/api/billing/status')
+    ])
+    sites.value = sitesResponse.sites || []
+    billing.value = billingResponse.billing
+  } catch (err) {
+    console.error('Failed to load dashboard data:', err)
+    sites.value = []
+    billing.value = null
+  } finally {
+    sitesLoading.value = false
+  }
 }, { immediate: true })
 
 useSeoMeta({ title: 'Dashboard | KrabiClaw', robots: 'noindex, nofollow' })

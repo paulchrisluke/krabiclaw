@@ -31,7 +31,7 @@
       <MenuCategoryNav :categories="menuSections" :active="activeSection" @select="activeSection = $event" />
       <AppSection v-for="(items, section) in menuItemsBySection" :key="section" :id="section" bg="white" padding="default">
         <h2 class="text-2xl font-bold text-(--ui-text-highlighted) mb-2">{{ section }}</h2>
-        <div class="divide-y divide-gray-100">
+        <div class="divide-y divide-[var(--ui-border-muted)]">
           <MenuItemCard v-for="item in items" :key="item.id" :item="item" />
         </div>
       </AppSection>

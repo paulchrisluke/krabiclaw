@@ -1,6 +1,5 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useFetch } from '#app'
-import DOMPurify from 'dompurify'
 import { getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
 
@@ -91,7 +90,7 @@ export const usePageContent = (pageName?: string) => {
     return def?.type === 'rich_text'
   }
 
-  const handlePreviewUpdate = (event: MessageEvent) => {
+  const handlePreviewUpdate = async (event: MessageEvent) => {
     if (!isTrustedOrigin(event.origin)) return
     if (!isPreview.value) return
     const message = event.data
@@ -99,9 +98,11 @@ export const usePageContent = (pageName?: string) => {
     if (message.page !== page.value) return
     if (typeof message.field !== 'string' || typeof message.value !== 'string') return
 
-    const value = needsSanitization(message.field)
-      ? DOMPurify.sanitize(message.value)
-      : message.value
+    let value = message.value
+    if (needsSanitization(message.field) && process.client) {
+      const DOMPurify = (await import('dompurify')).default
+      value = DOMPurify.sanitize(message.value)
+    }
 
     previewOverrides.value = {
       ...previewOverrides.value,

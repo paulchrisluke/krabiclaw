@@ -15,8 +15,8 @@ interface CreateLocationBody {
   is_primary?: boolean
 }
 
-const isPlainObjectOrArray = (v: unknown): v is object | unknown[] =>
-  v !== null && typeof v === 'object'
+const isPlainObjectOrArray = (v: unknown): v is Record<string, unknown> | unknown[] =>
+  v !== null && (Array.isArray(v) || (typeof v === 'object' && Object.prototype.toString.call(v) === '[object Object]'))
 
 const safeJsonParse = (raw: string | null | undefined, context: string): unknown => {
   if (!raw) return null

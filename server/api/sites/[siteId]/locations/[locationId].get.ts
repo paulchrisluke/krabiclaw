@@ -4,7 +4,11 @@ import { getAuthSession } from '~/server/utils/auth'
 
 const parseJson = (value: unknown) => {
   if (!value || typeof value !== 'string') return null
-  return JSON.parse(value)
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
 }
 
 export default defineEventHandler(async (event) => {

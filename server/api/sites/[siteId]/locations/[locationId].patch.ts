@@ -158,6 +158,13 @@ export default defineEventHandler(async (event) => {
         SET primary_location_id = ?, updated_at = ?, updated_by = ?
         WHERE id = ? AND organization_id = ?
       `).bind(locationId, now, session.user.id, siteId, site.organization_id))
+    } else if (body.is_primary === false) {
+      setParts.push('is_primary = 0')
+      statements.push(db.prepare(`
+        UPDATE sites
+        SET primary_location_id = NULL, updated_at = ?, updated_by = ?
+        WHERE id = ? AND organization_id = ? AND primary_location_id = ?
+      `).bind(now, session.user.id, siteId, site.organization_id, locationId))
     }
 
     statements.push(db.prepare(`

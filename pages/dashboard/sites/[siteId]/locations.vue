@@ -1,88 +1,95 @@
 <template>
-  <div class="space-y-8">
-    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-      <div>
-        <NuxtLink :to="`/dashboard/sites/${siteId}`" class="inline-flex items-center gap-2 text-sm text-(--ui-text-muted) hover:text-(--ui-text)">
-          <UIcon name="i-heroicons-arrow-left" class="size-4" />
-          Site dashboard
-        </NuxtLink>
-        <h1 class="mt-3 text-3xl font-bold text-(--ui-text-highlighted)">Locations</h1>
-        <p class="mt-2 text-(--ui-text-muted)">Manage the physical places that belong to this site.</p>
-      </div>
-
-      <div class="flex flex-wrap gap-2">
-        <UButton
-          :to="`/dashboard/sites/${siteId}/settings?tab=locations`"
-          icon="i-heroicons-plus"
-        >
-          Add Location
-        </UButton>
-        <UButton
-          :to="`/dashboard/sites/${siteId}/content`"
-          color="neutral"
-          variant="soft"
-          icon="i-heroicons-document-text"
-        >
-          Brand Content
-        </UButton>
-      </div>
-    </div>
-
-    <div v-if="loading" class="rounded-lg border border-(--ui-border) bg-(--ui-bg) p-8 text-center text-sm text-(--ui-text-muted)">
-      Loading locations...
-    </div>
-
-    <UAlert
-      v-else-if="error"
-      color="error"
-      variant="soft"
-      icon="i-heroicons-exclamation-triangle"
-      :description="error"
+  <UPage>
+    <UPageHeader
+      title="Locations"
+      :description="site ? `Physical locations for ${site.name}` : 'Physical locations for this website.'"
+      :links="[
+        { label: 'Add Location', icon: 'i-heroicons-plus', to: `/dashboard/sites/${siteId}/settings?tab=locations` },
+        { label: 'Brand Content', icon: 'i-heroicons-document-text', to: `/dashboard/sites/${siteId}/content`, color: 'neutral', variant: 'soft' }
+      ]"
     />
 
-    <div v-else class="space-y-4">
-      <div class="rounded-lg border border-(--ui-border) bg-(--ui-bg) p-5">
-        <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p class="text-sm font-medium text-(--ui-text-highlighted)">{{ site?.name || 'Site' }}</p>
-            <p class="text-sm text-(--ui-text-muted)">{{ locations.length }} active location{{ locations.length === 1 ? '' : 's' }}</p>
+    <UPageBody>
+      <UCard v-if="loading">
+        <div class="flex items-center gap-3 text-sm text-(--ui-text-muted)">
+          <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
+          Loading locations...
+        </div>
+      </UCard>
+
+      <UAlert
+        v-else-if="error"
+        color="error"
+        variant="soft"
+        icon="i-heroicons-exclamation-triangle"
+        :description="error"
+      />
+
+      <div v-else class="space-y-6">
+        <div class="grid gap-4 md:grid-cols-3">
+          <UCard>
+            <p class="text-sm text-(--ui-text-muted)">Locations</p>
+            <p class="mt-2 text-3xl font-semibold text-(--ui-text-highlighted)">{{ locations.length }}</p>
+          </UCard>
+          <UCard>
+            <p class="text-sm text-(--ui-text-muted)">Primary</p>
+            <p class="mt-2 truncate text-3xl font-semibold text-(--ui-text-highlighted)">{{ primaryLocation?.title || 'None' }}</p>
+          </UCard>
+          <UCard>
+            <p class="text-sm text-(--ui-text-muted)">URL structure</p>
+            <p class="mt-2 text-lg font-semibold text-(--ui-text-highlighted)">{{ site?.url_structure === 'brand_pages' ? 'Brand pages' : 'Location paths' }}</p>
+          </UCard>
+        </div>
+
+        <UCard v-if="locations.length === 0">
+          <div class="mx-auto max-w-md py-10 text-center">
+            <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-(--ui-text-muted)" />
+            <h2 class="mt-4 text-xl font-semibold text-(--ui-text-highlighted)">Add your first location</h2>
+            <p class="mt-2 text-sm text-(--ui-text-muted)">Local content, menus, hours, and Google Business mapping start here.</p>
+            <UButton class="mt-6" :to="`/dashboard/sites/${siteId}/settings?tab=locations`" icon="i-heroicons-plus">
+              Add Location
+            </UButton>
           </div>
-          <UBadge color="neutral" variant="soft">{{ site?.url_structure === 'brand_pages' ? 'Brand pages' : 'Location subdirectories' }}</UBadge>
+        </UCard>
+
+        <div v-else class="grid gap-4 lg:grid-cols-2">
+          <UCard
+            v-for="location in locations"
+            :key="location.id"
+          >
+            <div class="flex h-full flex-col">
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="truncate text-lg font-semibold text-(--ui-text-highlighted)">{{ location.title }}</h2>
+                    <UBadge v-if="location.is_primary" color="primary" variant="soft">Primary</UBadge>
+                    <UBadge :color="location.status === 'active' ? 'success' : 'warning'" variant="soft">{{ location.status }}</UBadge>
+                  </div>
+                  <p class="mt-2 text-sm text-(--ui-text-muted)">{{ addressLabel(location) || location.city || 'No address set' }}</p>
+                  <p v-if="location.phone" class="mt-1 text-sm text-(--ui-text-muted)">{{ location.phone }}</p>
+                </div>
+                <UIcon name="i-heroicons-map-pin" class="mt-1 size-5 shrink-0 text-(--ui-text-muted)" />
+              </div>
+
+              <div class="mt-5 space-y-2">
+                <UButton :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`" icon="i-heroicons-list-bullet" block>
+                  Edit Menu
+                </UButton>
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <UButton :to="`/dashboard/sites/${siteId}/content?locationId=${location.id}&page=location`" icon="i-heroicons-document-text" color="neutral" variant="soft" size="sm">
+                    Content
+                  </UButton>
+                  <UButton :to="`/dashboard/sites/${siteId}/settings?tab=locations&locationId=${location.id}`" icon="i-heroicons-cog-6-tooth" color="neutral" variant="soft" size="sm">
+                    Details
+                  </UButton>
+                </div>
+              </div>
+            </div>
+          </UCard>
         </div>
       </div>
-
-      <div v-if="locations.length === 0" class="rounded-lg border border-dashed border-(--ui-border) bg-(--ui-bg) p-10 text-center">
-        <UIcon name="i-heroicons-map-pin" class="mx-auto size-8 text-(--ui-text-muted)" />
-        <h2 class="mt-3 text-lg font-semibold text-(--ui-text-highlighted)">No locations yet</h2>
-        <p class="mt-1 text-sm text-(--ui-text-muted)">Create the first location to unlock location-specific content and menus.</p>
-        <UButton class="mt-5" :to="`/dashboard/sites/${siteId}/settings?tab=locations`" icon="i-heroicons-plus">
-          Add Location
-        </UButton>
-      </div>
-
-      <div v-else class="grid gap-4 lg:grid-cols-2">
-        <NuxtLink
-          v-for="location in locations"
-          :key="location.id"
-          :to="`/dashboard/sites/${siteId}/locations/${location.id}`"
-          class="group rounded-lg border border-(--ui-border) bg-(--ui-bg) p-5 transition hover:border-(--ui-primary) hover:shadow-sm"
-        >
-          <div class="flex items-start justify-between gap-4">
-            <div class="min-w-0">
-              <div class="flex flex-wrap items-center gap-2">
-                <h2 class="truncate text-lg font-semibold text-(--ui-text-highlighted)">{{ location.title }}</h2>
-                <UBadge v-if="location.is_primary" color="primary" variant="soft">Primary</UBadge>
-                <UBadge :color="location.status === 'active' ? 'success' : 'warning'" variant="soft">{{ location.status }}</UBadge>
-              </div>
-              <p class="mt-2 text-sm text-(--ui-text-muted)">{{ addressLabel(location) || location.city || 'No address set' }}</p>
-              <p v-if="location.phone" class="mt-1 text-sm text-(--ui-text-muted)">{{ location.phone }}</p>
-            </div>
-            <UIcon name="i-heroicons-arrow-right" class="mt-1 size-5 shrink-0 text-(--ui-text-muted) transition group-hover:text-(--ui-primary)" />
-          </div>
-        </NuxtLink>
-      </div>
-    </div>
-  </div>
+    </UPageBody>
+  </UPage>
 </template>
 
 <script setup lang="ts">
@@ -107,8 +114,8 @@ const error = ref<string | null>(null)
 const site = ref<any>(null)
 const locations = ref<BusinessLocation[]>([])
 
-const addressLabel = (location: BusinessLocation) =>
-  location.address?.addressLines?.join(', ') || ''
+const primaryLocation = computed(() => locations.value.find(location => location.is_primary) || null)
+const addressLabel = (location: BusinessLocation) => location.address?.addressLines?.join(', ') || ''
 
 const loadLocationsWorkspace = async () => {
   loading.value = true
