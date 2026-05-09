@@ -12,7 +12,7 @@
       bg="white"
       padding="xl"
     >
-      <div class="space-y-12 text-gray-700 text-lg leading-relaxed max-w-none">
+      <div class="space-y-12 text-[var(--ui-text)] text-lg leading-relaxed max-w-none">
         <div v-html="storyIntro" />
 
         <div class="grid md:grid-cols-2 gap-12 pt-8">
@@ -26,7 +26,7 @@
           </div>
         </div>
 
-        <div class="bg-stone-50 rounded-3xl p-10 md:p-16 my-16">
+        <div class="bg-[var(--ui-bg-muted)] rounded-3xl p-10 md:p-16 my-16">
           <h2 class="text-3xl font-bold text-black mb-8 italic">{{ getField('journey.title', 'Our Journey') }}</h2>
           <div v-html="journeyBody" class="space-y-6" />
         </div>
@@ -60,7 +60,7 @@ const googleMedia = computed(() => googleBusiness.value?.media || [])
 
 // Defaults moved to computeds to avoid inline template quote-escaping issues
 const storyIntro = computed(() => getField('story.intro',
-  '<p class="text-xl font-medium text-gray-900 border-l-4 border-black pl-6 py-2">' +
+  '<p class="text-xl font-medium text-[var(--ui-text-highlighted)] border-l-4 border-black pl-6 py-2">'  +
   'Saya Kitchen, nestled in the heart of Krabi, is a culinary haven that specializes in the artful fusion of robatayaki and sushi.' +
   '</p>'
 ))

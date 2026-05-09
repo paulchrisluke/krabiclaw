@@ -127,24 +127,7 @@ export const getDraftContent = async (db: D1Database, organizationId: string, si
 }
 
 export const buildUpsertDraftStmt = (db: D1Database, content: Omit<SiteContent, 'updated_at'>) => {
-  return db.prepare(`
-    INSERT INTO site_content_drafts (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET 
-      organization_id = excluded.organization_id,
-      site_id = excluded.site_id,
-      location_id = excluded.location_id,
-      page = excluded.page,
-      field = excluded.field,
-      value = excluded.value,
-      type = excluded.type,
-      source = excluded.source,
-      content = excluded.content,
-      hero_title = excluded.hero_title,
-      hero_subtitle = excluded.hero_subtitle,
-      hero_video_url = excluded.hero_video_url,
-      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-    `).bind(
+  const values = [
     content.id || crypto.randomUUID(),
     content.organization_id,
     content.site_id,
@@ -158,7 +141,37 @@ export const buildUpsertDraftStmt = (db: D1Database, content: Omit<SiteContent, 
     content.hero_title || null,
     content.hero_subtitle || null,
     content.hero_video_url || null
-  )
+  ]
+
+  if (!content.location_id) {
+    return db.prepare(`
+      INSERT INTO site_content_drafts (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(organization_id, site_id, page, field) WHERE location_id IS NULL DO UPDATE SET
+        value = excluded.value,
+        type = excluded.type,
+        source = excluded.source,
+        content = excluded.content,
+        hero_title = excluded.hero_title,
+        hero_subtitle = excluded.hero_subtitle,
+        hero_video_url = excluded.hero_video_url,
+        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    `).bind(...values)
+  }
+
+  return db.prepare(`
+    INSERT INTO site_content_drafts (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(organization_id, site_id, location_id, page, field) DO UPDATE SET
+      value = excluded.value,
+      type = excluded.type,
+      source = excluded.source,
+      content = excluded.content,
+      hero_title = excluded.hero_title,
+      hero_subtitle = excluded.hero_subtitle,
+      hero_video_url = excluded.hero_video_url,
+      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  `).bind(...values)
 }
 
 export const upsertDraftContent = async (db: D1Database, content: Omit<SiteContent, 'updated_at'>) => {
@@ -166,24 +179,7 @@ export const upsertDraftContent = async (db: D1Database, content: Omit<SiteConte
 }
 
 export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, 'updated_at'>) => {
-  return db.prepare(`
-    INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET 
-      organization_id = excluded.organization_id,
-      site_id = excluded.site_id,
-      location_id = excluded.location_id,
-      page = excluded.page,
-      field = excluded.field,
-      content = excluded.content,
-      hero_title = excluded.hero_title,
-      hero_subtitle = excluded.hero_subtitle,
-      hero_video_url = excluded.hero_video_url,
-      value = excluded.value,
-      type = excluded.type,
-      source = excluded.source,
-      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-    `).bind(
+  const values = [
     content.id || crypto.randomUUID(),
     content.organization_id,
     content.site_id,
@@ -197,7 +193,37 @@ export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, '
     content.hero_title || null,
     content.hero_subtitle || null,
     content.hero_video_url || null
-  )
+  ]
+
+  if (!content.location_id) {
+    return db.prepare(`
+      INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(organization_id, site_id, page, field) WHERE location_id IS NULL DO UPDATE SET
+        content = excluded.content,
+        hero_title = excluded.hero_title,
+        hero_subtitle = excluded.hero_subtitle,
+        hero_video_url = excluded.hero_video_url,
+        value = excluded.value,
+        type = excluded.type,
+        source = excluded.source,
+        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    `).bind(...values)
+  }
+
+  return db.prepare(`
+    INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(organization_id, site_id, location_id, page, field) DO UPDATE SET
+      content = excluded.content,
+      hero_title = excluded.hero_title,
+      hero_subtitle = excluded.hero_subtitle,
+      hero_video_url = excluded.hero_video_url,
+      value = excluded.value,
+      type = excluded.type,
+      source = excluded.source,
+      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  `).bind(...values)
 }
 
 export const upsertSiteContent = async (db: D1Database, content: Omit<SiteContent, 'updated_at'>) => {
@@ -212,7 +238,34 @@ export const publishDrafts = async (db: D1Database, organizationId: string, site
     return
   }
   
-  const stmts = drafts.map(draft => buildUpsertSiteStmt(db, draft))
+  const stmts = []
+
+  for (const draft of drafts) {
+    let existingQuery = `
+      SELECT id
+      FROM site_content
+      WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ?
+    `
+    const existingParams = [organizationId, siteId, page, draft.field]
+
+    if (locationId) {
+      existingQuery += ` AND location_id = ?`
+      existingParams.push(locationId)
+    } else {
+      existingQuery += ` AND location_id IS NULL`
+    }
+
+    const existing = await db.prepare(existingQuery).bind(...existingParams).first<{ id: string }>()
+
+    const contentId = existing
+      ? existing.id
+      : `content::${organizationId}::${siteId}::${locationId ? locationId : 'site'}::${page}::${draft.field}`
+
+    stmts.push(buildUpsertSiteStmt(db, {
+      ...draft,
+      id: contentId
+    }))
+  }
   
   let deleteQuery = `DELETE FROM site_content_drafts WHERE organization_id = ? AND site_id = ? AND page = ?`
   const deleteParams = [organizationId, siteId, page]

@@ -1,12 +1,12 @@
 <template>
-  <div class="min-h-screen bg-stone-50">
+  <div class="min-h-screen bg-(--ui-bg-muted)">
     <div class="max-w-md mx-auto pt-16 pb-12 px-4">
       <!-- KrabiClaw Branding -->
       <div class="text-center mb-8">
-        <h1 class="text-2xl font-bold text-stone-900 mb-2">
+        <h1 class="text-2xl font-bold text-(--ui-text-highlighted) mb-2">
           KrabiClaw
         </h1>
-        <p class="text-stone-600">
+        <p class="text-(--ui-text-muted)">
           Create your restaurant website in minutes
         </p>
       </div>
@@ -37,7 +37,7 @@
               <div class="w-full border-t border-stone-300"></div>
             </div>
             <div class="relative flex justify-center text-sm">
-              <span class="px-2 bg-white text-stone-500">or</span>
+              <span class="px-2 bg-[var(--ui-bg)] text-[var(--ui-text-muted)]">or</span>
             </div>
           </div>
 
@@ -74,16 +74,16 @@
         </div>
 
         <!-- Sign In Link -->
-        <div class="mt-6 text-center text-sm text-stone-600">
+        <div class="mt-6 text-center text-sm text-(--ui-text-muted)">
           Already have an account?
-          <NuxtLink to="/login" class="text-stone-900 hover:underline font-medium">
+          <NuxtLink to="/login" class="text-(--ui-text-highlighted) hover:underline font-medium">
             Sign in
           </NuxtLink>
         </div>
       </UCard>
 
       <!-- Features -->
-      <div class="mt-8 text-center text-sm text-stone-600">
+      <div class="mt-8 text-center text-sm text-(--ui-text-muted)">
         <p class="mb-2">✨ Free forever for basic features</p>
         <p>🎨 Beautiful restaurant themes</p>
         <p>🤖 AI-powered content</p>

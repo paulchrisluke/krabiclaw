@@ -1,10 +1,12 @@
 <template>
-  <div class="platform-layout min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
-    <PlatformHeader />
-    <main class="grow pt-16">
-      <slot />
-    </main>
-    <PlatformFooter />
+  <div class="platform-layout platform-theme min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
+    <UTheme :ui="{}" :props="{ button: { color: 'primary' } }">
+      <PlatformHeader />
+      <main class="grow pt-16">
+        <slot />
+      </main>
+      <PlatformFooter />
+    </UTheme>
   </div>
 </template>
 
@@ -20,7 +22,7 @@ useHead({
 <style>
 /* Platform-specific base styles */
 .platform-layout {
-  background-color: #ffffff;
-  color: #1c1917; /* stone-900 */
+  background-color: var(--ui-bg);
+  color: var(--ui-text);
 }
 </style>

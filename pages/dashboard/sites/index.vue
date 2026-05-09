@@ -1,129 +1,114 @@
 <template>
-  <div class="space-y-6">
-    <div class="flex justify-between items-center">
-      <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Sites</h1>
-      <UButton to="/dashboard/onboarding" color="primary">
-        <Icon name="i-heroicons-plus" class="w-4 h-4 mr-2" />
-        Add New Site
-      </UButton>
-    </div>
+  <UPage>
+    <UPageHeader
+      title="Websites"
+      description="All restaurant websites in this organization."
+      :links="[{ label: 'Create Website', icon: 'i-heroicons-plus', to: '/dashboard/onboarding' }]"
+    />
 
-    <!-- Loading state -->
-    <div v-if="pending" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-      <p class="text-gray-600 dark:text-gray-400">Loading your sites...</p>
-    </div>
-
-    <!-- Error state -->
-    <div v-else-if="error" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
-      <div class="max-w-md mx-auto">
-        <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Icon name="i-heroicons-exclamation-triangle" class="w-8 h-8 text-red-500" />
+    <UPageBody>
+      <UCard v-if="pending">
+        <div class="flex items-center gap-3 text-sm text-(--ui-text-muted)">
+          <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
+          Loading websites...
         </div>
-        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">Failed to load sites</h3>
-        <p class="text-gray-600 dark:text-gray-400 mb-4">{{ error.data?.message || error.message || 'An unexpected error occurred.' }}</p>
-        <UButton @click="refresh" color="neutral" variant="outline">
-          Retry
-        </UButton>
-      </div>
-    </div>
+      </UCard>
 
-    <!-- Sites list -->
-    <div v-else-if="sites.length > 0" class="grid gap-4">
-      <div v-for="site in sites" :key="site.id" 
-           class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div class="flex justify-between items-start">
-          <div>
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ site.name }}</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              <span v-if="site.subdomain">{{ site.subdomain }}{{ platformHostname ? `.${platformHostname}` : '' }}</span>
-              <span v-else-if="site.custom_domain">{{ site.custom_domain }}</span>
-              <span v-else>Unconfigured</span>
-            </p>
-            <div class="flex gap-2 mt-2">
-              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                    :class="getStatusClass(site.status)">
-                {{ site.status }}
-              </span>
-              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                {{ site.plan }}
-              </span>
+      <UAlert
+        v-else-if="error"
+        color="error"
+        variant="soft"
+        icon="i-heroicons-exclamation-triangle"
+        title="Failed to load websites"
+        :description="error.data?.message || error.message"
+      />
+
+      <UCard v-else-if="sites.length === 0">
+        <div class="mx-auto max-w-md py-10 text-center">
+          <UIcon name="i-heroicons-globe-alt" class="mx-auto size-10 text-(--ui-text-muted)" />
+          <h2 class="mt-4 text-xl font-semibold text-(--ui-text-highlighted)">No websites yet</h2>
+          <p class="mt-2 text-sm text-(--ui-text-muted)">Create a website first, then add physical locations inside it.</p>
+          <UButton to="/dashboard/onboarding" icon="i-heroicons-plus" class="mt-6">
+            Create Website
+          </UButton>
+        </div>
+      </UCard>
+
+      <div v-else class="grid gap-4">
+        <UCard
+          v-for="site in sites"
+          :key="site.id"
+        >
+          <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="truncate text-lg font-semibold text-(--ui-text-highlighted)">{{ site.name }}</h2>
+                <UBadge :color="site.status === 'active' ? 'success' : 'warning'" variant="soft">{{ site.status }}</UBadge>
+                <UBadge color="neutral" variant="soft">{{ site.plan }}</UBadge>
+              </div>
+              <p class="mt-1 truncate text-sm text-(--ui-text-muted)">{{ siteUrlLabel(site) }}</p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <UButton :to="`/dashboard/sites/${site.id}`" icon="i-heroicons-arrow-right" trailing color="primary">
+                Manage
+              </UButton>
+              <UButton
+                v-if="siteUrl(site)"
+                :to="siteUrl(site)!"
+                target="_blank"
+                icon="i-heroicons-arrow-top-right-on-square"
+                color="neutral"
+                variant="soft"
+                external
+              >
+                View Site
+              </UButton>
             </div>
           </div>
-          <div class="flex gap-2">
-            <UButton :to="`/dashboard/sites/${site.id}`" size="sm" variant="outline">
-              Manage
-            </UButton>
-            <UButton v-if="getSiteUrl(site)" :href="getSiteUrl(site)" target="_blank" size="sm" variant="soft">
-              View Site
-            </UButton>
-          </div>
-        </div>
+        </UCard>
       </div>
-    </div>
-
-    <!-- Empty state -->
-    <div v-else class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
-      <div class="max-w-md mx-auto">
-        <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Icon name="i-heroicons-globe-alt" class="w-8 h-8 text-gray-400" />
-        </div>
-        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No sites yet</h3>
-        <p class="text-gray-600 dark:text-gray-400 mb-4">Create your first restaurant website to get started.</p>
-        <UButton to="/dashboard/onboarding" color="primary" block>
-          <Icon name="i-heroicons-plus" class="w-4 h-4 mr-2" />
-          Create Your First Site
-        </UButton>
-      </div>
-    </div>
-  </div>
+    </UPageBody>
+  </UPage>
 </template>
 
-<script setup>
-definePageMeta({
-  layout: 'dashboard'
-})
+<script setup lang="ts">
+definePageMeta({ layout: 'dashboard' })
+
+interface DashboardSite {
+  id: string
+  name: string
+  subdomain: string | null
+  custom_domain: string | null
+  status: string
+  plan: string
+}
 
 const config = useRuntimeConfig()
-const { data: response, pending, error, refresh } = await useFetch('/api/sites')
+const { data: response, pending, error } = await useFetch<{ sites: DashboardSite[] }>('/api/sites')
 const sites = computed(() => response.value?.sites || [])
-
-// Extract hostname for URLs
-const platformHostname = computed(() => {
-  const domain = config.public?.freeSiteDomain
-  if (!domain) return ''
+const platformUrl = computed(() => {
   try {
-    const urlStr = domain.startsWith('http') ? domain : `https://${domain}`
-    return new URL(urlStr).hostname
-  } catch (e) {
-    return domain.replace(/^https?:\/\//, '').split('/')[0]
+    const domain = config.public.freeSiteDomain
+    if (!domain) return null
+    return new URL(domain)
+  } catch {
+    return null
   }
 })
 
-// Get site URL based on subdomain or custom domain
-const getSiteUrl = (site) => {
-  const domain = config.public?.freeSiteDomain || ''
-  if (site.subdomain && platformHostname.value) {
-    // Default to https unless explicitly http
-    const protocol = domain.startsWith('http://') ? 'http://' : 'https://'
-    return `${protocol}${site.subdomain}.${platformHostname.value}`
-  }
-  if (site.custom_domain) {
-    return `https://${site.custom_domain}`
+const siteUrlLabel = (site: DashboardSite) => {
+  if (site.custom_domain) return site.custom_domain
+  if (site.subdomain && platformUrl.value) return `${site.subdomain}.${platformUrl.value.hostname}`
+  return null
+}
+const siteUrl = (site: DashboardSite): string | null => {
+  if (site.custom_domain) return `https://${site.custom_domain}`
+  if (site.subdomain && platformUrl.value) {
+    return `${platformUrl.value.protocol}//${site.subdomain}.${platformUrl.value.hostname}${platformUrl.value.port ? `:${platformUrl.value.port}` : ''}`
   }
   return null
 }
 
-// Get status styling
-const getStatusClass = (status) => {
-  switch (status) {
-    case 'active':
-      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-    case 'inactive':
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-    case 'suspended':
-      return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-    default:
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-  }
-}
+useSeoMeta({ title: 'Websites | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

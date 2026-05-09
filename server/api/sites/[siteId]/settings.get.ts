@@ -1,6 +1,7 @@
 // GET site settings
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { getConfig } from '~/server/utils/site-config'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -35,7 +36,7 @@ export default defineEventHandler(async (event) => {
       SELECT s.id, s.organization_id, s.name, s.subdomain, s.theme, s.status, 
              s.primary_location_id, s.public_url, s.custom_domain_status,
              s.brand_name, s.brand_description, s.logo_url, s.contact_email,
-             s.last_published_at, s.created_at, s.updated_at,
+             s.settings, s.last_published_at, s.created_at, s.updated_at,
              o.name as organization_name
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
@@ -49,6 +50,17 @@ export default defineEventHandler(async (event) => {
         error: 'Site not found or access denied' 
       }, { status: 404 })
     }
+
+    const siteSettings = (() => {
+      if (!site.settings) return {}
+      try {
+        return JSON.parse(String(site.settings))
+      } catch {
+        return {}
+      }
+    })()
+
+    const siteConfig = await getConfig(db, site.organization_id as string, site.id as string)
 
     const settings = {
       id: site.id,
@@ -65,6 +77,8 @@ export default defineEventHandler(async (event) => {
       brand_description: site.brand_description,
       logo_url: site.logo_url,
       contact_email: site.contact_email,
+      brand_color: siteConfig.brand_color || '',
+      url_structure: siteSettings.url_structure || 'location_subdirectories',
       last_published_at: site.last_published_at,
       created_at: site.created_at,
       updated_at: site.updated_at

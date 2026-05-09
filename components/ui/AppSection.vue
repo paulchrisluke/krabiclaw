@@ -22,12 +22,12 @@ const props = defineProps({
 })
 
 const backgrounds = {
-  white: 'bg-[color:var(--ui-bg)] text-[color:var(--ui-text)]',
-  alt: 'bg-[color:var(--ui-bg-elevated)] text-[color:var(--ui-text)]',
-  black: 'bg-[color:var(--ui-bg-inverted)] text-[color:var(--ui-text-inverted)]',
-  dark: 'bg-[color:var(--ui-bg-inverted)] text-[color:var(--ui-text-inverted)]',
-  gray: 'bg-[color:var(--ui-bg-elevated)] text-[color:var(--ui-text)]',
-  stone: 'bg-[color:var(--ui-bg-elevated)] text-[color:var(--ui-text)]'
+  white: 'bg-default text-default',
+  alt: 'bg-elevated text-default',
+  black: 'bg-inverted text-inverted',
+  dark: 'bg-inverted text-inverted',
+  gray: 'bg-elevated text-default',
+  stone: 'bg-elevated text-default'
 }
 
 const bgClass = computed(() => backgrounds[props.bg])

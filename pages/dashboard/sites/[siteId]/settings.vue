@@ -1,308 +1,177 @@
 <template>
-  <div class="site-settings">
-    <!-- Header -->
-    <div class="mb-8">
-      <h1 class="text-3xl font-bold text-gray-900">Site Settings</h1>
-      <p class="text-gray-600 mt-2">Configure your restaurant website details and preferences</p>
-    </div>
+  <UPage>
+    <UPageHeader
+      title="Site Settings"
+      description="Manage your website configuration, brand, and appearance"
+    />
 
-    <!-- Loading state -->
-    <div v-if="loading" class="text-center py-12">
-      <p class="text-gray-600">Loading settings...</p>
-    </div>
+    <UPageBody>
+      <div v-if="loading" class="flex items-center justify-center py-12">
+        <div class="flex items-center gap-3 text-sm text-[var(--ui-text-muted)]">
+          <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
+          Loading settings...
+        </div>
+      </div>
 
-    <!-- Error state -->
-    <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-lg p-6">
-      <p class="text-red-800">{{ error }}</p>
-    </div>
+      <UAlert v-else-if="error" color="error" variant="soft" icon="i-heroicons-exclamation-triangle" :description="error" />
 
-    <!-- Settings form -->
-    <div v-else-if="settings" class="space-y-8">
-      <!-- Site Identity -->
-      <div class="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 class="text-xl font-semibold text-gray-900 mb-6">Site Identity</h2>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Site Name</label>
-            <input 
-              v-model="form.name"
-              type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Your restaurant name"
-            />
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Subdomain</label>
-            <input 
-              :value="settings.subdomain"
-              type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
-              readonly
-              placeholder="your-restaurant"
-            />
-            <p class="text-xs text-gray-500 mt-1">Subdomain cannot be changed after creation</p>
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Theme</label>
-            <input 
-              :value="settings.theme"
-              type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
-              readonly
-            />
-            <p class="text-xs text-gray-500 mt-1">Saya theme is currently the only option</p>
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
-            <div class="flex items-center">
-              <span 
-                :class="[
-                  'px-2 py-1 text-xs font-medium rounded',
-                  settings.status === 'active' 
-                    ? 'bg-green-100 text-green-800' 
-                    : settings.status === 'pending'
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-red-100 text-red-800'
-                ]"
-              >
+      <div v-else-if="settings" class="space-y-6">
+        <UCard>
+          <template #header>
+            <h2 class="font-semibold text-[var(--ui-text-highlighted)]">General</h2>
+          </template>
+          <div class="grid gap-6 md:grid-cols-2">
+            <UFormField label="Site Name">
+              <UInput v-model="form.name" placeholder="Your restaurant name" />
+            </UFormField>
+
+            <UFormField label="Subdomain" help="Subdomain cannot be changed after creation.">
+              <UInput :model-value="settings.subdomain" readonly class="opacity-50" />
+            </UFormField>
+
+            <UFormField label="Theme" help="Saya theme is currently the only option.">
+              <UInput :model-value="settings.theme" readonly class="opacity-50" />
+            </UFormField>
+
+            <UFormField label="URL Structure">
+              <USelect
+                v-model="form.url_structure"
+                :items="urlStructureOptions"
+                value-key="value"
+                label-key="label"
+              />
+            </UFormField>
+
+            <UFormField label="Public URL">
+              <div class="flex gap-2">
+                <UInput :model-value="settings.public_url" readonly class="flex-1 opacity-50" />
+                <UButton icon="i-heroicons-clipboard-document" variant="outline" color="neutral" aria-label="Copy URL" @click="copyToClipboard(settings.public_url)" />
+              </div>
+            </UFormField>
+
+            <div>
+              <p class="mb-2 block text-sm font-medium text-[var(--ui-text)]">Status</p>
+              <UBadge :color="settings.status === 'active' ? 'success' : 'warning'" variant="soft">
                 {{ settings.status }}
-              </span>
+              </UBadge>
             </div>
           </div>
-        </div>
+        </UCard>
 
-        <div class="mt-6">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Public URL</label>
-          <div class="flex items-center space-x-2">
-            <input 
-              :value="settings.public_url"
-              type="text"
-              class="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
-              readonly
-            />
-            <UButton
-              @click="copyToClipboard(settings.public_url)"
-              variant="outline"
-              color="neutral"
-              size="sm"
-            >
-              Copy
-            </UButton>
-          </div>
-        </div>
-      </div>
+        <UCard>
+          <template #header>
+            <h2 class="font-semibold text-[var(--ui-text-highlighted)]">Brand</h2>
+          </template>
+          <div class="space-y-6">
+            <UFormField label="Restaurant/Brand Name" help="Displayed prominently on your website.">
+              <UInput v-model="form.brand_name" placeholder="Your Restaurant Name" />
+            </UFormField>
 
-      <!-- Brand Basics -->
-      <div class="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 class="text-xl font-semibold text-gray-900 mb-6">Brand Basics</h2>
-        
-        <div class="space-y-6">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Restaurant/Brand Name</label>
-            <input 
-              v-model="form.brand_name"
-              type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Your Restaurant Name"
-            />
-            <p class="text-xs text-gray-500 mt-1">This is displayed prominently on your website</p>
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Short Description</label>
-            <textarea 
-              v-model="form.brand_description"
-              rows="3"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Authentic dining experience in your city"
-            ></textarea>
-            <p class="text-xs text-gray-500 mt-1">Brief description of your restaurant (used for SEO and homepage)</p>
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Logo URL (optional)</label>
-            <input 
-              v-model="form.logo_url"
-              type="url"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="https://example.com/logo.png"
-            />
-            <p class="text-xs text-gray-500 mt-1">URL to your restaurant logo image</p>
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Contact Email (optional)</label>
-            <input 
-              v-model="form.contact_email"
-              type="email"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="contact@yourrestaurant.com"
-            />
-            <p class="text-xs text-gray-500 mt-1">Public contact email for customers</p>
-          </div>
-        </div>
-      </div>
+            <UFormField label="Short Description" help="Used for SEO and homepage content.">
+              <UTextarea v-model="form.brand_description" :rows="3" placeholder="Authentic dining experience in your city" />
+            </UFormField>
 
-      <!-- Publishing Status -->
-      <div class="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 class="text-xl font-semibold text-gray-900 mb-6">Publishing Status</h2>
-        
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
-            <span class="text-sm font-medium text-gray-700">Site Status</span>
-            <span 
-              :class="[
-                'px-2 py-1 text-xs font-medium rounded',
-                settings.status === 'active' 
-                  ? 'bg-green-100 text-green-800' 
-                  : settings.status === 'pending'
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : 'bg-red-100 text-red-800'
-              ]"
-            >
-              {{ settings.status }}
-            </span>
-          </div>
-          
-          <div class="flex items-center justify-between">
-            <span class="text-sm font-medium text-gray-700">Last Published</span>
-            <span class="text-sm text-gray-600">
-              {{ settings.last_published_at ? new Date(settings.last_published_at).toLocaleDateString() : 'Never' }}
-            </span>
-          </div>
-          
-          <div class="flex items-center justify-between">
-            <span class="text-sm font-medium text-gray-700">Public Preview</span>
-            <a 
-              :href="settings.public_url"
-              target="_blank"
-              class="text-blue-600 hover:text-blue-800 text-sm font-medium"
-            >
-              Open in new tab →
-            </a>
-          </div>
-        </div>
-      </div>
+            <div class="grid gap-6 md:grid-cols-2">
+              <UFormField label="Logo URL">
+                <UInput v-model="form.logo_url" type="url" placeholder="https://example.com/logo.png" />
+              </UFormField>
 
-      <!-- Domain Status -->
-      <div class="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 class="text-xl font-semibold text-gray-900 mb-6">Domain Status</h2>
-        
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
-            <span class="text-sm font-medium text-gray-700">Free Subdomain</span>
-            <div class="flex items-center space-x-2">
-              <span class="text-sm text-gray-600">{{ settings.subdomain }}.{{ freeDomain }}</span>
-              <UBadge color="success" variant="soft" size="sm">Active</UBadge>
+              <UFormField label="Contact Email">
+                <UInput v-model="form.contact_email" type="email" placeholder="contact@yourrestaurant.com" />
+              </UFormField>
             </div>
           </div>
-          
-          <div class="flex items-center justify-between">
-            <span class="text-sm font-medium text-gray-700">Custom Domain</span>
-            <div class="flex items-center space-x-2">
-              <span class="text-sm text-gray-600">Not configured</span>
-              <UBadge color="neutral" variant="soft" size="sm">Optional</UBadge>
-            </div>
-          </div>
-          
-          <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <h3 class="text-sm font-medium text-blue-900 mb-2">Custom Domain Setup</h3>
-            <p class="text-sm text-blue-800 mb-3">
-              Want to use your own domain? Contact us to set up custom domain configuration.
-            </p>
-            <div class="text-xs text-blue-700">
-              <p class="font-medium mb-1">Manual setup requirements:</p>
-              <ul class="list-disc list-inside space-y-1">
-                <li>DNS A record pointing to our server IP</li>
-                <li>SSL certificate configuration</li>
-                <li>Domain verification</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
+        </UCard>
 
-      <!-- Action Buttons -->
-      <div class="flex items-center justify-between">
-        <NuxtLink 
-          :to="`/dashboard/sites/${siteId}`"
-          class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
-        >
-          ← Back to Dashboard
-        </NuxtLink>
-        
-        <div class="flex space-x-4">
-          <UButton
-            @click="resetForm"
-            variant="outline"
-            color="neutral"
-          >
-            Reset
-          </UButton>
-          
-          <UButton
-            @click="saveSettings"
-            :disabled="saving"
-            :loading="saving"
-            color="info"
-          >
-            {{ saving ? 'Saving...' : 'Save Settings' }}
-          </UButton>
-        </div>
+        <UCard>
+          <template #header>
+            <h2 class="font-semibold text-[var(--ui-text-highlighted)]">Appearance</h2>
+          </template>
+          <div class="space-y-6">
+            <UFormField label="Theme" help="Saya theme is currently the only option. More themes coming soon.">
+              <UInput :model-value="settings.theme" readonly class="opacity-50" />
+            </UFormField>
+
+            <UFormField label="Brand Color" help="Primary color used for buttons and accents on your site.">
+              <div class="flex items-center gap-3">
+                <input type="color" v-model="form.brand_color" class="h-9 w-16 cursor-pointer rounded border border-[var(--ui-border)]" />
+                <UInput v-model="form.brand_color" placeholder="#e87f67" class="w-32 font-mono text-sm" />
+              </div>
+            </UFormField>
+          </div>
+        </UCard>
+
+        <StickySaveBar
+          :visible="isDirty"
+          :saving="saving"
+          @save="saveSettings"
+          @reset="resetForm"
+        />
       </div>
-    </div>
-  </div>
+    </UPageBody>
+  </UPage>
 </template>
 
-<script setup>
-definePageMeta({
-  layout: 'dashboard'
-})
-import { ref, reactive, onMounted } from 'vue'
+<script setup lang="ts">
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
-const siteId = route.params.siteId
+const router = useRouter()
+const siteId = route.params.siteId as string
+const toast = useToast()
 
-// State
+const urlStructureOptions = [
+  { label: 'Location subdirectories', value: 'location_subdirectories' },
+  { label: 'Brand pages only', value: 'brand_pages' }
+]
+
 const loading = ref(true)
 const error = ref<string | null>(null)
 const saving = ref(false)
 const settings = ref<any>(null)
 
-// Form data
 const form = reactive({
   name: '',
   brand_name: '',
   brand_description: '',
   logo_url: '',
   contact_email: '',
-  primary_location_id: null
+  brand_color: '',
+  primary_location_id: null as string | null,
+  url_structure: 'location_subdirectories'
+} as {
+  name: string
+  brand_name: string
+  brand_description: string
+  logo_url: string
+  contact_email: string
+  brand_color: string
+  primary_location_id: string | null
+  url_structure: string
 })
 
-// Load settings
+const isDirty = computed(() => {
+  if (!settings.value) return false
+  return (
+    form.name !== settings.value.name ||
+    form.brand_name !== settings.value.brand_name ||
+    form.brand_description !== settings.value.brand_description ||
+    form.logo_url !== settings.value.logo_url ||
+    form.contact_email !== settings.value.contact_email ||
+    form.brand_color !== (settings.value.brand_color || '') ||
+    form.url_structure !== settings.value.url_structure
+  )
+})
+
 const loadSettings = async () => {
   loading.value = true
   error.value = null
 
   try {
-    const response = await $fetch(`/api/sites/${siteId}/settings`)
-    if (response.success) {
-      settings.value = response.settings
-      
-      // Populate form
-      form.name = settings.value.name || ''
-      form.brand_name = settings.value.brand_name || ''
-      form.brand_description = settings.value.brand_description || ''
-      form.logo_url = settings.value.logo_url || ''
-      form.contact_email = settings.value.contact_email || ''
-      form.primary_location_id = settings.value.primary_location_id || null
-    } else {
-      throw new Error('Failed to load settings')
-    }
+    const response = await $fetch<any>(`/api/sites/${siteId}/settings`)
+    if (!response.success) throw new Error('Failed to load settings')
+    settings.value = response.settings
+    resetForm()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load settings'
   } finally {
@@ -310,30 +179,19 @@ const loadSettings = async () => {
   }
 }
 
-// Save settings
 const saveSettings = async () => {
   saving.value = true
+  error.value = null
 
   try {
-    const response = await $fetch(`/api/sites/${siteId}/settings`, {
+    const response = await $fetch<any>(`/api/sites/${siteId}/settings`, {
       method: 'PATCH',
-      body: {
-        name: form.name,
-        brand_name: form.brand_name,
-        brand_description: form.brand_description,
-        logo_url: form.logo_url,
-        contact_email: form.contact_email,
-        primary_location_id: form.primary_location_id
-      }
+      body: { ...form }
     })
 
-    if (response.success) {
-      settings.value = response.settings
-      // Show success message (you could add a toast notification here)
-      alert('Settings saved successfully!')
-    } else {
-      throw new Error('Failed to save settings')
-    }
+    if (!response.success) throw new Error('Failed to save settings')
+    settings.value = response.settings
+    toast.add({ description: 'Settings saved', color: 'success' })
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to save settings'
   } finally {
@@ -341,39 +199,31 @@ const saveSettings = async () => {
   }
 }
 
-// Reset form
 const resetForm = () => {
-  if (settings.value) {
-    form.name = settings.value.name || ''
-    form.brand_name = settings.value.brand_name || ''
-    form.brand_description = settings.value.brand_description || ''
-    form.logo_url = settings.value.logo_url || ''
-    form.contact_email = settings.value.contact_email || ''
-    form.primary_location_id = settings.value.primary_location_id || null
-  }
+  if (!settings.value) return
+  form.name = settings.value.name || ''
+  form.brand_name = settings.value.brand_name || ''
+  form.brand_description = settings.value.brand_description || ''
+  form.logo_url = settings.value.logo_url || ''
+  form.contact_email = settings.value.contact_email || ''
+  form.brand_color = (settings.value as any).brand_color || ''
+  form.primary_location_id = settings.value.primary_location_id || null
+  form.url_structure = settings.value.url_structure || 'location_subdirectories'
 }
 
-// Copy to clipboard
-const copyToClipboard = async (text) => {
+const copyToClipboard = async (text: string) => {
   try {
     await navigator.clipboard.writeText(text)
-    // You could show a toast notification here
+    toast.add({ description: 'URL copied', color: 'success' })
   } catch (err) {
     console.error('Failed to copy to clipboard:', err)
+    toast.add({ description: 'Failed to copy URL', color: 'error' })
   }
 }
 
-// Get free domain from environment
-const freeDomain = computed(() => {
-  const config = useRuntimeConfig()
-  const domain = config.public.freeSiteDomain
-  if (!domain) return ''
-  // Remove protocol if present to get just the hostname
-  return domain.replace(/^https?:\/\//, '')
-})
-
-// Load settings on mount
 onMounted(() => {
   loadSettings()
 })
+
+useSeoMeta({ title: 'Site Settings | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

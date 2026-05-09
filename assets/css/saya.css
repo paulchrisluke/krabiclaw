@@ -1,33 +1,9 @@
+/* Saya theme tokens */
+
 :root {
-  --saya-radius: 9999px;
-  --saya-font-display: sans-serif;
+    --ui-radius: 0.5rem;
 }
 
-.saya-pill {
-  border-radius: var(--saya-radius);
-}
-
-.tenant-layout {
-  background: var(--ui-bg);
-  color: var(--ui-text);
-}
-
-.tenant-layout :where(.text-gray-950, .text-gray-900, .text-gray-800, .text-black) {
-  color: var(--ui-text);
-}
-
-.tenant-layout :where(.text-gray-700, .text-gray-600, .text-gray-500) {
-  color: var(--ui-text-muted);
-}
-
-.tenant-layout :where(.border-gray-300, .border-gray-200, .border-gray-100) {
-  border-color: var(--ui-border);
-}
-
-.tenant-layout :where(.bg-gray-100, .bg-gray-50) {
-  background-color: var(--ui-bg-muted);
-}
-
-.dark .tenant-layout :where(.bg-white) {
-  background-color: var(--ui-bg);
+.saya-theme {
+  --ui-primary: #8F1D21;
 }

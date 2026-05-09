@@ -15,6 +15,8 @@ export interface SiteSettings {
   brand_description: string | null
   logo_url: string | null
   contact_email: string | null
+  brand_color: string
+  url_structure: 'location_subdirectories' | 'brand_pages'
   last_published_at: string | null
   created_at: string
   updated_at: string
@@ -26,7 +28,9 @@ export interface UpdateSiteSettingsRequest {
   brand_description?: string
   logo_url?: string
   contact_email?: string
+  brand_color?: string
   primary_location_id?: string
+  url_structure?: 'location_subdirectories' | 'brand_pages'
 }
 
 export interface LaunchReadiness {
