@@ -3,18 +3,18 @@
     <UPageHeader
       title="Locations"
       :description="site ? `Physical locations for ${site.name}` : 'Physical locations for this website.'"
+      :links="headerLinks"
     />
 
     <UPageBody>
-      <!-- Loading state -->
-      <div v-if="loading" class="space-y-4">
-        <div class="grid gap-4 md:grid-cols-3">
-          <USkeleton class="h-20" />
-          <USkeleton class="h-20" />
-          <USkeleton class="h-20" />
+      <div v-if="loading">
+        <div class="overflow-hidden rounded-lg border border-(--ui-border)">
+          <div v-for="i in 3" :key="i" class="flex items-center gap-4 border-b border-(--ui-border) px-4 py-4 last:border-0">
+            <USkeleton class="h-4 w-40" />
+            <USkeleton class="h-4 w-24" />
+            <USkeleton class="ml-auto h-4 w-20" />
+          </div>
         </div>
-        <USkeleton class="h-48 w-full" />
-        <USkeleton class="h-48 w-full" />
       </div>
 
       <UAlert
@@ -25,148 +25,105 @@
         :description="error"
       />
 
-      <div v-else class="space-y-6">
-        <!-- Stats row -->
-        <div class="grid gap-4 md:grid-cols-3">
-          <UCard>
-            <p class="text-sm text-(--ui-text-muted)">Locations</p>
-            <p class="mt-2 text-3xl font-semibold text-(--ui-text-highlighted)">{{ locations.length }}</p>
-          </UCard>
-          <UCard>
-            <p class="text-sm text-(--ui-text-muted)">Primary</p>
-            <p class="mt-2 truncate text-3xl font-semibold text-(--ui-text-highlighted)">
-              {{ primaryLocation?.title || 'None' }}
-            </p>
-          </UCard>
-          <UCard>
-            <p class="text-sm text-(--ui-text-muted)">URL structure</p>
-            <p class="mt-2 text-lg font-semibold text-(--ui-text-highlighted)">
-              {{ site?.url_structure === 'brand_pages' ? 'Brand pages' : 'Location paths' }}
-            </p>
-          </UCard>
+      <div v-else class="space-y-4">
+        <!-- Empty state -->
+        <div v-if="locations.length === 0 && !showAddLocationForm" class="rounded-lg border border-(--ui-border) px-6 py-16 text-center">
+          <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-(--ui-text-muted)" />
+          <h2 class="mt-4 text-base font-semibold text-(--ui-text-highlighted)">Add your first location</h2>
+          <p class="mt-1 text-sm text-(--ui-text-muted)">Local content, menus, hours, and Google Business mapping start here.</p>
+          <UButton class="mt-5" icon="i-heroicons-plus" @click="showAddLocationForm = true">Add Location</UButton>
         </div>
 
-        <!-- Empty state -->
-        <UCard v-if="locations.length === 0 && !showAddLocationForm">
-          <div class="mx-auto max-w-md py-10 text-center">
-            <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-(--ui-text-muted)" />
-            <h2 class="mt-4 text-xl font-semibold text-(--ui-text-highlighted)">Add your first location</h2>
-            <p class="mt-2 text-sm text-(--ui-text-muted)">
-              Local content, menus, hours, and Google Business mapping start here.
-            </p>
-            <UButton class="mt-6" icon="i-heroicons-plus" @click="showAddLocationForm = true">
-              Add Location
-            </UButton>
-          </div>
-        </UCard>
+        <!-- Location list -->
+        <div v-else-if="locations.length > 0" class="overflow-hidden rounded-lg border border-(--ui-border)">
+          <template v-for="location in locations" :key="location.id">
+            <!-- Row: collapsed -->
+            <div
+              v-if="expandedLocationId !== location.id"
+              class="flex items-center gap-4 border-b border-(--ui-border) px-4 py-3.5 last:border-0"
+            >
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="font-medium text-(--ui-text-highlighted)">{{ location.title }}</span>
+                  <UBadge v-if="location.is_primary" color="primary" variant="soft" size="xs">Primary</UBadge>
+                  <UBadge :color="location.status === 'active' ? 'success' : 'neutral'" variant="soft" size="xs">
+                    {{ location.status }}
+                  </UBadge>
+                </div>
+                <p class="mt-0.5 text-sm text-(--ui-text-muted)">
+                  {{ addressLabel(location) || location.city || 'No address set' }}
+                  <span v-if="location.phone"> · {{ location.phone }}</span>
+                </p>
+              </div>
+              <div class="flex shrink-0 items-center gap-2">
+                <UButton
+                  :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`"
+                  color="neutral"
+                  variant="outline"
+                  size="xs"
+                >
+                  Edit menu
+                </UButton>
+                <UButton
+                  :to="`/dashboard/sites/${siteId}/content?locationId=${location.id}&page=location`"
+                  color="neutral"
+                  variant="outline"
+                  size="xs"
+                >
+                  Edit content
+                </UButton>
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  icon="i-heroicons-pencil-square"
+                  aria-label="Edit location"
+                  @click="openEditLocation(location)"
+                />
+              </div>
+            </div>
 
-        <!-- Location cards -->
-        <div v-else class="grid gap-4 lg:grid-cols-2">
-          <UCard
-            v-for="location in locations"
-            :key="location.id"
-          >
-            <div class="flex h-full flex-col">
-              <!-- Collapsed view -->
-              <template v-if="expandedLocationId !== location.id">
-                <div class="flex items-start justify-between gap-4">
-                  <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <h2 class="truncate text-lg font-semibold text-(--ui-text-highlighted)">{{ location.title }}</h2>
-                      <UBadge v-if="location.is_primary" color="primary" variant="soft">Primary</UBadge>
-                      <UBadge :color="location.status === 'active' ? 'success' : 'warning'" variant="soft">
-                        {{ location.status }}
-                      </UBadge>
-                    </div>
-                    <p class="mt-2 text-sm text-(--ui-text-muted)">
-                      {{ addressLabel(location) || location.city || 'No address set' }}
-                    </p>
-                    <p v-if="location.phone" class="mt-1 text-sm text-(--ui-text-muted)">{{ location.phone }}</p>
-                  </div>
-                  <UButton
-                    color="neutral"
-                    variant="ghost"
-                    size="sm"
-                    icon="i-heroicons-pencil-square"
-                    aria-label="Edit location"
-                    @click="openEditLocation(location)"
+            <!-- Row: expanded inline edit -->
+            <div v-else class="border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-4 last:border-0">
+              <div class="space-y-4">
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <UFormField label="Name">
+                    <UInput v-model="locationEditForm.title" placeholder="Kikuzuki Thonglor" autofocus />
+                  </UFormField>
+                  <UFormField label="City">
+                    <UInput v-model="locationEditForm.city" placeholder="Bangkok" />
+                  </UFormField>
+                </div>
+                <UFormField label="Phone">
+                  <UInput v-model="locationEditForm.phone" type="tel" placeholder="+66 2 123 4567" />
+                </UFormField>
+                <div class="flex items-center gap-6">
+                  <UCheckbox v-model="locationEditForm.is_primary" label="Primary location" />
+                  <UCheckbox
+                    :model-value="locationEditForm.status === 'active'"
+                    label="Active"
+                    @update:model-value="setLocationActive"
                   />
                 </div>
-
-                <div class="mt-5 space-y-2">
+                <div class="flex items-center justify-between gap-2">
                   <UButton
-                    :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`"
-                    icon="i-heroicons-list-bullet"
-                    block
-                  >
-                    Edit Menu
-                  </UButton>
-                  <UButton
-                    :to="`/dashboard/sites/${siteId}/content?locationId=${location.id}&page=location`"
-                    icon="i-heroicons-document-text"
-                    color="neutral"
-                    variant="soft"
-                    block
-                  >
-                    Edit Content
-                  </UButton>
-                </div>
-              </template>
-
-              <!-- Expanded inline edit form -->
-              <template v-else>
-                <h3 class="mb-4 font-semibold text-(--ui-text-highlighted)">Edit Location</h3>
-                <div class="space-y-4">
-                  <div class="grid gap-4 sm:grid-cols-2">
-                    <UFormField label="Name">
-                      <UInput v-model="locationEditForm.title" placeholder="Kikuzuki Thonglor" />
-                    </UFormField>
-                    <UFormField label="City">
-                      <UInput v-model="locationEditForm.city" placeholder="Bangkok" />
-                    </UFormField>
-                  </div>
-                  <UFormField label="Phone">
-                    <UInput v-model="locationEditForm.phone" type="tel" placeholder="+66 2 123 4567" />
-                  </UFormField>
-                  <div class="flex items-center gap-6">
-                    <UCheckbox v-model="locationEditForm.is_primary" label="Primary location" />
-                    <UCheckbox
-                      :model-value="locationEditForm.status === 'active'"
-                      label="Active"
-                      @update:model-value="locationEditForm.status = $event ? 'active' : 'inactive'"
-                    />
-                  </div>
-                  <div class="flex items-center justify-between gap-2 pt-1">
-                    <UButton
-                      color="neutral"
-                      variant="ghost"
-                      size="sm"
-                      icon="i-heroicons-trash"
-                      :loading="locationSaving"
-                      @click="handleDeleteLocation(location.id)"
-                    >
-                      Delete
-                    </UButton>
-                    <div class="flex gap-2">
-                      <UButton color="neutral" variant="ghost" size="sm" @click="expandedLocationId = null">
-                        Cancel
-                      </UButton>
-                      <UButton size="sm" :loading="locationSaving" @click="handleSaveLocation(location.id)">
-                        Save
-                      </UButton>
-                    </div>
+                    color="neutral" variant="ghost" size="sm" icon="i-heroicons-trash"
+                    :loading="locationSaving"
+                    @click="handleDeleteLocation(location.id)"
+                  >Delete</UButton>
+                  <div class="flex gap-2">
+                    <UButton color="neutral" variant="ghost" size="sm" @click="expandedLocationId = null">Cancel</UButton>
+                    <UButton size="sm" :loading="locationSaving" @click="handleSaveLocation(location.id)">Save</UButton>
                   </div>
                 </div>
-              </template>
+              </div>
             </div>
-          </UCard>
+          </template>
         </div>
 
-        <!-- Add Location inline form -->
-        <UCard v-if="showAddLocationForm">
-          <template #header>
-            <h2 class="font-semibold text-(--ui-text-highlighted)">New Location</h2>
-          </template>
+        <!-- Add Location form -->
+        <div v-if="showAddLocationForm" class="overflow-hidden rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated) p-4">
+          <h3 class="mb-4 text-sm font-semibold text-(--ui-text-highlighted)">New location</h3>
           <div class="space-y-4">
             <div class="grid gap-4 sm:grid-cols-2">
               <UFormField label="Name">
@@ -180,24 +137,13 @@
               <UInput v-model="addLocationForm.phone" type="tel" placeholder="+66 2 123 4567" />
             </UFormField>
             <UCheckbox v-model="addLocationForm.is_primary" label="Set as primary location" />
-            <div class="flex justify-end gap-2 pt-1">
-              <UButton color="neutral" variant="ghost" @click="showAddLocationForm = false">Cancel</UButton>
-              <UButton
-                :loading="locationSaving"
-                :disabled="!addLocationForm.title.trim()"
-                @click="handleCreateLocation"
-              >
-                Add Location
+            <div class="flex justify-end gap-2">
+              <UButton color="neutral" variant="ghost" size="sm" @click="showAddLocationForm = false">Cancel</UButton>
+              <UButton size="sm" :loading="locationSaving" :disabled="!addLocationForm.title.trim()" @click="handleCreateLocation">
+                Add location
               </UButton>
             </div>
           </div>
-        </UCard>
-
-        <!-- Add Location trigger (when locations exist and form not shown) -->
-        <div v-if="locations.length > 0 && !showAddLocationForm" class="flex justify-center">
-          <UButton color="neutral" variant="soft" icon="i-heroicons-plus" @click="showAddLocationForm = true">
-            Add Location
-          </UButton>
         </div>
       </div>
     </UPageBody>
@@ -228,8 +174,14 @@ const site = ref<any>(null)
 const locations = ref<BusinessLocation[]>([])
 const locationSaving = ref(false)
 
-const primaryLocation = computed(() => locations.value.find(l => l.is_primary) || null)
+const primaryLocation = computed(() => locations.value.find((l: BusinessLocation) => l.is_primary) || null)
 const addressLabel = (location: BusinessLocation) => location.address?.addressLines?.join(', ') || ''
+
+const headerLinks = computed(() => [
+  { label: 'Add location', icon: 'i-heroicons-plus', color: 'primary' as const, onClick: () => { showAddLocationForm.value = true } }
+])
+
+const setLocationActive = (v: boolean) => { locationEditForm.status = v ? 'active' : 'inactive' }
 
 const generateSlug = (name: string) =>
   name.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
@@ -258,10 +210,10 @@ const handleSaveLocation = async (id: string) => {
   try {
     const response = await $fetch<{ success: boolean; location: BusinessLocation }>(
       `/api/sites/${siteId}/locations/${id}`,
-      { method: 'PATCH', body: { ...locationEditForm } }
+      { method: 'PATCH', body: { ...locationEditForm } } as any
     )
     if (!response.success) throw new Error('Failed to save location')
-    const idx = locations.value.findIndex(l => l.id === id)
+    const idx = locations.value.findIndex((l: BusinessLocation) => l.id === id)
     if (idx !== -1) locations.value[idx] = response.location
     expandedLocationId.value = null
     toast.add({ description: 'Location saved', color: 'success' })
@@ -276,7 +228,7 @@ const handleDeleteLocation = async (id: string) => {
   locationSaving.value = true
   try {
     await $fetch(`/api/sites/${siteId}/locations/${id}`, { method: 'DELETE' })
-    locations.value = locations.value.filter(l => l.id !== id)
+    locations.value = locations.value.filter((l: BusinessLocation) => l.id !== id)
     expandedLocationId.value = null
     toast.add({ description: 'Location deleted', color: 'neutral' })
   } catch (err: any) {
@@ -310,7 +262,7 @@ const handleCreateLocation = async () => {
           phone: addLocationForm.phone.trim(),
           is_primary: addLocationForm.is_primary
         }
-      }
+      } as any
     )
     if (!response.success) throw new Error('Failed to create location')
     locations.value.push(response.location)

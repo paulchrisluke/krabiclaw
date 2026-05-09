@@ -2,9 +2,13 @@
   <div class="space-y-4">
     <!-- Loading state -->
     <template v-if="loading">
-      <USkeleton class="h-10 w-56" />
-      <USkeleton class="h-48 w-full" />
-      <USkeleton class="h-48 w-full" />
+      <UCard :ui="{ body: 'p-0' }">
+        <div v-for="i in 5" :key="i" class="flex items-center gap-4 border-b border-(--ui-border) px-4 py-3.5 last:border-0">
+          <USkeleton class="h-4 w-40" />
+          <USkeleton class="ml-auto h-4 w-16" />
+          <USkeleton class="h-5 w-20 rounded-full" />
+        </div>
+      </UCard>
     </template>
 
     <!-- Error state -->
@@ -16,27 +20,25 @@
       :description="error"
     />
 
-    <!-- No menus — empty state + inline create form -->
+    <!-- No menus — empty state -->
     <UCard v-else-if="!hasMenus">
-      <div class="mx-auto max-w-md py-10 text-center">
+      <div class="py-10 text-center">
         <UIcon name="i-heroicons-list-bullet" class="mx-auto size-10 text-(--ui-text-muted)" />
-        <h2 class="mt-4 text-xl font-semibold text-(--ui-text-highlighted)">No menus yet</h2>
-        <p class="mt-2 text-sm text-(--ui-text-muted)">Create a menu to start adding sections and items.</p>
-        <UButton v-if="!showCreateMenuForm" class="mt-6" icon="i-heroicons-plus" @click="showCreateMenuForm = true">
-          Create Menu
-        </UButton>
-        <div v-else class="mt-6 space-y-4 text-left">
-          <UFormField label="Menu Name">
+        <h2 class="mt-4 text-base font-semibold text-(--ui-text-highlighted)">No menus yet</h2>
+        <p class="mt-1 text-sm text-(--ui-text-muted)">Create a menu to start adding sections and items.</p>
+        <template v-if="!showCreateMenuForm">
+          <UButton class="mt-5" icon="i-heroicons-plus" @click="showCreateMenuForm = true">Create menu</UButton>
+        </template>
+        <div v-else class="mx-auto mt-5 max-w-sm space-y-3 text-left">
+          <UFormField label="Menu name">
             <UInput v-model="createMenuForm.name" placeholder="Dinner Menu" autofocus />
           </UFormField>
           <UFormField label="Description">
             <UTextarea v-model="createMenuForm.description" :rows="2" placeholder="Our evening selection..." />
           </UFormField>
           <div class="flex justify-end gap-2">
-            <UButton color="neutral" variant="ghost" @click="showCreateMenuForm = false">Cancel</UButton>
-            <UButton :loading="saving" :disabled="!createMenuForm.name.trim()" @click="handleCreateMenu">
-              Create Menu
-            </UButton>
+            <UButton color="neutral" variant="ghost" size="sm" @click="showCreateMenuForm = false">Cancel</UButton>
+            <UButton size="sm" :loading="saving" :disabled="!createMenuForm.name.trim()" @click="handleCreateMenu">Create menu</UButton>
           </div>
         </div>
       </div>
@@ -44,7 +46,7 @@
 
     <!-- Menu content -->
     <template v-else>
-      <!-- Menu selector bar -->
+      <!-- Menu selector / toolbar -->
       <div class="flex items-center justify-between gap-4">
         <div class="flex items-center gap-3">
           <USelect
@@ -54,191 +56,140 @@
             size="sm"
             @update:model-value="handleMenuChange"
           />
-          <span v-else class="font-semibold text-(--ui-text-highlighted)">{{ currentMenu?.name }}</span>
-          <UBadge
-            :color="currentMenu?.status === 'published' ? 'success' : 'warning'"
-            variant="soft"
-            size="xs"
-          >
-            {{ currentMenu?.status }}
-          </UBadge>
+          <div v-else class="flex items-center gap-2">
+            <span class="text-sm font-medium text-(--ui-text-highlighted)">{{ currentMenu?.name }}</span>
+            <UBadge :color="currentMenu?.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs">
+              {{ currentMenu?.status }}
+            </UBadge>
+          </div>
         </div>
-        <UButton color="neutral" variant="soft" size="sm" icon="i-heroicons-plus" @click="showCreateMenuForm = true">
-          New Menu
+        <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-plus" @click="showCreateMenuForm = true">
+          New menu
         </UButton>
       </div>
 
-      <!-- Inline create menu form (when adding a second menu) -->
-      <UCard v-if="showCreateMenuForm && hasMenus">
-        <div class="space-y-4">
-          <h3 class="font-semibold text-(--ui-text-highlighted)">New Menu</h3>
-          <UFormField label="Menu Name">
+      <!-- Inline create menu form -->
+      <div v-if="showCreateMenuForm && hasMenus" class="rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated) p-4">
+        <h3 class="mb-3 text-sm font-semibold text-(--ui-text-highlighted)">New menu</h3>
+        <div class="space-y-3">
+          <UFormField label="Menu name">
             <UInput v-model="createMenuForm.name" placeholder="Lunch Menu" autofocus />
           </UFormField>
           <UFormField label="Description">
             <UTextarea v-model="createMenuForm.description" :rows="2" placeholder="Optional description..." />
           </UFormField>
           <div class="flex justify-end gap-2">
-            <UButton color="neutral" variant="ghost" @click="showCreateMenuForm = false">Cancel</UButton>
-            <UButton :loading="saving" :disabled="!createMenuForm.name.trim()" @click="handleCreateMenu">
-              Create Menu
-            </UButton>
+            <UButton color="neutral" variant="ghost" size="sm" @click="showCreateMenuForm = false">Cancel</UButton>
+            <UButton size="sm" :loading="saving" :disabled="!createMenuForm.name.trim()" @click="handleCreateMenu">Create menu</UButton>
           </div>
         </div>
-      </UCard>
+      </div>
 
-      <!-- Section cards -->
-      <UCard v-for="section in allSections" :key="section">
-        <template #header>
-          <div class="flex items-center justify-between gap-4">
-            <h3 class="font-semibold text-(--ui-text-highlighted)">{{ section }}</h3>
-            <UButton
-              size="xs"
-              color="neutral"
-              variant="soft"
-              icon="i-heroicons-plus"
-              @click="openAddItem(section)"
-            >
-              Add Item
+      <!-- Single bordered list: sections + items -->
+      <div class="overflow-hidden rounded-lg border border-(--ui-border)">
+        <template v-for="section in allSections" :key="section">
+          <!-- Section header row -->
+          <div class="flex items-center justify-between gap-4 border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-2.5">
+            <span class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-muted)">{{ section }}</span>
+            <UButton size="xs" color="neutral" variant="ghost" icon="i-heroicons-plus" @click="openAddItem(section)">
+              Add item
             </UButton>
           </div>
-        </template>
 
-        <!-- Items list -->
-        <div
-          v-if="menuItemsBySection[section]?.length"
-          class="divide-y divide-(--ui-border)"
-        >
+          <!-- Items -->
           <template v-for="item in menuItemsBySection[section]" :key="item.id">
-            <!-- Collapsed item row — click to expand -->
+            <!-- Collapsed item row -->
             <div
               v-if="expandedItemId !== item.id"
-              class="-mx-4 flex cursor-pointer items-center justify-between gap-4 px-4 py-3 transition hover:bg-(--ui-bg-elevated) first:rounded-t last:rounded-b"
+              class="flex cursor-pointer items-center gap-4 border-b border-(--ui-border) px-4 py-3.5 last:border-0 hover:bg-(--ui-bg-elevated)"
               @click="openEditItem(item)"
             >
               <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <span class="font-medium text-(--ui-text-highlighted)">{{ item.name }}</span>
-                  <UBadge
-                    :color="item.available ? 'success' : 'neutral'"
-                    variant="soft"
-                    size="xs"
-                  >
-                    {{ item.available ? 'Available' : 'Unavailable' }}
-                  </UBadge>
-                </div>
-                <div class="mt-0.5 flex items-center gap-3">
-                  <span
-                    v-if="item.description"
-                    class="truncate text-sm text-(--ui-text-muted)"
-                  >{{ item.description }}</span>
-                  <span
-                    v-if="item.price"
-                    class="shrink-0 text-sm font-medium text-(--ui-text)"
-                  >{{ item.price }}</span>
-                </div>
+                <span class="text-sm font-medium text-(--ui-text-highlighted)">{{ item.name }}</span>
+                <span v-if="item.description" class="ml-2 truncate text-sm text-(--ui-text-muted)">{{ item.description }}</span>
               </div>
+              <span v-if="item.price" class="shrink-0 text-sm font-medium text-(--ui-text)">{{ item.price }}</span>
+              <UBadge :color="item.available ? 'success' : 'neutral'" variant="soft" size="xs">
+                {{ item.available ? 'Available' : 'Unavailable' }}
+              </UBadge>
               <UIcon name="i-heroicons-pencil-square" class="size-4 shrink-0 text-(--ui-text-muted)" />
             </div>
 
-            <!-- Expanded inline edit form -->
-            <div v-else class="space-y-4 py-4 first:pt-0">
-              <div class="grid gap-4 sm:grid-cols-2">
-                <UFormField label="Name">
-                  <UInput v-model="editForm.name" placeholder="Item name" />
+            <!-- Expanded inline edit -->
+            <div v-else class="border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-4 last:border-0">
+              <div class="space-y-3">
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <UFormField label="Name">
+                    <UInput v-model="editForm.name" placeholder="Item name" autofocus />
+                  </UFormField>
+                  <UFormField label="Price">
+                    <UInput v-model="editForm.price" placeholder="฿250" />
+                  </UFormField>
+                </div>
+                <UFormField label="Description">
+                  <UTextarea v-model="editForm.description" :rows="2" placeholder="Short description..." />
                 </UFormField>
-                <UFormField label="Price">
-                  <UInput v-model="editForm.price" placeholder="฿250" />
-                </UFormField>
-              </div>
-              <UFormField label="Description">
-                <UTextarea v-model="editForm.description" :rows="2" placeholder="Short description..." />
-              </UFormField>
-              <UCheckbox v-model="editForm.available" label="Available for ordering" />
-              <div class="flex items-center justify-between gap-2 pt-1">
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="sm"
-                  icon="i-heroicons-trash"
-                  @click="handleDeleteItem(item.id)"
-                >
-                  Delete
-                </UButton>
-                <div class="flex gap-2">
-                  <UButton color="neutral" variant="ghost" size="sm" @click="closeEdit">Cancel</UButton>
-                  <UButton size="sm" :loading="saving" @click="handleSaveItem(item.id)">Save</UButton>
+                <UCheckbox v-model="editForm.available" label="Available for ordering" />
+                <div class="flex items-center justify-between gap-2">
+                  <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-trash" @click="handleDeleteItem(item.id)">Delete</UButton>
+                  <div class="flex gap-2">
+                    <UButton color="neutral" variant="ghost" size="sm" @click="closeEdit">Cancel</UButton>
+                    <UButton size="sm" :loading="saving" @click="handleSaveItem(item.id)">Save</UButton>
+                  </div>
                 </div>
               </div>
             </div>
           </template>
-        </div>
 
-        <!-- Empty section — no items yet -->
-        <p
-          v-else-if="addingItemSection !== section"
-          class="py-4 text-center text-sm text-(--ui-text-muted)"
-        >
-          No items yet.
-        </p>
-
-        <!-- Add item inline form -->
-        <div
-          v-if="addingItemSection === section"
-          class="space-y-4 pt-4"
-          :class="{ 'border-t border-(--ui-border) mt-4': menuItemsBySection[section]?.length }"
-        >
-          <div class="grid gap-4 sm:grid-cols-2">
-            <UFormField label="Name">
-              <UInput v-model="addItemForm.name" placeholder="Item name" autofocus />
-            </UFormField>
-            <UFormField label="Price">
-              <UInput v-model="addItemForm.price" placeholder="฿250" />
-            </UFormField>
-          </div>
-          <UFormField label="Description">
-            <UTextarea v-model="addItemForm.description" :rows="2" placeholder="Short description..." />
-          </UFormField>
-          <UCheckbox v-model="addItemForm.available" label="Available for ordering" />
-          <div class="flex justify-end gap-2 pt-1">
-            <UButton color="neutral" variant="ghost" size="sm" @click="cancelAddItem(section)">Cancel</UButton>
-            <UButton
-              size="sm"
-              :loading="saving"
-              :disabled="!addItemForm.name.trim()"
-              @click="handleAddItem(section)"
-            >
-              Add Item
-            </UButton>
-          </div>
-        </div>
-      </UCard>
-
-      <!-- Add Section card -->
-      <UCard>
-        <div v-if="!showAddSectionForm" class="flex justify-center py-2">
-          <UButton
-            color="neutral"
-            variant="ghost"
-            icon="i-heroicons-plus"
-            @click="showAddSectionForm = true"
+          <!-- Empty section row -->
+          <div
+            v-if="!menuItemsBySection[section]?.length && addingItemSection !== section"
+            class="border-b border-(--ui-border) px-4 py-3 text-sm text-(--ui-text-muted) last:border-0"
           >
-            Add Section
+            No items yet. Click <button class="underline" @click="openAddItem(section)">Add item</button> to get started.
+          </div>
+
+          <!-- Add item inline form -->
+          <div v-if="addingItemSection === section" class="border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-4 last:border-0">
+            <div class="space-y-3">
+              <div class="grid gap-3 sm:grid-cols-2">
+                <UFormField label="Name">
+                  <UInput v-model="addItemForm.name" placeholder="Item name" autofocus />
+                </UFormField>
+                <UFormField label="Price">
+                  <UInput v-model="addItemForm.price" placeholder="฿250" />
+                </UFormField>
+              </div>
+              <UFormField label="Description">
+                <UTextarea v-model="addItemForm.description" :rows="2" placeholder="Short description..." />
+              </UFormField>
+              <UCheckbox v-model="addItemForm.available" label="Available for ordering" />
+              <div class="flex justify-end gap-2">
+                <UButton color="neutral" variant="ghost" size="sm" @click="cancelAddItem(section)">Cancel</UButton>
+                <UButton size="sm" :loading="saving" :disabled="!addItemForm.name.trim()" @click="handleAddItem(section)">Add item</UButton>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Add section row (always last inside the list) -->
+        <div v-if="!showAddSectionForm" class="flex justify-center px-4 py-3">
+          <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-plus" @click="showAddSectionForm = true">
+            Add section
           </UButton>
         </div>
-        <div v-else class="space-y-4">
-          <h3 class="font-semibold text-(--ui-text-highlighted)">New Section</h3>
-          <UFormField label="Section Name">
-            <UInput v-model="newSectionName" placeholder="Starters, Mains, Desserts..." autofocus />
-          </UFormField>
-          <div class="flex justify-end gap-2">
-            <UButton color="neutral" variant="ghost" size="sm" @click="cancelAddSection">Cancel</UButton>
-            <UButton size="sm" :disabled="!newSectionName.trim()" @click="handleAddSection">
-              Create Section
-            </UButton>
+        <div v-else class="bg-(--ui-bg-elevated) px-4 py-4">
+          <div class="space-y-3">
+            <UFormField label="Section name">
+              <UInput v-model="newSectionName" placeholder="Starters, Mains, Desserts..." autofocus />
+            </UFormField>
+            <div class="flex justify-end gap-2">
+              <UButton color="neutral" variant="ghost" size="sm" @click="cancelAddSection">Cancel</UButton>
+              <UButton size="sm" :disabled="!newSectionName.trim()" @click="handleAddSection">Create section</UButton>
+            </div>
           </div>
         </div>
-      </UCard>
+      </div>
     </template>
   </div>
 </template>
@@ -271,10 +222,10 @@ const {
 // Menu selector
 const selectedMenuId = ref<string | null>(null)
 const menuOptions = computed(() =>
-  menus.value.map(m => ({ value: m.id, label: m.name }))
+  menus.value.map((m: any) => ({ value: m.id, label: m.name }))
 )
 
-watch(currentMenu, (menu) => {
+watch(currentMenu, (menu: any) => {
   selectedMenuId.value = menu?.id ?? null
 })
 
@@ -356,7 +307,7 @@ const cancelAddItem = (section: string) => {
   addingItemSection.value = null
   // Remove pending section if it still has no items
   if (pendingSections.value.includes(section) && !menuItemsBySection.value[section]?.length) {
-    pendingSections.value = pendingSections.value.filter(s => s !== section)
+    pendingSections.value = pendingSections.value.filter((s: string) => s !== section)
   }
 }
 
@@ -370,7 +321,7 @@ const handleAddItem = async (section: string) => {
       available: addItemForm.available,
       section
     })
-    pendingSections.value = pendingSections.value.filter(s => s !== section)
+    pendingSections.value = pendingSections.value.filter((s: string) => s !== section)
     addingItemSection.value = null
     toast.add({ description: 'Item added', color: 'success' })
   } catch {
@@ -385,7 +336,7 @@ const newSectionName = ref('')
 
 const allSections = computed(() => {
   const existing = Object.keys(menuItemsBySection.value)
-  const pending = pendingSections.value.filter(s => !existing.includes(s))
+  const pending = pendingSections.value.filter((s: string) => !existing.includes(s))
   return [...existing, ...pending]
 })
 

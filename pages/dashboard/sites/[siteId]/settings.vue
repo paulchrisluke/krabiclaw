@@ -14,90 +14,82 @@
 
       <UAlert v-else-if="error" color="error" variant="soft" icon="i-heroicons-exclamation-triangle" :description="error" />
 
-      <div v-else-if="settings" class="space-y-6">
-        <UCard>
-          <template #header>
-            <h2 class="font-semibold text-[var(--ui-text-highlighted)]">General</h2>
-          </template>
-          <div class="grid gap-6 md:grid-cols-2">
+      <div v-else-if="settings" class="space-y-0 divide-y divide-(--ui-border) rounded-lg border border-(--ui-border)">
+        <!-- General -->
+        <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
+          <div>
+            <h2 class="font-semibold text-(--ui-text-highlighted)">General</h2>
+            <p class="mt-1 text-sm text-(--ui-text-muted)">Basic website configuration. Your subdomain is permanent and cannot be changed.</p>
+          </div>
+          <div class="space-y-5">
             <UFormField label="Site Name">
               <UInput v-model="form.name" placeholder="Your restaurant name" />
             </UFormField>
-
-            <UFormField label="Subdomain" help="Subdomain cannot be changed after creation.">
-              <UInput :model-value="settings.subdomain" readonly class="opacity-50" />
-            </UFormField>
-
-            <UFormField label="Theme" help="Saya theme is currently the only option.">
-              <UInput :model-value="settings.theme" readonly class="opacity-50" />
-            </UFormField>
-
-            <UFormField label="URL Structure">
-              <USelect
-                v-model="form.url_structure"
-                :items="urlStructureOptions"
-                value-key="value"
-                label-key="label"
-              />
-            </UFormField>
-
+            <div class="grid gap-5 sm:grid-cols-2">
+              <UFormField label="Subdomain">
+                <UInput :model-value="settings.subdomain" readonly class="opacity-50" />
+              </UFormField>
+              <UFormField label="URL Structure">
+                <USelect
+                  v-model="form.url_structure"
+                  :items="urlStructureOptions"
+                  value-key="value"
+                  label-key="label"
+                />
+              </UFormField>
+            </div>
             <UFormField label="Public URL">
               <div class="flex gap-2">
                 <UInput :model-value="settings.public_url" readonly class="flex-1 opacity-50" />
                 <UButton icon="i-heroicons-clipboard-document" variant="outline" color="neutral" aria-label="Copy URL" @click="copyToClipboard(settings.public_url)" />
               </div>
             </UFormField>
-
-            <UFormField label="Status">
-              <UBadge :color="settings.status === 'active' ? 'success' : 'warning'" variant="soft">
-                {{ settings.status }}
-              </UBadge>
-            </UFormField>
           </div>
-        </UCard>
+        </div>
 
-        <UCard>
-          <template #header>
-            <h2 class="font-semibold text-[var(--ui-text-highlighted)]">Brand</h2>
-          </template>
-          <div class="space-y-6">
-            <UFormField label="Restaurant/Brand Name" help="Displayed prominently on your website.">
+        <!-- Brand -->
+        <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
+          <div>
+            <h2 class="font-semibold text-(--ui-text-highlighted)">Brand</h2>
+            <p class="mt-1 text-sm text-(--ui-text-muted)">Your restaurant's identity. This name and description appear on your public website and in search results.</p>
+          </div>
+          <div class="space-y-5">
+            <UFormField label="Restaurant Name">
               <UInput v-model="form.brand_name" placeholder="Your Restaurant Name" />
             </UFormField>
-
-            <UFormField label="Short Description" help="Used for SEO and homepage content.">
+            <UFormField label="Short Description" help="Used for SEO and homepage tagline.">
               <UTextarea v-model="form.brand_description" :rows="3" placeholder="Authentic dining experience in your city" />
             </UFormField>
-
-            <div class="grid gap-6 md:grid-cols-2">
+            <div class="grid gap-5 sm:grid-cols-2">
               <UFormField label="Logo URL">
                 <UInput v-model="form.logo_url" type="url" placeholder="https://example.com/logo.png" />
               </UFormField>
-
               <UFormField label="Contact Email">
                 <UInput v-model="form.contact_email" type="email" placeholder="contact@yourrestaurant.com" />
               </UFormField>
             </div>
           </div>
-        </UCard>
+        </div>
 
-        <UCard>
-          <template #header>
-            <h2 class="font-semibold text-[var(--ui-text-highlighted)]">Appearance</h2>
-          </template>
-          <div class="space-y-6">
-            <UFormField label="Theme" help="Saya theme is currently the only option. More themes coming soon.">
-              <UInput :model-value="settings.theme" readonly class="opacity-50" />
-            </UFormField>
-
-            <UFormField label="Brand Color" help="Primary color used for buttons and accents on your site.">
+        <!-- Appearance -->
+        <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
+          <div>
+            <h2 class="font-semibold text-(--ui-text-highlighted)">Appearance</h2>
+            <p class="mt-1 text-sm text-(--ui-text-muted)">Control your site's color scheme. The brand color is applied to buttons, links, and accent elements.</p>
+          </div>
+          <div class="space-y-5">
+            <UFormField label="Brand Color" help="Primary color used for buttons and accents.">
               <div class="flex items-center gap-3">
                 <UInput v-model="form.brand_color" type="color" class="h-9 w-16 cursor-pointer p-1" />
                 <UInput v-model="form.brand_color" placeholder="#e87f67" class="w-32 font-mono text-sm" />
               </div>
             </UFormField>
+            <UFormField label="Theme">
+              <UInput :model-value="settings.theme" readonly class="opacity-50" />
+              <template #help>More themes coming soon.</template>
+            </UFormField>
           </div>
-        </UCard>
+        </div>
 
         <StickySaveBar
           :visible="isDirty"
@@ -182,7 +174,7 @@ const saveSettings = async () => {
   error.value = null
 
   try {
-    const response = await $fetch<any>(`/api/sites/${siteId}/settings`, {
+    const response = await ($fetch as any)(`/api/sites/${siteId}/settings`, {
       method: 'PATCH',
       body: { ...form }
     })

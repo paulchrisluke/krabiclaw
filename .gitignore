@@ -29,3 +29,6 @@ public/google-business-cache.json
 
 # Legacy admin archive (exclude from compilation)
 archive/
+scripts/.auth-state.json
+scripts/screenshots/
+scripts/bugcheck-report.json

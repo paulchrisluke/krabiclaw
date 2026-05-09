@@ -1,0 +1,52 @@
+// GET single menu with items
+import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
+import { getMenuWithItems } from '~/server/utils/menu-management'
+
+export default defineEventHandler(async (event) => {
+  const siteId = getRouterParam(event, 'siteId')
+  const menuId = getRouterParam(event, 'menuId')
+
+  if (!siteId || !menuId) {
+    return jsonResponse({ error: 'Site ID and menu ID are required' }, { status: 400 })
+  }
+
+  const env = cloudflareEnv(event)
+  const db = env.REVIEWS_DB
+
+  if (!db) {
+    return jsonResponse({ error: 'Database not available' }, { status: 500 })
+  }
+
+  const session = await getAuthSession(event, env)
+
+  if (!session?.user?.id) {
+    return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+  }
+
+  try {
+    const site = await db.prepare(`
+      SELECT s.id, s.organization_id
+      FROM sites s
+      JOIN organization o ON s.organization_id = o.id
+      JOIN member om ON o.id = om.organizationId
+      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
+      LIMIT 1
+    `).bind(siteId, session.user.id).first()
+
+    if (!site) {
+      return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+    }
+
+    const menu = await getMenuWithItems(db, site.organization_id, siteId, menuId)
+
+    if (!menu) {
+      return jsonResponse({ error: 'Menu not found' }, { status: 404 })
+    }
+
+    return jsonResponse({ success: true, menu })
+  } catch (error) {
+    console.error('Failed to get menu:', error)
+    return jsonResponse({ error: 'Failed to get menu' }, { status: 500 })
+  }
+})

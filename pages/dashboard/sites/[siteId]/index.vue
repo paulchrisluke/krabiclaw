@@ -26,6 +26,45 @@
       />
 
       <div v-else-if="site" class="space-y-6">
+        <!-- Launch Readiness card — always first -->
+        <UCard v-if="launchProgress < 100">
+          <template #header>
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <h2 class="font-semibold text-(--ui-text-highlighted)">Get started</h2>
+                <p class="mt-1 text-sm text-(--ui-text-muted)">Complete these steps to go live</p>
+              </div>
+              <UBadge color="warning" variant="soft" size="lg">{{ launchProgress }}% complete</UBadge>
+            </div>
+          </template>
+          <div class="space-y-4">
+            <UProgress :value="launchProgress" size="md" color="primary" />
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div
+                v-for="item in requiredFields"
+                :key="item.label"
+                class="flex items-center justify-between gap-3 rounded-lg border p-4"
+                :class="item.done ? 'border-(--ui-border) bg-(--ui-bg)' : 'border-(--ui-border) bg-(--ui-bg-elevated)'"
+              >
+                <div class="flex items-center gap-3">
+                  <div
+                    class="flex size-5 items-center justify-center rounded-full"
+                    :class="item.done ? 'bg-(--ui-success)' : 'bg-(--ui-border)'"
+                  >
+                    <UIcon v-if="item.done" name="i-heroicons-check" class="size-3 text-(--ui-bg)" />
+                  </div>
+                  <span class="text-sm font-medium" :class="item.done ? 'text-(--ui-text-highlighted)' : 'text-(--ui-text-muted)'">
+                    {{ item.label }}
+                  </span>
+                </div>
+                <UButton v-if="!item.done && item.to" :to="item.to" size="xs" variant="ghost" color="primary">
+                  Set up
+                </UButton>
+              </div>
+            </div>
+          </div>
+        </UCard>
+
         <!-- No locations prompt -->
         <UCard v-if="locations.length === 0">
           <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-center">
@@ -60,7 +99,7 @@
               <div>
                 <h2 class="font-semibold text-(--ui-text-highlighted)">Locations</h2>
                 <p class="mt-1 text-sm text-(--ui-text-muted)">
-                  Choose a location to edit local content, menu, and details.
+                  Choose a location to edit its menu and content.
                 </p>
               </div>
               <UButton
@@ -95,11 +134,7 @@
                 <UIcon name="i-heroicons-arrow-right" class="size-4 shrink-0 text-(--ui-text-muted) transition group-hover:text-(--ui-primary)" />
               </div>
               <div class="mt-3 flex items-center gap-2">
-                <UButton
-                  :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`"
-                  size="xs"
-                  block
-                >
+                <UButton :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`" size="xs" block>
                   Edit Menu
                 </UButton>
                 <UButton
@@ -114,60 +149,8 @@
           </div>
         </UCard>
 
-        <!-- Launch Readiness card -->
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between gap-4">
-              <div>
-                <h2 class="font-semibold text-(--ui-text-highlighted)">Launch Readiness</h2>
-                <p class="mt-1 text-sm text-(--ui-text-muted)">Complete these steps to go live</p>
-              </div>
-              <UBadge :color="launchProgress === 100 ? 'success' : 'warning'" variant="soft" size="lg">
-                {{ launchProgress }}%
-              </UBadge>
-            </div>
-          </template>
-
-          <div class="space-y-4">
-            <UProgress :value="launchProgress" size="md" color="primary" />
-
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div
-                v-for="item in requiredFields"
-                :key="item.label"
-                class="flex items-center justify-between gap-3 rounded-lg border p-4"
-                :class="item.done ? 'border-(--ui-border) bg-(--ui-bg)' : 'border-(--ui-border) bg-(--ui-bg-elevated)'"
-              >
-                <div class="flex items-center gap-3">
-                  <div
-                    class="flex size-5 items-center justify-center rounded-full"
-                    :class="item.done ? 'bg-(--ui-success)' : 'bg-(--ui-border)'"
-                  >
-                    <UIcon v-if="item.done" name="i-heroicons-check" class="size-3 text-(--ui-bg)" />
-                  </div>
-                  <span
-                    class="text-sm font-medium"
-                    :class="item.done ? 'text-(--ui-text-highlighted)' : 'text-(--ui-text-muted)'"
-                  >
-                    {{ item.label }}
-                  </span>
-                </div>
-                <UButton
-                  v-if="!item.done && item.to"
-                  :to="item.to"
-                  size="xs"
-                  variant="ghost"
-                  color="primary"
-                >
-                  Fix
-                </UButton>
-              </div>
-            </div>
-          </div>
-        </UCard>
-
-        <!-- Stats row -->
-        <div class="grid gap-4 md:grid-cols-3">
+        <!-- Stats row — only shown once launched -->
+        <div v-if="launchProgress === 100" class="grid gap-4 md:grid-cols-3">
           <UCard>
             <p class="text-sm text-(--ui-text-muted)">Locations</p>
             <p class="mt-2 text-3xl font-semibold text-(--ui-text-highlighted)">{{ locations.length }}</p>

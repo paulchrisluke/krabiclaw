@@ -118,7 +118,15 @@ export default defineNuxtConfig({
     {
       path: '~/components/menu',
       pathPrefix: false,
-    }
+    },
+    {
+      path: '~/components/editor',
+      pathPrefix: false,
+    },
+    {
+      path: '~/components/dashboard',
+      pathPrefix: false,
+    },
   ],
 
   // Global watcher exclusions

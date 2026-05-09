@@ -377,7 +377,7 @@ import DOMPurify from 'dompurify'
 import { contentRegistry, editablePages, getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
 
-definePageMeta({ layout: 'editor' })
+definePageMeta({ layout: 'editor', ssr: false })
 
 const route = useRoute()
 const router = useRouter()
