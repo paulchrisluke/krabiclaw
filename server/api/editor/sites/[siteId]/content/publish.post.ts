@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { publishDrafts } from '~/server/utils/content-management'
+import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
 
 interface PublishRequest {
   page: string
@@ -67,7 +68,22 @@ export default defineEventHandler(async (event) => {
     } else {
       // Publish specific page
       await publishDrafts(db, site.organization_id, siteId, page, locationId)
-      
+
+      // Fire WhatsApp notification — non-blocking, never fails the publish
+      getOrgWhatsAppPhone(db, site.organization_id, siteId).then((phone) => {
+        if (!phone) return
+        sendWhatsAppNotification(env, db, {
+          organizationId: site.organization_id,
+          siteId,
+          toPhone: phone,
+          template: 'draft_published',
+          vars: {
+            site_name: site.name ?? siteId,
+            url: `https://${env.NUXT_PUBLIC_PLATFORM_DOMAIN ? env.NUXT_PUBLIC_PLATFORM_DOMAIN.replace('https://', '') : 'krabiclaw.com'}`,
+          },
+        }).catch(console.error)
+      }).catch(console.error)
+
       return jsonResponse({
         success: true,
         message: 'Page published successfully',

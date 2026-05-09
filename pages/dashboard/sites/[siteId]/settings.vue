@@ -91,6 +91,42 @@
           </div>
         </div>
 
+        <!-- Notifications -->
+        <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
+          <div>
+            <h2 class="font-semibold text-(--ui-text-highlighted)">Notifications</h2>
+            <p class="mt-1 text-sm text-(--ui-text-muted)">
+              Connect WhatsApp to receive alerts when content is published, new reviews come in, or your AI assistant completes a task.
+            </p>
+          </div>
+          <div class="space-y-5">
+            <UFormField
+              label="WhatsApp number"
+              help="Enter your WhatsApp number with country code. KrabiClaw will send you notifications here."
+            >
+              <div class="flex gap-2">
+                <UInput
+                  v-model="whatsappPhone"
+                  placeholder="+1 555 000 0000"
+                  class="flex-1"
+                  :loading="savingWhatsapp"
+                />
+                <UButton
+                  :loading="savingWhatsapp"
+                  :disabled="!whatsappPhone.trim() || whatsappPhone === savedWhatsappPhone"
+                  @click="saveWhatsappPhone"
+                >
+                  Save
+                </UButton>
+              </div>
+            </UFormField>
+            <div v-if="savedWhatsappPhone" class="flex items-center gap-2 text-sm text-(--ui-text-muted)">
+              <UIcon name="i-heroicons-check-circle" class="size-4 shrink-0 text-green-500" />
+              Connected: {{ savedWhatsappPhone }}
+            </div>
+          </div>
+        </div>
+
         <StickySaveBar
           :visible="isDirty"
           :saving="saving"
@@ -211,8 +247,40 @@ const copyToClipboard = async (text: string) => {
   }
 }
 
+// WhatsApp notification number
+const whatsappPhone = ref('')
+const savedWhatsappPhone = ref<string | null>(null)
+const savingWhatsapp = ref(false)
+
+const loadWhatsappPhone = async () => {
+  try {
+    const res = await $fetch<any>(`/api/editor/sites/${siteId}/notifications`)
+    savedWhatsappPhone.value = res.notifications?.whatsapp_phone ?? null
+    whatsappPhone.value = savedWhatsappPhone.value ?? ''
+  } catch {}
+}
+
+const saveWhatsappPhone = async () => {
+  if (!whatsappPhone.value.trim()) return
+  savingWhatsapp.value = true
+  try {
+    const res = await ($fetch as any)(`/api/editor/sites/${siteId}/notifications`, {
+      method: 'PATCH',
+      body: { whatsapp_phone: whatsappPhone.value.trim() }
+    })
+    savedWhatsappPhone.value = res.notifications?.whatsapp_phone ?? null
+    whatsappPhone.value = savedWhatsappPhone.value ?? ''
+    toast.add({ description: 'WhatsApp number saved', color: 'success' })
+  } catch {
+    toast.add({ description: 'Failed to save WhatsApp number', color: 'error' })
+  } finally {
+    savingWhatsapp.value = false
+  }
+}
+
 onMounted(() => {
   loadSettings()
+  loadWhatsappPhone()
 })
 
 useSeoMeta({ title: 'Site Settings | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

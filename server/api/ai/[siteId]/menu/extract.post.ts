@@ -10,6 +10,7 @@
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
 import { createMenu, createMenuItem } from '~/server/utils/menu-management'
 import { callAiGateway, imageBlock, textBlock } from '~/server/utils/ai-gateway'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
@@ -195,6 +196,36 @@ export default defineEventHandler(async (event) => {
       )
     )
   )
+
+  // Fire WhatsApp notifications — non-blocking
+  getOrgWhatsAppPhone(db, orgId, siteId).then((phone) => {
+    if (!phone) return
+    // Notify: AI extraction complete
+    sendWhatsAppNotification(env, db, {
+      organizationId: orgId,
+      siteId,
+      toPhone: phone,
+      template: 'ai_action_complete',
+      vars: {
+        action_summary: `${createdItems.length} menu item${createdItems.length === 1 ? '' : 's'} extracted and saved as draft`,
+        preview_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/sites/${siteId}/menu`,
+      },
+    }).catch(console.error)
+
+    // Notify: low credits warning (threshold: 50)
+    if (newBalance > 0 && newBalance <= 50) {
+      sendWhatsAppNotification(env, db, {
+        organizationId: orgId,
+        siteId,
+        toPhone: phone,
+        template: 'low_credits',
+        vars: {
+          credits_remaining: String(newBalance),
+          upgrade_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/billing`,
+        },
+      }).catch(console.error)
+    }
+  }).catch(console.error)
 
   return jsonResponse({
     success: true,

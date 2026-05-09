@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s 'https://graph.facebook.com/v25.0/1720353359400312?fields=name,status,rejected_reason' -H 'Authorization: Bearer EAAOfr4JtxUwBRatPxZBa4GfERCLUijn4q3N2Syvl8qbMZAng6C2mSIg0ohln7VgjnyV3CPZBy2IcD6ZANzMvqFAHWcS5l0LMTe7Hrsa92vFpQj0w7Lx6QIA8ocOO46WRsQANZBlHPkyQpItZAZAQSZBqybrlBZAOjYAVXHircQyOZBTH18p9Pb43aE7JKL6vFYiAPrnkK3DMANFG39dA4a92YViIu2Px4ZCwV9R99tJTeazAo47ghSc6ZCZAbARGBBMghfEI3O7s5jh2bCLdVkrRAoEmot57H2QZDZD')",
+      "Bash(curl -s -X DELETE https://graph.facebook.com/v25.0/__TRACKED_VAR__ -H 'Authorization: Bearer EAAOfr4JtxUwBRatPxZBa4GfERCLUijn4q3N2Syvl8qbMZAng6C2mSIg0ohln7VgjnyV3CPZBy2IcD6ZANzMvqFAHWcS5l0LMTe7Hrsa92vFpQj0w7Lx6QIA8ocOO46WRsQANZBlHPkyQpItZAZAQSZBqybrlBZAOjYAVXHircQyOZBTH18p9Pb43aE7JKL6vFYiAPrnkK3DMANFG39dA4a92YViIu2Px4ZCwV9R99tJTeazAo47ghSc6ZCZAbARGBBMghfEI3O7s5jh2bCLdVkrRAoEmot57H2QZDZD')",
+      "Bash(curl -s 'https://graph.facebook.com/v25.0/873487679093916/message_templates?fields=name,status&limit=20' -H 'Authorization: Bearer EAAOfr4JtxUwBRatPxZBa4GfERCLUijn4q3N2Syvl8qbMZAng6C2mSIg0ohln7VgjnyV3CPZBy2IcD6ZANzMvqFAHWcS5l0LMTe7Hrsa92vFpQj0w7Lx6QIA8ocOO46WRsQANZBlHPkyQpItZAZAQSZBqybrlBZAOjYAVXHircQyOZBTH18p9Pb43aE7JKL6vFYiAPrnkK3DMANFG39dA4a92YViIu2Px4ZCwV9R99tJTeazAo47ghSc6ZCZAbARGBBMghfEI3O7s5jh2bCLdVkrRAoEmot57H2QZDZD')",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k,':',v\\) for k,v in d.get\\('scripts',{}\\).items\\(\\)]\")"
+    ]
+  }
+}

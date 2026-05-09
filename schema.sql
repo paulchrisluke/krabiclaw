@@ -447,6 +447,30 @@ CREATE TABLE IF NOT EXISTS onboarding_steps (
 );
 
 --------------------------------------------------------------------------------
+-- Notifications
+--------------------------------------------------------------------------------
+
+-- Channel-agnostic outbound notification log.
+-- Add email/SMS later by inserting rows with channel='email' — no schema change needed.
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT,
+  channel TEXT NOT NULL DEFAULT 'whatsapp',
+  template TEXT NOT NULL,
+  payload TEXT,                     -- JSON: template variable values
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed')),
+  provider_message_id TEXT,         -- WhatsApp message_id for debugging
+  error TEXT,
+  sent_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_org ON notifications(organization_id, created_at DESC);
+
+--------------------------------------------------------------------------------
 -- AI Credits & Usage
 --------------------------------------------------------------------------------
 
