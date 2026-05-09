@@ -40,7 +40,7 @@
 | Google Business Profile API | ⏳ API approval pending; client has invited us as manager to 2 locations |
 | WhatsApp Business API | ✅ App created and ready |
 | Facebook / Instagram Graph API | ✅ App created and ready |
-| Cloudflare AI Gateway | 🔲 Not started |
+| Cloudflare AI Gateway | ✅ Live — menu extraction, credit billing, usage logging |
 
 ---
 
@@ -99,6 +99,48 @@ Cloudflare AI Gateway exposes per-request logs via the REST API (`GET /accounts/
 - `notifications` table (channel, org_id, template, payload, status, sent_at)
 - `server/utils/whatsapp.ts` wrapping Meta Cloud API (app is ready)
 - First triggers: draft published, new review received, reservation alert
+
+#### WhatsApp Notification — Key Design Notes
+
+**Send-only first.** The Meta Cloud API (WhatsApp Business) app is already created. No webhook/receive flow yet — just outbound messages. Receive flow comes in Priority 3 (login OTP).
+
+**Template messages only until messaging window opens.** WhatsApp only allows free-form messages within 24 hours of a customer reply. For system notifications to restaurant owners (not customers), we use pre-approved template messages. Templates must be submitted to Meta for approval — plan for 24–72h approval time.
+
+**Notification templates needed (submit to Meta):**
+- `draft_published` — "Your [site name] menu has been published. View it at [url]."
+- `new_review` — "A new [rating]-star review was posted on [site name]: '[excerpt]'"
+- `ai_action_complete` — "Your AI assistant completed: [action summary]. [Preview link]"
+- `low_credits` — "You have [n] AI credits remaining. [Upgrade link]"
+
+**Phone number storage.** Restaurant owners provide their WhatsApp number during onboarding. Store normalized (E.164 format, e.g. `+66812345678`) in `organization_settings` key `whatsapp_phone`. No separate table needed yet — reuses the existing `site_config` KV pattern.
+
+**Delivery reliability.** Meta Cloud API returns a `message_id` on success. Store it in `notifications.provider_message_id` for debugging. Mark status `sent` on 2xx, `failed` on error — no retry queue yet (keep it simple; manual retry from dashboard is acceptable for v1).
+
+**Schema additions needed:**
+```sql
+notifications (
+  id, organization_id, site_id,
+  channel TEXT DEFAULT 'whatsapp',   -- email later, no schema change
+  template TEXT NOT NULL,
+  payload TEXT,                       -- JSON: template variables
+  status TEXT DEFAULT 'pending',      -- pending | sent | failed
+  provider_message_id TEXT,           -- WhatsApp message_id
+  error TEXT,
+  sent_at TEXT,
+  created_at TEXT
+)
+```
+
+**First triggers to wire:**
+1. `POST /api/editor/sites/[siteId]/content/publish` → fire `draft_published`
+2. New review saved → fire `new_review` (once review ingestion is live)
+3. AI extraction complete (from Priority 1 `extract.post.ts`) → fire `ai_action_complete`
+4. Credit balance drops below 50 after a charge → fire `low_credits`
+
+**Env vars needed:**
+- `WHATSAPP_PHONE_NUMBER_ID` — from Meta app dashboard (the sending number)
+- `WHATSAPP_ACCESS_TOKEN` — permanent system user token from Meta Business Manager
+- `WHATSAPP_BUSINESS_ACCOUNT_ID` — for template management API calls
 
 ### 3. WhatsApp login
 **Why here (not earlier):** Better Auth's `phoneNumber` plugin handles OTP natively. Since the WhatsApp Business app is already set up, implementation is: configure the plugin, swap SMS delivery for a WhatsApp message send via the utility built in step 2. Much simpler than a custom OAuth provider.
