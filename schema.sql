@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS user (
   email TEXT NOT NULL UNIQUE,
   emailVerified INTEGER NOT NULL DEFAULT 0,
   image TEXT,
+  phoneNumber TEXT UNIQUE,
+  phoneNumberVerified INTEGER NOT NULL DEFAULT 0,
   createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -445,6 +447,45 @@ CREATE TABLE IF NOT EXISTS onboarding_steps (
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
   UNIQUE(site_id, step_name)
 );
+
+--------------------------------------------------------------------------------
+-- Contact & Reservation Submissions
+--------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS contact_submissions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'read', 'replied')),
+  ip_hash TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS reservation_submissions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  date TEXT NOT NULL,
+  time TEXT NOT NULL,
+  guests TEXT NOT NULL,
+  requests TEXT,
+  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'confirmed', 'cancelled', 'completed')),
+  ip_hash TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_contact_submissions_site ON contact_submissions(site_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reservation_submissions_site ON reservation_submissions(site_id, date, created_at DESC);
 
 --------------------------------------------------------------------------------
 -- Notifications
