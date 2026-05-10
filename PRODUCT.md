@@ -43,6 +43,7 @@
 | WhatsApp Business API | ✅ Notifications built — blocked on real number (test number rejects custom templates) |
 | Facebook / Instagram Graph API | ✅ App created — channel adapter stub ready in post_channel_jobs |
 | Google Business Profile API | ⏳ API approval pending; GMB channel adapter stub ready in post_channel_jobs |
+| Google Places API (New v1) | ✅ Live — location autocomplete in onboarding + Add Location modal |
 
 ---
 
@@ -114,7 +115,20 @@ Posts are a platform primitive — live in our system first, pushed to channels 
 
 ---
 
-### 🔲 5. Sidekick — Dashboard AI Chat Agent
+### ✅ 5. Google Places Autocomplete
+**Status: Live**
+
+- `server/utils/google-places.ts` — `searchPlaces()` + `getPlaceDetails()` using Places API v1 with billing-aware field masks
+- `POST /api/places/search` + `GET /api/places/[placeId]` — auth-gated server proxies (key never exposed to client)
+- **Onboarding Step 2** — "Find on Google" search auto-fills location name, city, phone, address, maps URL, website, and opening hours; location name also pre-fills from restaurant name; phone now optional
+- **Add Location modal** (Locations dashboard) — same autocomplete, same auto-fill
+- Key stored as `GOOGLE_PLACES_API_KEY` CF Pages secret + local `.env` / `.dev.vars`
+
+**Billing:** Basic + Contact + Atmosphere fields fetched in one call per selection (~$0.025/lookup). Search is text search (~$0.017/call). Only called on explicit user action — no background polling.
+
+---
+
+### 🔲 6. Sidekick — Dashboard AI Chat Agent
 
 **What it is:** A Shopify Sidekick-style toggleable chat panel on every dashboard page. The owner types a natural language request — "make a NYE post about this photo", "update the salmon price to ฿320", "what happened last week?" — and the AI takes action, shows what it's doing, and asks for confirmation before publishing.
 
@@ -133,7 +147,7 @@ Posts are a platform primitive — live in our system first, pushed to channels 
 
 ---
 
-### 🔲 6. Social Channel Adapters (GMB, Instagram, Facebook)
+### 🔲 7. Social Channel Adapters (GMB, Instagram, Facebook)
 
 Build the drain workers for `post_channel_jobs`. Each adapter is a function: `publishToChannel(post, channelJob)` → calls the external API → marks job `published` or `failed`.
 
@@ -143,7 +157,7 @@ Build the drain workers for `post_channel_jobs`. Each adapter is a function: `pu
 
 ---
 
-### 🔲 7. Tenant MCP / API
+### 🔲 8. Tenant MCP / API
 
 Per-tenant API key system so restaurant owners can connect their own AI (Claude, ChatGPT) to manage their site via MCP. Most complex, most premium. Build last once agent actions are proven and used by real clients.
 

@@ -125,9 +125,44 @@
         <div v-if="showAddLocationForm" class="overflow-hidden rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated) p-4">
           <h3 class="mb-4 text-sm font-semibold text-(--ui-text-highlighted)">New location</h3>
           <div class="space-y-4">
+            <!-- Google Places search -->
+            <UFormField label="Search Google Places" hint="Optional — auto-fill from Google">
+              <UInput
+                v-model="placesQuery"
+                placeholder="Search your restaurant on Google…"
+                icon="i-heroicons-magnifying-glass"
+                :loading="placesSearching"
+                autofocus
+                @input="onPlacesInput"
+              />
+              <div v-if="placesResults.length" class="mt-1 overflow-hidden rounded-md border border-(--ui-border) bg-(--ui-bg) shadow-sm">
+                <button
+                  v-for="result in placesResults"
+                  :key="result.placeId"
+                  type="button"
+                  class="flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-(--ui-bg-elevated)"
+                  @click="selectPlace(result.placeId)"
+                >
+                  <span class="font-medium text-(--ui-text-highlighted)">{{ result.name }}</span>
+                  <span class="text-xs text-(--ui-text-muted)">{{ result.formattedAddress }}</span>
+                </button>
+              </div>
+            </UFormField>
+
+            <div v-if="placesQuery && !placesResults.length && !placesSearching" class="flex items-center gap-1.5">
+              <div class="h-px flex-1 bg-(--ui-border)" />
+              <span class="text-xs text-(--ui-text-muted)">or fill in manually</span>
+              <div class="h-px flex-1 bg-(--ui-border)" />
+            </div>
+            <div v-else-if="!placesQuery" class="flex items-center gap-1.5">
+              <div class="h-px flex-1 bg-(--ui-border)" />
+              <span class="text-xs text-(--ui-text-muted)">or fill in manually</span>
+              <div class="h-px flex-1 bg-(--ui-border)" />
+            </div>
+
             <div class="grid gap-4 sm:grid-cols-2">
               <UFormField label="Name">
-                <UInput v-model="addLocationForm.title" placeholder="Kikuzuki Thonglor" autofocus />
+                <UInput v-model="addLocationForm.title" placeholder="Kikuzuki Thonglor" />
               </UFormField>
               <UFormField label="City">
                 <UInput v-model="addLocationForm.city" placeholder="Bangkok" />
@@ -136,9 +171,12 @@
             <UFormField label="Phone">
               <UInput v-model="addLocationForm.phone" type="tel" placeholder="+66 2 123 4567" />
             </UFormField>
+            <UFormField v-if="addLocationForm.address" label="Address">
+              <UInput :model-value="addLocationForm.address" disabled />
+            </UFormField>
             <UCheckbox v-model="addLocationForm.is_primary" label="Set as primary location" />
             <div class="flex justify-end gap-2">
-              <UButton color="neutral" variant="ghost" size="sm" @click="showAddLocationForm = false">Cancel</UButton>
+              <UButton color="neutral" variant="ghost" size="sm" @click="cancelAddLocation">Cancel</UButton>
               <UButton size="sm" :loading="locationSaving" :disabled="!addLocationForm.title.trim()" @click="handleCreateLocation">
                 Add location
               </UButton>
@@ -244,8 +282,86 @@ const addLocationForm = reactive({
   title: '',
   city: '',
   phone: '',
-  is_primary: false
+  address: '',
+  maps_url: '',
+  website_url: '',
+  opening_hours: null as string[] | null,
+  is_primary: false,
+  _placeId: '',
 })
+
+// Google Places autocomplete
+interface PlaceSearchResult {
+  placeId: string
+  name: string
+  formattedAddress: string
+}
+
+const placesQuery = ref('')
+const placesResults = ref<PlaceSearchResult[]>([])
+const placesSearching = ref(false)
+let placesDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+const onPlacesInput = () => {
+  placesResults.value = []
+  if (placesDebounceTimer) clearTimeout(placesDebounceTimer)
+  const q = placesQuery.value.trim()
+  if (q.length < 2) return
+  placesDebounceTimer = setTimeout(() => doPlacesSearch(q), 400)
+}
+
+const doPlacesSearch = async (query: string) => {
+  placesSearching.value = true
+  try {
+    const response = await $fetch<{ success: boolean; results: PlaceSearchResult[] }>(
+      '/api/places/search',
+      { method: 'POST', body: { query } } as any
+    )
+    if (response.success) placesResults.value = response.results
+  } catch {
+    // silently ignore — user can still fill in manually
+  } finally {
+    placesSearching.value = false
+  }
+}
+
+const selectPlace = async (placeId: string) => {
+  placesResults.value = []
+  placesSearching.value = true
+  try {
+    const response = await $fetch<{ success: boolean; details: any }>(`/api/places/${placeId}`)
+    if (!response.success) return
+    const d = response.details
+    addLocationForm.title = d.name || addLocationForm.title
+    addLocationForm.city = d.city || addLocationForm.city
+    addLocationForm.phone = d.phone || addLocationForm.phone
+    addLocationForm.address = d.formattedAddress || ''
+    addLocationForm.maps_url = d.mapsUrl || ''
+    addLocationForm.website_url = d.websiteUrl || ''
+    addLocationForm.opening_hours = d.openingHours || null
+    addLocationForm._placeId = placeId
+    placesQuery.value = d.name || ''
+  } catch {
+    toast.add({ description: 'Could not load place details', color: 'error' })
+  } finally {
+    placesSearching.value = false
+  }
+}
+
+const cancelAddLocation = () => {
+  showAddLocationForm.value = false
+  placesQuery.value = ''
+  placesResults.value = []
+  addLocationForm.title = ''
+  addLocationForm.city = ''
+  addLocationForm.phone = ''
+  addLocationForm.address = ''
+  addLocationForm.maps_url = ''
+  addLocationForm.website_url = ''
+  addLocationForm.opening_hours = null
+  addLocationForm._placeId = ''
+  addLocationForm.is_primary = false
+}
 
 const handleCreateLocation = async () => {
   if (!addLocationForm.title.trim()) return
@@ -258,19 +374,19 @@ const handleCreateLocation = async () => {
         body: {
           title: addLocationForm.title.trim(),
           slug: generateSlug(addLocationForm.title),
-          city: addLocationForm.city.trim(),
-          phone: addLocationForm.phone.trim(),
-          is_primary: addLocationForm.is_primary
+          city: addLocationForm.city.trim() || null,
+          phone: addLocationForm.phone.trim() || null,
+          address: addLocationForm.address ? { addressLines: [addLocationForm.address] } : undefined,
+          maps_url: addLocationForm.maps_url || null,
+          website_url: addLocationForm.website_url || null,
+          opening_hours: addLocationForm.opening_hours ? { weekdayDescriptions: addLocationForm.opening_hours } : undefined,
+          is_primary: addLocationForm.is_primary,
         }
       } as any
     )
     if (!response.success) throw new Error('Failed to create location')
     locations.value.push(response.location)
-    addLocationForm.title = ''
-    addLocationForm.city = ''
-    addLocationForm.phone = ''
-    addLocationForm.is_primary = false
-    showAddLocationForm.value = false
+    cancelAddLocation()
     toast.add({ description: 'Location added', color: 'success' })
   } catch (err: any) {
     toast.add({ description: err.data?.message || 'Failed to create location', color: 'error' })

@@ -58,10 +58,38 @@
 
           <!-- Step 2: Primary Location -->
           <div v-else-if="currentStep === 1" class="space-y-6">
-            <UFormField
-              label="Location Name"
-              description="Name of your first restaurant location."
-            >
+            <!-- Places search -->
+            <UFormField label="Find on Google" hint="Search to auto-fill details">
+              <UInput
+                v-model="placesQuery"
+                placeholder="Search your restaurant on Google…"
+                icon="i-heroicons-magnifying-glass"
+                size="xl"
+                :loading="placesSearching"
+                :disabled="loading"
+                @input="onPlacesInput"
+              />
+              <div v-if="placesResults.length" class="mt-1 overflow-hidden rounded-md border border-(--ui-border) bg-(--ui-bg) shadow-sm">
+                <button
+                  v-for="result in placesResults"
+                  :key="result.placeId"
+                  type="button"
+                  class="flex w-full flex-col px-4 py-3 text-left text-sm hover:bg-(--ui-bg-elevated)"
+                  @click="selectPlace(result.placeId)"
+                >
+                  <span class="font-medium text-(--ui-text-highlighted)">{{ result.name }}</span>
+                  <span class="text-xs text-(--ui-text-muted)">{{ result.formattedAddress }}</span>
+                </button>
+              </div>
+            </UFormField>
+
+            <div class="flex items-center gap-1.5">
+              <div class="h-px flex-1 bg-(--ui-border)" />
+              <span class="text-xs text-(--ui-text-muted)">or fill in manually</span>
+              <div class="h-px flex-1 bg-(--ui-border)" />
+            </div>
+
+            <UFormField label="Location Name">
               <UInput
                 v-model="form.locationName"
                 placeholder="Kikuzuki Thonglor"
@@ -70,7 +98,7 @@
               />
             </UFormField>
 
-            <UFormField label="City" description="City where your restaurant is located.">
+            <UFormField label="City">
               <UInput
                 v-model="form.city"
                 placeholder="Bangkok"
@@ -79,7 +107,7 @@
               />
             </UFormField>
 
-            <UFormField label="Phone Number" description="Contact phone for customers.">
+            <UFormField label="Phone Number" hint="Optional">
               <UInput
                 v-model="form.phone"
                 type="tel"
@@ -175,8 +203,57 @@ const form = ref({
   subdomain: '',
   locationName: '',
   city: '',
-  phone: ''
+  phone: '',
+  address: '',
+  mapsUrl: '',
+  websiteUrl: '',
+  openingHours: null as string[] | null,
 })
+
+// Google Places autocomplete
+interface PlaceSearchResult { placeId: string; name: string; formattedAddress: string }
+const placesQuery = ref('')
+const placesResults = ref<PlaceSearchResult[]>([])
+const placesSearching = ref(false)
+let placesTimer: ReturnType<typeof setTimeout> | null = null
+
+const onPlacesInput = () => {
+  placesResults.value = []
+  if (placesTimer) clearTimeout(placesTimer)
+  const q = placesQuery.value.trim()
+  if (q.length < 2) return
+  placesTimer = setTimeout(() => doPlacesSearch(q), 400)
+}
+
+const doPlacesSearch = async (query: string) => {
+  placesSearching.value = true
+  try {
+    const res = await $fetch<{ success: boolean; results: PlaceSearchResult[] }>(
+      '/api/places/search', { method: 'POST', body: { query } } as any
+    )
+    if (res.success) placesResults.value = res.results
+  } catch { /* ignore — manual entry still works */ }
+  finally { placesSearching.value = false }
+}
+
+const selectPlace = async (placeId: string) => {
+  placesResults.value = []
+  placesSearching.value = true
+  try {
+    const res = await $fetch<{ success: boolean; details: any }>(`/api/places/${placeId}`)
+    if (!res.success) return
+    const d = res.details
+    form.value.locationName = d.name || form.value.locationName
+    form.value.city = d.city || form.value.city
+    form.value.phone = d.phone || form.value.phone
+    form.value.address = d.formattedAddress || ''
+    form.value.mapsUrl = d.mapsUrl || ''
+    form.value.websiteUrl = d.websiteUrl || ''
+    form.value.openingHours = d.openingHours || null
+    placesQuery.value = d.name || ''
+  } catch { /* ignore */ }
+  finally { placesSearching.value = false }
+}
 
 const platformHostname = computed(() => {
   const domain = config.public.freeSiteDomain
@@ -254,11 +331,7 @@ const isStep1Valid = computed(() =>
   subdomainAvailable.value
 )
 
-const isStep2Valid = computed(() =>
-  !!form.value.locationName.trim() &&
-  !!form.value.city.trim() &&
-  !!form.value.phone.trim()
-)
+const isStep2Valid = computed(() => !!form.value.locationName.trim())
 
 async function handleStep1Next() {
   if (!isStep1Valid.value || loading.value) return
@@ -273,6 +346,10 @@ async function handleStep1Next() {
       }
     })
     createdSiteId.value = response.siteId
+    // Pre-fill location name from restaurant name if not already set via Places
+    if (!form.value.locationName.trim()) {
+      form.value.locationName = form.value.restaurantName.trim()
+    }
     currentStep.value++
   } catch (error: any) {
     const isTaken =
@@ -300,8 +377,12 @@ async function handleStep2Next() {
       body: {
         title: form.value.locationName.trim(),
         slug: generateSubdomain(form.value.locationName),
-        city: form.value.city.trim(),
-        phone: form.value.phone.trim(),
+        city: form.value.city.trim() || null,
+        phone: form.value.phone.trim() || null,
+        address: form.value.address ? { addressLines: [form.value.address] } : undefined,
+        maps_url: form.value.mapsUrl || null,
+        website_url: form.value.websiteUrl || null,
+        opening_hours: form.value.openingHours ? { weekdayDescriptions: form.value.openingHours } : undefined,
         is_primary: true
       }
     })
