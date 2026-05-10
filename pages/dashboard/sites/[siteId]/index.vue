@@ -2,7 +2,7 @@
   <UPage>
     <UPageHeader
       title="Overview"
-      :description="site ? `${site.name} website workspace` : 'Website workspace'"
+      :description="site?.brand_name ?? ''"
       :links="headerLinks"
     />
 

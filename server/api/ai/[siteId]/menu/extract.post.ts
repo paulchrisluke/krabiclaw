@@ -12,7 +12,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
 import { createMenu, createMenuItem } from '~/server/utils/menu-management'
-import { callAiGateway, imageBlock, textBlock } from '~/server/utils/ai-gateway'
+import { callAiGateway, imageBlock, textBlock, documentBlock } from '~/server/utils/ai-gateway'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 
 const EXTRACT_SYSTEM = `You are a restaurant menu data extractor. The user will provide a photo or scan of a restaurant menu (including AI-generated food photography with text overlays). Extract ONLY text you can actually see — do not infer or hallucinate dishes.
@@ -33,6 +33,11 @@ const IMAGE_MIME_TYPES: Record<string, 'image/jpeg' | 'image/png' | 'image/gif' 
   'image/gif': 'image/gif',
   'image/webp': 'image/webp',
 }
+
+// Workers memory cap: base64 inflates ~33%, so 10 MB file → ~13 MB encoded.
+// Claude's PDF limit is 32 MB decoded; we stay well under Workers' ~128 MB heap.
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024   // 10 MB
+const MAX_PDF_BYTES   = 10 * 1024 * 1024   // 10 MB (conservative for Workers)
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -91,21 +96,37 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'No file provided' }, { status: 400 })
   }
 
+  const isPdf = file.type?.toLowerCase() === 'application/pdf'
   const mimeType = IMAGE_MIME_TYPES[file.type?.toLowerCase()]
-  if (!mimeType) {
+
+  if (!mimeType && !isPdf) {
     return jsonResponse(
-      { error: `Unsupported file type "${file.type}". Upload a JPEG, PNG, WEBP, or GIF image.` },
+      { error: `Unsupported file type "${file.type}". Upload a JPEG, PNG, WEBP, GIF, or PDF (max 10 MB).` },
       { status: 415 }
     )
   }
 
-  // 10 MB limit — base64 inflates ~33%, Claude's image limit is ~5MB decoded
-  if (file.size > 10 * 1024 * 1024) {
-    return jsonResponse({ error: 'File too large. Maximum 10 MB.' }, { status: 413 })
+  const limit = isPdf ? MAX_PDF_BYTES : MAX_IMAGE_BYTES
+  if (file.size > limit) {
+    const sizeMb = (file.size / 1024 / 1024).toFixed(0)
+    const tip = isPdf
+      ? `Your PDF is ${sizeMb} MB. Please compress it below 10 MB using Smallpdf or ILovePDF, or photograph each menu page and upload the images instead.`
+      : `Your image is ${sizeMb} MB. Please resize it below 10 MB.`
+    return jsonResponse({ error: tip }, { status: 413 })
   }
 
   const arrayBuffer = await file.arrayBuffer()
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+  // Chunked encoding — spreading a large Uint8Array into String.fromCharCode overflows the stack
+  const bytes = new Uint8Array(arrayBuffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192))
+  }
+  const base64 = btoa(binary)
+
+  const fileContentBlock = isPdf
+    ? documentBlock(base64)
+    : imageBlock(base64, mimeType!)
 
   // Call Claude via CF AI Gateway
   let aiResponse
@@ -116,8 +137,8 @@ export default defineEventHandler(async (event) => {
         {
           role: 'user',
           content: [
-            imageBlock(base64, mimeType),
-            textBlock('Extract all menu items from this image as JSON.'),
+            fileContentBlock,
+            textBlock('Extract all menu items from this file as JSON.'),
           ],
         },
       ],
@@ -136,20 +157,28 @@ export default defineEventHandler(async (event) => {
   const { creditsCharged, newBalance } = await chargeCredits(db, orgId, {
     siteId,
     action: 'menu_extract',
-    model: 'claude-sonnet-4-6-20250219',
+    model: 'claude-sonnet-4-6',
     inputTokens: aiResponse.usage.input_tokens,
     outputTokens: aiResponse.usage.output_tokens,
     cfGatewayLogId: aiResponse.cfLogId,
   })
 
-  // Parse model response
+  // Parse model response — strip markdown fences Claude sometimes adds
   const rawText = aiResponse.content.find((b) => b.type === 'text')?.text ?? ''
+  const jsonText = (() => {
+    const fenced = rawText.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (fenced) return fenced[1].trim()
+    const obj = rawText.match(/\{[\s\S]*\}/)
+    if (obj) return obj[0]
+    return rawText.trim()
+  })()
   let parsed: { items: any[]; warning?: string }
   try {
-    parsed = JSON.parse(rawText)
+    parsed = JSON.parse(jsonText)
   } catch {
+    console.error('[menu/extract] unparseable response:', rawText.slice(0, 300))
     return jsonResponse(
-      { error: 'Model returned malformed JSON. Try a clearer image.' },
+      { error: 'Could not read menu from that file. Try a higher-resolution photo or a less complex layout.' },
       { status: 422 }
     )
   }

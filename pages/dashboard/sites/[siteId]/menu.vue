@@ -57,7 +57,7 @@
 
       <div v-else-if="selectedLocation">
         <MenuEditor
-          :key="selectedLocation.id"
+          :key="`${selectedLocation.id}-${locationId}`"
           :site-id="siteId"
           :location-id="selectedLocation.id"
         />

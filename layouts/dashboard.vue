@@ -1,5 +1,6 @@
 <template>
   <div class="platform-theme">
+    <ChowBot />
     <UDashboardGroup
       unit="rem"
       :min-size="14"
@@ -43,15 +44,16 @@
                 <span class="text-sm font-bold text-white">K</span>
               </div>
             </div>
-            <div v-else class="flex items-center gap-2 px-2">
-              <UButton 
-                to="/dashboard/sites" 
-                icon="i-heroicons-arrow-left" 
-                variant="ghost" 
-                color="neutral" 
+            <div v-else class="flex items-center gap-2 px-2 min-w-0 overflow-hidden">
+              <UButton
+                to="/dashboard/sites"
+                icon="i-heroicons-arrow-left"
+                variant="ghost"
+                color="neutral"
                 size="xs"
+                class="shrink-0"
               />
-              <span class="font-semibold text-sm truncate">{{ siteContext?.name }}</span>
+              <span class="font-semibold text-sm truncate min-w-0">{{ siteContext?.brand_name }}</span>
             </div>
           </template>
         </template>
@@ -62,6 +64,38 @@
             :items="navigationItems"
             orientation="vertical"
           />
+
+          <template v-if="inSiteWorkspace && !collapsed">
+            <div class="mt-2 border-t border-default pt-2 px-2">
+              <div class="flex items-center justify-between px-1 py-1 mb-1">
+                <span class="text-xs font-medium text-muted">ChowBot</span>
+                <UTooltip text="New conversation">
+                  <UButton
+                    icon="i-heroicons-plus"
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    @click="newChowBotChat"
+                  />
+                </UTooltip>
+              </div>
+              <UButton
+                v-for="conv in siteConversations"
+                :key="conv.id"
+                :label="conv.title"
+                icon="i-lucide-message-square"
+                variant="ghost"
+                color="neutral"
+                size="xs"
+                class="w-full justify-start mb-0.5"
+                :ui="{ label: 'truncate text-left' }"
+                @click="loadChowBotChat(conv)"
+              />
+              <p v-if="!siteConversations.length" class="px-1 text-xs text-muted italic">
+                No conversations yet
+              </p>
+            </div>
+          </template>
         </template>
 
         <template #footer="{ collapsed }">
@@ -95,6 +129,16 @@
                 aria-label="Scope settings"
               />
               <UColorModeButton variant="ghost" color="neutral" size="sm" />
+              <UTooltip text="ChowBot">
+                <UButton
+                  icon="i-lucide-bot"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Open ChowBot"
+                  @click="toggleSidekick"
+                />
+              </UTooltip>
             </template>
           </UDashboardNavbar>
         </template>
@@ -109,10 +153,12 @@
 
 <script setup lang="ts">
 import { useAuth } from '~/composables/useAuth'
+import { useChowBot } from '~/composables/useChowBot'
+import { useChowBotHistory } from '~/composables/useChowBotHistory'
 
 interface DashboardSite {
   id: string
-  name: string
+  brand_name: string
   subdomain: string
   status: string
 }
@@ -120,6 +166,19 @@ interface DashboardSite {
 const route = useRoute()
 const router = useRouter()
 const { data: sessionData, signOut } = useAuth()
+const chowBot = useChowBot() as any
+const toggleSidekick = () => chowBot.toggle()
+const chowBotHistory = useChowBotHistory()
+const siteRefreshSignal = useState<number>('site:refresh', () => 0)
+
+watch(siteRefreshSignal, () => loadSiteContext())
+
+const siteConversations = computed(() =>
+  routeSiteId.value ? chowBotHistory.forSite(routeSiteId.value) : []
+)
+
+const newChowBotChat = () => chowBot.startNewConversation()
+const loadChowBotChat = (conv: any) => chowBot.loadConversation(conv)
 
 const siteContext = ref<any>(null)
 const sites = ref<DashboardSite[]>([])
@@ -134,9 +193,9 @@ const inSiteWorkspace = computed(() => Boolean(routeSiteId.value))
 const activeSiteId = computed(() => routeSiteId.value || selectedSiteId.value)
 
 const selectedSiteLabel = computed(() =>
-  siteContext.value?.name
-    || sites.value.find(site => site.id === selectedSiteId.value)?.name
-    || 'Choose a website'
+  siteContext.value?.brand_name
+    ?? sites.value.find((site: DashboardSite) => site.id === selectedSiteId.value)?.brand_name
+    ?? 'Choose a website'
 )
 
 const sitePath = (path = '', query?: Record<string, string>) => {
@@ -151,7 +210,7 @@ const sitePath = (path = '', query?: Record<string, string>) => {
 
 const navbarTitle = computed(() => {
   if (!inSiteWorkspace.value || !siteContext.value) return 'Dashboard'
-  return siteContext.value.name
+  return siteContext.value.brand_name
 })
 
 const platformNavigation = computed(() => [[
@@ -168,8 +227,8 @@ const selectedSiteButton = computed(() => ({
 }))
 
 const siteMenuItems = computed(() => [
-  sites.value.map(site => ({
-    label: site.name,
+  sites.value.map((site: DashboardSite) => ({
+    label: site.brand_name,
     icon: site.id === activeSiteId.value ? 'i-heroicons-check' : 'i-heroicons-globe-alt',
     onSelect: () => handleSiteChange(site.id)
   })),
@@ -223,17 +282,16 @@ const loadSites = async () => {
 }
 
 const loadSiteContext = async () => {
-  if (!routeSiteId.value) {
+  if (!routeSiteId.value || !sessionData.value?.user?.id) {
     siteContext.value = null
     return
   }
 
   try {
     const settingsResponse = await $fetch<any>(`/api/sites/${routeSiteId.value}/settings`)
-
     if (settingsResponse.success) siteContext.value = settingsResponse.settings
-  } catch (err) {
-    console.error('Failed to load site context:', err)
+  } catch (err: any) {
+    if (err?.statusCode !== 401) console.error('Failed to load site context:', err)
     siteContext.value = null
   }
 }

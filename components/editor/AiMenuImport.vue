@@ -37,7 +37,7 @@
             <p class="mt-1 text-xs text-(--ui-text-muted)">
               {{ selectedFile
                 ? formatFileSize(selectedFile.size)
-                : 'JPEG, PNG, or WEBP — max 10 MB. AI-generated food photos work too.' }}
+                : 'JPEG, PNG, WEBP or PDF — max 10 MB.' }}
             </p>
           </div>
           <UButton v-if="!selectedFile" size="sm" color="neutral" variant="outline" @click.stop="fileInput?.click()">
@@ -52,7 +52,7 @@
           <input
             ref="fileInput"
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
+            accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
             class="hidden"
             @change="onFileSelect"
           />
@@ -275,9 +275,9 @@ function onFileSelect(e: Event) {
 
 function setFile(file: File) {
   uploadError.value = null
-  const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
+  const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
   if (!allowed.includes(file.type.toLowerCase())) {
-    uploadError.value = 'Please upload a JPEG, PNG, WEBP, or GIF image.'
+    uploadError.value = 'Please upload a JPEG, PNG, WEBP, GIF, or PDF file.'
     return
   }
   if (file.size > 10 * 1024 * 1024) {

@@ -3,7 +3,7 @@
 
 export interface AiMessage {
   role: 'user' | 'assistant'
-  content: string | AiContentBlock[]
+  content: string | any[]
 }
 
 export interface AiContentBlock {
@@ -16,16 +16,28 @@ export interface AiContentBlock {
   }
 }
 
+export interface AiTool {
+  name: string
+  description: string
+  input_schema: {
+    type: 'object'
+    properties: Record<string, any>
+    required?: string[]
+  }
+}
+
 export interface AiGatewayOptions {
   model?: string
   maxTokens?: number
   system?: string
+  tools?: AiTool[]
   /** Attached to CF Gateway log entry — must include org_id for credit reconciliation */
   metadata?: Record<string, string>
 }
 
 export interface AiGatewayResponse {
-  content: Array<{ type: string; text: string }>
+  content: Array<{ type: string; text?: string; id?: string; name?: string; input?: any }>
+  stop_reason: string
   usage: {
     input_tokens: number
     output_tokens: number
@@ -47,7 +59,7 @@ export async function callAiGateway(
     throw new Error('CF AI Gateway env vars not configured (CF_ACCOUNT_ID, CF_GATEWAY_NAME, CF_AIG_TOKEN)')
   }
 
-  const model = opts.model ?? 'claude-sonnet-4-6-20250219'
+  const model = opts.model ?? 'claude-sonnet-4-6'
   const url = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayName}/anthropic/v1/messages`
 
   const headers: Record<string, string> = {
@@ -70,6 +82,10 @@ export async function callAiGateway(
     body.system = opts.system
   }
 
+  if (opts.tools && opts.tools.length > 0) {
+    body.tools = opts.tools
+  }
+
   const response = await fetch(url, {
     method: 'POST',
     headers,
@@ -86,6 +102,7 @@ export async function callAiGateway(
 
   return {
     content: data.content ?? [],
+    stop_reason: data.stop_reason ?? 'end_turn',
     usage: {
       input_tokens: data.usage?.input_tokens ?? 0,
       output_tokens: data.usage?.output_tokens ?? 0,
@@ -108,4 +125,12 @@ export function imageBlock(
 /** Build a text content block */
 export function textBlock(text: string): AiContentBlock {
   return { type: 'text', text }
+}
+
+/** Build a PDF document block (Claude supports PDFs up to 32 MB decoded) */
+export function documentBlock(base64Data: string): any {
+  return {
+    type: 'document',
+    source: { type: 'base64', media_type: 'application/pdf', data: base64Data },
+  }
 }

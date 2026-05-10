@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
     // Build WHERE clause for multiple organization IDs
     const placeholders = orgIds.map(() => '?').join(',')
     const sites = await db.prepare(`
-      SELECT id, organization_id, theme_id, name, slug, subdomain, 
+      SELECT id, organization_id, theme_id, name, brand_name, slug, subdomain,
              custom_domain, status, plan, created_at, updated_at,
              onboarding_status
       FROM sites 

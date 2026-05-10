@@ -76,7 +76,7 @@ export default defineEventHandler(async (event) => {
   const { creditsCharged, newBalance } = await chargeCredits(db, orgId, {
     siteId,
     action: 'post_generate',
-    model: 'claude-sonnet-4-6-20250219',
+    model: 'claude-sonnet-4-6',
     inputTokens: aiResponse.usage.input_tokens,
     outputTokens: aiResponse.usage.output_tokens,
     cfGatewayLogId: aiResponse.cfLogId,
