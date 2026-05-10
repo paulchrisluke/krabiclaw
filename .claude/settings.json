@@ -45,7 +45,13 @@
       "Bash(mkdir -p \"/Users/paulchrisluke/Repos 2026/kikuzuki-thailand-marketing/server/api/ai/[siteId]/posts\")",
       "Bash(kill 95944)",
       "Bash(rm -rf .nuxt node_modules/.cache)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Bash(curl -s http://localhost:3000/api/public/sites/test-site/posts)",
+      "Bash(curl -s http://localhost:3000/api/editor/sites/test-site/posts)",
+      "Bash(curl -s -X POST http://localhost:3000/api/ai/test-site/menu/extract)",
+      "Bash(curl -s -X POST http://localhost:3000/api/ai/test-site/posts/generate)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/dashboard)"
     ],
     "deny": [
       "Bash(rm -rf / *)",
