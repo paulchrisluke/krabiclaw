@@ -94,8 +94,8 @@
                 />
               </UFormField>
 
-              <UButton type="submit" color="neutral" variant="solid" size="xl" block>
-                Make Reservation
+              <UButton type="submit" color="neutral" variant="solid" size="xl" block :loading="submitting" :disabled="submitted">
+                {{ submitted ? 'Request received!' : 'Make Reservation' }}
               </UButton>
             </UForm>
           </UCard>
@@ -212,12 +212,28 @@ const validateReservation = (state) => {
   return errors
 }
 
-const handleReservation = () => {
-  // Handle reservation submission
-  console.log('Reservation submitted:', reservationForm.value)
-}
+const { site, siteId } = useTenantSite()
+const toast = useToast()
+const submitting = ref(false)
+const submitted = ref(false)
 
-const { site } = useTenantSite()
+const handleReservation = async () => {
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    await $fetch(`/api/public/sites/${siteId}/reservations`, {
+      method: 'POST',
+      body: reservationForm.value,
+    })
+    submitted.value = true
+    reservationForm.value = { name: '', email: '', phone: '', date: '', time: '', guests: '', requests: '' }
+    toast.add({ description: 'Reservation request received! We\'ll confirm shortly.', color: 'success' })
+  } catch (err) {
+    toast.add({ description: err?.data?.error ?? 'Failed to submit. Please try again.', color: 'error' })
+  } finally {
+    submitting.value = false
+  }
+}
 
 const config = useRuntimeConfig()
 const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '').replace(/\/$/, '') || 'krabiclaw.com'

@@ -1,9 +1,10 @@
 import { betterAuth } from 'better-auth'
-import { organization } from 'better-auth/plugins'
+import { organization, phoneNumber } from 'better-auth/plugins'
 import { D1Dialect } from '@atinux/kysely-d1'
 import { Kysely } from 'kysely'
 import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
+import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 
 export interface CloudflareEnv {
   REVIEWS_DB: any // Using any to avoid D1Database type conflicts
@@ -32,7 +33,16 @@ export function createAuth(env: CloudflareEnv) {
       db,
       type: 'sqlite'
     },
-    plugins: [organization()],
+    plugins: [
+      organization(),
+      phoneNumber({
+        sendOTP: async ({ phoneNumber: phone, code }) => {
+          await sendWhatsAppOtp(env, phone, code)
+        },
+        otpLength: 6,
+        expiresIn: 300,
+      }),
+    ],
     socialProviders: {
       google: {
         clientId: env.GOOGLE_CLIENT_ID,

@@ -73,8 +73,8 @@
                   placeholder="How can we help?"
                 />
               </UFormField>
-              <UButton type="submit" color="neutral" size="xl" block>
-                Send Message
+              <UButton type="submit" color="neutral" size="xl" block :loading="submitting" :disabled="submitted">
+                {{ submitted ? 'Message sent!' : 'Send Message' }}
               </UButton>
             </UForm>
           </UCard>
@@ -151,8 +151,26 @@ const validateContact = (state) => {
   return errors
 }
 
-const handleContact = () => {
-  console.log('Contact form submitted:', contactForm.value)
+const toast = useToast()
+const submitting = ref(false)
+const submitted = ref(false)
+
+const handleContact = async () => {
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    await $fetch(`/api/public/sites/${siteId}/contact`, {
+      method: 'POST',
+      body: contactForm.value,
+    })
+    submitted.value = true
+    contactForm.value = { name: '', email: '', message: '' }
+    toast.add({ description: 'Message sent! We\'ll be in touch soon.', color: 'success' })
+  } catch (err) {
+    toast.add({ description: err?.data?.error ?? 'Failed to send message. Please try again.', color: 'error' })
+  } finally {
+    submitting.value = false
+  }
 }
 
 useSeoMeta({

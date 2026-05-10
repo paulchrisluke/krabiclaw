@@ -20,6 +20,9 @@
 - `new_review` — fires when a new review is received
 - `ai_action_complete` — fires after AI menu extraction saves a draft
 - `low_credits` — fires when AI credit balance drops to ≤ 50
+- `new_contact_msg` — fires when a visitor submits the contact form (3 vars: guest name, email, message preview)
+- `new_reservation` — fires when a visitor submits a reservation (5 vars: guest name, date, time, guests, phone)
+- `otp_code` — WhatsApp login OTP, **AUTHENTICATION category** (1 var: 6-digit code)
 
 **Why the current test number can't do this:**
 Meta test numbers support only the pre-approved `hello_world` template. All custom templates submitted via the API are immediately auto-rejected with `INVALID_FORMAT` regardless of content.

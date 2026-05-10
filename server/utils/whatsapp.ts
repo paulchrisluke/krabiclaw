@@ -10,6 +10,9 @@ export type WhatsAppTemplate =
   | 'new_review'
   | 'ai_action_complete'
   | 'low_credits'
+  | 'new_contact_msg'
+  | 'new_reservation'
+  | 'otp_code'
 
 interface TemplateComponent {
   type: 'body'
@@ -64,6 +67,42 @@ const TEMPLATES: Record<
       parameters: [
         { type: 'text', text: v.credits_remaining ?? '0' },
         { type: 'text', text: v.upgrade_url ?? 'https://krabiclaw.com/dashboard/billing' },
+      ],
+    }],
+  }),
+  new_contact_msg: (v) => ({
+    name: 'new_contact_msg',
+    language: 'en_US',
+    components: [{
+      type: 'body',
+      parameters: [
+        { type: 'text', text: v.guest_name ?? 'A guest' },
+        { type: 'text', text: v.email ?? '' },
+        { type: 'text', text: (v.message_preview ?? '').slice(0, 100) },
+      ],
+    }],
+  }),
+  new_reservation: (v) => ({
+    name: 'new_reservation',
+    language: 'en_US',
+    components: [{
+      type: 'body',
+      parameters: [
+        { type: 'text', text: v.guest_name ?? 'A guest' },
+        { type: 'text', text: v.date ?? '' },
+        { type: 'text', text: v.time ?? '' },
+        { type: 'text', text: v.guests ?? '?' },
+        { type: 'text', text: v.phone ?? '' },
+      ],
+    }],
+  }),
+  otp_code: (v) => ({
+    name: 'otp_code',
+    language: 'en_US',
+    components: [{
+      type: 'body',
+      parameters: [
+        { type: 'text', text: v.code ?? '' },
       ],
     }],
   }),
@@ -189,6 +228,46 @@ export async function getOrgWhatsAppPhone(
     LIMIT 1
   `).bind(organizationId, siteId).first()
   return row?.value ?? null
+}
+
+/**
+ * Send a WhatsApp OTP code directly via Meta API.
+ * Used by Better Auth phoneNumber plugin — no DB logging needed here
+ * since Better Auth's verification table tracks the code lifecycle.
+ */
+export async function sendWhatsAppOtp(
+  env: Record<string, any>,
+  toPhone: string,
+  code: string
+): Promise<void> {
+  const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = env.WHATSAPP_ACCESS_TOKEN
+
+  if (!phoneNumberId || !accessToken) {
+    throw new Error('WhatsApp env vars not configured')
+  }
+
+  const normalized = normalizePhone(toPhone)
+  const templatePayload = TEMPLATES.otp_code({ code })
+
+  const response = await fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: normalized,
+      type: 'template',
+      template: templatePayload,
+    }),
+  })
+
+  if (!response.ok) {
+    const err = await response.json() as any
+    throw new Error(err?.error?.message ?? `WhatsApp OTP send failed: HTTP ${response.status}`)
+  }
 }
 
 /**
