@@ -1,7 +1,7 @@
 <template>
   <NuxtLayout :name="isPlatform ? 'platform' : 'saya'">
     <!-- KrabiClaw Platform Homepage -->
-    <div v-if="isPlatform" class="bg-(--kc-cream)">
+    <div v-if="isPlatform" class="bg-(--ui-bg)">
 
       <!-- Hero -->
       <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 grid lg:grid-cols-2 gap-12 items-center">
@@ -13,11 +13,11 @@
           </span>
 
           <!-- Headline -->
-          <h1 class="text-[clamp(40px,5vw,64px)] font-extrabold leading-[1.02] tracking-tight text-(--kc-navy) text-balance m-0">
+          <h1 class="text-[clamp(40px,5vw,64px)] font-extrabold leading-[1.02] tracking-tight text-(--ui-text) text-balance m-0">
             Build, grow, and manage your <span class="text-(--kc-coral)">restaurant</span> online.
           </h1>
 
-          <p class="text-lg leading-relaxed text-(--kc-navy-500) m-0 max-w-lg">
+          <p class="text-lg leading-relaxed text-(--ui-text-muted) m-0 max-w-lg">
             The Shopify for restaurants. Beautiful sites, AI-powered content, Google Business sync — in one tidy little dashboard.
           </p>
 
@@ -44,12 +44,12 @@
               <div
                 v-for="(av, i) in avatars"
                 :key="i"
-                class="w-8 h-8 rounded-full border-2 border-(--kc-cream) flex items-center justify-center text-white text-xs font-bold -ml-2 first:ml-0"
+                class="w-8 h-8 rounded-full border-2 border-(--ui-bg) flex items-center justify-center text-white text-xs font-bold -ml-2 first:ml-0"
                 :style="{ background: av.color }"
               >{{ av.letter }}</div>
             </div>
-            <p class="text-[13px] text-(--kc-navy-500) m-0">
-              Trusted by <strong class="text-(--kc-navy)">1,200+ restaurants</strong> across SE Asia
+            <p class="text-[13px] text-(--ui-text-muted) m-0">
+              Trusted by <strong class="text-(--ui-text)">1,200+ restaurants</strong> across SE Asia
             </p>
           </div>
         </div>
@@ -67,46 +67,46 @@
       </section>
 
       <!-- Features -->
-      <section id="features" class="bg-white border-y border-(--kc-border) py-20">
+      <section id="features" class="bg-elevated border-y border-default py-20">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="text-center max-w-2xl mx-auto mb-12 flex flex-col items-center gap-4">
-            <span class="kc-eyebrow text-(--kc-navy-300)">Everything your restaurant needs</span>
+            <span class="kc-eyebrow text-(--kc-navy-500)">Everything your restaurant needs</span>
             <h2 class="text-[44px] font-extrabold tracking-tight leading-[1.05] text-(--kc-navy) m-0">One platform. No plugins. No fuss.</h2>
           </div>
           <div class="grid md:grid-cols-3 gap-5">
             <div
               v-for="feat in features"
               :key="feat.title"
-              class="rounded-[18px] p-7 border"
+              class="rounded-[18px] p-7 border border-(--kc-border)"
               :class="feat.dark
-                ? 'bg-(--kc-navy) border-(--kc-navy)'
+                ? 'bg-(--kc-navy) dark:bg-(--kc-navy)'
                 : feat.muted
-                  ? 'bg-(--kc-cream) border-(--kc-border) shadow-none'
-                  : 'bg-white border-(--kc-border) shadow-[0_1px_3px_rgba(31,37,71,0.04)]'"
+                  ? 'bg-stone-50 dark:bg-stone-800 shadow-none'
+                  : 'bg-white dark:bg-(--kc-navy-700) shadow-[0_1px_3px_rgba(31,37,71,0.04)]'"
             >
               <div
                 class="w-12 h-12 rounded-xl flex items-center justify-center mb-5"
-                :class="feat.dark ? 'bg-(--kc-coral)' : 'bg-(--kc-navy)'"
+                :class="feat.dark ? 'bg-(--kc-coral)' : 'bg-(--kc-navy) dark:bg-(--kc-navy-500)'"
               >
                 <UIcon :name="feat.icon" class="size-5 text-white" />
               </div>
-              <h3 class="text-lg font-bold mb-2 m-0" :class="feat.dark ? 'text-white' : 'text-(--kc-navy)'">{{ feat.title }}</h3>
-              <p class="text-[14px] leading-relaxed m-0" :class="feat.dark ? 'text-white/70' : 'text-(--kc-navy-500)'">{{ feat.body }}</p>
+              <h3 class="text-lg font-bold mb-2 m-0" :class="feat.dark ? 'text-white' : feat.muted ? 'text-(--kc-navy)' : 'text-(--kc-navy) dark:text-white'">{{ feat.title }}</h3>
+              <p class="text-[14px] leading-relaxed m-0" :class="feat.dark ? 'text-white/75' : feat.muted ? 'text-(--kc-navy-500)' : 'text-(--kc-navy-500) dark:text-(--ui-text-muted)'">{{ feat.body }}</p>
             </div>
           </div>
         </div>
       </section>
 
       <!-- Pricing -->
-      <section class="bg-(--kc-cream) py-20">
+      <section class="bg-(--ui-bg) py-20">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="text-center max-w-2xl mx-auto mb-12 flex flex-col items-center gap-4">
-            <span class="kc-eyebrow text-(--kc-navy-300)">Simple pricing</span>
-            <h2 class="text-[44px] font-extrabold tracking-tight leading-[1.05] text-(--kc-navy) m-0">Start free. Grow when you're ready.</h2>
+            <span class="kc-eyebrow text-(--ui-text-dimmed)">Simple pricing</span>
+            <h2 class="text-[44px] font-extrabold tracking-tight leading-[1.05] text-(--ui-text) m-0">Start free. Grow when you're ready.</h2>
           </div>
           <div class="grid md:grid-cols-2 gap-5 max-w-3xl mx-auto">
             <!-- Free -->
-            <div class="bg-white border border-(--kc-border) rounded-[20px] p-8 relative">
+            <div class="bg-elevated border border-default rounded-[20px] p-8 relative">
               <div class="text-[14px] font-semibold text-(--kc-navy-500) uppercase tracking-[0.18em] mb-4">Free</div>
               <div class="flex items-baseline gap-2 mb-1.5">
                 <span class="text-[56px] font-extrabold text-(--kc-navy) tracking-tight leading-none">$0</span>
@@ -118,12 +118,12 @@
                   {{ f }}
                 </li>
               </ul>
-              <NuxtLink to="/signup" class="block text-center font-semibold text-[14px] py-3.5 rounded-[10px] bg-(--kc-navy) text-white hover:opacity-90 transition-opacity no-underline">
+              <NuxtLink to="/signup" class="block text-center font-semibold text-[14px] py-3.5 rounded-[10px] bg-(--ui-bg-inverted) text-white hover:opacity-90 transition-opacity no-underline">
                 Start free
               </NuxtLink>
             </div>
             <!-- Pro -->
-            <div class="bg-(--kc-navy) rounded-[20px] p-8 relative shadow-[0_24px_48px_rgba(31,37,71,0.18)]">
+            <div class="bg-(--ui-bg-inverted) rounded-[20px] p-8 relative shadow-[0_24px_48px_rgba(31,37,71,0.18)]">
               <div class="absolute -top-3 right-5 bg-(--kc-coral) text-white text-[11px] font-bold tracking-[0.18em] px-3 py-1.5 rounded-full uppercase">Most popular</div>
               <div class="text-[14px] font-semibold text-(--kc-coral-200) uppercase tracking-[0.18em] mb-4">Pro</div>
               <div class="flex items-baseline gap-2 mb-1.5">

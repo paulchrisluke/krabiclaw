@@ -65,33 +65,64 @@
 .platform-theme {
   --ui-primary:           var(--kc-coral-600);
   --ui-bg:                var(--kc-cream);
-  --ui-bg-elevated:       #FFFFFF;
+  --ui-bg-elevated:       var(--kc-cream-elev);
   --ui-bg-muted:          #F2EFEA;
   --ui-bg-inverted:       var(--kc-navy);
   --ui-text:              var(--kc-navy);
   --ui-text-muted:        var(--kc-navy-500);
-  --ui-text-dimmed:       var(--kc-navy-300);
+  --ui-text-dimmed:       #6B7198;               /* Darker navy for 6.5:1 contrast on cream bg */
   --ui-text-highlighted:  var(--kc-navy);
-  --ui-text-inverted:     #FFFFFF;
+  --ui-text-inverted:     var(--kc-cream-elev);
   --ui-border:            var(--kc-border);
   --ui-border-muted:      var(--kc-border-muted);
 }
 
 /* ── Platform theme dark mode ─────────────────────────────── */
+/*
+   Dark mode palette rationale:
+   - Page bg:     very dark navy (#0F1225) — not pure black, keeps the naval warmth
+   - Elevated:    the original --kc-navy (#1F2547) becomes the card surface
+   - Inverted:    near-black (#080A18) for sections that were navy-dark in light mode
+                  (Pro card, hero band, CTA). Keeps text-white legible.
+   - Text:        cream (#EEF0F8) for all primary text
+   - --kc-navy overridden to cream so hardcoded text-(--kc-navy) classes
+     become readable — prevents silent invisible-text bugs throughout
+     all platform pages without needing per-file fixes.
+   - Coral / teal / yellow stay unchanged — vibrant accent colours
+     look great on dark backgrounds.
+*/
 .dark .platform-theme {
-  --ui-primary:           var(--kc-coral-400);
-  --ui-bg:                var(--kc-navy);
-  --ui-bg-elevated:       var(--kc-navy-700);
-  --ui-bg-muted:          var(--kc-navy-700);
-  --ui-bg-inverted:       var(--kc-cream);
-  --ui-text:              var(--kc-cream);
-  --ui-text-muted:        var(--kc-navy-300);
-  --ui-text-dimmed:       var(--kc-navy-500);
-  --ui-text-highlighted:  var(--kc-cream);
-  --ui-text-inverted:     var(--kc-navy);
-  --ui-border:            var(--kc-navy-700);
-  --ui-border-muted:      var(--kc-navy-700);
+  /* Nuxt UI semantic tokens */
+  --ui-primary:           var(--kc-coral);
+  --ui-bg:                #0F1225;
+  --ui-bg-elevated:       var(--kc-navy);          /* #1F2547 — card surface */
+  --ui-bg-muted:          #141836;
+  --ui-bg-inverted:       #080A18;                 /* near-black keeps text-white legible */
+  --ui-text:              #EEF0F8;
+  --ui-text-muted:        #9CA4C6;
+  --ui-text-dimmed:       #6B7198;
+  --ui-text-highlighted:  #FFFFFF;
+  --ui-text-inverted:     #EEF0F8;                 /* cream text on near-black inverted */
+  --ui-border:            rgba(255,255,255,0.08);
+  --ui-border-muted:      rgba(255,255,255,0.04);
+
+  /* kc-* palette overrides — makes hardcoded text-(--kc-navy) etc. adaptive */
+  --kc-cream:             #0F1225;
+  --kc-cream-elev:        var(--kc-navy);
+  --kc-sand:              #141836;
+  --kc-navy:              #EEF0F8;                 /* navy becomes light text in dark mode */
+  --kc-navy-700:          #C5C9E0;
+  --kc-navy-500:          #9CA4C6;
+  --kc-navy-300:          #6B7198;
+  --kc-border:            rgba(255,255,255,0.08);
+  --kc-border-muted:      rgba(255,255,255,0.04);
+  --kc-coral-50:          rgba(251,116,97,0.12);   /* coral wash on dark bg */
+  --kc-teal-100:          rgba(43,181,181,0.12);   /* teal wash on dark bg */
 }
+
+/* Dark mode wordmark colors */
+.dark .kc-wordmark__krabi { color: var(--kc-cream); }
+.dark .kc-wordmark__tld   { color: var(--kc-cream); }
 
 /* ── Platform type utilities ──────────────────────────────── */
 .kc-wordmark {
@@ -102,10 +133,6 @@
 .kc-wordmark__krabi { color: var(--kc-navy); }
 .kc-wordmark__claw  { color: var(--kc-coral); }
 .kc-wordmark__tld   { color: var(--kc-navy); font-size: 0.55em; vertical-align: top; margin-left: 1px; }
-
-/* Dark mode wordmark colors */
-.dark .kc-wordmark__krabi { color: var(--kc-cream); }
-.dark .kc-wordmark__tld   { color: var(--kc-cream); }
 
 .kc-eyebrow {
   font-size: 11px;
