@@ -24,8 +24,17 @@
           <p class="saya-eyebrow mb-2 text-muted">Don't see your question?</p>
           <div class="saya-display saya-italic text-3xl text-default">Ask us — it'll show up here.</div>
         </div>
-        <!-- Free-tier locked state triggers upgrade modal -->
+        <!-- Free-tier: trigger upgrade modal; paid: link to GMB Q&A -->
+        <button
+          v-if="isFree"
+          class="inline-flex items-center gap-2 rounded-full border border-default bg-default px-7 py-3.5 text-xs font-medium uppercase tracking-widest text-default transition hover:opacity-70"
+          @click="openUpgrade('qa-writeback')"
+        >
+          <UIcon name="i-heroicons-lock-closed" class="size-3.5" />
+          Ask a question · Pro
+        </button>
         <a
+          v-else
           :href="location?.gmb_qa_url || '#'"
           target="_blank"
           rel="noopener noreferrer"
@@ -117,6 +126,8 @@ definePageMeta({ layout: 'saya' })
 const route = useRoute()
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
+const isFree = computed(() => !((site as any)?.value?.plan || (site as any)?.plan) || ((site as any)?.value?.plan || (site as any)?.plan) === 'free')
+const { open: openUpgrade } = useUpgradeModal()
 
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as any)?.value?.name || (site as any)?.name || 'Saya')
@@ -154,6 +165,28 @@ const breadcrumb = computed(() => [
 
 useSeoMeta({
   title: () => `Q&A · ${location.value?.title || slug.value}`,
+  description: () => `Questions and answers for ${location.value?.title} at ${siteName.value}.`,
   ogUrl: () => `/locations/${slug.value}/qa`
 })
+
+useSchemaOrg([
+  computed(() => ({
+    '@type': 'FAQPage',
+    name: `${location.value?.title ?? ''} Q&A`,
+    mainEntity: sorted.value.filter((q: any) => q.answer).map((q: any) => ({
+      '@type': 'Question',
+      name: q.question,
+      acceptedAnswer: { '@type': 'Answer', text: q.answer }
+    }))
+  })),
+  computed(() => ({
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: siteName.value, item: '/' },
+      { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` },
+      { '@type': 'ListItem', position: 4, name: 'Q&A', item: `/locations/${slug.value}/qa` }
+    ]
+  }))
+])
 </script>

@@ -112,8 +112,6 @@
 </template>
 
 <script setup lang="ts">
-import { formatGoogleHours } from '~/utils/formatters'
-
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
@@ -168,4 +166,36 @@ useSeoMeta({
   description: () => `Hours, address and directions for ${location.value?.title}.`,
   ogUrl: () => `/locations/${slug.value}/contact`
 })
+
+useSchemaOrg([
+  computed(() => {
+    const loc = location.value
+    if (!loc) return {}
+    const schemaHours = weekHours.value.map((h: any) => ({
+      '@type': 'OpeningHoursSpecification',
+      dayOfWeek: `https://schema.org/${h.day}`,
+      opens: h.hours?.split('–')[0]?.trim() || '',
+      closes: h.hours?.split('–')[1]?.trim() || ''
+    })).filter((h: any) => h.opens)
+    return {
+      '@type': ['LocalBusiness', 'Restaurant'],
+      name: `${siteName.value} — ${loc.title}`,
+      address: { '@type': 'PostalAddress', streetAddress: formattedAddress.value },
+      telephone: loc.phone,
+      email: loc.email,
+      hasMap: loc.maps_url,
+      openingHoursSpecification: schemaHours,
+      ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {})
+    }
+  }),
+  computed(() => ({
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: siteName.value, item: '/' },
+      { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` },
+      { '@type': 'ListItem', position: 4, name: 'Visit', item: `/locations/${slug.value}/contact` }
+    ]
+  }))
+])
 </script>

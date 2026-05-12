@@ -207,6 +207,7 @@ CREATE TABLE IF NOT EXISTS business_locations (
   last_synced_at TEXT,
   description TEXT,
   short_description TEXT,
+  hero_video_url TEXT,
   special_hours TEXT,
   price_level TEXT,
   attributes TEXT,

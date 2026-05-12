@@ -135,25 +135,38 @@
 
 <script setup lang="ts">
 const { isPlatform, siteId, site } = useTenantSite()
-const { locale, locales, setLocale } = useI18n()
+// Cast useI18n to any — @nuxtjs/i18n augments the types at runtime but TS
+// doesn't always pick up locales/setLocale under "module: preserve"
+const i18n = useI18n() as any
 const mobileMenuOpen = ref(false)
 
-const currentLocale = computed(() => locale.value)
-const availableLocales = computed(() => locales.value.map(l => ({ code: l.code, name: l.name })))
-const getLocaleFlag = (code: string) => ({ en: '🇺🇸', th: '🇹🇭', ja: '🇯🇵', ar: '🇸🇦' }[code] || '🌐')
+const currentLocale = computed(() => i18n.locale.value as string)
+const availableLocales = computed(() =>
+  (i18n.locales?.value ?? []).map((l: { code: string; name: string }) => ({
+    code: l.code,
+    name: l.name
+  }))
+)
+const getLocaleFlag = (code: string) =>
+  ({ en: '🇺🇸', th: '🇹🇭', ja: '🇯🇵', ar: '🇸🇦' }[code] ?? '🌐')
 const getCurrentLocaleFlag = () => getLocaleFlag(currentLocale.value)
-const restaurantName = computed(() => site?.value?.name || site?.name || 'Saya')
-const showBrandingStrip = true // wire to billing tier once GMB API is live
+
+const restaurantName = computed(() => (site as any)?.value?.name || (site as any)?.name || 'Saya')
+const sitePlan = computed(() => (site as any)?.value?.plan || (site as any)?.plan || 'free')
+const showBrandingStrip = computed(() => !isPlatform && sitePlan.value === 'free')
+
+const { open: openUpgrade } = useUpgradeModal()
 
 const languageItems = computed(() =>
-  availableLocales.value.map(l => ({
+  availableLocales.value.map((l: { code: string; name: string }) => ({
     label: `${getLocaleFlag(l.code)} ${l.name}`,
-    onSelect: () => setLocale(l.code)
+    onSelect: () => i18n.setLocale?.(l.code)
   }))
 )
 
+// No await — this is a layout component, not a page. Data arrives reactively.
 const { data: locationsData } = siteId
-  ? await useFetch(`/api/public/sites/${siteId}/locations`, {
+  ? useFetch(`/api/public/sites/${siteId}/locations`, {
       key: `header-locs-${siteId}`,
       default: () => ({ locations: [] })
     })
@@ -172,5 +185,5 @@ const locationDropdownItems = computed(() => [
     to: `/locations/${loc.slug}/menu`,
     icon: 'i-heroicons-map-pin'
   }))
-].filter(group => group.length > 0))
+].filter((group: any[]) => group.length > 0))
 </script>

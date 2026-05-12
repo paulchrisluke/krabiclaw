@@ -171,4 +171,30 @@ useSeoMeta({
   description: () => `Full menu for ${location.value?.title} at ${siteName.value}.`,
   ogUrl: () => `/locations/${slug.value}/menu`
 })
+
+useSchemaOrg([
+  computed(() => ({
+    '@type': 'Menu',
+    name: `${location.value?.title ?? ''} Menu`,
+    hasMenuSection: categories.value.map((cat: { id: string; name: string }) => ({
+      '@type': 'MenuSection',
+      name: cat.name,
+      hasMenuItem: (menuItemsBySection.value[cat.name] ?? []).map((item: any) => ({
+        '@type': 'MenuItem',
+        name: item.name,
+        description: item.description,
+        offers: { '@type': 'Offer', price: item.price ?? '', priceCurrency: 'THB' }
+      }))
+    }))
+  })),
+  computed(() => ({
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: siteName.value, item: '/' },
+      { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` },
+      { '@type': 'ListItem', position: 4, name: 'Menu', item: `/locations/${slug.value}/menu` }
+    ]
+  }))
+])
 </script>

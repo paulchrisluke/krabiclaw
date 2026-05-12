@@ -261,4 +261,34 @@ useSeoMeta({
   description: () => `Guest reviews for ${location.value?.title} at ${siteName.value}.`,
   ogUrl: () => `/locations/${slug.value}/reviews`
 })
+
+useSchemaOrg([
+  computed(() => ({
+    '@type': ['Restaurant', 'LocalBusiness'],
+    name: `${siteName.value} — ${location.value?.title ?? ''}`,
+    ...(aggregate.value?.rating ? {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: aggregate.value.rating,
+        reviewCount: aggregate.value.review_count ?? 0
+      }
+    } : {}),
+    review: reviews.value.slice(0, 10).map((r: any) => ({
+      '@type': 'Review',
+      author: { '@type': 'Person', name: r.author_name },
+      datePublished: r.created_at,
+      reviewBody: r.content,
+      reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5 }
+    }))
+  })),
+  computed(() => ({
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: siteName.value, item: '/' },
+      { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` },
+      { '@type': 'ListItem', position: 4, name: 'Reviews', item: `/locations/${slug.value}/reviews` }
+    ]
+  }))
+])
 </script>

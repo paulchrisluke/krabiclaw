@@ -110,7 +110,13 @@
       </section>
 
       <!-- Sub-nav -->
-      <SayaSubNav :location-slug="slug" active="menu" :review-count="location.review_count" />
+      <SayaSubNav
+        :location-slug="slug"
+        active="menu"
+        :review-count="location.review_count"
+        :photo-count="location.photo_count"
+        :qa-count="location.qa_count"
+      />
 
       <!-- Menu preview -->
       <section v-if="featuredItems.length" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
@@ -296,4 +302,29 @@ useSeoMeta({
   description: () => location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : '',
   ogUrl: () => `/locations/${slug.value}`
 })
+
+useSchemaOrg([
+  computed(() => {
+    const loc = location.value
+    if (!loc) return {}
+    return {
+      '@type': ['Restaurant', 'LocalBusiness'],
+      name: `${siteName.value} — ${loc.title}`,
+      description: formattedAddress.value,
+      address: { '@type': 'PostalAddress', streetAddress: formattedAddress.value },
+      telephone: loc.phone,
+      url: `/locations/${loc.slug}`,
+      ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {}),
+      ...(loc.rating ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: loc.rating, reviewCount: loc.review_count ?? 0 } } : {})
+    }
+  }),
+  computed(() => ({
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: siteName.value, item: '/' },
+      { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` }
+    ]
+  }))
+])
 </script>

@@ -212,6 +212,30 @@ const breadcrumb = computed(() => [
 
 useSeoMeta({
   title: () => `Photos · ${location.value?.title || slug.value}`,
+  description: () => `${photos.value.length} photos from ${location.value?.title} at ${siteName.value}.`,
   ogUrl: () => `/locations/${slug.value}/photos`
 })
+
+useSchemaOrg([
+  computed(() => ({
+    '@type': 'ImageGallery',
+    name: `${location.value?.title ?? ''} Photos`,
+    image: photos.value.slice(0, 20).map((p: any) => ({
+      '@type': 'ImageObject',
+      contentUrl: p.local_url || p.google_url,
+      thumbnailUrl: p.thumbnail_url,
+      description: p.description,
+      about: p.category
+    }))
+  })),
+  computed(() => ({
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: siteName.value, item: '/' },
+      { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` },
+      { '@type': 'ListItem', position: 4, name: 'Photos', item: `/locations/${slug.value}/photos` }
+    ]
+  }))
+])
 </script>

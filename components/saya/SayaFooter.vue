@@ -115,12 +115,11 @@
 </template>
 
 <script setup lang="ts">
-import { usePageContent } from '~/composables/usePageContent'
 import { DEFAULT_RESTAURANT_NAME } from '~/config/constants'
 import { getTodayGoogleHours } from '~/utils/formatters'
 
 const { isPlatform, siteId, site } = useTenantSite()
-const { getField } = usePageContent('contact')
+const { getField } = usePageContent('contact') // auto-imported
 
 const year = new Date().getFullYear()
 const restaurantName = computed(() => (site as any)?.value?.name || (site as any)?.name || DEFAULT_RESTAURANT_NAME)
@@ -141,8 +140,8 @@ const allSocials = computed(() => [
 const activeSocials = computed(() => allSocials.value.filter(s => s.url))
 const inactiveSocials = computed(() => allSocials.value.filter(s => !s.url))
 
-// Locations
-const { data: locationsData } = await useFetch(
+// No await — layout component, data arrives reactively
+const { data: locationsData } = useFetch(
   () => `/api/public/sites/${siteId}/locations`,
   {
     key: () => `footer-locs-${siteId}`,
@@ -151,7 +150,7 @@ const { data: locationsData } = await useFetch(
   }
 )
 
-const { data: googleBusiness } = await useFetch(
+const { data: googleBusiness } = useFetch(
   () => `/api/public/sites/${siteId}/google-business`,
   {
     key: () => `footer-google-business-${siteId}`,
