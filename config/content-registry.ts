@@ -72,6 +72,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
     label: 'Home',
     path: '/',
     fields: {
+      'hero.eyebrow': {
+        label: 'Hero Eyebrow',
+        type: 'text',
+        sources: ['manual'],
+        defaultValue: '',
+        placeholder: 'e.g. A neighbourhood izakaya'
+      },
       'hero.title': {
         label: 'Hero Title',
         type: 'text',
@@ -86,7 +93,21 @@ export const contentRegistry: Record<string, PageDefinition> = {
         defaultValue: 'Authentic Japanese Robatayaki in Krabi, Thailand',
         placeholder: 'Enter hero subtitle...'
       },
-      'hero.video': {
+      'story.headline': {
+        label: 'Brand Story Headline',
+        type: 'text',
+        sources: ['manual'],
+        defaultValue: '',
+        placeholder: 'e.g. Charcoal & salt.'
+      },
+      'story.body': {
+        label: 'Brand Story',
+        type: 'textarea',
+        sources: ['manual'],
+        defaultValue: '',
+        placeholder: 'Two or three sentences about your restaurant — what you cook, how you cook it, why it matters.'
+      },
+      'cta.title': {
         label: 'Hero Background Video URL',
         type: 'text',
         sources: ['manual'],
@@ -211,7 +232,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Story Introduction',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: '<p class="text-xl font-medium text-gray-900 border-l-4 border-black pl-6 py-2">Saya Kitchen brings the warmth of Japanese robatayaki to Krabi, pairing open-flame cooking with pristine seafood, seasonal produce, and generous island hospitality.</p>'
+        defaultValue: '<p class="text-xl font-medium text-default border-l-4 border-default pl-6 py-2">Saya Kitchen brings the warmth of Japanese robatayaki to Krabi, pairing open-flame cooking with pristine seafood, seasonal produce, and generous island hospitality.</p>'
       },
       'grill.title': {
         label: 'Grill Section Title',
@@ -303,6 +324,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'richtext',
         sources: ['manual'],
         defaultValue: '<p>Whether you are planning dinner, a celebration, or a quiet seat at the counter, the Saya team is here to help.</p>'
+      },
+      'footer.tagline': {
+        label: 'Footer Tagline',
+        type: 'text',
+        sources: ['manual'],
+        defaultValue: '',
+        placeholder: 'e.g. Authentic dining, crafted with passion.'
       },
       'social.facebook': {
         label: 'Facebook URL',

@@ -76,7 +76,7 @@
               </p>
             </div>
             <div class="flex flex-col gap-2">
-              <UButton :to="`/dashboard/sites/${siteId}/locations`" icon="i-heroicons-plus" size="lg" block>
+              <UButton :to="`/dashboard/sites/${siteId}/locations`" icon="i-heroicons-plus" color="primary" size="lg" block>
                 Add Location
               </UButton>
               <UButton

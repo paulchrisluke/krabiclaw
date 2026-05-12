@@ -11,7 +11,7 @@
               {{ serverHasDrafts || localHasChanges ? 'Draft' : 'Live' }}
             </UBadge>
           </div>
-          <p class="truncate text-xs text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">{{ siteDomain }}</p>
+          <p class="truncate text-xs text-(--ui-text-muted)">{{ siteDomain }}</p>
         </div>
       </div>
 
@@ -190,7 +190,7 @@
                       <span class="flex items-center gap-2">
                         <span class="truncate text-sm font-medium">{{ getFieldDef(selectedPageId, fieldKey)?.label }}</span>
                       </span>
-                      <span class="block truncate text-xs text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">{{ fieldPreview(fieldKey) }}</span>
+                      <span class="block truncate text-xs text-(--ui-text-muted)">{{ fieldPreview(fieldKey) }}</span>
                     </span>
                   </span>
                 </UButton>
@@ -213,11 +213,11 @@
         </div>
       </aside>
 
-      <main class="flex min-w-0 flex-col overflow-hidden bg-(--ui-bg-elevated) dark:bg-gray-950">
+      <main class="flex min-w-0 flex-col overflow-hidden bg-(--ui-bg-elevated)">
         <div class="flex h-11 shrink-0 items-center justify-between border-b border-(--ui-border) bg-(--ui-bg) px-4  ">
           <div class="flex min-w-0 items-center gap-2">
             <UIcon name="i-heroicons-globe-alt" class="size-4 text-(--ui-text-muted)" />
-            <p class="truncate text-sm text-(--ui-text-muted) dark:text-gray-300">{{ siteDomain }}{{ currentPagePath }}</p>
+            <p class="truncate text-sm text-(--ui-text-muted)">{{ siteDomain }}{{ currentPagePath }}</p>
           </div>
           <UBadge color="neutral" variant="subtle" size="xs">Preview</UBadge>
         </div>
@@ -236,7 +236,7 @@
           <div v-if="iframeLoading" class="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div class="flex items-center gap-3 rounded-lg border border-(--ui-border) bg-(--ui-bg) px-4 py-3 shadow-sm  ">
               <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin text-(--ui-text-muted)" />
-              <p class="text-sm text-(--ui-text-muted) dark:text-gray-300">Loading preview...</p>
+              <p class="text-sm text-(--ui-text-muted)">Loading preview...</p>
             </div>
           </div>
         </Transition>
@@ -250,7 +250,7 @@
             <p class="text-sm font-semibold text-(--ui-text-highlighted) ">
               {{ activeFieldDef?.label || 'Content settings' }}
             </p>
-            <p class="truncate text-xs text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">
+            <p class="truncate text-xs text-(--ui-text-muted)">
               {{ activeFieldDef ? `${selectedPageLabel} / ${selectedLocationLabel} / ${activeFieldDef.label}` : `${selectedPageLabel} / ${selectedLocationLabel}` }}
             </p>
           </div>
@@ -267,7 +267,7 @@
 
         <div v-if="activeField" class="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
           <div v-if="activeFieldDef?.type === 'text'" class="space-y-2">
-            <label :for="`field-${activeField}`" class="block text-sm font-medium text-(--ui-text) dark:text-gray-200">{{ activeFieldDef.label }}</label>
+            <label :for="`field-${activeField}`" class="block text-sm font-medium text-(--ui-text)">{{ activeFieldDef.label }}</label>
             <UInput
               :id="`field-${activeField}`"
               v-model="editingValue"
@@ -275,11 +275,11 @@
               size="sm"
               class="w-full"
             />
-            <p v-if="activeFieldDef?.defaultValue" class="text-xs text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">Default: {{ activeFieldDef.defaultValue }}</p>
+            <p v-if="activeFieldDef?.defaultValue" class="text-xs text-(--ui-text-muted)">Default: {{ activeFieldDef.defaultValue }}</p>
           </div>
 
           <div v-else-if="activeFieldDef?.type === 'textarea'" class="space-y-2">
-            <label :for="`field-${activeField}`" class="block text-sm font-medium text-(--ui-text) dark:text-gray-200">{{ activeFieldDef.label }}</label>
+            <label :for="`field-${activeField}`" class="block text-sm font-medium text-(--ui-text)">{{ activeFieldDef.label }}</label>
             <UTextarea
               :id="`field-${activeField}`"
               v-model="editingValue"
@@ -290,12 +290,12 @@
               size="sm"
               class="w-full"
             />
-            <p v-if="activeFieldDef?.defaultValue" class="text-xs text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">Default: {{ activeFieldDef.defaultValue }}</p>
+            <p v-if="activeFieldDef?.defaultValue" class="text-xs text-(--ui-text-muted)">Default: {{ activeFieldDef.defaultValue }}</p>
           </div>
 
           <div v-else-if="activeFieldDef?.type === 'richtext'" class="space-y-2">
-            <label :for="`field-${activeField}`" class="block text-sm font-medium text-(--ui-text) dark:text-gray-200">{{ activeFieldDef.label }}</label>
-            <div class="flex flex-wrap gap-1 rounded-md border border-(--ui-border) bg-(--ui-bg-muted) p-1  dark:bg-gray-950">
+            <label :for="`field-${activeField}`" class="block text-sm font-medium text-(--ui-text)">{{ activeFieldDef.label }}</label>
+            <div class="flex flex-wrap gap-1 rounded-md border border-(--ui-border) bg-(--ui-bg-muted) p-1">
               <UButton
                 v-for="cmd in richtextCommands"
                 :key="cmd.cmd"
@@ -309,7 +309,7 @@
             <div
               :id="`field-${activeField}`"
               contenteditable="true"
-              class="prose prose-sm min-h-40 w-full max-w-none rounded-md border border-(--ui-border) bg-(--ui-bg) px-3 py-2 text-sm text-(--ui-text-highlighted) focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20  dark:bg-gray-950 "
+              class="prose prose-sm min-h-40 w-full max-w-none rounded-md border border-(--ui-border) bg-(--ui-bg) px-3 py-2 text-sm text-(--ui-text-highlighted) focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               :data-placeholder="activeFieldDef?.placeholder || 'Start typing...'"
               v-html="DOMPurify.sanitize(editingValue || '')"
               @blur="onRichTextBlur"
@@ -324,7 +324,7 @@
                 </div>
                 <div>
                   <p class="text-sm font-semibold text-(--ui-text-highlighted) ">Auto-sync from Google Business</p>
-                  <p class="mt-1 text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">Save hours keeping your site updated — connect once, sync forever.</p>
+                  <p class="mt-1 text-sm text-(--ui-text-muted)">Save hours keeping your site updated — connect once, sync forever.</p>
                 </div>
               </div>
               <UButton to="/dashboard/billing" color="primary" block>
@@ -335,12 +335,12 @@
 
           <div
             v-else-if="activeFieldDef?.googleLocked"
-            class="flex items-center gap-2 rounded-lg border border-(--ui-border) bg-(--ui-bg-muted) px-3 py-2 text-sm text-(--ui-text)  dark:bg-gray-950 dark:text-gray-200"
+            class="flex items-center gap-2 rounded-lg border border-(--ui-border) bg-(--ui-bg-muted) px-3 py-2 text-sm text-(--ui-text)"
           >
             <UBadge color="neutral" variant="soft" size="sm">
               Synced from Google Business
             </UBadge>
-            <span class="text-xs text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">Manual edits remain available.</span>
+            <span class="text-xs text-(--ui-text-muted)">Manual edits remain available.</span>
           </div>
 
           <UButton
@@ -360,7 +360,7 @@
           <div>
             <UIcon name="i-heroicons-cursor-arrow-rays" class="mx-auto mb-3 size-8 text-(--ui-text-dimmed)" />
             <p class="text-sm font-medium text-(--ui-text-highlighted) ">Select a field</p>
-            <p class="mt-1 text-sm text-(--ui-text-muted) dark:text-(--ui-text-dimmed)">Choose editable content from the page structure.</p>
+            <p class="mt-1 text-sm text-(--ui-text-muted)">Choose editable content from the page structure.</p>
           </div>
         </div>
       </aside>
@@ -373,7 +373,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import DOMPurify from 'dompurify'
+import DOMPurify from 'isomorphic-dompurify'
 import { contentRegistry, editablePages, getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
 

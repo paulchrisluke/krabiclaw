@@ -34,23 +34,41 @@ export default defineEventHandler(async (event) => {
       }, { status: 404 })
     }
 
-    // Get location by slug for this site
+    // Get location by slug for this site (email excluded from public API)
     const location = await db.prepare(`
       SELECT id, slug, title, address, phone, website_url, maps_url, latitude, longitude,
              opening_hours, rating, review_count, is_primary, status, last_synced_at,
-             google_location_id, google_connection_id, image_url, city
-      FROM business_locations 
+             google_place_id, image_url, city
+      FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND slug = ? AND status = 'active'
       LIMIT 1
     `).bind(site.organization_id, siteId, slug).first()
-    
+
     if (!location) {
-      return jsonResponse({ 
-        error: 'Location not found' 
+      return jsonResponse({
+        error: 'Location not found'
       }, { status: 404 })
     }
-    
-    // Parse JSON fields and return public-safe data
+
+    // Counts for sub-nav badges
+    const photoCount = await db.prepare(
+      `SELECT COUNT(*) as n FROM location_photos WHERE location_id = ?`
+    ).bind(location.id).first()
+
+    const qaCount = await db.prepare(
+      `SELECT COUNT(*) as n FROM location_qa WHERE location_id = ? AND status = 'published'`
+    ).bind(location.id).first()
+
+    // Derive GMB action URLs from place ID when available
+    const placeId = location.google_place_id
+    const gmb_review_url = placeId
+      ? `https://search.google.com/local/writereview?placeid=${placeId}`
+      : null
+    const gmb_qa_url = placeId
+      ? `https://search.google.com/local/questions?placeid=${placeId}`
+      : null
+
+    // Parse JSON fields and return public-safe data (email excluded)
     const parsedLocation = {
       id: location.id,
       slug: location.slug,
@@ -64,10 +82,15 @@ export default defineEventHandler(async (event) => {
       opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null,
       rating: location.rating,
       review_count: location.review_count,
+      photo_count: (photoCount as any)?.n ?? 0,
+      qa_count: (qaCount as any)?.n ?? 0,
       is_primary: location.is_primary,
       status: location.status,
       image_url: location.image_url,
-      city: location.city
+      city: location.city,
+      google_place_id: location.google_place_id,
+      gmb_review_url,
+      gmb_qa_url
     }
     
     return jsonResponse({

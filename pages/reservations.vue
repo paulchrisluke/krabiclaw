@@ -235,8 +235,17 @@ const handleReservation = async () => {
   }
 }
 
+import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
+
 const config = useRuntimeConfig()
+const siteUrl = config.public.siteUrl
 const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '').replace(/\/$/, '') || 'krabiclaw.com'
+
+useBreadcrumbSchema([
+  { name: 'Home', url: `/` },
+  { name: 'Reservations', url: `/reservations` }
+])
+
 useSeoMeta({
   title: 'Reserve a Table | Saya Kitchen',
   description: 'Reserve a table at Saya Kitchen in Krabi.',
@@ -244,4 +253,24 @@ useSeoMeta({
   ogUrl: `https://${site?.subdomain || 'restaurant'}.${platformHostname}/reservations`,
   ogType: 'website'
 })
+
+useSchemaOrg([
+  ({
+    '@context': 'https://schema.org',
+    '@type': 'Restaurant',
+    name: site?.title || 'Restaurant',
+    url: `https://${site?.subdomain || 'restaurant'}.${platformHostname}`,
+    reservationUrl: `https://${site?.subdomain || 'restaurant'}.${platformHostname}/reservations`,
+    potentialAction: {
+      '@type': 'ReserveAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: `https://${site?.subdomain || 'restaurant'}.${platformHostname}/reservations`
+      },
+      result: {
+        '@type': 'Reservation'
+      }
+    }
+  })
+])
 </script>

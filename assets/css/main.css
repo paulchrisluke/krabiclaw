@@ -1,11 +1,15 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+@import "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap";
+@import "https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap";
+@import "https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap";
 @import "tailwindcss";
 @import "@nuxt/ui";
 @import "./saya.css";
+@plugin "@tailwindcss/typography";
 
 @theme static {
   --font-sans: "Poppins", sans-serif;
   --font-poppins: "Poppins", sans-serif;
+  --font-display: "Fredoka", "Poppins", ui-rounded, system-ui, sans-serif;
 
   --breakpoint-xs: 375px;
   --breakpoint-sm: 576px;
@@ -18,16 +22,121 @@
   --radius-xl: 12px;
   --radius-2xl: 16px;
   --radius-3xl: 24px;
-
 }
 
-/* Platform theme tokens */
+/* ── KrabiClaw brand palette ──────────────────────────────── */
 :root {
-  --ui-radius: 0.5rem;
+
+  --kc-navy:        #1F2547;
+  --kc-navy-700:    #2C3360;
+  --kc-navy-500:    #4A5380;
+  --kc-navy-300:    #8C92B0;
+
+  --kc-coral:       #FB7461;
+  --kc-coral-600:   #E87F67;
+  --kc-coral-400:   #FF9A8C;
+  --kc-coral-200:   #FFCCC2;
+  --kc-coral-50:    #FFF1ED;
+
+  --kc-teal:        #2BB5B5;
+  --kc-teal-600:    #239595;
+  --kc-teal-400:    #5DCBCB;
+  --kc-teal-100:    #D6F0EF;
+
+  --kc-cream:       #F8F6F3;
+  --kc-cream-elev:  #FFFFFF;
+  --kc-sand:        #F0EBE3;
+
+  --kc-border:      #E6E1D9;
+  --kc-border-muted:#EFEAE3;
+
+  --kc-success:     #2BB573;
+  --kc-warning:     #F8A93A;
+  --kc-danger:      #E0524C;
+
+  /* shadows — navy-tinted, low-contrast */
+  --shadow-xs:  0 1px 2px rgba(31, 37, 71, 0.04);
+  --shadow-sm:  0 1px 3px rgba(31, 37, 71, 0.06), 0 1px 2px rgba(31, 37, 71, 0.04);
+  --shadow-md:  0 4px 12px rgba(31, 37, 71, 0.08);
+  --shadow-lg:  0 12px 32px rgba(31, 37, 71, 0.10);
+  --shadow-xl:  0 24px 48px rgba(31, 37, 71, 0.12);
 }
 
+/* ── Platform theme ───────────────────────────────────────── */
 .platform-theme {
-  --ui-primary: #e87f67;
+  /* Mirror coral into Tailwind's --color-primary so color="primary"
+     on UButton, UBadge, UProgress etc. resolves to coral throughout
+     the platform and dashboard — same technique as .saya-theme. */
+  --color-primary:        var(--kc-coral-600);
+  --ui-primary:           var(--kc-coral-600);
+  --ui-bg:                var(--kc-cream);
+  --ui-bg-elevated:       var(--kc-cream-elev);
+  --ui-bg-muted:          #F2EFEA;
+  --ui-bg-inverted:       var(--kc-navy);
+  --ui-text:              var(--kc-navy);
+  --ui-text-muted:        var(--kc-navy-500);
+  --ui-text-dimmed:       #6B7198;               /* Darker navy for 6.5:1 contrast on cream bg */
+  --ui-text-highlighted:  var(--kc-navy);
+  --ui-text-inverted:     var(--kc-cream-elev);
+  --ui-border:            var(--kc-border);
+  --ui-border-muted:      var(--kc-border-muted);
+}
+
+/* ── Platform theme dark mode ─────────────────────────────── */
+/*
+   Rule: --kc-* brand palette variables are NEVER overridden for dark mode.
+   They represent absolute brand colours (navy = #1F2547, coral = #FB7461 …)
+   used as backgrounds, borders AND text — overriding them cascades
+   incorrectly into backgrounds. Only --ui-* semantic tokens are redefined.
+
+   Dark palette:
+   - bg:          very dark navy-adjacent (#0F1225) — warmer than pure black
+   - elevated:    #1F2547  (the original --kc-navy becomes the card surface)
+   - muted:       #141836  (slightly darker than elevated, for subtle sections)
+   - inverted:    #080A18  (near-black — Pro card, CTA bands keep text-white legible)
+   - text:        #EEF0F8  (warm cream-white, 16:1 on bg)
+   - text-muted:  #9CA4C6  (blue-grey, 7:1 on bg)
+   - text-dimmed: #6B7198  (muted, 4.8:1 on bg — eyebrows / captions)
+   - Coral, teal, yellow are unchanged — vibrant accents work on dark surfaces.
+
+   Hardcoded text-(--kc-navy) in templates must be changed to text-(--ui-text)
+   individually — see index.vue. Do NOT override --kc-navy here.
+*/
+.dark .platform-theme {
+  --color-primary:        #FB7461;   /* full coral — pops against dark bg */
+  --ui-primary:           #FB7461;            /* coral — slightly brighter on dark */
+  --ui-bg:                #0F1225;
+  --ui-bg-elevated:       #1F2547;            /* card surface = kc-navy value */
+  --ui-bg-muted:          #141836;
+  --ui-bg-inverted:       #080A18;
+  --ui-text:              #EEF0F8;
+  --ui-text-muted:        #9CA4C6;
+  --ui-text-dimmed:       #6B7198;
+  --ui-text-highlighted:  #FFFFFF;
+  --ui-text-inverted:     #EEF0F8;
+  --ui-border:            rgba(255,255,255,0.09);
+  --ui-border-muted:      rgba(255,255,255,0.05);
+}
+
+/* Dark mode wordmark: swap navy text to cream */
+.dark .kc-wordmark__krabi { color: #EEF0F8; }
+.dark .kc-wordmark__tld   { color: #EEF0F8; }
+
+/* ── Platform type utilities ──────────────────────────────── */
+.kc-wordmark {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.kc-wordmark__krabi { color: var(--kc-navy); }
+.kc-wordmark__claw  { color: var(--kc-coral); }
+.kc-wordmark__tld   { color: var(--kc-navy); font-size: 0.55em; vertical-align: top; margin-left: 1px; }
+
+.kc-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
 }
 
 

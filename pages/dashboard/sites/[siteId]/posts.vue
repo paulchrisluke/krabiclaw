@@ -2,7 +2,7 @@
   <UPage>
     <UPageHeader title="Posts" description="Write, schedule, and publish content to your site and social channels.">
       <template #links>
-        <UButton icon="i-heroicons-plus" @click="openCompose()">New post</UButton>
+        <UButton icon="i-heroicons-plus" color="primary" @click="openCompose()">New post</UButton>
       </template>
     </UPageHeader>
 

@@ -19,6 +19,7 @@ export interface MenuItem {
   menu_id: string
   section: string
   name: string
+  slug: string
   description: string | null
   price: string | null
   image_url: string | null
@@ -49,6 +50,7 @@ export interface UpdateMenuRequest {
 export interface CreateMenuItemRequest {
   section: string
   name: string
+  // slug is generated server-side from name
   description?: string
   price?: string
   image_url?: string
@@ -59,6 +61,7 @@ export interface CreateMenuItemRequest {
 export interface UpdateMenuItemRequest {
   section?: string
   name?: string
+  // slug is intentionally not editable via the standard update path
   description?: string
   price?: string
   image_url?: string

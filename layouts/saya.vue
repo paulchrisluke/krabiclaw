@@ -1,7 +1,7 @@
 <template>
-  <div 
-    class="tenant-layout saya-theme min-h-screen flex flex-col font-sans"
-    :style="brandColor ? { '--ui-primary': brandColor } : {}"
+  <div
+    class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-(--ui-bg) text-(--ui-text)"
+    :style="brandColor ? { '--ui-primary': brandColor, '--color-primary': brandColor } : {}"
   >
     <UTheme :ui="{}" :props="{ button: { color: 'neutral' } }">
       <SayaHeader />
@@ -9,6 +9,7 @@
         <slot />
       </main>
       <SayaFooter />
+      <SayaUpgradeModal />
     </UTheme>
   </div>
 </template>

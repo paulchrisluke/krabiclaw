@@ -14,11 +14,14 @@ export default defineNuxtConfig({
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { name: 'theme-color', content: '#000000' }
+        { name: 'theme-color', content: '#1F2547' }
       ],
       link: [
-        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
-        { rel: 'shortcut icon', href: '/favicon.ico', type: 'image/x-icon' }
+        { rel: 'icon', type: 'image/png', href: '/favicon-96x96.png', sizes: '96x96' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'shortcut icon', href: '/favicon.ico' },
+        { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
+        { rel: 'manifest', href: '/site.webmanifest' }
       ]
     },
   },
@@ -32,6 +35,7 @@ export default defineNuxtConfig({
       platformDomain: process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || '',
       freeSiteDomain: process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN || '',
       appName: process.env.NUXT_PUBLIC_APP_NAME || '',
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://krabiclaw.com',
       turnstileEnabled: process.env.NUXT_PUBLIC_TURNSTILE_ENABLED === 'true',
       turnstileSiteKey: process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY || ''
     },

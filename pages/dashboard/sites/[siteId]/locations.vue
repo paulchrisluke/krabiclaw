@@ -31,7 +31,7 @@
           <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-(--ui-text-muted)" />
           <h2 class="mt-4 text-base font-semibold text-(--ui-text-highlighted)">Add your first location</h2>
           <p class="mt-1 text-sm text-(--ui-text-muted)">Local content, menus, hours, and Google Business mapping start here.</p>
-          <UButton class="mt-5" icon="i-heroicons-plus" @click="showAddLocationForm = true">Add Location</UButton>
+          <UButton class="mt-5" icon="i-heroicons-plus" color="primary" @click="showAddLocationForm = true">Add Location</UButton>
         </div>
 
         <!-- Location list -->
@@ -177,7 +177,7 @@
             <UCheckbox v-model="addLocationForm.is_primary" label="Set as primary location" />
             <div class="flex justify-end gap-2">
               <UButton color="neutral" variant="ghost" size="sm" @click="cancelAddLocation">Cancel</UButton>
-              <UButton size="sm" :loading="locationSaving" :disabled="!addLocationForm.title.trim()" @click="handleCreateLocation">
+              <UButton size="sm" color="primary" :loading="locationSaving" :disabled="!addLocationForm.title.trim()" @click="handleCreateLocation">
                 Add location
               </UButton>
             </div>

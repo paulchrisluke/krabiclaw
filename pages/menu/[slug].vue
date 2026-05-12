@@ -88,7 +88,7 @@
           <div v-if="detailSections.length > 0" class="mt-8 border-t border-(--ui-border) pt-8">
             <div v-for="section in detailSections" :key="section.name" class="mt-6 first:mt-0">
               <h3 class="text-sm font-medium text-(--ui-text-highlighted)">{{ section.name }}</h3>
-              <ul role="list" class="mt-4 list-disc space-y-1 pl-5 text-sm leading-6 text-(--ui-text-muted) marker:text-gray-300">
+              <ul role="list" class="mt-4 list-disc space-y-1 pl-5 text-sm leading-6 text-(--ui-text-muted) marker:text-(--ui-text-dimmed)">
                 <li v-for="entry in section.items" :key="entry" class="pl-2">{{ entry }}</li>
               </ul>
             </div>
@@ -153,7 +153,7 @@
                   type="text"
                   required
                   maxlength="80"
-                  class="mt-2 block w-full rounded-md bg-(--ui-bg) px-3 py-2 text-base text-(--ui-text-highlighted) outline outline-1 -outline-offset-1 outline-gray-300 placeholder:text-(--ui-text-dimmed) focus:outline-2 focus:-outline-offset-2 focus:outline-black"
+                  class="mt-2 block w-full rounded-md bg-(--ui-bg) px-3 py-2 text-base text-(--ui-text-highlighted) outline outline-1 -outline-offset-1 outline-(--ui-border) placeholder:text-(--ui-text-dimmed) focus:outline-2 focus:-outline-offset-2 focus:outline-black"
                 />
               </div>
               <div>
@@ -161,7 +161,7 @@
                 <select
                   id="review-rating"
                   v-model.number="reviewForm.rating"
-                  class="mt-2 block w-full rounded-md bg-(--ui-bg) px-3 py-2 text-base text-(--ui-text-highlighted) outline outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-black"
+                  class="mt-2 block w-full rounded-md bg-(--ui-bg) px-3 py-2 text-base text-(--ui-text-highlighted) outline outline-1 -outline-offset-1 outline-(--ui-border) focus:outline-2 focus:-outline-offset-2 focus:outline-black"
                 >
                   <option v-for="rating in [5, 4, 3, 2, 1]" :key="rating" :value="rating">
                     {{ rating }} stars
@@ -177,7 +177,7 @@
                 type="text"
                 required
                 maxlength="120"
-                class="mt-2 block w-full rounded-md bg-(--ui-bg) px-3 py-2 text-base text-(--ui-text-highlighted) outline outline-1 -outline-offset-1 outline-gray-300 placeholder:text-(--ui-text-dimmed) focus:outline-2 focus:-outline-offset-2 focus:outline-black"
+                class="mt-2 block w-full rounded-md bg-(--ui-bg) px-3 py-2 text-base text-(--ui-text-highlighted) outline outline-1 -outline-offset-1 outline-(--ui-border) placeholder:text-(--ui-text-dimmed) focus:outline-2 focus:-outline-offset-2 focus:outline-black"
               />
             </div>
             <div>
@@ -189,7 +189,7 @@
                 minlength="10"
                 maxlength="1200"
                 rows="4"
-                class="mt-2 block w-full rounded-md bg-(--ui-bg) px-3 py-2 text-base text-(--ui-text-highlighted) outline outline-1 -outline-offset-1 outline-gray-300 placeholder:text-(--ui-text-dimmed) focus:outline-2 focus:-outline-offset-2 focus:outline-black"
+                class="mt-2 block w-full rounded-md bg-(--ui-bg) px-3 py-2 text-base text-(--ui-text-highlighted) outline outline-1 -outline-offset-1 outline-(--ui-border) placeholder:text-(--ui-text-dimmed) focus:outline-2 focus:-outline-offset-2 focus:outline-black"
               />
             </div>
             <div v-if="turnstileEnabled" ref="turnstileContainer" class="min-h-16"></div>

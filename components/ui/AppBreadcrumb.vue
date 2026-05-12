@@ -1,6 +1,6 @@
 <template>
   <nav aria-label="Breadcrumb" class="max-w-6xl mx-auto px-4 py-3">
-    <ol class="flex items-center gap-2 text-sm text-gray-500">
+    <ol class="flex items-center gap-2 text-sm text-[color:var(--ui-text-muted)]">
       <li v-for="(crumb, i) in crumbs" :key="crumb.to" class="flex items-center gap-2">
         <NuxtLink
           v-if="i < crumbs.length - 1"

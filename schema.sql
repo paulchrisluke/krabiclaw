@@ -207,6 +207,7 @@ CREATE TABLE IF NOT EXISTS business_locations (
   last_synced_at TEXT,
   description TEXT,
   short_description TEXT,
+  hero_video_url TEXT,
   special_hours TEXT,
   price_level TEXT,
   attributes TEXT,
@@ -332,6 +333,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
   menu_id TEXT NOT NULL,
   section TEXT NOT NULL,
   name TEXT NOT NULL,
+  slug TEXT NOT NULL DEFAULT '',
   description TEXT,
   price TEXT,
   image_url TEXT,
@@ -343,6 +345,9 @@ CREATE TABLE IF NOT EXISTS menu_items (
   updated_by TEXT,
   FOREIGN KEY (menu_id) REFERENCES menus(id) ON DELETE CASCADE
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_menu_items_menu_slug
+  ON menu_items(menu_id, slug) WHERE slug != '';
 
 CREATE TABLE IF NOT EXISTS reviews (
   id TEXT PRIMARY KEY,
@@ -662,3 +667,51 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_location_qa_google_id
 
 CREATE INDEX IF NOT EXISTS idx_location_qa_location
   ON location_qa(location_id, status, sort_order);
+
+--------------------------------------------------------------------------------
+-- Platform Owner Management
+--------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS platform_content (
+  id TEXT PRIMARY KEY,
+  page TEXT UNIQUE NOT NULL,
+  content TEXT NOT NULL,
+  updated_by TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (updated_by) REFERENCES user(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS platform_blog_posts (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  body TEXT NOT NULL,
+  excerpt TEXT,
+  category TEXT,
+  author_id TEXT,
+  published_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (author_id) REFERENCES user(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS platform_contact_submissions (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'read', 'replied')),
+  ip_hash TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_platform_contact_submissions_status_created
+  ON platform_contact_submissions(status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS platform_analytics (
+  id TEXT PRIMARY KEY,
+  metric TEXT NOT NULL,
+  value INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  UNIQUE(metric, date)
+);

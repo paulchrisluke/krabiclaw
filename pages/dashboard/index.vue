@@ -17,7 +17,7 @@
           <UIcon name="i-heroicons-building-storefront" class="mx-auto size-10 text-(--ui-text-muted)" />
           <h2 class="mt-4 text-xl font-semibold text-(--ui-text-highlighted)">Create your restaurant workspace</h2>
           <p class="mt-2 text-sm text-(--ui-text-muted)">Start with one website, then add locations for local menus, hours, and Google Business data.</p>
-          <UButton to="/dashboard/onboarding" icon="i-heroicons-plus" size="lg" class="mt-6">
+          <UButton to="/dashboard/onboarding" icon="i-heroicons-plus" color="primary" size="lg" class="mt-6">
             Get Started
           </UButton>
         </div>
@@ -55,7 +55,7 @@
           <div v-if="sites.length === 0" class="py-8 text-center">
             <p class="font-medium text-(--ui-text-highlighted)">No websites yet</p>
             <p class="mt-1 text-sm text-(--ui-text-muted)">Create your first restaurant website to begin.</p>
-            <UButton to="/dashboard/onboarding" icon="i-heroicons-plus" class="mt-4">
+            <UButton to="/dashboard/onboarding" icon="i-heroicons-plus" color="primary" class="mt-4">
               Create Website
             </UButton>
           </div>
@@ -132,11 +132,24 @@ interface DashboardSite {
 }
 
 const config = useRuntimeConfig()
+const router = useRouter()
 const organizationsState = authClient.useListOrganizations()
 const organizations = computed(() => unref(organizationsState)?.data ?? [])
 const sites = ref<DashboardSite[]>([])
 const billing = ref<any>(null)
 const sitesLoading = ref(false)
+
+// Check onboarding status and redirect if needed
+onMounted(async () => {
+  try {
+    const status = await $fetch<{ needsOnboarding: boolean }>('/api/onboarding/status')
+    if (status.needsOnboarding) {
+      await navigateTo('/dashboard/onboarding')
+    }
+  } catch (err) {
+    console.error('Failed to check onboarding status:', err)
+  }
+})
 
 const platformHostname = computed(() => {
   try {

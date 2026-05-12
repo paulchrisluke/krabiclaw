@@ -1,65 +1,84 @@
 <template>
-  <UFooter class="bg-stone-50 border-t border-stone-200">
-    <template #top>
-      <UContainer class="py-20">
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-12">
-          <div class="col-span-2 lg:col-span-2">
-            <NuxtLink to="/" class="flex items-center gap-2 mb-6 group">
-              <div class="w-8 h-8 bg-black rounded-lg flex items-center justify-center group-hover:rotate-12 transition-transform">
-                <span class="text-white font-bold italic text-lg">K</span>
-              </div>
-              <span class="text-xl font-bold tracking-tight text-stone-900">KrabiClaw</span>
-            </NuxtLink>
-            <p class="text-stone-500 max-w-xs mb-8">
-              The AI-powered restaurant platform. Build, grow, and manage your restaurant's digital presence in minutes.
-            </p>
-          </div>
+  <footer class="bg-(--ui-bg-inverted) text-(--ui-text-inverted)">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-8">
 
-          <div>
-            <h4 class="font-bold text-stone-900 mb-4 uppercase tracking-widest text-xs">Product</h4>
-            <ul class="space-y-2">
-              <li><NuxtLink to="/#features" class="text-stone-500 hover:text-black transition-colors text-sm">Features</NuxtLink></li>
-              <li><NuxtLink to="/pricing" class="text-stone-500 hover:text-black transition-colors text-sm">Pricing</NuxtLink></li>
-              <li><NuxtLink to="/templates" class="text-stone-500 hover:text-black transition-colors text-sm">Templates</NuxtLink></li>
-            </ul>
-          </div>
+      <!-- Main grid -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12 mb-12">
 
-          <div>
-            <h4 class="font-bold text-stone-900 mb-4 uppercase tracking-widest text-xs">Company</h4>
-            <ul class="space-y-2">
-              <li><NuxtLink to="/about" class="text-stone-500 hover:text-black transition-colors text-sm">About Us</NuxtLink></li>
-              <li><NuxtLink to="/blog" class="text-stone-500 hover:text-black transition-colors text-sm">Blog</NuxtLink></li>
-              <li><NuxtLink to="/contact" class="text-stone-500 hover:text-black transition-colors text-sm">Contact</NuxtLink></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 class="font-bold text-stone-900 mb-4 uppercase tracking-widest text-xs">Legal</h4>
-            <ul class="space-y-2">
-              <li><NuxtLink to="/privacy-policy" class="text-stone-500 hover:text-black transition-colors text-sm">Privacy Policy</NuxtLink></li>
-              <li><NuxtLink to="/terms-and-conditions" class="text-stone-500 hover:text-black transition-colors text-sm">Terms of Service</NuxtLink></li>
-            </ul>
-          </div>
-        </div>
-      </UContainer>
-    </template>
-    
-    <template #bottom>
-      <UContainer class="py-8 border-t border-stone-200">
-        <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-          <p class="text-stone-400 text-sm">
-            &copy; {{ new Date().getFullYear() }} KrabiClaw. All rights reserved.
+        <!-- Brand col -->
+        <div class="col-span-2 md:col-span-1">
+          <NuxtLink to="/" class="inline-flex items-center gap-2.5 mb-4 no-underline group">
+            <img src="/krabi-claw-logo.png" alt="KrabiClaw" class="w-8.5 h-8.5 rounded-[9px] group-hover:rotate-12 transition-transform duration-200" />
+            <span class="kc-wordmark text-[19px]">
+              <span class="text-(--ui-text-inverted)">krabi</span><span class="kc-wordmark__claw">claw</span><span class="text-(--ui-text-inverted)" style="font-size: 0.55em; vertical-align: top; margin-left: 1px">.com</span>
+            </span>
+          </NuxtLink>
+          <p class="text-[13px] leading-relaxed text-(--ui-text-inverted)/60 max-w-75">
+            The Shopify for restaurants. Built in Krabi, Thailand. 🦀
           </p>
-          <div class="flex items-center gap-6">
-            <UButton variant="ghost" color="neutral" size="sm" square>
-              <Icon name="i-simple-icons-twitter" />
-            </UButton>
-            <UButton variant="ghost" color="neutral" size="sm" square>
-              <Icon name="i-simple-icons-instagram" />
-            </UButton>
-          </div>
         </div>
-      </UContainer>
-    </template>
-  </UFooter>
+
+        <!-- Product -->
+        <div>
+          <div class="kc-eyebrow text-(--ui-text-inverted)/50 mb-4">Product</div>
+          <ul class="space-y-2.5">
+            <li v-for="link in productLinks" :key="link.label">
+              <NuxtLink :to="link.to" class="text-[14px] text-(--ui-text-inverted)/80 hover:text-(--ui-text-inverted) transition-colors no-underline">
+                {{ link.label }}
+              </NuxtLink>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Company -->
+        <div>
+          <div class="kc-eyebrow text-(--ui-text-inverted)/50 mb-4">Company</div>
+          <ul class="space-y-2.5">
+            <li v-for="link in companyLinks" :key="link.label">
+              <NuxtLink :to="link.to" class="text-[14px] text-(--ui-text-inverted)/80 hover:text-(--ui-text-inverted) transition-colors no-underline">
+                {{ link.label }}
+              </NuxtLink>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Resources -->
+        <div>
+          <div class="kc-eyebrow text-(--ui-text-inverted)/50 mb-4">Resources</div>
+          <ul class="space-y-2.5">
+            <li v-for="link in resourceLinks" :key="link.label">
+              <NuxtLink :to="link.to" class="text-[14px] text-(--ui-text-inverted)/80 hover:text-(--ui-text-inverted) transition-colors no-underline">
+                {{ link.label }}
+              </NuxtLink>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Bottom bar -->
+      <div class="border-t border-(--ui-text-inverted)/10 pt-6 text-center text-[12px] text-(--ui-text-inverted)/50">
+        &copy; {{ new Date().getFullYear() }} KrabiClaw Co., Ltd. — Made with care in Krabi, Thailand.
+      </div>
+    </div>
+  </footer>
 </template>
+
+<script setup>
+const productLinks = [
+  { label: 'Features', to: '/#features' },
+  { label: 'Pricing', to: '/pricing' },
+  { label: 'Templates', to: '/templates' },
+  { label: 'Changelog', to: '/changelog' },
+]
+const companyLinks = [
+  { label: 'About', to: '/about' },
+  { label: 'Blog', to: '/blog' },
+  { label: 'Contact', to: '/contact' },
+]
+const resourceLinks = [
+  { label: 'Docs', to: '/docs' },
+  { label: 'Help center', to: '/help' },
+  { label: 'Privacy policy', to: '/privacy' },
+  { label: 'Terms', to: '/terms' }
+]
+</script>

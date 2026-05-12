@@ -27,7 +27,7 @@
           <UIcon name="i-heroicons-globe-alt" class="mx-auto size-10 text-(--ui-text-muted)" />
           <h2 class="mt-4 text-xl font-semibold text-(--ui-text-highlighted)">No websites yet</h2>
           <p class="mt-2 text-sm text-(--ui-text-muted)">Create a website first, then add physical locations inside it.</p>
-          <UButton to="/dashboard/onboarding" icon="i-heroicons-plus" class="mt-6">
+          <UButton to="/dashboard/onboarding" icon="i-heroicons-plus" color="primary" class="mt-6">
             Create Website
           </UButton>
         </div>

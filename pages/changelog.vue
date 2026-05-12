@@ -1,0 +1,100 @@
+<template>
+  <div class="container mx-auto px-4 py-16">
+    <div class="max-w-3xl mx-auto">
+      <h1 class="text-4xl font-bold text-(--ui-text) mb-6">Changelog</h1>
+      <p class="text-lg text-(--ui-text-muted) mb-12">Latest updates and improvements to KrabiClaw</p>
+
+      <div v-if="loading" class="text-center py-12">
+        <p class="text-(--ui-text-muted)">Loading changelog...</p>
+      </div>
+
+      <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-lg p-6" role="alert">
+        <p class="text-red-600">{{ error }}</p>
+      </div>
+
+      <div v-else class="space-y-8">
+        <div v-for="(commits, type) in changelog.commits" :key="type" class="bg-(--ui-bg-elevated) rounded-2xl shadow-sm border border-(--ui-border) p-8">
+          <div class="flex items-center gap-4 mb-4">
+            <span :class="getBadgeClass(type)" class="text-white px-3 py-1 rounded-full text-sm font-medium capitalize">{{ type }}</span>
+            <span class="text-(--ui-text-muted) text-sm">{{ commits.length }} commits</span>
+          </div>
+          <div v-for="commit in commits" :key="commit.hash" class="mb-4 last:mb-0">
+            <h3 class="text-lg font-semibold text-(--ui-text) mb-1">{{ commit.description }}</h3>
+            <p class="text-sm text-(--ui-text-muted)">
+              {{ commit.author }} · {{ formatDate(commit.date) }}
+              <span v-if="commit.scope" class="ml-2 text-(--kc-teal-600)">({{ commit.scope }})</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="text-center text-sm text-(--ui-text-muted)">
+          Last updated: {{ formatDate(changelog.lastUpdated) }}
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+definePageMeta({ layout: 'platform' })
+
+import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
+
+useBreadcrumbSchema([
+  { name: 'Home', url: 'https://krabiclaw.com' },
+  { name: 'Changelog', url: 'https://krabiclaw.com/changelog' }
+])
+
+const changelog = ref({ commits: {}, total: 0, lastUpdated: '' })
+const loading = ref(true)
+const error = ref('')
+
+onMounted(async () => {
+  try {
+    const response = await $fetch('/api/changelog')
+    changelog.value = response
+  } catch (err) {
+    error.value = 'Failed to load changelog'
+  } finally {
+    loading.value = false
+  }
+})
+
+function formatDate(dateString) {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+}
+
+function getBadgeClass(type) {
+  const classes = {
+    feat: 'bg-(--kc-coral)',
+    fix: 'bg-(--kc-teal)',
+    chore: 'bg-(--kc-navy)',
+    docs: 'bg-purple-500',
+    style: 'bg-pink-500',
+    refactor: 'bg-blue-500',
+    perf: 'bg-green-500',
+    test: 'bg-yellow-500',
+    build: 'bg-orange-500',
+    ci: 'bg-gray-500',
+    other: 'bg-gray-400'
+  }
+  return classes[type] || classes.other
+}
+
+const config = useRuntimeConfig()
+const siteUrl = config.public.siteUrl
+
+useSeoMeta({
+  title: 'Changelog | KrabiClaw',
+  description: 'Latest updates and improvements to KrabiClaw restaurant website builder.',
+  ogImage: `${siteUrl}/og-image.jpg`,
+  ogUrl: `${siteUrl}/changelog`
+})
+</script>
