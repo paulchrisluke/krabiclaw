@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
     // Parse webhook event
     const stripe = new Stripe(env.STRIPE_SECRET_KEY!, {
       apiVersion: '2024-06-20'
-    } as any)
+    })
     
     const webhookEvent = stripe.webhooks.constructEvent(
       body.toString(),
@@ -74,16 +74,16 @@ export default defineEventHandler(async (event) => {
     // Handle different event types
     switch (webhookEvent.type) {
       case 'checkout.session.completed':
-        await handleCheckoutCompleted(db, webhookEvent.data.object as Stripe.Checkout.Session)
+        await handleCheckoutCompleted(env, db, webhookEvent.data.object as Stripe.Checkout.Session)
         break
         
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(db, webhookEvent.data.object as Stripe.Subscription)
+        await handleSubscriptionUpdated(env, db, webhookEvent.data.object as Stripe.Subscription)
         break
         
       case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(db, webhookEvent.data.object as Stripe.Subscription)
+        await handleSubscriptionDeleted(env, db, webhookEvent.data.object as Stripe.Subscription)
         break
         
       case 'invoice.payment_succeeded':
@@ -109,7 +109,7 @@ export default defineEventHandler(async (event) => {
 })
 
 // Handle checkout session completion
-async function handleCheckoutCompleted(db: any, session: Stripe.Checkout.Session) {
+async function handleCheckoutCompleted(env: Record<string, string | undefined>, db: any, session: Stripe.Checkout.Session) {
   const organizationId = session.metadata?.organization_id
   const plan = session.metadata?.plan
   const customerId = session.customer as string
@@ -122,11 +122,11 @@ async function handleCheckoutCompleted(db: any, session: Stripe.Checkout.Session
 
   try {
     // Fetch subscription to get the item ID (needed for per-location quantity updates)
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' } as any)
+    const stripe = new Stripe(env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' })
     const subscription = await stripe.subscriptions.retrieve(subscriptionId)
     const subscriptionItemId = subscription.items.data[0]?.id ?? null
-    const periodEnd = (subscription as any).current_period_end
-      ? new Date((subscription as any).current_period_end * 1000).toISOString()
+    const periodEnd = subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000).toISOString()
       : null
 
     await db.prepare(`
@@ -146,7 +146,7 @@ async function handleCheckoutCompleted(db: any, session: Stripe.Checkout.Session
       new Date().toISOString()
     ).run()
 
-    await setOrganizationEntitlementsFromPlan(process.env as any, db, organizationId, plan)
+    await setOrganizationEntitlementsFromPlan(env, db, organizationId, plan)
 
     console.log(`Checkout completed for organization ${organizationId}, plan ${plan}, item ${subscriptionItemId}`)
   } catch (error) {
@@ -155,7 +155,7 @@ async function handleCheckoutCompleted(db: any, session: Stripe.Checkout.Session
 }
 
 // Handle subscription updates
-async function handleSubscriptionUpdated(db: any, subscription: Stripe.Subscription) {
+async function handleSubscriptionUpdated(env: Record<string, string | undefined>, db: any, subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string
   
   // Find organization by customer ID
@@ -169,8 +169,8 @@ async function handleSubscriptionUpdated(db: any, subscription: Stripe.Subscript
   }
 
   const status = subscription.status
-  const currentPeriodEnd = new Date((subscription as any).current_period_end * 1000).toISOString()
-  const cancelAtPeriodEnd = (subscription as any).cancel_at_period_end || false
+  const currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString()
+  const cancelAtPeriodEnd = subscription.cancel_at_period_end || false
   
   try {
     // Update organization_billing subscription status
@@ -189,9 +189,9 @@ async function handleSubscriptionUpdated(db: any, subscription: Stripe.Subscript
     ).run()
 
     // Update plan based on subscription items
-    const plan = getPlanFromSubscription(subscription)
+    const plan = getPlanFromSubscription(env, subscription)
     if (plan) {
-      await setOrganizationEntitlementsFromPlan(process.env as any, db, billing.organization_id, plan)
+      await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, plan)
     }
     
     console.log(`Subscription updated for organization ${billing.organization_id}, status ${status}`)
@@ -201,7 +201,7 @@ async function handleSubscriptionUpdated(db: any, subscription: Stripe.Subscript
 }
 
 // Handle subscription deletion/cancellation
-async function handleSubscriptionDeleted(db: any, subscription: Stripe.Subscription) {
+async function handleSubscriptionDeleted(env: Record<string, string | undefined>, db: any, subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string
   
   // Find organization by customer ID
@@ -224,7 +224,7 @@ async function handleSubscriptionDeleted(db: any, subscription: Stripe.Subscript
     `).bind(new Date().toISOString(), billing.organization_id).run()
 
     // Set free entitlements
-    await setOrganizationEntitlementsFromPlan(process.env as any, db, billing.organization_id, 'free')
+    await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, 'free')
     
     console.log(`Subscription deleted for organization ${billing.organization_id}`)
   } catch (error) {
@@ -267,12 +267,11 @@ async function handlePaymentFailed(db: any, invoice: Stripe.Invoice) {
 }
 
 // Extract plan from subscription items
-function getPlanFromSubscription(subscription: Stripe.Subscription): string | null {
+function getPlanFromSubscription(env: Record<string, string | undefined>, subscription: Stripe.Subscription): string | null {
   const priceId = subscription.items.data[0]?.price.id
   
   if (!priceId) return null
-  
-  const env = process.env
+
   if (priceId === env.STRIPE_PRICE_PRO_MONTHLY || priceId === env.STRIPE_PRICE_PRO_ANNUAL) return 'pro'
   if (priceId === env.STRIPE_PRICE_AGENCY_MONTHLY || priceId === env.STRIPE_PRICE_AGENCY_ANNUAL) return 'agency'
   

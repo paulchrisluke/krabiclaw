@@ -37,7 +37,6 @@
     "@nuxtjs/robots": "^6.0.8",
     "@nuxtjs/sitemap": "^8.0.15",
     "@opentelemetry/api": "^1.9.1",
-    "@types/stripe": "^8.0.416",
     "better-auth": "^1.6.9",
     "isomorphic-dompurify": "^3.12.0",
     "kysely": "^0.28.17",

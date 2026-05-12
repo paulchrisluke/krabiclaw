@@ -32,6 +32,10 @@ export interface Plan {
   cta: { label: string; href: string }
 }
 
+interface MarketingFeature {
+  name: string
+}
+
 const STATIC_PLANS: Plan[] = [
   {
     id: 'free',
@@ -128,13 +132,21 @@ const STATIC_PLANS: Plan[] = [
   },
 ]
 
+function parseOptionalInt(value?: string): number | undefined {
+  if (!value) return undefined
+  const parsed = parseInt(value, 10)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
 function parseLimits(metadata: Record<string, string>): Partial<PlanLimits> {
   const loc = metadata.max_locations
   const sit = metadata.max_sites
+  const credits = metadata.ai_credits
+
   return {
-    locations: loc === 'unlimited' ? 'unlimited' : loc ? parseInt(loc) : undefined,
-    sites: sit === 'unlimited' ? 'unlimited' : sit ? parseInt(sit) : undefined,
-    aiCredits: metadata.ai_credits ? parseInt(metadata.ai_credits) : undefined,
+    locations: loc === 'unlimited' ? 'unlimited' : parseOptionalInt(loc),
+    sites: sit === 'unlimited' ? 'unlimited' : parseOptionalInt(sit),
+    aiCredits: parseOptionalInt(credits),
     customDomain: metadata.custom_domain === 'true',
     googleBusiness: metadata.google_business === 'true',
     advancedSeo: metadata.advanced_seo === 'true',
@@ -144,8 +156,13 @@ function parseLimits(metadata: Record<string, string>): Partial<PlanLimits> {
   }
 }
 
+function isMarketingFeatureArray(value: unknown): value is MarketingFeature[] {
+  return Array.isArray(value)
+    && value.every(item => typeof item === 'object' && item !== null && typeof (item as MarketingFeature).name === 'string')
+}
+
 async function fetchStripeProducts(env: Record<string, string | undefined>): Promise<Plan[]> {
-  const stripe = new Stripe(env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' } as any)
+  const stripe = new Stripe(env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' })
 
   const products = await stripe.products.list({
     active: true,
@@ -153,17 +170,29 @@ async function fetchStripeProducts(env: Record<string, string | undefined>): Pro
   })
 
   const priceLookup: Record<string, PlanPrice[]> = {}
-  const prices = await stripe.prices.list({ active: true, limit: 100 })
-  for (const price of prices.data) {
-    if (!price.unit_amount || price.type !== 'recurring') continue
-    const pid = typeof price.product === 'string' ? price.product : price.product.id
-    if (!priceLookup[pid]) priceLookup[pid] = []
-    priceLookup[pid].push({
-      id: price.id,
-      amount: price.unit_amount,
-      currency: price.currency,
-      interval: price.recurring!.interval as 'month' | 'year',
-    })
+  let startingAfter: string | undefined
+
+  while (true) {
+    const prices = await stripe.prices.list({ active: true, limit: 100, ...(startingAfter ? { starting_after: startingAfter } : {}) })
+
+    for (const price of prices.data) {
+      if (!price.unit_amount || price.type !== 'recurring') continue
+
+      const interval = price.recurring?.interval
+      if (interval !== 'month' && interval !== 'year') continue
+
+      const pid = typeof price.product === 'string' ? price.product : price.product.id
+      if (!priceLookup[pid]) priceLookup[pid] = []
+      priceLookup[pid].push({
+        id: price.id,
+        amount: price.unit_amount,
+        currency: price.currency,
+        interval,
+      })
+    }
+
+    if (!prices.has_more || prices.data.length === 0) break
+    startingAfter = prices.data[prices.data.length - 1]?.id
   }
 
   const plans: Plan[] = []
@@ -174,9 +203,10 @@ async function fetchStripeProducts(env: Record<string, string | undefined>): Pro
     if (!planId || planId === 'free') continue
 
     const staticFallback = STATIC_PLANS.find(p => p.id === planId)
-    const features = (product as any).marketing_features?.map((f: any) => f.name as string)
-      ?? staticFallback?.features
-      ?? []
+    const productWithMarketing = product as Stripe.Product & { marketing_features?: unknown }
+    const features = isMarketingFeatureArray(productWithMarketing.marketing_features)
+      ? productWithMarketing.marketing_features.map(f => f.name)
+      : (staticFallback?.features ?? [])
 
     plans.push({
       id: planId,

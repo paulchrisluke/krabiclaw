@@ -13,11 +13,18 @@ interface CheckoutRequest {
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event) as CheckoutRequest
-  const { organizationId, plan, interval = 'month', successUrl, cancelUrl } = body
+  const { organizationId, plan, successUrl, cancelUrl } = body
+  const interval = body.interval ?? 'month'
   
   if (!organizationId || !plan) {
     return jsonResponse({ 
       error: 'Organization ID and plan are required' 
+    }, { status: 400 })
+  }
+
+  if (interval !== 'month' && interval !== 'year') {
+    return jsonResponse({
+      error: 'Invalid interval. Allowed values are month or year'
     }, { status: 400 })
   }
   
@@ -65,12 +72,6 @@ export default defineEventHandler(async (event) => {
 
     // Get price ID for plan + interval
     const priceId = getPriceId(env, plan, interval)
-    if (!priceId) {
-      return jsonResponse({ 
-        error: `No price configured for plan: ${plan}` 
-      }, { status: 400 })
-    }
-
     const stripe = getStripe(env)
     
     // Create or get Stripe customer

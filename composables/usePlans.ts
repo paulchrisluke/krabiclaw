@@ -27,7 +27,11 @@ export const usePlans = () => {
 
   function displayPrice(plan: Plan, annual: boolean): string {
     if (plan.prices.length === 0) return '$0'
-    const cents = annual ? (annualPrice(plan) ?? monthlyPrice(plan)) : monthlyPrice(plan)
+    if (annual) {
+      const cents = annualPrice(plan)
+      return cents !== null ? formatPrice(cents) : 'N/A'
+    }
+    const cents = monthlyPrice(plan)
     return cents !== null ? formatPrice(cents) : '$0'
   }
 

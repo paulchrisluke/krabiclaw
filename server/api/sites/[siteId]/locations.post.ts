@@ -156,10 +156,16 @@ export default defineEventHandler(async (event) => {
       LIMIT 1
     `).bind(locationId, site.organization_id, siteId).first<any>()
 
-    // Fire-and-forget — never fail the request if Stripe errors
-    updateSubscriptionQuantity(env, db, site.organization_id).catch((err) =>
+    // Run in background when supported; otherwise await to keep sync reliable.
+    const syncPromise = updateSubscriptionQuantity(env, db, site.organization_id).catch((err) =>
       console.error('Failed to update Stripe subscription quantity after location create:', err)
     )
+    const waitUntil = event.context.cloudflare?.context?.waitUntil as ((promise: Promise<unknown>) => void) | undefined
+    if (typeof waitUntil === 'function') {
+      waitUntil(syncPromise)
+    } else {
+      await syncPromise
+    }
 
     return jsonResponse({
       success: true,

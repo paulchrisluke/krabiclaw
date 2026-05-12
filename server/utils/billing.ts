@@ -38,7 +38,7 @@ export function getStripe(env: BillingEnv): Stripe {
   
   return new Stripe(env.STRIPE_SECRET_KEY, {
     apiVersion: '2024-06-20'
-  } as any)
+  })
 }
 
 // Get organization billing status
@@ -193,28 +193,39 @@ export async function updateSubscriptionQuantity(
   db: any,
   organizationId: string
 ): Promise<void> {
-  const billing = await db.prepare(`
-    SELECT stripe_subscription_item_id, plan
-    FROM organization_billing
-    WHERE organization_id = ?
-  `).bind(organizationId).first<{ stripe_subscription_item_id: string | null; plan: string }>()
+  let stripeSubscriptionItemId: string | null = null
 
-  if (!billing?.stripe_subscription_item_id || billing.plan !== 'pro') return
+  try {
+    const billing = await db.prepare(`
+      SELECT stripe_subscription_item_id, plan
+      FROM organization_billing
+      WHERE organization_id = ?
+    `).bind(organizationId).first<{ stripe_subscription_item_id: string | null; plan: string }>()
 
-  const result = await db.prepare(`
-    SELECT COUNT(*) AS count
-    FROM business_locations bl
-    JOIN sites s ON bl.site_id = s.id
-    WHERE s.organization_id = ? AND bl.status = 'active'
-  `).bind(organizationId).first<{ count: number }>()
+    stripeSubscriptionItemId = billing?.stripe_subscription_item_id ?? null
+    if (!stripeSubscriptionItemId || billing.plan !== 'pro') return
 
-  const quantity = Math.max(1, result?.count ?? 1)
+    const result = await db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM business_locations bl
+      JOIN sites s ON bl.site_id = s.id
+      WHERE s.organization_id = ? AND bl.status = 'active'
+    `).bind(organizationId).first<{ count: number }>()
 
-  const stripe = getStripe(env)
-  await stripe.subscriptionItems.update(billing.stripe_subscription_item_id, {
-    quantity,
-    proration_behavior: 'create_prorations',
-  })
+    const quantity = Math.max(1, result?.count ?? 1)
+
+    const stripe = getStripe(env)
+    await stripe.subscriptionItems.update(stripeSubscriptionItemId, {
+      quantity,
+      proration_behavior: 'create_prorations',
+    })
+  } catch (error) {
+    console.error('Failed to sync Stripe subscription quantity', {
+      organizationId,
+      stripe_subscription_item_id: stripeSubscriptionItemId,
+      error,
+    })
+  }
 }
 
 // Require billing access for organization
@@ -263,11 +274,19 @@ export function verifyStripeWebhook(
 
 // Get price ID for plan + interval
 export function getPriceId(env: BillingEnv, plan: string, interval: 'month' | 'year' = 'month'): string {
+  let priceId: string | undefined
+
   if (plan === 'pro') {
-    return (interval === 'year' ? env.STRIPE_PRICE_PRO_ANNUAL : env.STRIPE_PRICE_PRO_MONTHLY) || ''
+    priceId = interval === 'year' ? env.STRIPE_PRICE_PRO_ANNUAL : env.STRIPE_PRICE_PRO_MONTHLY
+  } else if (plan === 'agency') {
+    priceId = interval === 'year' ? env.STRIPE_PRICE_AGENCY_ANNUAL : env.STRIPE_PRICE_AGENCY_MONTHLY
+  } else {
+    throw new Error(`Unknown plan: ${plan}`)
   }
-  if (plan === 'agency') {
-    return (interval === 'year' ? env.STRIPE_PRICE_AGENCY_ANNUAL : env.STRIPE_PRICE_AGENCY_MONTHLY) || ''
+
+  if (!priceId) {
+    throw new Error(`Missing price ID for plan ${plan} interval ${interval}`)
   }
-  throw new Error(`Unknown plan: ${plan}`)
+
+  return priceId
 }

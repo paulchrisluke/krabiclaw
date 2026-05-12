@@ -38,7 +38,7 @@
           {{ currentPrice }}
         </span>
         <span :class="plan.highlighted ? 'text-white/70' : 'text-(--ui-text-muted)'">
-          {{ annual && plan.id !== 'agency' ? '/location/year' : plan.id === 'agency' && annual ? '/year' : plan.id === 'agency' ? '/month' : '/location/month' }}
+          {{ billingPeriodLabel }}
         </span>
         <p v-if="annual && savingsNote" class="text-sm mt-1" :class="plan.highlighted ? 'text-emerald-400' : 'text-emerald-600'">
           {{ savingsNote }}
@@ -95,6 +95,14 @@ const props = defineProps<{
 const { displayPrice, annualPrice, monthlyPrice } = usePlans()
 
 const currentPrice = computed(() => displayPrice(props.plan, props.annual ?? false))
+
+const billingPeriodLabel = computed(() => {
+  const annual = props.annual ?? false
+  if (annual && props.plan.id === 'agency') return '/year'
+  if (annual && props.plan.id !== 'agency') return '/location/year'
+  if (!annual && props.plan.id === 'agency') return '/month'
+  return '/location/month'
+})
 
 const savingsNote = computed(() => {
   if (!props.annual) return null

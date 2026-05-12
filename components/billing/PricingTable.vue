@@ -6,6 +6,8 @@
       <button
         class="relative w-12 h-6 rounded-full transition-colors"
         :class="annual ? 'bg-(--kc-teal)' : 'bg-(--ui-bg-muted)'"
+        role="switch"
+        :aria-checked="annual"
         aria-label="Toggle annual billing"
         @click="annual = !annual"
       >
@@ -15,7 +17,7 @@
         />
       </button>
       <span class="text-(--ui-text-muted)" :class="{ 'font-semibold text-(--ui-text)': annual }">
-        Annual <span class="text-sm font-normal text-emerald-600 ml-1">Save ~30%</span>
+        Annual <span class="text-sm font-normal text-emerald-600 ml-1">Save {{ savingsPercentLabel }}</span>
       </span>
     </div>
 
@@ -36,7 +38,7 @@
       <p class="text-(--ui-text-muted)">
         A single restaurant and a chain with five locations get very different value from their website.
         Per-location pricing means you start small and only pay more as your business actually grows.
-        A 5-location brand on Pro pays $145/month — less than one hour of traditional web agency work.
+        A 5-location brand on Pro pays {{ proFiveLocationsMonthlyLabel }} — less than one hour of traditional web agency work.
       </p>
     </div>
 
@@ -54,7 +56,19 @@
         <tbody class="divide-y divide-(--ui-border)">
           <tr v-for="row in comparisonRows" :key="row.feature">
             <td class="py-4 text-(--ui-text-muted)">{{ row.feature }}</td>
-            <td v-for="plan in plans" :key="plan.id" class="py-4 text-center" v-html="renderCell(row[plan.id as keyof typeof row])" />
+            <td v-for="plan in plans" :key="plan.id" class="py-4 text-center">
+              <template v-if="cellValue(row, plan.id) === true">
+                <svg class="w-5 h-5 text-green-500 mx-auto" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+              </template>
+              <template v-else-if="cellValue(row, plan.id) === false">
+                <span class="text-(--ui-text-dimmed)">—</span>
+              </template>
+              <template v-else>
+                <span class="text-(--ui-text-muted)">{{ renderCell(cellValue(row, plan.id)) }}</span>
+              </template>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -64,9 +78,14 @@
 
 <script setup lang="ts">
 const annual = ref(false)
-const { plans } = usePlans()
+const { plans, proPlan, monthlyPrice } = usePlans()
 
-const comparisonRows = [
+type CellValue = boolean | string
+type ComparisonRow = {
+  feature: string
+} & Record<string, CellValue>
+
+const comparisonRows: ComparisonRow[] = [
   { feature: 'Locations', free: '1', pro: 'Unlimited', agency: 'Unlimited' },
   { feature: 'Custom domain', free: false, pro: true, agency: true },
   { feature: 'SSL certificate', free: true, pro: true, agency: true },
@@ -81,9 +100,35 @@ const comparisonRows = [
   { feature: 'Support', free: 'Community', pro: 'Priority email', agency: 'Dedicated' },
 ]
 
-function renderCell(val: boolean | string | undefined) {
-  if (val === true) return '<svg class="w-5 h-5 text-green-500 mx-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>'
-  if (val === false) return '<span class="text-(--ui-text-dimmed)">—</span>'
-  return `<span class="text-(--ui-text-muted)">${val ?? '—'}</span>`
+const savingsPercentLabel = computed(() => {
+  const pro = proPlan.value
+  if (!pro) return '~0%'
+  const monthly = monthlyPrice(pro)
+  const annualPriceCents = pro.prices.find((p: { interval: string, amount: number }) => p.interval === 'year')?.amount ?? null
+  if (!monthly || !annualPriceCents) return '~0%'
+  const fullYearMonthly = monthly * 12
+  if (!fullYearMonthly) return '~0%'
+  const pct = Math.round(((fullYearMonthly - annualPriceCents) / fullYearMonthly) * 100)
+  return `~${pct}%`
+})
+
+const proFiveLocationsMonthlyLabel = computed(() => {
+  const pro = proPlan.value
+  if (!pro) return '$0/month'
+  const monthly = monthlyPrice(pro)
+  if (!monthly) return '$0/month'
+  const amount = (monthly * 5) / 100
+  return `$${amount.toLocaleString('en-US')}/month`
+})
+
+function cellValue(row: ComparisonRow, planId: string): CellValue {
+  const value = row[planId]
+  if (typeof value === 'boolean' || typeof value === 'string') return value
+  return false
+}
+
+function renderCell(val: CellValue): string {
+  if (typeof val === 'string' && val.length > 0) return val
+  return '—'
 }
 </script>
