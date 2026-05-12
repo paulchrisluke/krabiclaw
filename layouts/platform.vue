@@ -2,7 +2,7 @@
   <div class="platform-layout platform-theme min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
     <UTheme :ui="{}" :props="{ button: { color: 'primary' } }">
       <PlatformHeader />
-      <main class="grow pt-16">
+      <main>
         <slot />
       </main>
       <PlatformFooter />

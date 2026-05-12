@@ -1,10 +1,12 @@
 // Composable for adding JSON-LD schema markup to pages
 export function useSchemaOrg(schema: Record<string, any>) {
+  // Sanitize JSON to prevent script tag injection
+  const sanitizedJson = JSON.stringify(schema).replace(/</g, '\\u003c')
   useHead({
     script: [
       {
         type: 'application/ld+json',
-        innerHTML: JSON.stringify(schema)
+        innerHTML: sanitizedJson
       }
     ]
   })

@@ -85,8 +85,8 @@
   --ui-bg-muted:          var(--kc-navy-700);
   --ui-bg-inverted:       var(--kc-cream);
   --ui-text:              var(--kc-cream);
-  --ui-text-muted:        var(--kc-navy-500);
-  --ui-text-dimmed:       var(--kc-navy-300);
+  --ui-text-muted:        var(--kc-navy-300);
+  --ui-text-dimmed:       var(--kc-navy-500);
   --ui-text-highlighted:  var(--kc-cream);
   --ui-text-inverted:     var(--kc-navy);
   --ui-border:            var(--kc-navy-700);
@@ -102,6 +102,10 @@
 .kc-wordmark__krabi { color: var(--kc-navy); }
 .kc-wordmark__claw  { color: var(--kc-coral); }
 .kc-wordmark__tld   { color: var(--kc-navy); font-size: 0.55em; vertical-align: top; margin-left: 1px; }
+
+/* Dark mode wordmark colors */
+.dark .kc-wordmark__krabi { color: var(--kc-cream); }
+.dark .kc-wordmark__tld   { color: var(--kc-cream); }
 
 .kc-eyebrow {
   font-size: 11px;

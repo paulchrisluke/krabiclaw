@@ -112,6 +112,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatGoogleHours } from '~/utils/formatters'
+
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
