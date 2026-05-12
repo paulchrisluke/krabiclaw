@@ -145,7 +145,7 @@
                 </li>
               </ul>
               <NuxtLink to="/signup" class="block text-center font-semibold text-[14px] py-3.5 rounded-[10px] bg-(--kc-coral) text-white hover:opacity-90 transition-opacity no-underline">
-                Start 14-day trial
+                Get Started
               </NuxtLink>
             </div>
           </div>

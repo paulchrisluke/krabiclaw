@@ -99,7 +99,7 @@ const STATIC_PLANS: Plan[] = [
       apiAccess: false,
       support: 'Priority email',
     },
-    cta: { label: 'Start 14-Day Free Trial', href: '/signup?plan=pro' },
+    cta: { label: 'Get Started', href: '/signup?plan=pro' },
   },
   {
     id: 'agency',

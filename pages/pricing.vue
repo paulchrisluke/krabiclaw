@@ -70,8 +70,8 @@ const faqs = [
     a: 'Yes. Additions are prorated immediately. Removals take effect at the end of your current billing period. You can manage everything from Dashboard → Billing.',
   },
   {
-    q: 'Is there a free trial for Pro?',
-    a: 'Yes — Pro comes with a 14-day free trial. No credit card required to start.',
+    q: 'Do I need a credit card to start?',
+    a: 'No. The Free plan is free forever — no credit card required. You only need a card when you upgrade to Pro.',
   },
   {
     q: 'Do you offer refunds?',
@@ -89,7 +89,7 @@ const faqs = [
 
 useSeoMeta({
   title: 'Pricing | KrabiClaw',
-  description: 'Per-location pricing for restaurant websites. Start free, pay $29/location/month as you grow. No setup fees, 14-day free trial.',
+  description: 'Per-location pricing for restaurant websites. Free forever, or upgrade to Pro at $29/location/month as you grow. No setup fees, no contracts.',
   ogImage: '/og-image.jpg',
   ogUrl: computed(() => `https://${platformHostname.value}/pricing`),
   ogType: 'website',
