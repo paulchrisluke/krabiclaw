@@ -10,9 +10,10 @@
 
 | Tier | Price | Features |
 |------|-------|---------|
-| Free | $0 | Subdomain (`name.krabiclaw.com`), Saya theme, manual editor, 500 AI credits on signup, 1 location |
-| Paid | ~$25/mo | Custom domain (BYOD), SSL via Cloudflare, Google Business sync, 5,000 AI credits/mo, multiple locations |
-| Upsell (TBD) | TBD | AI agent site management, image/video generation, Instagram/Facebook sync, additional themes, Tenant MCP |
+| Free | $0 | Subdomain (`name.krabiclaw.com`), Saya theme, manual editor, 500 AI credits/mo, 1 location |
+| Pro | $29/location/mo · $249/location/yr | Custom domain + SSL, Google Business sync, 5,000 AI credits/mo, unlimited locations |
+| Agency | $99/mo · $990/yr | Everything in Pro + unlimited sites, white-label, API access, 50,000 AI credits/mo |
+| Upsell (TBD) | TBD | Instagram/Facebook sync, additional themes, Tenant MCP |
 
 **Upgrade modal triggers** (shown inline when owner hits a paid feature):
 - Connecting Google Business Profile
@@ -47,6 +48,7 @@
 /locations/[slug]/reviews      → Reviews: aggregate score + star dist + owner replies
 /locations/[slug]/photos       → Photo gallery by category
 /locations/[slug]/qa           → Q&A: owner-answered pairs
+/locations/[slug]/contact      → Map embed, hours table, address, directions CTA
 /about                         → Brand story
 /contact                       → Brand contact form
 /reservations                  → Reservation form
@@ -176,20 +178,20 @@ Every field GMB provides is now manually editable in D1. GMB sync populates fiel
 
 ---
 
-### 🔲 8. Saya Sub-pages: Reviews, Photos, Q&A
-**Status: APIs ready — Saya pages not yet built**
+### ✅ 8. Saya Sub-pages: Reviews, Photos, Q&A, Contact
+**Status: Live (PR #9)**
 
-All data is available via public APIs. Need Saya Vue pages at:
-- `/locations/[slug]/reviews` — aggregate score + star distribution + review cards with owner replies
-- `/locations/[slug]/photos` — masonry gallery grouped by category
-- `/locations/[slug]/qa` — Q&A cards, owner-answered first
+- `/locations/[slug]/reviews` — aggregate score + star distribution histogram, filter chips, review cards with photo strips and owner replies
+- `/locations/[slug]/photos` — category tabs with counts, CSS masonry gallery, keyboard-nav lightbox via UModal
+- `/locations/[slug]/qa` — owner-answered first, Instrument Serif Q/A markers, upvote counts
+- `/locations/[slug]/contact` — map embed, hours table, address, directions CTA (added in PR #9, not originally planned)
 
 ---
 
 ### 🔲 9. Upgrade Modal
-**Status: Not built**
+**Status: Composable built — modal UI not wired**
 
-`UModal` triggered by `useUpgradeModal()` composable when owner hits a paid feature gate.
+`useUpgradeModal()` composable exists (`composables/useUpgradeModal.ts`) with open/close state. The UModal component with plan comparison and Stripe checkout CTA is not yet built or rendered anywhere.
 Triggers: GMB connect, location 2+, custom domain, remove branding, buy credits.
 
 ---

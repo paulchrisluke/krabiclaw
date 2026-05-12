@@ -1,6 +1,7 @@
 // Create a business location for a site
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { updateSubscriptionQuantity } from '~/server/utils/billing'
 
 interface CreateLocationBody {
   title?: string
@@ -154,6 +155,11 @@ export default defineEventHandler(async (event) => {
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
     `).bind(locationId, site.organization_id, siteId).first<any>()
+
+    // Fire-and-forget — never fail the request if Stripe errors
+    updateSubscriptionQuantity(env, db, site.organization_id).catch((err) =>
+      console.error('Failed to update Stripe subscription quantity after location create:', err)
+    )
 
     return jsonResponse({
       success: true,

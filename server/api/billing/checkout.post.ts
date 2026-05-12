@@ -6,13 +6,14 @@ import { getStripe, getPriceId, requireBillingAccess } from '../../utils/billing
 interface CheckoutRequest {
   organizationId: string
   plan: string
+  interval?: 'month' | 'year'
   successUrl?: string
   cancelUrl?: string
 }
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event) as CheckoutRequest
-  const { organizationId, plan, successUrl, cancelUrl } = body
+  const { organizationId, plan, interval = 'month', successUrl, cancelUrl } = body
   
   if (!organizationId || !plan) {
     return jsonResponse({ 
@@ -62,8 +63,8 @@ export default defineEventHandler(async (event) => {
       }, { status: 404 })
     }
 
-    // Get price ID for plan
-    const priceId = getPriceId(env, plan)
+    // Get price ID for plan + interval
+    const priceId = getPriceId(env, plan, interval)
     if (!priceId) {
       return jsonResponse({ 
         error: `No price configured for plan: ${plan}` 

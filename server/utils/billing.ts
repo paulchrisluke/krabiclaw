@@ -4,9 +4,10 @@ import Stripe from 'stripe'
 export interface BillingEnv {
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
-  STRIPE_PRICE_STARTER?: string
-  STRIPE_PRICE_PRO?: string
-  STRIPE_PRICE_BUSINESS?: string
+  STRIPE_PRICE_PRO_MONTHLY?: string
+  STRIPE_PRICE_PRO_ANNUAL?: string
+  STRIPE_PRICE_AGENCY_MONTHLY?: string
+  STRIPE_PRICE_AGENCY_ANNUAL?: string
 }
 
 export interface OrganizationEntitlement {
@@ -148,43 +149,72 @@ function getPlanEntitlements(plan: string): Record<string, any> {
     remove_branding: false,
     max_sites: 1,
     max_locations: 1,
-    max_menu_items: 50,
-    advanced_seo: false
+    ai_credits: 500,
+    advanced_seo: false,
+    white_label: false,
+    api_access: false,
   }
-  
+
   switch (plan) {
-    case 'starter':
-      return {
-        ...baseEntitlements,
-        max_menu_items: 100,
-        max_locations: 2
-      }
-    
     case 'pro':
       return {
         ...baseEntitlements,
         custom_domains: true,
         google_business: true,
-        max_menu_items: 500,
-        max_locations: 5,
-        advanced_seo: true
+        advanced_seo: true,
+        max_locations: -1, // unlimited — -1 means no limit in enforcement code
+        ai_credits: 5000,
       }
-    
-    case 'business':
+
+    case 'agency':
       return {
         ...baseEntitlements,
         custom_domains: true,
         google_business: true,
         remove_branding: true,
-        max_sites: 10,
-        max_menu_items: 1000,
-        max_locations: 20,
-        advanced_seo: true
+        advanced_seo: true,
+        white_label: true,
+        api_access: true,
+        max_sites: -1,
+        max_locations: -1,
+        ai_credits: 50000,
       }
-    
+
     default:
       return baseEntitlements
   }
+}
+
+// Sync Stripe subscription item quantity to match current active location count.
+// Only runs for Pro plan — Agency is flat-rate so quantity stays at 1.
+// Called fire-and-forget from location create/delete; errors are logged but never bubble up.
+export async function updateSubscriptionQuantity(
+  env: BillingEnv,
+  db: any,
+  organizationId: string
+): Promise<void> {
+  const billing = await db.prepare(`
+    SELECT stripe_subscription_item_id, plan
+    FROM organization_billing
+    WHERE organization_id = ?
+  `).bind(organizationId).first<{ stripe_subscription_item_id: string | null; plan: string }>()
+
+  if (!billing?.stripe_subscription_item_id || billing.plan !== 'pro') return
+
+  const result = await db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM business_locations bl
+    JOIN sites s ON bl.site_id = s.id
+    WHERE s.organization_id = ? AND bl.status = 'active'
+  `).bind(organizationId).first<{ count: number }>()
+
+  const quantity = Math.max(1, result?.count ?? 1)
+
+  const stripe = getStripe(env)
+  await stripe.subscriptionItems.update(billing.stripe_subscription_item_id, {
+    quantity,
+    proration_behavior: 'create_prorations',
+  })
 }
 
 // Require billing access for organization
@@ -231,16 +261,13 @@ export function verifyStripeWebhook(
   }
 }
 
-// Get price ID for plan
-export function getPriceId(env: BillingEnv, plan: string): string {
-  switch (plan) {
-    case 'starter':
-      return env.STRIPE_PRICE_STARTER || ''
-    case 'pro':
-      return env.STRIPE_PRICE_PRO || ''
-    case 'business':
-      return env.STRIPE_PRICE_BUSINESS || ''
-    default:
-      throw new Error(`Unknown plan: ${plan}`)
+// Get price ID for plan + interval
+export function getPriceId(env: BillingEnv, plan: string, interval: 'month' | 'year' = 'month'): string {
+  if (plan === 'pro') {
+    return (interval === 'year' ? env.STRIPE_PRICE_PRO_ANNUAL : env.STRIPE_PRICE_PRO_MONTHLY) || ''
   }
+  if (plan === 'agency') {
+    return (interval === 'year' ? env.STRIPE_PRICE_AGENCY_ANNUAL : env.STRIPE_PRICE_AGENCY_MONTHLY) || ''
+  }
+  throw new Error(`Unknown plan: ${plan}`)
 }

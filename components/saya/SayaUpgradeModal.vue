@@ -45,7 +45,7 @@
           </div>
           <div class="rounded-2xl border-2 border-primary bg-elevated p-4">
             <div class="mb-3 flex items-center justify-between">
-              <p class="saya-eyebrow text-primary">Pro · $25/mo</p>
+              <p class="saya-eyebrow text-primary">Pro · {{ proPrice }}/mo</p>
               <UBadge color="primary" size="xs">Recommended</UBadge>
             </div>
             <ul class="space-y-2 text-sm text-default">
@@ -71,7 +71,7 @@
 
         <div class="flex gap-3">
           <UButton
-            to="/billing"
+            to="/signup?plan=pro"
             color="neutral"
             variant="solid"
             block
@@ -94,7 +94,14 @@
 </template>
 
 <script setup lang="ts">
+import { usePlans } from '~/composables/usePlans'
+
 const { isOpen, feature, close } = useUpgradeModal()
+const { proPlan, monthlyPrice, formatPrice } = usePlans()
+const proPrice = computed(() => {
+  const cents = proPlan.value ? monthlyPrice(proPlan.value) : null
+  return cents ? formatPrice(cents) : '$29'
+})
 
 const featureMap: Record<string, { title: string; description: string }> = {
   'qa-writeback': {

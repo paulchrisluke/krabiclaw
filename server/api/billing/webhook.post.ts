@@ -114,34 +114,41 @@ async function handleCheckoutCompleted(db: any, session: Stripe.Checkout.Session
   const plan = session.metadata?.plan
   const customerId = session.customer as string
   const subscriptionId = session.subscription as string
-  
+
   if (!organizationId || !plan) {
     console.error('Missing metadata in checkout session:', session.id)
     return
   }
 
   try {
-    // Update organization_billing table with Stripe info
+    // Fetch subscription to get the item ID (needed for per-location quantity updates)
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' } as any)
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+    const subscriptionItemId = subscription.items.data[0]?.id ?? null
+    const periodEnd = (subscription as any).current_period_end
+      ? new Date((subscription as any).current_period_end * 1000).toISOString()
+      : null
+
     await db.prepare(`
-      INSERT OR REPLACE INTO organization_billing 
-      (id, organization_id, stripe_customer_id, stripe_subscription_id, plan, status, 
-       current_period_end, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO organization_billing
+      (id, organization_id, stripe_customer_id, stripe_subscription_id, stripe_subscription_item_id,
+       plan, status, current_period_end, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       `billing-${organizationId}`,
       organizationId,
       customerId,
       subscriptionId,
+      subscriptionItemId,
       plan,
       'active',
-      new Date(session.expires_at! * 1000).toISOString(),
+      periodEnd,
       new Date().toISOString()
     ).run()
 
-    // Set entitlements based on plan
     await setOrganizationEntitlementsFromPlan(process.env as any, db, organizationId, plan)
-    
-    console.log(`Checkout completed for organization ${organizationId}, plan ${plan}`)
+
+    console.log(`Checkout completed for organization ${organizationId}, plan ${plan}, item ${subscriptionItemId}`)
   } catch (error) {
     console.error('Failed to handle checkout completion:', error)
   }
@@ -265,11 +272,9 @@ function getPlanFromSubscription(subscription: Stripe.Subscription): string | nu
   
   if (!priceId) return null
   
-  // Map price IDs to plans (this should be configurable)
   const env = process.env
-  if (priceId === env.STRIPE_PRICE_STARTER) return 'starter'
-  if (priceId === env.STRIPE_PRICE_PRO) return 'pro'
-  if (priceId === env.STRIPE_PRICE_BUSINESS) return 'business'
+  if (priceId === env.STRIPE_PRICE_PRO_MONTHLY || priceId === env.STRIPE_PRICE_PRO_ANNUAL) return 'pro'
+  if (priceId === env.STRIPE_PRICE_AGENCY_MONTHLY || priceId === env.STRIPE_PRICE_AGENCY_ANNUAL) return 'agency'
   
   return null
 }

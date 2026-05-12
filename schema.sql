@@ -388,6 +388,7 @@ CREATE TABLE IF NOT EXISTS organization_billing (
   organization_id TEXT PRIMARY KEY,
   stripe_customer_id TEXT UNIQUE,
   stripe_subscription_id TEXT UNIQUE,
+  stripe_subscription_item_id TEXT UNIQUE,
   status TEXT NOT NULL DEFAULT 'free',
   plan TEXT NOT NULL DEFAULT 'free',
   current_period_end TEXT,
