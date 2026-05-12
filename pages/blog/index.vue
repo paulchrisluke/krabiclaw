@@ -131,7 +131,7 @@ const subscribing = ref(false)
 const subscribeMessage = ref('')
 
 const { data, pending } = useAsyncData(
-  () => `blog-${activeCategory.value ?? 'all'}`,
+  `blog-${activeCategory.value ?? 'all'}`,
   () => $fetch(activeCategory.value
     ? `/api/public/blog/posts?category=${encodeURIComponent(activeCategory.value)}`
     : '/api/public/blog/posts'

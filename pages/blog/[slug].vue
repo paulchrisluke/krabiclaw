@@ -68,7 +68,7 @@
         </div>
 
         <!-- Hero image placeholder -->
-        <div class="h-64 bg-(--ui-bg-muted) rounded-2xl mb-10" />
+        <div class="h-64 bg-(--ui-bg-muted) rounded-2xl mb-10" aria-hidden="true" />
 
         <!-- Body -->
         <div
@@ -158,8 +158,17 @@ const authorInitial = computed(() => {
 
 const wasUpdated = computed(() => {
   if (!post.value?.updated_at || !post.value?.published_at) return false
-  const diff = Math.abs(new Date(post.value.updated_at).getTime() - new Date(post.value.published_at).getTime())
-  return diff > 60_000
+  const updatedDate = new Date(post.value.updated_at)
+  const publishedDate = new Date(post.value.published_at)
+  if (Number.isNaN(updatedDate.getTime())) {
+    console.warn('[wasUpdated] Invalid updated_at date', post.value.updated_at, 'post id:', post.value.id)
+    return false
+  }
+  if (Number.isNaN(publishedDate.getTime())) {
+    console.warn('[wasUpdated] Invalid published_at date', post.value.published_at, 'post id:', post.value.id)
+    return false
+  }
+  return Math.abs(updatedDate.getTime() - publishedDate.getTime()) > 60_000
 })
 
 function categoryClass(cat: string) {
@@ -167,7 +176,9 @@ function categoryClass(cat: string) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
 useSeoMeta({

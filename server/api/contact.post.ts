@@ -88,19 +88,28 @@ export default defineEventHandler(async (event) => {
   const dateKey = `rate:email:${email}:${new Date().toISOString().split('T')[0]}`
 
   if (db) {
+    let ipIncremented = true
+    let emailIncremented = true
+
     try {
-      const ipCount = await db.prepare(`SELECT count FROM rate_limits WHERE key = ?`).bind(hourKey).first()
-      if (ipCount && (ipCount as any).count >= IP_HOURLY_LIMIT) {
-        return jsonResponse({ error: 'Too many submissions from your IP. Please try again later.' }, { status: 429 })
-      }
-      
-      const emailCount = await db.prepare(`SELECT count FROM rate_limits WHERE key = ?`).bind(dateKey).first()
-      if (emailCount && (emailCount as any).count >= EMAIL_DAILY_LIMIT) {
-        return jsonResponse({ error: 'Too many submissions from your email. Please try again tomorrow.' }, { status: 429 })
-      }
+      ipIncremented = await incrementRateLimit(db, hourKey, IP_HOURLY_LIMIT)
     } catch (err) {
-      console.error('Rate limit check failed:', err)
-      // Continue anyway - don't block on rate limit errors
+      console.error('Rate limit increment failed (ip):', err)
+      return jsonResponse({ error: 'Rate limit service unavailable' }, { status: 500 })
+    }
+
+    try {
+      emailIncremented = await incrementRateLimit(db, dateKey, EMAIL_DAILY_LIMIT)
+    } catch (err) {
+      console.error('Rate limit increment failed (email):', err)
+      return jsonResponse({ error: 'Rate limit service unavailable' }, { status: 500 })
+    }
+
+    if (!ipIncremented) {
+      return jsonResponse({ error: 'Too many submissions from your IP. Please try again later.' }, { status: 429 })
+    }
+    if (!emailIncremented) {
+      return jsonResponse({ error: 'Too many submissions from your email. Please try again tomorrow.' }, { status: 429 })
     }
   }
 
@@ -115,8 +124,7 @@ export default defineEventHandler(async (event) => {
     // Store submission in database first
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
-    const ip = getHeader(event, 'CF-Connecting-IP') ?? getHeader(event, 'x-forwarded-for') ?? ''
-    const ipHash = await hashIp(ip)
+    const ipHash = await hashIp(clientIp)
     
     if (db) {
       try {
@@ -163,22 +171,6 @@ export default defineEventHandler(async (event) => {
       const errorText = await response.text()
       console.error('Resend API error:', errorText)
       return jsonResponse({ error: 'Failed to send email' }, { status: 500 })
-    }
-
-    if (db) {
-      try {
-        const ipIncremented = await incrementRateLimit(db, hourKey, IP_HOURLY_LIMIT)
-        if (!ipIncremented) {
-          return jsonResponse({ error: 'Too many submissions from your IP. Please try again later.' }, { status: 429 })
-        }
-
-        const emailIncremented = await incrementRateLimit(db, dateKey, EMAIL_DAILY_LIMIT)
-        if (!emailIncremented) {
-          return jsonResponse({ error: 'Too many submissions from your email. Please try again tomorrow.' }, { status: 429 })
-        }
-      } catch (err) {
-        console.error('Rate limit increment failed:', err)
-      }
     }
 
     return jsonResponse({ success: true, message: 'Message sent successfully' })

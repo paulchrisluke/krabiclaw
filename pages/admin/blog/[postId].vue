@@ -67,13 +67,19 @@ const successMessage = ref('')
 onMounted(async () => {
   try {
     const res = await $fetch(`/api/admin/blog/posts/${postId}`) as any
+    if (!res?.post) {
+      loadError.value = 'Failed to load post: unexpected response from server.'
+      console.error('Unexpected API response loading post', postId, res)
+      return
+    }
     post.value = res.post
     form.title = res.post.title
     form.excerpt = res.post.excerpt ?? ''
     form.category = res.post.category ?? ''
     form.body = res.post.body
-  } catch {
-    loadError.value = 'Failed to load post.'
+  } catch (err: any) {
+    loadError.value = `Failed to load post: ${err?.message ?? err}`
+    console.error('Error loading post', postId, err)
   } finally {
     loadPending.value = false
   }
@@ -88,11 +94,17 @@ async function update(publish = false) {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    await $fetch(`/api/admin/blog/posts/${postId}`, {
+    const updated = await $fetch(`/api/admin/blog/posts/${postId}`, {
       method: 'PATCH',
       body: { ...form, ...(publish ? { publish: true } : {}) }
-    })
-    if (publish) post.value.published_at = new Date().toISOString()
+    }) as any
+    if (updated?.post) {
+      post.value = updated.post
+    } else if (publish) {
+      // fallback: re-fetch if server didn't return the updated post
+      const refetched = await $fetch(`/api/admin/blog/posts/${postId}`) as any
+      if (refetched?.post) post.value = refetched.post
+    }
     successMessage.value = 'Saved.'
   } catch (err: any) {
     errorMessage.value = err?.data?.error ?? 'Failed to save.'

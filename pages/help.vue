@@ -16,6 +16,8 @@
           >
             <button
               class="w-full text-left px-6 py-4 flex items-center justify-between gap-4 hover:bg-(--ui-bg-elevated) transition-colors"
+              :aria-expanded="open === faq.q"
+              :aria-controls="panelId(section.title, faq.q)"
               @click="toggle(faq.q)"
             >
               <span class="font-medium text-(--ui-text)">{{ faq.q }}</span>
@@ -24,8 +26,13 @@
                 class="shrink-0 w-5 h-5 text-(--ui-text-muted)"
               />
             </button>
-            <div v-if="open === faq.q" class="px-6 py-4 bg-(--ui-bg-elevated) text-(--ui-text-muted) border-t border-(--ui-border)">
-              <p v-html="faq.a" />
+            <div
+              v-if="open === faq.q"
+              :id="panelId(section.title, faq.q)"
+              class="px-6 py-4 bg-(--ui-bg-elevated) text-(--ui-text-muted) border-t border-(--ui-border)"
+              role="region"
+            >
+              <p>{{ faq.a }}</p>
             </div>
           </div>
         </div>
@@ -64,6 +71,15 @@ function toggle(q: string) {
   open.value = open.value === q ? null : q
 }
 
+function panelId(sectionTitle: string, question: string) {
+  const slug = `${sectionTitle}-${question}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `faq-panel-${slug}`
+}
+
+// FAQ answers are rendered as plain text and should only be sourced from trusted app content.
 const sections = [
   {
     title: 'Getting Started',

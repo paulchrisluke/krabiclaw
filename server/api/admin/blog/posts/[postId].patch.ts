@@ -4,6 +4,11 @@ import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
 import slugify from 'slugify'
 
+function isSlugUniqueConstraintError(err: unknown): boolean {
+  const message = String((err as any)?.message || err || '')
+  return message.includes('platform_blog_posts.slug') || message.includes('UNIQUE constraint failed')
+}
+
 export default defineEventHandler(async (event) => {
   const postId = getRouterParam(event, 'postId')
   if (!postId) return jsonResponse({ error: 'Post ID required' }, { status: 400 })
@@ -73,6 +78,9 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Post not found' }, { status: 404 })
     }
   } catch (err) {
+    if (isSlugUniqueConstraintError(err)) {
+      return jsonResponse({ error: 'Slug already in use' }, { status: 400 })
+    }
     console.error('Failed to update blog post:', err)
     return jsonResponse({ error: 'Failed to update post' }, { status: 500 })
   }

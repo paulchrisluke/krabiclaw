@@ -56,6 +56,9 @@
             </UButton>
           </UDropdownMenu>
 
+          <!-- Dark mode toggle -->
+          <UColorModeButton variant="ghost" color="neutral" size="sm" />
+
           <!-- Reserve CTA -->
           <UButton
             to="/reservations"
@@ -146,7 +149,7 @@ interface I18nComposable {
 }
 
 const { isPlatform, siteId, site } = useTenantSite()
-const i18n = useI18n() as I18nComposable
+const i18n = useI18n() as unknown as I18nComposable
 const mobileMenuOpen = ref(false)
 
 const currentLocale = computed(() => i18n.locale.value)

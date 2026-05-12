@@ -118,6 +118,17 @@ const handleEmailSignup = async () => {
 
   if (!password) {
     validationErrors.value.password = 'Password is required.'
+  } else {
+    const unmet = []
+    if (password.length < 8) unmet.push('be at least 8 characters')
+    if (password.length > 128) unmet.push('be at most 128 characters')
+    if (!/[a-z]/.test(password)) unmet.push('include a lowercase letter')
+    if (!/[A-Z]/.test(password)) unmet.push('include an uppercase letter')
+    if (!/\d/.test(password)) unmet.push('include a number')
+    if (!/[^A-Za-z0-9]/.test(password)) unmet.push('include a special character')
+    if (unmet.length) {
+      validationErrors.value.password = `Password must ${unmet.join(', ')}.`
+    }
   }
 
   if (validationErrors.value.email || validationErrors.value.password) {
@@ -127,8 +138,19 @@ const handleEmailSignup = async () => {
 
   loading.value = true
   try {
-    // For now, redirect to login since email signup not implemented
-    router.push('/login')
+    const result = await authClient.signUp.email({
+      email,
+      password,
+      name: email.split('@')[0],
+      callbackURL: '/login'
+    })
+
+    if (result?.error) {
+      error.value = result.error.message || 'Sign up failed. Please try again.'
+      return
+    }
+
+    await router.push('/login')
   } catch (err) {
     console.error('Email sign-up error:', err)
     error.value = 'Sign up failed. Please try again.'

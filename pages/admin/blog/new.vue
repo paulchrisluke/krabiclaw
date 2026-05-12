@@ -41,6 +41,11 @@
 </template>
 
 <script setup lang="ts">
+interface CreatePostResponse {
+  id: string | number
+  [key: string]: unknown
+}
+
 definePageMeta({ layout: 'default' })
 
 const categories = ['Marketing', 'Technology', 'Design', 'Business', 'SEO', 'Social Media']
@@ -57,10 +62,10 @@ async function save(publish: boolean) {
   saving.value = true
   errorMessage.value = ''
   try {
-    const res = await $fetch('/api/admin/blog/posts', {
+    const res = await $fetch<CreatePostResponse>('/api/admin/blog/posts', {
       method: 'POST',
       body: { ...form, publish }
-    }) as any
+    })
     await navigateTo(`/admin/blog/${res.id}`)
   } catch (err: any) {
     errorMessage.value = err?.data?.error ?? 'Failed to save post.'

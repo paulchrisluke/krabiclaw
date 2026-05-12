@@ -128,17 +128,6 @@ const introBody = computed(() => getField('intro.body',
   '<p class="font-semibold leading-relaxed">Elevate your senses; contact us for an unforgettable dining adventure.</p>'
 ))
 
-DOMPurify.addHook('uponSanitizeAttribute', (_, data) => {
-  if (data.attrName?.toLowerCase().startsWith('on')) {
-    data.keepAttr = false
-  }
-
-  const value = String(data.attrValue || '').trim().toLowerCase()
-  if (value.startsWith('data:')) {
-    data.keepAttr = false
-  }
-})
-
 // Sanitize HTML to prevent XSS
 const sanitizedIntro = computed(() => {
   if (!introBody.value) return ''

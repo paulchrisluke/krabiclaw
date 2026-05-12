@@ -4,6 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
 
 const ALLOWED_PAGES = ['about', 'contact', 'help']
+const MAX_CONTENT_LENGTH = 1_000_000
 
 export default defineEventHandler(async (event) => {
   const page = getRouterParam(event, 'page')
@@ -28,6 +29,9 @@ export default defineEventHandler(async (event) => {
 
   if (typeof body.content !== 'string') {
     return jsonResponse({ error: 'content must be a string' }, { status: 400 })
+  }
+  if (body.content.length > MAX_CONTENT_LENGTH) {
+    return jsonResponse({ error: 'content too large' }, { status: 413 })
   }
 
   const now = new Date().toISOString()

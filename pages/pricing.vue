@@ -166,7 +166,6 @@ const openFaq = ref<string | null>(null)
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
 const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
 const platformHostname = computed(() => {
   const freeSiteDomain = config.public.freeSiteDomain
   if (!freeSiteDomain) return 'krabiclaw.com'
@@ -274,32 +273,49 @@ useSeoMeta({
 useSchemaOrg([
   ({
     '@context': 'https://schema.org',
-    '@type': 'PricingTable',
+    '@type': 'WebPage',
     name: 'KrabiClaw Pricing Plans',
-    offers: [
-      {
-        '@type': 'Offer',
-        name: 'Free',
-        price: '0',
-        priceCurrency: 'USD',
-        description: 'Get started free with basic features'
-      },
-      {
-        '@type': 'Offer',
-        name: 'Pro',
-        price: '29',
-        priceCurrency: 'USD',
-        billingDuration: 'P1M',
-        description: 'Professional features per location per month'
-      },
-      {
-        '@type': 'Offer',
-        name: 'Agency',
-        price: 'Contact for pricing',
-        priceCurrency: 'USD',
-        description: 'Unlimited sites and advanced features'
-      }
-    ]
+    mainEntity: {
+      '@type': 'OfferCatalog',
+      name: 'KrabiClaw Pricing Plans',
+      itemListElement: [
+        {
+          '@type': 'Offer',
+          name: 'Free',
+          price: '0',
+          priceCurrency: 'USD',
+          description: 'Get started free with basic features'
+        },
+        {
+          '@type': 'Offer',
+          name: 'Pro',
+          price: '29',
+          priceCurrency: 'USD',
+          billingDuration: 'P1M',
+          description: 'Professional features per location per month'
+        },
+        {
+          '@type': 'Offer',
+          name: 'Agency',
+          priceCurrency: 'USD',
+          priceSpecification: [
+            {
+              '@type': 'UnitPriceSpecification',
+              price: '99',
+              priceCurrency: 'USD',
+              billingDuration: 'P1M'
+            },
+            {
+              '@type': 'UnitPriceSpecification',
+              price: '990',
+              priceCurrency: 'USD',
+              billingDuration: 'P1Y'
+            }
+          ],
+          description: 'Unlimited sites and advanced features'
+        }
+      ]
+    }
   })
 ])
 </script>
