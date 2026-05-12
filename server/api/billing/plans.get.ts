@@ -26,6 +26,7 @@ export interface Plan {
   tagline: string
   highlighted: boolean
   badge?: string
+  image?: string
   prices: PlanPrice[]
   features: string[]
   limits: PlanLimits
@@ -64,6 +65,7 @@ const STATIC_PLANS: Plan[] = [
       apiAccess: false,
       support: 'Community',
     },
+    image: '/krabi-claw-free.png',
     cta: { label: 'Start Free', href: '/signup' },
   },
   {
@@ -214,6 +216,7 @@ async function fetchStripeProducts(env: Record<string, string | undefined>): Pro
       tagline: product.description ?? staticFallback?.tagline ?? '',
       highlighted: meta.highlighted === 'true',
       badge: meta.badge || staticFallback?.badge,
+      image: product.images?.[0] ?? staticFallback?.image,
       prices: (priceLookup[product.id] ?? []).sort((a, b) =>
         a.interval === 'month' ? -1 : 1
       ),

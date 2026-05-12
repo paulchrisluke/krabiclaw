@@ -8,6 +8,11 @@
       highlighted && 'ring-2 ring-primary',
     ]"
   >
+    <!-- Plan image -->
+    <div v-if="plan.image" class="mb-6 rounded-xl overflow-hidden aspect-square w-20">
+      <img :src="plan.image" :alt="plan.name" class="w-full h-full object-cover" />
+    </div>
+
     <!-- Header -->
     <div class="mb-6 flex items-start justify-between gap-3">
       <div>
