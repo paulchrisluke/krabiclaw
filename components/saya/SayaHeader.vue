@@ -134,13 +134,22 @@
 </template>
 
 <script setup lang="ts">
+interface Site {
+  name?: string
+  plan?: string
+}
+
+interface I18nComposable {
+  locale: Ref<string>
+  locales: Ref<Array<{ code: string; name: string }>>
+  setLocale: (code: string) => void
+}
+
 const { isPlatform, siteId, site } = useTenantSite()
-// Cast useI18n to any — @nuxtjs/i18n augments the types at runtime but TS
-// doesn't always pick up locales/setLocale under "module: preserve"
-const i18n = useI18n() as any
+const i18n = useI18n() as I18nComposable
 const mobileMenuOpen = ref(false)
 
-const currentLocale = computed(() => i18n.locale.value as string)
+const currentLocale = computed(() => i18n.locale.value)
 const availableLocales = computed(() =>
   (i18n.locales?.value ?? []).map((l: { code: string; name: string }) => ({
     code: l.code,
@@ -151,8 +160,8 @@ const getLocaleFlag = (code: string) =>
   ({ en: '🇺🇸', th: '🇹🇭', ja: '🇯🇵', ar: '🇸🇦' }[code] ?? '🌐')
 const getCurrentLocaleFlag = () => getLocaleFlag(currentLocale.value)
 
-const restaurantName = computed(() => (site as any)?.value?.name || (site as any)?.name || 'Saya')
-const sitePlan = computed(() => (site as any)?.value?.plan || (site as any)?.plan || 'free')
+const restaurantName = computed(() => (site.value as Site)?.name ?? (site as Site)?.name ?? 'Saya')
+const sitePlan = computed(() => (site.value as Site)?.plan ?? (site as Site)?.plan ?? 'free')
 const showBrandingStrip = computed(() => !isPlatform && sitePlan.value === 'free')
 
 const { open: openUpgrade } = useUpgradeModal()
@@ -160,19 +169,27 @@ const { open: openUpgrade } = useUpgradeModal()
 const languageItems = computed(() =>
   availableLocales.value.map((l: { code: string; name: string }) => ({
     label: `${getLocaleFlag(l.code)} ${l.name}`,
-    onSelect: () => i18n.setLocale?.(l.code)
+    onSelect: () => i18n.setLocale(l.code)
   }))
 )
 
 // No await — this is a layout component, not a page. Data arrives reactively.
-const { data: locationsData } = siteId
-  ? useFetch(`/api/public/sites/${siteId}/locations`, {
-      key: `header-locs-${siteId}`,
-      default: () => ({ locations: [] })
-    })
-  : { data: ref({ locations: [] }) }
+const { data: locationsData, error: locationsError } = useFetch(
+  `/api/public/sites/${siteId}/locations`,
+  {
+    key: `header-locs-${siteId}`,
+    default: () => ({ locations: [] })
+  }
+)
 
-const locations = computed(() => (locationsData as any).value?.locations ?? [])
+const locations = computed(() => {
+  if (locationsError.value) {
+    console.error('Failed to load locations:', locationsError.value)
+    return []
+  }
+  if (!siteId) return []
+  return locationsData.value?.locations ?? []
+})
 
 const locationDropdownItems = computed(() => [
   [{
@@ -180,7 +197,7 @@ const locationDropdownItems = computed(() => [
     to: '/locations',
     class: 'text-xs uppercase tracking-widest text-(--ui-text-muted)'
   }],
-  locations.value.map((loc: any) => ({
+  locations.value.map((loc: { title: string; slug: string }) => ({
     label: loc.title,
     to: `/locations/${loc.slug}/menu`,
     icon: 'i-heroicons-map-pin'

@@ -17,10 +17,6 @@
         <p class="text-red-600">{{ error }}</p>
       </div>
 
-      <div v-else-if="!isPlatformOwner" class="bg-red-50 border border-red-200 rounded-lg p-6">
-        <p class="text-red-600">Access denied. Platform owner access required.</p>
-      </div>
-
       <div v-else>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <UCard class="hover:shadow-md transition-shadow cursor-pointer" @click="activeTab = 'content'">
@@ -162,7 +158,7 @@
           <h2 class="text-xl font-bold text-(--ui-text) mb-4">ChowBot AI Assistant</h2>
           <p class="text-(--ui-text-muted) mb-4">Use ChowBot to generate platform content, blog posts, and more.</p>
           <UTextarea v-model="chowbotPrompt" placeholder="Ask ChowBot to help with platform content..." :rows="4" class="mb-4" />
-          <UButton @click="sendToChowBot" :loading="chowbotLoading">Generate</UButton>
+          <UButton @click="sendToChowbot" :loading="chowbotLoading">Generate</UButton>
           <div v-if="chowbotResponse" class="mt-4 p-4 bg-(--ui-bg-muted) rounded-lg">
             <p class="text-(--ui-text) whitespace-pre-wrap">{{ chowbotResponse }}</p>
           </div>
@@ -179,7 +175,6 @@ const session = await useAuth()
 const activeTab = ref('content')
 const loading = ref(true)
 const error = ref('')
-const isPlatformOwner = ref(false)
 
 const platformPages = ['about', 'contact', 'help']
 const blogPosts = ref([])
@@ -193,14 +188,8 @@ const analyticsLoading = ref(false)
 
 onMounted(async () => {
   try {
-    if (session?.user?.email) {
-      isPlatformOwner.value = ['paulchrisluke@gmail.com', 'bamboo.chow@gmail.com'].includes(session.user.email.toLowerCase())
-    }
-    
-    if (isPlatformOwner.value) {
-      await loadBlogPosts()
-      await loadAnalytics()
-    }
+    await loadBlogPosts()
+    await loadAnalytics()
   } catch (err) {
     error.value = 'Failed to load dashboard'
   } finally {
@@ -215,6 +204,7 @@ async function loadAnalytics() {
     analytics.value = response
   } catch (err) {
     console.error('Failed to load analytics:', err)
+    error.value = 'Failed to load analytics'
   } finally {
     analyticsLoading.value = false
   }

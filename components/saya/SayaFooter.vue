@@ -26,14 +26,14 @@
             >
               <UIcon :name="`i-simple-icons-${social.name.toLowerCase()}`" class="size-4" />
             </a>
-            <a
+            <span
               v-for="social in inactiveSocials"
               :key="social.name"
               aria-hidden="true"
               class="flex size-9 cursor-default items-center justify-center rounded-full border border-white/8 text-white/30"
             >
               <UIcon :name="`i-simple-icons-${social.name.toLowerCase()}`" class="size-4" />
-            </a>
+            </span>
           </div>
         </div>
 
@@ -171,7 +171,7 @@ const rawLocations = computed(() => (locationsData as any).value?.locations ?? [
 const locations = computed(() =>
   rawLocations.value.map((loc: any) => ({
     ...loc,
-    hoursToday: getTodayGoogleHours(googleBusiness.value?.business?.regularHours)
+    hoursToday: loc.googleBusinessHours ? getTodayGoogleHours(loc.googleBusinessHours) : null
   }))
 )
 

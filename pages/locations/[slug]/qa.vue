@@ -126,7 +126,8 @@ definePageMeta({ layout: 'saya' })
 const route = useRoute()
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
-const isFree = computed(() => !((site as any)?.value?.plan || (site as any)?.plan) || ((site as any)?.value?.plan || (site as any)?.plan) === 'free')
+const plan = computed(() => (site as any)?.value?.plan || (site as any)?.plan)
+const isFree = computed(() => !plan.value || plan.value === 'free')
 const { open: openUpgrade } = useUpgradeModal()
 
 const slug = computed(() => String(route.params.slug))
@@ -163,10 +164,13 @@ const breadcrumb = computed(() => [
   { label: 'Q&A' }
 ])
 
+const config = useRuntimeConfig()
+const siteUrl = config.public.siteUrl
+
 useSeoMeta({
-  title: () => `Q&A · ${location.value?.title || slug.value}`,
+  title: () => `Questions and answers for ${location.value?.title} at ${siteName.value}.`,
   description: () => `Questions and answers for ${location.value?.title} at ${siteName.value}.`,
-  ogUrl: () => `/locations/${slug.value}/qa`
+  ogUrl: () => `${siteUrl}/locations/${slug.value}/qa`
 })
 
 useSchemaOrg([
@@ -182,10 +186,10 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: siteName.value, item: '/' },
-      { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` },
-      { '@type': 'ListItem', position: 4, name: 'Q&A', item: `/locations/${slug.value}/qa` }
+      { '@type': 'ListItem', position: 1, name: siteName.value, item: `${siteUrl}/` },
+      { '@type': 'ListItem', position: 2, name: 'Locations', item: `${siteUrl}/locations` },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${siteUrl}/locations/${slug.value}` },
+      { '@type': 'ListItem', position: 4, name: 'Q&A', item: `${siteUrl}/locations/${slug.value}/qa` }
     ]
   }))
 ])

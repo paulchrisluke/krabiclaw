@@ -18,7 +18,7 @@
       <section class="relative mt-6 min-h-160 overflow-hidden">
         <div
           class="absolute inset-0 bg-cover bg-center"
-          :style="location.image_url ? `background-image: url(${location.image_url})` : ''"
+          :style="heroBackgroundStyle"
           :class="!location.image_url ? 'bg-zinc-900' : ''"
         />
         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
@@ -239,15 +239,28 @@ const { data: reviewsData } = await useFetch(
 )
 const reviewsPreview = computed(() => ((reviewsData as any).value?.reviews ?? []).slice(0, 3))
 
+// Sanitize hero background URL to prevent CSS injection
+const heroBackgroundStyle = computed(() => {
+  const url = location.value?.image_url
+  if (!url) return {}
+  // Validate URL pattern
+  if (!/^https?:\/\//.test(url)) return {}
+  return { backgroundImage: `url(${url})` }
+})
+
 // Fetch menu for featured items
-const { data: menuData } = await useFetch(
+const { data: menuData, execute: fetchMenu } = await useFetch(
   () => `/api/public/sites/${siteId}/menus?locationId=${location.value?.id ?? ''}`,
   {
     key: () => `public-menu-preview-${siteId}-${slug.value}`,
     default: () => ({ menu: null }),
-    watch: [() => location.value?.id]
+    immediate: false
   }
 )
+
+watch(() => location.value?.id, (id) => {
+  if (id) fetchMenu()
+}, { immediate: true })
 const featuredItems = computed(() => {
   const items = (menuData as any).value?.menu?.items ?? []
   return items.filter((i: any) => i.featured || i.available !== false).slice(0, 3)
@@ -277,9 +290,13 @@ const weekHours = computed(() => {
 
 const todayHours = computed(() => getTodayGoogleHours(location.value?.opening_hours))
 const isOpenNow = computed(() => {
-  // Simple heuristic: if todayHours mentions "Open today" it's open (real open-now needs GMB)
+  // Only return definite status when hours string explicitly indicates it
   const h = todayHours.value
-  return h?.startsWith('Open today')
+  if (!h) return undefined
+  const lower = h.toLowerCase()
+  if (lower.includes('open today') && !lower.includes('closed today')) return true
+  if (lower.includes('closed today')) return false
+  return undefined
 })
 
 const mapEmbedSrc = computed(() => {
@@ -297,10 +314,13 @@ const breadcrumb = computed(() => [
   { label: location.value?.title || slug.value }
 ])
 
+const config = useRuntimeConfig()
+const siteUrl = config.public.siteUrl
+
 useSeoMeta({
   title: () => location.value ? `${location.value.title} | Locations` : 'Location',
   description: () => location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : '',
-  ogUrl: () => `/locations/${slug.value}`
+  ogUrl: () => `${siteUrl}/locations/${slug.value}`
 })
 
 useSchemaOrg([
@@ -313,7 +333,7 @@ useSchemaOrg([
       description: formattedAddress.value,
       address: { '@type': 'PostalAddress', streetAddress: formattedAddress.value },
       telephone: loc.phone,
-      url: `/locations/${loc.slug}`,
+      url: `${siteUrl}/locations/${loc.slug}`,
       ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {}),
       ...(loc.rating ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: loc.rating, reviewCount: loc.review_count ?? 0 } } : {})
     }
@@ -321,9 +341,9 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: siteName.value, item: '/' },
-      { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` }
+      { '@type': 'ListItem', position: 1, name: siteName.value, item: `${siteUrl}/` },
+      { '@type': 'ListItem', position: 2, name: 'Locations', item: `${siteUrl}/locations` },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${siteUrl}/locations/${slug.value}` }
     ]
   }))
 ])

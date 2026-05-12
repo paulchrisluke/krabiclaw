@@ -25,7 +25,6 @@
 
 /* ── KrabiClaw brand palette ──────────────────────────────── */
 :root {
-  --ui-radius: 0.5rem;
 
   --kc-navy:        #1F2547;
   --kc-navy-700:    #2C3360;
@@ -76,7 +75,6 @@
   --ui-text-inverted:     #FFFFFF;
   --ui-border:            var(--kc-border);
   --ui-border-muted:      var(--kc-border-muted);
-  --ui-radius:            0.5rem;
 }
 
 /* ── Platform theme dark mode ─────────────────────────────── */
@@ -87,8 +85,8 @@
   --ui-bg-muted:          var(--kc-navy-700);
   --ui-bg-inverted:       var(--kc-cream);
   --ui-text:              var(--kc-cream);
-  --ui-text-muted:        var(--kc-navy-300);
-  --ui-text-dimmed:       var(--kc-navy-500);
+  --ui-text-muted:        var(--kc-navy-500);
+  --ui-text-dimmed:       var(--kc-navy-300);
   --ui-text-highlighted:  var(--kc-cream);
   --ui-text-inverted:     var(--kc-navy);
   --ui-border:            var(--kc-navy-700);

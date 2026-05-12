@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const session = await getAuthSession(event, env)
-  if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+  if (!session?.user?.email || !session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   if (!isPlatformOwner(session.user.email)) {
     return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
@@ -29,20 +29,17 @@ export default defineEventHandler(async (event) => {
 
   const now = new Date().toISOString()
   const userId = session.user.id
+  const id = crypto.randomUUID()
 
-  const existing = await db.prepare(
-    `SELECT id FROM platform_content WHERE page = ? LIMIT 1`
-  ).bind(page).first()
-
-  if (existing) {
+  try {
     await db.prepare(
-      `UPDATE platform_content SET content = ?, updated_by = ?, updated_at = ? WHERE page = ?`
-    ).bind(body.content, userId, now, page).run()
-  } else {
-    const id = crypto.randomUUID()
-    await db.prepare(
-      `INSERT INTO platform_content (id, page, content, updated_by, updated_at) VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO platform_content (id, page, content, updated_by, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(page) DO UPDATE SET content = excluded.content, updated_by = excluded.updated_by, updated_at = excluded.updated_at`
     ).bind(id, page, body.content, userId, now).run()
+  } catch (err) {
+    console.error('Failed to save content:', err)
+    return jsonResponse({ error: 'Failed to save content' }, { status: 500 })
   }
 
   return jsonResponse({ success: true, page, updated_at: now })

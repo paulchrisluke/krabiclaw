@@ -1,7 +1,6 @@
 /* Saya theme tokens — KrabiClaw Design System */
 
 :root {
-  --ui-radius: 0.5rem;
   --font-saya: 'Instrument Serif', 'Iowan Old Style', Palatino, Georgia, serif;
 }
 
@@ -36,7 +35,7 @@
   --ui-text-inverted:   var(--saya-fg-inverted);
   --ui-border:          var(--saya-border);
   --ui-border-muted:    var(--saya-border-muted);
-  --ui-radius:          0.25rem;
+  --ui-radius:          0.25rem; /* Platform-specific radius override */
 }
 
 /* Saya display type — Instrument Serif, sentence case, never bold */
@@ -69,17 +68,17 @@
   font-weight: 400;
   font-style: normal;
   letter-spacing: -0.01em;
-  line-height: 1.0;
+  line-height: 1.15;
 }
 .saya-italic { font-style: italic; }
 .saya-eyebrow {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.32em;
   text-transform: uppercase;
 }
 .saya-kicker {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.4em;
   text-transform: uppercase;

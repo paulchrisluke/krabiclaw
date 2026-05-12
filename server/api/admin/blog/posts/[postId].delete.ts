@@ -18,7 +18,15 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
   }
 
-  await db.prepare(`DELETE FROM platform_blog_posts WHERE id = ?`).bind(postId).run()
+  try {
+    const result = await db.prepare(`DELETE FROM platform_blog_posts WHERE id = ?`).bind(postId).run()
+    if (!result.changes || result.changes === 0) {
+      return jsonResponse({ error: 'Post not found' }, { status: 404 })
+    }
+  } catch (err) {
+    console.error('Failed to delete blog post:', err)
+    return jsonResponse({ error: 'Failed to delete post', details: String(err) }, { status: 500 })
+  }
 
   return jsonResponse({ success: true })
 })

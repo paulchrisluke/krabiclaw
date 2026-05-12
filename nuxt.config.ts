@@ -35,6 +35,7 @@ export default defineNuxtConfig({
       platformDomain: process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || '',
       freeSiteDomain: process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN || '',
       appName: process.env.NUXT_PUBLIC_APP_NAME || '',
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://krabiclaw.com',
       turnstileEnabled: process.env.NUXT_PUBLIC_TURNSTILE_ENABLED === 'true',
       turnstileSiteKey: process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY || ''
     },

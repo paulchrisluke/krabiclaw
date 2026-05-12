@@ -38,10 +38,13 @@ definePageMeta({ layout: 'platform' })
 
 import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
+const config = useRuntimeConfig()
+const siteUrl = config.public.siteUrl
+
 useOrganizationSchema()
 useBreadcrumbSchema([
-  { name: 'Home', url: 'https://krabiclaw.com' },
-  { name: 'About', url: 'https://krabiclaw.com/about' }
+  { name: 'Home', url: `${siteUrl}/` },
+  { name: 'About', url: `${siteUrl}/about` }
 ])
 
 useSeoMeta({

@@ -46,7 +46,7 @@
               <UFormField label="WhatsApp number">
                 <UInput v-model="phone" type="tel" placeholder="+1 555 000 0000" size="lg" color="success" class="w-full" :disabled="loading" @keydown.enter="handleSendOtp" />
               </UFormField>
-              <UButton block size="lg" color="success" variant="solid" icon="i-heroicons-chat-bubble-left-ellipsis" :loading="loading" :disabled="!phone.trim()" @click="handleSendOtp">
+              <UButton block size="lg" color="success" variant="solid" icon="i-heroicons-chat-bubble-left-ellipsis" :loading="loading" :disabled="loading || !isPhoneValid" @click="handleSendOtp">
                 Send code via WhatsApp
               </UButton>
             </div>
@@ -95,8 +95,17 @@ const otpStep = ref('phone')
 const phone = ref('')
 const code = ref('')
 
+const isPhoneValid = computed(() => {
+  const value = phone.value.trim()
+  if (!value) return false
+  return /^\+?[1-9]\d{1,14}$/.test(value.replace(/[\s\-\(\)]/g, ''))
+})
+
 const handleSendOtp = async () => {
-  if (!phone.value.trim()) return
+  if (!isPhoneValid.value) {
+    error.value = 'Please enter a valid phone number'
+    return
+  }
   loading.value = true
   error.value = null
   try {

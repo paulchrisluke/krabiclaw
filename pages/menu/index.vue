@@ -28,7 +28,7 @@ if (siteId) {
   const target = locations.find(l => l.is_primary) ?? locations[0]
 
   if (target?.slug) {
-    await navigateTo(`/locations/${target.slug}/menu`, { redirectCode: 301 })
+    await navigateTo(`/locations/${target.slug}/menu`, { redirectCode: 302 })
   } else if (locations.length === 0) {
     // No locations yet — fall through to the template above
   }

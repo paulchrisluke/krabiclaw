@@ -241,8 +241,14 @@ function distCount(star: number) {
   return aggregate.value?.distribution?.find((d: any) => d.star === star)?.count ?? 0
 }
 
+const failedPhotoIndices = new Set<string>()
+
+function handleReviewImageError(reviewId: string, index: number) {
+  failedPhotoIndices.add(`${reviewId}-${index}`)
+}
+
 function initials(name: string) {
-  return name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase()
+  return name.trim().split(/\s+/).filter(Boolean).map(s => s[0]).slice(0, 2).join('').toUpperCase()
 }
 function formatDate(ts: string | null) {
   if (!ts) return ''

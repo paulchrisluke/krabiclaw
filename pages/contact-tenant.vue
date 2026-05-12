@@ -9,7 +9,7 @@
     <UContainer class="py-12">
       <UCard class="mb-12">
         <div
-          v-html="introBody"
+          v-html="sanitizedIntro"
           class="prose prose-lg max-w-none text-(--ui-text-muted) [--tw-prose-body:var(--ui-text-muted)] [--tw-prose-bold:var(--ui-text)]"
         />
       </UCard>
@@ -73,8 +73,8 @@
                   placeholder="How can we help?"
                 />
               </UFormField>
-              <UButton type="submit" color="neutral" size="xl" block :loading="submitting" :disabled="submitted">
-                {{ submitted ? 'Message sent!' : 'Send Message' }}
+              <UButton type="submit" color="neutral" size="xl" block :loading="submitting">
+                Send Message
               </UButton>
             </UForm>
           </UCard>
@@ -127,6 +127,16 @@ const introBody = computed(() => getField('intro.body',
   '<p class="font-semibold leading-relaxed">Elevate your senses; contact us for an unforgettable dining adventure.</p>'
 ))
 
+// Sanitize HTML to prevent XSS
+const sanitizedIntro = computed(() => {
+  if (!introBody.value) return ''
+  // Basic sanitization - remove script tags and event handlers
+  return introBody.value
+    .replace(/<script[^>]*>.*?<\/script>/gis, '')
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/javascript:/gi, '')
+})
+
 const contactForm = ref({
   name: '',
   email: '',
@@ -153,7 +163,6 @@ const validateContact = (state) => {
 
 const toast = useToast()
 const submitting = ref(false)
-const submitted = ref(false)
 
 const handleContact = async () => {
   if (submitting.value) return
@@ -163,7 +172,6 @@ const handleContact = async () => {
       method: 'POST',
       body: contactForm.value,
     })
-    submitted.value = true
     contactForm.value = { name: '', email: '', message: '' }
     toast.add({ description: 'Message sent! We\'ll be in touch soon.', color: 'success' })
   } catch (err) {
@@ -173,10 +181,14 @@ const handleContact = async () => {
   }
 }
 
+const restaurantName = computed(() => getField('restaurant.name', businessName.value || ''))
+const config = useRuntimeConfig()
+const siteUrl = config.public.siteUrl
+
 useSeoMeta({
-  title: 'Contact | Saya Kitchen',
-  description: 'Contact Saya Kitchen in Krabi for reservations, location details, hours, and guest questions.',
-  ogImage: '/og-image.jpg',
-  ogUrl: '/contact'
+  title: computed(() => restaurantName.value ? `Contact | ${restaurantName.value}` : 'Contact Us'),
+  description: computed(() => getField('seo.description', `Contact ${restaurantName.value || 'us'} for reservations, location details, hours, and guest questions.`)),
+  ogImage: computed(() => getField('seo.ogImage', `${siteUrl}/og-image.jpg`)),
+  ogUrl: computed(() => `${siteUrl}/contact`)
 })
 </script>

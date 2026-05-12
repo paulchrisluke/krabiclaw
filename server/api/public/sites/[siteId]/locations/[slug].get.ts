@@ -34,9 +34,9 @@ export default defineEventHandler(async (event) => {
       }, { status: 404 })
     }
 
-    // Get location by slug for this site
+    // Get location by slug for this site (email excluded from public API)
     const location = await db.prepare(`
-      SELECT id, slug, title, address, phone, email, website_url, maps_url, latitude, longitude,
+      SELECT id, slug, title, address, phone, website_url, maps_url, latitude, longitude,
              opening_hours, rating, review_count, is_primary, status, last_synced_at,
              google_location_id, google_connection_id, google_place_id, image_url, city
       FROM business_locations
@@ -68,14 +68,13 @@ export default defineEventHandler(async (event) => {
       ? `https://search.google.com/local/questions?placeid=${placeId}`
       : null
 
-    // Parse JSON fields and return public-safe data
+    // Parse JSON fields and return public-safe data (email excluded)
     const parsedLocation = {
       id: location.id,
       slug: location.slug,
       title: location.title,
       address: location.address ? JSON.parse(location.address) : null,
       phone: location.phone,
-      email: location.email,
       website_url: location.website_url,
       maps_url: location.maps_url,
       latitude: location.latitude,

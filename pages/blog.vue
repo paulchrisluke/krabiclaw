@@ -123,16 +123,17 @@
           <p class="text-white/70 mb-6 max-w-2xl mx-auto">
             Get the latest restaurant marketing tips and industry insights delivered to your inbox.
           </p>
-          <div class="flex flex-col sm:flex-row gap-4 max-w-md mx-auto items-center justify-center">
+          <form @submit.prevent="handleNewsletterSubmit" class="flex flex-col sm:flex-row gap-4 max-w-md mx-auto items-center justify-center">
             <input
               id="newsletter-email"
+              v-model="newsletterEmail"
               type="email"
               placeholder="Enter your email"
               class="flex-1 px-4 py-3 rounded-lg text-(--kc-navy)"
               aria-label="Enter your email for the newsletter"
             >
-            <UButton color="neutral" variant="outline">Subscribe</UButton>
-          </div>
+            <UButton type="submit" color="neutral" variant="outline">Subscribe</UButton>
+          </form>
         </div>
       </div>
 
@@ -141,12 +142,12 @@
         <div class="sticky top-8">
           <h2 class="text-2xl font-bold text-(--kc-navy) mb-6">Browse by Category</h2>
           <div class="flex flex-col gap-3">
-            <UButton variant="outline" color="neutral" class="w-full justify-start">Marketing</UButton>
-            <UButton variant="outline" color="neutral" class="w-full justify-start">Technology</UButton>
-            <UButton variant="outline" color="neutral" class="w-full justify-start">Design</UButton>
-            <UButton variant="outline" color="neutral" class="w-full justify-start">Business</UButton>
-            <UButton variant="outline" color="neutral" class="w-full justify-start">SEO</UButton>
-            <UButton variant="outline" color="neutral" class="w-full justify-start">Social Media</UButton>
+            <UButton variant="outline" color="neutral" class="w-full justify-start" @click="filterByCategory('Marketing')">Marketing</UButton>
+            <UButton variant="outline" color="neutral" class="w-full justify-start" @click="filterByCategory('Technology')">Technology</UButton>
+            <UButton variant="outline" color="neutral" class="w-full justify-start" @click="filterByCategory('Design')">Design</UButton>
+            <UButton variant="outline" color="neutral" class="w-full justify-start" @click="filterByCategory('Business')">Business</UButton>
+            <UButton variant="outline" color="neutral" class="w-full justify-start" @click="filterByCategory('SEO')">SEO</UButton>
+            <UButton variant="outline" color="neutral" class="w-full justify-start" @click="filterByCategory('Social Media')">Social Media</UButton>
           </div>
         </div>
       </div>
@@ -156,6 +157,20 @@
 
 <script setup>
 definePageMeta({ layout: 'platform' })
+
+const selectedCategory = ref(null)
+const newsletterEmail = ref('')
+
+function filterByCategory(category) {
+  selectedCategory.value = category
+  navigateTo(`/blog/category/${category.toLowerCase()}`)
+}
+
+async function handleNewsletterSubmit() {
+  if (!newsletterEmail.value.trim()) return
+  console.log('Newsletter subscription:', newsletterEmail.value)
+  newsletterEmail.value = ''
+}
 
 useSeoMeta({
   title: 'Blog | KrabiClaw',

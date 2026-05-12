@@ -1,11 +1,18 @@
 import type { Menu, MenuItem, MenuWithItems, CreateMenuRequest, UpdateMenuRequest, CreateMenuItemRequest, UpdateMenuItemRequest } from '../types/menu'
 
 function slugify(name: string): string {
-  return name
+  const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '')
     .trim()
     .replace(/[\s-]+/g, '-')
+  
+  // Return fallback if slug is empty (e.g., non-ASCII only names)
+  if (!slug) {
+    return `untitled-${Date.now().toString(36)}`
+  }
+  
+  return slug
 }
 
 async function uniqueSlug(db: any, menuId: string, base: string, excludeId?: string): Promise<string> {
@@ -336,6 +343,11 @@ export async function updateMenuItem(
     ).bind(menuItemId).first()
     if (existing?.menu_id) {
       const newSlug = await uniqueSlug(db, existing.menu_id, updates.name, menuItemId)
+      setParts.push('slug = ?')
+      params.push(newSlug)
+    } else {
+      // If menu_id lookup fails, generate slug without menu_id scope (fallback)
+      const newSlug = slugify(updates.name)
       setParts.push('slug = ?')
       params.push(newSlug)
     }

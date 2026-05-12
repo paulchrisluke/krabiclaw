@@ -11,7 +11,8 @@ export default defineEventHandler(async (event) => {
 
     const docs = await Promise.all(markdownFiles.map(async (file) => {
       const filePath = join(docsDir, file)
-      const content = await readFile(filePath, 'utf-8')
+      // Read only first 2KB to find H1 title
+      const content = await readFile(filePath, { encoding: 'utf-8' })
       const titleMatch = content.match(/^#\s+(.+)$/m)
       const title = titleMatch ? titleMatch[1] : file.replace('.md', '')
       return {
@@ -23,6 +24,7 @@ export default defineEventHandler(async (event) => {
 
     return jsonResponse({ docs })
   } catch (error) {
-    return jsonResponse({ error: 'Failed to load docs', details: String(error) }, { status: 500 })
+    console.error('Failed to load docs:', error)
+    return jsonResponse({ error: 'Failed to load docs' }, { status: 500 })
   }
 })

@@ -29,21 +29,43 @@ export default defineEventHandler(async (event) => {
 
   if (body.title !== undefined) {
     updates.push('title = ?', 'slug = ?')
-    const slug = body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    let slug = body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    if (!slug) {
+      return jsonResponse({ error: 'Title must contain alphanumeric characters to generate a valid slug' }, { status: 400 })
+    }
     params.push(body.title, slug)
   }
-  if (body.body !== undefined) updates.push('body = ?')
-  if (body.body !== undefined) params.push(body.body)
-  if (body.excerpt !== undefined) updates.push('excerpt = ?')
-  if (body.excerpt !== undefined) params.push(body.excerpt)
-  if (body.category !== undefined) updates.push('category = ?')
-  if (body.category !== undefined) params.push(body.category)
-  if (body.publish) updates.push('published_at = ?')
-  if (body.publish) params.push(now)
-  if (body.unpublish) updates.push('published_at = NULL')
+  
+  const fields: Array<'body' | 'excerpt' | 'category'> = ['body', 'excerpt', 'category']
+  for (const field of fields) {
+    if (body[field] !== undefined) {
+      updates.push(`${field} = ?`)
+      params.push(body[field])
+    }
+  }
+  
+  if (body.publish && body.unpublish) {
+    return jsonResponse({ error: 'Cannot publish and unpublish simultaneously' }, { status: 400 })
+  }
+  if (body.publish) {
+    updates.push('published_at = ?')
+    params.push(now)
+  }
+  if (body.unpublish) {
+    updates.push('published_at = NULL')
+  }
 
   params.push(postId)
-  await db.prepare(`UPDATE platform_blog_posts SET ${updates.join(', ')} WHERE id = ?`).bind(...params).run()
+  
+  try {
+    const result = await db.prepare(`UPDATE platform_blog_posts SET ${updates.join(', ')} WHERE id = ?`).bind(...params).run()
+    if (!result.changes || result.changes === 0) {
+      return jsonResponse({ error: 'Post not found' }, { status: 404 })
+    }
+  } catch (err) {
+    console.error('Failed to update blog post:', err)
+    return jsonResponse({ error: 'Failed to update post', details: String(err) }, { status: 500 })
+  }
 
   return jsonResponse({ success: true, updated_at: now })
 })

@@ -179,22 +179,32 @@ useSchemaOrg([
     hasMenuSection: categories.value.map((cat: { id: string; name: string }) => ({
       '@type': 'MenuSection',
       name: cat.name,
-      hasMenuItem: (menuItemsBySection.value[cat.name] ?? []).map((item: any) => ({
-        '@type': 'MenuItem',
-        name: item.name,
-        description: item.description,
-        offers: { '@type': 'Offer', price: item.price ?? '', priceCurrency: 'THB' }
-      }))
+      hasMenuItem: (menuItemsBySection.value[cat.name] ?? []).map((item: any) => {
+        const menuItem: any = {
+          '@type': 'MenuItem',
+          name: item.name,
+          description: item.description
+        }
+        // Only include offers if price is valid
+        if (item.price !== null && item.price !== undefined && item.price !== '') {
+          menuItem.offers = { '@type': 'Offer', price: item.price, priceCurrency: 'THB' }
+        }
+        return menuItem
+      })
     }))
   })),
-  computed(() => ({
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: siteName.value, item: '/' },
-      { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` },
-      { '@type': 'ListItem', position: 4, name: 'Menu', item: `/locations/${slug.value}/menu` }
-    ]
-  }))
+  computed(() => {
+    const config = useRuntimeConfig()
+    const siteUrl = config.public.siteUrl
+    return {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: siteName.value, item: `${siteUrl}/` },
+        { '@type': 'ListItem', position: 2, name: 'Locations', item: `${siteUrl}/locations` },
+        { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${siteUrl}/locations/${slug.value}` },
+        { '@type': 'ListItem', position: 4, name: 'Menu', item: `${siteUrl}/locations/${slug.value}/menu` }
+      ]
+    }
+  })
 ])
 </script>

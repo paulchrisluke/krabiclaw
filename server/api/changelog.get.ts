@@ -1,17 +1,22 @@
 // GET /api/changelog - Auto-generated changelog from git commits
-import { execSync } from 'child_process'
+import { exec } from 'child_process'
+import { promisify } from 'util'
 import { jsonResponse } from '~/server/utils/api-response'
+
+const execPromise = promisify(exec)
 
 export default defineEventHandler(async (event) => {
   try {
     // Get git log with conventional commits
-    const gitLog = execSync('git log --pretty=format:"%H|%s|%an|%ad" --date=iso', {
+    const { stdout: gitLog } = await execPromise('git log --pretty=format:"%H%x1E%s%x1E%an%x1E%ad" --date=iso', {
       cwd: process.cwd(),
-      encoding: 'utf-8'
+      encoding: 'utf-8',
+      timeout: 10000,
+      maxBuffer: 1024 * 1024
     })
 
     const commits = gitLog.trim().split('\n').map(line => {
-      const parts = line.split('|')
+      const parts = line.split('\x1E')
       if (parts.length < 4) return null
       const [hash, message, author, date] = parts
       return { hash, message, author, date }
@@ -56,12 +61,20 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    // Get actual last commit timestamp
+    const { stdout: lastCommitDate } = await execPromise('git log -1 --format=%cI', {
+      cwd: process.cwd(),
+      encoding: 'utf-8',
+      timeout: 5000
+    })
+
     return jsonResponse({
       commits: categorized,
       total: commits.length,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: lastCommitDate.trim()
     })
   } catch (error) {
-    return jsonResponse({ error: 'Failed to generate changelog', details: String(error) }, { status: 500 })
+    console.error('Failed to generate changelog:', error)
+    return jsonResponse({ error: 'Failed to generate changelog' }, { status: 500 })
   }
 })

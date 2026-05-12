@@ -1,6 +1,6 @@
 <template>
   <div class="border-b border-(--ui-border) bg-(--ui-bg)">
-    <div class="mx-auto flex max-w-7xl gap-3 overflow-x-auto px-4 py-5 sm:px-6 lg:px-8 flex-wrap">
+    <div class="mx-auto flex max-w-7xl gap-3 overflow-x-auto px-4 py-5 sm:px-6 lg:px-8">
       <NuxtLink
         v-for="item in items"
         :key="item.key"

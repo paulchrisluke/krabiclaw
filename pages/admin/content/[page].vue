@@ -38,16 +38,18 @@ const error = ref('')
 const saving = ref(false)
 
 onMounted(async () => {
-  if (!session?.user?.email || !['paulchrisluke@gmail.com', 'bamboo.chow@gmail.com'].includes(session.user.email.toLowerCase())) {
-    error.value = 'Access denied'
-    loading.value = false
-    return
-  }
-
   try {
+    // Validate and sanitize page parameter
+    if (!page || !/^[a-zA-Z0-9_-]+$/.test(page)) {
+      error.value = 'Invalid page parameter'
+      loading.value = false
+      return
+    }
+
     const response = await $fetch(`/api/admin/content/${page}`)
     content.value = response.content || ''
   } catch (err) {
+    console.error('Failed to load content:', err)
     error.value = 'Failed to load content'
   } finally {
     loading.value = false
@@ -57,12 +59,19 @@ onMounted(async () => {
 async function saveContent() {
   saving.value = true
   try {
+    // Validate and sanitize page parameter
+    if (!page || !/^[a-zA-Z0-9_-]+$/.test(page)) {
+      alert('Invalid page parameter')
+      return
+    }
+
     await $fetch(`/api/admin/content/${page}`, {
       method: 'POST',
       body: { content: content.value }
     })
     alert('Content saved successfully!')
   } catch (err) {
+    console.error('Failed to save content:', err)
     alert('Failed to save content')
   } finally {
     saving.value = false

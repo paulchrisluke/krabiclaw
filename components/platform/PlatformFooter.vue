@@ -80,5 +80,6 @@ const resourceLinks = [
   { label: 'Help center', to: '/help' },
   { label: 'Privacy policy', to: '/privacy' },
   { label: 'Terms', to: '/terms' },
+  { label: 'Admin', to: '/admin' }
 ]
 </script>

@@ -171,12 +171,21 @@ useSchemaOrg([
   computed(() => {
     const loc = location.value
     if (!loc) return {}
-    const schemaHours = weekHours.value.map((h: any) => ({
-      '@type': 'OpeningHoursSpecification',
-      dayOfWeek: `https://schema.org/${h.day}`,
-      opens: h.hours?.split('–')[0]?.trim() || '',
-      closes: h.hours?.split('–')[1]?.trim() || ''
-    })).filter((h: any) => h.opens)
+    const schemaHours = weekHours.value.map((h: any) => {
+      if (!h.hours || typeof h.hours !== 'string' || !h.hours.includes('–')) return null
+      if (h.hours.toLowerCase() === 'closed') return null
+      const parts = h.hours.split('–')
+      if (parts.length !== 2) return null
+      const opens = parts[0]?.trim()
+      const closes = parts[1]?.trim()
+      if (!opens || !closes) return null
+      return {
+        '@type': 'OpeningHoursSpecification',
+        dayOfWeek: `https://schema.org/${h.day}`,
+        opens,
+        closes
+      }
+    }).filter((h: any) => h && h.opens)
     return {
       '@type': ['LocalBusiness', 'Restaurant'],
       name: `${siteName.value} — ${loc.title}`,

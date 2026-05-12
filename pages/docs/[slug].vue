@@ -24,42 +24,34 @@
 <script setup>
 definePageMeta({ layout: 'platform' })
 
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+
 const route = useRoute()
-const doc = ref({ title: '', content: '' })
-const loading = ref(true)
-const error = ref('')
+const config = useRuntimeConfig()
+const siteUrl = config.public.siteUrl
+
+const { data: doc, pending: loading, error } = await useAsyncData(
+  `doc-${route.params.slug}`,
+  async () => {
+    const response = await $fetch(`/api/docs/${route.params.slug}`)
+    if (!response || typeof response.title !== 'string' || typeof response.content !== 'string') {
+      throw createError({ statusCode: 404, statusMessage: 'Invalid documentation format' })
+    }
+    return response
+  }
+)
 
 const renderedContent = computed(() => {
-  if (!doc.value.content) return ''
-  return doc.value.content
-    .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
-    .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
-    .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/^(?!<[h|u])/gm, '<p>')
-    .replace(/(?<!>)$/gm, '</p>')
-})
-
-onMounted(async () => {
-  try {
-    const response = await $fetch(`/api/docs/${route.params.slug}`)
-    doc.value = response
-  } catch (err) {
-    error.value = 'Documentation not found'
-  } finally {
-    loading.value = false
-  }
+  if (!doc.value?.content) return ''
+  const html = marked.parse(doc.value.content)
+  return DOMPurify.sanitize(html)
 })
 
 useSeoMeta({
-  title: computed(() => `${doc.value.title} | KrabiClaw Docs`),
-  description: computed(() => `Learn about ${doc.value.title} in KrabiClaw documentation.`),
-  ogImage: '/og-image.jpg',
-  ogUrl: computed(() => `/docs/${route.params.slug}`)
+  title: computed(() => `${doc.value?.title || 'Documentation'} | KrabiClaw Docs`),
+  description: computed(() => `Learn about ${doc.value?.title || 'this topic'} in KrabiClaw documentation.`),
+  ogImage: `${siteUrl}/og-image.jpg`,
+  ogUrl: computed(() => `${siteUrl}/docs/${route.params.slug}`)
 })
 </script>

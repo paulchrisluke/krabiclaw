@@ -1,8 +1,8 @@
 <template>
   <div>
     <SayaHero
-      :title="getField('hero.title', 'About Saya Kitchen')"
-      :subtitle="getField('hero.subtitle', 'Authentic Japanese Robatayaki Experience in Krabi')"
+      :title="getField('hero.title', 'About Us')"
+      :subtitle="getField('hero.subtitle', 'Our Story')"
       size="page"
       :establishment-year="googleBusiness.value?.business?.establishmentYear"
     />
@@ -17,17 +17,17 @@
 
         <div class="grid md:grid-cols-2 gap-12 pt-8">
           <div>
-            <h3 class="text-2xl font-bold text-black mb-4">{{ getField('grill.title', 'Mastery of the Grill') }}</h3>
-            <p>{{ getField('grill.description', 'Renowned for its robatayaki, our restaurant showcases a mastery of grilling techniques, presenting a delectable array of skewered delights.') }}</p>
+            <h3 class="text-2xl font-bold text-black mb-4">{{ getField('grill.title', 'Our Specialties') }}</h3>
+            <p>{{ getField('grill.description', 'Our restaurant showcases mastery of culinary techniques, presenting a delectable array of dishes.') }}</p>
           </div>
           <div>
-            <h3 class="text-2xl font-bold text-black mb-4">{{ getField('sushi.title', 'Artistry in Sushi') }}</h3>
-            <p>{{ getField('sushi.description', "Complementing the robatayaki experience is our restaurant's sushi selection, where skilled chefs artfully craft a variety of sushi rolls.") }}</p>
+            <h3 class="text-2xl font-bold text-black mb-4">{{ getField('sushi.title', 'Our Craft') }}</h3>
+            <p>{{ getField('sushi.description', "Skilled chefs artfully craft a variety of dishes with care and precision.") }}</p>
           </div>
         </div>
 
         <div class="bg-[var(--ui-bg-muted)] rounded-3xl p-10 md:p-16 my-16">
-          <h2 class="text-3xl font-bold text-black mb-8 italic">{{ getField('journey.title', 'Our Journey') }}</h2>
+          <h2 class="text-3xl font-bold text-black mb-8 italic">{{ getField('journey.title', 'Our Story') }}</h2>
           <div v-html="journeyBody" class="space-y-6" />
         </div>
 
@@ -61,26 +61,28 @@ const googleMedia = computed(() => googleBusiness.value?.media || [])
 // Defaults moved to computeds to avoid inline template quote-escaping issues
 const storyIntro = computed(() => getField('story.intro',
   '<p class="text-xl font-medium text-[var(--ui-text-highlighted)] border-l-4 border-black pl-6 py-2">'  +
-  'Saya Kitchen, nestled in the heart of Krabi, is a culinary haven that specializes in the artful fusion of robatayaki and sushi.' +
+  'Welcome to our restaurant, where culinary tradition meets modern creativity.' +
   '</p>'
 ))
 
 const journeyBody = computed(() => getField('journey.body',
-  '<p>Nestled amidst the tropical allure of Krabi, Saya Kitchen has an enchanting culinary tale. ' +
-  'Beyond the sliding glazed door entrance and our giant red lucky cat, you are welcomed into a little piece of Japan.</p>' +
-  '<p>The restaurant, a symphony of warm wood and subtle lighting, immerses diners in an ambiance that transports them to the heart of Japan.</p>'
+  '<p>Our restaurant has a unique story to tell. ' +
+  'From our humble beginnings to where we are today, every step has been guided by passion and dedication.</p>' +
+  '<p>The restaurant, a symphony of warm ambiance and subtle lighting, immerses diners in an unforgettable experience.</p>'
 ))
 
 const experienceBody = computed(() => getField('experience.body',
-  '<p>Equally enticing is our sushi bar, a stage where culinary craftsmen orchestrate amazing flavors and textures. ' +
-  'Committed to the freshest seafood, our sushi chefs weave magic into every dish.</p>' +
-  '<p>Saya Kitchen brings the legacy of robatayaki and the allure of sushi together in a focused, warm dining experience.</p>'
+  '<p>Our culinary team orchestrates amazing flavors and textures. ' +
+  'Committed to the freshest ingredients, our chefs weave magic into every dish.</p>' +
+  '<p>We bring together tradition and innovation in a focused, warm dining experience.</p>'
 ))
 
+const restaurantName = computed(() => getField('restaurant.name', ''))
+
 useSeoMeta({
-  title: 'About | Saya Kitchen',
-  description: 'Learn about Saya Kitchen and our authentic Japanese robatayaki dining experience in Krabi.',
-  ogImage: '/og-image.jpg',
+  title: computed(() => restaurantName.value ? `About | ${restaurantName.value}` : 'About Us'),
+  description: computed(() => getField('seo.description', 'Learn about our restaurant and our story.')),
+  ogImage: computed(() => getField('seo.ogImage', '/og-image.jpg')),
   ogUrl: '/about'
 })
 </script>

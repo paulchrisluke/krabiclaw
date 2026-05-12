@@ -25,16 +25,38 @@ export default defineEventHandler(async (event) => {
   }
 
   const id = crypto.randomUUID()
-  const slug = body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  let slug = body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  
+  // Handle empty slug
+  if (!slug) {
+    slug = `post-${Date.now()}`
+  }
+  
+  // Ensure slug uniqueness
+  let uniqueSlug = slug
+  let suffix = 1
+  while (true) {
+    const existing = await db.prepare(`SELECT id FROM platform_blog_posts WHERE slug = ?`).bind(uniqueSlug).first()
+    if (!existing) break
+    suffix++
+    uniqueSlug = `${slug}-${suffix}`
+  }
+  slug = uniqueSlug
+  
   const now = new Date().toISOString()
   const userId = session.user.id
 
   const publishedAt = body.publish ? now : null
 
-  await db.prepare(
-    `INSERT INTO platform_blog_posts (id, title, slug, body, excerpt, category, author_id, published_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, body.title, slug, body.body, body.excerpt ?? null, body.category ?? null, userId, publishedAt, now, now).run()
+  try {
+    await db.prepare(
+      `INSERT INTO platform_blog_posts (id, title, slug, body, excerpt, category, author_id, published_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, body.title, slug, body.body, body.excerpt ?? null, body.category ?? null, userId, publishedAt, now, now).run()
+  } catch (err) {
+    console.error('Failed to create blog post:', err)
+    return jsonResponse({ error: 'Failed to create post', details: String(err) }, { status: 500 })
+  }
 
   return jsonResponse({ success: true, id, slug, published_at: publishedAt })
 })

@@ -47,28 +47,72 @@ export function useWebSiteSchema() {
 }
 
 export function useBreadcrumbSchema(items: Array<{ name: string; url: string }>) {
+  // Validate items
+  if (!Array.isArray(items) || items.length === 0) {
+    return
+  }
+  
+  const validItems = items.filter(item => {
+    const name = item.name?.trim()
+    const url = item.url?.trim()
+    return name && url
+  })
+  
+  if (validItems.length === 0) {
+    return
+  }
+  
+  // Convert relative URLs to absolute
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://krabiclaw.com'
+  
   useSchemaOrg({
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
-    itemListElement: items.map((item, index) => ({
+    itemListElement: validItems.map((item, index) => ({
       '@type': 'ListItem',
       position: index + 1,
       name: item.name,
-      item: item.url
+      item: item.url.startsWith('http') ? item.url : `${baseUrl}${item.url}`
     }))
   })
 }
 
 export function useArticleSchema(title: string, description: string, publishedAt: string, author: string) {
+  // Validate required fields
+  const trimmedTitle = title?.trim()
+  const trimmedDescription = description?.trim()
+  const trimmedAuthor = author?.trim()
+  
+  if (!trimmedTitle || !trimmedDescription || !trimmedAuthor) {
+    console.warn('useArticleSchema: missing required fields (title, description, or author)')
+    return
+  }
+  
+  // Validate and normalize publishedAt to ISO 8601
+  let normalizedDate = publishedAt
+  if (publishedAt) {
+    try {
+      const date = new Date(publishedAt)
+      if (isNaN(date.getTime())) {
+        console.warn('useArticleSchema: invalid date format for publishedAt')
+        return
+      }
+      normalizedDate = date.toISOString()
+    } catch (e) {
+      console.warn('useArticleSchema: error parsing publishedAt', e)
+      return
+    }
+  }
+  
   useSchemaOrg({
     '@context': 'https://schema.org',
     '@type': 'Article',
-    headline: title,
-    description,
-    datePublished: publishedAt,
+    headline: trimmedTitle,
+    description: trimmedDescription,
+    datePublished: normalizedDate,
     author: {
       '@type': 'Person',
-      name: author
+      name: trimmedAuthor
     },
     publisher: {
       '@type': 'Organization',

@@ -8,7 +8,7 @@
         <p class="text-(--ui-text-muted)">Loading changelog...</p>
       </div>
 
-      <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-lg p-6">
+      <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-lg p-6" role="alert">
         <p class="text-red-600">{{ error }}</p>
       </div>
 
@@ -61,7 +61,10 @@ onMounted(async () => {
 })
 
 function formatDate(dateString) {
-  return new Date(dateString).toLocaleDateString('en-US', {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric'
@@ -85,10 +88,13 @@ function getBadgeClass(type) {
   return classes[type] || classes.other
 }
 
+const config = useRuntimeConfig()
+const siteUrl = config.public.siteUrl
+
 useSeoMeta({
   title: 'Changelog | KrabiClaw',
   description: 'Latest updates and improvements to KrabiClaw restaurant website builder.',
-  ogImage: '/og-image.jpg',
-  ogUrl: '/changelog'
+  ogImage: `${siteUrl}/og-image.jpg`,
+  ogUrl: `${siteUrl}/changelog`
 })
 </script>

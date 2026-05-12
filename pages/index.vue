@@ -305,7 +305,7 @@
           <p class="saya-eyebrow mb-8 text-white/60">Our story</p>
 
           <!-- Filled state -->
-          <template v-if="getField('story.headline') || businessTitle !== 'Saya Kitchen'">
+          <template v-if="getField('story.headline') || hasGoogleBusiness">
             <h2 class="saya-display-md max-w-3xl text-white">
               {{ getField('story.headline', businessTitle) }}
             </h2>
@@ -590,7 +590,7 @@ const googleReviewSummary = computed(() => {
 const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
 const featuredReviews = computed(() => googleReviews.value.slice(0, 3))
 
-// Aggregated highlights — mix posts, dishes, review quotes (max 6 tiles)
+// Aggregated highlights — mix posts, dishes, review quotes (max 7 tiles)
 const highlights = computed(() => {
   const tiles = []
 

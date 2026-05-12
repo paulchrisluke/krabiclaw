@@ -22,7 +22,7 @@
           >
             <UCard class="hover:shadow-md transition-shadow cursor-pointer h-full">
               <h3 class="text-xl font-bold text-(--ui-text) mb-2">{{ doc.title }}</h3>
-              <p class="text-(--ui-text-muted) mb-4">Learn about {{ doc.title.toLowerCase() }}</p>
+              <p class="text-(--ui-text-muted) mb-4">Learn about {{ doc.title?.toLowerCase() || 'this topic' }}</p>
               <UButton variant="outline" color="neutral">View Guide</UButton>
             </UCard>
           </NuxtLink>
@@ -43,9 +43,12 @@ definePageMeta({ layout: 'platform' })
 
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
+const config = useRuntimeConfig()
+const siteUrl = config.public.siteUrl
+
 useBreadcrumbSchema([
-  { name: 'Home', url: 'https://krabiclaw.com' },
-  { name: 'Documentation', url: 'https://krabiclaw.com/docs' }
+  { name: 'Home', url: `${siteUrl}/` },
+  { name: 'Documentation', url: `${siteUrl}/docs` }
 ])
 
 const docs = ref([])
@@ -55,7 +58,7 @@ const error = ref('')
 onMounted(async () => {
   try {
     const response = await $fetch('/api/docs')
-    docs.value = response.docs
+    docs.value = response?.docs || []
   } catch (err) {
     error.value = 'Failed to load documentation'
   } finally {
@@ -66,7 +69,7 @@ onMounted(async () => {
 useSeoMeta({
   title: 'Documentation | KrabiClaw',
   description: 'Documentation for KrabiClaw restaurant website builder. Learn how to use all features.',
-  ogImage: '/og-image.jpg',
-  ogUrl: '/docs'
+  ogImage: `${siteUrl}/og-image.jpg`,
+  ogUrl: `${siteUrl}/docs`
 })
 </script>

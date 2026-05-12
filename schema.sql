@@ -676,8 +676,9 @@ CREATE TABLE IF NOT EXISTS platform_content (
   id TEXT PRIMARY KEY,
   page TEXT UNIQUE NOT NULL,
   content TEXT NOT NULL,
-  updated_by TEXT NOT NULL,
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  updated_by TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (updated_by) REFERENCES user(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS platform_blog_posts (
@@ -690,7 +691,8 @@ CREATE TABLE IF NOT EXISTS platform_blog_posts (
   author_id TEXT NOT NULL,
   published_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (author_id) REFERENCES user(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS platform_contact_submissions (
@@ -705,5 +707,6 @@ CREATE TABLE IF NOT EXISTS platform_analytics (
   id TEXT PRIMARY KEY,
   metric TEXT NOT NULL,
   value INTEGER NOT NULL,
-  date TEXT NOT NULL
+  date TEXT NOT NULL,
+  UNIQUE(metric, date)
 );

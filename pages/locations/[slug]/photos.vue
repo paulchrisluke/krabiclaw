@@ -74,7 +74,7 @@
           >
           <div class="absolute inset-0 flex items-end bg-gradient-to-t from-black/50 to-transparent p-4 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
             <span class="saya-eyebrow rounded-full bg-white/18 px-2.5 py-1 text-xs text-white backdrop-blur-sm">
-              {{ photo.category }}
+              {{ photo.category || '—' }}
             </span>
           </div>
         </button>
@@ -175,7 +175,11 @@ const activeCategory = ref('ALL')
 
 const counts = computed(() => {
   const m: Record<string, number> = { ALL: photos.value.length }
-  photos.value.forEach((p: any) => { m[p.category] = (m[p.category] ?? 0) + 1 })
+  photos.value.forEach((p: any) => {
+    if (p.category && typeof p.category === 'string' && p.category.trim()) {
+      m[p.category] = (m[p.category] ?? 0) + 1
+    }
+  })
   return m
 })
 

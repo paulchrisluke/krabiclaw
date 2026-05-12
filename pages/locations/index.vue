@@ -5,7 +5,7 @@
     <header class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
       <p class="saya-kicker mb-6">Find us</p>
       <h1 class="saya-display-md text-default">
-        {{ locations.length || 2 }} location{{ (locations.length || 2) === 1 ? '' : 's' }},
+        {{ locations.length }} location{{ locations.length === 1 ? '' : 's' }},
         one kitchen philosophy.
       </h1>
     </header>
@@ -106,17 +106,34 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'saya' })
 
+type AddressInput = string | { addressLines?: string[]; locality?: string; administrativeArea?: string; postalCode?: string } | null | undefined
+
+interface Location {
+  id: string
+  slug: string
+  title: string
+  city?: string
+  address?: AddressInput
+  image_url?: string
+  open_now?: boolean
+  hours_today?: string
+}
+
+interface LocationsResponse {
+  locations: Location[]
+}
+
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 const { isAuthenticated } = useAuth()
 
-const { data, pending } = await useFetch(
+const { data, pending } = await useFetch<LocationsResponse>(
   `/api/public/sites/${siteId}/locations`,
-  { key: `public-locations-${siteId}`, default: () => ({ locations: [] }) }
+  { key: `public-locations-${siteId}` }
 )
-const locations = computed(() => (data as any).value?.locations ?? [])
+const locations = computed(() => data.value?.locations ?? [])
 
-function formatAddress(address: any) {
+function formatAddress(address: AddressInput) {
   if (!address) return ''
   if (typeof address === 'string') return address
   return [address.addressLines?.[0], address.locality, address.administrativeArea, address.postalCode].filter(Boolean).join(', ')

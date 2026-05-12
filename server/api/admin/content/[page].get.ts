@@ -12,15 +12,21 @@ export default defineEventHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const session = await getAuthSession(event, env)
-  if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+  if (!session?.user?.email || !session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   if (!isPlatformOwner(session.user.email)) {
     return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
   }
 
-  const row = await db.prepare(
-    `SELECT id, page, content, updated_by, updated_at FROM platform_content WHERE page = ? LIMIT 1`
-  ).bind(page).first()
+  let row
+  try {
+    row = await db.prepare(
+      `SELECT id, page, content, updated_by, updated_at FROM platform_content WHERE page = ? LIMIT 1`
+    ).bind(page).first()
+  } catch (err) {
+    console.error('Failed to fetch content:', err)
+    return jsonResponse({ error: 'Failed to fetch content' }, { status: 500 })
+  }
 
   if (!row) {
     return jsonResponse({ page, content: '', exists: false })

@@ -70,10 +70,13 @@ definePageMeta({ layout: 'platform' })
 
 import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
+const config = useRuntimeConfig()
+const siteUrl = config.public.siteUrl
+
 useOrganizationSchema()
 useBreadcrumbSchema([
-  { name: 'Home', url: 'https://krabiclaw.com' },
-  { name: 'Contact', url: 'https://krabiclaw.com/contact' }
+  { name: 'Home', url: `${siteUrl}/` },
+  { name: 'Contact', url: `${siteUrl}/contact` }
 ])
 
 const contactForm = ref({
@@ -112,6 +115,9 @@ const handleContact = async () => {
     submitted.value = true
     contactForm.value = { name: '', email: '', message: '' }
     toast.add({ description: 'Message sent! We\'ll be in touch soon.', color: 'success' })
+    setTimeout(() => {
+      submitted.value = false
+    }, 3000)
   } catch (err) {
     toast.add({ description: 'Failed to send message. Please try again.', color: 'error' })
   } finally {
@@ -122,7 +128,7 @@ const handleContact = async () => {
 useSeoMeta({
   title: 'Contact | KrabiClaw',
   description: 'Contact the KrabiClaw team for support, questions, or partnership inquiries.',
-  ogImage: '/og-image.jpg',
-  ogUrl: '/contact'
+  ogImage: `${siteUrl}/og-image.jpg`,
+  ogUrl: `${siteUrl}/contact`
 })
 </script>

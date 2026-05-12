@@ -3,7 +3,7 @@
 
     <!-- Mascot side -->
     <aside class="hidden lg:flex flex-col items-center justify-center bg-(--kc-coral-50) px-12 py-12">
-      <img src="/krabiclaw-login-mascot.png" alt="" class="w-full max-w-115 block" />
+      <img src="/krabiclaw-login-mascot.png" alt="KrabicLaw mascot" class="w-full max-w-115 block" />
       <p class="text-[14px] text-(--kc-navy-500) text-center max-w-sm mt-5 leading-relaxed">
         "We launched our menu in 12 minutes and got our first online reservation the same night." —
         <strong class="text-(--kc-navy)">Saya, Kikuzuki Krabi</strong>
@@ -73,6 +73,8 @@ definePageMeta({
   auth: false
 })
 
+import { authClient } from '~/lib/auth-client'
+
 const router = useRouter()
 const loading = ref(false)
 const error = ref(null)
@@ -88,6 +90,7 @@ const handleGoogleSignIn = async () => {
   try {
     await authClient.signIn.social({ provider: 'google', callbackURL: '/dashboard' })
   } catch (err) {
+    console.error('Google sign-in error:', err)
     error.value = 'Google sign in failed. Please try again.'
   } finally {
     loading.value = false

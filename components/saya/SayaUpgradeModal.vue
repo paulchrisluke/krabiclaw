@@ -11,6 +11,7 @@
           </div>
           <button
             class="flex size-8 shrink-0 items-center justify-center rounded-full hover:bg-muted transition-colors"
+            aria-label="Close modal"
             @click="close"
           >
             <UIcon name="i-heroicons-x-mark" class="size-4 text-muted" />
@@ -75,7 +76,6 @@
             variant="solid"
             block
             class="rounded-full"
-            @click="close"
           >
             Upgrade to Pro
           </UButton>
