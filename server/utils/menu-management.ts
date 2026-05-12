@@ -1,5 +1,7 @@
 import type { Menu, MenuItem, MenuWithItems, CreateMenuRequest, UpdateMenuRequest, CreateMenuItemRequest, UpdateMenuItemRequest } from '../types/menu'
 
+const MAX_SUFFIX_ATTEMPTS = 50
+
 function slugify(name: string): string {
   const slug = name
     .toLowerCase()
@@ -16,18 +18,21 @@ function slugify(name: string): string {
 }
 
 async function uniqueSlug(db: any, menuId: string, base: string, excludeId?: string): Promise<string> {
-  let candidate = slugify(base)
+  const baseSlug = slugify(base)
+  let candidate = baseSlug
   let suffix = 1
-  while (true) {
+  while (suffix <= MAX_SUFFIX_ATTEMPTS) {
     const query = excludeId
       ? `SELECT id FROM menu_items WHERE menu_id = ? AND slug = ? AND id != ? LIMIT 1`
       : `SELECT id FROM menu_items WHERE menu_id = ? AND slug = ? LIMIT 1`
     const params = excludeId ? [menuId, candidate, excludeId] : [menuId, candidate]
     const existing = await db.prepare(query).bind(...params).first()
     if (!existing) return candidate
+    candidate = `${baseSlug}-${suffix}`
     suffix++
-    candidate = `${slugify(base)}-${suffix}`
   }
+
+  throw new Error(`Failed to generate unique slug for "${base}" after ${MAX_SUFFIX_ATTEMPTS} attempts`)
 }
 
 // Get menus for a site with optional location filter
@@ -298,6 +303,9 @@ export async function createMenuItem(
     createdBy
   ).run()
 
+  // Rely on DB unique index (menu_id, slug) for concurrent writes.
+  // Callers can safely retry create on unique-constraint failures with backoff.
+
   if (!result.success) {
     throw new Error('Failed to create menu item')
   }
@@ -346,10 +354,7 @@ export async function updateMenuItem(
       setParts.push('slug = ?')
       params.push(newSlug)
     } else {
-      // If menu_id lookup fails, generate slug without menu_id scope (fallback)
-      const newSlug = slugify(updates.name)
-      setParts.push('slug = ?')
-      params.push(newSlug)
+      throw new Error(`Missing menu_id for menu item ${menuItemId}`)
     }
   }
   if (updates.description !== undefined) {
@@ -384,6 +389,9 @@ export async function updateMenuItem(
     SET ${setParts.join(', ')}
     WHERE id = ?
   `).bind(...params).run()
+
+  // Rely on DB unique index (menu_id, slug) for concurrent writes.
+  // Callers can safely retry updates on unique-constraint failures with backoff.
 
   if (!result.success) {
     throw new Error('Failed to update menu item')

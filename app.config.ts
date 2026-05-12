@@ -7,7 +7,7 @@ export default defineAppConfig({
     },
     textarea: {
       slots: {
-        root: 'relative flex w-full items-center'
+        root: 'relative flex w-full items-start'
       }
     },
     colors: {

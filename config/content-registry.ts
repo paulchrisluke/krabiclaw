@@ -232,7 +232,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Story Introduction',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: '<p class="text-xl font-medium text-(--ui-text) border-l-4 border-(--ui-border) pl-6 py-2">Saya Kitchen brings the warmth of Japanese robatayaki to Krabi, pairing open-flame cooking with pristine seafood, seasonal produce, and generous island hospitality.</p>'
+        defaultValue: '<p class="text-xl font-medium text-default border-l-4 border-default pl-6 py-2">Saya Kitchen brings the warmth of Japanese robatayaki to Krabi, pairing open-flame cooking with pristine seafood, seasonal produce, and generous island hospitality.</p>'
       },
       'grill.title': {
         label: 'Grill Section Title',

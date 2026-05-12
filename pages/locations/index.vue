@@ -144,7 +144,7 @@ const placeholders = [
   { title: 'Second Location', city: 'Coming Soon', address: 'Additional locations appear here when added.' }
 ]
 
-const siteName = computed(() => (site as any)?.value?.name || (site as any)?.name || 'Saya')
+const siteName = computed(() => unref(site)?.name || 'Saya')
 
 useSeoMeta({
   title: () => `Locations · ${siteName.value}`,

@@ -25,7 +25,7 @@
 definePageMeta({ layout: 'platform' })
 
 import { marked } from 'marked'
-import DOMPurify from 'dompurify'
+import DOMPurify from 'isomorphic-dompurify'
 
 const route = useRoute()
 const config = useRuntimeConfig()

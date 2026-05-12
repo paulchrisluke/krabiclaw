@@ -63,19 +63,25 @@ function isPlatformHost(host: string): boolean {
 }
 
 function isPlatformRoute(pathname: string): boolean {
-  const platformRoutes = [
+  const exactOrTrailingSlashRoutes = ['/privacy', '/terms']
+  const prefixRoutes = [
     '/login',
-    '/signup', 
+    '/signup',
     '/pricing',
     '/dashboard',
     '/api/auth',
-    '/privacy',
-    '/terms',
     '/templates',
     '/features'
   ]
-  
-  return platformRoutes.some(route => pathname.startsWith(route))
+
+  const exactMatch = exactOrTrailingSlashRoutes.some(route => {
+    const escaped = route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`^${escaped}/?$`).test(pathname)
+  })
+
+  if (exactMatch) return true
+
+  return prefixRoutes.some(route => pathname.startsWith(route))
 }
 
 async function resolveTenantSite(host: string, event: any): Promise<any> {

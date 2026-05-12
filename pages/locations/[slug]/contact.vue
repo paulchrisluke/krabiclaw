@@ -25,6 +25,7 @@
           <iframe
             v-if="mapEmbedSrc"
             :src="mapEmbedSrc"
+            :title="location?.title ? `Map for ${location.title}` : 'Location map'"
             width="100%"
             height="100%"
             style="border:0"
@@ -143,7 +144,17 @@ const weekHours = computed(() => {
   const hours = location.value?.opening_hours
   if (!hours) return []
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
-  const today = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][new Date().getDay()]
+  const timezone = location.value?.time_zone || location.value?.timezone || null
+  let today = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][new Date().getDay()]
+
+  if (timezone) {
+    try {
+      today = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: timezone }).format(new Date()).toUpperCase()
+    } catch {
+      // Fallback to local weekday when the location timezone is missing or invalid.
+    }
+  }
+
   return formatGoogleHours(hours).map((h, i) => ({ ...h, today: days[i] === today }))
 })
 

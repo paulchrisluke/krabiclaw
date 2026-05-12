@@ -43,13 +43,15 @@
           size="sm"
           class="md:hidden"
           aria-label="Toggle menu"
+          :aria-expanded="isMobileMenuOpen"
+          aria-controls="mobile-menu"
           @click="toggleMobileMenu"
         />
       </div>
     </div>
 
     <!-- Mobile menu -->
-    <div v-if="isMobileMenuOpen" class="md:hidden border-t border-(--ui-border) bg-(--ui-bg)">
+    <div id="mobile-menu" v-if="isMobileMenuOpen" class="md:hidden border-t border-(--ui-border) bg-(--ui-bg)">
       <nav class="px-4 py-4 space-y-2">
         <NuxtLink
           v-for="item in navItems"

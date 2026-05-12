@@ -1,4 +1,4 @@
-// DELETE /api/admin/blog/posts/[postId] - Delete platform blog post
+// GET /api/admin/blog/posts/[postId] - Fetch single platform blog post (including draft)
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
@@ -18,15 +18,11 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
   }
 
-  try {
-    const result = await db.prepare(`DELETE FROM platform_blog_posts WHERE id = ?`).bind(postId).run()
-    if (!result.changes || result.changes === 0) {
-      return jsonResponse({ error: 'Post not found' }, { status: 404 })
-    }
-  } catch (err) {
-    console.error('Failed to delete blog post:', err)
-    return jsonResponse({ error: 'Failed to delete post' }, { status: 500 })
-  }
+  const post = await db.prepare(
+    `SELECT id, title, slug, body, excerpt, category, published_at, created_at, updated_at FROM platform_blog_posts WHERE id = ?`
+  ).bind(postId).first()
 
-  return jsonResponse({ success: true })
+  if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
+
+  return jsonResponse({ post })
 })

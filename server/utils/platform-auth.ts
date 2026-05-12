@@ -2,15 +2,18 @@
 // Platform owners: configured via PLATFORM_OWNER_EMAILS environment variable
 
 function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
   const aBuf = Buffer.from(a, 'utf8')
   const bBuf = Buffer.from(b, 'utf8')
+
+  if (aBuf.length !== bBuf.length) return false
+
   try {
     return require('crypto').timingSafeEqual(aBuf, bBuf)
   } catch {
     // Fallback for environments without timingSafeEqual
     let result = 0
-    for (let i = 0; i < aBuf.length; i++) {
+    const maxLen = Math.max(aBuf.length, bBuf.length)
+    for (let i = 0; i < maxLen; i++) {
       result |= (aBuf[i] || 0) ^ (bBuf[i] || 0)
     }
     return result === 0

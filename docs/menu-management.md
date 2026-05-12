@@ -18,7 +18,7 @@ Learn how to manage your restaurant menu in KrabiClaw.
 4. Add description
 5. Set price
 6. Upload photo (optional)
-7. Choose category
+7. Choose category (optional; create categories as needed, see Organize Categories below)
 8. Save
 
 ## Organize Categories
@@ -45,7 +45,7 @@ Categories help organize your menu items. Common categories:
 2. Select the category you want to modify
 3. Click "Edit" to update name/description, then save
 4. Click "Delete" to remove the category (requires confirmation)
-5. Note: Deleting a category will unassign items from that category
+5. Note: Deleting a category removes the category assignment only. Items remain in your menu as uncategorized items (not moved to a default category), and they stay editable/searchable in the admin. Follow up by reassigning them from the item editor (or by bulk-editing section/category where available). Example: if "Desserts" is deleted, "Mochi" stays in the menu but appears uncategorized until you assign it to "Sweets".
 
 ### Reorder Categories
 
@@ -109,3 +109,19 @@ If the import didn't capture items correctly:
 - Use high-quality photos
 - Update prices regularly
 - Mark items as unavailable when out of stock
+
+### Mark items as unavailable
+
+See Add Menu Items above for the item-edit flow and Tips for stock hygiene.
+
+1. Open Menu, then click the item to edit.
+2. Toggle Available for ordering off (this updates the `available` field to `false`).
+3. Save changes.
+
+API/admin details:
+- Admin handler uses `updateMenuItem` in server logic.
+- Endpoint: `PATCH /api/editor/sites/:siteId/menus/:menuId/items/:itemId` with payload like `{ "available": false }`.
+
+Behavior and common workflows:
+- Temporarily out of stock: set `available` to `false`; item remains in admin lists for quick re-enable later.
+- Permanently discontinued: set `available` to `false` first (so it disappears from customer ordering views), then optionally delete after internal review/history checks.

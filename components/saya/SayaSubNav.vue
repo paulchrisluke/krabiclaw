@@ -5,6 +5,7 @@
         v-for="item in items"
         :key="item.key"
         :to="item.href"
+        :aria-current="active === item.key ? 'page' : null"
         :class="[
           'inline-flex shrink-0 items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-medium tracking-wide transition-colors',
           active === item.key

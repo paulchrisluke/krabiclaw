@@ -37,10 +37,13 @@ const loading = ref(true)
 const error = ref('')
 const saving = ref(false)
 
+function validatePage(value) {
+  return !!value && /^[a-zA-Z0-9_-]+$/.test(String(value))
+}
+
 onMounted(async () => {
   try {
-    // Validate and sanitize page parameter
-    if (!page || !/^[a-zA-Z0-9_-]+$/.test(page)) {
+    if (!validatePage(page)) {
       error.value = 'Invalid page parameter'
       loading.value = false
       return
@@ -57,14 +60,13 @@ onMounted(async () => {
 })
 
 async function saveContent() {
+  if (!validatePage(page)) {
+    alert('Invalid page parameter')
+    return
+  }
+
   saving.value = true
   try {
-    // Validate and sanitize page parameter
-    if (!page || !/^[a-zA-Z0-9_-]+$/.test(page)) {
-      alert('Invalid page parameter')
-      return
-    }
-
     await $fetch(`/api/admin/content/${page}`, {
       method: 'POST',
       body: { content: content.value }

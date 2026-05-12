@@ -39,6 +39,15 @@
 
         <!-- Locations grid -->
         <div
+          v-if="locationsError"
+          class="rounded-xl border border-white/10 bg-white/3 p-6 text-sm text-zinc-400"
+          role="status"
+          aria-live="polite"
+        >
+          We could not load locations right now. Please try again in a moment.
+        </div>
+        <div
+          v-else
           :class="[
             'grid gap-8',
             locations.length > 2 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
@@ -148,7 +157,7 @@ const resourceLinks = [
 ]
 
 // No await — layout component, data arrives reactively
-const { data: locationsData } = useFetch(
+const { data: locationsData, error: locationsError } = useFetch(
   () => `/api/public/sites/${siteId}/locations`,
   {
     key: () => `footer-locs-${siteId}`,
@@ -178,7 +187,8 @@ const locations = computed(() =>
 function formatLocAddress(loc: any) {
   if (!loc.address) return ''
   if (typeof loc.address === 'string') return loc.address
-  const addr = loc.address
-  return [addr.addressLines?.[0], addr.locality, addr.administrativeArea].filter(Boolean).join(', ')
+  const addr = typeof loc.address === 'object' && loc.address !== null ? loc.address : null
+  const line1 = Array.isArray(addr?.addressLines) ? addr?.addressLines?.[0] : ''
+  return [line1, addr?.locality, addr?.administrativeArea].filter(Boolean).join(', ')
 }
 </script>

@@ -83,7 +83,10 @@
             <h2 class="text-xl font-bold text-(--ui-text)">Platform Blog</h2>
             <UButton size="sm" @click="createPost">New Post</UButton>
           </div>
-          <div v-if="blogPosts.length === 0" class="text-center py-8 text-(--ui-text-muted)">
+          <div v-if="blogError" class="text-center py-8 text-red-600">
+            {{ blogError }}
+          </div>
+          <div v-else-if="blogPosts.length === 0" class="text-center py-8 text-(--ui-text-muted)">
             No blog posts yet. Create your first post!
           </div>
           <div v-else class="space-y-4">
@@ -94,7 +97,7 @@
               </div>
               <div class="flex gap-2">
                 <UButton size="sm" variant="outline" @click="editPost(post.id)">Edit</UButton>
-                <UButton size="sm" variant="outline" color="red" @click="deletePost(post.id)">Delete</UButton>
+                <UButton size="sm" variant="outline" color="red" :loading="deletingPostId === post.id" :disabled="deletingPostId === post.id" @click="openDeleteConfirm(post.id)">Delete</UButton>
               </div>
             </div>
           </div>
@@ -111,35 +114,35 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <div class="bg-blue-50 rounded-lg p-6">
                 <h3 class="text-sm font-medium text-blue-600 mb-2">Total Users</h3>
-                <p class="text-3xl font-bold text-blue-900">{{ analytics.metrics.users }}</p>
+                <p class="text-3xl font-bold text-blue-900">{{ analytics?.metrics?.users }}</p>
               </div>
               <div class="bg-green-50 rounded-lg p-6">
                 <h3 class="text-sm font-medium text-green-600 mb-2">Total Sites</h3>
-                <p class="text-3xl font-bold text-green-900">{{ analytics.metrics.sites }}</p>
+                <p class="text-3xl font-bold text-green-900">{{ analytics?.metrics?.sites }}</p>
               </div>
               <div class="bg-purple-50 rounded-lg p-6">
                 <h3 class="text-sm font-medium text-purple-600 mb-2">Total Posts</h3>
-                <p class="text-3xl font-bold text-purple-900">{{ analytics.metrics.posts }}</p>
+                <p class="text-3xl font-bold text-purple-900">{{ analytics?.metrics?.posts }}</p>
               </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <div class="bg-gray-50 rounded-lg p-6">
                 <h3 class="text-sm font-medium text-(--ui-text-muted) mb-2">Organizations</h3>
-                <p class="text-2xl font-bold text-(--ui-text)">{{ analytics.metrics.organizations }}</p>
+                <p class="text-2xl font-bold text-(--ui-text)">{{ analytics?.metrics?.organizations }}</p>
               </div>
               <div class="bg-gray-50 rounded-lg p-6">
                 <h3 class="text-sm font-medium text-(--ui-text-muted) mb-2">Menus</h3>
-                <p class="text-2xl font-bold text-(--ui-text)">{{ analytics.metrics.menus }}</p>
+                <p class="text-2xl font-bold text-(--ui-text)">{{ analytics?.metrics?.menus }}</p>
               </div>
               <div class="bg-gray-50 rounded-lg p-6">
                 <h3 class="text-sm font-medium text-(--ui-text-muted) mb-2">Locations</h3>
-                <p class="text-2xl font-bold text-(--ui-text)">{{ analytics.metrics.locations }}</p>
+                <p class="text-2xl font-bold text-(--ui-text)">{{ analytics?.metrics?.locations }}</p>
               </div>
             </div>
 
             <h3 class="text-lg font-bold text-(--ui-text) mb-4">Recent Sites</h3>
-            <div v-if="analytics.recentSites.length === 0" class="text-center py-4 text-(--ui-text-muted)">
+            <div v-if="!analytics?.recentSites?.length" class="text-center py-4 text-(--ui-text-muted)">
               No sites yet.
             </div>
             <div v-else class="space-y-2">
@@ -164,6 +167,19 @@
           </div>
         </div>
       </div>
+
+      <UModal v-model:open="deleteConfirmOpen" :ui="{ content: 'max-w-md' }">
+        <template #content>
+          <div class="p-6">
+            <h3 class="text-lg font-semibold text-(--ui-text) mb-2">Delete post?</h3>
+            <p class="text-sm text-(--ui-text-muted) mb-6">This action cannot be undone.</p>
+            <div class="flex justify-end gap-2">
+              <UButton variant="ghost" color="neutral" @click="closeDeleteConfirm">Cancel</UButton>
+              <UButton color="red" :loading="deletingPostId !== null" @click="confirmDeletePost">Delete</UButton>
+            </div>
+          </div>
+        </template>
+      </UModal>
     </div>
   </div>
 </template>
@@ -171,13 +187,18 @@
 <script setup>
 definePageMeta({ layout: 'default' })
 
-const session = await useAuth()
+const auth = useAuth()
 const activeTab = ref('content')
 const loading = ref(true)
 const error = ref('')
+const { addToast } = useToast()
 
 const platformPages = ['about', 'contact', 'help']
 const blogPosts = ref([])
+const blogError = ref('')
+const deleteConfirmOpen = ref(false)
+const pendingDeletePostId = ref(null)
+const deletingPostId = ref(null)
 
 const chowbotPrompt = ref('')
 const chowbotResponse = ref('')
@@ -185,26 +206,51 @@ const chowbotLoading = ref(false)
 
 const analytics = ref({ metrics: { users: 0, organizations: 0, sites: 0, posts: 0, menus: 0, locations: 0 }, recentSites: [] })
 const analyticsLoading = ref(false)
+const initialized = ref(false)
 
-onMounted(async () => {
-  try {
-    await loadBlogPosts()
-    await loadAnalytics()
-  } catch (err) {
-    error.value = 'Failed to load dashboard'
-  } finally {
-    loading.value = false
-  }
+const isAdmin = computed(() => {
+  const user = auth.data.value?.user
+  return !!user && (user.role === 'admin' || user.isAdmin === true)
 })
+
+watch(() => auth.sessionLoading.value, async (pending) => {
+  if (!pending && !isAdmin.value) {
+    await navigateTo('/login')
+  }
+}, { immediate: true })
+
+watch([() => auth.sessionLoading.value, isAdmin], async ([pending, admin]) => {
+  if (pending || initialized.value) {
+    return
+  }
+
+  if (!admin) {
+    await navigateTo('/login')
+    return
+  }
+
+  initialized.value = true
+
+  const [blogResult, analyticsResult] = await Promise.allSettled([loadBlogPosts(), loadAnalytics()])
+  const blogFailed = blogResult.status === 'fulfilled' ? blogResult.value === false : true
+  const analyticsFailed = analyticsResult.status === 'fulfilled' ? analyticsResult.value === false : true
+
+  if (blogFailed && analyticsFailed) {
+    error.value = 'Failed to load dashboard'
+  }
+
+  loading.value = false
+}, { immediate: true })
 
 async function loadAnalytics() {
   analyticsLoading.value = true
   try {
     const response = await $fetch('/api/admin/analytics')
     analytics.value = response
+    return true
   } catch (err) {
     console.error('Failed to load analytics:', err)
-    error.value = 'Failed to load analytics'
+    return false
   } finally {
     analyticsLoading.value = false
   }
@@ -213,14 +259,23 @@ async function loadAnalytics() {
 async function loadBlogPosts() {
   try {
     const response = await $fetch('/api/admin/blog/posts')
-    blogPosts.value = response.posts
+    blogPosts.value = response.posts || []
+    blogError.value = ''
+    return true
   } catch (err) {
     console.error('Failed to load blog posts:', err)
+    blogError.value = 'Failed to load blog posts. Please try again.'
+    return false
   }
 }
 
 function formatDate(dateString) {
-  return new Date(dateString).toLocaleDateString('en-US', {
+  if (!dateString) return '—'
+
+  const parsed = new Date(dateString)
+  if (Number.isNaN(parsed.getTime())) return '—'
+
+  return parsed.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric'
@@ -239,14 +294,29 @@ function editPost(postId) {
   navigateTo(`/admin/blog/${postId}`)
 }
 
-async function deletePost(postId) {
-  if (!confirm('Are you sure you want to delete this post?')) return
-  
+function openDeleteConfirm(postId) {
+  pendingDeletePostId.value = postId
+  deleteConfirmOpen.value = true
+}
+
+function closeDeleteConfirm() {
+  deleteConfirmOpen.value = false
+  pendingDeletePostId.value = null
+}
+
+async function confirmDeletePost() {
+  if (!pendingDeletePostId.value) return
+
+  deletingPostId.value = pendingDeletePostId.value
   try {
-    await $fetch(`/api/admin/blog/posts/${postId}`, { method: 'DELETE' })
+    await $fetch(`/api/admin/blog/posts/${pendingDeletePostId.value}`, { method: 'DELETE' })
     await loadBlogPosts()
+    addToast('Post deleted successfully', 'success')
   } catch (err) {
-    alert('Failed to delete post')
+    addToast('Failed to delete post', 'error')
+  } finally {
+    deletingPostId.value = null
+    closeDeleteConfirm()
   }
 }
 

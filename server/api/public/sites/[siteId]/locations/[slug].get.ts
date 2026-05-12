@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
     const location = await db.prepare(`
       SELECT id, slug, title, address, phone, website_url, maps_url, latitude, longitude,
              opening_hours, rating, review_count, is_primary, status, last_synced_at,
-             google_location_id, google_connection_id, google_place_id, image_url, city
+             google_place_id, image_url, city
       FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND slug = ? AND status = 'active'
       LIMIT 1

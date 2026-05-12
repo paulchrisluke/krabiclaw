@@ -4,12 +4,12 @@
       <h1 class="text-4xl font-bold text-(--ui-text) mb-6">Documentation</h1>
       <p class="text-lg text-(--ui-text-muted) mb-12">Learn how to use KrabiClaw to build your restaurant website</p>
 
-      <div v-if="loading" class="text-center py-12">
+      <div v-if="pending" class="text-center py-12">
         <p class="text-(--ui-text-muted)">Loading documentation...</p>
       </div>
 
-      <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-lg p-6">
-        <p class="text-red-600">{{ error }}</p>
+      <div v-else-if="docsError" class="bg-red-50 border border-red-200 rounded-lg p-6">
+        <p class="text-red-600">Failed to load documentation</p>
       </div>
 
       <div v-else>
@@ -51,20 +51,11 @@ useBreadcrumbSchema([
   { name: 'Documentation', url: `${siteUrl}/docs` }
 ])
 
-const docs = ref([])
-const loading = ref(true)
-const error = ref('')
-
-onMounted(async () => {
-  try {
-    const response = await $fetch('/api/docs')
-    docs.value = response?.docs || []
-  } catch (err) {
-    error.value = 'Failed to load documentation'
-  } finally {
-    loading.value = false
-  }
+const { data, pending, error: docsError } = await useFetch('/api/docs', {
+  default: () => ({ docs: [] })
 })
+
+const docs = computed(() => data.value?.docs || [])
 
 useSeoMeta({
   title: 'Documentation | KrabiClaw',

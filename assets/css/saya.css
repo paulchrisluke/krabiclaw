@@ -38,6 +38,37 @@
   --ui-radius:          0.25rem; /* Platform-specific radius override */
 }
 
+@media (prefers-color-scheme: dark) {
+  .saya-theme {
+    color-scheme: dark;
+
+    --saya-primary:       #D16063;
+    --color-primary:      var(--saya-primary);
+    --saya-bg:            #09090B;
+    --saya-bg-alt:        #121216;
+    --saya-bg-inverted:   #FAFAFA;
+    --saya-fg:            #F4F4F5;
+    --saya-fg-muted:      #D4D4D8;
+    --saya-fg-dimmed:     #A1A1AA;
+    --saya-fg-inverted:   #18181B;
+    --saya-border:        #27272A;
+    --saya-border-muted:  #1E1E22;
+
+    --ui-primary:         var(--saya-primary);
+    --ui-bg:              var(--saya-bg);
+    --ui-bg-elevated:     var(--saya-bg-alt);
+    --ui-bg-muted:        var(--saya-bg-alt);
+    --ui-bg-inverted:     var(--saya-bg-inverted);
+    --ui-text:            var(--saya-fg);
+    --ui-text-muted:      var(--saya-fg-muted);
+    --ui-text-dimmed:     var(--saya-fg-dimmed);
+    --ui-text-highlighted:var(--saya-fg);
+    --ui-text-inverted:   var(--saya-fg-inverted);
+    --ui-border:          var(--saya-border);
+    --ui-border-muted:    var(--saya-border-muted);
+  }
+}
+
 /* Saya display type — Instrument Serif, sentence case, never bold */
 .saya-display-lg {
   font-family: var(--font-saya);

@@ -12,10 +12,10 @@
 
         <!-- Featured Theme -->
         <div class="mb-16">
-          <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div class="bg-(--ui-bg-elevated) rounded-2xl shadow-lg overflow-hidden border border-(--ui-border)">
             <div class="md:flex">
               <div class="md:w-1/2">
-                <div class="h-96 bg-gradient-to-br from-(--kc-cream) to-(--kc-border) flex items-center justify-center">
+                <div class="h-96 bg-(--ui-bg-muted) flex items-center justify-center">
                   <div class="text-center">
                     <div class="w-24 h-24 bg-(--ui-text) rounded-2xl mx-auto mb-4 flex items-center justify-center">
                       <span class="text-white text-3xl font-bold">S</span>
@@ -73,8 +73,8 @@
           <h2 class="text-3xl font-bold text-(--ui-text) text-center mb-12">Coming Soon</h2>
           <div class="grid md:grid-cols-3 gap-8">
             <!-- Theme 2 -->
-            <div class="bg-white rounded-2xl shadow-sm border border-(--ui-border) overflow-hidden">
-              <div class="h-48 bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center">
+            <div class="bg-(--ui-bg-elevated) rounded-2xl shadow-sm border border-(--ui-border) overflow-hidden">
+              <div class="h-48 bg-(--ui-bg-muted) flex items-center justify-center">
                 <div class="text-center">
                   <div class="w-16 h-16 bg-amber-600 rounded-xl mx-auto mb-2 flex items-center justify-center">
                     <span class="text-white text-2xl font-bold">M</span>
@@ -95,8 +95,8 @@
             </div>
 
             <!-- Theme 3 -->
-            <div class="bg-white rounded-2xl shadow-sm border border-(--ui-border) overflow-hidden">
-              <div class="h-48 bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center">
+            <div class="bg-(--ui-bg-elevated) rounded-2xl shadow-sm border border-(--ui-border) overflow-hidden">
+              <div class="h-48 bg-(--ui-bg-muted) flex items-center justify-center">
                 <div class="text-center">
                   <div class="w-16 h-16 bg-emerald-600 rounded-xl mx-auto mb-2 flex items-center justify-center">
                     <span class="text-white text-2xl font-bold">R</span>
@@ -117,8 +117,8 @@
             </div>
 
             <!-- Theme 4 -->
-            <div class="bg-white rounded-2xl shadow-sm border border-(--ui-border) overflow-hidden">
-              <div class="h-48 bg-gradient-to-br from-indigo-50 to-indigo-100 flex items-center justify-center">
+            <div class="bg-(--ui-bg-elevated) rounded-2xl shadow-sm border border-(--ui-border) overflow-hidden">
+              <div class="h-48 bg-(--ui-bg-muted) flex items-center justify-center">
                 <div class="text-center">
                   <div class="w-16 h-16 bg-indigo-600 rounded-xl mx-auto mb-2 flex items-center justify-center">
                     <span class="text-white text-2xl font-bold">F</span>
@@ -141,7 +141,7 @@
         </div>
 
         <!-- Features -->
-        <div class="mt-20 bg-white rounded-2xl p-8">
+        <div class="mt-20 bg-(--ui-bg-elevated) rounded-2xl border border-(--ui-border) p-8">
           <h2 class="text-3xl font-bold text-(--ui-text) text-center mb-12">All Themes Include</h2>
           <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             <div class="text-center">

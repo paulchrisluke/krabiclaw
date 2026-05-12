@@ -55,8 +55,8 @@ export function useBreadcrumbSchema(items: Array<{ name: string; url: string }>)
   }
   
   const validItems = items.filter(item => {
-    const name = item.name?.trim()
-    const url = item.url?.trim()
+    const name = typeof item?.name === 'string' ? item.name.trim() : ''
+    const url = typeof item?.url === 'string' ? item.url.trim() : ''
     return name && url
   })
   
@@ -66,20 +66,38 @@ export function useBreadcrumbSchema(items: Array<{ name: string; url: string }>)
   
   // Convert relative URLs to absolute
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://krabiclaw.com'
+  const itemListElement = validItems.reduce((acc: Array<Record<string, any>>, item) => {
+    try {
+      const itemUrl = new URL(item.url, baseUrl).toString()
+      acc.push({
+        '@type': 'ListItem',
+        position: acc.length + 1,
+        name: item.name,
+        item: itemUrl
+      })
+    } catch (error) {
+      console.warn('useBreadcrumbSchema: invalid breadcrumb URL, skipping item', item.url, error)
+    }
+    return acc
+  }, [])
+
+  if (itemListElement.length === 0) {
+    return
+  }
   
   useSchemaOrg({
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
-    itemListElement: validItems.map((item, index) => ({
-      '@type': 'ListItem',
-      position: index + 1,
-      name: item.name,
-      item: item.url.startsWith('http') ? item.url : `${baseUrl}${item.url}`
-    }))
+    itemListElement
   })
 }
 
-export function useArticleSchema(title: string, description: string, publishedAt: string, author: string) {
+export function useArticleSchema(title: string, description: string, author: string): void
+export function useArticleSchema(title: string, description: string, publishedAt: string | undefined, author: string): void
+export function useArticleSchema(title: string, description: string, publishedAtOrAuthor?: string, maybeAuthor?: string) {
+  const publishedAt = maybeAuthor === undefined ? undefined : publishedAtOrAuthor
+  const author = maybeAuthor === undefined ? publishedAtOrAuthor : maybeAuthor
+
   // Validate required fields
   const trimmedTitle = title?.trim()
   const trimmedDescription = description?.trim()
@@ -106,12 +124,11 @@ export function useArticleSchema(title: string, description: string, publishedAt
     }
   }
   
-  useSchemaOrg({
+  const articleSchema: Record<string, any> = {
     '@context': 'https://schema.org',
     '@type': 'Article',
     headline: trimmedTitle,
     description: trimmedDescription,
-    datePublished: normalizedDate,
     author: {
       '@type': 'Person',
       name: trimmedAuthor
@@ -121,5 +138,11 @@ export function useArticleSchema(title: string, description: string, publishedAt
       name: 'KrabiClaw',
       logo: 'https://krabiclaw.com/krabi-claw-logo.png'
     }
-  })
+  }
+
+  if (normalizedDate) {
+    articleSchema.datePublished = normalizedDate
+  }
+
+  useSchemaOrg(articleSchema)
 }

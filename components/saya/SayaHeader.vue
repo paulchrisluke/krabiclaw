@@ -160,11 +160,11 @@ const getLocaleFlag = (code: string) =>
   ({ en: '🇺🇸', th: '🇹🇭', ja: '🇯🇵', ar: '🇸🇦' }[code] ?? '🌐')
 const getCurrentLocaleFlag = () => getLocaleFlag(currentLocale.value)
 
-const restaurantName = computed(() => (site.value as Site)?.name ?? (site as Site)?.name ?? 'Saya')
-const sitePlan = computed(() => (site.value as Site)?.plan ?? (site as Site)?.plan ?? 'free')
+const restaurantName = computed(() => (site as Site | null)?.name ?? 'Saya')
+const sitePlan = computed(() => (site as Site | null)?.plan ?? 'free')
 const showBrandingStrip = computed(() => !isPlatform && sitePlan.value === 'free')
 
-const { open: openUpgrade } = useUpgradeModal()
+useUpgradeModal()
 
 const languageItems = computed(() =>
   availableLocales.value.map((l: { code: string; name: string }) => ({
@@ -174,20 +174,30 @@ const languageItems = computed(() =>
 )
 
 // No await — this is a layout component, not a page. Data arrives reactively.
-const { data: locationsData, error: locationsError } = useFetch(
-  `/api/public/sites/${siteId}/locations`,
+const currentSiteId = computed(() => siteId || '')
+
+const { data: locationsData, error: locationsError, execute: loadLocations } = useFetch(
+  () => `/api/public/sites/${currentSiteId.value}/locations`,
   {
-    key: `header-locs-${siteId}`,
-    default: () => ({ locations: [] })
+    key: () => `header-locs-${currentSiteId.value || 'none'}`,
+    default: () => ({ locations: [] }),
+    watch: false,
+    immediate: false
   }
 )
+
+watch(currentSiteId, (id: string) => {
+  if (id) {
+    loadLocations()
+  }
+}, { immediate: true })
 
 const locations = computed(() => {
   if (locationsError.value) {
     console.error('Failed to load locations:', locationsError.value)
     return []
   }
-  if (!siteId) return []
+  if (!currentSiteId.value) return []
   return locationsData.value?.locations ?? []
 })
 

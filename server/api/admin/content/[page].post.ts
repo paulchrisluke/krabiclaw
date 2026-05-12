@@ -3,9 +3,12 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
 
+const ALLOWED_PAGES = ['about', 'contact', 'help']
+
 export default defineEventHandler(async (event) => {
   const page = getRouterParam(event, 'page')
   if (!page) return jsonResponse({ error: 'Page required' }, { status: 400 })
+  if (!ALLOWED_PAGES.includes(page)) return jsonResponse({ error: 'Invalid page' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.REVIEWS_DB
@@ -24,7 +27,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (typeof body.content !== 'string') {
-    return jsonResponse({ error: 'content is required' }, { status: 400 })
+    return jsonResponse({ error: 'content must be a string' }, { status: 400 })
   }
 
   const now = new Date().toISOString()

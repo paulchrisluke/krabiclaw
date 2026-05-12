@@ -43,13 +43,13 @@
 
           <!-- Email Signup -->
           <form @submit.prevent="handleEmailSignup" class="space-y-3">
-            <UFormField label="Email">
-              <UInput v-model="form.email" type="email" placeholder="you@example.com" size="lg" class="w-full" :disabled="loading" @keydown.enter="handleEmailSignup" />
+            <UFormField label="Email" :error="validationErrors.email">
+              <UInput v-model="form.email" type="email" placeholder="you@example.com" size="lg" class="w-full" :disabled="loading" autocomplete="email" />
             </UFormField>
-            <UFormField label="Password">
-              <UInput v-model="form.password" type="password" placeholder="••••••••" size="lg" class="w-full" :disabled="loading" @keydown.enter="handleEmailSignup" />
+            <UFormField label="Password" :error="validationErrors.password">
+              <UInput v-model="form.password" type="password" placeholder="••••••••" size="lg" class="w-full" :disabled="loading" autocomplete="new-password" />
             </UFormField>
-            <UButton block size="lg" :loading="loading" @click="handleEmailSignup">
+            <UButton type="submit" block size="lg" :loading="loading">
               Create Account
             </UButton>
           </form>
@@ -78,6 +78,10 @@ import { authClient } from '~/lib/auth-client'
 const router = useRouter()
 const loading = ref(false)
 const error = ref(null)
+const validationErrors = ref({
+  email: '',
+  password: ''
+})
 const form = ref({
   email: '',
   password: ''
@@ -99,12 +103,34 @@ const handleGoogleSignIn = async () => {
 
 // Handle Email Sign Up (if enabled later)
 const handleEmailSignup = async () => {
-  loading.value = true
+  validationErrors.value.email = ''
+  validationErrors.value.password = ''
   error.value = null
+
+  const email = form.value.email.trim()
+  const password = form.value.password
+
+  if (!email) {
+    validationErrors.value.email = 'Email is required.'
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    validationErrors.value.email = 'Please enter a valid email address.'
+  }
+
+  if (!password) {
+    validationErrors.value.password = 'Password is required.'
+  }
+
+  if (validationErrors.value.email || validationErrors.value.password) {
+    error.value = 'Please correct the highlighted fields.'
+    return
+  }
+
+  loading.value = true
   try {
     // For now, redirect to login since email signup not implemented
     router.push('/login')
   } catch (err) {
+    console.error('Email sign-up error:', err)
     error.value = 'Sign up failed. Please try again.'
   } finally {
     loading.value = false

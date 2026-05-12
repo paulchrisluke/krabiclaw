@@ -117,7 +117,7 @@
           <!-- Image -->
           <img
             v-if="sorted[lightboxIdx]"
-            :src="sorted[lightboxIdx].local_url || sorted[lightboxIdx].google_url"
+            :src="sorted[lightboxIdx].thumbnail_url || sorted[lightboxIdx].local_url || sorted[lightboxIdx].google_url"
             alt=""
             class="max-h-[85vh] max-w-[90vw] object-contain"
             @click.stop
@@ -176,8 +176,10 @@ const activeCategory = ref('ALL')
 const counts = computed(() => {
   const m: Record<string, number> = { ALL: photos.value.length }
   photos.value.forEach((p: any) => {
-    if (p.category && typeof p.category === 'string' && p.category.trim()) {
-      m[p.category] = (m[p.category] ?? 0) + 1
+    if (p.category && typeof p.category === 'string') {
+      const trimmed = p.category.trim()
+      if (!trimmed) return
+      m[trimmed] = (m[trimmed] ?? 0) + 1
     }
   })
   return m
@@ -214,31 +216,48 @@ const breadcrumb = computed(() => [
   { label: 'Photos' }
 ])
 
+const config = useRuntimeConfig()
+const siteUrl = config.public.siteUrl
+
+function toAbsoluteUrl(value?: string | null): string | null {
+  if (!value) return null
+  try {
+    return new URL(value, siteUrl).toString()
+  } catch {
+    return null
+  }
+}
+
 useSeoMeta({
   title: () => `Photos · ${location.value?.title || slug.value}`,
   description: () => `${photos.value.length} photos from ${location.value?.title} at ${siteName.value}.`,
-  ogUrl: () => `/locations/${slug.value}/photos`
+  ogUrl: () => `${siteUrl}/locations/${slug.value}/photos`
 })
 
 useSchemaOrg([
   computed(() => ({
     '@type': 'ImageGallery',
     name: `${location.value?.title ?? ''} Photos`,
-    image: photos.value.slice(0, 20).map((p: any) => ({
-      '@type': 'ImageObject',
-      contentUrl: p.local_url || p.google_url,
-      thumbnailUrl: p.thumbnail_url,
-      description: p.description,
-      about: p.category
-    }))
+    image: photos.value.slice(0, 20).map((p: any) => {
+      const contentUrl = toAbsoluteUrl(p.thumbnail_url || p.local_url || p.google_url)
+      const thumbnailUrl = toAbsoluteUrl(p.thumbnail_url || p.local_url || p.google_url)
+      if (!contentUrl) return null
+      return {
+        '@type': 'ImageObject',
+        contentUrl,
+        thumbnailUrl,
+        description: p.description,
+        about: p.category
+      }
+    }).filter(Boolean)
   })),
   computed(() => ({
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: siteName.value, item: '/' },
-      { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` },
-      { '@type': 'ListItem', position: 4, name: 'Photos', item: `/locations/${slug.value}/photos` }
+      { '@type': 'ListItem', position: 1, name: siteName.value, item: `${siteUrl}/` },
+      { '@type': 'ListItem', position: 2, name: 'Locations', item: `${siteUrl}/locations` },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${siteUrl}/locations/${slug.value}` },
+      { '@type': 'ListItem', position: 4, name: 'Photos', item: `${siteUrl}/locations/${slug.value}/photos` }
     ]
   }))
 ])

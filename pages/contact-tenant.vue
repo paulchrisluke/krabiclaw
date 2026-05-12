@@ -98,6 +98,7 @@
 
 <script setup>
 definePageMeta({ layout: 'saya' })
+import DOMPurify from 'isomorphic-dompurify'
 import { getTodayGoogleHours } from '~/utils/formatters'
 import { usePageContent } from '~/composables/usePageContent'
 import { useTenantSite } from '~/composables/useTenantSite'
@@ -127,14 +128,28 @@ const introBody = computed(() => getField('intro.body',
   '<p class="font-semibold leading-relaxed">Elevate your senses; contact us for an unforgettable dining adventure.</p>'
 ))
 
+DOMPurify.addHook('uponSanitizeAttribute', (_, data) => {
+  if (data.attrName?.toLowerCase().startsWith('on')) {
+    data.keepAttr = false
+  }
+
+  const value = String(data.attrValue || '').trim().toLowerCase()
+  if (value.startsWith('data:')) {
+    data.keepAttr = false
+  }
+})
+
 // Sanitize HTML to prevent XSS
 const sanitizedIntro = computed(() => {
   if (!introBody.value) return ''
-  // Basic sanitization - remove script tags and event handlers
-  return introBody.value
-    .replace(/<script[^>]*>.*?<\/script>/gis, '')
-    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/javascript:/gi, '')
+  return DOMPurify.sanitize(introBody.value, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'b', 'i', 'ul', 'ol', 'li', 'a', 'span'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'style'],
+    FORBID_ATTR: ['style'],
+    ALLOW_DATA_ATTR: false,
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i
+  })
 })
 
 const contactForm = ref({

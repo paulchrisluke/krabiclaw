@@ -3,6 +3,21 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
 
+const TITLE_MAX = 200
+const BODY_MAX = 100000
+const EXCERPT_MAX = 500
+const CATEGORY_MAX = 100
+const MAX_SLUG_ATTEMPTS = 8
+
+function randomSlugSuffix(): string {
+  return Math.random().toString(36).slice(2, 8)
+}
+
+function isSlugUniqueConstraintError(err: unknown): boolean {
+  const message = String((err as any)?.message || err || '')
+  return message.includes('platform_blog_posts.slug') || message.includes('UNIQUE constraint failed')
+}
+
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.REVIEWS_DB
@@ -24,39 +39,52 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'title and body are required' }, { status: 400 })
   }
 
+  if (body.title.length > TITLE_MAX) {
+    return jsonResponse({ error: `title exceeds maximum length (${TITLE_MAX})` }, { status: 400 })
+  }
+  if (body.body.length > BODY_MAX) {
+    return jsonResponse({ error: `body exceeds maximum length (${BODY_MAX})` }, { status: 400 })
+  }
+  if (body.excerpt && body.excerpt.length > EXCERPT_MAX) {
+    return jsonResponse({ error: `excerpt exceeds maximum length (${EXCERPT_MAX})` }, { status: 400 })
+  }
+  if (body.category && body.category.length > CATEGORY_MAX) {
+    return jsonResponse({ error: `category exceeds maximum length (${CATEGORY_MAX})` }, { status: 400 })
+  }
+
   const id = crypto.randomUUID()
-  let slug = body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  const baseSlug = body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
   
   // Handle empty slug
+  let slug = baseSlug
   if (!slug) {
     slug = `post-${Date.now()}`
   }
-  
-  // Ensure slug uniqueness
-  let uniqueSlug = slug
-  let suffix = 1
-  while (true) {
-    const existing = await db.prepare(`SELECT id FROM platform_blog_posts WHERE slug = ?`).bind(uniqueSlug).first()
-    if (!existing) break
-    suffix++
-    uniqueSlug = `${slug}-${suffix}`
-  }
-  slug = uniqueSlug
-  
+
   const now = new Date().toISOString()
   const userId = session.user.id
 
   const publishedAt = body.publish ? now : null
 
-  try {
-    await db.prepare(
-      `INSERT INTO platform_blog_posts (id, title, slug, body, excerpt, category, author_id, published_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(id, body.title, slug, body.body, body.excerpt ?? null, body.category ?? null, userId, publishedAt, now, now).run()
-  } catch (err) {
-    console.error('Failed to create blog post:', err)
-    return jsonResponse({ error: 'Failed to create post', details: String(err) }, { status: 500 })
+  for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
+    const candidateSlug = attempt === 0 ? slug : `${slug}-${randomSlugSuffix()}`
+
+    try {
+      await db.prepare(
+        `INSERT INTO platform_blog_posts (id, title, slug, body, excerpt, category, author_id, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(id, body.title, candidateSlug, body.body, body.excerpt ?? null, body.category ?? null, userId, publishedAt, now, now).run()
+
+      return jsonResponse({ success: true, id, slug: candidateSlug, published_at: publishedAt })
+    } catch (err) {
+      if (isSlugUniqueConstraintError(err) && attempt < MAX_SLUG_ATTEMPTS - 1) {
+        continue
+      }
+
+      console.error('Failed to create blog post:', err)
+      return jsonResponse({ error: 'Failed to create post' }, { status: 500 })
+    }
   }
 
-  return jsonResponse({ success: true, id, slug, published_at: publishedAt })
+  return jsonResponse({ error: 'Failed to create post' }, { status: 500 })
 })

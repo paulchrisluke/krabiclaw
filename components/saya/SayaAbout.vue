@@ -5,7 +5,7 @@
         <img
           v-if="image"
           :src="image"
-          :alt="title || 'About our restaurant'"
+          :alt="imageAlt || title || 'About our restaurant'"
           class="w-full h-full object-cover hover:scale-105 transition-transform duration-1000"
         >
         <div v-else class="w-full h-full bg-(--ui-bg-muted) flex items-center justify-center border-2 border-dashed border-(--ui-border)">
@@ -56,6 +56,7 @@ defineProps({
   title: { type: String, default: null },
   description: { type: String, default: null },
   image: { type: String, default: null },
+  imageAlt: { type: String, default: null },
   isTeaser: { type: Boolean, default: false },
   bg: { type: String, default: 'white' },
   padding: { type: String, default: 'lg' },

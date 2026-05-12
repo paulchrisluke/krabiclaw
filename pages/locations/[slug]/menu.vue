@@ -132,9 +132,26 @@ const menuUpdated = computed(() => {
   return new Date(d).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 })
 
-const categories = computed(() =>
-  Object.keys(menuItemsBySection.value).map(name => ({ id: name.toLowerCase().replace(/\s+/g, '-'), name }))
-)
+function slugifyCategory(input: string): string {
+  return String(input)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '') || 'section'
+}
+
+const categories = computed(() => {
+  const seen: Record<string, number> = {}
+  return Object.keys(menuItemsBySection.value).map(name => {
+    const base = slugifyCategory(name)
+    const count = seen[base] ?? 0
+    seen[base] = count + 1
+    const id = count === 0 ? base : `${base}-${count}`
+    return { id, name }
+  })
+})
 
 const activeCategory = ref('')
 watch(categories, (cats: { id: string; name: string }[]) => {
@@ -153,9 +170,10 @@ function itemSlug(item: any): string {
 function getDietaryTags(item: any): string[] {
   const tags: string[] = []
   // D1 items: boolean flags (future); static items: dietaryNotes array
-  if (item.is_vegetarian || item.dietaryNotes?.includes('V')) tags.push('V')
-  if (item.is_vegan || item.dietaryNotes?.includes('VG')) tags.push('VG')
-  if (item.is_gluten_free || item.dietaryNotes?.includes('GF')) tags.push('GF')
+  const notes = Array.isArray(item.dietaryNotes) ? item.dietaryNotes : []
+  if (item.is_vegetarian || notes.includes('V')) tags.push('V')
+  if (item.is_vegan || notes.includes('VG')) tags.push('VG')
+  if (item.is_gluten_free || notes.includes('GF')) tags.push('GF')
   return tags
 }
 
@@ -169,7 +187,23 @@ const breadcrumb = computed(() => [
 useSeoMeta({
   title: () => `Menu · ${location.value?.title || slug.value}`,
   description: () => `Full menu for ${location.value?.title} at ${siteName.value}.`,
-  ogUrl: () => `/locations/${slug.value}/menu`
+  ogUrl: () => {
+    const config = useRuntimeConfig()
+    const origin = config.public.siteUrl
+    return `${origin}/locations/${slug.value}/menu`
+  }
+})
+
+const locationCurrency = computed(() => {
+  const loc = location.value as any
+  if (loc?.currency && typeof loc.currency === 'string') return loc.currency
+
+  const country = String(loc?.country || loc?.country_code || '').toUpperCase()
+  if (country === 'TH' || country === 'THA') return 'THB'
+  if (country === 'US' || country === 'USA') return 'USD'
+  if (country === 'GB' || country === 'GBR') return 'GBP'
+
+  return 'THB'
 })
 
 useSchemaOrg([
@@ -187,7 +221,7 @@ useSchemaOrg([
         }
         // Only include offers if price is valid
         if (item.price !== null && item.price !== undefined && item.price !== '') {
-          menuItem.offers = { '@type': 'Offer', price: item.price, priceCurrency: 'THB' }
+          menuItem.offers = { '@type': 'Offer', price: item.price, priceCurrency: locationCurrency.value }
         }
         return menuItem
       })

@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
+import slugify from 'slugify'
 
 export default defineEventHandler(async (event) => {
   const postId = getRouterParam(event, 'postId')
@@ -28,11 +29,20 @@ export default defineEventHandler(async (event) => {
   const params: any[] = [now]
 
   if (body.title !== undefined) {
-    updates.push('title = ?', 'slug = ?')
-    let slug = body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    const slug = slugify(body.title, { lower: true, strict: true, trim: true })
     if (!slug) {
       return jsonResponse({ error: 'Title must contain alphanumeric characters to generate a valid slug' }, { status: 400 })
     }
+
+    const existingSlug = await db.prepare(
+      `SELECT id FROM platform_blog_posts WHERE slug = ? AND id != ? LIMIT 1`
+    ).bind(slug, postId).first()
+
+    if (existingSlug) {
+      return jsonResponse({ error: 'Slug already in use' }, { status: 400 })
+    }
+
+    updates.push('title = ?', 'slug = ?')
     params.push(body.title, slug)
   }
   
@@ -64,7 +74,7 @@ export default defineEventHandler(async (event) => {
     }
   } catch (err) {
     console.error('Failed to update blog post:', err)
-    return jsonResponse({ error: 'Failed to update post', details: String(err) }, { status: 500 })
+    return jsonResponse({ error: 'Failed to update post' }, { status: 500 })
   }
 
   return jsonResponse({ success: true, updated_at: now })

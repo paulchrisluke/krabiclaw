@@ -1,6 +1,6 @@
 // GET /api/docs/[slug] - Get specific documentation file
 import { readFile } from 'fs/promises'
-import { join, resolve } from 'path'
+import { resolve } from 'path'
 import { jsonResponse } from '~/server/utils/api-response'
 
 export default defineEventHandler(async (event) => {

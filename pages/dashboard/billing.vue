@@ -88,7 +88,9 @@
             </div>
           </template>
 
-          <div v-if="credits" class="space-y-4">
+          <USkeleton v-if="creditsLoading" class="h-32 w-full" />
+
+          <div v-else-if="credits" class="space-y-4">
             <div>
               <div class="mb-1 flex items-center justify-between text-xs text-muted">
                 <span>{{ credits.lifetime_used.toLocaleString() }} used</span>
@@ -138,7 +140,11 @@
             </div>
             <p v-else class="text-sm text-muted">No AI usage yet.</p>
           </div>
-          <USkeleton v-else class="h-32 w-full" />
+
+          <div v-else class="rounded-lg border border-dashed border-default bg-elevated p-5">
+            <p class="text-sm text-muted">No AI credit activity yet.</p>
+            <p class="mt-1 text-xs text-muted">Usage appears here after your first AI action.</p>
+          </div>
         </UCard>
 
         <div class="grid gap-4 lg:grid-cols-3">
@@ -193,6 +199,7 @@ const route = useRoute()
 const loading = ref(true)
 const billing = ref<any>(null)
 const credits = ref<any>(null)
+const creditsLoading = ref(true)
 const upgrading = ref<string | null>(null)
 const portalLoading = ref(false)
 const addingCredits = ref(false)
@@ -222,10 +229,14 @@ const plans = [
 ]
 
 const loadCredits = async () => {
+  creditsLoading.value = true
   try {
     credits.value = await $fetch<any>('/api/billing/credits')
   } catch {
     // non-critical
+    credits.value = null
+  } finally {
+    creditsLoading.value = false
   }
 }
 

@@ -688,11 +688,11 @@ CREATE TABLE IF NOT EXISTS platform_blog_posts (
   body TEXT NOT NULL,
   excerpt TEXT,
   category TEXT,
-  author_id TEXT NOT NULL,
+  author_id TEXT,
   published_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  FOREIGN KEY (author_id) REFERENCES user(id) ON DELETE CASCADE
+  FOREIGN KEY (author_id) REFERENCES user(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS platform_contact_submissions (
@@ -700,8 +700,13 @@ CREATE TABLE IF NOT EXISTS platform_contact_submissions (
   name TEXT NOT NULL,
   email TEXT NOT NULL,
   message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'read', 'replied')),
+  ip_hash TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_platform_contact_submissions_status_created
+  ON platform_contact_submissions(status, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS platform_analytics (
   id TEXT PRIMARY KEY,

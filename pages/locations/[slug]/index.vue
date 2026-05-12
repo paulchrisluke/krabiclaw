@@ -31,9 +31,17 @@
                 {{ location.title }}
               </span>
             </h1>
-            <div class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
-              <span class="size-1.5 rounded-full" :class="isOpenNow ? 'bg-green-400' : 'bg-zinc-400'" />
-              {{ isOpenNow ? 'Open now' : 'Closed' }} · {{ todayHours }}
+            <div v-if="isOpenNow === true" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
+              <span class="size-1.5 rounded-full bg-green-400" />
+              Open now · {{ todayHours }}
+            </div>
+            <div v-else-if="isOpenNow === false" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
+              <span class="size-1.5 rounded-full bg-zinc-400" />
+              Closed · {{ todayHours }}
+            </div>
+            <div v-else class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
+              <span class="size-1.5 rounded-full bg-zinc-300" />
+              Hours unknown
             </div>
             <div class="mt-10 flex flex-wrap gap-3">
               <UButton
@@ -161,14 +169,16 @@
           </div>
           <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <div v-for="review in reviewsPreview" :key="review.id" class="border border-default bg-default p-8">
-              <div class="mb-3 flex gap-1">
+              <div class="mb-3 flex gap-1" :aria-label="`${review.rating} out of 5 stars`">
                 <UIcon
                   v-for="s in 5"
                   :key="s"
                   name="i-heroicons-star-solid"
+                  aria-hidden="true"
                   class="size-3.5"
                   :class="s <= review.rating ? 'text-primary' : 'text-muted'"
                 />
+                <span class="sr-only">{{ review.rating }} out of 5 stars</span>
               </div>
               <p class="text-sm leading-relaxed text-default">"{{ review.content }}"</p>
               <div class="mt-6 border-t border-default pt-4">
@@ -189,6 +199,7 @@
           <iframe
             v-if="mapEmbedSrc"
             :src="mapEmbedSrc"
+            :title="location?.title ? `Map for ${location.title}` : 'Location map'"
             width="100%"
             height="100%"
             style="border:0"
@@ -241,11 +252,24 @@ const reviewsPreview = computed(() => ((reviewsData as any).value?.reviews ?? []
 
 // Sanitize hero background URL to prevent CSS injection
 const heroBackgroundStyle = computed(() => {
-  const url = location.value?.image_url
-  if (!url) return {}
-  // Validate URL pattern
-  if (!/^https?:\/\//.test(url)) return {}
-  return { backgroundImage: `url(${url})` }
+  const raw = String(location.value?.image_url || '').trim()
+  if (!raw) return {}
+
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    return {}
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) return {}
+
+  const safeHref = encodeURI(parsed.href)
+  if (/["'\\);]/.test(safeHref) || safeHref.includes('/*') || safeHref.includes('*/')) {
+    return {}
+  }
+
+  return { backgroundImage: `url("${safeHref}")` }
 })
 
 // Fetch menu for featured items
@@ -258,7 +282,7 @@ const { data: menuData, execute: fetchMenu } = await useFetch(
   }
 )
 
-watch(() => location.value?.id, (id) => {
+watch(() => location.value?.id, (id: string | undefined) => {
   if (id) fetchMenu()
 }, { immediate: true })
 const featuredItems = computed(() => {
@@ -326,7 +350,7 @@ useSeoMeta({
 useSchemaOrg([
   computed(() => {
     const loc = location.value
-    if (!loc) return {}
+    if (!loc) return null
     return {
       '@type': ['Restaurant', 'LocalBusiness'],
       name: `${siteName.value} — ${loc.title}`,

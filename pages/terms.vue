@@ -1,10 +1,10 @@
 <template>
   <div class="container mx-auto px-4 py-16">
     <div class="max-w-3xl mx-auto">
-      <h1 class="text-4xl font-bold text-(--ui-text) mb-6">Terms and Conditions</h1>
-      <p class="text-lg text-(--ui-text-muted) mb-12">Our agreement with you</p>
+      <h1 class="text-4xl font-bold text-[var(--ui-text)] mb-6">Terms and Conditions</h1>
+      <p class="text-lg text-[var(--ui-text-muted)] mb-12">Our agreement with you</p>
 
-      <article class="prose prose-lg max-w-none text-(--ui-text);">
+      <article class="prose prose-lg max-w-none text-[var(--ui-text)]">
         <p><strong>Effective Date:</strong> October 21, 2024</p>
 
         <p>Welcome to <strong>KrabiClaw</strong>. By accessing or using our website builder platform and services, you agree to be bound by the following terms and conditions. Please read them carefully.</p>
@@ -47,22 +47,34 @@
 </template>
 
 <script setup>
-
 definePageMeta({
   layout: 'platform'
 })
+
+const config = useRuntimeConfig()
+const requestURL = useRequestURL()
+const configuredSiteUrl = config.public.siteUrl
+const siteOrigin = (() => {
+  if (!configuredSiteUrl) return requestURL.origin
+
+  try {
+    return new URL(configuredSiteUrl).origin
+  } catch {
+    return requestURL.origin
+  }
+})()
 
 useSeoMeta({
   title: 'Terms and Conditions | KrabiClaw',
   description: 'Terms and Conditions for KrabiClaw website builder platform. Read our terms of service for using our SaaS platform.',
   ogTitle: 'Terms and Conditions | KrabiClaw',
   ogDescription: 'Our terms of service for the website builder platform.',
-  ogImage: '/og-image.jpg',
-  ogUrl: '/terms',
+  ogImage: `${siteOrigin}/og-image.jpg`,
+  ogUrl: `${siteOrigin}/terms`,
   ogType: 'website',
   twitterCard: 'summary',
   twitterTitle: 'Terms and Conditions - KrabiClaw',
   twitterDescription: 'Terms of service for our website builder platform.',
-  twitterImage: '/og-image.jpg'
+  twitterImage: `${siteOrigin}/og-image.jpg`
 })
 </script>

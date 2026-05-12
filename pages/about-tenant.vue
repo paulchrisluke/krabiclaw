@@ -9,11 +9,12 @@
     <SayaAbout
       :title="getField('story-title', 'Finding Inspiration in Every Turn')"
       :image="googleMedia[0]?.googleUrl"
+      :image-alt="googleMedia[0]?.altText || googleMedia[0]?.description || 'Tenant image'"
       bg="white"
       padding="xl"
     >
       <div class="space-y-12 text-[var(--ui-text)] text-lg leading-relaxed max-w-none">
-        <div v-html="storyIntro" />
+        <p class="text-xl font-medium border-l-4 border-black pl-6 py-2">{{ storyIntro }}</p>
 
         <div class="grid md:grid-cols-2 gap-12 pt-8">
           <div>
@@ -28,10 +29,10 @@
 
         <div class="bg-[var(--ui-bg-muted)] rounded-3xl p-10 md:p-16 my-16">
           <h2 class="text-3xl font-bold text-black mb-8 italic">{{ getField('journey.title', 'Our Story') }}</h2>
-          <div v-html="journeyBody" class="space-y-6" />
+          <p class="space-y-6 whitespace-pre-line">{{ journeyBody }}</p>
         </div>
 
-        <div v-html="experienceBody" class="space-y-8" />
+        <p class="space-y-8 whitespace-pre-line">{{ experienceBody }}</p>
 
         <div v-if="businessDescription" class="mt-20 pt-20 border-t border-stone-100">
           <h4 class="text-sm font-bold uppercase tracking-widest text-stone-400 mb-8">From Google Business</h4>
@@ -47,6 +48,8 @@ definePageMeta({ layout: 'saya' })
 import { usePageContent } from '~/composables/usePageContent'
 
 const { getField } = usePageContent('about')
+const route = useRoute()
+const requestURL = useRequestURL()
 
 const { siteId } = await useTenantSite()
 
@@ -58,24 +61,25 @@ const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/goo
 const businessDescription = computed(() => googleBusiness.value?.business?.profile?.description || '')
 const googleMedia = computed(() => googleBusiness.value?.media || [])
 
-// Defaults moved to computeds to avoid inline template quote-escaping issues
-const storyIntro = computed(() => getField('story.intro',
-  '<p class="text-xl font-medium text-[var(--ui-text-highlighted)] border-l-4 border-black pl-6 py-2">'  +
-  'Welcome to our restaurant, where culinary tradition meets modern creativity.' +
-  '</p>'
-))
+function sanitizeFieldText(value) {
+  return String(value || '').replace(/<[^>]+>/g, '').trim()
+}
 
-const journeyBody = computed(() => getField('journey.body',
-  '<p>Our restaurant has a unique story to tell. ' +
-  'From our humble beginnings to where we are today, every step has been guided by passion and dedication.</p>' +
-  '<p>The restaurant, a symphony of warm ambiance and subtle lighting, immerses diners in an unforgettable experience.</p>'
-))
+const journeyBody = computed(() => sanitizeFieldText(getField('journey.body',
+  'Our restaurant has a unique story to tell. ' +
+  'From our humble beginnings to where we are today, every step has been guided by passion and dedication.\n\n' +
+  'The restaurant, a symphony of warm ambiance and subtle lighting, immerses diners in an unforgettable experience.'
+)))
 
-const experienceBody = computed(() => getField('experience.body',
-  '<p>Our culinary team orchestrates amazing flavors and textures. ' +
-  'Committed to the freshest ingredients, our chefs weave magic into every dish.</p>' +
-  '<p>We bring together tradition and innovation in a focused, warm dining experience.</p>'
-))
+const storyIntro = computed(() => sanitizeFieldText(getField('story.intro',
+  'Welcome to our restaurant, where culinary tradition meets modern creativity.'
+)))
+
+const experienceBody = computed(() => sanitizeFieldText(getField('experience.body',
+  'Our culinary team orchestrates amazing flavors and textures. ' +
+  'Committed to the freshest ingredients, our chefs weave magic into every dish.\n\n' +
+  'We bring together tradition and innovation in a focused, warm dining experience.'
+)))
 
 const restaurantName = computed(() => getField('restaurant.name', ''))
 
@@ -83,6 +87,6 @@ useSeoMeta({
   title: computed(() => restaurantName.value ? `About | ${restaurantName.value}` : 'About Us'),
   description: computed(() => getField('seo.description', 'Learn about our restaurant and our story.')),
   ogImage: computed(() => getField('seo.ogImage', '/og-image.jpg')),
-  ogUrl: '/about'
+  ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
 })
 </script>

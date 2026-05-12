@@ -276,7 +276,7 @@
                 :class="tile.wide ? 'sm:col-span-2' : ''"
               >
                 <div v-if="tile.image" class="overflow-hidden bg-muted" :class="tile.wide ? 'aspect-video' : 'aspect-square'">
-                  <img :src="tile.image" alt="" class="h-full w-full object-cover" >
+                  <img :src="tile.image" :alt="tile.alt || tile.name || `${tile.type} image`" class="h-full w-full object-cover" >
                 </div>
                 <div class="p-5 pt-4">
                   <p class="saya-eyebrow mb-2 text-muted">Google Post</p>
@@ -287,7 +287,7 @@
               <!-- Dish tile -->
               <article v-else-if="tile.type === 'dish'" class="overflow-hidden bg-default">
                 <div v-if="tile.image" class="aspect-square overflow-hidden bg-muted">
-                  <img :src="tile.image" alt="" class="h-full w-full object-cover" >
+                  <img :src="tile.image" :alt="tile.alt || tile.name || `${tile.type} image`" class="h-full w-full object-cover" >
                 </div>
                 <div class="p-5 pt-4">
                   <p class="saya-eyebrow mb-2 text-muted">Featured</p>
@@ -605,13 +605,21 @@ const highlights = computed(() => {
   // Up to 2 GMB posts with photos
   const posts = (googlePosts.value || []).filter(p => p.media?.[0]?.googleUrl)
   for (let i = 0; i < Math.min(2, posts.length); i++) {
-    tiles.push({ type: 'post', image: posts[i].media[0].googleUrl, text: posts[i].summary || posts[i].name, wide: i === 0 })
+    const post = posts[i]
+    const image = post?.media?.[0]?.googleUrl || null
+    tiles.push({
+      type: 'post',
+      image,
+      text: post?.summary || post?.name,
+      alt: post?.summary || post?.name || 'Google post image',
+      wide: i === 0
+    })
   }
 
   // Up to 3 featured dishes
   for (let i = 0; i < Math.min(3, featuredMenuItems.value.length); i++) {
     const item = featuredMenuItems.value[i]
-    tiles.push({ type: 'dish', name: item.name, price: item.price, image: item.image_url || null })
+    tiles.push({ type: 'dish', name: item.name, price: item.price, image: item.image_url || null, alt: item.name ? `${item.name} dish` : 'Featured dish image' })
   }
 
   // Up to 2 review quotes

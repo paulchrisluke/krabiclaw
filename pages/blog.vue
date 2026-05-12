@@ -11,116 +11,67 @@
           </p>
         </div>
 
-        <!-- Featured Post -->
-        <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-12">
-          <div class="h-64 bg-linear-to-br from-stone-100 to-stone-200"></div>
-          <div class="p-8">
-            <div class="flex items-center gap-4 mb-4">
-              <span class="bg-(--ui-bg-inverted) text-white px-3 py-1 rounded-full text-sm font-medium">Featured</span>
-              <span class="text-(--ui-text-dimmed) text-sm">May 7, 2026</span>
-            </div>
-            <h2 class="text-3xl font-bold text-(--ui-text) mb-4">
-              How to Optimize Your Restaurant Website for Google Search
-            </h2>
-            <p class="text-(--ui-text-muted) mb-6 text-lg">
-              Learn the essential SEO strategies that will help your restaurant rank higher in local search results 
-              and attract more customers online.
-            </p>
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-(--ui-bg-muted) rounded-full"></div>
-                <div>
-                  <p class="font-semibold text-(--ui-text)">KrabiClaw Team</p>
-                  <p class="text-(--ui-text-dimmed) text-sm">5 min read</p>
-                </div>
-              </div>
-              <UButton variant="outline" color="neutral">Read More</UButton>
-            </div>
-          </div>
+        <div v-if="pending" class="space-y-8">
+          <div v-for="i in 3" :key="i" class="bg-(--ui-bg-elevated) rounded-2xl h-64 animate-pulse" />
         </div>
 
-        <!-- Recent Posts -->
-        <div class="mb-12">
-          <h2 class="text-3xl font-bold text-(--ui-text) mb-8">Recent Posts</h2>
-          <div class="grid md:grid-cols-2 gap-8">
-            <!-- Post 1 -->
-            <div class="bg-white rounded-xl shadow-sm border border-(--ui-border) overflow-hidden">
-              <div class="h-48 bg-linear-to-br from-amber-50 to-amber-100"></div>
-              <div class="p-6">
-                <div class="flex items-center gap-3 mb-3">
-                  <span class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs font-medium">Marketing</span>
-                  <span class="text-(--ui-text-dimmed) text-sm">May 5, 2026</span>
+        <div v-else-if="posts.length === 0" class="text-center py-24 text-(--ui-text-muted)">
+          <p class="text-xl mb-2">No posts yet</p>
+          <p class="text-sm">Check back soon — new content is on the way.</p>
+        </div>
+
+        <div v-else>
+          <!-- Featured Post -->
+          <NuxtLink :to="`/blog/${posts[0].slug}`" class="block mb-12">
+            <div class="bg-(--ui-bg-elevated) rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+              <div class="h-64 bg-linear-to-br from-teal-50 to-teal-100 dark:from-teal-900/20 dark:to-teal-800/20" />
+              <div class="p-8">
+                <div class="flex items-center gap-4 mb-4">
+                  <span class="bg-(--ui-bg-inverted) text-(--ui-text-inverted) px-3 py-1 rounded-full text-sm font-medium">Featured</span>
+                  <span v-if="posts[0].category" class="px-3 py-1 rounded-full text-sm font-medium" :class="categoryClass(posts[0].category)">{{ posts[0].category }}</span>
+                  <span class="text-(--ui-text-dimmed) text-sm">{{ formatDate(posts[0].published_at) }}</span>
                 </div>
-                <h3 class="text-xl font-bold text-(--ui-text) mb-3">
-                  5 Ways to Use Instagram to Promote Your Restaurant
-                </h3>
-                <p class="text-(--ui-text-muted) mb-4">
-                  Discover proven Instagram strategies that restaurants use to attract customers and build brand awareness.
-                </p>
-                <UButton variant="ghost" color="neutral" class="p-0 h-auto font-semibold">Read More →</UButton>
+                <h2 class="text-3xl font-bold text-(--ui-text) mb-4">{{ posts[0].title }}</h2>
+                <p v-if="posts[0].excerpt" class="text-(--ui-text-muted) mb-6 text-lg">{{ posts[0].excerpt }}</p>
+                <div class="flex items-center justify-between">
+                  <p class="text-sm text-(--ui-text-dimmed)">{{ readTime(posts[0]) }} min read</p>
+                  <span class="font-semibold text-sm" style="color: var(--kc-teal)">Read Article →</span>
+                </div>
               </div>
             </div>
+          </NuxtLink>
 
-            <!-- Post 2 -->
-            <div class="bg-white rounded-xl shadow-sm border border-(--ui-border) overflow-hidden">
-              <div class="h-48 bg-linear-to-br from-emerald-50 to-emerald-100"></div>
-              <div class="p-6">
-                <div class="flex items-center gap-3 mb-3">
-                  <span class="bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-xs font-medium">Technology</span>
-                  <span class="text-(--ui-text-dimmed) text-sm">May 3, 2026</span>
+          <!-- Recent Posts -->
+          <div v-if="posts.length > 1" class="mb-12">
+            <h2 class="text-3xl font-bold text-(--ui-text) mb-8">Recent Posts</h2>
+            <div class="grid md:grid-cols-2 gap-8">
+              <NuxtLink
+                v-for="post in posts.slice(1)"
+                :key="post.id"
+                :to="`/blog/${post.slug}`"
+                class="block"
+              >
+                <div class="bg-(--ui-bg-elevated) rounded-xl shadow-sm border border-(--ui-border) overflow-hidden hover:shadow-md transition-shadow h-full">
+                  <div class="h-48 bg-linear-to-br from-stone-50 to-stone-100 dark:from-stone-900/20 dark:to-stone-800/20" />
+                  <div class="p-6">
+                    <div class="flex items-center gap-3 mb-3">
+                      <span v-if="post.category" class="px-2 py-1 rounded text-xs font-medium" :class="categoryClass(post.category)">{{ post.category }}</span>
+                      <span class="text-(--ui-text-dimmed) text-sm">{{ formatDate(post.published_at) }}</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-(--ui-text) mb-3">{{ post.title }}</h3>
+                    <p v-if="post.excerpt" class="text-(--ui-text-muted) mb-4">{{ post.excerpt }}</p>
+                    <span class="font-semibold text-sm" style="color: var(--kc-teal)">Read More →</span>
+                  </div>
                 </div>
-                <h3 class="text-xl font-bold text-(--ui-text) mb-3">
-                  The Future of Restaurant Websites: AI and Automation
-                </h3>
-                <p class="text-(--ui-text-muted) mb-4">
-                  Explore how artificial intelligence is revolutionizing the way restaurants manage their online presence.
-                </p>
-                <UButton variant="ghost" color="neutral" class="p-0 h-auto font-semibold">Read More →</UButton>
-              </div>
-            </div>
-
-            <!-- Post 3 -->
-            <div class="bg-white rounded-xl shadow-sm border border-(--ui-border) overflow-hidden">
-              <div class="h-48 bg-linear-to-br from-indigo-50 to-indigo-100"></div>
-              <div class="p-6">
-                <div class="flex items-center gap-3 mb-3">
-                  <span class="bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-xs font-medium">Design</span>
-                  <span class="text-(--ui-text-dimmed) text-sm">May 1, 2026</span>
-                </div>
-                <h3 class="text-xl font-bold text-(--ui-text) mb-3">
-                  Essential Elements of a High-Converting Restaurant Menu Page
-                </h3>
-                <p class="text-(--ui-text-muted) mb-4">
-                  Learn how to design a menu page that not only looks great but also drives more orders.
-                </p>
-                <UButton variant="ghost" color="neutral" class="p-0 h-auto font-semibold">Read More →</UButton>
-              </div>
-            </div>
-
-            <!-- Post 4 -->
-            <div class="bg-white rounded-xl shadow-sm border border-(--ui-border) overflow-hidden">
-              <div class="h-48 bg-linear-to-br from-rose-50 to-rose-100"></div>
-              <div class="p-6">
-                <div class="flex items-center gap-3 mb-3">
-                  <span class="bg-rose-100 text-rose-800 px-2 py-1 rounded text-xs font-medium">Business</span>
-                  <span class="text-(--ui-text-dimmed) text-sm">April 28, 2026</span>
-                </div>
-                <h3 class="text-xl font-bold text-(--ui-text) mb-3">
-                  Customer Reviews: How to Get More and Manage Them Effectively
-                </h3>
-                <p class="text-(--ui-text-muted) mb-4">
-                  A complete guide to generating positive reviews and handling customer feedback professionally.
-                </p>
-                <UButton variant="ghost" color="neutral" class="p-0 h-auto font-semibold">Read More →</UButton>
-              </div>
+              </NuxtLink>
             </div>
           </div>
         </div>
 
         <!-- Newsletter Signup -->
-        <div class="bg-(--ui-bg-inverted) text-white rounded-2xl p-8 text-center">
+        <div class="bg-(--ui-bg-inverted) text-(--ui-text-inverted) rounded-2xl p-8 text-center">
           <h2 class="text-3xl font-bold mb-4">Stay Updated</h2>
-          <p class="text-white/70 mb-6 max-w-2xl mx-auto">
+          <p class="text-(--ui-text-inverted)/70 mb-6 max-w-2xl mx-auto">
             Get the latest restaurant marketing tips and industry insights delivered to your inbox.
           </p>
           <form @submit.prevent="handleNewsletterSubmit" class="flex flex-col sm:flex-row gap-4 max-w-md mx-auto items-center justify-center">
@@ -129,11 +80,12 @@
               v-model="newsletterEmail"
               type="email"
               placeholder="Enter your email"
-              class="flex-1 px-4 py-3 rounded-lg text-(--ui-text)"
+              class="flex-1 px-4 py-3 rounded-lg text-(--ui-text) bg-white"
               aria-label="Enter your email for the newsletter"
             >
-            <UButton type="submit" color="neutral" variant="outline">Subscribe</UButton>
+            <UButton type="submit" color="neutral" variant="outline" :loading="subscribing">Subscribe</UButton>
           </form>
+          <p v-if="subscribeMessage" class="mt-4 text-sm text-(--ui-text-inverted)/80">{{ subscribeMessage }}</p>
         </div>
       </div>
 
@@ -142,34 +94,86 @@
         <div class="sticky top-8">
           <h2 class="text-2xl font-bold text-(--ui-text) mb-6">Browse by Category</h2>
           <div class="flex flex-col gap-3">
-            <UButton variant="outline" color="neutral" class="w-full justify-start" @click="filterByCategory('Marketing')">Marketing</UButton>
-            <UButton variant="outline" color="neutral" class="w-full justify-start" @click="filterByCategory('Technology')">Technology</UButton>
-            <UButton variant="outline" color="neutral" class="w-full justify-start" @click="filterByCategory('Design')">Design</UButton>
-            <UButton variant="outline" color="neutral" class="w-full justify-start" @click="filterByCategory('Business')">Business</UButton>
-            <UButton variant="outline" color="neutral" class="w-full justify-start" @click="filterByCategory('SEO')">SEO</UButton>
-            <UButton variant="outline" color="neutral" class="w-full justify-start" @click="filterByCategory('Social Media')">Social Media</UButton>
+            <UButton
+              v-for="cat in categories"
+              :key="cat"
+              :variant="activeCategory === cat ? 'solid' : 'outline'"
+              color="neutral"
+              class="w-full justify-start"
+              @click="toggleCategory(cat)"
+            >{{ cat }}</UButton>
           </div>
+          <UButton v-if="activeCategory" variant="ghost" color="neutral" class="w-full mt-3" @click="activeCategory = null">
+            Clear filter
+          </UButton>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 definePageMeta({ layout: 'platform' })
 
-const selectedCategory = ref(null)
-const newsletterEmail = ref('')
+const CATEGORY_CLASSES: Record<string, string> = {
+  Marketing: 'bg-amber-100 text-amber-800',
+  Technology: 'bg-emerald-100 text-emerald-800',
+  Design: 'bg-indigo-100 text-indigo-800',
+  Business: 'bg-rose-100 text-rose-800',
+  SEO: 'bg-violet-100 text-violet-800',
+  'Social Media': 'bg-sky-100 text-sky-800',
+}
 
-function filterByCategory(category) {
-  selectedCategory.value = category
-  navigateTo(`/blog/category/${category.toLowerCase()}`)
+const categories = Object.keys(CATEGORY_CLASSES)
+const activeCategory = ref<string | null>(null)
+const newsletterEmail = ref('')
+const subscribing = ref(false)
+const subscribeMessage = ref('')
+
+const { data, pending } = useAsyncData(
+  () => `blog-${activeCategory.value ?? 'all'}`,
+  () => $fetch(activeCategory.value
+    ? `/api/public/blog/posts?category=${encodeURIComponent(activeCategory.value)}`
+    : '/api/public/blog/posts'
+  ),
+  { watch: [activeCategory] }
+)
+
+const posts = computed(() => (data.value as any)?.posts ?? [])
+
+function toggleCategory(cat: string) {
+  activeCategory.value = activeCategory.value === cat ? null : cat
+}
+
+function categoryClass(cat: string) {
+  return CATEGORY_CLASSES[cat] ?? 'bg-stone-100 text-stone-800'
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+function readTime(post: any) {
+  const words = (post.body ?? post.excerpt ?? '').split(/\s+/).length
+  return Math.max(1, Math.ceil(words / 200))
 }
 
 async function handleNewsletterSubmit() {
   if (!newsletterEmail.value.trim()) return
-  console.log('Newsletter subscription:', newsletterEmail.value)
-  newsletterEmail.value = ''
+  subscribing.value = true
+  subscribeMessage.value = ''
+  try {
+    await $fetch('/api/contact', {
+      method: 'POST',
+      body: { email: newsletterEmail.value, type: 'newsletter' }
+    })
+    subscribeMessage.value = "You're subscribed! We'll be in touch."
+    newsletterEmail.value = ''
+  } catch {
+    subscribeMessage.value = 'Something went wrong. Please try again.'
+  } finally {
+    subscribing.value = false
+  }
 }
 
 useSeoMeta({

@@ -146,7 +146,13 @@
                 :key="i"
                 class="size-28 overflow-hidden rounded-xl bg-muted"
               >
-                <img :src="url" alt="" class="h-full w-full object-cover" >
+                <img
+                  v-if="!failedPhotoIndices[`${review.id}-${i}`]"
+                  :src="url"
+                  alt=""
+                  class="h-full w-full object-cover"
+                  @error="handleReviewImageError(review.id, i)"
+                >
               </div>
             </div>
 
@@ -176,7 +182,8 @@
             </p>
           </div>
           <a
-            :href="location?.gmb_review_url || '#'"
+            v-if="location?.gmb_review_url"
+            :href="location.gmb_review_url"
             target="_blank"
             rel="noopener noreferrer"
             class="inline-flex items-center rounded-full bg-white px-8 py-4 text-xs font-medium uppercase tracking-widest text-black no-underline transition hover:bg-zinc-100"
@@ -226,7 +233,14 @@ const filtered = computed(() => {
   if (activeFilter.value === 'highest') list.sort((a, b) => b.rating - a.rating)
   else if (activeFilter.value === 'lowest') list.sort((a, b) => a.rating - b.rating)
   else if (activeFilter.value === 'photos') list = list.filter(r => r.photo_urls?.length)
-  else list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  else {
+    const ts = (value: unknown) => {
+      if (typeof value !== 'string' || !value) return 0
+      const parsed = Date.parse(value)
+      return Number.isNaN(parsed) ? 0 : parsed
+    }
+    list.sort((a, b) => ts(b.created_at) - ts(a.created_at))
+  }
   return list
 })
 
@@ -241,13 +255,14 @@ function distCount(star: number) {
   return aggregate.value?.distribution?.find((d: any) => d.star === star)?.count ?? 0
 }
 
-const failedPhotoIndices = new Set<string>()
+const failedPhotoIndices = ref<Record<string, boolean>>({})
 
 function handleReviewImageError(reviewId: string, index: number) {
-  failedPhotoIndices.add(`${reviewId}-${index}`)
+  failedPhotoIndices.value[`${reviewId}-${index}`] = true
 }
 
-function initials(name: string) {
+function initials(name: any) {
+  if (typeof name !== 'string' || !name.trim()) return ''
   return name.trim().split(/\s+/).filter(Boolean).map(s => s[0]).slice(0, 2).join('').toUpperCase()
 }
 function formatDate(ts: string | null) {

@@ -1,6 +1,19 @@
 // POST /api/contact - Platform contact form submission via Resend
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 
+const NAME_MAX_LENGTH = 100
+const EMAIL_MAX_LENGTH = 254
+const MESSAGE_MAX_LENGTH = 5000
+const IP_HOURLY_LIMIT = 5
+const EMAIL_DAILY_LIMIT = 3
+
+const hashIp = async (ip: string) => {
+  if (!ip) return null
+  const bytes = new TextEncoder().encode(ip)
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 function escapeHtml(text: string): string {
   const map: Record<string, string> = {
     '&': '&amp;',
@@ -10,6 +23,31 @@ function escapeHtml(text: string): string {
     "'": '&#039;'
   }
   return text.replace(/[&<>"']/g, (m) => map[m] || m)
+}
+
+function getClientIp(event: any): string {
+  const rawForwardedFor = event.node.req.headers['x-forwarded-for']
+  const forwardedFor = Array.isArray(rawForwardedFor)
+    ? rawForwardedFor.join(',')
+    : String(rawForwardedFor || '')
+
+  const firstForwardedIp = forwardedFor
+    .split(',')
+    .map((part: string) => part.trim())
+    .find(Boolean)
+
+  return firstForwardedIp || event.node.req.socket.remoteAddress || 'unknown'
+}
+
+async function incrementRateLimit(db: any, key: string, limit: number): Promise<boolean> {
+  const result = await db.prepare(`
+    INSERT INTO rate_limits (key, count)
+    VALUES (?, 1)
+    ON CONFLICT(key) DO UPDATE SET count = count + 1
+    WHERE count < ?
+  `).bind(key, limit).run()
+
+  return Boolean(result?.success && result?.meta?.changes)
 }
 
 export default defineEventHandler(async (event) => {
@@ -28,6 +66,16 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Consent to privacy policy is required' }, { status: 400 })
   }
 
+  if (name.length > NAME_MAX_LENGTH) {
+    return jsonResponse({ error: `name exceeds maximum length (${NAME_MAX_LENGTH})` }, { status: 400 })
+  }
+  if (email.length > EMAIL_MAX_LENGTH) {
+    return jsonResponse({ error: `email exceeds maximum length (${EMAIL_MAX_LENGTH})` }, { status: 400 })
+  }
+  if (message.length > MESSAGE_MAX_LENGTH) {
+    return jsonResponse({ error: `message exceeds maximum length (${MESSAGE_MAX_LENGTH})` }, { status: 400 })
+  }
+
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailPattern.test(email)) {
     return jsonResponse({ error: 'Invalid email address' }, { status: 400 })
@@ -35,25 +83,21 @@ export default defineEventHandler(async (event) => {
 
   // Rate limiting (simplified - in production use KV or proper rate limit store)
   const db = cloudflareEnv(event).REVIEWS_DB
+  const clientIp = getClientIp(event)
+  const hourKey = `rate:ip:${clientIp}:${Math.floor(Date.now() / 3600000)}`
+  const dateKey = `rate:email:${email}:${new Date().toISOString().split('T')[0]}`
+
   if (db) {
-    const ip = event.node.req.headers['x-forwarded-for'] as string || event.node.req.socket.remoteAddress || 'unknown'
-    const hourKey = `rate:ip:${ip}:${Math.floor(Date.now() / 3600000)}`
-    const dateKey = `rate:email:${email}:${new Date().toISOString().split('T')[0]}`
-    
     try {
       const ipCount = await db.prepare(`SELECT count FROM rate_limits WHERE key = ?`).bind(hourKey).first()
-      if (ipCount && (ipCount as any).count >= 5) {
+      if (ipCount && (ipCount as any).count >= IP_HOURLY_LIMIT) {
         return jsonResponse({ error: 'Too many submissions from your IP. Please try again later.' }, { status: 429 })
       }
       
       const emailCount = await db.prepare(`SELECT count FROM rate_limits WHERE key = ?`).bind(dateKey).first()
-      if (emailCount && (emailCount as any).count >= 3) {
+      if (emailCount && (emailCount as any).count >= EMAIL_DAILY_LIMIT) {
         return jsonResponse({ error: 'Too many submissions from your email. Please try again tomorrow.' }, { status: 429 })
       }
-      
-      // Increment counters
-      await db.prepare(`INSERT INTO rate_limits (key, count) VALUES (?, 1) ON CONFLICT(key) DO UPDATE SET count = count + 1`).bind(hourKey).run()
-      await db.prepare(`INSERT INTO rate_limits (key, count) VALUES (?, 1) ON CONFLICT(key) DO UPDATE SET count = count + 1`).bind(dateKey).run()
     } catch (err) {
       console.error('Rate limit check failed:', err)
       // Continue anyway - don't block on rate limit errors
@@ -68,16 +112,17 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Email service not configured' }, { status: 500 })
     }
 
-    // Store submission in database first (with retention timestamp)
+    // Store submission in database first
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
-    const retentionDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // 90 days
+    const ip = getHeader(event, 'CF-Connecting-IP') ?? getHeader(event, 'x-forwarded-for') ?? ''
+    const ipHash = await hashIp(ip)
     
     if (db) {
       try {
         await db.prepare(
-          `INSERT INTO platform_contact_submissions (id, name, email, message, created_at, retention_until) VALUES (?, ?, ?, ?, ?, ?)`
-        ).bind(id, name, email, message, now, retentionDate).run()
+          `INSERT INTO platform_contact_submissions (id, name, email, message, status, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+        ).bind(id, name, email, message, 'new', ipHash, now).run()
       } catch (err) {
         console.error('Failed to store contact submission:', err)
         // Continue to send email even if DB fails
@@ -118,6 +163,22 @@ export default defineEventHandler(async (event) => {
       const errorText = await response.text()
       console.error('Resend API error:', errorText)
       return jsonResponse({ error: 'Failed to send email' }, { status: 500 })
+    }
+
+    if (db) {
+      try {
+        const ipIncremented = await incrementRateLimit(db, hourKey, IP_HOURLY_LIMIT)
+        if (!ipIncremented) {
+          return jsonResponse({ error: 'Too many submissions from your IP. Please try again later.' }, { status: 429 })
+        }
+
+        const emailIncremented = await incrementRateLimit(db, dateKey, EMAIL_DAILY_LIMIT)
+        if (!emailIncremented) {
+          return jsonResponse({ error: 'Too many submissions from your email. Please try again tomorrow.' }, { status: 429 })
+        }
+      } catch (err) {
+        console.error('Rate limit increment failed:', err)
+      }
     }
 
     return jsonResponse({ success: true, message: 'Message sent successfully' })

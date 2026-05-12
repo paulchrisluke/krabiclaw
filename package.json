@@ -38,10 +38,11 @@
     "@opentelemetry/api": "^1.9.1",
     "@types/stripe": "^8.0.416",
     "better-auth": "^1.6.9",
-    "dompurify": "^3.4.2",
+    "isomorphic-dompurify": "^3.12.0",
     "kysely": "^0.28.17",
     "marked": "^18.0.3",
     "nuxt-schema-org": "^6.0.4",
+    "slugify": "^1.6.9",
     "stripe": "^22.1.0",
     "tailwind-variants": "^3.2.2"
   }
