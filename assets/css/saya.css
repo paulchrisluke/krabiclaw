@@ -8,6 +8,9 @@
 }
 
 .saya-theme {
+  color-scheme: light;
+  background-color: #FFFFFF;
+
   --saya-primary:       #8F1D21;
   --saya-bg:            #FFFFFF;
   --saya-bg-alt:        #FAFAFA;

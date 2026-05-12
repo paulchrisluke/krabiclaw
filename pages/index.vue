@@ -127,21 +127,22 @@
       </section>
 
       <!-- ── Locations grid ─────────────────────────────────── -->
-      <section v-if="hasLocations" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+      <section class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
         <div class="mb-16 max-w-2xl">
           <p class="saya-kicker mb-6">Find us</p>
           <h2 class="saya-display-md text-default">
             {{ locations.length }} location{{ locations.length === 1 ? '' : 's' }}, one kitchen philosophy.
           </h2>
         </div>
-        <div :class="['grid gap-8', locations.length > 1 ? 'md:grid-cols-2' : '']">
+        <!-- Real locations -->
+        <div v-if="hasLocations" :class="['grid gap-8', locations.length > 1 ? 'md:grid-cols-2' : '']">
           <NuxtLink
             v-for="loc in locations"
             :key="loc.id"
             :to="`/locations/${loc.slug}`"
             class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
           >
-            <div class="aspect-16/10 overflow-hidden bg-muted">
+            <div class="aspect-video overflow-hidden bg-muted">
               <img
                 v-if="loc.image_url"
                 :src="loc.image_url"
@@ -163,6 +164,32 @@
               </div>
             </div>
           </NuxtLink>
+        </div>
+
+        <!-- Empty state: no locations yet -->
+        <div v-else class="grid gap-8 md:grid-cols-2">
+          <div
+            v-for="i in 2"
+            :key="i"
+            class="overflow-hidden border border-dashed border-default"
+          >
+            <div class="flex aspect-video items-center justify-center bg-muted">
+              <UIcon name="i-heroicons-map-pin" class="size-10 text-muted" />
+            </div>
+            <div class="p-8 pb-9">
+              <div class="saya-display saya-italic text-4xl text-muted leading-none">
+                {{ i === 1 ? 'Main location' : 'Second location' }}
+              </div>
+              <p class="mt-4 text-sm text-muted">
+                {{ i === 1 ? 'Connect Google Business to sync your address, hours, photos and reviews.' : 'Add a second location once your first is connected.' }}
+              </p>
+            </div>
+          </div>
+          <div v-if="isAuthenticated" class="md:col-span-2 text-center pt-2">
+            <UButton to="/dashboard/integrations" color="neutral" variant="outline" size="sm" class="rounded-full">
+              Connect Google Business →
+            </UButton>
+          </div>
         </div>
       </section>
 
@@ -218,33 +245,69 @@
       <section class="bg-inverted text-inverted">
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <p class="saya-eyebrow mb-8 text-white/60">Our story</p>
-          <h2 class="saya-display-md max-w-3xl text-white">
-            {{ getField('story.headline', businessTitle) }}
-          </h2>
-          <p class="mt-8 max-w-2xl text-base leading-relaxed text-zinc-400">
-            {{ getField('story.body', businessSubtitle) }}
-          </p>
-          <NuxtLink
-            to="/about"
-            class="mt-8 inline-block border-b border-white pb-1 text-xs uppercase tracking-widest text-white no-underline transition hover:opacity-60"
-          >
-            Read more →
-          </NuxtLink>
+
+          <!-- Filled state -->
+          <template v-if="getField('story.headline') || businessTitle !== 'Saya Kitchen'">
+            <h2 class="saya-display-md max-w-3xl text-white">
+              {{ getField('story.headline', businessTitle) }}
+            </h2>
+            <p class="mt-8 max-w-2xl text-base leading-relaxed text-zinc-400">
+              {{ getField('story.body', businessSubtitle) }}
+            </p>
+            <NuxtLink
+              to="/about"
+              class="mt-8 inline-block border-b border-white pb-1 text-xs uppercase tracking-widest text-white no-underline transition hover:opacity-60"
+            >
+              Read more →
+            </NuxtLink>
+          </template>
+
+          <!-- Empty state: owner hasn't added story yet -->
+          <template v-else>
+            <h2 class="saya-display-md max-w-3xl text-white/30">Your brand story goes here.</h2>
+            <p class="mt-6 max-w-lg text-sm leading-relaxed text-white/30">
+              Two or three sentences about your restaurant — what you cook, how you cook it, why it matters.
+            </p>
+            <NuxtLink
+              v-if="isAuthenticated"
+              to="/dashboard/sites"
+              class="mt-8 inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-2.5 text-xs uppercase tracking-widest text-white/60 no-underline transition hover:border-white/40 hover:text-white/80"
+            >
+              Add your story in the dashboard →
+            </NuxtLink>
+          </template>
         </div>
       </section>
 
       <!-- ── Aggregated reviews ──────────────────────────────── -->
-      <section v-if="hasGoogleBusiness && featuredReviews.length" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+      <section class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
         <div class="mb-16 max-w-2xl">
           <p class="saya-kicker mb-6">Reviews</p>
-          <h2 class="saya-display-md flex flex-wrap items-center gap-4 text-default">
-            <UIcon name="i-heroicons-star-solid" class="size-8 text-primary" />
-            {{ googleReviewSummary?.average }}
-            <span class="text-muted">· {{ googleReviewSummary?.count?.toLocaleString() }} reviews</span>
-          </h2>
-          <p class="mt-6 text-sm text-muted">Synced live from Google Business across all locations.</p>
+          <template v-if="hasGoogleBusiness && googleReviewSummary">
+            <h2 class="saya-display-md flex flex-wrap items-center gap-4 text-default">
+              <UIcon name="i-heroicons-star-solid" class="size-8 text-primary" />
+              {{ googleReviewSummary.average }}
+              <span class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
+            </h2>
+            <p class="mt-6 text-sm text-muted">Synced live from Google Business across all locations.</p>
+          </template>
+          <template v-else>
+            <h2 class="saya-display-md text-default">What your guests say.</h2>
+            <p class="mt-6 text-sm text-muted">
+              Connect Google Business to automatically display fresh guest reviews here.
+            </p>
+            <NuxtLink
+              v-if="isAuthenticated"
+              to="/dashboard/integrations"
+              class="mt-4 inline-block text-xs uppercase tracking-widest text-default no-underline underline-offset-4 hover:underline"
+            >
+              Connect Google Business →
+            </NuxtLink>
+          </template>
         </div>
-        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+
+        <!-- Real reviews -->
+        <div v-if="featuredReviews.length" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <div
             v-for="review in featuredReviews"
             :key="review.id"
@@ -262,6 +325,24 @@
             <p class="text-sm leading-relaxed text-default">"{{ review.comment?.text || review.content }}"</p>
             <div class="mt-6 border-t border-default pt-4">
               <p class="text-sm font-medium text-default">{{ review.reviewer?.displayName || review.author_name }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Placeholder review cards -->
+        <div v-else class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div v-for="i in 3" :key="i" class="bg-elevated p-8">
+            <div class="mb-4 flex gap-1">
+              <span v-for="s in 5" :key="s" class="size-3.5 rounded-sm bg-zinc-200" />
+            </div>
+            <div class="space-y-2">
+              <div class="h-3 rounded bg-zinc-200 animate-[sayaPulse_1.6s_ease-in-out_infinite]" />
+              <div class="h-3 w-4/5 rounded bg-zinc-200 animate-[sayaPulse_1.6s_ease-in-out_infinite]" />
+              <div class="h-3 w-3/5 rounded bg-zinc-200 animate-[sayaPulse_1.6s_ease-in-out_infinite]" />
+            </div>
+            <div class="mt-6 flex items-center gap-3 border-t border-default pt-4">
+              <div class="size-8 rounded-full bg-zinc-200 animate-[sayaPulse_1.6s_ease-in-out_infinite]" />
+              <div class="h-3 w-24 rounded bg-zinc-200 animate-[sayaPulse_1.6s_ease-in-out_infinite]" />
             </div>
           </div>
         </div>
