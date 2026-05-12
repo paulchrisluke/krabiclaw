@@ -151,6 +151,10 @@ export default defineNuxtConfig({
     },
     externals: {
       inline: ['@opentelemetry/api']
-    }
+    },
+    serverAssets: [{
+      baseName: 'docs',
+      dir: './docs'
+    }]
   }
 })

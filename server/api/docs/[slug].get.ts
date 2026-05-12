@@ -1,37 +1,31 @@
-// GET /api/docs/[slug] - Get specific documentation file
-import { readFile } from 'fs/promises'
-import { resolve } from 'path'
+// GET /api/docs/[slug] - Get a single documentation file (bundled as Nitro server asset)
 import { jsonResponse } from '~/server/utils/api-response'
+
+const INTERNAL_DOCS = new Set(['billing-architecture'])
+const VALID_SLUG = /^[a-zA-Z0-9-_]+$/
 
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
-  if (!slug) return jsonResponse({ error: 'Slug required' }, { status: 400 })
-
-  // Sanitize slug to prevent path traversal
-  if (slug.includes('..') || slug.includes('/') || slug.includes('\\')) {
+  if (!slug || !VALID_SLUG.test(slug)) {
     return jsonResponse({ error: 'Invalid slug' }, { status: 400 })
   }
 
-  const safeSlug = slug.replace(/[^a-zA-Z0-9-_]/g, '')
-  if (safeSlug !== slug) {
-    return jsonResponse({ error: 'Invalid slug format' }, { status: 400 })
+  if (INTERNAL_DOCS.has(slug)) {
+    return jsonResponse({ error: 'Not found' }, { status: 404 })
   }
 
   try {
-    const docsDir = resolve(process.cwd(), 'docs')
-    const filePath = resolve(docsDir, `${safeSlug}.md`)
-    
-    // Verify the resolved path is within docs directory
-    if (!filePath.startsWith(docsDir)) {
-      return jsonResponse({ error: 'Invalid file path' }, { status: 403 })
-    }
+    const storage = useStorage('assets:docs')
+    const content = await storage.getItem(`${slug}.md`) as string | null
 
-    const content = await readFile(filePath, 'utf-8')
+    if (!content) return jsonResponse({ error: 'Documentation not found' }, { status: 404 })
+
     const titleMatch = content.match(/^#\s+(.+)$/m)
-    const title = titleMatch ? titleMatch[1] : safeSlug
+    const title = titleMatch ? titleMatch[1] : slug
 
-    return jsonResponse({ slug: safeSlug, title, content })
+    return jsonResponse({ slug, title, content })
   } catch (error) {
+    console.error('Failed to load doc:', slug, error)
     return jsonResponse({ error: 'Documentation not found' }, { status: 404 })
   }
 })
