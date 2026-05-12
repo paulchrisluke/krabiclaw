@@ -92,7 +92,7 @@
           </div>
 
           <div class="mt-8 flex flex-wrap gap-3">
-            <UButton to="/reservations" color="neutral" variant="solid" size="sm" class="rounded-full">Reserve a table</UButton>
+            <UButton to="/reservations" color="primary" variant="solid" size="sm" class="rounded-full">Reserve a table</UButton>
             <UButton
               v-if="location.maps_url"
               :to="location.maps_url"
@@ -111,7 +111,7 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup>
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()

@@ -59,10 +59,10 @@
           <!-- Reserve CTA -->
           <UButton
             to="/reservations"
-            color="neutral"
+            color="primary"
             variant="solid"
             size="sm"
-            class="rounded-full !bg-(--ui-primary) !text-white hover:!opacity-90"
+            class="rounded-full"
           >
             Reserve
           </UButton>

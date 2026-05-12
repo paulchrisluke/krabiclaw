@@ -1,90 +1,148 @@
 <template>
   <NuxtLayout :name="isPlatform ? 'platform' : 'saya'">
     <!-- KrabiClaw Platform Homepage -->
-    <div v-if="isPlatform" class="krabiclaw-platform">
-      <SayaHero
-        id="section-hero"
-        title="KrabiClaw"
-        subtitle="The AI-powered restaurant platform. Build your digital presence in minutes."
-        size="home"
-        bg="black"
-      >
-        <template #cta>
-          <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <UButton
-              to="/signup"
-              variant="outline"
-              size="xl"
-              color="neutral"
-              class="border-[var(--ui-border)] text-[var(--ui-text-inverted)] hover:bg-[var(--ui-bg)]/10"
-            >
-              Start Free
-            </UButton>
-            <UButton to="/pricing" size="xl" color="neutral">View Pricing</UButton>
-          </div>
-        </template>
-      </SayaHero>
+    <div v-if="isPlatform" class="bg-(--kc-cream)">
 
-      <!-- Platform features section -->
-      <AppSection id="features" bg="white" padding="xl">
-        <div class="text-center mb-16">
-          <h2 class="text-4xl font-bold text-[var(--ui-text-highlighted)] mb-4 tracking-tight">
-            Everything your restaurant needs to thrive online
-          </h2>
-          <p class="text-xl text-[var(--ui-text-muted)] max-w-2xl mx-auto">
-            Professional websites with AI-powered content, Google Business integration, and seamless reservation management.
+      <!-- Hero -->
+      <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 grid lg:grid-cols-2 gap-12 items-center">
+        <div class="flex flex-col gap-6">
+          <!-- Eyebrow -->
+          <span class="self-start inline-flex items-center gap-2 text-[11px] font-bold tracking-[0.3em] uppercase text-(--kc-teal-600) bg-(--kc-teal-100) px-3.5 py-1.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-(--kc-teal) shrink-0" />
+            New · AI menu translator
+          </span>
+
+          <!-- Headline -->
+          <h1 class="text-[clamp(40px,5vw,64px)] font-extrabold leading-[1.02] tracking-tight text-(--kc-navy) text-balance m-0">
+            Build, grow, and manage your <span class="text-(--kc-coral)">restaurant</span> online.
+          </h1>
+
+          <p class="text-lg leading-relaxed text-(--kc-navy-500) m-0 max-w-lg">
+            The Shopify for restaurants. Beautiful sites, AI-powered content, Google Business sync — in one tidy little dashboard.
           </p>
+
+          <!-- CTAs -->
+          <div class="flex flex-wrap gap-3">
+            <NuxtLink
+              to="/signup"
+              class="inline-flex items-center gap-2 bg-(--kc-coral) text-white font-semibold text-[15px] px-6 py-3.5 rounded-[10px] hover:opacity-90 transition-opacity no-underline"
+            >
+              Start free
+              <UIcon name="i-heroicons-arrow-right" class="size-4" />
+            </NuxtLink>
+            <NuxtLink
+              to="/templates"
+              class="inline-flex items-center bg-transparent text-(--kc-teal-600) border border-(--kc-teal) font-semibold text-[15px] px-6 py-3.5 rounded-full hover:bg-(--kc-teal-100) transition-colors no-underline"
+            >
+              See live demo
+            </NuxtLink>
+          </div>
+
+          <!-- Social proof -->
+          <div class="flex items-center gap-3 mt-2">
+            <div class="flex">
+              <div
+                v-for="(av, i) in avatars"
+                :key="i"
+                class="w-8 h-8 rounded-full border-2 border-(--kc-cream) flex items-center justify-center text-white text-xs font-bold -ml-2 first:ml-0"
+                :style="{ background: av.color }"
+              >{{ av.letter }}</div>
+            </div>
+            <p class="text-[13px] text-(--kc-navy-500) m-0">
+              Trusted by <strong class="text-(--kc-navy)">1,200+ restaurants</strong> across SE Asia
+            </p>
+          </div>
         </div>
 
-        <div class="grid md:grid-cols-3 gap-12">
-          <UCard class="bg-[var(--ui-bg-muted)] border border-[var(--ui-border-muted)]">
-            <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center mb-6">
-              <span class="text-white text-2xl">🎨</span>
-            </div>
-            <h3 class="text-xl font-bold mb-3 text-[var(--ui-text-highlighted)]">Beautiful Themes</h3>
-            <p class="text-[var(--ui-text-muted)] leading-relaxed">
-              Choose from premium, conversion-optimized restaurant themes that look stunning on any device.
-            </p>
-          </UCard>
-
-          <UCard class="bg-[var(--ui-bg-muted)] border border-[var(--ui-border-muted)]">
-            <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center mb-6">
-              <span class="text-white text-2xl">🤖</span>
-            </div>
-            <h3 class="text-xl font-bold mb-3 text-[var(--ui-text-highlighted)]">AI-Powered Content</h3>
-            <p class="text-[var(--ui-text-muted)] leading-relaxed">
-              Our AI helps you write compelling copy, generate mouth-watering descriptions, and optimize for SEO.
-            </p>
-          </UCard>
-
-          <UCard class="bg-[var(--ui-bg-muted)] border border-[var(--ui-border-muted)]">
-            <div class="w-14 h-14 bg-black rounded-2xl flex items-center justify-center mb-6">
-              <span class="text-white text-2xl">📊</span>
-            </div>
-            <h3 class="text-xl font-bold mb-3 text-[var(--ui-text-highlighted)]">Google Sync</h3>
-            <p class="text-[var(--ui-text-muted)] leading-relaxed">
-              Automatically sync your reviews, photos, and business hours directly from your Google Business Profile.
-            </p>
-          </UCard>
+        <!-- Mascot / hero visual -->
+        <div class="hidden lg:flex justify-center">
+          <div class="bg-(--kc-coral-50) rounded-[32px] p-7 shadow-xl max-w-lg w-full">
+            <img
+              src="/krabiclaw-login-mascot.png"
+              alt="KrabiClaw mascot"
+              class="w-full block rounded-[20px]"
+            >
+          </div>
         </div>
-      </AppSection>
+      </section>
 
-      <!-- CTA Section -->
-      <AppSection bg="black" padding="xl">
-        <div class="text-center">
-          <h2 class="text-4xl font-bold mb-6 italic text-white">Ready to grow your restaurant?</h2>
-          <p class="text-[var(--ui-text-dimmed)] text-xl mb-10">Join hundreds of restaurants building their future with KrabiClaw.</p>
-          <UButton
-            to="/signup"
-            variant="solid"
-            color="neutral"
-            size="xl"
-            class="bg-[var(--ui-bg)] text-[var(--ui-text)] hover:bg-[var(--ui-bg-elevated)]"
-          >
-            Get Started for Free
-          </UButton>
+      <!-- Features -->
+      <section id="features" class="bg-white border-y border-(--kc-border) py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="text-center max-w-2xl mx-auto mb-12 flex flex-col items-center gap-4">
+            <span class="kc-eyebrow text-(--kc-navy-300)">Everything your restaurant needs</span>
+            <h2 class="text-[44px] font-extrabold tracking-tight leading-[1.05] text-(--kc-navy) m-0">One platform. No plugins. No fuss.</h2>
+          </div>
+          <div class="grid md:grid-cols-3 gap-5">
+            <div
+              v-for="feat in features"
+              :key="feat.title"
+              class="rounded-[18px] p-7 border"
+              :class="feat.dark
+                ? 'bg-(--kc-navy) border-(--kc-navy)'
+                : feat.muted
+                  ? 'bg-(--kc-cream) border-(--kc-border) shadow-none'
+                  : 'bg-white border-(--kc-border) shadow-[0_1px_3px_rgba(31,37,71,0.04)]'"
+            >
+              <div
+                class="w-12 h-12 rounded-xl flex items-center justify-center mb-5"
+                :class="feat.dark ? 'bg-(--kc-coral)' : 'bg-(--kc-navy)'"
+              >
+                <UIcon :name="feat.icon" class="size-5 text-white" />
+              </div>
+              <h3 class="text-lg font-bold mb-2 m-0" :class="feat.dark ? 'text-white' : 'text-(--kc-navy)'">{{ feat.title }}</h3>
+              <p class="text-[14px] leading-relaxed m-0" :class="feat.dark ? 'text-white/70' : 'text-(--kc-navy-500)'">{{ feat.body }}</p>
+            </div>
+          </div>
         </div>
-      </AppSection>
+      </section>
+
+      <!-- Pricing -->
+      <section class="bg-(--kc-cream) py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="text-center max-w-2xl mx-auto mb-12 flex flex-col items-center gap-4">
+            <span class="kc-eyebrow text-(--kc-navy-300)">Simple pricing</span>
+            <h2 class="text-[44px] font-extrabold tracking-tight leading-[1.05] text-(--kc-navy) m-0">Start free. Grow when you're ready.</h2>
+          </div>
+          <div class="grid md:grid-cols-2 gap-5 max-w-3xl mx-auto">
+            <!-- Free -->
+            <div class="bg-white border border-(--kc-border) rounded-[20px] p-8 relative">
+              <div class="text-[14px] font-semibold text-(--kc-navy-500) uppercase tracking-[0.18em] mb-4">Free</div>
+              <div class="flex items-baseline gap-2 mb-1.5">
+                <span class="text-[56px] font-extrabold text-(--kc-navy) tracking-tight leading-none">$0</span>
+                <span class="text-[14px] text-(--kc-navy-500)">forever</span>
+              </div>
+              <ul class="mt-5 mb-6 space-y-2.5">
+                <li v-for="f in freePlan" :key="f" class="flex items-center gap-2.5 text-[14px] text-(--kc-navy)">
+                  <UIcon name="i-heroicons-check" class="size-4 text-(--kc-teal) shrink-0" />
+                  {{ f }}
+                </li>
+              </ul>
+              <NuxtLink to="/signup" class="block text-center font-semibold text-[14px] py-3.5 rounded-[10px] bg-(--kc-navy) text-white hover:opacity-90 transition-opacity no-underline">
+                Start free
+              </NuxtLink>
+            </div>
+            <!-- Pro -->
+            <div class="bg-(--kc-navy) rounded-[20px] p-8 relative shadow-[0_24px_48px_rgba(31,37,71,0.18)]">
+              <div class="absolute -top-3 right-5 bg-(--kc-coral) text-white text-[11px] font-bold tracking-[0.18em] px-3 py-1.5 rounded-full uppercase">Most popular</div>
+              <div class="text-[14px] font-semibold text-(--kc-coral-200) uppercase tracking-[0.18em] mb-4">Pro</div>
+              <div class="flex items-baseline gap-2 mb-1.5">
+                <span class="text-[56px] font-extrabold text-white tracking-tight leading-none">$25</span>
+                <span class="text-[14px] text-white/70">per location / mo</span>
+              </div>
+              <ul class="mt-5 mb-6 space-y-2.5">
+                <li v-for="f in proPlan" :key="f" class="flex items-center gap-2.5 text-[14px] text-white/85">
+                  <UIcon name="i-heroicons-check" class="size-4 text-(--kc-coral) shrink-0" />
+                  {{ f }}
+                </li>
+              </ul>
+              <NuxtLink to="/signup" class="block text-center font-semibold text-[14px] py-3.5 rounded-[10px] bg-(--kc-coral) text-white hover:opacity-90 transition-opacity no-underline">
+                Start 14-day trial
+              </NuxtLink>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
 
     <!-- Saya Restaurant Theme (Tenant Site) -->
@@ -353,7 +411,7 @@
         <h3 class="saya-display saya-italic text-5xl text-default leading-none">
           {{ getField('cta.title', 'Come hungry.') }}
         </h3>
-        <UButton to="/reservations" color="neutral" variant="solid" size="xl" class="rounded-full">
+        <UButton to="/reservations" color="primary" variant="solid" size="xl" class="rounded-full">
           Reserve a table
         </UButton>
       </section>
@@ -371,6 +429,24 @@ import { useAuth } from '~/composables/useAuth'
 definePageMeta({ layout: false })
 
 const { isPlatform, siteId } = useTenantSite()
+
+// Platform homepage data
+const avatars = [
+  { color: '#FB7461', letter: 'S' },
+  { color: '#2BB5B5', letter: 'K' },
+  { color: '#F8C546', letter: 'M' },
+  { color: '#1F2547', letter: 'A' },
+]
+const features = [
+  { icon: 'i-heroicons-paint-brush', title: 'Beautiful themes', body: 'Conversion-optimized themes built for restaurants. Pick one, swap a color, you\'re live.' },
+  { icon: 'i-heroicons-sparkles', title: 'AI-powered content', body: 'Mouth-watering descriptions, allergens, translations — generated in one click.', muted: true },
+  { icon: 'i-heroicons-globe-alt', title: 'Google Business sync', body: 'Hours, photos, menu — pushed to Google so guests find the right info every time.' },
+  { icon: 'i-heroicons-calendar-days', title: 'Reservations + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.', dark: true },
+  { icon: 'i-heroicons-shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
+  { icon: 'i-heroicons-chart-bar', title: 'Real-time insights', body: 'See covers, top dishes, busy hours — all in one dashboard.' },
+]
+const freePlan = ['1 location', 'Beautiful Saya theme', 'Online menu', 'Google Business sync']
+const proPlan = ['Everything in Free', 'Reservations + waitlist', 'AI content writer', 'Custom domain', 'Remove KrabiClaw badge']
 const { getField, getFieldStr } = usePageContent('home')
 const { isAuthenticated } = useAuth()
 

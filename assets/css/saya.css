@@ -12,6 +12,10 @@
   background-color: #FFFFFF;
 
   --saya-primary:       #8F1D21;
+  /* Mirror saya-primary into Tailwind's --color-primary so that
+     bg-primary / text-primary / ring-primary utilities and all Nuxt UI
+     components using color="primary" resolve to the tenant brand color. */
+  --color-primary:      var(--saya-primary);
   --saya-bg:            #FFFFFF;
   --saya-bg-alt:        #FAFAFA;
   --saya-bg-inverted:   #09090B;
