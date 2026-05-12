@@ -89,316 +89,193 @@
 
     <!-- Saya Restaurant Theme (Tenant Site) -->
     <div v-else class="saya-restaurant-theme">
-      <SayaHero
-        id="section-hero"
-        :title="getField('hero.title', 'Saya Kitchen')"
-        :subtitle="getField('hero.subtitle', 'Authentic Japanese Robatayaki in Krabi, Thailand')"
-        size="home"
-        :video="getFieldStr('hero.video', '/videos/hero-video.mp4')"
-        :establishment-year="googleBusiness.value?.business?.establishmentYear"
-      >
-        <template #cta>
-          <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <UButton to="/menu" variant="solid" color="neutral" size="xl">
-              View Menu
-            </UButton>
-            <UButton v-if="hasLocations" :to="locationsCtaUrl" variant="outline" color="neutral" size="xl">
-              {{ locationsCtaText }}
-            </UButton>
-            <UButton v-else to="/reservations" variant="outline" color="neutral" size="xl">
-              Reserve a Table
-            </UButton>
+
+      <!-- ── Brand hero ─────────────────────────────────────── -->
+      <section class="relative min-h-160 overflow-hidden flex items-center">
+        <!-- Background photo -->
+        <div
+          v-if="businessPrimaryPhoto"
+          class="absolute inset-0 bg-cover bg-center opacity-50"
+          :style="`background-image: url(${businessPrimaryPhoto.googleUrl})`"
+        />
+        <div class="absolute inset-0 bg-zinc-950" :class="businessPrimaryPhoto ? 'opacity-50' : ''" />
+        <div class="relative mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">
+          <p class="saya-eyebrow mb-8 text-white/70">
+            {{ getField('hero.eyebrow', businessCity || 'A neighbourhood restaurant') }}
+          </p>
+          <h1 class="saya-display-lg text-white max-w-4xl">
+            {{ getField('hero.title', businessTitle) }}<br>
+            <em class="saya-italic">{{ getField('hero.subtitle', businessSubtitle) }}</em>
+          </h1>
+
+          <!-- Location pills -->
+          <div v-if="hasLocations" class="mt-12 flex flex-wrap gap-3">
+            <NuxtLink
+              v-for="loc in locations"
+              :key="loc.id"
+              :to="`/locations/${loc.slug}`"
+              class="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/5 px-5 py-2.5 text-sm text-white backdrop-blur-sm no-underline transition hover:bg-white/10"
+            >
+              <UIcon name="i-heroicons-map-pin" class="size-3.5 opacity-70" />
+              {{ loc.title }}
+            </NuxtLink>
           </div>
-        </template>
-      </SayaHero>
-
-      <!-- Location Cards/Picker -->
-      <AppSection v-if="hasLocations" bg="white" padding="default">
-        <div class="text-center mb-12">
-          <h2 class="text-3xl font-bold text-[var(--ui-text-highlighted)] mb-4">Our Locations</h2>
-          <p class="text-xl text-[var(--ui-text-muted)]">Visit us at any of our convenient locations</p>
+          <div v-else class="mt-12 flex flex-wrap gap-4">
+            <UButton to="/reservations" color="neutral" variant="solid" size="xl" class="rounded-full bg-white! text-black! hover:bg-zinc-100!">Reserve a table</UButton>
+          </div>
         </div>
+      </section>
 
-        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <AppCard
-            v-for="location in locations"
-            :key="location.id"
-            variant="elevated"
-            border="light"
-            hoverable
-            @click="navigateToLocation(location)"
+      <!-- ── Locations grid ─────────────────────────────────── -->
+      <section v-if="hasLocations" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+        <div class="mb-16 max-w-2xl">
+          <p class="saya-kicker mb-6">Find us</p>
+          <h2 class="saya-display-md text-default">
+            {{ locations.length }} location{{ locations.length === 1 ? '' : 's' }}, one kitchen philosophy.
+          </h2>
+        </div>
+        <div :class="['grid gap-8', locations.length > 1 ? 'md:grid-cols-2' : '']">
+          <NuxtLink
+            v-for="loc in locations"
+            :key="loc.id"
+            :to="`/locations/${loc.slug}`"
+            class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
           >
-            <div v-if="location.image_url" class="aspect-video bg-[var(--ui-bg-elevated)] rounded-t-lg overflow-hidden">
+            <div class="aspect-16/10 overflow-hidden bg-muted">
               <img
-                :src="location.image_url"
-                :alt="location.title"
-                class="w-full h-full object-cover"
+                v-if="loc.image_url"
+                :src="loc.image_url"
+                :alt="loc.title"
+                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               >
-            </div>
-            <div v-else class="aspect-video bg-[var(--ui-bg-elevated)] rounded-t-lg flex items-center justify-center">
-              <svg class="w-12 h-12 text-[var(--ui-text-dimmed)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
-
-            <div class="p-6">
-              <div class="flex items-start justify-between mb-2">
-                <h3 class="text-lg font-semibold text-[var(--ui-text-highlighted)]">{{ location.title }}</h3>
-                <UBadge color="neutral" variant="soft" size="sm">Primary</UBadge>
-              </div>
-
-              <p v-if="location.address" class="text-[var(--ui-text-muted)] text-sm mb-3">{{ location.address }}</p>
-
-              <div class="flex items-center text-sm text-[var(--ui-text-muted)]">
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                {{ location.city || 'Location' }}
+              <div v-else class="flex h-full w-full items-center justify-center">
+                <UIcon name="i-heroicons-map-pin" class="size-10 text-muted" />
               </div>
             </div>
-          </AppCard>
+            <div class="p-8 pb-9">
+              <div class="saya-eyebrow mb-5 flex items-center gap-2 text-muted">
+                <span class="size-1.5 rounded-full bg-zinc-300" />
+                {{ loc.city || 'Location' }}
+              </div>
+              <div class="saya-display saya-italic text-4xl text-default leading-none">{{ loc.title }}</div>
+              <div class="mt-6 border-t border-default pt-5">
+                <span class="saya-eyebrow text-muted">Visit this location →</span>
+              </div>
+            </div>
+          </NuxtLink>
         </div>
-      </AppSection>
+      </section>
 
-      <!-- Featured Menu Preview -->
-      <AppSection v-if="hasMenu" bg="alt" padding="default">
-        <div class="text-center mb-12">
-          <h2 class="text-3xl font-bold text-[var(--ui-text-highlighted)] mb-4">Featured Menu</h2>
-          <p class="text-xl text-[var(--ui-text-muted)]">Taste our signature dishes</p>
-        </div>
-
-        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <AppCard
-            v-for="item in featuredMenuItems"
-            :key="item.id"
-            variant="elevated"
-            border="light"
-            hoverable
-          >
-            <div class="flex justify-between items-start mb-4">
-              <div>
-                <h3 class="text-lg font-semibold text-[var(--ui-text-highlighted)]">{{ item.name }}</h3>
-                <p v-if="item.description" class="text-[var(--ui-text-muted)] text-sm mt-1">{{ item.description }}</p>
-              </div>
-              <div v-if="item.price" class="text-lg font-bold text-[var(--ui-text-highlighted)] ml-4">
-                {{ item.price }}
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between">
-              <span
-                :class="[
-                  'inline-flex items-center px-2 py-1 text-xs font-medium rounded',
-                  item.available
-                    ? 'bg-[var(--ui-bg-elevated)] text-[var(--ui-text)]'
-                    : 'bg-red-100 text-red-800'
-                ]"
+      <!-- ── Aggregated highlights ───────────────────────────── -->
+      <section v-if="highlights.length" class="bg-elevated">
+        <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+          <div class="mb-16 max-w-2xl">
+            <p class="saya-kicker mb-6">Lately</p>
+            <h2 class="saya-display-md text-default">Posts, reviews &amp; dishes from across the brand.</h2>
+            <p class="mt-6 text-sm leading-relaxed text-muted">Updates automatically from Google Business across every location.</p>
+          </div>
+          <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <template v-for="(tile, i) in highlights" :key="i">
+              <!-- Post tile -->
+              <article
+                v-if="tile.type === 'post'"
+                class="overflow-hidden bg-default"
+                :class="tile.wide ? 'sm:col-span-2' : ''"
               >
-                {{ item.available ? 'Available' : 'Unavailable' }}
-              </span>
+                <div v-if="tile.image" class="overflow-hidden bg-muted" :class="tile.wide ? 'aspect-video' : 'aspect-square'">
+                  <img :src="tile.image" alt="" class="h-full w-full object-cover" >
+                </div>
+                <div class="p-5 pt-4">
+                  <p class="saya-eyebrow mb-2 text-muted">Google Post</p>
+                  <p class="text-sm leading-relaxed text-default line-clamp-3">{{ tile.text }}</p>
+                </div>
+              </article>
 
-              <UButton to="/menu" color="neutral" variant="outline" size="sm">View Full Menu</UButton>
-            </div>
-          </AppCard>
-        </div>
-      </AppSection>
+              <!-- Dish tile -->
+              <article v-else-if="tile.type === 'dish'" class="overflow-hidden bg-default">
+                <div v-if="tile.image" class="aspect-square overflow-hidden bg-muted">
+                  <img :src="tile.image" alt="" class="h-full w-full object-cover" >
+                </div>
+                <div class="p-5 pt-4">
+                  <p class="saya-eyebrow mb-2 text-muted">Featured</p>
+                  <p class="saya-display saya-italic text-xl text-default leading-snug">{{ tile.name }}</p>
+                  <p v-if="tile.price" class="mt-1 text-sm tabular-nums text-muted">{{ tile.price }}</p>
+                </div>
+              </article>
 
-      <!-- Reviews Summary -->
-      <AppSection v-if="hasGoogleBusiness && googleReviewSummary" bg="white" padding="default">
-        <div class="text-center mb-12">
-          <h2 class="text-3xl font-bold text-[var(--ui-text-highlighted)] mb-4">What Our Guests Say</h2>
-          <div class="flex items-center justify-center gap-4">
-            <div class="flex items-center">
-              <div class="flex text-yellow-400">
-                <svg v-for="i in 5" :key="i" class="w-5 h-5 fill-current" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-              </div>
-              <span class="text-2xl font-bold text-[var(--ui-text-highlighted)] ml-2">{{ googleReviewSummary.average }}</span>
-            </div>
-            <span class="text-[var(--ui-text-muted)]">({{ googleReviewSummary.count }} reviews)</span>
+              <!-- Review quote tile -->
+              <article v-else-if="tile.type === 'review'" class="bg-default p-6 flex flex-col">
+                <UIcon name="i-heroicons-chat-bubble-left" class="mb-4 size-6 text-muted opacity-30" />
+                <p class="saya-display saya-italic text-xl text-default leading-snug flex-1">"{{ tile.text }}"</p>
+                <p class="mt-4 text-xs text-muted">{{ tile.author }}</p>
+              </article>
+            </template>
           </div>
         </div>
+      </section>
 
-        <div class="grid md:grid-cols-3 gap-8">
+      <!-- ── Brand story ─────────────────────────────────────── -->
+      <section class="bg-inverted text-inverted">
+        <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+          <p class="saya-eyebrow mb-8 text-white/60">Our story</p>
+          <h2 class="saya-display-md max-w-3xl text-white">
+            {{ getField('story.headline', businessTitle) }}
+          </h2>
+          <p class="mt-8 max-w-2xl text-base leading-relaxed text-zinc-400">
+            {{ getField('story.body', businessSubtitle) }}
+          </p>
+          <NuxtLink
+            to="/about"
+            class="mt-8 inline-block border-b border-white pb-1 text-xs uppercase tracking-widest text-white no-underline transition hover:opacity-60"
+          >
+            Read more →
+          </NuxtLink>
+        </div>
+      </section>
+
+      <!-- ── Aggregated reviews ──────────────────────────────── -->
+      <section v-if="hasGoogleBusiness && featuredReviews.length" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+        <div class="mb-16 max-w-2xl">
+          <p class="saya-kicker mb-6">Reviews</p>
+          <h2 class="saya-display-md flex flex-wrap items-center gap-4 text-default">
+            <UIcon name="i-heroicons-star-solid" class="size-8 text-primary" />
+            {{ googleReviewSummary?.average }}
+            <span class="text-muted">· {{ googleReviewSummary?.count?.toLocaleString() }} reviews</span>
+          </h2>
+          <p class="mt-6 text-sm text-muted">Synced live from Google Business across all locations.</p>
+        </div>
+        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <div
             v-for="review in featuredReviews"
             :key="review.id"
-            class="bg-[var(--ui-bg-muted)] rounded-lg p-6"
+            class="bg-elevated p-8"
           >
-            <div class="flex items-center mb-4">
-              <div class="flex text-yellow-400">
-                <svg v-for="i in review.rating" :key="i" class="w-4 h-4 fill-current" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-              </div>
-              <span class="ml-2 text-sm text-[var(--ui-text-muted)]">{{ review.rating }}/5</span>
+            <div class="mb-3 flex gap-1">
+              <UIcon
+                v-for="s in 5"
+                :key="s"
+                name="i-heroicons-star-solid"
+                class="size-3.5"
+                :class="s <= googleReviewRating(review) ? 'text-primary' : 'text-muted'"
+              />
             </div>
-
-            <p class="text-[var(--ui-text)] mb-3">{{ review.content }}</p>
-            <p class="text-sm text-[var(--ui-text-muted)] font-medium">{{ review.author }}</p>
-          </div>
-        </div>
-      </AppSection>
-      <AppSection v-else bg="white" padding="default">
-        <div class="mb-8 text-center">
-          <h2 class="mb-3 text-3xl font-bold text-[var(--ui-text-highlighted)]">What Our Guests Say</h2>
-          <p class="text-[var(--ui-text-muted)]">Connect Google Business to display fresh guest reviews.</p>
-        </div>
-        <div class="grid gap-8 md:grid-cols-3">
-          <UCard v-for="i in 3" :key="`review-placeholder-${i}`" class="flex flex-col bg-[var(--ui-bg)] p-8 shadow-sm border border-[var(--ui-border-muted)]">
-            <div class="mb-4 flex items-center gap-1">
-              <span v-for="star in 5" :key="star" class="h-4 w-4 rounded bg-stone-200 animate-pulse" />
-            </div>
-            <div class="flex-grow space-y-3">
-              <div class="h-3 rounded bg-stone-200 animate-pulse" />
-              <div class="h-3 w-4/5 rounded bg-stone-200 animate-pulse" />
-              <div class="h-3 w-3/4 rounded bg-stone-200 animate-pulse" />
-            </div>
-            <div class="mt-6 flex items-center gap-3 border-t border-gray-50 pt-6">
-              <div class="h-10 w-10 rounded-full bg-stone-200 animate-pulse" />
-              <div class="flex-1 space-y-2">
-                <div class="h-4 w-28 rounded bg-stone-200 animate-pulse" />
-                <div class="h-3 w-20 rounded bg-stone-200 animate-pulse" />
-              </div>
-            </div>
-          </UCard>
-        </div>
-        <div v-if="isAuthenticated" class="mt-8 text-center">
-          <NuxtLink to="/dashboard/integrations" class="font-semibold text-[var(--ui-text-highlighted)] underline decoration-[var(--ui-border-muted)] underline-offset-4 hover:decoration-[var(--ui-border)]">
-            Connect Google Business →
-          </NuxtLink>
-        </div>
-      </AppSection>
-
-      <!-- Posts/News -->
-      <ClientOnly>
-        <SayaPosts :posts="googlePosts" :limit="3" show-view-more description="News, events and special offers" />
-      </ClientOnly>
-
-      <!-- About teaser -->
-      <ClientOnly>
-        <SayaAbout
-          :title="getField('about-teaser-title', businessTitle)"
-          :image="businessPrimaryPhoto?.googleUrl"
-          is-teaser
-          bg="black"
-          padding="xl"
-        >
-          <p class="text-[var(--ui-text-inverted)] opacity-80 text-lg font-light leading-relaxed">
-            {{ getField('cta.description', businessSubtitle) }}
-          </p>
-        </SayaAbout>
-      </ClientOnly>
-
-      <!-- Gallery -->
-      <AppSection bg="white" padding="default">
-        <div class="flex items-center justify-between mb-8">
-          <h2 class="text-3xl font-bold text-[var(--ui-text-highlighted)] italic">Gallery</h2>
-          <NuxtLink to="/photos" class="text-black font-semibold hover:underline">View All Photos →</NuxtLink>
-        </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <!-- Loaded photos -->
-          <template v-if="googleMedia.length">
-            <div v-for="media in googleMedia.slice(0, 4)" :key="media.name" class="aspect-square overflow-hidden rounded-2xl shadow-sm">
-              <img
-                :src="media.googleUrl"
-                :alt="media.description || 'Restaurant Photo'"
-                class="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
-              >
-            </div>
-          </template>
-          <!-- Empty state placeholders -->
-          <template v-else>
-            <div v-for="photo in sayaGalleryPlaceholders" :key="photo.src" class="aspect-square overflow-hidden rounded-2xl shadow-sm">
-              <img
-                :src="photo.src"
-                :alt="photo.alt"
-                class="h-full w-full object-cover transition-transform duration-500 hover:scale-110"
-              >
-            </div>
-          </template>
-        </div>
-      </AppSection>
-
-      <!-- Location & Hours -->
-      <AppSection id="section-google" bg="alt" padding="default">
-        <div class="grid md:grid-cols-2 gap-12 items-center">
-          <div>
-            <h2 class="text-3xl font-bold text-[var(--ui-text-highlighted)] mb-4 italic">
-              Find Us{{ businessCity ? ` in ${businessCity}` : ' at Our Location' }}
-            </h2>
-            <div class="space-y-4 text-[var(--ui-text-muted)] mb-8">
-              <!-- Address placeholder if not yet synced -->
-              <div v-if="businessAddress">
-                <p>{{ businessAddress }}</p>
-              </div>
-              <p v-else>123 Beach Road, Ao Nang, Krabi 81180</p>
-
-              <div v-if="specialHoursNotice" class="flex items-start gap-4 p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                <span class="text-2xl">🗓️</span>
-                <div>
-                  <h3 class="font-bold text-amber-900 text-sm uppercase tracking-wider mb-1">Holiday Update</h3>
-                  <p class="text-amber-800 text-sm font-medium">{{ specialHoursNotice }}</p>
-                </div>
-              </div>
-
-              <p v-if="businessHours">{{ businessHours }}</p>
-              <p v-else>Open daily, 5:00 PM - 10:30 PM</p>
-
-              <p v-if="businessPhone">{{ businessPhone }}</p>
-              <p v-else>+66 81 154 3606</p>
-            </div>
-            <div class="flex gap-4">
-              <UButton to="/location" variant="solid" color="neutral" size="xl">Full Location Details</UButton>
-              <UButton to="/reservations" variant="outline" color="neutral" size="xl">Reserve a Table →</UButton>
-            </div>
-          </div>
-          <div class="rounded-3xl h-80 overflow-hidden shadow-2xl bg-[var(--ui-bg-elevated)]">
-            <iframe
-              v-if="businessCoordinates"
-              :src="`https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d3950.432413181305!2d${businessCoordinates.lng}!3d${businessCoordinates.lat}!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x305195cf958f130b%3A0xd8ce9d779ecb9325!2sYour%20Restaurant!5e0!3m2!1sen!2sth!4v1777770384431!5m2!1sen!2sth`"
-              width="100%"
-              height="100%"
-              style="border:0;"
-              allowfullscreen=""
-              loading="lazy"
-              referrerpolicy="no-referrer-when-downgrade"
-            />
-            <div v-else class="flex h-full w-full items-center justify-center bg-[var(--ui-bg)]">
-              <div class="px-8 text-center">
-                <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-[var(--ui-bg-muted)] text-[var(--ui-text-highlighted)]">
-                  <UIcon name="i-simple-icons-googlemaps" class="size-7" />
-                </div>
-                <p class="text-base font-semibold text-[var(--ui-text-highlighted)]">Google Maps will appear here</p>
-                <p class="mt-2 text-sm text-[var(--ui-text-muted)]">Connect Google Business to sync your verified location and directions.</p>
-              </div>
+            <p class="text-sm leading-relaxed text-default">"{{ review.comment?.text || review.content }}"</p>
+            <div class="mt-6 border-t border-default pt-4">
+              <p class="text-sm font-medium text-default">{{ review.reviewer?.displayName || review.author_name }}</p>
             </div>
           </div>
         </div>
-      </AppSection>
+      </section>
 
-      <!-- CTA -->
-      <AppSection id="section-cta" bg="black" padding="xl">
-        <div class="text-center">
-          <h2 class="text-3xl md:text-5xl font-bold text-white mb-6 italic">
-            {{ getField('cta.title', 'Ready to Experience Saya Kitchen?') }}
-          </h2>
-          <p class="text-white/60 mb-10 max-w-2xl mx-auto font-light">
-            {{ getField('cta.description', "From our open-flame robatayaki grill to hand-rolled sushi, every dish at Saya is crafted with intention. Join us for an evening you won't forget.") }}
-          </p>
-          <div class="flex flex-col md:flex-row items-center justify-center gap-6">
-            <UButton to="/reservations" variant="solid" color="neutral" size="xl" class="bg-[var(--ui-bg)] text-[var(--ui-text)] hover:bg-[var(--ui-bg-elevated)]">
-              Reserve a Table
-            </UButton>
-            <UButton to="/contact" variant="outline" color="neutral" size="xl" class="border-[var(--ui-border)] text-[var(--ui-text-inverted)] hover:bg-[var(--ui-bg)]/10">
-              Contact Us
-            </UButton>
-          </div>
-        </div>
-      </AppSection>
+      <!-- ── CTA strip ───────────────────────────────────────── -->
+      <section class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-20 pb-28 sm:px-6 lg:px-8">
+        <h3 class="saya-display saya-italic text-5xl text-default leading-none">
+          {{ getField('cta.title', 'Come hungry.') }}
+        </h3>
+        <UButton to="/reservations" color="neutral" variant="solid" size="xl" class="rounded-full">
+          Reserve a table
+        </UButton>
+      </section>
     </div>
   </NuxtLayout>
 </template>
@@ -556,9 +433,30 @@ const googleReviewSummary = computed(() => {
 const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
 const featuredReviews = computed(() => googleReviews.value.slice(0, 3))
 
-// Navigate to location
-const navigateToLocation = (location) => {
-  navigateTo(`/locations/${location.slug}`)
-}
+// Aggregated highlights — mix posts, dishes, review quotes (max 6 tiles)
+const highlights = computed(() => {
+  const tiles = []
+
+  // Up to 2 GMB posts with photos
+  const posts = (googlePosts.value || []).filter(p => p.media?.[0]?.googleUrl)
+  for (let i = 0; i < Math.min(2, posts.length); i++) {
+    tiles.push({ type: 'post', image: posts[i].media[0].googleUrl, text: posts[i].summary || posts[i].name, wide: i === 0 })
+  }
+
+  // Up to 3 featured dishes
+  for (let i = 0; i < Math.min(3, featuredMenuItems.value.length); i++) {
+    const item = featuredMenuItems.value[i]
+    tiles.push({ type: 'dish', name: item.name, price: item.price, image: item.image_url || null })
+  }
+
+  // Up to 2 review quotes
+  const reviews = googleReviews.value.filter(r => (r.comment?.text || r.content)?.length > 40)
+  for (let i = 0; i < Math.min(2, reviews.length); i++) {
+    const r = reviews[i]
+    tiles.push({ type: 'review', text: (r.comment?.text || r.content || '').slice(0, 160), author: r.reviewer?.displayName || r.author_name || 'Guest' })
+  }
+
+  return tiles.slice(0, 7)
+})
 
 </script>

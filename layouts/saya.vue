@@ -9,6 +9,7 @@
         <slot />
       </main>
       <SayaFooter />
+      <SayaUpgradeModal />
     </UTheme>
   </div>
 </template>
