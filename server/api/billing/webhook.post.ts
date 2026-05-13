@@ -1,6 +1,7 @@
 // Handle Stripe webhooks for subscription management
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { verifyStripeWebhook, setOrganizationEntitlementsFromPlan } from '../../utils/billing'
+import { deleteOrganizationCustomDomains } from '../../utils/domains'
 import Stripe from 'stripe'
 
 export default defineEventHandler(async (event) => {
@@ -205,6 +206,9 @@ async function handleSubscriptionUpdated(env: Record<string, string | undefined>
   const plan = getPlanFromSubscription(env, subscription)
   if (plan) {
     await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, plan)
+    if (plan === 'free') {
+      await deleteOrganizationCustomDomains(env, db, billing.organization_id)
+    }
   }
 
   console.log(`Subscription updated for organization ${billing.organization_id}, status ${status}`)
@@ -235,6 +239,7 @@ async function handleSubscriptionDeleted(env: Record<string, string | undefined>
 
     // Set free entitlements
     await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, 'free')
+    await deleteOrganizationCustomDomains(env, db, billing.organization_id)
     
     console.log(`Subscription deleted for organization ${billing.organization_id}`)
   } catch (error) {

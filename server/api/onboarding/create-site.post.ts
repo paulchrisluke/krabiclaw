@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getSayaThemeSeedContent, getDefaultMenuSeedData } from '../../utils/content-seeding'
 import { getAuthSession } from '../../utils/auth'
+import { createSystemSubdomain } from '../../utils/domains'
 import { defineEventHandler, readBody } from 'h3'
 
 interface CreateSiteRequest {
@@ -89,7 +90,7 @@ export default defineEventHandler(async (event) => {
           })
         } else if (existingSite.onboarding_status === 'pending' || existingSite.onboarding_status === 'failed') {
           // Resume incomplete onboarding
-          return await resumeOnboarding(db, existingSite.id, organizationId, restaurantName)
+          return await resumeOnboarding(env, db, existingSite.id, organizationId, restaurantName)
         }
       }
       
@@ -184,7 +185,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Step 6: Perform required seeding (must succeed)
-    return await performRequiredSeeding(db, siteId, organizationId, restaurantName, normalizedSubdomain)
+    return await performRequiredSeeding(env, db, siteId, organizationId, restaurantName, normalizedSubdomain)
     
   } catch (error) {
     console.error('Site creation failed:', error)
@@ -206,9 +207,9 @@ export default defineEventHandler(async (event) => {
 })
 
 // Resume incomplete onboarding
-async function resumeOnboarding(db: any, siteId: string, organizationId: string, restaurantName: string) {
+async function resumeOnboarding(env: any, db: any, siteId: string, organizationId: string, restaurantName: string) {
   try {
-    return await performRequiredSeeding(db, siteId, organizationId, restaurantName, '')
+    return await performRequiredSeeding(env, db, siteId, organizationId, restaurantName, '')
   } catch (error) {
     console.error('Failed to resume onboarding:', error)
     throw error
@@ -216,7 +217,7 @@ async function resumeOnboarding(db: any, siteId: string, organizationId: string,
 }
 
 // Perform required seeding (must succeed for onboarding to complete)
-async function performRequiredSeeding(db: any, siteId: string, organizationId: string, restaurantName: string, subdomain: string) {
+async function performRequiredSeeding(env: any, db: any, siteId: string, organizationId: string, restaurantName: string, subdomain: string) {
   const now = new Date().toISOString()
   
   try {
@@ -290,6 +291,9 @@ async function performRequiredSeeding(db: any, siteId: string, organizationId: s
       ).run()
     }
     
+    const resolvedSubdomain = subdomain || await db.prepare('SELECT subdomain FROM sites WHERE id = ?').bind(siteId).first().then((r: any) => r?.subdomain)
+    await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
+
     // Step 3: Mark site as active (onboarding complete)
     await db.prepare(`
       UPDATE sites SET onboarding_status = 'active', updated_at = ?
@@ -299,7 +303,7 @@ async function performRequiredSeeding(db: any, siteId: string, organizationId: s
     return jsonResponse({
       siteId,
       organizationId,
-      subdomain: subdomain || await db.prepare('SELECT subdomain FROM sites WHERE id = ?').bind(siteId).first().then((r: any) => r?.subdomain),
+      subdomain: resolvedSubdomain,
       message: 'Site created successfully'
     })
     

@@ -160,6 +160,38 @@
             </div>
           </dl>
         </UCard>
+
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold text-highlighted">Hero Media</h2>
+              <UButton v-if="heroSaved" size="xs" color="success" variant="soft" icon="i-heroicons-check">Saved</UButton>
+            </div>
+          </template>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <UFormField label="Hero Image">
+              <MediaPicker
+                v-model="heroImageAssetId"
+                :site-id="siteId"
+                :location-id="locationId"
+                accept="image"
+                title="Location hero image"
+                @change="saveHeroMedia"
+              />
+            </UFormField>
+            <UFormField label="Hero Video">
+              <MediaPicker
+                v-model="heroVideoAssetId"
+                :site-id="siteId"
+                :location-id="locationId"
+                accept="video"
+                title="Location hero video"
+                @change="saveHeroMedia"
+              />
+            </UFormField>
+          </div>
+        </UCard>
       </div>
     </UPageBody>
   </UPage>
@@ -231,6 +263,30 @@ const workspaceActions = computed(() => [
   { label: 'Edit Location Details', icon: 'i-heroicons-cog-6-tooth', to: `/dashboard/sites/${siteId}/settings?tab=locations&locationId=${locationId}` },
   { label: 'Edit Brand Content', icon: 'i-heroicons-building-storefront', to: `/dashboard/sites/${siteId}/content` }
 ])
+
+const heroImageAssetId = ref<string | null>(null)
+const heroVideoAssetId = ref<string | null>(null)
+const heroSaved = ref(false)
+
+watch(location, (loc) => {
+  if (loc) {
+    heroImageAssetId.value = (loc as any).hero_image_asset_id ?? null
+    heroVideoAssetId.value = (loc as any).hero_video_asset_id ?? null
+  }
+})
+
+async function saveHeroMedia() {
+  try {
+    await $fetch(`/api/sites/${siteId}/locations/${locationId}`, {
+      method: 'PATCH',
+      body: { hero_image_asset_id: heroImageAssetId.value, hero_video_asset_id: heroVideoAssetId.value },
+    })
+    heroSaved.value = true
+    setTimeout(() => { heroSaved.value = false }, 2000)
+  } catch (err: any) {
+    toast.add({ description: err?.data?.error ?? 'Failed to save', color: 'error' })
+  }
+}
 
 const connectGoogleBusiness = async () => {
   connectingGoogle.value = true

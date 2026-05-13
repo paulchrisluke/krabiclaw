@@ -3,7 +3,7 @@
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="brandColor ? { '--ui-primary': brandColor, '--color-primary': brandColor } : {}"
   >
-    <UTheme :ui="{}" :props="{ button: { color: 'neutral' } }">
+    <UTheme :ui="{}">
       <SayaHeader />
       <main class="grow">
         <slot />

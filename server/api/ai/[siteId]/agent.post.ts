@@ -9,6 +9,8 @@ import { getMenus, getMenuWithItems, createMenu, updateMenu, createMenuItem, upd
 const MAX_ITERATIONS = 10
 const MODEL = 'claude-sonnet-4-6'
 
+const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+
 const TOOLS: AiTool[] = [
   // ── Posts ──────────────────────────────────────────────────────────────────
   {
@@ -30,7 +32,7 @@ const TOOLS: AiTool[] = [
       properties: {
         title: { type: 'string', description: 'Short headline (max 80 chars). Optional.' },
         body: { type: 'string', description: 'Post body (max 400 chars). Friendly, warm tone.' },
-        image_url: { type: 'string', description: 'Optional image URL.' },
+        image_asset_id: { type: 'string', description: 'Optional media asset ID from generate_image or get_location_media.' },
         location_id: { type: 'string', description: 'Pin this post to a specific location. Omit for site-wide.' },
         post_type: { type: 'string', enum: ['standard', 'offer', 'event', 'update'], description: 'Post type. Default: standard.' },
         cta_type: { type: 'string', enum: ['BOOK', 'ORDER', 'SHOP', 'LEARN_MORE', 'SIGN_UP', 'CALL'], description: 'Call-to-action button type.' },
@@ -109,7 +111,7 @@ const TOOLS: AiTool[] = [
               name: { type: 'string', description: 'Dish name.' },
               description: { type: 'string', description: 'Short description. Optional.' },
               price: { type: 'string', description: 'Price string, e.g. "฿120". Optional.' },
-              image_url: { type: 'string', description: 'Photo URL for this item. Optional.' },
+              image_asset_id: { type: 'string', description: 'Media asset ID from generate_image. Optional.' },
             },
             required: ['section', 'name'],
           },
@@ -129,7 +131,7 @@ const TOOLS: AiTool[] = [
         name: { type: 'string', description: 'Dish name.' },
         description: { type: 'string', description: 'Short description. Optional.' },
         price: { type: 'string', description: 'Price string. Optional.' },
-        image_url: { type: 'string', description: 'Photo URL. Optional.' },
+        image_asset_id: { type: 'string', description: 'Media asset ID from generate_image. Optional.' },
       },
       required: ['menu_id', 'section', 'name'],
     },
@@ -144,7 +146,7 @@ const TOOLS: AiTool[] = [
         name: { type: 'string' },
         description: { type: 'string' },
         price: { type: 'string' },
-        image_url: { type: 'string', description: 'New photo URL.' },
+        image_asset_id: { type: 'string', description: 'New media asset ID from generate_image.' },
         available: { type: 'boolean' },
       },
       required: ['item_id'],
@@ -241,42 +243,40 @@ const TOOLS: AiTool[] = [
     },
   },
 
-  // ── Photos ─────────────────────────────────────────────────────────────────
+  // ── Media ──────────────────────────────────────────────────────────────────
   {
-    name: 'get_location_photos',
-    description: 'List photos for a location.',
+    name: 'get_location_media',
+    description: 'List media assets (images, videos) for a location.',
     input_schema: {
       type: 'object',
       properties: {
         location_id: { type: 'string', description: 'Location ID from get_locations.' },
+        kind: { type: 'string', enum: ['image', 'video', 'file'], description: 'Filter by media type. Omit for all.' },
       },
       required: ['location_id'],
     },
   },
   {
-    name: 'add_location_photo',
-    description: 'Add a photo to a location.',
+    name: 'delete_media_asset',
+    description: 'Delete a media asset from the library and Cloudflare storage. Confirm with user first.',
     input_schema: {
       type: 'object',
       properties: {
-        location_id: { type: 'string' },
-        url: { type: 'string', description: 'Photo URL.' },
-        category: { type: 'string', enum: ['EXTERIOR', 'INTERIOR', 'FOOD', 'MENU', 'TEAM', 'GENERAL'], description: 'Photo category.' },
-        description: { type: 'string', description: 'Caption. Optional.' },
+        asset_id: { type: 'string', description: 'ID from get_location_media.' },
       },
-      required: ['location_id', 'url'],
+      required: ['asset_id'],
     },
   },
   {
-    name: 'delete_location_photo',
-    description: 'Delete a location photo. Confirm with user first.',
+    name: 'generate_image',
+    description: 'Generate an AI image from a text prompt using Flux. The image is automatically saved to the media library. Use for menu item photos, hero images, or social posts.',
     input_schema: {
       type: 'object',
       properties: {
-        photo_id: { type: 'string' },
-        location_id: { type: 'string' },
+        prompt: { type: 'string', description: 'Describe the image. Include food type, style, plating, lighting. Be specific.' },
+        location_id: { type: 'string', description: 'Optional: attach the generated image to a specific location.' },
       },
-      required: ['photo_id', 'location_id'],
+      required: ['prompt'],
     },
   },
 
@@ -349,7 +349,7 @@ const TOOLS: AiTool[] = [
   },
 ]
 
-const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu', 'delete_location_photo', 'delete_qa'])
+const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu', 'delete_media_asset', 'delete_qa'])
 
 function requiresConfirmation(name: string, recentMessages: AiMessage[]): boolean {
   if (!CONFIRM_REQUIRED.has(name)) return false
@@ -362,9 +362,9 @@ function requiresConfirmation(name: string, recentMessages: AiMessage[]): boolea
 async function executeTool(
   name: string,
   input: Record<string, any>,
-  ctx: { db: any; orgId: string; siteId: string; userId: string; agentMessages?: AiMessage[] }
+  ctx: { db: any; env: Record<string, any>; orgId: string; siteId: string; userId: string; agentMessages?: AiMessage[] }
 ): Promise<any> {
-  const { db, orgId, siteId, userId } = ctx
+  const { db, env, orgId, siteId, userId } = ctx
 
   if (requiresConfirmation(name, ctx.agentMessages ?? [])) {
     return { __requires_confirmation: true, message: `Please confirm you want to ${name.replace(/_/g, ' ')}.` }
@@ -385,7 +385,7 @@ async function executeTool(
 
     case 'create_post': {
       const post = await createPost(db, orgId, siteId, {
-        title: input.title, body: input.body, image_url: input.image_url,
+        title: input.title, body: input.body, image_asset_id: input.image_asset_id,
         location_id: input.location_id, post_type: input.post_type,
         cta_type: input.cta_type, cta_url: input.cta_url,
         event_title: input.event_title, event_start: input.event_start, event_end: input.event_end,
@@ -429,7 +429,7 @@ async function executeTool(
           name: String(item.name || '').slice(0, 200),
           description: item.description ? String(item.description).slice(0, 500) : undefined,
           price: item.price ? String(item.price).slice(0, 50) : undefined,
-          image_url: item.image_url ?? undefined,
+          image_asset_id: item.image_asset_id ?? undefined,
         }, userId)
       ))
       return { added: created.length, menu_id: input.menu_id }
@@ -438,14 +438,14 @@ async function executeTool(
     case 'add_menu_item': {
       const item = await createMenuItem(db, input.menu_id, {
         section: input.section, name: input.name,
-        description: input.description, price: input.price, image_url: input.image_url,
+        description: input.description, price: input.price, image_asset_id: input.image_asset_id,
       }, userId)
       return { id: item.id, name: item.name, section: item.section, price: item.price }
     }
 
     case 'update_menu_item': {
       const updates: any = {}
-      for (const f of ['name', 'description', 'price', 'image_url', 'available']) {
+      for (const f of ['name', 'description', 'price', 'image_asset_id', 'available']) {
         if (input[f] !== undefined) updates[f] = input[f]
       }
       const item = await updateMenuItem(db, input.item_id, updates, userId)
@@ -476,7 +476,7 @@ async function executeTool(
     case 'create_location': {
       const id = crypto.randomUUID()
       const now = new Date().toISOString()
-      const slug = input.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+      const slug = toSlug(input.title)
       await db.prepare(
         `INSERT INTO business_locations (id, organization_id, site_id, title, slug, city, phone, email, description, address, is_primary, status, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`
@@ -493,7 +493,7 @@ async function executeTool(
       const params: any[] = [now]
       if (input.title !== undefined) {
         sets.push('title = ?', 'slug = ?')
-        params.push(input.title, input.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''))
+        params.push(input.title, toSlug(input.title))
       }
       const simple = ['city', 'phone', 'email', 'description', 'short_description', 'price_level',
         'facebook_url', 'instagram_url', 'tiktok_url', 'website_url']
@@ -531,30 +531,58 @@ async function executeTool(
       return { review_id: input.review_id, replied: true }
     }
 
-    case 'get_location_photos': {
+    case 'get_location_media': {
+      const conditions = [`location_id = ?`, `status = 'active'`]
+      const params: any[] = [input.location_id]
+      if (input.kind) { conditions.push(`kind = ?`); params.push(input.kind) }
+      params.push(50)
       const { results } = await db.prepare(
-        `SELECT id, google_url, local_url, category, description, sort_order
-         FROM location_photos WHERE location_id = ? ORDER BY category, sort_order`
-      ).bind(input.location_id).all()
+        `SELECT id, kind, provider, public_url, thumbnail_url, alt_text, mime_type, file_name, created_at
+         FROM media_assets WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC LIMIT ?`
+      ).bind(...params).all()
       return results ?? []
     }
 
-    case 'add_location_photo': {
-      const id = crypto.randomUUID()
-      const now = new Date().toISOString()
-      const loc = await db.prepare(`SELECT organization_id, site_id FROM business_locations WHERE id = ? LIMIT 1`).bind(input.location_id).first()
-      if (!loc) return { error: 'Location not found.' }
-      await db.prepare(
-        `INSERT INTO location_photos (id, organization_id, site_id, location_id, local_url, category, description, source, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?)`
-      ).bind(id, loc.organization_id, loc.site_id, input.location_id, input.url,
-        input.category ?? 'GENERAL', input.description ?? null, now, now).run()
-      return { id, added: true }
+    case 'delete_media_asset': {
+      const { deleteMediaAsset } = await import('~/server/utils/media-asset-manager')
+      await deleteMediaAsset(db, env, input.asset_id, siteId)
+      return { asset_id: input.asset_id, deleted: true }
     }
 
-    case 'delete_location_photo': {
-      await db.prepare(`DELETE FROM location_photos WHERE id = ? AND location_id = ?`).bind(input.photo_id, input.location_id).run()
-      return { photo_id: input.photo_id, deleted: true }
+    case 'generate_image': {
+      const { uploadImageBuffer } = await import('~/server/utils/cloudflare-images')
+      const { createMediaAsset } = await import('~/server/utils/media-asset-manager')
+      const ai = env.AI
+      if (!ai) return { error: 'AI binding not available.' }
+      const result = await ai.run('@cf/black-forest-labs/flux-1-schnell', {
+        prompt: input.prompt,
+        num_steps: 4,
+      }) as { image: string }
+      const buffer = Buffer.from(result.image, 'base64')
+      const { imageId, publicUrl, thumbnailUrl } = await uploadImageBuffer(
+        env, buffer, `chowbot-${Date.now()}.png`
+      )
+      const assetId = crypto.randomUUID()
+      await createMediaAsset(db, {
+        id: assetId,
+        organization_id: orgId,
+        site_id: siteId,
+        location_id: input.location_id ?? null,
+        kind: 'image',
+        provider: 'chowbot',
+        source: 'generated',
+        cloudflare_image_id: imageId,
+        public_url: publicUrl,
+        thumbnail_url: thumbnailUrl,
+        mime_type: 'image/png',
+        status: 'active',
+        created_by_user_id: userId,
+      })
+      await chargeCredits(db, orgId, {
+        siteId, action: 'generate_image', model: '@cf/black-forest-labs/flux-1-schnell',
+        inputTokens: 0, outputTokens: 4000,
+      })
+      return { asset_id: assetId, publicUrl, thumbnailUrl }
     }
 
     case 'get_location_qa': {
@@ -615,7 +643,7 @@ async function executeTool(
 
     case 'rename_site': {
       const now = new Date().toISOString()
-      const newSubdomain = input.brand_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+      const newSubdomain = toSlug(input.brand_name)
       await db.prepare(
         `UPDATE sites SET brand_name = ?, name = ?, subdomain = ?, updated_at = ? WHERE id = ? AND organization_id = ?`
       ).bind(input.brand_name, input.brand_name, newSubdomain, now, siteId, orgId).run()
@@ -674,10 +702,10 @@ Current page: ${currentPage}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create (standard/offer/event/update with CTA), publish — optionally location-scoped
-- Menus: create, rename, view, add items (batch with image_url), update items, publish, delete
+- Menus: create, rename, view, add items (batch with image_asset_id), update items, publish, delete
 - Locations: list, create, update (title syncs slug, plus description/email/socials/price_level)
 - Reviews: get (with star distribution), reply as owner
-- Photos: list, add, delete per location
+- Media: list per location, delete, generate AI images with Flux (auto-saved, returns asset_id)
 - Q&A: list, add, delete per location
 - Contact & reservation submissions: read
 - Site: rename (updates subdomain)
@@ -715,7 +743,7 @@ Guidelines:
     try { await writer.write(enc.encode(`data: ${JSON.stringify(data)}\n\n`)) } catch { }
   }
 
-  const ctx = { db, orgId, siteId, userId, agentMessages }
+  const ctx = { db, env, orgId, siteId, userId, agentMessages }
   const toolCalls: Array<{ name: string; input: any; result: any }> = []
   let totalInput = 0, totalOutput = 0, cfLogId: string | null = null
 

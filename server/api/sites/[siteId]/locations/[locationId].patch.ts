@@ -9,7 +9,8 @@ interface UpdateLocationBody {
   city?: string
   phone?: string
   email?: string
-  image_url?: string
+  hero_image_asset_id?: string
+  hero_video_asset_id?: string
   website_url?: string
   maps_url?: string
   opening_hours?: unknown
@@ -38,7 +39,7 @@ interface LocationRow {
   address: string | null
   city: string | null
   phone: string | null
-  image_url: string | null
+  hero_image_asset_id: string | null
   website_url: string | null
   maps_url: string | null
   opening_hours: string | null
@@ -146,9 +147,13 @@ export default defineEventHandler(async (event) => {
       setParts.push('phone = ?')
       params.push(body.phone || null)
     }
-    if (body.image_url !== undefined) {
-      setParts.push('image_url = ?')
-      params.push(body.image_url || null)
+    if (body.hero_image_asset_id !== undefined) {
+      setParts.push('hero_image_asset_id = ?')
+      params.push(body.hero_image_asset_id || null)
+    }
+    if (body.hero_video_asset_id !== undefined) {
+      setParts.push('hero_video_asset_id = ?')
+      params.push(body.hero_video_asset_id || null)
     }
     if (body.website_url !== undefined) {
       setParts.push('website_url = ?')
@@ -227,7 +232,7 @@ export default defineEventHandler(async (event) => {
     await db.batch(statements)
 
     const location = await db.prepare(`
-      SELECT id, slug, title, address, city, phone, image_url, website_url,
+      SELECT id, slug, title, address, city, phone, hero_image_asset_id, website_url,
              maps_url, opening_hours, is_primary, status, created_at, updated_at
       FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?

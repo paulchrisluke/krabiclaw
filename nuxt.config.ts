@@ -1,6 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   modules: ['nitro-cloudflare-dev', 'nuxt-gtag', '@nuxtjs/robots', '@nuxtjs/sitemap', 'nuxt-schema-org', '@nuxtjs/i18n', '@nuxt/ui'],
+
   
   gtag: {
     id: 'G-Z18L1Y4G7K'
@@ -132,6 +133,10 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
+      path: '~/components/media',
+      pathPrefix: false,
+    },
+    {
       path: '~/components/billing',
       prefix: 'Billing',
       pathPrefix: false,
@@ -148,6 +153,13 @@ export default defineNuxtConfig({
   // Nitro configuration for Cloudflare deployment
   nitro: {
     preset: 'cloudflare-pages',
+    experimental: {
+      tasks: true
+    },
+    scheduledTasks: {
+      '*/10 * * * *': ['domain-reconciliation'],
+      '0 3 * * *': ['domain-reconciliation-daily']
+    },
     cloudflare: {
       deployConfig: true
     },

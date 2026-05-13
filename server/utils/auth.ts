@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth'
-import { organization, phoneNumber } from 'better-auth/plugins'
+import { admin, organization, phoneNumber } from 'better-auth/plugins'
 import { D1Dialect } from '@atinux/kysely-d1'
 import { Kysely } from 'kysely'
 import { getHeaders } from 'h3'
@@ -60,6 +60,11 @@ export function createAuth(env: CloudflareEnv) {
     },
     plugins: [
       organization(),
+      admin({
+        adminRoles: ['admin'],
+        defaultRole: 'user',
+        impersonationSessionDuration: 60 * 60,
+      }),
       phoneNumber({
         sendOTP: async ({ phoneNumber: phone, code }) => {
           await sendWhatsAppOtp(env, phone, code)

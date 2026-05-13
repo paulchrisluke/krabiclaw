@@ -81,11 +81,13 @@ export async function getMenuWithItems(
 
   // Get menu items
   const items = await db.prepare(`
-    SELECT id, menu_id, section, name, slug, description, price, image_url, available, sort_order,
-           created_at, updated_at, created_by, updated_by
-    FROM menu_items 
-    WHERE menu_id = ?
-    ORDER BY section, sort_order, name
+    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price,
+           mi.image_asset_id, ma.public_url as image_url, mi.available, mi.sort_order,
+           mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
+    FROM menu_items mi
+    LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
+    WHERE mi.menu_id = ?
+    ORDER BY mi.section, mi.sort_order, mi.name
   `).bind(menuId).all()
 
   return {
@@ -113,11 +115,13 @@ export async function getActiveMenu(
 
     if (locationMenu) {
       const items = await db.prepare(`
-        SELECT id, menu_id, section, name, description, price, image_url, available, sort_order,
-               created_at, updated_at, created_by, updated_by
-        FROM menu_items 
-        WHERE menu_id = ?
-        ORDER BY section, sort_order, name
+        SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price,
+               mi.image_asset_id, ma.public_url as image_url, mi.available, mi.sort_order,
+               mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
+        FROM menu_items mi
+        LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
+        WHERE mi.menu_id = ?
+        ORDER BY mi.section, mi.sort_order, mi.name
       `).bind(locationMenu.id).all()
 
       return {
@@ -139,11 +143,13 @@ export async function getActiveMenu(
   if (!brandMenu) return null
 
   const items = await db.prepare(`
-    SELECT id, menu_id, section, name, slug, description, price, image_url, available, sort_order,
-           created_at, updated_at, created_by, updated_by
-    FROM menu_items 
-    WHERE menu_id = ?
-    ORDER BY section, sort_order, name
+    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price,
+           mi.image_asset_id, ma.public_url as image_url, mi.available, mi.sort_order,
+           mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
+    FROM menu_items mi
+    LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
+    WHERE mi.menu_id = ?
+    ORDER BY mi.section, mi.sort_order, mi.name
   `).bind(brandMenu.id).all()
 
   return {
@@ -285,7 +291,7 @@ export async function createMenuItem(
   const slug = await uniqueSlug(db, menuId, item.name)
 
   const result = await db.prepare(`
-    INSERT INTO menu_items (id, menu_id, section, name, slug, description, price, image_url, available, sort_order, created_at, updated_at, created_by)
+    INSERT INTO menu_items (id, menu_id, section, name, slug, description, price, image_asset_id, available, sort_order, created_at, updated_at, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id,
@@ -295,7 +301,7 @@ export async function createMenuItem(
     slug,
     item.description || null,
     item.price || null,
-    item.image_url || null,
+    item.image_asset_id || null,
     item.available !== undefined ? item.available : true,
     item.sort_order || 0,
     now,
@@ -311,7 +317,7 @@ export async function createMenuItem(
   }
 
   const createdItem = await db.prepare(`
-    SELECT id, menu_id, section, name, slug, description, price, image_url, available, sort_order,
+    SELECT id, menu_id, section, name, slug, description, price, image_asset_id, available, sort_order,
            created_at, updated_at, created_by, updated_by
     FROM menu_items 
     WHERE id = ?
@@ -365,9 +371,9 @@ export async function updateMenuItem(
     setParts.push('price = ?')
     params.push(updates.price)
   }
-  if (updates.image_url !== undefined) {
-    setParts.push('image_url = ?')
-    params.push(updates.image_url)
+  if (updates.image_asset_id !== undefined) {
+    setParts.push('image_asset_id = ?')
+    params.push(updates.image_asset_id)
   }
   if (updates.available !== undefined) {
     setParts.push('available = ?')
@@ -398,7 +404,7 @@ export async function updateMenuItem(
   }
 
   const updatedItem = await db.prepare(`
-    SELECT id, menu_id, section, name, slug, description, price, image_url, available, sort_order,
+    SELECT id, menu_id, section, name, slug, description, price, image_asset_id, available, sort_order,
            created_at, updated_at, created_by, updated_by
     FROM menu_items 
     WHERE id = ?

@@ -9,7 +9,7 @@ interface CreateLocationBody {
   address?: unknown
   city?: string
   phone?: string
-  image_url?: string
+  hero_image_asset_id?: string
   website_url?: string
   maps_url?: string
   opening_hours?: unknown
@@ -32,7 +32,7 @@ interface LocationRow {
   address: string | null
   city: string | null
   phone: string | null
-  image_url: string | null
+  hero_image_asset_id: string | null
   website_url: string | null
   maps_url: string | null
   opening_hours: string | null
@@ -144,6 +144,17 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Unable to verify active locations' }, { status: 500 })
     }
 
+
+    // Validate hero_image_asset_id if present
+    if (body.hero_image_asset_id) {
+      const asset = await db.prepare(`
+        SELECT id, organization_id FROM media_assets WHERE id = ? LIMIT 1
+      `).bind(body.hero_image_asset_id).first()
+      if (!asset || asset.organization_id !== site.organization_id) {
+        return jsonResponse({ error: 'Invalid or unauthorized hero_image_asset_id' }, { status: 400 })
+      }
+    }
+
     const isPrimary = body.is_primary === true || activeLocationCount === 0
     const locationId = crypto.randomUUID()
     const now = new Date().toISOString()
@@ -160,7 +171,7 @@ export default defineEventHandler(async (event) => {
     statements.push(db.prepare(`
       INSERT INTO business_locations (
         id, organization_id, site_id, slug, title, address, city, phone,
-        image_url, website_url, maps_url, opening_hours, is_primary, status,
+        hero_image_asset_id, website_url, maps_url, opening_hours, is_primary, status,
         created_at, updated_at
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
@@ -173,7 +184,7 @@ export default defineEventHandler(async (event) => {
       body.address ? JSON.stringify(body.address) : null,
       body.city || null,
       body.phone || null,
-      body.image_url || null,
+      body.hero_image_asset_id || null,
       body.website_url || null,
       body.maps_url || null,
       body.opening_hours ? JSON.stringify(body.opening_hours) : null,
@@ -193,7 +204,7 @@ export default defineEventHandler(async (event) => {
     await db.batch(statements)
 
     const location = await db.prepare(`
-      SELECT id, slug, title, address, city, phone, image_url, website_url,
+      SELECT id, slug, title, address, city, phone, hero_image_asset_id, website_url,
              maps_url, opening_hours, is_primary, status, created_at, updated_at
       FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?

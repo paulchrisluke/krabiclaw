@@ -12,6 +12,7 @@ export type WhatsAppTemplate =
   | 'low_credits'
   | 'new_contact_msg'
   | 'new_reservation'
+  | 'domain_update'
   | 'otp_code'
 
 interface TemplateComponent {
@@ -93,6 +94,18 @@ const TEMPLATES: Record<
         { type: 'text', text: v.time ?? '' },
         { type: 'text', text: v.guests ?? '?' },
         { type: 'text', text: v.phone ?? '' },
+      ],
+    }],
+  }),
+  domain_update: (v) => ({
+    name: 'domain_update',
+    language: 'en_US',
+    components: [{
+      type: 'body',
+      parameters: [
+        { type: 'text', text: v.domain ?? 'your domain' },
+        { type: 'text', text: v.status ?? 'updated' },
+        { type: 'text', text: v.dashboard_url ?? 'https://krabiclaw.com/dashboard' },
       ],
     }],
   }),

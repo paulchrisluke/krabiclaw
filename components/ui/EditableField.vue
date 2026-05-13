@@ -42,7 +42,7 @@ const source = computed(() => {
   return 'manual'
 })
 
-const fieldType = computed<FieldType>(() => fieldDef.value?.type ?? 'text')
+const fieldType = computed(() => fieldDef.value?.type ?? 'text')
 
 const isEditable = computed(() => editMode.value && source.value === 'manual')
 const isGoogle = computed(() => editMode.value && source.value === 'google')

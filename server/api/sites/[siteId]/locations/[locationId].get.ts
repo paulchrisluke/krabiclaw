@@ -23,6 +23,7 @@ interface LocationRow {
   address: string | null
   city: string | null
   phone: string | null
+  hero_image_asset_id: string | null
   image_url: string | null
   website_url: string | null
   maps_url: string | null
@@ -73,15 +74,20 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
+    // If ma.public_url is null, fallback to bl.image_url (legacy)
     const location = await db.prepare(`
-      SELECT id, slug, title, address, city, phone, image_url, website_url,
-             maps_url, latitude, longitude, opening_hours, categories, rating,
-             review_count, is_primary, status, last_synced_at, google_location_id,
-             google_connection_id, created_at, updated_at
-      FROM business_locations
-      WHERE id = ? AND organization_id = ? AND site_id = ?
+      SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone,
+             bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours,
+             bl.categories, bl.rating, bl.review_count, bl.is_primary, bl.status,
+             bl.last_synced_at, bl.google_location_id, bl.google_connection_id,
+             bl.hero_image_asset_id, bl.created_at, bl.updated_at,
+             COALESCE(ma.public_url, bl.image_url) as image_url
+      FROM business_locations bl
+      LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
+      WHERE bl.id = ? AND bl.organization_id = ? AND bl.site_id = ?
       LIMIT 1
     `).bind(locationId, site.organization_id, siteId).first() as LocationRow | null
+    // Note: If both are null, image_url will be null. This preserves legacy images if present.
 
     if (!location) {
       return jsonResponse({ error: 'Location not found' }, { status: 404 })

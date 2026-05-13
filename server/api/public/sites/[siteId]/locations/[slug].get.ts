@@ -36,11 +36,13 @@ export default defineEventHandler(async (event) => {
 
     // Get location by slug for this site (email excluded from public API)
     const location = await db.prepare(`
-      SELECT id, slug, title, address, phone, website_url, maps_url, latitude, longitude,
-             opening_hours, rating, review_count, is_primary, status, last_synced_at,
-             google_place_id, image_url, city
-      FROM business_locations
-      WHERE organization_id = ? AND site_id = ? AND slug = ? AND status = 'active'
+      SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
+             bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
+             bl.is_primary, bl.status, bl.last_synced_at, bl.google_place_id, bl.city,
+             bl.hero_image_asset_id, ma.public_url as image_url
+      FROM business_locations bl
+      LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
+      WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.slug = ? AND bl.status = 'active'
       LIMIT 1
     `).bind(site.organization_id, siteId, slug).first()
 
@@ -52,7 +54,7 @@ export default defineEventHandler(async (event) => {
 
     // Counts for sub-nav badges
     const photoCount = await db.prepare(
-      `SELECT COUNT(*) as n FROM location_photos WHERE location_id = ?`
+      `SELECT COUNT(*) as n FROM media_assets WHERE location_id = ? AND status = 'active'`
     ).bind(location.id).first()
 
     const qaCount = await db.prepare(

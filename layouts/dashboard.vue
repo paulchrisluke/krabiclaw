@@ -1,6 +1,14 @@
 <template>
   <div class="platform-theme">
     <ChowBot />
+    <div v-if="impersonatedBy" class="border-b border-warning bg-warning/10 px-4 py-2">
+      <div class="mx-auto flex max-w-7xl flex-col gap-2 text-sm text-highlighted sm:flex-row sm:items-center sm:justify-between">
+        <span>You are impersonating {{ sessionData?.user?.email }}.</span>
+        <UButton size="xs" color="warning" variant="soft" :loading="stoppingImpersonation" @click="stopImpersonating">
+          Stop impersonating
+        </UButton>
+      </div>
+    </div>
     <UDashboardGroup
       unit="rem"
       :min-size="14"
@@ -168,6 +176,7 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import { useAuth } from '~/composables/useAuth'
 import { useChowBot } from '~/composables/useChowBot'
 import { useChowBotHistory } from '~/composables/useChowBotHistory'
+import { authClient } from '~/lib/auth-client'
 
 interface DashboardSite {
   id: string
@@ -179,6 +188,7 @@ interface DashboardSite {
 const route = useRoute()
 const router = useRouter()
 const { data: sessionData, signOut } = useAuth()
+const stoppingImpersonation = ref(false)
 const chowBot = useChowBot() as any
 const toggleChowbot = () => chowBot.toggle()
 const chowBotHistory = useChowBotHistory()
@@ -199,6 +209,7 @@ const selectedSiteId = ref<string | null>(null)
 
 const { data: billingStatus } = useFetch<{ billing: { plan: string } }>('/api/billing/status', { key: 'dashboard-billing-status' })
 const currentPlan = computed(() => billingStatus.value?.billing?.plan ?? null)
+const impersonatedBy = computed(() => (sessionData.value?.session as any)?.impersonatedBy)
 
 const routeSiteId = computed(() => {
   const param = route.params.siteId || route.params.id
@@ -292,6 +303,7 @@ const siteNavigation = computed(() => [[
   { label: 'Content', icon: 'i-heroicons-document-text', to: sitePath('/content') },
   { label: 'Menu', icon: 'i-heroicons-list-bullet', to: sitePath('/menu') },
   { label: 'Posts', icon: 'i-heroicons-newspaper', to: sitePath('/posts') },
+  { label: 'Media', icon: 'i-heroicons-photo', to: sitePath('/media') },
   { label: 'Locations', icon: 'i-heroicons-map-pin', to: sitePath('/locations') },
   { label: 'Launch', icon: 'i-heroicons-rocket-launch', to: sitePath('/launch') },
   { label: 'Settings', icon: 'i-heroicons-cog-6-tooth', to: sitePath('/settings') }
@@ -357,5 +369,15 @@ onMounted(async () => {
 async function handleSignOut() {
   await signOut()
   await navigateTo('/login')
+}
+
+async function stopImpersonating() {
+  stoppingImpersonation.value = true
+  try {
+    await authClient.admin.stopImpersonating()
+    await navigateTo('/admin')
+  } finally {
+    stoppingImpersonation.value = false
+  }
 }
 </script>

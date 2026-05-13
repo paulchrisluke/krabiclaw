@@ -35,12 +35,14 @@ export default defineEventHandler(async (event) => {
 
     // Get active business locations for this site
     const locations = await db.prepare(`
-      SELECT id, slug, title, address, phone, website_url, maps_url, latitude, longitude,
-             opening_hours, rating, review_count, is_primary, status, last_synced_at,
-             google_location_id, google_connection_id, image_url, city
-      FROM business_locations 
-      WHERE organization_id = ? AND site_id = ? AND status = 'active'
-      ORDER BY is_primary DESC, title ASC
+      SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
+             bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
+             bl.is_primary, bl.status, bl.last_synced_at, bl.google_location_id,
+             bl.google_connection_id, bl.city, ma.public_url as image_url
+      FROM business_locations bl
+      LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
+      WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
+      ORDER BY bl.is_primary DESC, bl.title ASC
     `).bind(site.organization_id, siteId).all()
     
     // Parse JSON fields and return public-safe data

@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
   const post = await createPost(db, site.organization_id, siteId, {
     title: body.title?.trim() || undefined,
     body: body.body.trim(),
-    image_url: body.image_url?.trim() || undefined,
+    image_asset_id: body.image_asset_id || undefined,
     scheduled_for: body.scheduled_for || undefined,
     location_id: body.location_id || undefined,
     post_type: body.post_type || undefined,

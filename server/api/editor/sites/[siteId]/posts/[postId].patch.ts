@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
   const post = await updatePost(db, site.organization_id, siteId, postId, {
     title: body.title,
     body: body.body,
-    image_url: body.image_url,
+    image_asset_id: body.image_asset_id,
     scheduled_for: body.scheduled_for,
     location_id: body.location_id,
     post_type: body.post_type,

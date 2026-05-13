@@ -5,8 +5,8 @@ import { defineEventHandler, getRequestURL, getHeader } from 'h3'
 import { cloudflareEnv } from '../utils/api-response'
 
 // Get platform domain from runtime config
-function getPlatformDomain(): string {
-  const domain = process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN
+function getPlatformDomain(env: Record<string, any>): string {
+  const domain = env.NUXT_PUBLIC_FREE_SITE_DOMAIN
   // Return empty string if domain is not defined
   if (!domain) return ''
   // Remove protocol if present
@@ -16,8 +16,9 @@ function getPlatformDomain(): string {
 export default defineEventHandler(async (event) => {
   const url = getRequestURL(event)
   const host = getHeader(event, 'host') || ''
+  const env = cloudflareEnv(event)
   
-  const isPlatform = isPlatformHost(host)
+  const isPlatform = isPlatformHost(host, env)
   const isPlatformPath = isPlatformRoute(url.pathname)
 
   console.log(`[TenantResolution] Host: ${host}, Path: ${url.pathname}, isPlatform: ${isPlatform}, isPlatformPath: ${isPlatformPath}`)
@@ -39,6 +40,8 @@ export default defineEventHandler(async (event) => {
     event.context.themeId = site.theme_id
     event.context.onboardingStatus = site.onboarding_status
     event.context.tenantType = 'tenant'
+    event.context.tenantHost = host.split(':')[0]
+    event.context.canonicalDomain = site.canonical_domain || null
     return
   }
   
@@ -47,9 +50,9 @@ export default defineEventHandler(async (event) => {
   event.context.siteId = null
 })
 
-function isPlatformHost(host: string): boolean {
+function isPlatformHost(host: string, env: Record<string, any>): boolean {
   const hostname = host?.split(':')[0] || ''
-  const platformDomain = getPlatformDomain()
+  const platformDomain = getPlatformDomain(env)
   if (hostname === 'kikuzuki-thailand-marketing.pages.dev' || hostname.endsWith('.kikuzuki-thailand-marketing.pages.dev')) {
     return true
   }
@@ -87,14 +90,15 @@ function isPlatformRoute(pathname: string): boolean {
 async function resolveTenantSite(host: string, event: any): Promise<any> {
   const env = cloudflareEnv(event)
   const db = env.REVIEWS_DB
+  const hostname = host.split(':')[0]
   
   if (!db) return null
 
   // Local development support (e.g., demo.localhost)
-  if (host.includes('.localhost')) {
-    const subdomain = host.split('.')[0]
+  if (hostname.includes('.localhost')) {
+    const subdomain = hostname.split('.')[0]
     return await db.prepare(`
-      SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status
+      SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, s.subdomain || '.localhost' AS canonical_domain
       FROM sites s
       WHERE s.subdomain = ? AND s.status = 'active'
       LIMIT 1
@@ -103,24 +107,30 @@ async function resolveTenantSite(host: string, event: any): Promise<any> {
   
   // Try custom domains first (from site_domains table)
   const customDomainSite = await db.prepare(`
-    SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain
+    SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
+           COALESCE(canonical.domain, sd.domain) AS canonical_domain
     FROM sites s
     JOIN site_domains sd ON s.id = sd.site_id
+    LEFT JOIN site_domains canonical
+      ON canonical.site_id = s.id AND canonical.role = 'canonical' AND canonical.status = 'active'
     WHERE sd.domain = ? AND sd.type = 'custom' AND sd.status = 'active' 
       AND s.status = 'active' AND s.onboarding_status = 'active'
     LIMIT 1
-  `).bind(host).first()
+  `).bind(hostname).first()
   
   if (customDomainSite) return customDomainSite
   
   // Try subdomains
-  const platformDomain = getPlatformDomain()
-  const subdomain = host.replace(`.${platformDomain}`, '').replace(':8788', '')
-  if (subdomain && subdomain !== 'www' && subdomain !== host) {
+  const platformDomain = getPlatformDomain(env)
+  const subdomain = hostname.replace(`.${platformDomain}`, '')
+  if (subdomain && subdomain !== 'www' && subdomain !== hostname) {
     const subdomainSite = await db.prepare(`
-      SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain
+      SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
+             COALESCE(canonical.domain, sd.domain) AS canonical_domain
       FROM sites s
       JOIN site_domains sd ON s.id = sd.site_id
+      LEFT JOIN site_domains canonical
+        ON canonical.site_id = s.id AND canonical.role = 'canonical' AND canonical.status = 'active'
       WHERE sd.domain = ? AND sd.type = 'subdomain' AND sd.status = 'active' 
         AND s.status = 'active' AND s.onboarding_status = 'active'
       LIMIT 1

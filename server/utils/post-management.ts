@@ -7,7 +7,7 @@ export interface Post {
   post_type: 'standard' | 'offer' | 'event' | 'update'
   title: string | null
   body: string
-  image_url: string | null
+  image_asset_id: string | null
   cta_type: string | null
   cta_url: string | null
   event_title: string | null
@@ -82,7 +82,7 @@ export async function createPost(
   organizationId: string,
   siteId: string,
   data: {
-    title?: string; body: string; image_url?: string; scheduled_for?: string
+    title?: string; body: string; image_asset_id?: string; scheduled_for?: string
     location_id?: string; post_type?: string
     cta_type?: string; cta_url?: string
     event_title?: string; event_start?: string; event_end?: string
@@ -94,14 +94,14 @@ export async function createPost(
   const now = new Date().toISOString()
 
   await db.prepare(`
-    INSERT INTO posts (id, organization_id, site_id, location_id, post_type, title, body, image_url,
+    INSERT INTO posts (id, organization_id, site_id, location_id, post_type, title, body, image_asset_id,
       cta_type, cta_url, event_title, event_start, event_end, offer_coupon, offer_terms,
       status, scheduled_for, created_by, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)
   `).bind(
     id, organizationId, siteId,
     data.location_id ?? null, data.post_type ?? 'standard',
-    data.title ?? null, data.body, data.image_url ?? null,
+    data.title ?? null, data.body, data.image_asset_id ?? null,
     data.cta_type ?? null, data.cta_url ?? null,
     data.event_title ?? null, data.event_start ?? null, data.event_end ?? null,
     data.offer_coupon ?? null, data.offer_terms ?? null,
@@ -117,7 +117,7 @@ export async function updatePost(
   siteId: string,
   postId: string,
   data: {
-    title?: string; body?: string; image_url?: string; scheduled_for?: string | null
+    title?: string; body?: string; image_asset_id?: string; scheduled_for?: string | null
     location_id?: string | null; post_type?: string
     cta_type?: string | null; cta_url?: string | null
     event_title?: string | null; event_start?: string | null; event_end?: string | null
@@ -130,7 +130,7 @@ export async function updatePost(
   const params: any[] = [now]
 
   const fields: Array<[string, any]> = [
-    ['title', data.title], ['body', data.body], ['image_url', data.image_url],
+    ['title', data.title], ['body', data.body], ['image_asset_id', data.image_asset_id],
     ['scheduled_for', data.scheduled_for], ['location_id', data.location_id],
     ['post_type', data.post_type], ['cta_type', data.cta_type], ['cta_url', data.cta_url],
     ['event_title', data.event_title], ['event_start', data.event_start], ['event_end', data.event_end],
@@ -198,10 +198,12 @@ export async function getPublishedPosts(
   limit = 20
 ): Promise<any[]> {
   const result = await db.prepare(`
-    SELECT id, title, body, image_url, published_at, created_at
-    FROM posts
-    WHERE site_id = ? AND status = 'published'
-    ORDER BY published_at DESC
+    SELECT p.id, p.title, p.body, p.image_asset_id, p.published_at, p.created_at,
+           ma.public_url as image_url
+    FROM posts p
+    LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
+    WHERE p.site_id = ? AND p.status = 'published'
+    ORDER BY p.published_at DESC
     LIMIT ?
   `).bind(siteId, limit).all()
 

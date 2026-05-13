@@ -316,6 +316,17 @@
             />
           </div>
 
+          <div v-else-if="activeFieldDef?.type === 'media'" class="space-y-2">
+            <label class="block text-sm font-medium text-default">{{ activeFieldDef.label }}</label>
+            <MediaPicker
+              :model-value="editingValue || null"
+              :site-id="siteId"
+              :accept="(activeFieldDef as { mediaKind: 'image' | 'video' | 'any' }).mediaKind"
+              :title="activeFieldDef.label"
+              @change="onMediaChange"
+            />
+          </div>
+
           <UCard v-if="activeFieldRequiresGoogleUpgrade">
             <div class="space-y-4">
               <div class="flex items-start gap-3">
@@ -617,6 +628,10 @@ const onRichTextBlur = (e: FocusEvent) => {
   editingValue.value = DOMPurify.sanitize((e.target as HTMLElement).innerHTML)
 }
 
+function onMediaChange(asset: { id: string; publicUrl: string } | null) {
+  editingValue.value = asset?.id ?? ''
+}
+
 const richtextCommands = [
   { cmd: 'bold',                label: 'B' },
   { cmd: 'italic',              label: 'I' },
@@ -668,10 +683,13 @@ const loadPageContent = async () => {
     const map: Record<string, string> = {}
     for (const row of res.content || []) {
       if (row.field === 'hero') {
-        // Hero fields use dedicated columns
+        // Hero fields use dedicated columns, support both asset_id and url for migration
         if (row.hero_title) map['hero.title'] = row.hero_title
         if (row.hero_subtitle) map['hero.subtitle'] = row.hero_subtitle
-        if (row.hero_video_url) map['hero.video'] = row.hero_video_url
+        if (row.hero_image_asset_id) map['hero.image'] = row.hero_image_asset_id
+        else if (row.hero_image_url) map['hero.image'] = row.hero_image_url
+        if (row.hero_video_asset_id) map['hero.video'] = row.hero_video_asset_id
+        else if (row.hero_video_url) map['hero.video'] = row.hero_video_url
       } else {
         map[row.field] = row.content || ''
       }

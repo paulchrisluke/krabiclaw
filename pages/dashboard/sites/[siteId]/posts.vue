@@ -73,7 +73,7 @@
               :class="selectedPost?.id === post.id ? 'bg-elevated' : ''"
               @click="selectPost(post)"
             >
-              <img v-if="post.image_url" :src="post.image_url" class="size-10 shrink-0 rounded object-cover" />
+              <img v-if="post.image_url || post.image_asset_id" :src="post.image_url || post._imageUrl" class="size-10 shrink-0 rounded object-cover" />
               <div v-else class="flex size-10 shrink-0 items-center justify-center rounded bg-muted">
                 <UIcon name="i-heroicons-document-text" class="size-4 text-muted" />
               </div>
@@ -106,8 +106,14 @@
               <UFormField label="Body" size="sm">
                 <UTextarea v-model="editForm.body" :rows="5" placeholder="What's the post about?" />
               </UFormField>
-              <UFormField label="Image URL" size="sm">
-                <UInput v-model="editForm.image_url" placeholder="https://…" />
+              <UFormField label="Image" size="sm">
+                <MediaPicker
+                  v-model="editForm.image_asset_id"
+                  :site-id="siteId"
+                  accept="image"
+                  title="Select post image"
+                  @change="onImageChange"
+                />
               </UFormField>
 
               <!-- Channel selector -->
@@ -135,7 +141,7 @@
           <div v-if="editForm.body" class="overflow-hidden rounded-lg border border-default">
             <p class="border-b border-default bg-elevated px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted">Site preview</p>
             <div class="p-4">
-              <img v-if="editForm.image_url" :src="editForm.image_url" class="mb-3 w-full rounded-lg object-cover max-h-48" />
+              <img v-if="editForm.imagePreviewUrl" :src="editForm.imagePreviewUrl" class="mb-3 w-full rounded-lg object-cover max-h-48" />
               <p v-if="editForm.title" class="mb-1 text-base font-bold text-highlighted">{{ editForm.title }}</p>
               <p class="text-sm leading-relaxed text-muted">{{ editForm.body }}</p>
             </div>
@@ -177,7 +183,7 @@ onMounted(loadPosts)
 // Selection / compose
 const selectedPost = ref<any>(null)
 const composing = ref(false)
-const editForm = reactive({ title: '', body: '', image_url: '' })
+const editForm = reactive({ title: '', body: '', image_asset_id: '' as string | null, imagePreviewUrl: '' as string | null })
 const selectedChannels = ref<string[]>(['site'])
 
 const channelOptions = [
@@ -187,12 +193,17 @@ const channelOptions = [
   { value: 'facebook', label: 'Facebook', disabled: true },
 ]
 
+function onImageChange(asset: { id: string; publicUrl: string; thumbnailUrl: string } | null) {
+  editForm.imagePreviewUrl = asset?.thumbnailUrl ?? asset?.publicUrl ?? null
+}
+
 const openCompose = () => {
   selectedPost.value = null
   composing.value = true
   editForm.title = ''
   editForm.body = ''
-  editForm.image_url = ''
+  editForm.image_asset_id = null
+  editForm.imagePreviewUrl = null
   selectedChannels.value = ['site']
 }
 
@@ -201,7 +212,8 @@ const selectPost = (post: any) => {
   selectedPost.value = post
   editForm.title = post.title ?? ''
   editForm.body = post.body ?? ''
-  editForm.image_url = post.image_url ?? ''
+  editForm.image_asset_id = post.image_asset_id ?? null
+  editForm.imagePreviewUrl = post.image_url ?? null
   selectedChannels.value = ['site']
 }
 
@@ -215,12 +227,12 @@ const handleSaveDraft = async () => {
   try {
     if (selectedPost.value) {
       const res = await ($fetch as any)(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, {
-        method: 'PATCH', body: { ...editForm },
+        method: 'PATCH', body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id },
       })
       selectedPost.value = res.post
     } else {
       const res = await ($fetch as any)(`/api/editor/sites/${siteId}/posts`, {
-        method: 'POST', body: { ...editForm },
+        method: 'POST', body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id },
       })
       selectedPost.value = res.post
       composing.value = false
@@ -240,7 +252,7 @@ const handlePublish = async () => {
     if (!postId || editForm.body !== selectedPost.value?.body || editForm.title !== (selectedPost.value?.title ?? '')) {
       const method = postId ? 'PATCH' : 'POST'
       const url = postId ? `/api/editor/sites/${siteId}/posts/${postId}` : `/api/editor/sites/${siteId}/posts`
-      const res = await ($fetch as any)(url, { method, body: { ...editForm } })
+      const res = await ($fetch as any)(url, { method, body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id } })
       postId = res.post.id
       selectedPost.value = res.post
     }

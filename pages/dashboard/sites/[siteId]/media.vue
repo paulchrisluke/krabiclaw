@@ -1,0 +1,318 @@
+<template>
+  <UPage>
+    <UPageHeader title="Media" description="Images and videos for this site.">
+      <template #links>
+        <UButton icon="i-heroicons-arrow-up-tray" color="primary" @click="fileInput?.click()">
+          Upload
+        </UButton>
+        <input ref="fileInput" type="file" accept="image/*,video/mp4,video/webm" class="hidden" @change="onFileSelect" />
+      </template>
+    </UPageHeader>
+
+    <UPageBody>
+      <!-- Filters -->
+      <div class="mb-4 flex flex-wrap items-center gap-2">
+        <UInput v-model="search" placeholder="Search files…" icon="i-heroicons-magnifying-glass" size="sm" class="w-56" />
+        <div class="flex gap-1">
+          <UButton
+            v-for="k in kindTabs"
+            :key="k.value"
+            size="sm"
+            :variant="kindFilter === k.value ? 'soft' : 'ghost'"
+            color="neutral"
+            @click="kindFilter = k.value; load()"
+          >
+            {{ k.label }}
+          </UButton>
+        </div>
+        <div class="ml-auto flex items-center gap-2">
+          <span v-if="selected.size" class="text-sm text-muted">{{ selected.size }} selected</span>
+          <UButton
+            v-if="selected.size"
+            size="sm"
+            color="error"
+            variant="soft"
+            icon="i-heroicons-trash"
+            :loading="deleting"
+            @click="deleteSelected"
+          >
+            Delete
+          </UButton>
+        </div>
+      </div>
+
+      <!-- Upload zone -->
+      <div
+        class="mb-4 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-8 transition-colors cursor-pointer"
+        :class="isDragging ? 'border-primary bg-primary/5' : 'border-default hover:border-accented'"
+        @dragenter.prevent="handleDragEnter"
+        @dragover.prevent="handleDragOver"
+        @dragleave.prevent="handleDragLeave"
+        @drop.prevent="handleDrop"
+        @click="fileInput?.click()"
+      >
+        <UIcon name="i-heroicons-arrow-up-tray" class="size-7 text-muted" />
+        <p class="text-sm text-muted">Drag and drop images or videos here, or <span class="text-primary cursor-pointer">click to browse</span></p>
+        <p class="text-xs text-muted">Images up to 10 MB via Cloudflare Images · Videos up to 50 MB via R2</p>
+      </div>
+
+      <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-heroicons-exclamation-triangle" class="mb-4" />
+
+      <!-- Grid -->
+      <div v-if="loading" class="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-7">
+        <div v-for="i in 14" :key="i" class="aspect-square rounded-lg bg-elevated animate-pulse" />
+      </div>
+
+      <div v-else-if="filtered.length === 0" class="py-16 text-center">
+        <UIcon name="i-heroicons-photo" class="mx-auto size-10 text-muted" />
+        <p class="mt-4 text-sm font-medium text-highlighted">No media yet</p>
+        <p class="mt-1 text-xs text-muted">Upload images or videos to get started.</p>
+      </div>
+
+      <div v-else class="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-7">
+        <div
+          v-for="asset in filtered"
+          :key="asset.id"
+          class="group relative aspect-square overflow-hidden rounded-lg border-2 transition-all"
+          :class="selected.has(asset.id) ? 'border-primary' : 'border-transparent'"
+        >
+          <!-- Thumbnail -->
+          <img
+            v-if="asset.thumbnail_url || asset.public_url"
+            :src="asset.thumbnail_url || asset.public_url"
+            :alt="asset.alt_text || asset.file_name || ''"
+            class="h-full w-full cursor-pointer object-cover"
+            loading="lazy"
+            @click="toggleSelect(asset.id)"
+          />
+          <div
+            v-else
+            class="flex h-full w-full cursor-pointer items-center justify-center bg-elevated"
+            @click="toggleSelect(asset.id)"
+          >
+            <UIcon
+              :name="asset.kind === 'video' ? 'i-heroicons-film' : 'i-heroicons-document'"
+              class="size-6 text-muted"
+            />
+          </div>
+
+          <!-- Checkbox -->
+          <div
+            class="absolute left-1.5 top-1.5 opacity-0 transition-opacity group-hover:opacity-100"
+            :class="selected.has(asset.id) ? 'opacity-100' : ''"
+          >
+            <div
+              class="flex size-5 cursor-pointer items-center justify-center rounded"
+              :class="selected.has(asset.id) ? 'bg-primary' : 'bg-black/40'"
+              @click.stop="toggleSelect(asset.id)"
+            >
+              <UIcon v-if="selected.has(asset.id)" name="i-heroicons-check" class="size-3 text-white" />
+            </div>
+          </div>
+
+          <!-- Kind badge -->
+          <div class="absolute right-1.5 top-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+            <UBadge :label="asset.kind" size="xs" color="neutral" variant="solid" class="uppercase" />
+          </div>
+
+          <!-- Filename on hover -->
+          <div class="absolute inset-x-0 bottom-0 translate-y-full bg-black/70 px-2 py-1.5 transition-transform group-hover:translate-y-0">
+            <p class="truncate text-xs text-white">{{ asset.file_name || asset.kind }}</p>
+            <p v-if="asset.file_size" class="text-xs text-white/60">{{ formatSize(asset.file_size) }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Load more -->
+      <div v-if="hasMore" class="mt-6 text-center">
+        <UButton color="neutral" variant="ghost" :loading="loadingMore" @click="loadMore">Load more</UButton>
+      </div>
+    </UPageBody>
+  </UPage>
+</template>
+
+<script setup lang="ts">
+definePageMeta({ layout: 'dashboard' })
+
+const route = useRoute()
+const siteId = route.params.siteId as string
+const toast = useToast()
+
+const assets = ref<any[]>([])
+const loading = ref(false)
+const loadingMore = ref(false)
+const deleting = ref(false)
+const uploadError = ref<string | null>(null)
+const isDragging = ref(false)
+const dragCounter = ref(0)
+const fileInput = ref<HTMLInputElement | null>(null)
+const search = ref('')
+const kindFilter = ref('')
+const selected = ref(new Set<string>())
+const offset = ref(0)
+const hasMore = ref(false)
+const LIMIT = 50
+
+const kindTabs = [
+  { label: 'All', value: '' },
+  { label: 'Images', value: 'image' },
+  { label: 'Videos', value: 'video' },
+]
+
+const filtered = computed(() => {
+  if (!search.value) return assets.value
+  return assets.value.filter(a => (a.file_name ?? '').toLowerCase().includes(search.value.toLowerCase()))
+})
+
+async function load() {
+  loading.value = true
+  offset.value = 0
+  selected.value.clear()
+  try {
+    const params = new URLSearchParams({ limit: String(LIMIT), offset: '0' })
+    if (kindFilter.value) params.set('kind', kindFilter.value)
+    const res = await $fetch<{ media: any[] }>(`/api/editor/sites/${siteId}/media?${params}`)
+    assets.value = res.media ?? []
+    hasMore.value = assets.value.length === LIMIT
+  } catch (err: any) {
+    console.error('Failed to load media:', err)
+    assets.value = []
+    hasMore.value = false
+    toast.add({ title: err?.data?.error ?? err?.message ?? 'Failed to load media', color: 'error' })
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadMore() {
+  loadingMore.value = true
+  offset.value += LIMIT
+  try {
+    const params = new URLSearchParams({ limit: String(LIMIT), offset: String(offset.value) })
+    if (kindFilter.value) params.set('kind', kindFilter.value)
+    const res = await $fetch<{ media: any[] }>(`/api/editor/sites/${siteId}/media?${params}`)
+    const more = res.media ?? []
+    assets.value.push(...more)
+    hasMore.value = more.length === LIMIT
+  } catch (err: any) {
+    offset.value = Math.max(0, offset.value - LIMIT)
+    console.error('Failed to load more media:', err)
+    toast.add({ title: err?.data?.error ?? err?.message ?? 'Failed to load more media', color: 'error' })
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+function toggleSelect(id: string) {
+  selected.value.has(id) ? selected.value.delete(id) : selected.value.add(id)
+}
+
+async function deleteSelected() {
+  if (!selected.value.size) return
+  deleting.value = true
+  const selectedIds = [...selected.value]
+  try {
+    const results = await Promise.allSettled(selectedIds.map(id =>
+      $fetch(`/api/editor/sites/${siteId}/media/${id}`, { method: 'DELETE' })
+    ))
+
+    const successfullyDeleted = new Set<string>()
+    const failedIds: string[] = []
+
+    results.forEach((result, index) => {
+      const id = selectedIds[index]
+      if (!id) return
+      if (result.status === 'fulfilled') successfullyDeleted.add(id)
+      else failedIds.push(id)
+    })
+
+    if (successfullyDeleted.size > 0) {
+      assets.value = assets.value.filter(a => !successfullyDeleted.has(a.id))
+      successfullyDeleted.forEach(id => selected.value.delete(id))
+      toast.add({ title: `${successfullyDeleted.size} item(s) deleted`, icon: 'i-heroicons-check-circle', color: 'success' })
+    }
+
+    if (failedIds.length > 0) {
+      toast.add({ title: `${failedIds.length} item(s) failed to delete`, color: 'error' })
+    }
+  } finally { deleting.value = false }
+}
+
+function handleDragEnter() {
+  dragCounter.value += 1
+  isDragging.value = true
+}
+
+function handleDragOver() {
+  if (dragCounter.value > 0) isDragging.value = true
+}
+
+function handleDragLeave() {
+  dragCounter.value = Math.max(0, dragCounter.value - 1)
+  isDragging.value = dragCounter.value > 0
+}
+
+function handleDrop(e: DragEvent) {
+  dragCounter.value = 0
+  isDragging.value = false
+  const file = e.dataTransfer?.files[0]
+  if (file) uploadFile(file)
+}
+
+function onFileSelect(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) uploadFile(file)
+  if (fileInput.value) fileInput.value.value = ''
+}
+
+async function uploadFile(file: File) {
+  uploadError.value = null
+  const isImage = file.type.startsWith('image/')
+  const isVideo = file.type.startsWith('video/')
+
+  if (!isImage && !isVideo) {
+    uploadError.value = 'Only images and videos are supported.'
+    return
+  }
+
+  if (isImage && file.size > 10 * 1024 * 1024) {
+    uploadError.value = 'Images must be under 10 MB.'
+    return
+  }
+
+  if (isVideo && file.size > 50 * 1024 * 1024) {
+    uploadError.value = 'Videos must be under 50 MB.'
+    return
+  }
+
+  try {
+    if (isImage) {
+      const { assetId, uploadUrl } = await $fetch<{ assetId: string; uploadUrl: string }>(
+        `/api/editor/sites/${siteId}/media/request-upload`,
+        { method: 'POST', body: { filename: file.name } }
+      )
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(uploadUrl, { method: 'POST', body: form })
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
+      await $fetch(`/api/editor/sites/${siteId}/media/${assetId}/confirm`, { method: 'POST' })
+    } else {
+      const form = new FormData()
+      form.append('file', file)
+      await $fetch(`/api/editor/sites/${siteId}/media/upload`, { method: 'POST', body: form })
+    }
+    toast.add({ title: 'File uploaded', icon: 'i-heroicons-check-circle', color: 'success' })
+    await load()
+  } catch (err: any) {
+    uploadError.value = err?.data?.error ?? err?.message ?? 'Upload failed.'
+  }
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+onMounted(load)
+</script>
