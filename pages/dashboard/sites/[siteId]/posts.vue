@@ -11,10 +11,10 @@
         <!-- Left: AI compose + draft list -->
         <div class="space-y-4">
           <!-- AI compose input -->
-          <div class="overflow-hidden rounded-lg border border-(--ui-border)">
-            <div class="flex items-center gap-2 border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-2.5">
-              <UIcon name="i-heroicons-sparkles" class="size-4 text-(--ui-text-muted)" />
-              <span class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-muted)">AI Composer</span>
+          <div class="overflow-hidden rounded-lg border border-default">
+            <div class="flex items-center gap-2 border-b border-default bg-elevated px-4 py-2.5">
+              <UIcon name="i-heroicons-sparkles" class="size-4 text-muted" />
+              <span class="text-xs font-semibold uppercase tracking-wider text-muted">AI Composer</span>
             </div>
             <div class="p-4 space-y-3">
               <UTextarea
@@ -26,7 +26,7 @@
                 @keydown.ctrl.enter="generatePost"
               />
               <div class="flex items-center justify-between gap-3">
-                <p class="text-xs text-(--ui-text-muted)">
+                <p class="text-xs text-muted">
                   <span v-if="credits !== null">{{ credits.toLocaleString() }} credits remaining · </span>Attach a photo for image-aware posts
                 </p>
                 <div class="flex items-center gap-2">
@@ -45,14 +45,14 @@
           </div>
 
           <!-- Draft / published list -->
-          <div class="overflow-hidden rounded-lg border border-(--ui-border)">
-            <div class="flex items-center justify-between gap-4 border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-2.5">
+          <div class="overflow-hidden rounded-lg border border-default">
+            <div class="flex items-center justify-between gap-4 border-b border-default bg-elevated px-4 py-2.5">
               <div class="flex items-center gap-3">
                 <button
                   v-for="tab in ['all','draft','published']"
                   :key="tab"
                   class="text-xs font-semibold capitalize transition-colors"
-                  :class="activeTab === tab ? 'text-(--ui-text-highlighted)' : 'text-(--ui-text-muted) hover:text-(--ui-text)'"
+                  :class="activeTab === tab ? 'text-highlighted' : 'text-muted hover:text-default'"
                   @click="activeTab = tab; loadPosts()"
                 >{{ tab }}</button>
               </div>
@@ -61,25 +61,25 @@
 
             <!-- Empty state -->
             <div v-if="!loading && posts.length === 0" class="px-4 py-10 text-center">
-              <UIcon name="i-heroicons-newspaper" class="mx-auto size-8 text-(--ui-text-muted)" />
-              <p class="mt-3 text-sm text-(--ui-text-muted)">No posts yet. Use the AI composer or write one manually.</p>
+              <UIcon name="i-heroicons-newspaper" class="mx-auto size-8 text-muted" />
+              <p class="mt-3 text-sm text-muted">No posts yet. Use the AI composer or write one manually.</p>
             </div>
 
             <!-- Post rows -->
             <div
               v-for="post in posts"
               :key="post.id"
-              class="flex cursor-pointer items-start gap-3 border-b border-(--ui-border) px-4 py-3.5 last:border-0 hover:bg-(--ui-bg-elevated)"
-              :class="selectedPost?.id === post.id ? 'bg-(--ui-bg-elevated)' : ''"
+              class="flex cursor-pointer items-start gap-3 border-b border-default px-4 py-3.5 last:border-0 hover:bg-elevated"
+              :class="selectedPost?.id === post.id ? 'bg-elevated' : ''"
               @click="selectPost(post)"
             >
               <img v-if="post.image_url" :src="post.image_url" class="size-10 shrink-0 rounded object-cover" />
-              <div v-else class="flex size-10 shrink-0 items-center justify-center rounded bg-(--ui-bg-muted)">
-                <UIcon name="i-heroicons-document-text" class="size-4 text-(--ui-text-muted)" />
+              <div v-else class="flex size-10 shrink-0 items-center justify-center rounded bg-muted">
+                <UIcon name="i-heroicons-document-text" class="size-4 text-muted" />
               </div>
               <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium text-(--ui-text-highlighted)">{{ post.title || post.body.slice(0, 60) }}</p>
-                <p class="truncate text-xs text-(--ui-text-muted)">{{ formatDate(post.updated_at) }}</p>
+                <p class="truncate text-sm font-medium text-highlighted">{{ post.title || post.body.slice(0, 60) }}</p>
+                <p class="truncate text-xs text-muted">{{ formatDate(post.updated_at) }}</p>
               </div>
               <UBadge :color="post.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs" class="shrink-0">{{ post.status }}</UBadge>
             </div>
@@ -88,9 +88,9 @@
 
         <!-- Right: Editor + preview -->
         <div v-if="selectedPost || composing" class="space-y-4">
-          <div class="overflow-hidden rounded-lg border border-(--ui-border)">
-            <div class="flex items-center justify-between gap-2 border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-2.5">
-              <span class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-muted)">
+          <div class="overflow-hidden rounded-lg border border-default">
+            <div class="flex items-center justify-between gap-2 border-b border-default bg-elevated px-4 py-2.5">
+              <span class="text-xs font-semibold uppercase tracking-wider text-muted">
                 {{ composing ? 'New post' : (selectedPost?.status === 'published' ? 'Published' : 'Draft') }}
               </span>
               <div class="flex gap-1">
@@ -111,12 +111,12 @@
               </UFormField>
 
               <!-- Channel selector -->
-              <div class="border-t border-(--ui-border) pt-3">
-                <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-(--ui-text-muted)">Publish to</p>
+              <div class="border-t border-default pt-3">
+                <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">Publish to</p>
                 <div class="space-y-1.5">
                   <label v-for="ch in channelOptions" :key="ch.value" class="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" :value="ch.value" v-model="selectedChannels" :disabled="ch.disabled" class="rounded" />
-                    <span class="text-sm" :class="ch.disabled ? 'text-(--ui-text-muted)' : 'text-(--ui-text)'">{{ ch.label }}</span>
+                    <span class="text-sm" :class="ch.disabled ? 'text-muted' : 'text-default'">{{ ch.label }}</span>
                     <UBadge v-if="ch.disabled" size="xs" color="neutral" variant="soft">Not connected</UBadge>
                   </label>
                 </div>
@@ -132,18 +132,18 @@
           </div>
 
           <!-- Preview -->
-          <div v-if="editForm.body" class="overflow-hidden rounded-lg border border-(--ui-border)">
-            <p class="border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-2 text-xs font-semibold uppercase tracking-wider text-(--ui-text-muted)">Site preview</p>
+          <div v-if="editForm.body" class="overflow-hidden rounded-lg border border-default">
+            <p class="border-b border-default bg-elevated px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted">Site preview</p>
             <div class="p-4">
               <img v-if="editForm.image_url" :src="editForm.image_url" class="mb-3 w-full rounded-lg object-cover max-h-48" />
-              <p v-if="editForm.title" class="mb-1 text-base font-bold text-(--ui-text-highlighted)">{{ editForm.title }}</p>
-              <p class="text-sm leading-relaxed text-(--ui-text-muted)">{{ editForm.body }}</p>
+              <p v-if="editForm.title" class="mb-1 text-base font-bold text-highlighted">{{ editForm.title }}</p>
+              <p class="text-sm leading-relaxed text-muted">{{ editForm.body }}</p>
             </div>
           </div>
         </div>
 
         <!-- Right: empty state -->
-        <div v-else class="hidden lg:flex items-center justify-center rounded-lg border border-dashed border-(--ui-border) text-sm text-(--ui-text-muted)">
+        <div v-else class="hidden lg:flex items-center justify-center rounded-lg border border-dashed border-default text-sm text-muted">
           Select a post or generate one with AI
         </div>
       </div>

@@ -1,9 +1,9 @@
 <template>
   <AppSection :bg="bg" :padding="padding">
-    <div v-if="showTitle" class="flex flex-col gap-4 mb-12 md:flex-row md:items-end md:justify-between border-b border-(--ui-border) pb-8">
+    <div v-if="showTitle" class="flex flex-col gap-4 mb-12 md:flex-row md:items-end md:justify-between border-b border-default pb-8">
       <div>
-        <h2 class="text-base font-semibold text-(--ui-text) tracking-wide uppercase">Guest Experience</h2>
-        <p class="mt-2 text-4xl font-bold text-(--ui-text) italic">What Our Guests Say</p>
+        <h2 class="text-base font-semibold text-default tracking-wide uppercase">Guest Experience</h2>
+        <p class="mt-2 text-4xl font-bold text-default italic">What Our Guests Say</p>
       </div>
       <div v-if="ratingSummary" class="flex flex-col items-start md:items-end gap-1">
         <div
@@ -15,7 +15,7 @@
             {{ i <= Math.round(Number(ratingSummary.average)) ? '★' : '☆' }}
           </span>
         </div>
-        <p class="text-sm font-medium text-(--ui-text-muted)">
+        <p class="text-sm font-medium text-muted">
           {{ ratingSummary.average }} / 5.0 from {{ ratingSummary.count }} Google reviews
         </p>
       </div>
@@ -26,7 +26,7 @@
       <UCard
         v-for="review in displayedReviews"
         :key="review.reviewId || review.name || review.createTime"
-        class="flex flex-col bg-(--ui-bg) p-8 shadow-sm border border-(--ui-border) hover:shadow-md transition-all"
+        class="flex flex-col bg-default p-8 shadow-sm border border-default hover:shadow-md transition-all"
       >
         <div
           class="flex items-center gap-1 text-yellow-400 mb-4"
@@ -39,24 +39,24 @@
         </div>
         
         <blockquote class="flex-grow">
-          <p class="text-(--ui-text) leading-relaxed italic text-sm">
+          <p class="text-default leading-relaxed italic text-sm">
             "{{ reviewText(review) }}"
           </p>
         </blockquote>
 
         <!-- Review Reply -->
-        <div v-if="review.reviewReply?.comment" class="mt-4 bg-(--ui-bg-muted) border border-(--ui-border) rounded-xl p-4 text-xs">
-          <p class="font-bold text-(--ui-text) mb-1">Restaurant Response:</p>
-          <p class="text-(--ui-text-muted)">{{ typeof review.reviewReply.comment === 'string' ? review.reviewReply.comment : review.reviewReply.comment?.text || '' }}</p>
+        <div v-if="review.reviewReply?.comment" class="mt-4 bg-muted border border-default rounded-xl p-4 text-xs">
+          <p class="font-bold text-default mb-1">Restaurant Response:</p>
+          <p class="text-muted">{{ typeof review.reviewReply.comment === 'string' ? review.reviewReply.comment : review.reviewReply.comment?.text || '' }}</p>
         </div>
 
-        <div class="mt-6 flex items-center gap-3 pt-6 border-t border-(--ui-border)">
-          <div class="h-10 w-10 rounded-full bg-(--ui-bg-inverted) flex items-center justify-center text-(--ui-text-inverted) font-bold text-xs uppercase">
+        <div class="mt-6 flex items-center gap-3 pt-6 border-t border-default">
+          <div class="h-10 w-10 rounded-full bg-inverted flex items-center justify-center text-inverted font-bold text-xs uppercase">
             {{ reviewAuthor(review).charAt(0) }}
           </div>
           <div>
-            <p class="text-sm font-bold text-(--ui-text)">{{ reviewAuthor(review) }}</p>
-            <time v-if="review.createTime" :datetime="review.createTime" class="block text-xs text-(--ui-text-muted)">
+            <p class="text-sm font-bold text-default">{{ reviewAuthor(review) }}</p>
+            <time v-if="review.createTime" :datetime="review.createTime" class="block text-xs text-muted">
               {{ formatDate(review.createTime) }}
             </time>
           </div>
@@ -65,7 +65,7 @@
 
       <!-- Placeholder cards when no reviews -->
       <template v-if="reviews.length === 0">
-        <UCard v-for="i in (limit || 3)" :key="`placeholder-${i}`" class="flex flex-col bg-(--ui-bg) p-8 shadow-sm border border-(--ui-border)">
+        <UCard v-for="i in (limit || 3)" :key="`placeholder-${i}`" class="flex flex-col bg-default p-8 shadow-sm border border-default">
           <div class="flex items-center gap-1 text-yellow-400 mb-4">
           <span v-for="starIndex in 5" :key="starIndex" class="text-sm">☆</span>
         </div>
@@ -74,7 +74,7 @@
             <USkeleton class="h-3 w-4/5" />
             <USkeleton class="h-3 w-3/4" />
           </div>
-          <div class="mt-6 flex items-center gap-3 pt-6 border-t border-(--ui-border)">
+          <div class="mt-6 flex items-center gap-3 pt-6 border-t border-default">
             <USkeleton class="h-10 w-10 rounded-full" />
             <div class="flex-1">
               <USkeleton class="h-4 mb-2" />

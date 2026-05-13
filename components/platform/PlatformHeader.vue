@@ -1,5 +1,5 @@
 <template>
-  <header class="sticky top-0 z-50 bg-(--ui-bg)/85 backdrop-blur-md border-b border-(--ui-border)">
+  <header class="sticky top-0 z-50 bg-default/85 backdrop-blur-md border-b border-default">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-6 h-16">
 
       <!-- Wordmark -->
@@ -11,13 +11,13 @@
       </NuxtLink>
 
       <!-- Pill nav (desktop) -->
-      <nav class="hidden md:flex items-center gap-1 bg-(--ui-bg-elevated)/50 border border-(--ui-border-muted) rounded-full px-1 py-1">
+      <nav class="hidden md:flex items-center gap-1 bg-elevated/50 border border-muted rounded-full px-1 py-1">
         <NuxtLink
           v-for="item in navItems"
           :key="item.label"
           :to="item.to"
-          class="px-4 py-2 rounded-full text-[13.5px] font-medium text-(--ui-text-muted) transition-colors hover:text-(--ui-text) no-underline"
-          :class="$route.fullPath === item.to || ($route.fullPath.startsWith(item.to) && item.to !== '/') ? 'bg-(--ui-bg-elevated) text-(--ui-text) shadow-[0_1px_2px_rgba(31,37,71,0.06)]' : ''"
+          class="px-4 py-2 rounded-full text-[13.5px] font-medium text-muted transition-colors hover:text-default no-underline"
+          :class="isActiveRoute(item.to) ? 'bg-elevated text-default shadow-[0_1px_2px_rgba(31,37,71,0.06)]' : ''"
         >
           {{ item.label }}
         </NuxtLink>
@@ -62,14 +62,14 @@
     </div>
 
     <!-- Mobile menu -->
-    <div id="mobile-menu" v-if="isMobileMenuOpen" class="md:hidden border-t border-(--ui-border) bg-(--ui-bg)">
+    <div id="mobile-menu" v-if="isMobileMenuOpen" class="md:hidden border-t border-default bg-default">
       <nav class="px-4 py-4 space-y-2">
         <NuxtLink
           v-for="item in navItems"
           :key="item.label"
           :to="item.to"
-          class="block px-4 py-3 rounded-lg text-[13.5px] font-medium text-(--ui-text-muted) hover:text-(--ui-text) hover:bg-(--ui-bg-muted) transition-colors no-underline"
-          :class="$route.fullPath === item.to || ($route.fullPath.startsWith(item.to) && item.to !== '/') ? 'bg-(--ui-bg-muted) text-(--ui-text)' : ''"
+          class="block px-4 py-3 rounded-lg text-[13.5px] font-medium text-muted hover:text-default hover:bg-muted transition-colors no-underline"
+          :class="isActiveRoute(item.to) ? 'bg-muted text-default' : ''"
           @click="closeMobileMenu"
         >
           {{ item.label }}
@@ -94,7 +94,7 @@
   </header>
 </template>
 
-<script setup>
+<script setup lang="ts">
 const { isAuthenticated } = useAuth()
 
 const navItems = [
@@ -103,6 +103,14 @@ const navItems = [
   { label: 'Templates', to: '/templates' },
   { label: 'Docs', to: '/docs' },
 ]
+
+const route = useRoute()
+
+function isActiveRoute(to: string) {
+  const path = to.split('#')[0]!
+  if (path === '/') return route.fullPath === to
+  return route.fullPath === to || route.fullPath.startsWith(path)
+}
 
 const isMobileMenuOpen = ref(false)
 
@@ -114,7 +122,7 @@ function closeMobileMenu() {
   isMobileMenuOpen.value = false
 }
 
-watch(() => useRoute().fullPath, () => {
+watch(() => route.fullPath, () => {
   closeMobileMenu()
 })
 </script>

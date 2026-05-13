@@ -1,10 +1,10 @@
 <template>
   <div class="container mx-auto px-4 py-16">
     <div class="max-w-3xl mx-auto">
-      <h1 class="text-4xl font-bold text-[var(--ui-text)] mb-6">Terms and Conditions</h1>
-      <p class="text-lg text-[var(--ui-text-muted)] mb-12">Our agreement with you</p>
+      <h1 class="text-4xl font-bold text-default mb-6">Terms and Conditions</h1>
+      <p class="text-lg text-muted mb-12">Our agreement with you</p>
 
-      <article class="prose prose-lg max-w-none text-[var(--ui-text)]">
+      <article class="prose prose-lg max-w-none text-default">
         <p><strong>Effective Date:</strong> October 21, 2024</p>
 
         <p>Welcome to <strong>KrabiClaw</strong>. By accessing or using our website builder platform and services, you agree to be bound by the following terms and conditions. Please read them carefully.</p>

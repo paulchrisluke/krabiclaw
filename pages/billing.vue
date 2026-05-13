@@ -1,18 +1,18 @@
 <template>
-  <div class="min-h-screen bg-(--ui-bg-muted)">
+  <div class="min-h-screen bg-muted">
     <div class="container mx-auto px-4 py-16">
       <div class="max-w-4xl mx-auto">
-        <h1 class="text-4xl font-bold text-(--ui-text-highlighted) mb-8">Billing & Plans</h1>
+        <h1 class="text-4xl font-bold text-highlighted mb-8">Billing & Plans</h1>
         
-        <div class="bg-(--ui-bg) rounded-2xl shadow-sm border border-(--ui-border) p-8">
-          <h2 class="text-2xl font-semibold text-(--ui-text-highlighted) mb-6">Choose Your Plan</h2>
+        <div class="bg-default rounded-2xl shadow-sm border border-default p-8">
+          <h2 class="text-2xl font-semibold text-highlighted mb-6">Choose Your Plan</h2>
           
           <div class="grid md:grid-cols-2 gap-8 overflow-visible">
             <!-- Free Plan -->
-            <div class="border border-(--ui-border) rounded-xl p-6">
-              <h3 class="text-xl font-bold text-(--ui-text-highlighted) mb-2">Free</h3>
-              <p class="text-3xl font-bold text-(--ui-text-highlighted) mb-4">$0<span class="text-lg font-normal text-(--ui-text-muted)">/month</span></p>
-              <ul class="space-y-2 text-(--ui-text-muted) mb-6">
+            <div class="border border-default rounded-xl p-6">
+              <h3 class="text-xl font-bold text-highlighted mb-2">Free</h3>
+              <p class="text-3xl font-bold text-highlighted mb-4">$0<span class="text-lg font-normal text-muted">/month</span></p>
+              <ul class="space-y-2 text-muted mb-6">
                 <li class="flex items-center">
                   <svg class="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                     <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
@@ -48,9 +48,9 @@
               <div class="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
                 <span class="bg-black text-white px-3 py-1 text-sm font-medium rounded-full">Popular</span>
               </div>
-              <h3 class="text-xl font-bold text-(--ui-text-highlighted) mb-2">Pro</h3>
-              <p class="text-3xl font-bold text-(--ui-text-highlighted) mb-4">$25<span class="text-lg font-normal text-(--ui-text-muted)">/month</span></p>
-              <ul class="space-y-2 text-(--ui-text-muted) mb-6">
+              <h3 class="text-xl font-bold text-highlighted mb-2">Pro</h3>
+              <p class="text-3xl font-bold text-highlighted mb-4">$25<span class="text-lg font-normal text-muted">/month</span></p>
+              <ul class="space-y-2 text-muted mb-6">
                 <li class="flex items-center">
                   <svg class="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                     <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />

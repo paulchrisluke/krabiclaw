@@ -14,12 +14,12 @@
 
       <UAlert v-else-if="error" color="error" variant="soft" icon="i-heroicons-exclamation-triangle" :description="error" />
 
-      <div v-else-if="settings" class="space-y-0 divide-y divide-(--ui-border) rounded-lg border border-(--ui-border)">
+      <div v-else-if="settings" class="space-y-0 divide-y divide-default rounded-lg border border-default">
         <!-- General -->
         <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
           <div>
-            <h2 class="font-semibold text-(--ui-text-highlighted)">General</h2>
-            <p class="mt-1 text-sm text-(--ui-text-muted)">Basic website configuration. Your subdomain is permanent and cannot be changed.</p>
+            <h2 class="font-semibold text-highlighted">General</h2>
+            <p class="mt-1 text-sm text-muted">Basic website configuration. Your subdomain is permanent and cannot be changed.</p>
           </div>
           <div class="space-y-5">
             <UFormField label="Site Name">
@@ -50,8 +50,8 @@
         <!-- Brand -->
         <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
           <div>
-            <h2 class="font-semibold text-(--ui-text-highlighted)">Brand</h2>
-            <p class="mt-1 text-sm text-(--ui-text-muted)">Your restaurant's identity. This name and description appear on your public website and in search results.</p>
+            <h2 class="font-semibold text-highlighted">Brand</h2>
+            <p class="mt-1 text-sm text-muted">Your restaurant's identity. This name and description appear on your public website and in search results.</p>
           </div>
           <div class="space-y-5">
             <UFormField label="Restaurant Name">
@@ -74,8 +74,8 @@
         <!-- Appearance -->
         <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
           <div>
-            <h2 class="font-semibold text-(--ui-text-highlighted)">Appearance</h2>
-            <p class="mt-1 text-sm text-(--ui-text-muted)">Control your site's color scheme. The brand color is applied to buttons, links, and accent elements.</p>
+            <h2 class="font-semibold text-highlighted">Appearance</h2>
+            <p class="mt-1 text-sm text-muted">Control your site's color scheme. The brand color is applied to buttons, links, and accent elements.</p>
           </div>
           <div class="space-y-5">
             <UFormField label="Brand Color" help="Primary color used for buttons and accents.">
@@ -94,8 +94,8 @@
         <!-- Notifications -->
         <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
           <div>
-            <h2 class="font-semibold text-(--ui-text-highlighted)">Notifications</h2>
-            <p class="mt-1 text-sm text-(--ui-text-muted)">
+            <h2 class="font-semibold text-highlighted">Notifications</h2>
+            <p class="mt-1 text-sm text-muted">
               Connect WhatsApp to receive alerts when content is published, new reviews come in, or your AI assistant completes a task.
             </p>
           </div>
@@ -120,7 +120,7 @@
                 </UButton>
               </div>
             </UFormField>
-            <div v-if="savedWhatsappPhone" class="flex items-center gap-2 text-sm text-(--ui-text-muted)">
+            <div v-if="savedWhatsappPhone" class="flex items-center gap-2 text-sm text-muted">
               <UIcon name="i-heroicons-check-circle" class="size-4 shrink-0 text-green-500" />
               Connected: {{ savedWhatsappPhone }}
             </div>

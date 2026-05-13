@@ -3,8 +3,8 @@
     class="rounded-2xl flex flex-col"
     :class="[
       isHighlighted
-        ? 'bg-(--ui-bg-inverted) text-white shadow-lg p-8'
-        : 'bg-(--ui-bg-elevated) border border-(--ui-border) p-8',
+        ? 'bg-inverted text-white shadow-lg p-8'
+        : 'bg-elevated border border-default p-8',
       isHighlighted && 'ring-2 ring-primary',
     ]"
   >
@@ -16,10 +16,10 @@
     <!-- Header -->
     <div class="mb-6 flex items-start justify-between gap-3">
       <div>
-        <h3 class="text-2xl font-bold mb-1" :class="isHighlighted ? 'text-white' : 'text-(--ui-text)'">
+        <h3 class="text-2xl font-bold mb-1" :class="isHighlighted ? 'text-white' : 'text-default'">
           {{ plan.name }}
         </h3>
-        <p class="text-sm" :class="isHighlighted ? 'text-white/70' : 'text-(--ui-text-muted)'">
+        <p class="text-sm" :class="isHighlighted ? 'text-white/70' : 'text-muted'">
           {{ plan.tagline }}
         </p>
       </div>
@@ -35,14 +35,14 @@
     <!-- Price -->
     <div class="mb-6">
       <template v-if="plan.prices.length === 0">
-        <span class="text-4xl font-bold" :class="isHighlighted ? 'text-white' : 'text-(--ui-text)'">$0</span>
-        <span :class="isHighlighted ? 'text-white/70' : 'text-(--ui-text-muted)'">/month</span>
+        <span class="text-4xl font-bold" :class="isHighlighted ? 'text-white' : 'text-default'">$0</span>
+        <span :class="isHighlighted ? 'text-white/70' : 'text-muted'">/month</span>
       </template>
       <template v-else>
-        <span class="text-4xl font-bold" :class="isHighlighted ? 'text-white' : 'text-(--ui-text)'">
+        <span class="text-4xl font-bold" :class="isHighlighted ? 'text-white' : 'text-default'">
           {{ currentPrice }}
         </span>
-        <span :class="isHighlighted ? 'text-white/70' : 'text-(--ui-text-muted)'">
+        <span :class="isHighlighted ? 'text-white/70' : 'text-muted'">
           {{ billingPeriodLabel }}
         </span>
         <p v-if="annual && savingsNote" class="text-sm mt-1" :class="isHighlighted ? 'text-emerald-400' : 'text-emerald-600'">
@@ -57,7 +57,7 @@
         v-for="feature in plan.features"
         :key="feature"
         class="flex items-start gap-2 text-sm"
-        :class="isHighlighted ? 'text-white/85' : 'text-(--ui-text-muted)'"
+        :class="isHighlighted ? 'text-white/85' : 'text-muted'"
       >
         <svg
           class="w-5 h-5 shrink-0 mt-0.5"

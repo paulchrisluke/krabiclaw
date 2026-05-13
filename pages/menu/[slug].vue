@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-(--ui-bg)">
+  <div class="min-h-screen bg-default">
     <AppBreadcrumb v-if="item" :crumbs="[
       { to: '/', label: 'Home' },
       { to: '/menu', label: 'Menu' },
@@ -10,22 +10,22 @@
     <article v-if="item" class="mx-auto max-w-7xl px-4 pb-16 sm:px-6 sm:pb-24 lg:px-8">
       <div class="lg:grid lg:auto-rows-min lg:grid-cols-12 lg:gap-x-10">
         <section class="lg:col-span-5 lg:col-start-8">
-          <p class="text-sm font-medium text-(--ui-text-muted)">{{ category?.name }}</p>
+          <p class="text-sm font-medium text-muted">{{ category?.name }}</p>
           <div class="mt-2 flex items-start justify-between gap-6">
-            <h1 class="text-2xl font-semibold leading-tight text-(--ui-text-highlighted) md:text-4xl">{{ item.name }}</h1>
-            <p class="shrink-0 text-2xl font-semibold text-(--ui-text-highlighted)">{{ formattedPrice }}</p>
+            <h1 class="text-2xl font-semibold leading-tight text-highlighted md:text-4xl">{{ item.name }}</h1>
+            <p class="shrink-0 text-2xl font-semibold text-highlighted">{{ formattedPrice }}</p>
           </div>
 
           <div class="mt-5 flex flex-wrap gap-2">
             <span
               :class="[
                 'inline-flex items-center rounded-full px-3 py-1 text-sm font-medium',
-                item.available ? 'bg-(--ui-bg-elevated) text-stone-800' : 'bg-red-50 text-red-700'
+                item.available ? 'bg-elevated text-default' : 'bg-red-50 text-red-700'
               ]"
             >
               {{ item.available ? 'Available today' : 'Currently unavailable' }}
             </span>
-            <span class="inline-flex items-center rounded-full bg-(--ui-bg-elevated) px-3 py-1 text-sm font-medium text-(--ui-text)">
+            <span class="inline-flex items-center rounded-full bg-elevated px-3 py-1 text-sm font-medium text-default">
               {{ category?.name }}
             </span>
             <span v-if="isRobatayaki" class="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-sm font-medium text-amber-800">
@@ -37,18 +37,18 @@
         <section class="mt-8 lg:col-span-7 lg:col-start-1 lg:row-span-3 lg:row-start-1 lg:mt-0" aria-labelledby="item-images-heading">
           <h2 id="item-images-heading" class="sr-only">Dish images</h2>
           <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:grid-rows-3 lg:gap-6">
-            <UCard class="bg-(--ui-bg) rounded-lg overflow-hidden">
+            <UCard class="bg-default rounded-lg overflow-hidden">
               <img
                 v-if="imageGallery[0]"
                 :src="imageGallery[0]"
                 :alt="item.name"
-                class="aspect-[4/3] w-full object-cover"
+                class="aspect-4/3 w-full object-cover"
               />
-              <div v-else class="flex aspect-[4/3] w-full items-center justify-center px-6 text-center">
-                <span class="text-sm text-(--ui-text-dimmed)">No image available yet</span>
+              <div v-else class="flex aspect-4/3 w-full items-center justify-center px-6 text-center">
+                <span class="text-sm text-dimmed">No image available yet</span>
               </div>
             </UCard>
-            <UCard v-for="image in secondaryImages" :key="image" class="hidden lg:block bg-(--ui-bg-elevated) rounded-lg overflow-hidden">
+            <UCard v-for="image in secondaryImages" :key="image" class="hidden lg:block bg-elevated rounded-lg overflow-hidden">
               <img :src="image" :alt="item.name" class="aspect-square w-full object-cover" />
             </UCard>
           </div>
@@ -58,37 +58,37 @@
           <h2 id="item-details-heading" class="sr-only">Dish details</h2>
 
           <div>
-            <h3 class="text-sm font-medium text-(--ui-text-highlighted)">Description</h3>
-            <p class="mt-4 text-sm leading-6 text-(--ui-text-muted)">{{ item.description }}</p>
-            <p v-if="item.preparation" class="mt-4 text-sm leading-6 text-(--ui-text-muted)">{{ item.preparation }}</p>
+            <h3 class="text-sm font-medium text-highlighted">Description</h3>
+            <p class="mt-4 text-sm leading-6 text-muted">{{ item.description }}</p>
+            <p v-if="item.preparation" class="mt-4 text-sm leading-6 text-muted">{{ item.preparation }}</p>
           </div>
 
-          <div class="mt-8 border-t border-(--ui-border) pt-8">
-            <h3 class="text-sm font-medium text-(--ui-text-highlighted)">Menu details</h3>
+          <div class="mt-8 border-t border-default pt-8">
+            <h3 class="text-sm font-medium text-highlighted">Menu details</h3>
             <dl class="mt-4 divide-y divide-gray-100 text-sm leading-6">
               <div class="flex justify-between gap-4 py-3">
-                <dt class="text-(--ui-text-muted)">Category</dt>
-                <dd class="text-right font-medium text-(--ui-text-highlighted)">{{ category?.name }}</dd>
+                <dt class="text-muted">Category</dt>
+                <dd class="text-right font-medium text-highlighted">{{ category?.name }}</dd>
               </div>
               <div class="flex justify-between gap-4 py-3">
-                <dt class="text-(--ui-text-muted)">Price</dt>
-                <dd class="text-right font-medium text-(--ui-text-highlighted)">{{ formattedPrice }}</dd>
+                <dt class="text-muted">Price</dt>
+                <dd class="text-right font-medium text-highlighted">{{ formattedPrice }}</dd>
               </div>
               <div class="flex justify-between gap-4 py-3">
-                <dt class="text-(--ui-text-muted)">Availability</dt>
-                <dd class="text-right font-medium text-(--ui-text-highlighted)">{{ item.available ? 'Available' : 'Not available' }}</dd>
+                <dt class="text-muted">Availability</dt>
+                <dd class="text-right font-medium text-highlighted">{{ item.available ? 'Available' : 'Not available' }}</dd>
               </div>
               <div class="flex justify-between gap-4 py-3">
-                <dt class="text-(--ui-text-muted)">Allergens</dt>
-                <dd class="text-right font-medium text-(--ui-text-highlighted)">{{ visibleAllergensLabel }}</dd>
+                <dt class="text-muted">Allergens</dt>
+                <dd class="text-right font-medium text-highlighted">{{ visibleAllergensLabel }}</dd>
               </div>
             </dl>
           </div>
 
-          <div v-if="detailSections.length > 0" class="mt-8 border-t border-(--ui-border) pt-8">
+          <div v-if="detailSections.length > 0" class="mt-8 border-t border-default pt-8">
             <div v-for="section in detailSections" :key="section.name" class="mt-6 first:mt-0">
-              <h3 class="text-sm font-medium text-(--ui-text-highlighted)">{{ section.name }}</h3>
-              <ul role="list" class="mt-4 list-disc space-y-1 pl-5 text-sm leading-6 text-(--ui-text-muted) marker:text-(--ui-text-dimmed)">
+              <h3 class="text-sm font-medium text-highlighted">{{ section.name }}</h3>
+              <ul role="list" class="mt-4 list-disc space-y-1 pl-5 text-sm leading-6 text-muted marker:text-dimmed">
                 <li v-for="entry in section.items" :key="entry" class="pl-2">{{ entry }}</li>
               </ul>
             </div>
@@ -97,8 +97,8 @@
           <section class="mt-10" aria-labelledby="dining-notes-heading">
             <h3 id="dining-notes-heading" class="sr-only">Dining notes</h3>
             <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <UCard v-for="note in diningNotes" :key="note.name" class="border border-(--ui-border) bg-(--ui-bg-muted) p-5">
-                <dt class="text-sm font-medium text-(--ui-text-highlighted)">{{ note.name }}</dt>
+              <UCard v-for="note in diningNotes" :key="note.name" class="border border-default bg-muted p-5">
+                <dt class="text-sm font-medium text-highlighted">{{ note.name }}</dt>
               </UCard>
             </dl>
           </section>
@@ -112,56 +112,56 @@
       </div>
 
       <!-- ... -->
-      <section v-if="reviews.length > 0" aria-labelledby="reviews-heading" class="mt-16 border-t border-(--ui-border) pt-12 sm:mt-24">
+      <section v-if="reviews.length > 0" aria-labelledby="reviews-heading" class="mt-16 border-t border-default pt-12 sm:mt-24">
         <div class="flex items-center justify-between gap-6">
-          <h2 id="reviews-heading" class="text-lg font-medium text-(--ui-text-highlighted)">Guest reviews</h2>
-          <p v-if="reviewSummary" class="text-sm text-(--ui-text-muted)">
+          <h2 id="reviews-heading" class="text-lg font-medium text-highlighted">Guest reviews</h2>
+          <p v-if="reviewSummary" class="text-sm text-muted">
             {{ reviewSummary.average }} out of 5 from {{ reviewSummary.count }} reviews
           </p>
         </div>
-        <div class="mt-6 divide-y divide-gray-200 border-y border-(--ui-border)">
+        <div class="mt-6 divide-y divide-gray-200 border-y border-default">
           <article v-for="review in reviews" :key="review.id || review.author" class="py-8 lg:grid lg:grid-cols-12 lg:gap-x-8">
             <div class="lg:col-span-3">
-              <p class="font-medium text-(--ui-text-highlighted)">{{ review.author }}</p>
-              <time v-if="reviewDateTime(review)" :datetime="reviewDateTime(review)" class="mt-1 block text-sm text-(--ui-text-muted)">
+              <p class="font-medium text-highlighted">{{ review.author }}</p>
+              <time v-if="reviewDateTime(review)" :datetime="reviewDateTime(review)" class="mt-1 block text-sm text-muted">
                 {{ reviewDateLabel(review) }}
               </time>
             </div>
             <div class="mt-4 lg:col-span-9 lg:mt-0">
-              <p class="text-sm font-medium text-(--ui-text-highlighted)">{{ review.title }}</p>
-              <p class="mt-3 text-sm leading-6 text-(--ui-text-muted)">{{ review.content }}</p>
+              <p class="text-sm font-medium text-highlighted">{{ review.title }}</p>
+              <p class="mt-3 text-sm leading-6 text-muted">{{ review.content }}</p>
             </div>
           </article>
         </div>
       </section>
 
-      <section aria-labelledby="review-form-heading" class="mt-16 border-t border-(--ui-border) pt-12 sm:mt-24">
+      <section aria-labelledby="review-form-heading" class="mt-16 border-t border-default pt-12 sm:mt-24">
         <div class="grid gap-8 lg:grid-cols-12 lg:gap-x-10">
           <div class="lg:col-span-4">
-            <h2 id="review-form-heading" class="text-lg font-medium text-(--ui-text-highlighted)">Share your experience</h2>
-            <p class="mt-3 text-sm leading-6 text-(--ui-text-muted)">
+            <h2 id="review-form-heading" class="text-lg font-medium text-highlighted">Share your experience</h2>
+            <p class="mt-3 text-sm leading-6 text-muted">
               Reviews are checked before they appear on the menu page.
             </p>
           </div>
           <form class="space-y-5 lg:col-span-8" @submit.prevent="submitReview">
             <div class="grid gap-5 sm:grid-cols-2">
               <div>
-                <label for="review-author" class="block text-sm font-medium text-(--ui-text-highlighted)">Name</label>
+                <label for="review-author" class="block text-sm font-medium text-highlighted">Name</label>
                 <input
                   id="review-author"
                   v-model="reviewForm.author"
                   type="text"
                   required
                   maxlength="80"
-                  class="mt-2 block w-full rounded-md bg-(--ui-bg) px-3 py-2 text-base text-(--ui-text-highlighted) outline outline-1 -outline-offset-1 outline-(--ui-border) placeholder:text-(--ui-text-dimmed) focus:outline-2 focus:-outline-offset-2 focus:outline-black"
+                  class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline-solid outline-1 -outline-offset-1 outline-default placeholder:text-dimmed focus:outline-2 focus:-outline-offset-2 focus:outline-black"
                 />
               </div>
               <div>
-                <label for="review-rating" class="block text-sm font-medium text-(--ui-text-highlighted)">Rating</label>
+                <label for="review-rating" class="block text-sm font-medium text-highlighted">Rating</label>
                 <select
                   id="review-rating"
                   v-model.number="reviewForm.rating"
-                  class="mt-2 block w-full rounded-md bg-(--ui-bg) px-3 py-2 text-base text-(--ui-text-highlighted) outline outline-1 -outline-offset-1 outline-(--ui-border) focus:outline-2 focus:-outline-offset-2 focus:outline-black"
+                  class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline-solid outline-1 -outline-offset-1 outline-default focus:outline-2 focus:-outline-offset-2 focus:outline-black"
                 >
                   <option v-for="rating in [5, 4, 3, 2, 1]" :key="rating" :value="rating">
                     {{ rating }} stars
@@ -170,18 +170,18 @@
               </div>
             </div>
             <div>
-              <label for="review-title" class="block text-sm font-medium text-(--ui-text-highlighted)">Short title</label>
+              <label for="review-title" class="block text-sm font-medium text-highlighted">Short title</label>
               <input
                 id="review-title"
                 v-model="reviewForm.title"
                 type="text"
                 required
                 maxlength="120"
-                class="mt-2 block w-full rounded-md bg-(--ui-bg) px-3 py-2 text-base text-(--ui-text-highlighted) outline outline-1 -outline-offset-1 outline-(--ui-border) placeholder:text-(--ui-text-dimmed) focus:outline-2 focus:-outline-offset-2 focus:outline-black"
+                class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline-solid outline-1 -outline-offset-1 outline-default placeholder:text-dimmed focus:outline-2 focus:-outline-offset-2 focus:outline-black"
               />
             </div>
             <div>
-              <label for="review-content" class="block text-sm font-medium text-(--ui-text-highlighted)">Review</label>
+              <label for="review-content" class="block text-sm font-medium text-highlighted">Review</label>
               <textarea
                 id="review-content"
                 v-model="reviewForm.content"
@@ -189,7 +189,7 @@
                 minlength="10"
                 maxlength="1200"
                 rows="4"
-                class="mt-2 block w-full rounded-md bg-(--ui-bg) px-3 py-2 text-base text-(--ui-text-highlighted) outline outline-1 -outline-offset-1 outline-(--ui-border) placeholder:text-(--ui-text-dimmed) focus:outline-2 focus:-outline-offset-2 focus:outline-black"
+                class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline-solid outline-1 -outline-offset-1 outline-default placeholder:text-dimmed focus:outline-2 focus:-outline-offset-2 focus:outline-black"
               />
             </div>
             <div v-if="turnstileEnabled" ref="turnstileContainer" class="min-h-16"></div>
@@ -207,8 +207,8 @@
         </div>
       </section>
 
-      <section v-if="relatedItems.length > 0" aria-labelledby="related-heading" class="mt-16 border-t border-(--ui-border) pt-12 sm:mt-24">
-        <h2 id="related-heading" class="text-lg font-medium text-(--ui-text-highlighted)">More from {{ category?.name }}</h2>
+      <section v-if="relatedItems.length > 0" aria-labelledby="related-heading" class="mt-16 border-t border-default pt-12 sm:mt-24">
+        <h2 id="related-heading" class="text-lg font-medium text-highlighted">More from {{ category?.name }}</h2>
         <div class="mt-6 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
           <NuxtLink
             v-for="related in relatedItems"
@@ -216,7 +216,7 @@
             :to="`/menu/${related.slug}`"
             class="group relative"
           >
-            <div class="aspect-square overflow-hidden rounded-md bg-(--ui-bg-elevated)">
+            <div class="aspect-square overflow-hidden rounded-md bg-elevated">
               <img
                 v-if="related.image && !related.image.includes('PLACEHOLDER')"
                 :src="related.image"
@@ -225,15 +225,15 @@
                 loading="lazy"
               />
               <div v-else class="flex h-full w-full items-center justify-center px-4 text-center">
-                <span class="text-sm text-(--ui-text-dimmed)">No image yet</span>
+                <span class="text-sm text-dimmed">No image yet</span>
               </div>
             </div>
             <div class="mt-4 flex justify-between gap-4">
               <div>
-                <h3 class="text-sm font-medium text-(--ui-text-highlighted)">{{ related.name }}</h3>
-                <p class="mt-1 text-sm text-(--ui-text-muted)">{{ related.description }}</p>
+                <h3 class="text-sm font-medium text-highlighted">{{ related.name }}</h3>
+                <p class="mt-1 text-sm text-muted">{{ related.description }}</p>
               </div>
-              <p class="shrink-0 text-sm font-medium text-(--ui-text-highlighted)">{{ formatPrice(related) }}</p>
+              <p class="shrink-0 text-sm font-medium text-highlighted">{{ formatPrice(related) }}</p>
             </div>
           </NuxtLink>
         </div>
@@ -242,8 +242,8 @@
 
     <!-- 404 State -->
     <div class="max-w-6xl mx-auto px-4 py-12 text-center" v-else>
-      <h1 class="text-4xl font-bold text-(--ui-text-highlighted) mb-4">Menu Item Not Found</h1>
-      <p class="text-lg text-(--ui-text) mb-6">The menu item you're looking for doesn't exist.</p>
+      <h1 class="text-4xl font-bold text-highlighted mb-4">Menu Item Not Found</h1>
+      <p class="text-lg text-default mb-6">The menu item you're looking for doesn't exist.</p>
       <NuxtLink 
         to="/menu" 
         class="inline-block bg-black text-white px-6 py-3 rounded-full font-semibold hover:bg-gray-800 transition-colors"

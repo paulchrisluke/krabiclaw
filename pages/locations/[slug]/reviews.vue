@@ -257,8 +257,8 @@ function distCount(star: number) {
 
 const failedPhotoIndices = ref<Record<string, boolean>>({})
 
-function handleReviewImageError(reviewId: string, index: number) {
-  failedPhotoIndices.value[`${reviewId}-${index}`] = true
+function handleReviewImageError(reviewId: string | number, index: string | number) {
+  failedPhotoIndices.value[`${String(reviewId)}-${String(index)}`] = true
 }
 
 function initials(name: any) {

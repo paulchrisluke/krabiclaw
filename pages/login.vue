@@ -4,17 +4,17 @@
     <!-- Mascot side -->
     <aside class="hidden lg:flex flex-col items-center justify-center bg-(--kc-coral-50) px-12 py-12">
       <img src="/krabiclaw-login-mascot.png" alt="" class="w-full max-w-115 block" />
-      <p class="text-[14px] text-(--ui-text-muted) text-center max-w-sm mt-5 leading-relaxed">
+      <p class="text-[14px] text-muted text-center max-w-sm mt-5 leading-relaxed">
         "We launched our menu in 12 minutes and got our first online reservation the same night." —
-        <strong class="text-(--ui-text)">Saya, Kikuzuki Krabi</strong>
+        <strong class="text-default">Saya, Kikuzuki Krabi</strong>
       </p>
     </aside>
 
     <!-- Form side -->
     <div class="flex items-center justify-center px-8 py-12">
         <div class="w-full max-w-105">
-          <h1 class="text-[36px] font-extrabold tracking-tight text-(--ui-text) m-0 mb-2">Welcome back</h1>
-          <p class="text-[15px] text-(--ui-text-muted) mb-7">Sign in to manage your restaurant.</p>
+          <h1 class="text-[36px] font-extrabold tracking-tight text-default m-0 mb-2">Welcome back</h1>
+          <p class="text-[15px] text-muted mb-7">Sign in to manage your restaurant.</p>
 
           <UAlert v-if="error" color="error" variant="soft" :description="error" class="mb-4" />
 
@@ -23,7 +23,7 @@
             <button
               @click="handleGoogleSignIn"
               :disabled="loading"
-              class="w-full flex items-center justify-center gap-3 h-11.5 bg-(--ui-bg-elevated) border border-(--ui-border) rounded-[10px] text-[14px] font-semibold text-(--ui-text) hover:bg-(--ui-bg-muted) transition-colors disabled:opacity-50"
+              class="w-full flex items-center justify-center gap-3 h-11.5 bg-elevated border border-default rounded-[10px] text-[14px] font-semibold text-default hover:bg-muted transition-colors disabled:opacity-50"
             >
               <svg class="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -36,9 +36,9 @@
 
             <!-- Divider -->
             <div class="flex items-center gap-3 py-1">
-              <div class="flex-1 h-px bg-(--ui-border)" />
-              <span class="text-[12px] text-(--ui-text-dimmed) uppercase tracking-[0.18em]">or continue with</span>
-              <div class="flex-1 h-px bg-(--ui-border)" />
+              <div class="flex-1 h-px bg-default" />
+              <span class="text-[12px] text-dimmed uppercase tracking-[0.18em]">or continue with</span>
+              <div class="flex-1 h-px bg-default" />
             </div>
 
             <!-- WhatsApp OTP — Step 1 -->
@@ -53,8 +53,8 @@
 
             <!-- WhatsApp OTP — Step 2 -->
             <div v-else-if="otpStep === 'code'" class="space-y-3">
-              <p class="text-sm text-(--ui-text-muted)">
-                A 6-digit code was sent to <strong class="text-(--ui-text)">{{ phone }}</strong> on WhatsApp.
+              <p class="text-sm text-muted">
+                A 6-digit code was sent to <strong class="text-default">{{ phone }}</strong> on WhatsApp.
               </p>
               <UFormField label="Verification code">
                 <UInput v-model="code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" size="lg" color="success" class="w-full font-mono tracking-widest text-center" :disabled="loading" @keydown.enter="handleVerifyOtp" />
@@ -62,7 +62,7 @@
               <UButton block size="lg" color="success" :loading="loading" :disabled="code.length < 6" @click="handleVerifyOtp">
                 Verify and sign in
               </UButton>
-              <button class="w-full text-sm text-(--ui-text-dimmed) hover:text-(--ui-text) transition-colors" @click="otpStep = 'phone'; code = ''; error = null">
+              <button class="w-full text-sm text-dimmed hover:text-default transition-colors" @click="otpStep = 'phone'; code = ''; error = null">
                 ← Use a different number
               </button>
             </div>

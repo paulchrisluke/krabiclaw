@@ -14,7 +14,7 @@
           <!-- Org level -->
           <template v-if="!inSiteWorkspace">
             <div v-if="collapsed" class="flex items-center justify-center">
-              <div class="flex size-8 items-center justify-center rounded-lg bg-(--ui-primary)">
+              <div class="flex size-8 items-center justify-center rounded-lg bg-primary">
                 <span class="text-sm font-bold text-white">K</span>
               </div>
             </div>
@@ -40,7 +40,7 @@
           <!-- Site level — show site name with back button -->
           <template v-else>
             <div v-if="collapsed" class="flex items-center justify-center">
-              <div class="flex size-8 items-center justify-center rounded-lg bg-(--ui-primary)">
+              <div class="flex size-8 items-center justify-center rounded-lg bg-primary">
                 <span class="text-sm font-bold text-white">K</span>
               </div>
             </div>
@@ -102,7 +102,7 @@
           <UDropdownMenu :items="profileMenuItems" :content="{ align: 'start', collisionPadding: 12, side: 'top' }">
             <UButton
               :avatar="{
-                src: sessionData?.user?.image,
+                src: sessionData?.user?.image ?? undefined,
                 loading: 'lazy',
                 alt: sessionData?.user?.name || 'User avatar'
               }"

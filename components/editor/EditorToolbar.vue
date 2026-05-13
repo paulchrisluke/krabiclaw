@@ -1,12 +1,12 @@
 <template>
   <UCard v-if="editMode" class="editor-toolbar fixed top-4 right-4 z-50 min-w-80">
     <!-- Site and Scope Info -->
-    <div class="mb-4 pb-4 border-b border-(--ui-border)">
-      <div class="text-sm font-medium text-(--ui-text-highlighted) mb-2">
+    <div class="mb-4 pb-4 border-b border-default">
+      <div class="text-sm font-medium text-highlighted mb-2">
         {{ context?.site?.name }}
       </div>
       <div class="flex items-center justify-between">
-        <div class="text-sm text-(--ui-text-muted)">Editing:</div>
+        <div class="text-sm text-muted">Editing:</div>
         <USelect 
           v-model="selectedScopeId" 
           :items="scopeOptions"
@@ -19,7 +19,7 @@
     <!-- Draft Status -->
     <div class="mb-4">
       <div class="flex items-center justify-between text-sm">
-        <span class="text-(--ui-text-muted)">Draft Status:</span>
+        <span class="text-muted">Draft Status:</span>
         <UBadge :color="hasDrafts ? 'warning' : 'success'" variant="soft" size="sm">
           {{ hasDrafts ? 'Has drafts' : 'No drafts' }}
         </UBadge>
@@ -68,7 +68,7 @@
     </div>
 
     <!-- Exit Edit Mode -->
-    <div class="mt-4 pt-4 border-t border-(--ui-border)">
+    <div class="mt-4 pt-4 border-t border-default">
       <UButton
         @click="exitEditMode"
         variant="outline"

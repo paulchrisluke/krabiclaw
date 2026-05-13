@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-(--ui-bg-muted)">
+  <div class="min-h-screen bg-muted">
     <slot />
   </div>
 </template>

@@ -1,17 +1,17 @@
 <template>
-  <div class="flex h-screen flex-col overflow-hidden bg-(--ui-bg-muted) text-(--ui-text-highlighted)  ">
-    <header class="flex h-14 shrink-0 items-center justify-between border-b border-(--ui-border) bg-(--ui-bg) px-3  ">
+  <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted  ">
+    <header class="flex h-14 shrink-0 items-center justify-between border-b border-default bg-default px-3  ">
       <div class="flex min-w-0 items-center gap-2">
         <UButton icon="i-heroicons-arrow-left" color="neutral" variant="ghost" size="sm" aria-label="Go back" @click="handleBack" />
         <div class="h-6 w-px bg-gray-200 " />
         <div class="min-w-0">
           <div class="flex items-center gap-2">
-            <p class="truncate text-sm font-semibold text-(--ui-text-highlighted) ">{{ siteName }}</p>
+            <p class="truncate text-sm font-semibold text-highlighted ">{{ siteName }}</p>
             <UBadge :color="serverHasDrafts || localHasChanges ? 'warning' : 'success'" variant="soft" size="xs">
               {{ serverHasDrafts || localHasChanges ? 'Draft' : 'Live' }}
             </UBadge>
           </div>
-          <p class="truncate text-xs text-(--ui-text-muted)">{{ siteDomain }}</p>
+          <p class="truncate text-xs text-muted">{{ siteDomain }}</p>
         </div>
       </div>
 
@@ -75,13 +75,13 @@
 
     <div
       v-if="requiresLocationSelection"
-      class="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-(--ui-bg-muted) p-6"
+      class="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted p-6"
     >
       <UCard class="w-full max-w-xl">
         <div class="text-center">
-          <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-(--ui-text-muted)" />
-          <h1 class="mt-4 text-xl font-semibold text-(--ui-text-highlighted)">Choose a location first</h1>
-          <p class="mt-2 text-sm text-(--ui-text-muted)">
+          <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-muted" />
+          <h1 class="mt-4 text-xl font-semibold text-highlighted">Choose a location first</h1>
+          <p class="mt-2 text-sm text-muted">
             Location and menu pages are edited per physical location, so add or select a location before editing this page.
           </p>
           <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
@@ -113,8 +113,8 @@
     </div>
 
     <div v-else class="grid min-h-0 flex-1 grid-cols-[20rem_minmax(0,1fr)_22rem] overflow-hidden">
-      <aside class="flex min-h-0 flex-col border-r border-(--ui-border) bg-(--ui-bg)  ">
-        <div class="border-b border-(--ui-border) p-3  md:hidden">
+      <aside class="flex min-h-0 flex-col border-r border-default bg-default  ">
+        <div class="border-b border-default p-3  md:hidden">
           <div class="space-y-2">
             <USelect
               v-model="selectedLocationId"
@@ -134,9 +134,9 @@
           </div>
         </div>
 
-        <div class="border-b border-(--ui-border) px-4 py-3 ">
+        <div class="border-b border-default px-4 py-3 ">
           <div class="flex items-center justify-between">
-            <h1 class="text-sm font-semibold text-(--ui-text-highlighted) ">{{ selectedPageLabel }}</h1>
+            <h1 class="text-sm font-semibold text-highlighted ">{{ selectedPageLabel }}</h1>
             <UBadge color="neutral" variant="subtle" size="xs">{{ currentPageGroups.length }} sections</UBadge>
           </div>
         </div>
@@ -150,7 +150,7 @@
         </UAlert>
 
         <div class="min-h-0 flex-1 overflow-y-auto py-2">
-          <div v-for="group in currentPageGroups" :key="group.id" class="border-b border-(--ui-border-muted) py-1 last:border-b-0 ">
+          <div v-for="group in currentPageGroups" :key="group.id" class="border-b border-muted py-1 last:border-b-0 ">
             <UButton
               @click="toggleGroup(group.id)"
               variant="ghost"
@@ -160,12 +160,12 @@
               class="justify-between px-4"
             >
               <span class="flex min-w-0 items-center gap-2">
-                <UIcon :name="group.icon" class="size-4 shrink-0 text-(--ui-text-muted)" />
+                <UIcon :name="group.icon" class="size-4 shrink-0 text-muted" />
                 <span class="truncate text-sm font-medium">{{ group.label }}</span>
               </span>
               <UIcon
                 name="i-heroicons-chevron-down-20-solid"
-                class="size-4 shrink-0 text-(--ui-text-dimmed) transition-transform"
+                class="size-4 shrink-0 text-dimmed transition-transform"
                 :class="{ 'rotate-180': openGroups.includes(group.id) }"
               />
             </UButton>
@@ -184,13 +184,13 @@
                   <span class="flex min-w-0 flex-1 items-start gap-2 text-left">
                     <UIcon
                       :name="fieldSupportsGoogle(fieldKey) ? 'i-heroicons-lock-closed' : 'i-heroicons-bars-3-bottom-left'"
-                      class="mt-0.5 size-4 shrink-0 text-(--ui-text-dimmed)"
+                      class="mt-0.5 size-4 shrink-0 text-dimmed"
                     />
                     <span class="min-w-0 flex-1">
                       <span class="flex items-center gap-2">
                         <span class="truncate text-sm font-medium">{{ getFieldDef(selectedPageId, fieldKey)?.label }}</span>
                       </span>
-                      <span class="block truncate text-xs text-(--ui-text-muted)">{{ fieldPreview(fieldKey) }}</span>
+                      <span class="block truncate text-xs text-muted">{{ fieldPreview(fieldKey) }}</span>
                     </span>
                   </span>
                 </UButton>
@@ -199,7 +199,7 @@
           </div>
         </div>
 
-        <div class="space-y-2 border-t border-(--ui-border) p-3 ">
+        <div class="space-y-2 border-t border-default p-3 ">
           <UButton
             v-if="localHasChanges || serverHasDrafts"
             block
@@ -213,17 +213,17 @@
         </div>
       </aside>
 
-      <main class="flex min-w-0 flex-col overflow-hidden bg-(--ui-bg-elevated)">
-        <div class="flex h-11 shrink-0 items-center justify-between border-b border-(--ui-border) bg-(--ui-bg) px-4  ">
+      <main class="flex min-w-0 flex-col overflow-hidden bg-elevated">
+        <div class="flex h-11 shrink-0 items-center justify-between border-b border-default bg-default px-4  ">
           <div class="flex min-w-0 items-center gap-2">
-            <UIcon name="i-heroicons-globe-alt" class="size-4 text-(--ui-text-muted)" />
-            <p class="truncate text-sm text-(--ui-text-muted)">{{ siteDomain }}{{ currentPagePath }}</p>
+            <UIcon name="i-heroicons-globe-alt" class="size-4 text-muted" />
+            <p class="truncate text-sm text-muted">{{ siteDomain }}{{ currentPagePath }}</p>
           </div>
           <UBadge color="neutral" variant="subtle" size="xs">Preview</UBadge>
         </div>
 
         <div class="min-h-0 flex-1 overflow-auto p-4">
-          <div class="relative mx-auto h-full min-h-[640px] max-w-7xl overflow-hidden rounded-lg border border-(--ui-border) bg-(--ui-bg) shadow-sm  ">
+          <div class="relative mx-auto h-full min-h-[640px] max-w-7xl overflow-hidden rounded-lg border border-default bg-default shadow-sm  ">
         <iframe
           id="site-preview-frame"
           ref="previewFrame"
@@ -234,9 +234,9 @@
         />
         <Transition enter-active-class="transition-opacity duration-200" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="transition-opacity duration-150" leave-from-class="opacity-100" leave-to-class="opacity-0">
           <div v-if="iframeLoading" class="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div class="flex items-center gap-3 rounded-lg border border-(--ui-border) bg-(--ui-bg) px-4 py-3 shadow-sm  ">
-              <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin text-(--ui-text-muted)" />
-              <p class="text-sm text-(--ui-text-muted)">Loading preview...</p>
+            <div class="flex items-center gap-3 rounded-lg border border-default bg-default px-4 py-3 shadow-sm  ">
+              <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin text-muted" />
+              <p class="text-sm text-muted">Loading preview...</p>
             </div>
           </div>
         </Transition>
@@ -244,13 +244,13 @@
         </div>
       </main>
 
-      <aside class="flex min-h-0 flex-col border-l border-(--ui-border) bg-(--ui-bg)  ">
-        <div class="flex shrink-0 items-start justify-between border-b border-(--ui-border) px-4 py-3 ">
+      <aside class="flex min-h-0 flex-col border-l border-default bg-default  ">
+        <div class="flex shrink-0 items-start justify-between border-b border-default px-4 py-3 ">
           <div class="min-w-0">
-            <p class="text-sm font-semibold text-(--ui-text-highlighted) ">
+            <p class="text-sm font-semibold text-highlighted ">
               {{ activeFieldDef?.label || 'Content settings' }}
             </p>
-            <p class="truncate text-xs text-(--ui-text-muted)">
+            <p class="truncate text-xs text-muted">
               {{ activeFieldDef ? `${selectedPageLabel} / ${selectedLocationLabel} / ${activeFieldDef.label}` : `${selectedPageLabel} / ${selectedLocationLabel}` }}
             </p>
           </div>
@@ -267,7 +267,7 @@
 
         <div v-if="activeField" class="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
           <div v-if="activeFieldDef?.type === 'text'" class="space-y-2">
-            <label :for="`field-${activeField}`" class="block text-sm font-medium text-(--ui-text)">{{ activeFieldDef.label }}</label>
+            <label :for="`field-${activeField}`" class="block text-sm font-medium text-default">{{ activeFieldDef.label }}</label>
             <UInput
               :id="`field-${activeField}`"
               v-model="editingValue"
@@ -275,11 +275,11 @@
               size="sm"
               class="w-full"
             />
-            <p v-if="activeFieldDef?.defaultValue" class="text-xs text-(--ui-text-muted)">Default: {{ activeFieldDef.defaultValue }}</p>
+            <p v-if="activeFieldDef?.defaultValue" class="text-xs text-muted">Default: {{ activeFieldDef.defaultValue }}</p>
           </div>
 
           <div v-else-if="activeFieldDef?.type === 'textarea'" class="space-y-2">
-            <label :for="`field-${activeField}`" class="block text-sm font-medium text-(--ui-text)">{{ activeFieldDef.label }}</label>
+            <label :for="`field-${activeField}`" class="block text-sm font-medium text-default">{{ activeFieldDef.label }}</label>
             <UTextarea
               :id="`field-${activeField}`"
               v-model="editingValue"
@@ -290,12 +290,12 @@
               size="sm"
               class="w-full"
             />
-            <p v-if="activeFieldDef?.defaultValue" class="text-xs text-(--ui-text-muted)">Default: {{ activeFieldDef.defaultValue }}</p>
+            <p v-if="activeFieldDef?.defaultValue" class="text-xs text-muted">Default: {{ activeFieldDef.defaultValue }}</p>
           </div>
 
           <div v-else-if="activeFieldDef?.type === 'richtext'" class="space-y-2">
-            <label :for="`field-${activeField}`" class="block text-sm font-medium text-(--ui-text)">{{ activeFieldDef.label }}</label>
-            <div class="flex flex-wrap gap-1 rounded-md border border-(--ui-border) bg-(--ui-bg-muted) p-1">
+            <label :for="`field-${activeField}`" class="block text-sm font-medium text-default">{{ activeFieldDef.label }}</label>
+            <div class="flex flex-wrap gap-1 rounded-md border border-default bg-muted p-1">
               <UButton
                 v-for="cmd in richtextCommands"
                 :key="cmd.cmd"
@@ -309,7 +309,7 @@
             <div
               :id="`field-${activeField}`"
               contenteditable="true"
-              class="prose prose-sm min-h-40 w-full max-w-none rounded-md border border-(--ui-border) bg-(--ui-bg) px-3 py-2 text-sm text-(--ui-text-highlighted) focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              class="prose prose-sm min-h-40 w-full max-w-none rounded-md border border-default bg-default px-3 py-2 text-sm text-highlighted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               :data-placeholder="activeFieldDef?.placeholder || 'Start typing...'"
               v-html="DOMPurify.sanitize(editingValue || '')"
               @blur="onRichTextBlur"
@@ -319,12 +319,12 @@
           <UCard v-if="activeFieldRequiresGoogleUpgrade">
             <div class="space-y-4">
               <div class="flex items-start gap-3">
-                <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-(--ui-bg-elevated) text-(--ui-primary)">
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-elevated text-primary">
                   <UIcon name="i-simple-icons-google" class="size-5" />
                 </div>
                 <div>
-                  <p class="text-sm font-semibold text-(--ui-text-highlighted) ">Auto-sync from Google Business</p>
-                  <p class="mt-1 text-sm text-(--ui-text-muted)">Save hours keeping your site updated — connect once, sync forever.</p>
+                  <p class="text-sm font-semibold text-highlighted ">Auto-sync from Google Business</p>
+                  <p class="mt-1 text-sm text-muted">Save hours keeping your site updated — connect once, sync forever.</p>
                 </div>
               </div>
               <UButton to="/dashboard/billing" color="primary" block>
@@ -335,12 +335,12 @@
 
           <div
             v-else-if="activeFieldDef?.googleLocked"
-            class="flex items-center gap-2 rounded-lg border border-(--ui-border) bg-(--ui-bg-muted) px-3 py-2 text-sm text-(--ui-text)"
+            class="flex items-center gap-2 rounded-lg border border-default bg-muted px-3 py-2 text-sm text-default"
           >
             <UBadge color="neutral" variant="soft" size="sm">
               Synced from Google Business
             </UBadge>
-            <span class="text-xs text-(--ui-text-muted)">Manual edits remain available.</span>
+            <span class="text-xs text-muted">Manual edits remain available.</span>
           </div>
 
           <UButton
@@ -358,9 +358,9 @@
 
         <div v-else class="flex min-h-0 flex-1 items-center justify-center p-6 text-center">
           <div>
-            <UIcon name="i-heroicons-cursor-arrow-rays" class="mx-auto mb-3 size-8 text-(--ui-text-dimmed)" />
-            <p class="text-sm font-medium text-(--ui-text-highlighted) ">Select a field</p>
-            <p class="mt-1 text-sm text-(--ui-text-muted)">Choose editable content from the page structure.</p>
+            <UIcon name="i-heroicons-cursor-arrow-rays" class="mx-auto mb-3 size-8 text-dimmed" />
+            <p class="text-sm font-medium text-highlighted ">Select a field</p>
+            <p class="mt-1 text-sm text-muted">Choose editable content from the page structure.</p>
           </div>
         </div>
       </aside>

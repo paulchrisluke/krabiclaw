@@ -29,14 +29,14 @@
         <UCard v-if="billing">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p class="text-sm text-(--ui-text-muted)">Current plan</p>
+              <p class="text-sm text-muted">Current plan</p>
               <div class="mt-2 flex flex-wrap items-center gap-2">
-                <h2 class="text-3xl font-semibold capitalize text-(--ui-text-highlighted)">{{ billing.plan }}</h2>
+                <h2 class="text-3xl font-semibold capitalize text-highlighted">{{ billing.plan }}</h2>
                 <UBadge :color="billing.plan === 'free' ? 'neutral' : 'success'" variant="soft">
                   {{ billing.subscriptionStatus || 'active' }}
                 </UBadge>
               </div>
-              <p v-if="billing.currentPeriodEnd" class="mt-2 text-sm text-(--ui-text-muted)">
+              <p v-if="billing.currentPeriodEnd" class="mt-2 text-sm text-muted">
                 Renews {{ formatDate(billing.currentPeriodEnd) }}
               </p>
             </div>
@@ -160,23 +160,23 @@
             <div class="flex h-full flex-col">
               <div>
                 <div class="flex items-center justify-between gap-3">
-                  <h2 class="text-lg font-semibold text-(--ui-text-highlighted)">{{ plan.name }}</h2>
+                  <h2 class="text-lg font-semibold text-highlighted">{{ plan.name }}</h2>
                   <div class="flex gap-2">
                     <UBadge v-if="plan.badge && billing?.plan !== plan.id" color="primary" variant="soft">{{ plan.badge }}</UBadge>
                     <UBadge v-if="billing?.plan === plan.id" color="success" variant="soft">Current</UBadge>
                   </div>
                 </div>
-                <p class="mt-2 text-3xl font-semibold text-(--ui-text-highlighted)">
+                <p class="mt-2 text-3xl font-semibold text-highlighted">
                   {{ displayPrice(plan, annual) }}
-                  <span v-if="plan.prices?.length" class="text-sm font-normal text-(--ui-text-muted)">
+                  <span v-if="plan.prices?.length" class="text-sm font-normal text-muted">
                     {{ annual && plan.id === 'agency' ? '/yr' : annual ? '/location/yr' : plan.id === 'agency' ? '/mo' : '/location/mo' }}
                   </span>
                 </p>
               </div>
 
-              <ul class="mt-5 flex-1 space-y-2 text-sm text-(--ui-text)">
+              <ul class="mt-5 flex-1 space-y-2 text-sm text-default">
                 <li v-for="feature in plan.features" :key="feature" class="flex gap-2">
-                  <UIcon name="i-heroicons-check-circle" class="mt-0.5 size-4 shrink-0 text-(--ui-primary)" />
+                  <UIcon name="i-heroicons-check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>{{ feature }}</span>
                 </li>
               </ul>

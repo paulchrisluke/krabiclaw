@@ -69,24 +69,24 @@
                 :disabled="loading"
                 @input="onPlacesInput"
               />
-              <div v-if="placesResults.length" class="mt-1 overflow-hidden rounded-md border border-(--ui-border) bg-(--ui-bg) shadow-sm">
+              <div v-if="placesResults.length" class="mt-1 overflow-hidden rounded-md border border-default bg-default shadow-sm">
                 <button
                   v-for="result in placesResults"
                   :key="result.placeId"
                   type="button"
-                  class="flex w-full flex-col px-4 py-3 text-left text-sm hover:bg-(--ui-bg-elevated)"
+                  class="flex w-full flex-col px-4 py-3 text-left text-sm hover:bg-elevated"
                   @click="selectPlace(result.placeId)"
                 >
-                  <span class="font-medium text-(--ui-text-highlighted)">{{ result.name }}</span>
-                  <span class="text-xs text-(--ui-text-muted)">{{ result.formattedAddress }}</span>
+                  <span class="font-medium text-highlighted">{{ result.name }}</span>
+                  <span class="text-xs text-muted">{{ result.formattedAddress }}</span>
                 </button>
               </div>
             </UFormField>
 
             <div class="flex items-center gap-1.5">
-              <div class="h-px flex-1 bg-(--ui-border)" />
-              <span class="text-xs text-(--ui-text-muted)">or fill in manually</span>
-              <div class="h-px flex-1 bg-(--ui-border)" />
+              <div class="h-px flex-1 bg-default" />
+              <span class="text-xs text-muted">or fill in manually</span>
+              <div class="h-px flex-1 bg-default" />
             </div>
 
             <UFormField label="Location Name">
@@ -142,14 +142,14 @@
           <!-- Step 3: Success -->
           <div v-else-if="currentStep === 2" class="space-y-6 text-center">
             <div class="flex justify-center">
-              <div class="flex size-16 items-center justify-center rounded-full bg-(--ui-bg-elevated)">
-                <UIcon name="i-heroicons-check-circle" class="size-10 text-(--ui-success)" />
+              <div class="flex size-16 items-center justify-center rounded-full bg-elevated">
+                <UIcon name="i-heroicons-check-circle" class="size-10 text-success" />
               </div>
             </div>
 
             <div>
-              <h2 class="text-2xl font-bold text-(--ui-text-highlighted)">Your website is ready!</h2>
-              <p class="mt-2 text-(--ui-text-muted)">
+              <h2 class="text-2xl font-bold text-highlighted">Your website is ready!</h2>
+              <p class="mt-2 text-muted">
                 {{ form.restaurantName }} has been created successfully.
               </p>
             </div>

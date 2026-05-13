@@ -3,7 +3,7 @@
     <!-- Loading state -->
     <template v-if="loading">
       <UCard :ui="{ body: 'p-0' }">
-        <div v-for="i in 5" :key="i" class="flex items-center gap-4 border-b border-(--ui-border) px-4 py-3.5 last:border-0">
+        <div v-for="i in 5" :key="i" class="flex items-center gap-4 border-b border-default px-4 py-3.5 last:border-0">
           <USkeleton class="h-4 w-40" />
           <USkeleton class="ml-auto h-4 w-16" />
           <USkeleton class="h-5 w-20 rounded-full" />
@@ -23,9 +23,9 @@
     <!-- No menus — empty state -->
     <UCard v-else-if="!hasMenus">
       <div class="py-10 text-center">
-        <UIcon name="i-heroicons-list-bullet" class="mx-auto size-10 text-(--ui-text-muted)" />
-        <h2 class="mt-4 text-base font-semibold text-(--ui-text-highlighted)">No menus yet</h2>
-        <p class="mt-1 text-sm text-(--ui-text-muted)">Create a menu to start adding sections and items.</p>
+        <UIcon name="i-heroicons-list-bullet" class="mx-auto size-10 text-muted" />
+        <h2 class="mt-4 text-base font-semibold text-highlighted">No menus yet</h2>
+        <p class="mt-1 text-sm text-muted">Create a menu to start adding sections and items.</p>
         <template v-if="!showCreateMenuForm">
           <UButton class="mt-5" icon="i-heroicons-plus" @click="showCreateMenuForm = true">Create menu</UButton>
         </template>
@@ -57,7 +57,7 @@
             @update:model-value="handleMenuChange"
           />
           <div v-else class="flex items-center gap-2">
-            <span class="text-sm font-medium text-(--ui-text-highlighted)">{{ currentMenu?.name }}</span>
+            <span class="text-sm font-medium text-highlighted">{{ currentMenu?.name }}</span>
             <UBadge :color="currentMenu?.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs">
               {{ currentMenu?.status }}
             </UBadge>
@@ -72,8 +72,8 @@
       </div>
 
       <!-- Inline create menu form -->
-      <div v-if="showCreateMenuForm && hasMenus" class="rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated) p-4">
-        <h3 class="mb-3 text-sm font-semibold text-(--ui-text-highlighted)">New menu</h3>
+      <div v-if="showCreateMenuForm && hasMenus" class="rounded-lg border border-default bg-elevated p-4">
+        <h3 class="mb-3 text-sm font-semibold text-highlighted">New menu</h3>
         <div class="space-y-3">
           <UFormField label="Menu name">
             <UInput v-model="createMenuForm.name" placeholder="Lunch Menu" autofocus />
@@ -89,11 +89,11 @@
       </div>
 
       <!-- Single bordered list: sections + items -->
-      <div class="overflow-hidden rounded-lg border border-(--ui-border)">
+      <div class="overflow-hidden rounded-lg border border-default">
         <template v-for="section in allSections" :key="section">
           <!-- Section header row -->
-          <div class="flex items-center justify-between gap-4 border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-2.5">
-            <span class="text-xs font-semibold uppercase tracking-wider text-(--ui-text-muted)">{{ section }}</span>
+          <div class="flex items-center justify-between gap-4 border-b border-default bg-elevated px-4 py-2.5">
+            <span class="text-xs font-semibold uppercase tracking-wider text-muted">{{ section }}</span>
             <UButton size="xs" color="neutral" variant="ghost" icon="i-heroicons-plus" @click="openAddItem(section)">
               Add item
             </UButton>
@@ -104,22 +104,22 @@
             <!-- Collapsed item row -->
             <div
               v-if="expandedItemId !== item.id"
-              class="flex cursor-pointer items-center gap-4 border-b border-(--ui-border) px-4 py-3.5 last:border-0 hover:bg-(--ui-bg-elevated)"
+              class="flex cursor-pointer items-center gap-4 border-b border-default px-4 py-3.5 last:border-0 hover:bg-elevated"
               @click="openEditItem(item)"
             >
               <div class="min-w-0 flex-1">
-                <span class="text-sm font-medium text-(--ui-text-highlighted)">{{ item.name }}</span>
-                <span v-if="item.description" class="ml-2 truncate text-sm text-(--ui-text-muted)">{{ item.description }}</span>
+                <span class="text-sm font-medium text-highlighted">{{ item.name }}</span>
+                <span v-if="item.description" class="ml-2 truncate text-sm text-muted">{{ item.description }}</span>
               </div>
-              <span v-if="item.price" class="shrink-0 text-sm font-medium text-(--ui-text)">{{ item.price }}</span>
+              <span v-if="item.price" class="shrink-0 text-sm font-medium text-default">{{ item.price }}</span>
               <UBadge :color="item.available ? 'success' : 'neutral'" variant="soft" size="xs">
                 {{ item.available ? 'Available' : 'Unavailable' }}
               </UBadge>
-              <UIcon name="i-heroicons-pencil-square" class="size-4 shrink-0 text-(--ui-text-muted)" />
+              <UIcon name="i-heroicons-pencil-square" class="size-4 shrink-0 text-muted" />
             </div>
 
             <!-- Expanded inline edit -->
-            <div v-else class="border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-4 last:border-0">
+            <div v-else class="border-b border-default bg-elevated px-4 py-4 last:border-0">
               <div class="space-y-3">
                 <div class="grid gap-3 sm:grid-cols-2">
                   <UFormField label="Name">
@@ -147,13 +147,13 @@
           <!-- Empty section row -->
           <div
             v-if="!menuItemsBySection[section]?.length && addingItemSection !== section"
-            class="border-b border-(--ui-border) px-4 py-3 text-sm text-(--ui-text-muted) last:border-0"
+            class="border-b border-default px-4 py-3 text-sm text-muted last:border-0"
           >
             No items yet. Click <button class="underline" @click="openAddItem(section)">Add item</button> to get started.
           </div>
 
           <!-- Add item inline form -->
-          <div v-if="addingItemSection === section" class="border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-4 last:border-0">
+          <div v-if="addingItemSection === section" class="border-b border-default bg-elevated px-4 py-4 last:border-0">
             <div class="space-y-3">
               <div class="grid gap-3 sm:grid-cols-2">
                 <UFormField label="Name">
@@ -181,7 +181,7 @@
             Add section
           </UButton>
         </div>
-        <div v-else class="bg-(--ui-bg-elevated) px-4 py-4">
+        <div v-else class="bg-elevated px-4 py-4">
           <div class="space-y-3">
             <UFormField label="Section name">
               <UInput v-model="newSectionName" placeholder="Starters, Mains, Desserts..." autofocus />
@@ -199,6 +199,7 @@
 
 <script setup lang="ts">
 import { useMenuEditor } from '~/composables/useMenuEditor'
+import { useToast } from '~/composables/useToast'
 
 const props = defineProps<{
   siteId: string
@@ -251,8 +252,9 @@ const handleCreateMenu = async () => {
     createMenuForm.name = ''
     createMenuForm.description = ''
     showCreateMenuForm.value = false
-  } catch {
-    toast.add({ description: 'Failed to create menu', color: 'error' })
+  } catch (err) {
+    console.error('handleCreateMenu failed:', err)
+    toast.addToast('Failed to create menu', 'error')
   }
 }
 
@@ -281,9 +283,10 @@ const handleSaveItem = async (itemId: string) => {
       available: editForm.available
     })
     expandedItemId.value = null
-    toast.add({ description: 'Item saved', color: 'success' })
-  } catch {
-    toast.add({ description: 'Failed to save item', color: 'error' })
+    toast.addToast('Item saved', 'success')
+  } catch (err) {
+    console.error('handleSaveItem failed:', err)
+    toast.addToast('Failed to save item', 'error')
   }
 }
 
@@ -291,9 +294,10 @@ const handleDeleteItem = async (itemId: string) => {
   try {
     await deleteMenuItem(itemId)
     expandedItemId.value = null
-    toast.add({ description: 'Item deleted', color: 'neutral' })
-  } catch {
-    toast.add({ description: 'Failed to delete item', color: 'error' })
+    toast.addToast('Item deleted', 'success')
+  } catch (err) {
+    console.error('handleDeleteItem failed:', err)
+    toast.addToast('Failed to delete item', 'error')
   }
 }
 
@@ -330,9 +334,10 @@ const handleAddItem = async (section: string) => {
     })
     pendingSections.value = pendingSections.value.filter((s: string) => s !== section)
     addingItemSection.value = null
-    toast.add({ description: 'Item added', color: 'success' })
-  } catch {
-    toast.add({ description: 'Failed to add item', color: 'error' })
+    toast.addToast('Item added', 'success')
+  } catch (err) {
+    console.error('handleAddItem failed:', err)
+    toast.addToast('Failed to add item', 'error')
   }
 }
 

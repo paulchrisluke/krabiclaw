@@ -159,7 +159,11 @@ export async function verifyOAuthState<T = Record<string, unknown>>(
     const expected = new Uint8Array(expectedSig)
     if (expected.length !== providedSig.length) return null
     let diff = 0
-    for (let i = 0; i < expected.length; i++) diff |= expected[i] ^ providedSig[i]
+    for (let i = 0; i < expected.length; i++) {
+      const expectedByte = expected[i] ?? 0
+      const providedByte = providedSig[i] ?? 0
+      diff |= expectedByte ^ providedByte
+    }
     if (diff !== 0) return null
     const payloadBytes = base64urlDecode(payloadB64)
     return JSON.parse(new TextDecoder().decode(payloadBytes)) as T

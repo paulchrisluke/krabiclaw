@@ -99,7 +99,7 @@
    - text-dimmed: #6B7198  (muted, 4.8:1 on bg — eyebrows / captions)
    - Coral, teal, yellow are unchanged — vibrant accents work on dark surfaces.
 
-   Hardcoded text-(--kc-navy) in templates must be changed to text-(--ui-text)
+   Hardcoded text-(--kc-navy) in templates must be changed to text-default
    individually — see index.vue. Do NOT override --kc-navy here.
 */
 .dark .platform-theme {

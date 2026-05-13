@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-(--ui-bg) text-(--ui-text)">
+  <div class="min-h-screen bg-default text-default">
     <SayaHero
       :title="getField('hero.title', 'Reserve a Table')"
       :subtitle="getField('hero.subtitle', 'Book Your Authentic Dining Experience')"
@@ -9,8 +9,8 @@
       <div class="grid md:grid-cols-2 gap-12">
         <!-- Reservation Form -->
         <div>
-          <h2 class="text-2xl md:text-3xl font-bold text-(--ui-text) mb-6">Make a Reservation</h2>
-          <UCard class="rounded-lg bg-(--ui-bg-muted)">
+          <h2 class="text-2xl md:text-3xl font-bold text-default mb-6">Make a Reservation</h2>
+          <UCard class="rounded-lg bg-muted">
             <UForm :state="reservationForm" :validate="validateReservation" class="space-y-6" @submit="handleReservation">
               <div class="grid gap-5 md:grid-cols-2">
                 <UFormField label="Name" name="name" required>
@@ -103,19 +103,19 @@
 
         <!-- Sidebar Info -->
         <div>
-          <h2 class="text-2xl md:text-3xl font-bold text-(--ui-text) mb-6">Reservation Details</h2>
+          <h2 class="text-2xl md:text-3xl font-bold text-default mb-6">Reservation Details</h2>
 
-          <UCard class="mb-6 rounded-lg bg-(--ui-bg-muted)">
-            <h3 class="text-lg font-semibold text-(--ui-text) mb-4">Contact Information</h3>
+          <UCard class="mb-6 rounded-lg bg-muted">
+            <h3 class="text-lg font-semibold text-default mb-4">Contact Information</h3>
             <div class="space-y-2">
-              <p class="text-(--ui-text-muted)"><strong class="text-(--ui-text)">Phone:</strong> {{ contactPhone }}</p>
-              <p class="text-(--ui-text-muted)"><strong class="text-(--ui-text)">Email:</strong> {{ contactEmail }}</p>
+              <p class="text-muted"><strong class="text-default">Phone:</strong> {{ contactPhone }}</p>
+              <p class="text-muted"><strong class="text-default">Email:</strong> {{ contactEmail }}</p>
             </div>
           </UCard>
 
-          <UCard class="mb-6 rounded-lg bg-(--ui-bg-muted)">
-            <h3 class="text-lg font-semibold text-(--ui-text) mb-4">Reservation Policies</h3>
-            <div v-html="policiesBody" class="text-(--ui-text-muted)" />
+          <UCard class="mb-6 rounded-lg bg-muted">
+            <h3 class="text-lg font-semibold text-default mb-4">Reservation Policies</h3>
+            <div v-html="policiesBody" class="text-muted" />
           </UCard>
 
           <div class="space-y-4">

@@ -1,12 +1,12 @@
 <template>
   <div class="container mx-auto px-4 py-16">
     <div class="max-w-3xl mx-auto">
-      <NuxtLink to="/docs" class="inline-flex items-center text-(--ui-primary) hover:text-(--ui-primary) mb-6">
+      <NuxtLink to="/docs" class="inline-flex items-center text-primary hover:text-primary mb-6">
         ← Back to Documentation
       </NuxtLink>
 
       <div v-if="loading" class="text-center py-12">
-        <p class="text-(--ui-text-muted)">Loading...</p>
+        <p class="text-muted">Loading...</p>
       </div>
 
       <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-lg p-6">
@@ -14,8 +14,8 @@
       </div>
 
       <div v-else>
-        <h1 class="text-4xl font-bold text-(--ui-text) mb-6">{{ doc.title }}</h1>
-        <div class="prose prose-lg max-w-none text-(--ui-text)" v-html="renderedContent"></div>
+        <h1 class="text-4xl font-bold text-default mb-6">{{ doc.title }}</h1>
+        <div class="prose prose-lg max-w-none text-default" v-html="renderedContent"></div>
       </div>
     </div>
   </div>

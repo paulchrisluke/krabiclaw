@@ -1,6 +1,6 @@
 <template>
   <NuxtLink :to="`/menu/${item.slug}`" class="group block">
-    <div class="aspect-square w-full overflow-hidden rounded-2xl bg-(--ui-bg-elevated) relative">
+    <div class="aspect-square w-full overflow-hidden rounded-2xl bg-elevated relative">
 
       <!-- Video support -->
       <video
@@ -44,8 +44,8 @@
 
     <!-- Content below image -->
     <div class="mt-3 px-1">
-      <h3 class="font-semibold text-(--ui-text) text-base leading-tight">{{ item.name }}</h3>
-      <p v-if="item.description" class="mt-1 text-sm text-(--ui-text-muted) line-clamp-2">
+      <h3 class="font-semibold text-default text-base leading-tight">{{ item.name }}</h3>
+      <p v-if="item.description" class="mt-1 text-sm text-muted line-clamp-2">
         {{ item.description }}
       </p>
     </div>

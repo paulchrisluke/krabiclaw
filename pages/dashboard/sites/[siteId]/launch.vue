@@ -31,8 +31,8 @@
               <UBadge :color="readiness.overall_ready ? 'success' : 'warning'" variant="soft">
                 {{ readiness.overall_ready ? 'Ready' : 'Needs work' }}
               </UBadge>
-              <h2 class="mt-3 text-3xl font-semibold text-(--ui-text-highlighted)">{{ readinessScore }}% complete</h2>
-              <p class="mt-2 text-sm text-(--ui-text-muted)">
+              <h2 class="mt-3 text-3xl font-semibold text-highlighted">{{ readinessScore }}% complete</h2>
+              <p class="mt-2 text-sm text-muted">
                 {{ readiness.missing_critical }} critical and {{ readiness.missing_optional }} optional item{{ readiness.missing_optional === 1 ? '' : 's' }} remaining.
               </p>
             </div>
@@ -41,16 +41,16 @@
               <UProgress :model-value="readinessScore" />
               <div class="mt-4 grid grid-cols-3 gap-3 text-center">
                 <div>
-                  <p class="text-2xl font-semibold text-(--ui-text-highlighted)">{{ completedCount }}</p>
-                  <p class="text-xs text-(--ui-text-muted)">Done</p>
+                  <p class="text-2xl font-semibold text-highlighted">{{ completedCount }}</p>
+                  <p class="text-xs text-muted">Done</p>
                 </div>
                 <div>
-                  <p class="text-2xl font-semibold text-(--ui-text-highlighted)">{{ readiness.missing_critical }}</p>
-                  <p class="text-xs text-(--ui-text-muted)">Critical</p>
+                  <p class="text-2xl font-semibold text-highlighted">{{ readiness.missing_critical }}</p>
+                  <p class="text-xs text-muted">Critical</p>
                 </div>
                 <div>
-                  <p class="text-2xl font-semibold text-(--ui-text-highlighted)">{{ readiness.missing_optional }}</p>
-                  <p class="text-xs text-(--ui-text-muted)">Optional</p>
+                  <p class="text-2xl font-semibold text-highlighted">{{ readiness.missing_optional }}</p>
+                  <p class="text-xs text-muted">Optional</p>
                 </div>
               </div>
             </div>
@@ -59,10 +59,10 @@
 
         <UCard v-if="readiness.action_items.length > 0">
           <template #header>
-            <h2 class="font-semibold text-(--ui-text-highlighted)">Action Items</h2>
+            <h2 class="font-semibold text-highlighted">Action Items</h2>
           </template>
 
-          <div class="divide-y divide-(--ui-border)">
+          <div class="divide-y divide-default">
             <div
               v-for="item in readiness.action_items"
               :key="`${item.section}-${item.item}`"
@@ -73,9 +73,9 @@
                   <UBadge :color="item.priority === 'critical' ? 'error' : 'warning'" variant="soft" size="xs">
                     {{ item.priority }}
                   </UBadge>
-                  <span class="text-xs text-(--ui-text-muted)">{{ item.section }}</span>
+                  <span class="text-xs text-muted">{{ item.section }}</span>
                 </div>
-                <p class="mt-2 font-medium text-(--ui-text-highlighted)">{{ item.description }}</p>
+                <p class="mt-2 font-medium text-highlighted">{{ item.description }}</p>
               </div>
 
               <UButton
@@ -99,7 +99,7 @@
           >
             <template #header>
               <div class="flex items-center justify-between gap-4">
-                <h2 class="font-semibold text-(--ui-text-highlighted)">{{ section.label }}</h2>
+                <h2 class="font-semibold text-highlighted">{{ section.label }}</h2>
                 <UBadge :color="section.complete ? 'success' : 'warning'" variant="soft">
                   {{ section.complete ? 'Complete' : 'Incomplete' }}
                 </UBadge>
@@ -112,10 +112,10 @@
                 :key="item.label"
                 class="flex items-center justify-between gap-4"
               >
-                <span class="text-sm text-(--ui-text)">{{ item.label }}</span>
+                <span class="text-sm text-default">{{ item.label }}</span>
                 <UIcon
                   :name="item.checked ? 'i-heroicons-check-circle' : 'i-heroicons-x-circle'"
-                  :class="item.checked ? 'text-(--ui-success)' : 'text-(--ui-text-muted)'"
+                  :class="item.checked ? 'text-success' : 'text-muted'"
                   class="size-5 shrink-0"
                 />
               </div>

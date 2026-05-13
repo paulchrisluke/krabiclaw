@@ -14,7 +14,7 @@
 
           <div class="flex items-center gap-4">
             <UAvatar
-              :src="sessionData?.user?.image"
+              :src="sessionData?.user?.image ?? undefined"
               :alt="sessionData?.user?.name || 'User avatar'"
               size="lg"
             />
@@ -37,7 +37,7 @@
             </div>
             <div>
               <p class="text-sm text-muted">Role</p>
-              <p class="mt-1 font-medium capitalize text-highlighted">{{ organization.role || 'Member' }}</p>
+              <p class="mt-1 font-medium capitalize text-highlighted">{{ organizationRole }}</p>
             </div>
           </div>
 
@@ -142,6 +142,13 @@ definePageMeta({ layout: 'dashboard' })
 const { data: sessionData } = useAuth()
 const organizationsState = authClient.useListOrganizations()
 const organization = computed(() => unref(organizationsState)?.data?.[0] || null)
+const organizationRole = computed(() => {
+  const metadata = organization.value?.metadata
+  if (metadata && typeof metadata === 'object' && 'role' in metadata && typeof metadata.role === 'string' && metadata.role.trim()) {
+    return metadata.role.trim()
+  }
+  return 'Member'
+})
 
 const deleteModalOpen = ref(false)
 const deleteConfirmText = ref('')

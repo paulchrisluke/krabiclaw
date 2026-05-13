@@ -6,16 +6,16 @@
           <USkeleton class="h-5 w-32" />
         </div>
         <div v-else-if="locations.length > 1" class="flex items-center gap-2">
-          <UIcon name="i-heroicons-map-pin" class="size-4 shrink-0 text-(--ui-text-muted)" />
+          <UIcon name="i-heroicons-map-pin" class="size-4 shrink-0 text-muted" />
           <USelect
-            :model-value="locationId"
+            :model-value="locationId ?? undefined"
             :items="locationSelectItems"
             size="sm"
             class="w-48"
             @update:model-value="handleLocationChange"
           />
         </div>
-        <div v-else-if="selectedLocation" class="flex items-center gap-1.5 text-(--ui-text-muted)">
+        <div v-else-if="selectedLocation" class="flex items-center gap-1.5 text-muted">
           <UIcon name="i-heroicons-map-pin" class="size-4 shrink-0" />
           <span>{{ selectedLocation.title }}</span>
         </div>
@@ -46,9 +46,9 @@
 
       <UCard v-else-if="locations.length === 0">
         <div class="mx-auto max-w-md py-10 text-center">
-          <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-(--ui-text-muted)" />
-          <h2 class="mt-4 text-xl font-semibold text-(--ui-text-highlighted)">Add a location first</h2>
-          <p class="mt-2 text-sm text-(--ui-text-muted)">Menus are managed per physical location.</p>
+          <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-muted" />
+          <h2 class="mt-4 text-xl font-semibold text-highlighted">Add a location first</h2>
+          <p class="mt-2 text-sm text-muted">Menus are managed per physical location.</p>
           <UButton class="mt-6" :to="`/dashboard/sites/${siteId}/locations`" icon="i-heroicons-plus" color="primary">
             Add Location
           </UButton>

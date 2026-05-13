@@ -10,44 +10,44 @@
       <UCard class="mb-12">
         <div
           v-html="sanitizedIntro"
-          class="prose prose-lg max-w-none text-(--ui-text-muted) [--tw-prose-body:var(--ui-text-muted)] [--tw-prose-bold:var(--ui-text)]"
+          class="prose prose-lg max-w-none text-muted"
         />
       </UCard>
 
       <div class="grid md:grid-cols-2 gap-12">
         <!-- Contact Details -->
         <div>
-          <h2 class="text-2xl md:text-3xl font-bold text-(--ui-text) mb-6">Contact Information</h2>
+          <h2 class="text-2xl md:text-3xl font-bold text-default mb-6">Contact Information</h2>
           <div class="space-y-6">
             <div v-if="businessName">
-              <h3 class="font-semibold text-(--ui-text) mb-1 uppercase tracking-wider text-xs">Restaurant</h3>
-              <p class="text-(--ui-text-muted)">{{ businessName }}</p>
+              <h3 class="font-semibold text-default mb-1 uppercase tracking-wider text-xs">Restaurant</h3>
+              <p class="text-muted">{{ businessName }}</p>
             </div>
             <div v-if="businessAddress">
-              <h3 class="font-semibold text-(--ui-text) mb-1 uppercase tracking-wider text-xs">Address</h3>
-              <p class="text-(--ui-text-muted)">{{ businessAddress }}</p>
+              <h3 class="font-semibold text-default mb-1 uppercase tracking-wider text-xs">Address</h3>
+              <p class="text-muted">{{ businessAddress }}</p>
             </div>
             <div v-if="businessPhone">
-              <h3 class="font-semibold text-(--ui-text) mb-1 uppercase tracking-wider text-xs">Phone</h3>
-              <p class="text-(--ui-text-muted)">{{ businessPhone }}</p>
+              <h3 class="font-semibold text-default mb-1 uppercase tracking-wider text-xs">Phone</h3>
+              <p class="text-muted">{{ businessPhone }}</p>
             </div>
             <div v-if="businessHours">
-              <h3 class="font-semibold text-(--ui-text) mb-1 uppercase tracking-wider text-xs">Opening Hours</h3>
-              <p class="text-(--ui-text-muted)">{{ businessHours }}</p>
+              <h3 class="font-semibold text-default mb-1 uppercase tracking-wider text-xs">Opening Hours</h3>
+              <p class="text-muted">{{ businessHours }}</p>
             </div>
           </div>
           <div class="mt-8">
-            <h3 class="font-semibold text-(--ui-text) mb-4">Follow Us</h3>
+            <h3 class="font-semibold text-default mb-4">Follow Us</h3>
             <div class="flex space-x-4">
-              <a :href="getField('social.facebook', '#')" target="_blank" rel="noopener noreferrer" class="text-(--ui-text-muted) hover:text-(--ui-text)">Facebook</a>
-              <a :href="getField('social.instagram', '#')" target="_blank" rel="noopener noreferrer" class="text-(--ui-text-muted) hover:text-(--ui-text)">Instagram</a>
+              <a :href="getField('social.facebook', '#')" target="_blank" rel="noopener noreferrer" class="text-muted hover:text-default">Facebook</a>
+              <a :href="getField('social.instagram', '#')" target="_blank" rel="noopener noreferrer" class="text-muted hover:text-default">Instagram</a>
             </div>
           </div>
         </div>
 
           <!-- Contact Form -->
         <div>
-          <h2 class="text-2xl md:text-3xl font-bold text-(--ui-text) mb-6">Send Us a Message</h2>
+          <h2 class="text-2xl md:text-3xl font-bold text-default mb-6">Send Us a Message</h2>
           <UCard>
             <UForm :state="contactForm" :validate="validateContact" class="space-y-6" @submit="handleContact">
               <div class="grid gap-5 md:grid-cols-2">
@@ -84,12 +84,12 @@
       <!-- Quick Actions -->
       <div class="mt-12 grid md:grid-cols-2 gap-6">
         <UCard to="/reservations" class="hover:shadow-md transition-shadow cursor-pointer">
-          <h3 class="text-lg font-semibold text-(--ui-text) mb-2">Make a Reservation</h3>
-          <p class="text-(--ui-text-muted)">Book your table online or call us directly</p>
+          <h3 class="text-lg font-semibold text-default mb-2">Make a Reservation</h3>
+          <p class="text-muted">Book your table online or call us directly</p>
         </UCard>
         <UCard to="/location" class="hover:shadow-md transition-shadow cursor-pointer">
-          <h3 class="text-lg font-semibold text-(--ui-text) mb-2">Find Us</h3>
-          <p class="text-(--ui-text-muted)">Get directions and view our location on Google Maps</p>
+          <h3 class="text-lg font-semibold text-default mb-2">Find Us</h3>
+          <p class="text-muted">Get directions and view our location on Google Maps</p>
         </UCard>
       </div>
     </UContainer>

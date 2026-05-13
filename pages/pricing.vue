@@ -4,8 +4,8 @@
 
       <!-- Header -->
       <div class="text-center mb-16">
-        <h1 class="text-5xl font-bold text-(--ui-text) mb-6">Simple, Transparent Pricing</h1>
-        <p class="text-xl text-(--ui-text-muted) max-w-3xl mx-auto">
+        <h1 class="text-5xl font-bold text-default mb-6">Simple, Transparent Pricing</h1>
+        <p class="text-xl text-muted max-w-3xl mx-auto">
           Start free. Pay per location as you grow. No setup fees, no long-term contracts.
         </p>
       </div>
@@ -14,20 +14,20 @@
 
       <!-- FAQ -->
       <div class="max-w-3xl mx-auto mt-20">
-        <h2 class="text-3xl font-bold text-(--ui-text) text-center mb-12">Frequently Asked Questions</h2>
+        <h2 class="text-3xl font-bold text-default text-center mb-12">Frequently Asked Questions</h2>
         <div class="space-y-4">
-          <div v-for="faq in faqs" :key="faq.q" class="bg-(--ui-bg-elevated) rounded-xl border border-(--ui-border)">
+          <div v-for="faq in faqs" :key="faq.q" class="bg-elevated rounded-xl border border-default">
             <button
               class="w-full text-left px-6 py-5 flex items-center justify-between gap-4"
               @click="openFaq = openFaq === faq.q ? null : faq.q"
             >
-              <span class="font-semibold text-(--ui-text)">{{ faq.q }}</span>
+              <span class="font-semibold text-default">{{ faq.q }}</span>
               <UIcon
                 :name="openFaq === faq.q ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
-                class="shrink-0 w-5 h-5 text-(--ui-text-muted)"
+                class="shrink-0 w-5 h-5 text-muted"
               />
             </button>
-            <div v-if="openFaq === faq.q" class="px-6 pb-5 text-(--ui-text-muted)">{{ faq.a }}</div>
+            <div v-if="openFaq === faq.q" class="px-6 pb-5 text-muted">{{ faq.a }}</div>
           </div>
         </div>
       </div>

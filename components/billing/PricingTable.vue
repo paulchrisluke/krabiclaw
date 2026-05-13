@@ -2,10 +2,10 @@
   <div>
     <!-- Billing toggle -->
     <div class="flex items-center justify-center gap-4 mb-12">
-      <span class="text-(--ui-text-muted)" :class="{ 'font-semibold text-(--ui-text)': !annual }">Monthly</span>
+      <span class="text-muted" :class="{ 'font-semibold text-default': !annual }">Monthly</span>
       <button
         class="relative w-12 h-6 rounded-full transition-colors"
-        :class="annual ? 'bg-(--kc-teal)' : 'bg-(--ui-bg-muted)'"
+        :class="annual ? 'bg-(--kc-teal)' : 'bg-muted'"
         role="switch"
         :aria-checked="annual"
         aria-label="Toggle annual billing"
@@ -16,7 +16,7 @@
           :class="{ 'translate-x-6': annual }"
         />
       </button>
-      <span class="text-(--ui-text-muted)" :class="{ 'font-semibold text-(--ui-text)': annual }">
+      <span class="text-muted" :class="{ 'font-semibold text-default': annual }">
         Annual <span class="text-sm font-normal text-emerald-600 ml-1">Save {{ savingsPercentLabel }}</span>
       </span>
     </div>
@@ -56,9 +56,9 @@
     </div>
 
     <!-- Per-location callout -->
-    <div class="max-w-3xl mx-auto mt-16 bg-(--ui-bg-muted) rounded-2xl p-8 text-center">
-      <h3 class="text-xl font-bold text-(--ui-text) mb-3">Why per-location pricing?</h3>
-      <p class="text-(--ui-text-muted)">
+    <div class="max-w-3xl mx-auto mt-16 bg-muted rounded-2xl p-8 text-center">
+      <h3 class="text-xl font-bold text-default mb-3">Why per-location pricing?</h3>
+      <p class="text-muted">
         A single restaurant and a chain with five locations get very different value from their website.
         Per-location pricing means you start small and only pay more as your business actually grows.
         A 5-location brand on Pro pays {{ proFiveLocationsMonthlyLabel }} — less than one hour of traditional web agency work.
@@ -69,16 +69,16 @@
     <div class="max-w-4xl mx-auto mt-16 overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
-          <tr class="border-b border-(--ui-border)">
-            <th class="text-left py-4 text-(--ui-text-muted) font-medium w-1/2">Feature</th>
-            <th v-for="plan in plans" :key="plan.id" class="text-center py-4 text-(--ui-text) font-semibold">
+          <tr class="border-b border-default">
+            <th class="text-left py-4 text-muted font-medium w-1/2">Feature</th>
+            <th v-for="plan in plans" :key="plan.id" class="text-center py-4 text-default font-semibold">
               {{ plan.name }}
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-(--ui-border)">
+        <tbody class="divide-y divide-default">
           <tr v-for="row in comparisonRows" :key="row.feature">
-            <td class="py-4 text-(--ui-text-muted)">{{ row.feature }}</td>
+            <td class="py-4 text-muted">{{ row.feature }}</td>
             <td v-for="plan in plans" :key="plan.id" class="py-4 text-center">
               <template v-if="cellValue(row, plan.id) === true">
                 <svg class="w-5 h-5 text-green-500 mx-auto" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
@@ -86,10 +86,10 @@
                 </svg>
               </template>
               <template v-else-if="cellValue(row, plan.id) === false">
-                <span class="text-(--ui-text-dimmed)">—</span>
+                <span class="text-dimmed">—</span>
               </template>
               <template v-else>
-                <span class="text-(--ui-text-muted)">{{ renderCell(cellValue(row, plan.id)) }}</span>
+                <span class="text-muted">{{ renderCell(cellValue(row, plan.id)) }}</span>
               </template>
             </td>
           </tr>
@@ -118,7 +118,7 @@ async function handleUpgrade(planId: string) {
     const res = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
       method: 'POST',
       body: { plan: planId, interval: annual.value ? 'year' : 'month' }
-    })
+    } as Parameters<typeof $fetch>[1])
     if (res.checkoutUrl) {
       await navigateTo(res.checkoutUrl, { external: true })
     } else {

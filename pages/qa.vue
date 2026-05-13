@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-(--ui-bg)">
+  <div class="min-h-screen bg-default">
     <SayaHero
       title="Questions & Answers"
       subtitle="Customer Inquiries About Our Restaurant"

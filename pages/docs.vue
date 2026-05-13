@@ -1,11 +1,11 @@
 <template>
   <div class="container mx-auto px-4 py-16">
     <div class="max-w-4xl mx-auto">
-      <h1 class="text-4xl font-bold text-(--ui-text) mb-6">Documentation</h1>
-      <p class="text-lg text-(--ui-text-muted) mb-12">Learn how to use KrabiClaw to build your restaurant website</p>
+      <h1 class="text-4xl font-bold text-default mb-6">Documentation</h1>
+      <p class="text-lg text-muted mb-12">Learn how to use KrabiClaw to build your restaurant website</p>
 
       <div v-if="pending" class="text-center py-12">
-        <p class="text-(--ui-text-muted)">Loading documentation...</p>
+        <p class="text-muted">Loading documentation...</p>
       </div>
 
       <div v-else-if="docsError" class="bg-red-50 border border-red-200 rounded-lg p-6">
@@ -21,16 +21,16 @@
             class="block"
           >
             <UCard class="hover:shadow-md transition-shadow cursor-pointer h-full">
-              <h3 class="text-xl font-bold text-(--ui-text) mb-2">{{ doc.title }}</h3>
-              <p class="text-(--ui-text-muted) mb-4">Learn about {{ doc.title?.toLowerCase() || 'this topic' }}</p>
+              <h3 class="text-xl font-bold text-default mb-2">{{ doc.title }}</h3>
+              <p class="text-muted mb-4">Learn about {{ doc.title?.toLowerCase() || 'this topic' }}</p>
               <UButton variant="outline" color="neutral">View Guide</UButton>
             </UCard>
           </NuxtLink>
         </div>
 
-        <div class="mt-12 bg-(--ui-bg-inverted) text-(--ui-text-inverted) rounded-2xl p-8 text-center">
+        <div class="mt-12 bg-inverted text-inverted rounded-2xl p-8 text-center">
           <h2 class="text-2xl font-bold mb-4">Need Help?</h2>
-          <p class="text-(--ui-text-inverted)/70 mb-6">Can't find what you're looking for? Check out our help center.</p>
+          <p class="text-inverted/70 mb-6">Can't find what you're looking for? Check out our help center.</p>
           <UButton color="neutral" variant="outline" to="/help">Visit Help Center</UButton>
         </div>
       </div>

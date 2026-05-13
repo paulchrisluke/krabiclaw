@@ -1,35 +1,35 @@
 <template>
   <div class="container mx-auto px-4 py-16">
     <div class="max-w-3xl mx-auto">
-      <h1 class="text-4xl font-bold text-(--ui-text) mb-4">Help Center</h1>
-      <p class="text-lg text-(--ui-text-muted) mb-10">Find answers to common questions about KrabiClaw</p>
+      <h1 class="text-4xl font-bold text-default mb-4">Help Center</h1>
+      <p class="text-lg text-muted mb-10">Find answers to common questions about KrabiClaw</p>
 
       <UInput v-model="searchQuery" placeholder="Search questions…" size="lg" icon="i-heroicons-magnifying-glass" class="mb-12" />
 
       <div v-for="section in filteredSections" :key="section.title" class="mb-12">
-        <h2 class="text-xl font-bold text-(--ui-text) mb-4 pb-2 border-b border-(--ui-border)">{{ section.title }}</h2>
+        <h2 class="text-xl font-bold text-default mb-4 pb-2 border-b border-default">{{ section.title }}</h2>
         <div class="space-y-2">
           <div
             v-for="faq in section.faqs"
             :key="faq.q"
-            class="border border-(--ui-border) rounded-xl overflow-hidden"
+            class="border border-default rounded-xl overflow-hidden"
           >
             <button
-              class="w-full text-left px-6 py-4 flex items-center justify-between gap-4 hover:bg-(--ui-bg-elevated) transition-colors"
+              class="w-full text-left px-6 py-4 flex items-center justify-between gap-4 hover:bg-elevated transition-colors"
               :aria-expanded="open === faq.q"
               :aria-controls="panelId(section.title, faq.q)"
               @click="toggle(faq.q)"
             >
-              <span class="font-medium text-(--ui-text)">{{ faq.q }}</span>
+              <span class="font-medium text-default">{{ faq.q }}</span>
               <UIcon
                 :name="open === faq.q ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
-                class="shrink-0 w-5 h-5 text-(--ui-text-muted)"
+                class="shrink-0 w-5 h-5 text-muted"
               />
             </button>
             <div
               v-if="open === faq.q"
               :id="panelId(section.title, faq.q)"
-              class="px-6 py-4 bg-(--ui-bg-elevated) text-(--ui-text-muted) border-t border-(--ui-border)"
+              class="px-6 py-4 bg-elevated text-muted border-t border-default"
               role="region"
             >
               <p>{{ faq.a }}</p>
@@ -38,13 +38,13 @@
         </div>
       </div>
 
-      <div v-if="filteredSections.length === 0" class="text-center py-12 text-(--ui-text-muted)">
+      <div v-if="filteredSections.length === 0" class="text-center py-12 text-muted">
         No results for "{{ searchQuery }}". Try a different search or contact us below.
       </div>
 
-      <div class="mt-12 bg-(--ui-bg-elevated) rounded-2xl p-8 text-center border border-(--ui-border)">
-        <p class="text-(--ui-text) font-semibold mb-2">Still need help?</p>
-        <p class="text-(--ui-text-muted) mb-6">We're based in Krabi, Thailand and reply within one business day.</p>
+      <div class="mt-12 bg-elevated rounded-2xl p-8 text-center border border-default">
+        <p class="text-default font-semibold mb-2">Still need help?</p>
+        <p class="text-muted mb-6">We're based in Krabi, Thailand and reply within one business day.</p>
         <UButton color="primary" to="/contact">Contact Support</UButton>
       </div>
     </div>

@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-(--ui-bg-muted) flex items-center justify-center px-4">
+  <div class="min-h-screen bg-muted flex items-center justify-center px-4">
     <div class="max-w-md w-full text-center">
       <!-- Setup Icon -->
       <div class="mb-8">
@@ -12,16 +12,16 @@
       </div>
 
       <!-- Setup Message -->
-      <h1 class="text-3xl font-bold text-(--ui-text-highlighted) mb-4">
+      <h1 class="text-3xl font-bold text-highlighted mb-4">
         Setting Up Your Site
       </h1>
       
-      <p class="text-(--ui-text-muted) mb-8">
+      <p class="text-muted mb-8">
         We're creating your restaurant website. This usually takes just a few seconds.
       </p>
 
       <!-- Progress -->
-      <div class="bg-(--ui-bg) rounded-lg p-6 border border-(--ui-border)">
+      <div class="bg-default rounded-lg p-6 border border-default">
         <div class="space-y-4">
           <div class="flex items-center">
             <div class="w-4 h-4 bg-green-500 rounded-full mr-3"></div>

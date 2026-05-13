@@ -3,6 +3,16 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateSubscriptionQuantity } from '~/server/utils/billing'
 
+interface SiteRow {
+  id: string
+  organization_id: string
+  primary_location_id: string | null
+}
+
+interface ExistingLocationRow {
+  id: string
+}
+
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locationId = getRouterParam(event, 'locationId')
@@ -29,7 +39,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON s.organization_id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
       LIMIT 1
-    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; primary_location_id: string | null }>()
+    `).bind(siteId, session.user.id).first<SiteRow>()
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -40,7 +50,7 @@ export default defineEventHandler(async (event) => {
       FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
-    `).bind(locationId, site.organization_id, siteId).first()
+    `).bind(locationId, site.organization_id, siteId).first<ExistingLocationRow>()
 
     if (!existingLocation) {
       return jsonResponse({ error: 'Location not found' }, { status: 404 })

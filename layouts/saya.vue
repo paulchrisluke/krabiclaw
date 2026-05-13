@@ -1,6 +1,6 @@
 <template>
   <div
-    class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-(--ui-bg) text-(--ui-text)"
+    class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="brandColor ? { '--ui-primary': brandColor, '--color-primary': brandColor } : {}"
   >
     <UTheme :ui="{}" :props="{ button: { color: 'neutral' } }">

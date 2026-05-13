@@ -61,7 +61,6 @@
           <!-- Category header -->
           <div class="mb-8 border-b border-default pb-6">
             <h2 class="saya-display saya-italic text-5xl text-default">{{ cat.name }}</h2>
-            <p v-if="cat.note" class="mt-3 text-sm leading-relaxed text-muted">{{ cat.note }}</p>
           </div>
 
           <!-- Items -->

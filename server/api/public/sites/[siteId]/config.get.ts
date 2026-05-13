@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
       FROM sites
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `).bind(siteId).first<{ id: string; organization_id: string }>()
+    `).bind(siteId).first() as { id: string; organization_id: string } | null
 
     if (!site) {
       return jsonResponse({ error: 'Site not found' }, { status: 404 })

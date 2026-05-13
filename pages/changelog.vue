@@ -1,11 +1,11 @@
 <template>
   <div class="container mx-auto px-4 py-16">
     <div class="max-w-3xl mx-auto">
-      <h1 class="text-4xl font-bold text-(--ui-text) mb-6">Changelog</h1>
-      <p class="text-lg text-(--ui-text-muted) mb-12">Latest updates and improvements to KrabiClaw</p>
+      <h1 class="text-4xl font-bold text-default mb-6">Changelog</h1>
+      <p class="text-lg text-muted mb-12">Latest updates and improvements to KrabiClaw</p>
 
       <div v-if="loading" class="text-center py-12">
-        <p class="text-(--ui-text-muted)">Loading changelog...</p>
+        <p class="text-muted">Loading changelog...</p>
       </div>
 
       <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-lg p-6" role="alert">
@@ -13,21 +13,21 @@
       </div>
 
       <div v-else class="space-y-8">
-        <div v-for="(commits, type) in changelog.commits" :key="type" class="bg-(--ui-bg-elevated) rounded-2xl shadow-sm border border-(--ui-border) p-8">
+        <div v-for="(commits, type) in changelog.commits" :key="type" class="bg-elevated rounded-2xl shadow-sm border border-default p-8">
           <div class="flex items-center gap-4 mb-4">
             <span :class="getBadgeClass(type)" class="text-white px-3 py-1 rounded-full text-sm font-medium capitalize">{{ type }}</span>
-            <span class="text-(--ui-text-muted) text-sm">{{ commits.length }} commits</span>
+            <span class="text-muted text-sm">{{ commits.length }} commits</span>
           </div>
           <div v-for="commit in commits" :key="commit.hash" class="mb-4 last:mb-0">
-            <h3 class="text-lg font-semibold text-(--ui-text) mb-1">{{ commit.description }}</h3>
-            <p class="text-sm text-(--ui-text-muted)">
+            <h3 class="text-lg font-semibold text-default mb-1">{{ commit.description }}</h3>
+            <p class="text-sm text-muted">
               {{ commit.author }} · {{ formatDate(commit.date) }}
-              <span v-if="commit.scope" class="ml-2 text-(--kc-teal-600)">({{ commit.scope }})</span>
+              <span v-if="commit.scope" class="ml-2 text-muted">({{ commit.scope }})</span>
             </p>
           </div>
         </div>
 
-        <div class="text-center text-sm text-(--ui-text-muted)">
+        <div class="text-center text-sm text-muted">
           Last updated: {{ formatDate(changelog.lastUpdated) }}
         </div>
       </div>

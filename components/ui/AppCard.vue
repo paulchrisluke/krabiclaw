@@ -35,16 +35,16 @@ const emit = defineEmits<{
 }>()
 
 const variantClasses = {
-  default: 'bg-[color:var(--ui-bg)] text-[color:var(--ui-text)]',
-  elevated: 'bg-[color:var(--ui-bg)] text-[color:var(--ui-text)] shadow-md border-[color:var(--ui-border)]',
-  outlined: 'bg-[color:var(--ui-bg)] text-[color:var(--ui-text)] border-[color:var(--ui-border)]'
+  default: 'bg-default text-default',
+  elevated: 'bg-elevated text-default shadow-md border',
+  outlined: 'bg-default text-default border'
 }
 
 const borderClasses = {
   none: '',
-  light: 'border-[color:var(--ui-border)]',
-  medium: 'border-2 border-[color:var(--ui-border)]',
-  dark: 'border-2 border-[color:var(--ui-border)]'
+  light: 'border-default',
+  medium: 'border-2 border-default',
+  dark: 'border-2 border-highlighted'
 }
 
 const handleClick = (event: MouseEvent) => {

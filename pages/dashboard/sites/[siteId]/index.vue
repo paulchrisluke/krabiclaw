@@ -31,8 +31,8 @@
           <template #header>
             <div class="flex items-center justify-between gap-4">
               <div>
-                <h2 class="font-semibold text-(--ui-text-highlighted)">Get started</h2>
-                <p class="mt-1 text-sm text-(--ui-text-muted)">Complete these steps to go live</p>
+                <h2 class="font-semibold text-highlighted">Get started</h2>
+                <p class="mt-1 text-sm text-muted">Complete these steps to go live</p>
               </div>
               <UBadge color="warning" variant="soft" size="lg">{{ launchProgress }}% complete</UBadge>
             </div>
@@ -44,16 +44,16 @@
                 v-for="item in requiredFields"
                 :key="item.label"
                 class="flex items-center justify-between gap-3 rounded-lg border p-4"
-                :class="item.done ? 'border-(--ui-border) bg-(--ui-bg)' : 'border-(--ui-border) bg-(--ui-bg-elevated)'"
+                :class="item.done ? 'border-default bg-default' : 'border-default bg-elevated'"
               >
                 <div class="flex items-center gap-3">
                   <div
                     class="flex size-5 items-center justify-center rounded-full"
-                    :class="item.done ? 'bg-(--ui-success)' : 'bg-(--ui-border)'"
+                    :class="item.done ? 'bg-success' : 'bg-default'"
                   >
-                    <UIcon v-if="item.done" name="i-heroicons-check" class="size-3 text-(--ui-bg)" />
+                    <UIcon v-if="item.done" name="i-heroicons-check" class="size-3 text-default" />
                   </div>
-                  <span class="text-sm font-medium" :class="item.done ? 'text-(--ui-text-highlighted)' : 'text-(--ui-text-muted)'">
+                  <span class="text-sm font-medium" :class="item.done ? 'text-highlighted' : 'text-muted'">
                     {{ item.label }}
                   </span>
                 </div>
@@ -70,8 +70,8 @@
           <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-center">
             <div>
               <UBadge color="warning" variant="soft">Location required</UBadge>
-              <h2 class="mt-4 text-2xl font-semibold text-(--ui-text-highlighted)">Add your first location</h2>
-              <p class="mt-2 max-w-2xl text-sm text-(--ui-text-muted)">
+              <h2 class="mt-4 text-2xl font-semibold text-highlighted">Add your first location</h2>
+              <p class="mt-2 max-w-2xl text-sm text-muted">
                 Location content, menus, hours, addresses, and Google Business sync all start with a physical location.
               </p>
             </div>
@@ -97,8 +97,8 @@
           <template #header>
             <div class="flex items-center justify-between gap-4">
               <div>
-                <h2 class="font-semibold text-(--ui-text-highlighted)">Locations</h2>
-                <p class="mt-1 text-sm text-(--ui-text-muted)">
+                <h2 class="font-semibold text-highlighted">Locations</h2>
+                <p class="mt-1 text-sm text-muted">
                   Choose a location to edit its menu and content.
                 </p>
               </div>
@@ -119,19 +119,19 @@
               v-for="location in locations"
               :key="location.id"
               :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`"
-              class="group relative rounded-lg border border-(--ui-border) p-4 transition hover:bg-(--ui-bg-elevated)"
+              class="group relative rounded-lg border border-default p-4 transition hover:bg-elevated"
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2">
-                    <p class="truncate font-medium text-(--ui-text-highlighted)">{{ location.title }}</p>
+                    <p class="truncate font-medium text-highlighted">{{ location.title }}</p>
                     <UBadge v-if="location.is_primary" color="primary" variant="soft" size="xs">Primary</UBadge>
                   </div>
-                  <p class="mt-1 truncate text-sm text-(--ui-text-muted)">
+                  <p class="mt-1 truncate text-sm text-muted">
                     {{ addressLabel(location) || location.city || `/${location.slug}` }}
                   </p>
                 </div>
-                <UIcon name="i-heroicons-arrow-right" class="size-4 shrink-0 text-(--ui-text-muted) transition group-hover:text-(--ui-primary)" />
+                <UIcon name="i-heroicons-arrow-right" class="size-4 shrink-0 text-muted transition group-hover:text-primary" />
               </div>
               <div class="mt-3 flex items-center gap-2">
                 <UButton :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`" size="xs" block>
@@ -152,16 +152,16 @@
         <!-- Stats row — only shown once launched -->
         <div v-if="launchProgress === 100" class="grid gap-4 md:grid-cols-3">
           <UCard>
-            <p class="text-sm text-(--ui-text-muted)">Locations</p>
-            <p class="mt-2 text-3xl font-semibold text-(--ui-text-highlighted)">{{ locations.length }}</p>
+            <p class="text-sm text-muted">Locations</p>
+            <p class="mt-2 text-3xl font-semibold text-highlighted">{{ locations.length }}</p>
           </UCard>
           <UCard>
-            <p class="text-sm text-(--ui-text-muted)">Menu items</p>
-            <p class="mt-2 text-3xl font-semibold text-(--ui-text-highlighted)">{{ menuItemsCount }}</p>
+            <p class="text-sm text-muted">Menu items</p>
+            <p class="mt-2 text-3xl font-semibold text-highlighted">{{ menuItemsCount }}</p>
           </UCard>
           <UCard>
-            <p class="text-sm text-(--ui-text-muted)">Reviews</p>
-            <p class="mt-2 text-3xl font-semibold text-(--ui-text-highlighted)">{{ reviewCount }}</p>
+            <p class="text-sm text-muted">Reviews</p>
+            <p class="mt-2 text-3xl font-semibold text-highlighted">{{ reviewCount }}</p>
           </UCard>
         </div>
       </div>

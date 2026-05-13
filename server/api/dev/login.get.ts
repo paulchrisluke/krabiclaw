@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
   const auth = createAuth(env)
   const ctx = await auth.$context
 
-  const user = await db.prepare('SELECT id, email FROM user LIMIT 1').first<{ id: string; email: string }>()
+  const user = await db.prepare('SELECT id, email FROM user LIMIT 1').first() as { id: string; email: string } | null
   if (!user) throw createError({ statusCode: 500, statusMessage: 'No users in database' })
 
   const session = await ctx.internalAdapter.createSession(user.id)

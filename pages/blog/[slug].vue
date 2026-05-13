@@ -2,25 +2,25 @@
   <div class="container mx-auto px-4 py-16">
     <div class="max-w-3xl mx-auto">
 
-      <NuxtLink to="/blog" class="inline-flex items-center gap-2 text-(--ui-text-muted) hover:text-(--ui-text) mb-10 transition-colors text-sm">
+      <NuxtLink to="/blog" class="inline-flex items-center gap-2 text-muted hover:text-default mb-10 transition-colors text-sm">
         <UIcon name="i-heroicons-arrow-left" class="w-4 h-4" />
         Back to Blog
       </NuxtLink>
 
       <!-- Loading -->
       <div v-if="pending" class="space-y-4">
-        <div class="h-6 bg-(--ui-bg-elevated) rounded animate-pulse w-1/4" />
-        <div class="h-12 bg-(--ui-bg-elevated) rounded animate-pulse w-3/4" />
-        <div class="h-12 bg-(--ui-bg-elevated) rounded animate-pulse w-1/2" />
-        <div class="h-5 bg-(--ui-bg-elevated) rounded animate-pulse w-2/3 mt-4" />
+        <div class="h-6 bg-elevated rounded animate-pulse w-1/4" />
+        <div class="h-12 bg-elevated rounded animate-pulse w-3/4" />
+        <div class="h-12 bg-elevated rounded animate-pulse w-1/2" />
+        <div class="h-5 bg-elevated rounded animate-pulse w-2/3 mt-4" />
         <div class="mt-8 space-y-3">
-          <div v-for="i in 10" :key="i" class="h-4 bg-(--ui-bg-elevated) rounded animate-pulse" :style="`width: ${70 + (i % 3) * 10}%`" />
+          <div v-for="i in 10" :key="i" class="h-4 bg-elevated rounded animate-pulse" :style="`width: ${70 + (i % 3) * 10}%`" />
         </div>
       </div>
 
       <!-- Error -->
       <div v-else-if="error || !post" class="text-center py-24">
-        <p class="text-xl text-(--ui-text-muted) mb-6">Article not found.</p>
+        <p class="text-xl text-muted mb-6">Article not found.</p>
         <UButton to="/blog" variant="outline" color="neutral">Back to Blog</UButton>
       </div>
 
@@ -32,17 +32,17 @@
           <span v-if="post.category" class="px-3 py-1 rounded-full text-sm font-medium" :class="categoryClass(post.category)">
             {{ post.category }}
           </span>
-          <span class="text-(--ui-text-dimmed) text-sm">{{ formatDate(post.published_at) }}</span>
-          <span class="text-(--ui-text-dimmed) text-sm">·</span>
-          <span class="text-(--ui-text-dimmed) text-sm">{{ readTime }} min read</span>
+          <span class="text-dimmed text-sm">{{ formatDate(post.published_at) }}</span>
+          <span class="text-dimmed text-sm">·</span>
+          <span class="text-dimmed text-sm">{{ readTime }} min read</span>
         </div>
 
         <!-- Title + excerpt -->
-        <h1 class="text-4xl font-bold text-(--ui-text) mb-5 leading-tight">{{ post.title }}</h1>
-        <p v-if="post.excerpt" class="text-xl text-(--ui-text-muted) mb-8 leading-relaxed">{{ post.excerpt }}</p>
+        <h1 class="text-4xl font-bold text-default mb-5 leading-tight">{{ post.title }}</h1>
+        <p v-if="post.excerpt" class="text-xl text-muted mb-8 leading-relaxed">{{ post.excerpt }}</p>
 
         <!-- Author -->
-        <div class="flex items-center gap-4 py-6 border-y border-(--ui-border) mb-10">
+        <div class="flex items-center gap-4 py-6 border-y border-default mb-10">
           <div class="shrink-0">
             <img
               v-if="post.author_image"
@@ -59,8 +59,8 @@
             </div>
           </div>
           <div>
-            <p class="font-semibold text-(--ui-text)">{{ post.author_name || 'KrabiClaw' }}</p>
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-(--ui-text-dimmed)">
+            <p class="font-semibold text-default">{{ post.author_name || 'KrabiClaw' }}</p>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-dimmed">
               <span>Published {{ formatDate(post.published_at) }}</span>
               <span v-if="wasUpdated">· Updated {{ formatDate(post.updated_at) }}</span>
             </div>
@@ -68,23 +68,23 @@
         </div>
 
         <!-- Hero image placeholder -->
-        <div class="h-64 bg-(--ui-bg-muted) rounded-2xl mb-10" aria-hidden="true" />
+        <div class="h-64 bg-muted rounded-2xl mb-10" aria-hidden="true" />
 
         <!-- Body -->
         <div
           class="prose prose-lg dark:prose-invert max-w-none
-                 prose-headings:font-bold prose-headings:text-(--ui-text)
-                 prose-p:text-(--ui-text-muted) prose-p:leading-relaxed
+                 prose-headings:font-bold prose-headings:text-default
+                 prose-p:text-muted prose-p:leading-relaxed
                  prose-a:text-(--kc-teal) prose-a:no-underline hover:prose-a:underline
-                 prose-strong:text-(--ui-text)
-                 prose-li:text-(--ui-text-muted)
-                 prose-hr:border-(--ui-border)
-                 prose-blockquote:border-l-[--kc-teal] prose-blockquote:text-(--ui-text-muted)"
+                 prose-strong:text-default
+                 prose-li:text-muted
+                 prose-hr:border-default
+                 prose-blockquote:border-l-(--kc-teal) prose-blockquote:text-muted"
           v-html="renderedBody"
         />
 
         <!-- Bottom author card -->
-        <div class="mt-16 pt-8 border-t border-(--ui-border) flex items-center justify-between gap-6">
+        <div class="mt-16 pt-8 border-t border-default flex items-center justify-between gap-6">
           <div class="flex items-center gap-4">
             <div class="shrink-0">
               <img
@@ -102,8 +102,8 @@
               </div>
             </div>
             <div>
-              <p class="font-semibold text-(--ui-text) text-sm">{{ post.author_name || 'KrabiClaw' }}</p>
-              <p class="text-xs text-(--ui-text-dimmed)">Restaurant website builder built in Krabi, Thailand</p>
+              <p class="font-semibold text-default text-sm">{{ post.author_name || 'KrabiClaw' }}</p>
+              <p v-if="authorSubtitle" class="text-xs text-dimmed">{{ authorSubtitle }}</p>
             </div>
           </div>
           <UButton to="/blog" variant="outline" color="neutral" size="sm">More Articles</UButton>
@@ -123,6 +123,7 @@ definePageMeta({ layout: 'platform' })
 const route = useRoute()
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
+const postEndpoint = computed<string>(() => `/api/public/blog/posts/${String(route.params.slug)}`)
 
 const CATEGORY_CLASSES: Record<string, string> = {
   Marketing: 'bg-amber-100 text-amber-800',
@@ -134,11 +135,27 @@ const CATEGORY_CLASSES: Record<string, string> = {
 }
 
 const { data, pending, error } = await useAsyncData(
-  `blog-post-${route.params.slug}`,
-  () => $fetch(`/api/public/blog/posts/${route.params.slug}`)
+  () => `blog-post-${postEndpoint.value}`,
+  () => $fetch(postEndpoint.value),
+  {
+    transform: (payload: any) => {
+      const rawPost = payload?.post
+      if (!rawPost) return payload
+      const authorSubtitle = rawPost.author_subtitle || rawPost.author_bio || rawPost.author?.bio || ''
+      return {
+        ...payload,
+        post: {
+          ...rawPost,
+          author_subtitle: authorSubtitle
+        }
+      }
+    }
+  }
 )
 
 const post = computed(() => (data.value as any)?.post ?? null)
+
+const authorSubtitle = computed(() => post.value?.author_subtitle || '')
 
 const renderedBody = computed(() => {
   if (!post.value?.body) return ''

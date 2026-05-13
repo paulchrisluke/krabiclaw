@@ -12,8 +12,8 @@
         <div class="grid md:grid-cols-2 gap-12">
           <!-- Contact form -->
           <div>
-            <h2 class="text-2xl font-bold text-(--ui-text) mb-6">Send a Message</h2>
-            <UCard class="rounded-lg bg-(--ui-bg-muted)">
+            <h2 class="text-2xl font-bold text-default mb-6">Send a Message</h2>
+            <UCard class="rounded-lg bg-muted">
               <UForm :state="tenantForm" :validate="validateTenantContact" class="space-y-5" @submit="handleTenantContact">
                 <UFormField label="Name" name="name" required>
                   <UInput v-model="tenantForm.name" size="lg" placeholder="Your name" class="w-full" />
@@ -33,20 +33,20 @@
 
           <!-- Contact info -->
           <div class="space-y-6">
-            <h2 class="text-2xl font-bold text-(--ui-text) mb-6">Get in Touch</h2>
-            <UCard class="rounded-lg bg-(--ui-bg-muted)">
+            <h2 class="text-2xl font-bold text-default mb-6">Get in Touch</h2>
+            <UCard class="rounded-lg bg-muted">
               <div class="space-y-4">
                 <div v-if="contactPhone">
-                  <p class="text-xs font-bold uppercase tracking-widest text-(--ui-text-dimmed) mb-1">Phone</p>
-                  <a :href="`tel:${contactPhone.replace(/\s/g, '')}`" class="text-(--ui-text) hover:underline">{{ contactPhone }}</a>
+                  <p class="text-xs font-bold uppercase tracking-widest text-dimmed mb-1">Phone</p>
+                  <a :href="`tel:${contactPhone.replace(/\s/g, '')}`" class="text-default hover:underline">{{ contactPhone }}</a>
                 </div>
                 <div v-if="contactEmail">
-                  <p class="text-xs font-bold uppercase tracking-widest text-(--ui-text-dimmed) mb-1">Email</p>
-                  <a :href="`mailto:${contactEmail}`" class="text-(--ui-text) hover:underline">{{ contactEmail }}</a>
+                  <p class="text-xs font-bold uppercase tracking-widest text-dimmed mb-1">Email</p>
+                  <a :href="`mailto:${contactEmail}`" class="text-default hover:underline">{{ contactEmail }}</a>
                 </div>
                 <div v-if="contactAddress">
-                  <p class="text-xs font-bold uppercase tracking-widest text-(--ui-text-dimmed) mb-1">Address</p>
-                  <p class="text-(--ui-text-muted)">{{ contactAddress }}</p>
+                  <p class="text-xs font-bold uppercase tracking-widest text-dimmed mb-1">Address</p>
+                  <p class="text-muted">{{ contactAddress }}</p>
                 </div>
               </div>
             </UCard>
@@ -69,28 +69,28 @@
     <!-- ── PLATFORM: KrabiClaw contact page ──────────────── -->
     <div v-else class="container mx-auto px-4 py-16">
       <div class="max-w-3xl mx-auto">
-        <h1 class="text-4xl font-bold text-(--ui-text) mb-6">Contact Us</h1>
-        <p class="text-lg text-(--ui-text-muted) mb-12">Get in touch with the KrabiClaw team</p>
+        <h1 class="text-4xl font-bold text-default mb-6">Contact Us</h1>
+        <p class="text-lg text-muted mb-12">Get in touch with the KrabiClaw team</p>
         <div class="grid md:grid-cols-2 gap-12 mb-12">
           <div>
-            <h2 class="text-2xl font-bold text-(--ui-text) mb-6">Get in Touch</h2>
+            <h2 class="text-2xl font-bold text-default mb-6">Get in Touch</h2>
             <div class="space-y-4">
               <div>
-                <h3 class="font-semibold text-(--ui-text) mb-1">Email</h3>
-                <p class="text-(--ui-text-muted)">hello@krabiclaw.com</p>
+                <h3 class="font-semibold text-default mb-1">Email</h3>
+                <p class="text-muted">hello@krabiclaw.com</p>
               </div>
               <div>
-                <h3 class="font-semibold text-(--ui-text) mb-1">Location</h3>
-                <p class="text-(--ui-text-muted)">Krabi, Thailand 🦀</p>
+                <h3 class="font-semibold text-default mb-1">Location</h3>
+                <p class="text-muted">Krabi, Thailand 🦀</p>
               </div>
               <div>
-                <h3 class="font-semibold text-(--ui-text) mb-1">Support</h3>
-                <p class="text-(--ui-text-muted)">support@krabiclaw.com</p>
+                <h3 class="font-semibold text-default mb-1">Support</h3>
+                <p class="text-muted">support@krabiclaw.com</p>
               </div>
             </div>
           </div>
           <div>
-            <h2 class="text-2xl font-bold text-(--ui-text) mb-6">Send a Message</h2>
+            <h2 class="text-2xl font-bold text-default mb-6">Send a Message</h2>
             <UCard>
               <UForm :state="platformForm" :validate="validatePlatformContact" class="space-y-4" @submit="handlePlatformContact">
                 <UFormField label="Name" name="name" required>

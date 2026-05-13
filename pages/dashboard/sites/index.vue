@@ -24,9 +24,9 @@
 
       <UCard v-else-if="sites.length === 0">
         <div class="mx-auto max-w-md py-10 text-center">
-          <UIcon name="i-heroicons-globe-alt" class="mx-auto size-10 text-(--ui-text-muted)" />
-          <h2 class="mt-4 text-xl font-semibold text-(--ui-text-highlighted)">No websites yet</h2>
-          <p class="mt-2 text-sm text-(--ui-text-muted)">Create a website first, then add physical locations inside it.</p>
+          <UIcon name="i-heroicons-globe-alt" class="mx-auto size-10 text-muted" />
+          <h2 class="mt-4 text-xl font-semibold text-highlighted">No websites yet</h2>
+          <p class="mt-2 text-sm text-muted">Create a website first, then add physical locations inside it.</p>
           <UButton to="/dashboard/onboarding" icon="i-heroicons-plus" color="primary" class="mt-6">
             Create Website
           </UButton>
@@ -41,11 +41,11 @@
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
-                <h2 class="truncate text-lg font-semibold text-(--ui-text-highlighted)">{{ site.name }}</h2>
+                <h2 class="truncate text-lg font-semibold text-highlighted">{{ site.name }}</h2>
                 <UBadge :color="site.status === 'active' ? 'success' : 'warning'" variant="soft">{{ site.status }}</UBadge>
                 <UBadge color="neutral" variant="soft">{{ site.plan }}</UBadge>
               </div>
-              <p class="mt-1 truncate text-sm text-(--ui-text-muted)">{{ siteUrlLabel(site) }}</p>
+              <p class="mt-1 truncate text-sm text-muted">{{ siteUrlLabel(site) }}</p>
             </div>
 
             <div class="flex flex-wrap gap-2">

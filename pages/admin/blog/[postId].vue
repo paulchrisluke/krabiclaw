@@ -1,35 +1,35 @@
 <template>
-  <div class="min-h-screen bg-(--ui-bg)">
+  <div class="min-h-screen bg-default">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="mb-8 flex items-center gap-4">
-        <NuxtLink to="/admin" class="text-(--ui-text-muted) hover:text-(--ui-text) transition-colors">← Admin</NuxtLink>
-        <h1 class="text-2xl font-bold text-(--ui-text)">Edit Post</h1>
+        <NuxtLink to="/admin" class="text-muted hover:text-default transition-colors">← Admin</NuxtLink>
+        <h1 class="text-2xl font-bold text-default">Edit Post</h1>
         <span v-if="post?.published_at" class="ml-auto text-sm text-green-600 font-medium">Published {{ formatDate(post.published_at) }}</span>
-        <span v-else class="ml-auto text-sm text-(--ui-text-dimmed) font-medium">Draft</span>
+        <span v-else class="ml-auto text-sm text-dimmed font-medium">Draft</span>
       </div>
 
-      <div v-if="loadPending" class="text-center py-12 text-(--ui-text-muted)">Loading…</div>
+      <div v-if="loadPending" class="text-center py-12 text-muted">Loading…</div>
       <div v-else-if="loadError" class="bg-red-50 border border-red-200 rounded-lg p-6 text-red-600">{{ loadError }}</div>
 
       <UCard v-else>
         <div class="space-y-6">
           <div>
-            <label class="block text-sm font-medium text-(--ui-text) mb-2">Title <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium text-default mb-2">Title <span class="text-red-500">*</span></label>
             <UInput v-model="form.title" size="lg" />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-(--ui-text) mb-2">Excerpt</label>
+            <label class="block text-sm font-medium text-default mb-2">Excerpt</label>
             <UTextarea v-model="form.excerpt" :rows="2" />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-(--ui-text) mb-2">Category</label>
+            <label class="block text-sm font-medium text-default mb-2">Category</label>
             <USelect v-model="form.category" :options="categories" placeholder="Select a category" />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-(--ui-text) mb-2">Body (Markdown) <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium text-default mb-2">Body (Markdown) <span class="text-red-500">*</span></label>
             <UTextarea v-model="form.body" :rows="20" class="font-mono text-sm" />
           </div>
 

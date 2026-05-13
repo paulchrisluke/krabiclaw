@@ -1,7 +1,7 @@
 <template>
   <NuxtLayout :name="isPlatform ? 'platform' : 'saya'">
     <!-- KrabiClaw Platform Homepage -->
-    <div v-if="isPlatform" class="bg-(--ui-bg)">
+    <div v-if="isPlatform" class="bg-default">
 
       <!-- Hero -->
       <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 grid lg:grid-cols-2 gap-12 items-center">
@@ -44,7 +44,7 @@
               <div
                 v-for="(av, i) in avatars"
                 :key="i"
-                class="w-8 h-8 rounded-full border-2 border-(--ui-bg) flex items-center justify-center text-white text-xs font-bold -ml-2 first:ml-0"
+                class="w-8 h-8 rounded-full border-2 border-default flex items-center justify-center text-white text-xs font-bold -ml-2 first:ml-0"
                 :style="{ background: av.color }"
               >{{ av.letter }}</div>
             </div>
@@ -56,7 +56,7 @@
 
         <!-- Mascot / hero visual -->
         <div class="hidden lg:flex justify-center">
-          <div class="bg-(--kc-coral-50) rounded-[32px] p-7 shadow-xl max-w-lg w-full">
+          <div class="bg-(--kc-coral-50) rounded-3xl p-7 shadow-xl max-w-lg w-full">
             <img
               src="/krabiclaw-login-mascot.png"
               alt="KrabiClaw mascot"
@@ -77,7 +77,7 @@
             <div
               v-for="feat in features"
               :key="feat.title"
-              class="rounded-[18px] p-7 border border-(--ui-border)"
+              class="rounded-[18px] p-7 border border-default"
               :class="feat.dark
                 ? 'bg-(--kc-navy)'
                 : feat.muted
@@ -106,10 +106,10 @@
       </section>
 
       <!-- Pricing -->
-      <section class="bg-(--ui-bg) py-20">
+      <section class="bg-default py-20">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="text-center max-w-2xl mx-auto mb-12 flex flex-col items-center gap-4">
-            <span class="kc-eyebrow text-(--ui-text-dimmed)">Simple pricing</span>
+            <span class="kc-eyebrow text-dimmed">Simple pricing</span>
             <h2 class="text-[44px] font-extrabold tracking-tight leading-[1.05] text-default m-0">Start free. Grow when you're ready.</h2>
           </div>
           <div class="grid md:grid-cols-2 gap-5 max-w-3xl mx-auto">
@@ -126,7 +126,7 @@
                   {{ f }}
                 </li>
               </ul>
-              <NuxtLink v-if="freePlanData?.cta?.href" :to="freePlanData.cta.href" class="block text-center font-semibold text-[14px] py-3.5 rounded-[10px] bg-(--ui-bg-inverted) text-inverted hover:opacity-90 transition-opacity no-underline">
+              <NuxtLink v-if="freePlanData?.cta?.href" :to="freePlanData.cta.href" class="block text-center font-semibold text-[14px] py-3.5 rounded-[10px] bg-inverted text-inverted hover:opacity-90 transition-opacity no-underline">
                 {{ freePlanData?.cta?.label }}
               </NuxtLink>
             </div>
@@ -308,21 +308,21 @@
       </section>
 
       <!-- ── Brand story ─────────────────────────────────────── -->
-      <section class="bg-(--ui-bg-inverted) text-(--ui-text-inverted)">
+      <section class="bg-inverted text-inverted">
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-          <p class="saya-eyebrow mb-8 text-(--ui-text-inverted)/60">Our story</p>
+          <p class="saya-eyebrow mb-8 text-inverted/60">Our story</p>
 
           <!-- Filled state -->
           <template v-if="getField('story.headline') || hasGoogleBusiness">
-            <h2 class="saya-display-md max-w-3xl text-(--ui-text-inverted)">
+            <h2 class="saya-display-md max-w-3xl text-inverted">
               {{ getField('story.headline', businessTitle) }}
             </h2>
-            <p class="mt-8 max-w-2xl text-base leading-relaxed text-(--ui-text-inverted)/60">
+            <p class="mt-8 max-w-2xl text-base leading-relaxed text-inverted/60">
               {{ getField('story.body', businessSubtitle) }}
             </p>
             <NuxtLink
               to="/about"
-              class="mt-8 inline-block border-b border-(--ui-text-inverted) pb-1 text-xs uppercase tracking-widest text-(--ui-text-inverted) no-underline transition hover:opacity-60"
+              class="mt-8 inline-block border-b border-inverted pb-1 text-xs uppercase tracking-widest text-inverted no-underline transition hover:opacity-60"
             >
               Read more →
             </NuxtLink>
@@ -330,14 +330,14 @@
 
           <!-- Empty state: owner hasn't added story yet -->
           <template v-else>
-            <h2 class="saya-display-md max-w-3xl text-(--ui-text-inverted)/30">Your brand story goes here.</h2>
-            <p class="mt-6 max-w-lg text-sm leading-relaxed text-(--ui-text-inverted)/30">
+            <h2 class="saya-display-md max-w-3xl text-inverted/30">Your brand story goes here.</h2>
+            <p class="mt-6 max-w-lg text-sm leading-relaxed text-inverted/30">
               Two or three sentences about your restaurant — what you cook, how you cook it, why it matters.
             </p>
             <NuxtLink
               v-if="isAuthenticated"
               to="/dashboard/sites"
-              class="mt-8 inline-flex items-center gap-2 rounded-full border border-(--ui-text-inverted)/20 px-5 py-2.5 text-xs uppercase tracking-widest text-(--ui-text-inverted)/60 no-underline transition hover:border-(--ui-text-inverted)/40 hover:text-(--ui-text-inverted)/80"
+              class="mt-8 inline-flex items-center gap-2 rounded-full border border-inverted/20 px-5 py-2.5 text-xs uppercase tracking-widest text-inverted/60 no-underline transition hover:border-inverted/40 hover:text-inverted/80"
             >
               Add your story in the dashboard →
             </NuxtLink>

@@ -1,0 +1,15 @@
+{
+  // Volar (Vue - Official) configuration for Nuxt 4 / Vue 3
+  "volar.takeOverMode": true,
+  "volar.useWorkspaceTsdk": true,
+
+  // Vue file formatting: use Prettier, disable format-on-save
+  "[vue]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": false
+  },
+  
+  // Disable built-in CSS validation for Tailwind v4 at-rules
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore"
+}

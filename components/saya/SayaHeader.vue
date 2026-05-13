@@ -3,17 +3,17 @@
     <!-- Branding strip for free-tier tenants -->
     <div
       v-if="!isPlatform && showBrandingStrip"
-      class="border-b border-(--ui-border) bg-(--ui-bg-muted) px-4 py-2 text-center text-xs tracking-wide text-(--ui-text-muted)"
+      class="border-b border-default bg-muted px-4 py-2 text-center text-xs tracking-wide text-muted"
     >
       Powered by
-      <a href="https://krabiclaw.com" target="_blank" rel="noopener noreferrer" class="font-semibold text-(--ui-text) hover:underline">krabiclaw.com</a>
+      <a href="https://krabiclaw.com" target="_blank" rel="noopener noreferrer" class="font-semibold text-default hover:underline">krabiclaw.com</a>
       — restaurant sites that run themselves
     </div>
 
-    <header class="sticky top-0 z-40 border-b border-(--ui-border) bg-(--ui-bg)/80 backdrop-blur-md">
+    <header class="sticky top-0 z-40 border-b border-default bg-default/80 backdrop-blur-md">
       <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <!-- Brand name -->
-        <NuxtLink to="/" class="saya-display shrink-0 text-2xl text-(--ui-text) no-underline">
+        <NuxtLink to="/" class="saya-display shrink-0 text-2xl text-default no-underline">
           {{ restaurantName }}
         </NuxtLink>
 
@@ -21,7 +21,7 @@
         <nav class="hidden items-center gap-1 lg:flex" aria-label="Saya navigation">
           <!-- Locations dropdown -->
           <UDropdownMenu :items="locationDropdownItems" :ui="{ content: 'min-w-64' }">
-            <button class="flex items-center gap-1.5 rounded-full border border-(--ui-border) bg-(--ui-bg) px-3.5 py-2 text-sm text-(--ui-text) transition hover:border-(--ui-text-muted)">
+            <button class="flex items-center gap-1.5 rounded-full border border-default bg-default px-3.5 py-2 text-sm text-default transition hover:border-muted">
               Locations
               <UIcon name="i-heroicons-chevron-down" class="size-3 opacity-60" />
             </button>
@@ -29,19 +29,19 @@
 
           <NuxtLink
             to="/about"
-            class="rounded-full px-3 py-2 text-sm text-(--ui-text-muted) transition hover:bg-(--ui-bg-muted) hover:text-(--ui-text)"
+            class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
             Story
           </NuxtLink>
           <NuxtLink
             to="/reservations"
-            class="rounded-full px-3 py-2 text-sm text-(--ui-text-muted) transition hover:bg-(--ui-bg-muted) hover:text-(--ui-text)"
+            class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
             Reservations
           </NuxtLink>
           <NuxtLink
             to="/contact"
-            class="rounded-full px-3 py-2 text-sm text-(--ui-text-muted) transition hover:bg-(--ui-bg-muted) hover:text-(--ui-text)"
+            class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
             Contact
           </NuxtLink>
@@ -86,15 +86,15 @@
       <!-- Mobile menu -->
       <div
         v-if="mobileMenuOpen"
-        class="absolute inset-x-0 top-16 border-b border-(--ui-border) bg-(--ui-bg) p-4 shadow-sm lg:hidden"
+        class="absolute inset-x-0 top-16 border-b border-default bg-default p-4 shadow-sm lg:hidden"
       >
         <nav class="grid gap-1" aria-label="Saya mobile navigation">
           <div class="pb-2 pt-1">
-            <p class="px-4 text-xs font-medium uppercase tracking-widest text-(--ui-text-muted)">Locations</p>
+            <p class="px-4 text-xs font-medium uppercase tracking-widest text-muted">Locations</p>
           </div>
           <NuxtLink
             to="/locations"
-            class="rounded-full px-4 py-3 text-sm text-(--ui-text-muted) hover:bg-(--ui-bg-muted)"
+            class="rounded-full px-4 py-3 text-sm text-muted hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
             All locations
@@ -103,29 +103,29 @@
             v-for="loc in locations"
             :key="loc.id"
             :to="`/locations/${loc.slug}/menu`"
-            class="rounded-full px-4 py-3 text-sm text-(--ui-text) hover:bg-(--ui-bg-muted)"
+            class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
             {{ loc.title }}
           </NuxtLink>
-          <div class="my-1 border-t border-(--ui-border)" />
+          <div class="my-1 border-t border-default" />
           <NuxtLink
             to="/about"
-            class="rounded-full px-4 py-3 text-sm text-(--ui-text) hover:bg-(--ui-bg-muted)"
+            class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
             Story
           </NuxtLink>
           <NuxtLink
             to="/reservations"
-            class="rounded-full px-4 py-3 text-sm text-(--ui-text) hover:bg-(--ui-bg-muted)"
+            class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
             Reservations
           </NuxtLink>
           <NuxtLink
             to="/contact"
-            class="rounded-full px-4 py-3 text-sm text-(--ui-text) hover:bg-(--ui-bg-muted)"
+            class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
             Contact
@@ -179,7 +179,7 @@ const languageItems = computed(() =>
 // No await — this is a layout component, not a page. Data arrives reactively.
 const currentSiteId = computed(() => siteId || '')
 
-const { data: locationsData, error: locationsError, execute: loadLocations } = useFetch(
+const { data: locationsData, error: locationsError, execute: loadLocations } = useFetch<{ locations: any[] }>(
   () => `/api/public/sites/${currentSiteId.value}/locations`,
   {
     key: () => `header-locs-${currentSiteId.value || 'none'}`,
@@ -208,7 +208,7 @@ const locationDropdownItems = computed(() => [
   [{
     label: 'All locations',
     to: '/locations',
-    class: 'text-xs uppercase tracking-widest text-(--ui-text-muted)'
+    class: 'text-xs uppercase tracking-widest text-muted'
   }],
   locations.value.map((loc: { title: string; slug: string }) => ({
     label: loc.title,

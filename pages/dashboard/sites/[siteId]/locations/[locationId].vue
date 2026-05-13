@@ -15,7 +15,7 @@
 
     <UPageBody>
       <UCard v-if="loading">
-        <div class="flex items-center gap-3 text-sm text-(--ui-text-muted)">
+        <div class="flex items-center gap-3 text-sm text-muted">
           <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
           Loading location...
         </div>
@@ -47,27 +47,27 @@
 
         <div class="grid gap-4 md:grid-cols-4">
           <UCard>
-            <p class="text-sm text-(--ui-text-muted)">Phone</p>
-            <p class="mt-2 truncate font-semibold text-(--ui-text-highlighted)">{{ location.phone || 'Not set' }}</p>
+            <p class="text-sm text-muted">Phone</p>
+            <p class="mt-2 truncate font-semibold text-highlighted">{{ location.phone || 'Not set' }}</p>
           </UCard>
           <UCard>
-            <p class="text-sm text-(--ui-text-muted)">Rating</p>
-            <p class="mt-2 font-semibold text-(--ui-text-highlighted)">{{ location.rating ? `${location.rating} / 5` : 'Not synced' }}</p>
+            <p class="text-sm text-muted">Rating</p>
+            <p class="mt-2 font-semibold text-highlighted">{{ location.rating ? `${location.rating} / 5` : 'Not synced' }}</p>
           </UCard>
           <UCard>
-            <p class="text-sm text-(--ui-text-muted)">Reviews</p>
-            <p class="mt-2 font-semibold text-(--ui-text-highlighted)">{{ location.review_count ?? 0 }}</p>
+            <p class="text-sm text-muted">Reviews</p>
+            <p class="mt-2 font-semibold text-highlighted">{{ location.review_count ?? 0 }}</p>
           </UCard>
           <UCard>
-            <p class="text-sm text-(--ui-text-muted)">Menus</p>
-            <p class="mt-2 font-semibold text-(--ui-text-highlighted)">{{ menus.length }}</p>
+            <p class="text-sm text-muted">Menus</p>
+            <p class="mt-2 font-semibold text-highlighted">{{ menus.length }}</p>
           </UCard>
         </div>
 
         <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <UCard>
             <template #header>
-              <h2 class="font-semibold text-(--ui-text-highlighted)">Local Work</h2>
+              <h2 class="font-semibold text-highlighted">Local Work</h2>
             </template>
 
             <div class="grid gap-3 md:grid-cols-2">
@@ -89,33 +89,33 @@
           <UCard>
             <template #header>
               <div class="flex items-center gap-2">
-                <UIcon name="i-simple-icons-google" class="size-4 text-(--ui-primary)" />
-                <h2 class="font-semibold text-(--ui-text-highlighted)">Google Business</h2>
+                <UIcon name="i-simple-icons-google" class="size-4 text-primary" />
+                <h2 class="font-semibold text-highlighted">Google Business</h2>
               </div>
             </template>
 
             <div class="space-y-4 text-sm">
               <div v-if="gbConnection" class="space-y-3">
                 <div class="flex items-center justify-between gap-4">
-                  <span class="text-(--ui-text-muted)">Account</span>
-                  <span class="truncate text-right text-(--ui-text-highlighted)">{{ gbConnection.provider_account_email }}</span>
+                  <span class="text-muted">Account</span>
+                  <span class="truncate text-right text-highlighted">{{ gbConnection.provider_account_email }}</span>
                 </div>
                 <div class="flex items-center justify-between gap-4">
-                  <span class="text-(--ui-text-muted)">Status</span>
+                  <span class="text-muted">Status</span>
                   <UBadge color="success" variant="soft">Connected</UBadge>
                 </div>
                 <div class="flex items-center justify-between gap-4">
-                  <span class="text-(--ui-text-muted)">Last synced</span>
-                  <span class="text-right text-(--ui-text-highlighted)">{{ location.last_synced_at || 'Never' }}</span>
+                  <span class="text-muted">Last synced</span>
+                  <span class="text-right text-highlighted">{{ location.last_synced_at || 'Never' }}</span>
                 </div>
               </div>
 
               <div v-else class="space-y-3">
                 <div class="flex items-center justify-between gap-4">
-                  <span class="text-(--ui-text-muted)">Status</span>
+                  <span class="text-muted">Status</span>
                   <UBadge color="neutral" variant="soft">Not connected</UBadge>
                 </div>
-                <p class="text-(--ui-text-muted)">Connect Google Business to sync reviews, photos, and location data.</p>
+                <p class="text-muted">Connect Google Business to sync reviews, photos, and location data.</p>
               </div>
 
               <div class="flex flex-col gap-2">
@@ -146,17 +146,17 @@
 
         <UCard>
           <template #header>
-            <h2 class="font-semibold text-(--ui-text-highlighted)">Details</h2>
+            <h2 class="font-semibold text-highlighted">Details</h2>
           </template>
 
           <dl class="grid gap-4 md:grid-cols-2">
             <div>
-              <dt class="text-sm text-(--ui-text-muted)">Slug</dt>
-              <dd class="mt-1 font-medium text-(--ui-text-highlighted)">/{{ location.slug }}</dd>
+              <dt class="text-sm text-muted">Slug</dt>
+              <dd class="mt-1 font-medium text-highlighted">/{{ location.slug }}</dd>
             </div>
             <div>
-              <dt class="text-sm text-(--ui-text-muted)">Address</dt>
-              <dd class="mt-1 font-medium text-(--ui-text-highlighted)">{{ locationAddress || 'Not set' }}</dd>
+              <dt class="text-sm text-muted">Address</dt>
+              <dd class="mt-1 font-medium text-highlighted">{{ locationAddress || 'Not set' }}</dd>
             </div>
           </dl>
         </UCard>
@@ -194,6 +194,7 @@ interface GbConnection {
 }
 
 const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 const siteId = route.params.siteId as string
 const locationId = route.params.locationId as string

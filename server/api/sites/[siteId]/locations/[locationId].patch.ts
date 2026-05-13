@@ -26,6 +26,28 @@ interface UpdateLocationBody {
   status?: 'active' | 'inactive' | 'sync_error'
 }
 
+interface SiteRow {
+  id: string
+  organization_id: string
+}
+
+interface LocationRow {
+  id: string
+  slug: string
+  title: string
+  address: string | null
+  city: string | null
+  phone: string | null
+  image_url: string | null
+  website_url: string | null
+  maps_url: string | null
+  opening_hours: string | null
+  is_primary: number | boolean
+  status: string
+  created_at: string
+  updated_at: string
+}
+
 const slugify = (value: string) =>
   value
     .toLowerCase()
@@ -64,7 +86,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON s.organization_id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
       LIMIT 1
-    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+    `).bind(siteId, session.user.id).first() as SiteRow | null
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -210,7 +232,11 @@ export default defineEventHandler(async (event) => {
       FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
-    `).bind(locationId, site.organization_id, siteId).first<any>()
+    `).bind(locationId, site.organization_id, siteId).first() as LocationRow | null
+
+    if (!location) {
+      return jsonResponse({ error: 'Updated location could not be loaded' }, { status: 500 })
+    }
 
     return jsonResponse({
       success: true,

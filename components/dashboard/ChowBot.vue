@@ -209,7 +209,26 @@ async function purchaseCredits(bundle: 500 | 2500 | 5000) {
       method: 'POST',
       body: { bundle }
     })
-    if (res.checkoutUrl) await navigateTo(res.checkoutUrl, { external: true })
+    if (res.checkoutUrl) {
+      try {
+        const url = new URL(res.checkoutUrl)
+        if (url.protocol !== 'https:') {
+          throw new Error('Invalid URL protocol')
+        }
+        const allowedHosts = ['checkout.stripe.com', 'pay.stripe.com']
+        if (!allowedHosts.includes(url.hostname)) {
+          throw new Error('Untrusted hostname')
+        }
+        await navigateTo(res.checkoutUrl, { external: true })
+      } catch (e) {
+        console.error('[ChowBot] Invalid checkout URL:', res.checkoutUrl, e)
+        messages.value = [...messages.value, {
+          role: 'assistant',
+          content: 'Invalid checkout URL. Please contact support.',
+          error: true,
+        }]
+      }
+    }
     if (res.balance !== undefined) await fetchCredits()
   } catch (err: any) {
     console.error('[ChowBot] purchaseCredits failed:', err)

@@ -5,17 +5,17 @@
       <div class="lg:col-span-3">
         <!-- Header -->
         <div class="text-center mb-16">
-          <h1 class="text-5xl font-bold text-(--ui-text) mb-6">Restaurant Blog</h1>
-          <p class="text-xl text-(--ui-text-muted) max-w-2xl mx-auto">
+          <h1 class="text-5xl font-bold text-default mb-6">Restaurant Blog</h1>
+          <p class="text-xl text-muted max-w-2xl mx-auto">
             Tips, insights, and stories to help your restaurant thrive in the digital age.
           </p>
         </div>
 
         <div v-if="pending" class="space-y-8">
-          <div v-for="i in 3" :key="i" class="bg-(--ui-bg-elevated) rounded-2xl h-64 animate-pulse" />
+          <div v-for="i in 3" :key="i" class="bg-elevated rounded-2xl h-64 animate-pulse" />
         </div>
 
-        <div v-else-if="posts.length === 0" class="text-center py-24 text-(--ui-text-muted)">
+        <div v-else-if="posts.length === 0" class="text-center py-24 text-muted">
           <p class="text-xl mb-2">No posts yet</p>
           <p class="text-sm">Check back soon — new content is on the way.</p>
         </div>
@@ -23,18 +23,18 @@
         <div v-else>
           <!-- Featured Post -->
           <NuxtLink :to="`/blog/${posts[0].slug}`" class="block mb-12">
-            <div class="bg-(--ui-bg-elevated) rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+            <div class="bg-elevated rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
               <div class="h-64 bg-linear-to-br from-teal-50 to-teal-100 dark:from-teal-900/20 dark:to-teal-800/20" />
               <div class="p-8">
                 <div class="flex items-center gap-4 mb-4">
-                  <span class="bg-(--ui-bg-inverted) text-(--ui-text-inverted) px-3 py-1 rounded-full text-sm font-medium">Featured</span>
+                  <span class="bg-inverted text-inverted px-3 py-1 rounded-full text-sm font-medium">Featured</span>
                   <span v-if="posts[0].category" class="px-3 py-1 rounded-full text-sm font-medium" :class="categoryClass(posts[0].category)">{{ posts[0].category }}</span>
-                  <span class="text-(--ui-text-dimmed) text-sm">{{ formatDate(posts[0].published_at) }}</span>
+                  <span class="text-dimmed text-sm">{{ formatDate(posts[0].published_at) }}</span>
                 </div>
-                <h2 class="text-3xl font-bold text-(--ui-text) mb-4">{{ posts[0].title }}</h2>
-                <p v-if="posts[0].excerpt" class="text-(--ui-text-muted) mb-6 text-lg">{{ posts[0].excerpt }}</p>
+                <h2 class="text-3xl font-bold text-default mb-4">{{ posts[0].title }}</h2>
+                <p v-if="posts[0].excerpt" class="text-muted mb-6 text-lg">{{ posts[0].excerpt }}</p>
                 <div class="flex items-center justify-between">
-                  <p class="text-sm text-(--ui-text-dimmed)">{{ readTime(posts[0]) }} min read</p>
+                  <p class="text-sm text-dimmed">{{ readTime(posts[0]) }} min read</p>
                   <span class="font-semibold text-sm" style="color: var(--kc-teal)">Read Article →</span>
                 </div>
               </div>
@@ -43,7 +43,7 @@
 
           <!-- Recent Posts -->
           <div v-if="posts.length > 1" class="mb-12">
-            <h2 class="text-3xl font-bold text-(--ui-text) mb-8">Recent Posts</h2>
+            <h2 class="text-3xl font-bold text-default mb-8">Recent Posts</h2>
             <div class="grid md:grid-cols-2 gap-8">
               <NuxtLink
                 v-for="post in posts.slice(1)"
@@ -51,15 +51,15 @@
                 :to="`/blog/${post.slug}`"
                 class="block"
               >
-                <div class="bg-(--ui-bg-elevated) rounded-xl shadow-sm border border-(--ui-border) overflow-hidden hover:shadow-md transition-shadow h-full">
+                <div class="bg-elevated rounded-xl shadow-sm border border-default overflow-hidden hover:shadow-md transition-shadow h-full">
                   <div class="h-48 bg-linear-to-br from-stone-50 to-stone-100 dark:from-stone-900/20 dark:to-stone-800/20" />
                   <div class="p-6">
                     <div class="flex items-center gap-3 mb-3">
                       <span v-if="post.category" class="px-2 py-1 rounded text-xs font-medium" :class="categoryClass(post.category)">{{ post.category }}</span>
-                      <span class="text-(--ui-text-dimmed) text-sm">{{ formatDate(post.published_at) }}</span>
+                      <span class="text-dimmed text-sm">{{ formatDate(post.published_at) }}</span>
                     </div>
-                    <h3 class="text-xl font-bold text-(--ui-text) mb-3">{{ post.title }}</h3>
-                    <p v-if="post.excerpt" class="text-(--ui-text-muted) mb-4">{{ post.excerpt }}</p>
+                    <h3 class="text-xl font-bold text-default mb-3">{{ post.title }}</h3>
+                    <p v-if="post.excerpt" class="text-muted mb-4">{{ post.excerpt }}</p>
                     <span class="font-semibold text-sm" style="color: var(--kc-teal)">Read More →</span>
                   </div>
                 </div>
@@ -69,9 +69,9 @@
         </div>
 
         <!-- Newsletter Signup -->
-        <div class="bg-(--ui-bg-inverted) text-(--ui-text-inverted) rounded-2xl p-8 text-center">
+        <div class="bg-inverted text-inverted rounded-2xl p-8 text-center">
           <h2 class="text-3xl font-bold mb-4">Stay Updated</h2>
-          <p class="text-(--ui-text-inverted)/70 mb-6 max-w-2xl mx-auto">
+          <p class="text-inverted/70 mb-6 max-w-2xl mx-auto">
             Get the latest restaurant marketing tips and industry insights delivered to your inbox.
           </p>
           <form @submit.prevent="handleNewsletterSubmit" class="flex flex-col sm:flex-row gap-4 max-w-md mx-auto items-center justify-center">
@@ -80,19 +80,19 @@
               v-model="newsletterEmail"
               type="email"
               placeholder="Enter your email"
-              class="flex-1 px-4 py-3 rounded-lg text-(--ui-text) bg-white"
+              class="flex-1 px-4 py-3 rounded-lg text-default bg-white"
               aria-label="Enter your email for the newsletter"
             >
             <UButton type="submit" color="neutral" variant="outline" :loading="subscribing">Subscribe</UButton>
           </form>
-          <p v-if="subscribeMessage" class="mt-4 text-sm text-(--ui-text-inverted)/80">{{ subscribeMessage }}</p>
+          <p v-if="subscribeMessage" class="mt-4 text-sm text-inverted/80">{{ subscribeMessage }}</p>
         </div>
       </div>
 
       <!-- Sidebar -->
       <div class="lg:col-span-1">
         <div class="sticky top-8">
-          <h2 class="text-2xl font-bold text-(--ui-text) mb-6">Browse by Category</h2>
+          <h2 class="text-2xl font-bold text-default mb-6">Browse by Category</h2>
           <div class="flex flex-col gap-3">
             <UButton
               v-for="cat in categories"
@@ -130,12 +130,15 @@ const newsletterEmail = ref('')
 const subscribing = ref(false)
 const subscribeMessage = ref('')
 
-const { data, pending } = useAsyncData(
-  `blog-${activeCategory.value ?? 'all'}`,
-  () => $fetch(activeCategory.value
+const apiUrl = computed(() =>
+  activeCategory.value
     ? `/api/public/blog/posts?category=${encodeURIComponent(activeCategory.value)}`
     : '/api/public/blog/posts'
-  ),
+)
+
+const { data, pending } = useAsyncData(
+  () => `blog-${activeCategory.value ?? 'all'}`,
+  () => $fetch(apiUrl.value),
   { watch: [activeCategory] }
 )
 

@@ -8,8 +8,8 @@
 
     <UPageBody>
       <div v-if="loading">
-        <div class="overflow-hidden rounded-lg border border-(--ui-border)">
-          <div v-for="i in 3" :key="i" class="flex items-center gap-4 border-b border-(--ui-border) px-4 py-4 last:border-0">
+        <div class="overflow-hidden rounded-lg border border-default">
+          <div v-for="i in 3" :key="i" class="flex items-center gap-4 border-b border-default px-4 py-4 last:border-0">
             <USkeleton class="h-4 w-40" />
             <USkeleton class="h-4 w-24" />
             <USkeleton class="ml-auto h-4 w-20" />
@@ -27,30 +27,30 @@
 
       <div v-else class="space-y-4">
         <!-- Empty state -->
-        <div v-if="locations.length === 0 && !showAddLocationForm" class="rounded-lg border border-(--ui-border) px-6 py-16 text-center">
-          <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-(--ui-text-muted)" />
-          <h2 class="mt-4 text-base font-semibold text-(--ui-text-highlighted)">Add your first location</h2>
-          <p class="mt-1 text-sm text-(--ui-text-muted)">Local content, menus, hours, and Google Business mapping start here.</p>
+        <div v-if="locations.length === 0 && !showAddLocationForm" class="rounded-lg border border-default px-6 py-16 text-center">
+          <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-muted" />
+          <h2 class="mt-4 text-base font-semibold text-highlighted">Add your first location</h2>
+          <p class="mt-1 text-sm text-muted">Local content, menus, hours, and Google Business mapping start here.</p>
           <UButton class="mt-5" icon="i-heroicons-plus" color="primary" @click="showAddLocationForm = true">Add Location</UButton>
         </div>
 
         <!-- Location list -->
-        <div v-else-if="locations.length > 0" class="overflow-hidden rounded-lg border border-(--ui-border)">
+        <div v-else-if="locations.length > 0" class="overflow-hidden rounded-lg border border-default">
           <template v-for="location in locations" :key="location.id">
             <!-- Row: collapsed -->
             <div
               v-if="expandedLocationId !== location.id"
-              class="flex items-center gap-4 border-b border-(--ui-border) px-4 py-3.5 last:border-0"
+              class="flex items-center gap-4 border-b border-default px-4 py-3.5 last:border-0"
             >
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class="font-medium text-(--ui-text-highlighted)">{{ location.title }}</span>
+                  <span class="font-medium text-highlighted">{{ location.title }}</span>
                   <UBadge v-if="location.is_primary" color="primary" variant="soft" size="xs">Primary</UBadge>
                   <UBadge :color="location.status === 'active' ? 'success' : 'neutral'" variant="soft" size="xs">
                     {{ location.status }}
                   </UBadge>
                 </div>
-                <p class="mt-0.5 text-sm text-(--ui-text-muted)">
+                <p class="mt-0.5 text-sm text-muted">
                   {{ addressLabel(location) || location.city || 'No address set' }}
                   <span v-if="location.phone"> · {{ location.phone }}</span>
                 </p>
@@ -84,7 +84,7 @@
             </div>
 
             <!-- Row: expanded inline edit -->
-            <div v-else class="border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-4 last:border-0">
+            <div v-else class="border-b border-default bg-elevated px-4 py-4 last:border-0">
               <div class="space-y-4">
                 <div class="grid gap-4 sm:grid-cols-2">
                   <UFormField label="Name">
@@ -122,8 +122,8 @@
         </div>
 
         <!-- Add Location form -->
-        <div v-if="showAddLocationForm" class="overflow-hidden rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated) p-4">
-          <h3 class="mb-4 text-sm font-semibold text-(--ui-text-highlighted)">New location</h3>
+        <div v-if="showAddLocationForm" class="overflow-hidden rounded-lg border border-default bg-elevated p-4">
+          <h3 class="mb-4 text-sm font-semibold text-highlighted">New location</h3>
           <div class="space-y-4">
             <!-- Google Places search -->
             <UFormField label="Search Google Places" hint="Optional — auto-fill from Google">
@@ -135,29 +135,29 @@
                 autofocus
                 @input="onPlacesInput"
               />
-              <div v-if="placesResults.length" class="mt-1 overflow-hidden rounded-md border border-(--ui-border) bg-(--ui-bg) shadow-sm">
+              <div v-if="placesResults.length" class="mt-1 overflow-hidden rounded-md border border-default bg-default shadow-sm">
                 <button
                   v-for="result in placesResults"
                   :key="result.placeId"
                   type="button"
-                  class="flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-(--ui-bg-elevated)"
+                  class="flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-elevated"
                   @click="selectPlace(result.placeId)"
                 >
-                  <span class="font-medium text-(--ui-text-highlighted)">{{ result.name }}</span>
-                  <span class="text-xs text-(--ui-text-muted)">{{ result.formattedAddress }}</span>
+                  <span class="font-medium text-highlighted">{{ result.name }}</span>
+                  <span class="text-xs text-muted">{{ result.formattedAddress }}</span>
                 </button>
               </div>
             </UFormField>
 
             <div v-if="placesQuery && !placesResults.length && !placesSearching" class="flex items-center gap-1.5">
-              <div class="h-px flex-1 bg-(--ui-border)" />
-              <span class="text-xs text-(--ui-text-muted)">or fill in manually</span>
-              <div class="h-px flex-1 bg-(--ui-border)" />
+              <div class="h-px flex-1 bg-default" />
+              <span class="text-xs text-muted">or fill in manually</span>
+              <div class="h-px flex-1 bg-default" />
             </div>
             <div v-else-if="!placesQuery" class="flex items-center gap-1.5">
-              <div class="h-px flex-1 bg-(--ui-border)" />
-              <span class="text-xs text-(--ui-text-muted)">or fill in manually</span>
-              <div class="h-px flex-1 bg-(--ui-border)" />
+              <div class="h-px flex-1 bg-default" />
+              <span class="text-xs text-muted">or fill in manually</span>
+              <div class="h-px flex-1 bg-default" />
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2">
@@ -219,7 +219,13 @@ const headerLinks = computed(() => [
   { label: 'Add location', icon: 'i-heroicons-plus', color: 'primary' as const, onClick: () => { showAddLocationForm.value = true } }
 ])
 
-const setLocationActive = (v: boolean) => { locationEditForm.status = v ? 'active' : 'inactive' }
+const setLocationActive = (v: boolean | 'indeterminate') => {
+  if (v === 'indeterminate') {
+    // indeterminate means no change — leave status unchanged
+    return
+  }
+  locationEditForm.status = v ? 'active' : 'inactive'
+}
 
 const generateSlug = (name: string) =>
   name.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')

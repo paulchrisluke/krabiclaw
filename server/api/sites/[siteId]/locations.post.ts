@@ -16,6 +16,32 @@ interface CreateLocationBody {
   is_primary?: boolean
 }
 
+interface SiteRow {
+  id: string
+  organization_id: string
+}
+
+interface CountRow {
+  count: number | string
+}
+
+interface LocationRow {
+  id: string
+  slug: string
+  title: string
+  address: string | null
+  city: string | null
+  phone: string | null
+  image_url: string | null
+  website_url: string | null
+  maps_url: string | null
+  opening_hours: string | null
+  is_primary: number | boolean
+  status: string
+  created_at: string
+  updated_at: string
+}
+
 const isPlainObjectOrArray = (v: unknown): v is Record<string, unknown> | unknown[] =>
   v !== null && (Array.isArray(v) || (typeof v === 'object' && Object.prototype.toString.call(v) === '[object Object]'))
 
@@ -78,7 +104,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON s.organization_id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
       LIMIT 1
-    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+    `).bind(siteId, session.user.id).first() as SiteRow | null
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -98,9 +124,27 @@ export default defineEventHandler(async (event) => {
       SELECT COUNT(*) AS count
       FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND status = 'active'
-    `).bind(site.organization_id, siteId).first<{ count: number }>()
+    `).bind(site.organization_id, siteId).first<CountRow>()
 
-    const isPrimary = body.is_primary === true || (activeCount?.count ?? 0) === 0
+    if (!activeCount) {
+      console.error('Null active location count when creating location', {
+        organizationId: site.organization_id,
+        siteId
+      })
+      return jsonResponse({ error: 'Unable to verify active locations' }, { status: 500 })
+    }
+
+    const activeLocationCount = Number(activeCount.count)
+    if (!Number.isFinite(activeLocationCount)) {
+      console.error('Invalid active location count when creating location', {
+        count: activeCount.count,
+        organizationId: site.organization_id,
+        siteId
+      })
+      return jsonResponse({ error: 'Unable to verify active locations' }, { status: 500 })
+    }
+
+    const isPrimary = body.is_primary === true || activeLocationCount === 0
     const locationId = crypto.randomUUID()
     const now = new Date().toISOString()
     const statements = []
@@ -154,7 +198,11 @@ export default defineEventHandler(async (event) => {
       FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
-    `).bind(locationId, site.organization_id, siteId).first<any>()
+    `).bind(locationId, site.organization_id, siteId).first() as LocationRow | null
+
+    if (!location) {
+      return jsonResponse({ error: 'Created location could not be loaded' }, { status: 500 })
+    }
 
     // Run in background when supported; otherwise await to keep sync reliable.
     const syncPromise = updateSubscriptionQuantity(env, db, site.organization_id).catch((err) =>

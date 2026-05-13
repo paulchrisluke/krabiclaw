@@ -11,6 +11,36 @@ const parseJson = (value: unknown) => {
   }
 }
 
+interface SiteRow {
+  id: string
+  organization_id: string
+}
+
+interface LocationRow {
+  id: string
+  slug: string
+  title: string
+  address: string | null
+  city: string | null
+  phone: string | null
+  image_url: string | null
+  website_url: string | null
+  maps_url: string | null
+  latitude: number | null
+  longitude: number | null
+  opening_hours: string | null
+  categories: string | null
+  rating: number | null
+  review_count: number | null
+  is_primary: number | boolean
+  status: string
+  last_synced_at: string | null
+  google_location_id: string | null
+  google_connection_id: string | null
+  created_at: string
+  updated_at: string
+}
+
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locationId = getRouterParam(event, 'locationId')
@@ -37,7 +67,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON s.organization_id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+    `).bind(siteId, session.user.id).first() as SiteRow | null
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -51,7 +81,7 @@ export default defineEventHandler(async (event) => {
       FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
-    `).bind(locationId, site.organization_id, siteId).first<any>()
+    `).bind(locationId, site.organization_id, siteId).first() as LocationRow | null
 
     if (!location) {
       return jsonResponse({ error: 'Location not found' }, { status: 404 })

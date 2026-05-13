@@ -72,7 +72,7 @@
             class="block w-full transition-opacity duration-200 group-hover:opacity-80"
             loading="lazy"
           >
-          <div class="absolute inset-0 flex items-end bg-gradient-to-t from-black/50 to-transparent p-4 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <div class="absolute inset-0 flex items-end bg-linear-to-t from-black/50 to-transparent p-4 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
             <span class="saya-eyebrow rounded-full bg-white/18 px-2.5 py-1 text-xs text-white backdrop-blur-sm">
               {{ photo.category || '—' }}
             </span>

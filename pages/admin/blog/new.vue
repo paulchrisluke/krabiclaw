@@ -1,30 +1,30 @@
 <template>
-  <div class="min-h-screen bg-(--ui-bg)">
+  <div class="min-h-screen bg-default">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="mb-8 flex items-center gap-4">
-        <NuxtLink to="/admin" class="text-(--ui-text-muted) hover:text-(--ui-text) transition-colors">← Admin</NuxtLink>
-        <h1 class="text-2xl font-bold text-(--ui-text)">New Blog Post</h1>
+        <NuxtLink to="/admin" class="text-muted hover:text-default transition-colors">← Admin</NuxtLink>
+        <h1 class="text-2xl font-bold text-default">New Blog Post</h1>
       </div>
 
       <UCard>
         <div class="space-y-6">
           <div>
-            <label class="block text-sm font-medium text-(--ui-text) mb-2">Title <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium text-default mb-2">Title <span class="text-red-500">*</span></label>
             <UInput v-model="form.title" placeholder="How to..." size="lg" />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-(--ui-text) mb-2">Excerpt</label>
+            <label class="block text-sm font-medium text-default mb-2">Excerpt</label>
             <UTextarea v-model="form.excerpt" placeholder="One or two sentences summarising the post..." :rows="2" />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-(--ui-text) mb-2">Category</label>
+            <label class="block text-sm font-medium text-default mb-2">Category</label>
             <USelect v-model="form.category" :options="categories" placeholder="Select a category" />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-(--ui-text) mb-2">Body (Markdown) <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium text-default mb-2">Body (Markdown) <span class="text-red-500">*</span></label>
             <UTextarea v-model="form.body" placeholder="Write your post in Markdown..." :rows="20" class="font-mono text-sm" />
           </div>
 
