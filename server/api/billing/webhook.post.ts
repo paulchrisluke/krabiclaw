@@ -111,18 +111,19 @@ async function handleCheckoutCompleted(env: Record<string, string | undefined>, 
   const organizationId = session.metadata?.organization_id
   const plan = session.metadata?.plan
   const customerId = session.customer as string
-  const subscriptionId = session.subscription as string
 
-  if (!organizationId || !plan) {
-    console.error('Missing metadata in checkout session:', session.id)
+  // In Stripe v22 the subscription is expanded inline in the webhook payload
+  const subRef = session.subscription
+  const sub: any = typeof subRef === 'object' ? subRef : null
+  const subscriptionId: string = sub?.id ?? (subRef as string)
+
+  if (!organizationId || !plan || !subscriptionId) {
+    console.error('Missing metadata or subscription in checkout session:', session.id)
     return
   }
 
-  const stripe = new Stripe(env.STRIPE_SECRET_KEY!)
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-  const subscriptionItemId = subscription.items.data[0]?.id ?? null
-  const sub = subscription as any
-  const periodEnd = sub.billing_cycle_anchor
+  const subscriptionItemId: string | null = sub?.items?.data?.[0]?.id ?? null
+  const periodEnd: string | null = sub?.billing_cycle_anchor
     ? new Date(sub.billing_cycle_anchor * 1000).toISOString()
     : null
 
