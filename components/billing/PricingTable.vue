@@ -28,7 +28,33 @@
         :key="plan.id"
         :class="plan.highlighted ? 'md:-mt-4 md:mb-4' : ''"
       >
-        <BillingPlanCard :plan="plan" :annual="annual" class="h-full" />
+        <BillingPlanCard :plan="plan" :annual="annual" class="h-full">
+          <template v-if="plan.prices.length" #cta>
+            <UButton
+              v-if="plan.id === 'agency'"
+              to="/contact"
+              variant="outline"
+              color="neutral"
+              size="xl"
+              block
+            >
+              Contact Us
+            </UButton>
+            <UButton
+              v-else
+              size="xl"
+              block
+              :loading="upgrading === plan.id"
+              :class="plan.highlighted ? 'text-white hover:opacity-90' : ''"
+              :style="plan.highlighted ? 'background-color: var(--kc-coral)' : ''"
+              :variant="plan.highlighted ? 'solid' : 'outline'"
+              color="neutral"
+              @click="handleUpgrade(plan.id)"
+            >
+              Get Started
+            </UButton>
+          </template>
+        </BillingPlanCard>
       </div>
     </div>
 
@@ -79,6 +105,27 @@
 <script setup lang="ts">
 const annual = ref(false)
 const { plans, proPlan, monthlyPrice } = usePlans()
+const { isAuthenticated } = useAuth()
+const upgrading = ref<string | null>(null)
+
+async function handleUpgrade(planId: string) {
+  if (!isAuthenticated.value) {
+    await navigateTo('/login?next=/dashboard/billing')
+    return
+  }
+  upgrading.value = planId
+  try {
+    const res = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
+      method: 'POST',
+      body: { plan: planId, interval: annual.value ? 'year' : 'month' }
+    } as any)
+    if (res.checkoutUrl) await navigateTo(res.checkoutUrl, { external: true })
+  } catch (err) {
+    console.error('Checkout failed:', err)
+  } finally {
+    upgrading.value = null
+  }
+}
 
 type CellValue = boolean | string
 type ComparisonRow = {

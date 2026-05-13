@@ -26,16 +26,27 @@
       <!-- Right actions -->
       <div class="flex items-center gap-2 shrink-0">
         <UColorModeButton variant="ghost" color="neutral" size="sm" />
-        <NuxtLink to="/login" class="hidden sm:block text-[13.5px] font-medium text-(--ui-text) px-3 py-2 hover:text-(--ui-text-muted) transition-colors no-underline">
-          Login
-        </NuxtLink>
-        <NuxtLink
-          to="/signup"
-          class="hidden sm:inline-flex items-center gap-1.5 bg-(--ui-primary) text-(--ui-text-inverted) text-[13.5px] font-semibold px-4 py-2.5 rounded-[9px] hover:bg-(--ui-primary)/90 transition-colors no-underline"
-        >
-          Start free
-          <UIcon name="i-heroicons-arrow-right" class="size-3.5" />
-        </NuxtLink>
+        <template v-if="isAuthenticated">
+          <NuxtLink
+            to="/dashboard"
+            class="hidden sm:inline-flex items-center gap-1.5 bg-primary text-inverted text-[13.5px] font-semibold px-4 py-2.5 rounded-[9px] hover:bg-primary/90 transition-colors no-underline"
+          >
+            Dashboard
+            <UIcon name="i-heroicons-arrow-right" class="size-3.5" />
+          </NuxtLink>
+        </template>
+        <template v-else>
+          <NuxtLink to="/login" class="hidden sm:block text-[13.5px] font-medium text-default px-3 py-2 hover:text-muted transition-colors no-underline">
+            Login
+          </NuxtLink>
+          <NuxtLink
+            to="/signup"
+            class="hidden sm:inline-flex items-center gap-1.5 bg-primary text-inverted text-[13.5px] font-semibold px-4 py-2.5 rounded-[9px] hover:bg-primary/90 transition-colors no-underline"
+          >
+            Start free
+            <UIcon name="i-heroicons-arrow-right" class="size-3.5" />
+          </NuxtLink>
+        </template>
         <UButton
           icon="i-heroicons-bars-3"
           variant="ghost"
@@ -64,12 +75,19 @@
           {{ item.label }}
         </NuxtLink>
         <div class="pt-4 space-y-2">
-          <NuxtLink to="/login" class="block px-4 py-3 text-[13.5px] font-medium text-(--ui-text) hover:text-(--ui-text-muted) transition-colors no-underline" @click="closeMobileMenu">
-            Login
-          </NuxtLink>
-          <NuxtLink to="/signup" class="block px-4 py-3 text-[13.5px] font-semibold text-(--ui-primary) transition-colors no-underline" @click="closeMobileMenu">
-            Start free
-          </NuxtLink>
+          <template v-if="isAuthenticated">
+            <NuxtLink to="/dashboard" class="block px-4 py-3 text-[13.5px] font-semibold text-primary transition-colors no-underline" @click="closeMobileMenu">
+              Dashboard →
+            </NuxtLink>
+          </template>
+          <template v-else>
+            <NuxtLink to="/login" class="block px-4 py-3 text-[13.5px] font-medium text-default hover:text-muted transition-colors no-underline" @click="closeMobileMenu">
+              Login
+            </NuxtLink>
+            <NuxtLink to="/signup" class="block px-4 py-3 text-[13.5px] font-semibold text-primary transition-colors no-underline" @click="closeMobileMenu">
+              Start free
+            </NuxtLink>
+          </template>
         </div>
       </nav>
     </div>
@@ -77,6 +95,8 @@
 </template>
 
 <script setup>
+const { isAuthenticated } = useAuth()
+
 const navItems = [
   { label: 'Features', to: '/#features' },
   { label: 'Pricing', to: '/pricing' },

@@ -4,7 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, getPriceId, requireBillingAccess } from '../../utils/billing'
 
 interface CheckoutRequest {
-  organizationId: string
+  organizationId?: string
   plan: string
   interval?: 'month' | 'year'
   successUrl?: string
@@ -13,12 +13,17 @@ interface CheckoutRequest {
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event) as CheckoutRequest
-  const { organizationId, plan, successUrl, cancelUrl } = body
+  const { plan, successUrl, cancelUrl } = body
   const interval = body.interval ?? 'month'
-  
-  if (!organizationId || !plan) {
-    return jsonResponse({ 
-      error: 'Organization ID and plan are required' 
+  let organizationId = body.organizationId
+
+  if (!plan) {
+    return jsonResponse({ error: 'Plan is required' }, { status: 400 })
+  }
+
+  if (plan !== 'pro' && plan !== 'agency') {
+    return jsonResponse({
+      error: 'Invalid plan. Allowed values are pro or agency'
     }, { status: 400 })
   }
 
@@ -53,6 +58,17 @@ export default defineEventHandler(async (event) => {
     }, { status: 401 })
   }
 
+  // Auto-detect org from session when not provided (e.g. pricing page CTA)
+  if (!organizationId) {
+    const userOrg = await db.prepare(`
+      SELECT organizationId FROM member WHERE userId = ? LIMIT 1
+    `).bind(session.user.id).first() as { organizationId: string } | null
+    if (!userOrg) {
+      return jsonResponse({ error: 'No organization found' }, { status: 404 })
+    }
+    organizationId = userOrg.organizationId
+  }
+
   try {
     // Require billing access
     await requireBillingAccess(env, db, organizationId, session.user.id)
@@ -71,7 +87,16 @@ export default defineEventHandler(async (event) => {
     }
 
     // Get price ID for plan + interval
-    const priceId = getPriceId(env, plan, interval)
+    let priceId: string
+    try {
+      priceId = getPriceId(env, plan, interval)
+    } catch (error) {
+      console.error('Invalid Stripe pricing configuration in checkout', { plan, interval, error })
+      return jsonResponse({
+        error: 'Billing is temporarily unavailable for the selected plan'
+      }, { status: 503 })
+    }
+
     const stripe = getStripe(env)
     
     // Create or get Stripe customer
