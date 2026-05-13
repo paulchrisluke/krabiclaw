@@ -532,8 +532,8 @@ async function executeTool(
     }
 
     case 'get_location_media': {
-      const conditions = [`location_id = ?`, `status = 'active'`]
-      const params: any[] = [input.location_id]
+      const conditions = [`site_id = ?`, `location_id = ?`, `status = 'active'`]
+      const params: any[] = [siteId, input.location_id]
       if (input.kind) { conditions.push(`kind = ?`); params.push(input.kind) }
       params.push(50)
       const { results } = await db.prepare(

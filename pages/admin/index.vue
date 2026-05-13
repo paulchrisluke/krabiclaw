@@ -301,8 +301,6 @@
 </template>
 
 <script setup>
-import { authClient } from '~/lib/auth-client'
-
 definePageMeta({ layout: 'default' })
 
 const auth = useAuth()
@@ -430,16 +428,9 @@ async function syncAdminDomain(domainId) {
 async function loadUsers() {
   usersLoading.value = true
   try {
-    const query = {
-      limit: 50,
-      offset: 0,
-      ...(userSearch.value.trim()
-        ? { searchValue: userSearch.value.trim(), searchField: 'email', searchOperator: 'contains' }
-        : {})
-    }
-    const response = await authClient.admin.listUsers({ query })
-    if (response.error) throw response.error
-    users.value = response.data?.users || []
+    const query = userSearch.value.trim() ? `?q=${encodeURIComponent(userSearch.value.trim())}` : ''
+    const response = await $fetch(`/api/admin/users${query}`)
+    users.value = response.users || []
     return true
   } catch (err) {
     console.error('Failed to load users:', err)
@@ -452,8 +443,10 @@ async function loadUsers() {
 async function impersonateUser(userId) {
   impersonatingUserId.value = userId
   try {
-    const response = await authClient.admin.impersonateUser({ userId })
-    if (response.error) throw response.error
+    await $fetch('/api/admin/impersonation/start', {
+      method: 'POST',
+      body: { userId }
+    })
     addToast('Impersonation started', 'success')
     await navigateTo('/dashboard')
   } catch (err) {

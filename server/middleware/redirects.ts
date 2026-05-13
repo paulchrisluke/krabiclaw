@@ -10,7 +10,8 @@ export default defineEventHandler((event) => {
   const url = getRequestURL(event)
   const target = redirects[url.pathname]
   if (target) {
+    const targetWithParams = `${target}${url.search}${url.hash}`
     // Permanent redirect for SEO
-    return sendRedirect(event, target, 301)
+    return sendRedirect(event, targetWithParams, 301)
   }
 })

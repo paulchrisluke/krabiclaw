@@ -73,9 +73,10 @@ export default defineEventHandler(async (event) => {
       siteId,
       userId: session.user.id,
       model: MODEL,
-      error: error?.message || 'Unknown error'
+      error: error?.message || 'Unknown error',
+      stack: error?.stack || null
     })
-    return jsonResponse({ error: error?.message || 'Failed to generate image' }, { status: 500 })
+    return jsonResponse({ error: 'Failed to generate image' }, { status: 500 })
   }
 
   const assetId = crypto.randomUUID()

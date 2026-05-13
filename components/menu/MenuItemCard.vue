@@ -67,13 +67,14 @@ interface MenuItem {
 
 const props = defineProps<{
   item: MenuItem
+  resolveAssetUrl?: (assetId: string) => string
 }>()
 
-// Prefer backend-provided image_url (joined asset), fallback to asset_id if needed
 const mediaUrl = computed(() => {
-  // If backend provides image_url (joined asset), use it
   if (props.item.image_url) return props.item.image_url
-  // Optionally, resolve asset_id to URL if needed (requires asset lookup)
+  if (props.item.image_asset_id && props.resolveAssetUrl) {
+    return props.resolveAssetUrl(props.item.image_asset_id)
+  }
   return ''
 })
 

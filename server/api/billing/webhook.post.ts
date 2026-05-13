@@ -206,9 +206,14 @@ async function handleSubscriptionUpdated(env: Record<string, string | undefined>
   const plan = getPlanFromSubscription(env, subscription)
   if (plan) {
     await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, plan)
-    if (plan === 'free') {
-      await deleteOrganizationCustomDomains(env, db, billing.organization_id)
-    }
+  } else {
+    console.warn('Unrecognized Stripe price ID in subscription update; falling back to free entitlements', {
+      organizationId: billing.organization_id,
+      subscriptionId: subscription.id,
+      priceIds: subscription.items.data.map((item) => item.price?.id).filter(Boolean)
+    })
+    await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, 'free')
+    await deleteOrganizationCustomDomains(env, db, billing.organization_id)
   }
 
   console.log(`Subscription updated for organization ${billing.organization_id}, status ${status}`)

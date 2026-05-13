@@ -86,7 +86,9 @@ export default defineEventHandler(async (event) => {
   if (!filePart?.data) return jsonResponse({ error: 'file field required' }, { status: 400 })
 
   const detectedContentType = sniffMimeType(filePart.data)
-  const declaredContentType = typeof filePart.type === 'string' ? filePart.type.toLowerCase().trim() : ''
+  const declaredContentType = typeof filePart.type === 'string'
+    ? filePart.type.split(';', 1)[0]?.toLowerCase().trim() || ''
+    : ''
   const contentType = detectedContentType
   const filename = sanitizeFilename(filePart.filename)
   const fileSize = filePart.data.byteLength

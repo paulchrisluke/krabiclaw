@@ -176,7 +176,6 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import { useAuth } from '~/composables/useAuth'
 import { useChowBot } from '~/composables/useChowBot'
 import { useChowBotHistory } from '~/composables/useChowBotHistory'
-import { authClient } from '~/lib/auth-client'
 
 interface DashboardSite {
   id: string
@@ -188,6 +187,7 @@ interface DashboardSite {
 const route = useRoute()
 const router = useRouter()
 const { data: sessionData, signOut } = useAuth()
+const toast = useToast()
 const stoppingImpersonation = ref(false)
 const chowBot = useChowBot() as any
 const toggleChowbot = () => chowBot.toggle()
@@ -374,8 +374,15 @@ async function handleSignOut() {
 async function stopImpersonating() {
   stoppingImpersonation.value = true
   try {
-    await authClient.admin.stopImpersonating()
+    await $fetch('/api/admin/impersonation/stop', { method: 'POST' })
     await navigateTo('/admin')
+  } catch (error) {
+    console.error('Failed to stop impersonation:', error)
+    toast.add({
+      title: 'Error',
+      description: 'Failed to stop impersonation',
+      color: 'error'
+    })
   } finally {
     stoppingImpersonation.value = false
   }

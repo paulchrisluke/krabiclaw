@@ -321,7 +321,7 @@
             <MediaPicker
               :model-value="editingValue || null"
               :site-id="siteId"
-              :accept="(activeFieldDef as { mediaKind: 'image' | 'video' | 'any' }).mediaKind"
+              :accept="activeFieldDef?.mediaKind ?? 'any'"
               :title="activeFieldDef.label"
               @change="onMediaChange"
             />
