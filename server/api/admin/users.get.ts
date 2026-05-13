@@ -19,8 +19,9 @@ export default defineEventHandler(async (event) => {
   const where: string[] = []
   const params: any[] = []
   if (search) {
-    where.push('lower(email) LIKE ?')
-    params.push(`%${search}%`)
+    const escapedSearch = search.replace(/([%_\\])/g, '\\$1')
+    where.push("lower(email) LIKE ? ESCAPE '\\\\'")
+    params.push(`%${escapedSearch}%`)
   }
 
   const users = await db.prepare(`

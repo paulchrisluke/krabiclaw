@@ -213,7 +213,14 @@ async function handleSubscriptionUpdated(env: Record<string, string | undefined>
       priceIds: subscription.items.data.map((item) => item.price?.id).filter(Boolean)
     })
     await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, 'free')
-    await deleteOrganizationCustomDomains(env, db, billing.organization_id)
+    try {
+      await deleteOrganizationCustomDomains(env, db, billing.organization_id)
+    } catch (error) {
+      console.error('Failed to delete custom domains during subscription update fallback', {
+        organizationId: billing.organization_id,
+        error
+      })
+    }
   }
 
   console.log(`Subscription updated for organization ${billing.organization_id}, status ${status}`)

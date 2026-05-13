@@ -1,4 +1,4 @@
-import { getHeader, getRequestURL, setResponseHeader } from 'h3'
+import { appendResponseHeader, getHeader, getRequestURL } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
@@ -19,8 +19,20 @@ export default defineEventHandler(async (event) => {
     }
   })
 
-  const setCookie = response.headers.get('set-cookie')
-  if (setCookie) setResponseHeader(event, 'set-cookie', setCookie)
+  const headerBag = response.headers as Headers & {
+    getSetCookie?: () => string[]
+    getAll?: (name: string) => string[]
+    raw?: () => Record<string, string[]>
+  }
+  const setCookies = typeof headerBag.getSetCookie === 'function'
+    ? headerBag.getSetCookie()
+    : typeof headerBag.getAll === 'function'
+      ? headerBag.getAll('set-cookie')
+      : (headerBag.raw?.()['set-cookie'] || [])
+
+  for (const cookieValue of setCookies) {
+    appendResponseHeader(event, 'set-cookie', cookieValue)
+  }
 
   if (!response.ok) {
     const text = await response.text().catch(() => '')
