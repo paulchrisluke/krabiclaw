@@ -8,22 +8,23 @@
 
 ## Business Model
 
-| Tier | Price | Features |
-|------|-------|---------|
-| Free | $0 | Subdomain (`name.krabiclaw.com`), Saya theme, manual editor, 500 AI credits/mo, 1 location |
-| Pro | $29/location/mo · $249/location/yr | Custom domain + SSL, Google Business sync, 5,000 AI credits/mo, unlimited locations |
-| Agency | $99/mo · $990/yr | Everything in Pro + unlimited sites, white-label, API access, 50,000 AI credits/mo |
-| Credit top-ups | $9 / $29 / $49 | 500 / 2,500 / 5,000 one-time credits — never expire |
-| Upsell (TBD) | TBD | Instagram/Facebook sync, additional themes, Tenant MCP |
+Pricing is managed entirely in Stripe — never duplicated here. See Stripe dashboard → Product catalog for current prices, features, and credit bundle amounts.
 
-**Stripe products:** Plans and credit bundles are defined in Stripe with `marketing_features` + `metadata`. All pricing UI (home page, `/pricing`, dashboard billing, upgrade modal) reads from `GET /api/billing/plans` — single source of truth, no pricing drift.
+| Tier | Features |
+|------|---------|
+| Free | Subdomain, Saya theme, manual editor, starter AI credits, 1 location |
+| Pro | Custom domain + SSL, Google Business sync, more AI credits/mo, unlimited locations (per-location billing) |
+| Agency | Everything in Pro + unlimited sites, white-label, API access, higher AI credit allowance |
+| Credit top-ups | 3 one-time bundles (500 / 2,500 / 5,000 credits) — never expire |
+| Upsell (TBD) | Instagram/Facebook sync, additional themes, Tenant MCP |
 
-**Upgrade modal triggers** (shown inline when owner hits a paid feature):
+**Source of truth:** Plans and credit bundles are Stripe products with `marketing_features` + `metadata`. All pricing UI (home page, `/pricing`, dashboard billing, upgrade modal, ChowBot depleted banner) reads from `GET /api/billing/plans` — zero hardcoded prices in the codebase.
+
+**Upgrade modal triggers** (shown inline when owner hits a paid feature gate):
 - Connecting Google Business Profile
 - Adding a second location
 - Custom domain setup
 - Removing KrabiClaw branding
-- Buying additional AI credits
 
 ---
 
@@ -87,9 +88,9 @@
 
 ---
 
-## D1 Database — 34 Tables
+## D1 Database
 
-Key tables added during this build cycle:
+Key tables (see `schema.sql` for authoritative list):
 - `ai_credits` / `ai_usage_log` — credit billing, usage tracking, CF Gateway log reconciliation
 - `notifications` — channel-agnostic outbound notification log
 - `contact_submissions` / `reservation_submissions` — Saya theme form submissions
@@ -115,7 +116,7 @@ Removed: `staff_profiles`, `awards_recognition` (no GMB source, no routes)
 - `POST /api/ai/[siteId]/menu/extract` — vision extraction from photo/image, saves as draft, charges credits
 - Draft-first always — owner must publish explicitly, AI never auto-publishes
 
-**Credit model:** 1 credit = 1,000 normalized tokens. Free: 500. Paid: 5,000/mo. Markup: 2–3× Anthropic cost.
+**Credit model:** 1 credit = 1,000 normalized tokens. 5× output token weighting. Markup: 2–3× Anthropic cost. Credit amounts per plan managed in Stripe metadata.
 
 ---
 
@@ -152,9 +153,9 @@ Removed: `staff_profiles`, `awards_recognition` (no GMB source, no routes)
 ### ✅ 6. ChowBot — Dashboard AI Chat Agent
 **Status: Live**
 
-A Shopify Sidekick-style chat panel on every dashboard page. Owner types natural language → ChowBot takes action via 30 tools → streams live tool indicators → confirms before publishing.
+A Shopify Sidekick-style chat panel on every dashboard page. Owner types natural language → ChowBot takes action via tools → streams live tool indicators → confirms before publishing.
 
-**30 tools covering:**
+**Tools covering:**
 - Posts: list, create (all types + CTA/event/offer), publish
 - Menus: full CRUD + batch add + image_url on items
 - Locations: list, create, update (all fields including socials/description/price_level)
@@ -208,8 +209,8 @@ End-to-end Stripe integration for plan upgrades and credit purchases.
 - `stripe_subscription_item_id` stored for quantity updates
 
 **Credit top-ups (one-time payments):**
-- Bundles: 500 credits / $9 · 2,500 credits / $29 · 5,000 credits / $49
-- `POST /api/billing/credits/add` with `{ bundle }` → Stripe one-time checkout → webhook tops up `ai_credits.balance`
+- 3 bundles (prices managed in Stripe — see Product catalog)
+- `POST /api/billing/credits/add` with `{ bundle: 500|2500|5000 }` → Stripe one-time checkout → webhook tops up `ai_credits.balance`
 - Dashboard billing: "Buy credits" dropdown with 3 bundles
 - ChowBot: credit-depleted banner locks input and shows inline buy buttons (no page nav needed)
 
