@@ -66,9 +66,16 @@
         </div>
       </div>
 
-      <div v-if="isDepleted" class="shrink-0 bg-error-50 dark:bg-error-950 px-4 py-2 text-xs text-error-600 dark:text-error-400 flex items-center gap-2">
-        <UIcon name="i-heroicons-exclamation-triangle" class="size-3.5 shrink-0" />
-        No AI credits remaining. <NuxtLink to="/dashboard/billing" class="underline" @click="close">Add credits →</NuxtLink>
+      <div v-if="isDepleted" class="shrink-0 border-b border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-4 py-3 flex flex-col gap-2">
+        <div class="flex items-center gap-2 text-xs text-error-600 dark:text-error-400">
+          <UIcon name="i-heroicons-exclamation-triangle" class="size-3.5 shrink-0" />
+          <span class="font-medium">No AI credits remaining</span>
+        </div>
+        <div class="flex gap-2">
+          <UButton size="xs" color="error" variant="solid" :loading="buyingCredits === 500" @click="purchaseCredits(500)">500 — $9</UButton>
+          <UButton size="xs" color="error" variant="soft" :loading="buyingCredits === 2500" @click="purchaseCredits(2500)">2,500 — $29</UButton>
+          <UButton size="xs" color="error" variant="soft" :loading="buyingCredits === 5000" @click="purchaseCredits(5000)">5,000 — $49</UButton>
+        </div>
       </div>
       <div v-else-if="isLow" class="shrink-0 bg-warning-50 dark:bg-warning-950 px-4 py-2 text-xs text-warning-600 dark:text-warning-400 flex items-center gap-2">
         <UIcon name="i-heroicons-exclamation-triangle" class="size-3.5 shrink-0" />
@@ -145,8 +152,8 @@
 
         <UChatPrompt
           v-model="input"
-          :placeholder="pendingFile ? 'Add a caption (optional) then press send…' : 'Ask ChowBot anything…'"
-          :disabled="isLoading || isUploading || !siteId"
+          :placeholder="isDepleted ? 'Purchase credits above to continue…' : pendingFile ? 'Add a caption (optional) then press send…' : 'Ask ChowBot anything…'"
+          :disabled="isLoading || isUploading || !siteId || isDepleted"
           :loading="isLoading || isUploading"
           :maxrows="8"
           @submit="handleSubmit"
@@ -161,7 +168,7 @@
               color="neutral"
               variant="ghost"
               size="xs"
-              :disabled="isLoading || isUploading || !siteId"
+              :disabled="isLoading || isUploading || !siteId || isDepleted"
               @click="fileInputRef?.click()"
             />
           </UTooltip>
@@ -192,6 +199,22 @@ const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages }
 const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId) as any
 
 watch(isOpen, (open: boolean) => { if (open && siteId.value) fetchCredits() })
+
+const buyingCredits = ref<number | null>(null)
+
+async function purchaseCredits(bundle: 500 | 2500 | 5000) {
+  buyingCredits.value = bundle
+  try {
+    const res = await $fetch<{ checkoutUrl?: string; balance?: number }>('/api/billing/credits/add', {
+      method: 'POST',
+      body: { bundle }
+    } as any)
+    if (res.checkoutUrl) await navigateTo(res.checkoutUrl, { external: true })
+    if (res.balance !== undefined) await fetchCredits()
+  } finally {
+    buyingCredits.value = null
+  }
+}
 
 const input = ref('')
 const fileInputRef = ref<HTMLInputElement | null>(null)
