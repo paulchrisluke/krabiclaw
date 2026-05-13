@@ -37,6 +37,18 @@ interface MarketingFeature {
   name: string
 }
 
+const DEFAULT_PLAN_LIMITS: PlanLimits = {
+  locations: 1,
+  sites: 1,
+  aiCredits: 0,
+  customDomain: false,
+  googleBusiness: false,
+  advancedSeo: false,
+  whiteLabel: false,
+  apiAccess: false,
+  support: 'Community',
+}
+
 const STATIC_PLANS: Plan[] = [
   {
     id: 'free',
@@ -217,14 +229,16 @@ async function fetchStripeProducts(env: Record<string, string | undefined>): Pro
       highlighted: meta.highlighted === 'true',
       badge: meta.badge || staticFallback?.badge,
       image: product.images?.[0] ?? staticFallback?.image,
-      prices: (priceLookup[product.id] ?? []).sort((a, b) =>
-        a.interval === 'month' ? -1 : 1
-      ),
+      prices: (priceLookup[product.id] ?? []).sort((a, b) => {
+        const rank: Record<string, number> = { month: 0, year: 1 }
+        return (rank[a.interval] ?? 0) - (rank[b.interval] ?? 0)
+      }),
       features,
       limits: {
+        ...DEFAULT_PLAN_LIMITS,
         ...staticFallback?.limits,
         ...parseLimits(meta),
-      } as PlanLimits,
+      },
       cta: staticFallback?.cta ?? { label: 'Get started', href: '/signup' },
     })
   }

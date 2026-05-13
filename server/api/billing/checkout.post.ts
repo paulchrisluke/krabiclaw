@@ -70,19 +70,21 @@ export default defineEventHandler(async (event) => {
     if (orgIds.length > 1) {
       return jsonResponse({ error: 'User belongs to multiple organizations. Please specify organizationId.' }, { status: 400 })
     }
-    organizationId = orgIds[0]
+    organizationId = orgIds[0]!
   }
+
+  const orgId: string = organizationId!
 
   try {
     // Require billing access
-    await requireBillingAccess(env, db, organizationId, session.user.id)
+    await requireBillingAccess(env, db, orgId, session.user.id)
     
     // Get organization details
     const organization = await db.prepare(`
       SELECT o.name, b.stripe_customer_id FROM organization o
       LEFT JOIN organization_billing b ON o.id = b.organization_id
       WHERE o.id = ?
-    `).bind(organizationId).first()
+    `).bind(orgId).first()
     
     if (!organization) {
       return jsonResponse({ 
@@ -109,7 +111,7 @@ export default defineEventHandler(async (event) => {
       const customer = await stripe.customers.create({
         name: organization.name,
         metadata: {
-          organization_id: organizationId
+          organization_id: orgId
         }
       })
       customerId = customer.id
@@ -120,8 +122,8 @@ export default defineEventHandler(async (event) => {
         (id, organization_id, stripe_customer_id, updated_at)
         VALUES (?, ?, ?, ?)
       `).bind(
-        `billing-${organizationId}`,
-        organizationId,
+        `billing-${orgId}`,
+        orgId,
         customerId,
         new Date().toISOString()
       ).run()
@@ -146,7 +148,7 @@ export default defineEventHandler(async (event) => {
       },
       subscription_data: {
         metadata: {
-          organization_id: organizationId,
+          organization_id: orgId,
           plan
         }
       }

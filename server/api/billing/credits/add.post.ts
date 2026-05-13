@@ -23,7 +23,14 @@ export default defineEventHandler(async (event) => {
 
   // Dev-only direct top-up — accepts either { amount } or { bundle }
   if (process.env.NODE_ENV === 'development') {
-    const amount = Number(body.amount ?? body.bundle)
+    const raw = body.amount ?? body.bundle
+    if (raw === undefined || raw === null) {
+      return jsonResponse({ error: 'amount or bundle is required' }, { status: 400 })
+    }
+    const amount = Number(raw)
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
+      return jsonResponse({ error: 'amount must be a positive integer' }, { status: 400 })
+    }
     const member = await db.prepare(
       'SELECT organizationId FROM member WHERE userId = ? LIMIT 1'
     ).bind(session.user.id).first()

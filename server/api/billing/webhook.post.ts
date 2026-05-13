@@ -118,7 +118,12 @@ async function handleCheckoutCompleted(env: Record<string, string | undefined>, 
   const organizationId = session.metadata?.organization_id
 
   if (session.metadata?.type === 'credit_topup') {
-    await handleCreditTopup(db, organizationId!, Number(session.metadata.credits))
+    const credits = Number(session.metadata.credits)
+    if (!organizationId || !Number.isFinite(credits) || credits <= 0) {
+      console.error('Invalid credit topup metadata in checkout session:', session.id, { organizationId, credits: session.metadata.credits })
+      return
+    }
+    await handleCreditTopup(db, organizationId, credits)
     return
   }
 
@@ -271,22 +276,17 @@ async function handlePaymentFailed(db: any, invoice: Stripe.Invoice) {
   console.log(`Payment failed for organization ${billing.organization_id}`)
 }
 
-// Add purchased credits to org balance
+// Add purchased credits to org balance — atomic upsert on PRIMARY KEY
 async function handleCreditTopup(db: any, organizationId: string, credits: number) {
   const now = new Date().toISOString()
-  const existing = await db.prepare(
-    'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1'
-  ).bind(organizationId).first()
-
-  if (existing) {
-    await db.prepare(
-      'UPDATE ai_credits SET balance = balance + ?, last_topped_up_at = ?, updated_at = ? WHERE organization_id = ?'
-    ).bind(credits, now, now, organizationId).run()
-  } else {
-    await db.prepare(
-      'INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at) VALUES (?, ?, 0, ?, ?)'
-    ).bind(organizationId, credits, now, now).run()
-  }
+  await db.prepare(`
+    INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)
+    VALUES (?, ?, 0, ?, ?)
+    ON CONFLICT(organization_id) DO UPDATE SET
+      balance = balance + excluded.balance,
+      last_topped_up_at = excluded.last_topped_up_at,
+      updated_at = excluded.updated_at
+  `).bind(organizationId, credits, now, now).run()
   console.log(`Credit top-up: +${credits} credits for org ${organizationId}`)
 }
 

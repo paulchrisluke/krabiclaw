@@ -39,22 +39,21 @@ export function createAuth(env: CloudflareEnv) {
           after: async (user) => {
             const now = new Date().toISOString()
             const orgId = `org-${user.id}`
-            try {
-              const statements = [
-                d1.prepare(
-                  `INSERT OR IGNORE INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)`
-                ).bind(orgId, user.name ?? user.email ?? 'My Restaurant', orgId, now),
-                d1.prepare(
-                  `INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, ?, ?)`
-                ).bind(`member-${orgId}`, orgId, user.id, 'owner', now)
-              ]
-              
-              // Execute both inserts atomically
-              await d1.batch(statements)
-            } catch (err) {
-              console.error('Failed to create org on signup:', err)
-              throw err
-            }
+            // Insert org first, then member. If member insert fails, compensate by
+          // removing the org so we don't leave an owner-less organization.
+          await d1.prepare(
+            `INSERT OR IGNORE INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)`
+          ).bind(orgId, user.name ?? user.email ?? 'My Restaurant', orgId, now).run()
+
+          try {
+            await d1.prepare(
+              `INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, ?, ?)`
+            ).bind(`member-${orgId}`, orgId, user.id, 'owner', now).run()
+          } catch (memberErr) {
+            await d1.prepare(`DELETE FROM organization WHERE id = ?`).bind(orgId).run().catch(() => {})
+            console.error('Failed to create member on signup, compensated org deletion:', memberErr)
+            throw memberErr
+          }
           }
         }
       }

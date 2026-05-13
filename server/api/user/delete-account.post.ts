@@ -18,33 +18,38 @@ export default defineEventHandler(async (event) => {
 
   const userId = session.user.id
 
-  // Find organizations where this user is the SOLE owner
+  // Find orgs where this user is the SOLE owner (subquery counts all owners per org)
   const ownedOrgsResult = await db.prepare(`
-    SELECT o.id FROM organization o
-    JOIN member m ON o.id = m.organizationId
+    SELECT m.organizationId as id
+    FROM member m
     WHERE m.userId = ? AND m.role = 'owner'
-    GROUP BY o.id
-    HAVING COUNT(*) = 1
+    AND (
+      SELECT COUNT(*) FROM member m2
+      WHERE m2.organizationId = m.organizationId AND m2.role = 'owner'
+    ) = 1
   `).bind(userId).all() as { results?: Array<{ id: string }> } | null
 
   const soleOwnedOrgIds: string[] = (ownedOrgsResult?.results ?? []).map((r: any) => r.id)
-  
-  // Find all organizations where user is a member (for cleanup)
+
+  // Find all org memberships for cleanup
   const allMemberships = await db.prepare(`
     SELECT DISTINCT organizationId FROM member WHERE userId = ?
   `).bind(userId).all() as { results?: Array<{ organizationId: string }> } | null
 
   const allOrgIds: string[] = (allMemberships?.results ?? []).map((r: any) => r.organizationId)
 
-  // Block deletion if any organization has an active Stripe subscription
-  for (const orgId of allOrgIds) {
-    const billing = await db.prepare(`
-      SELECT status FROM organization_billing
-      WHERE organization_id = ?
+  // Single query: block deletion if any org has an active subscription
+  if (allOrgIds.length > 0) {
+    const placeholders = allOrgIds.map(() => '?').join(',')
+    const statusPlaceholders = ACTIVE_STATUSES.map(() => '?').join(',')
+    const activeSubscription = await db.prepare(`
+      SELECT organization_id FROM organization_billing
+      WHERE organization_id IN (${placeholders})
+      AND status IN (${statusPlaceholders})
       LIMIT 1
-    `).bind(orgId).first() as { status: string } | null
+    `).bind(...allOrgIds, ...ACTIVE_STATUSES).first()
 
-    if (billing && ACTIVE_STATUSES.includes(billing.status)) {
+    if (activeSubscription) {
       return jsonResponse(
         { error: 'active_subscription', message: 'Please cancel your subscription before deleting your account.' },
         { status: 409 }
@@ -52,23 +57,37 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Delete in transaction: sole-owned orgs first, then member records, then user
-  const statements = []
-  
-  // Delete sole-owned organizations (cascades to their data)
+  // For each sole-owned org, block if other members exist (would lose access)
   for (const orgId of soleOwnedOrgIds) {
-    statements.push(db.prepare(`DELETE FROM organization WHERE id = ?`).bind(orgId))
+    const otherMembers = await db.prepare(`
+      SELECT COUNT(*) as count FROM member WHERE organizationId = ? AND userId != ?
+    `).bind(orgId, userId).first() as { count: number } | null
+
+    if ((otherMembers?.count ?? 0) > 0) {
+      return jsonResponse(
+        { error: 'org_has_members', message: 'Transfer ownership or remove all members before deleting your account.' },
+        { status: 409 }
+      )
+    }
   }
-  
-  // Delete member records for all orgs (for co-owned orgs, removes user from org)
+
+  // Delete in correct order: member rows first, then orgs (avoids FK violations),
+  // then the user row (cascades sessions/accounts)
+  const statements = []
+
+  // Remove user from all orgs (co-owned orgs: removes membership; sole-owned: clears before org delete)
   for (const orgId of allOrgIds) {
     statements.push(db.prepare(`DELETE FROM member WHERE organizationId = ? AND userId = ?`).bind(orgId, userId))
   }
-  
-  // Delete the user — cascades to session, account, phone_number rows
+
+  // Delete sole-owned orgs (safe now that member rows are removed above)
+  for (const orgId of soleOwnedOrgIds) {
+    statements.push(db.prepare(`DELETE FROM organization WHERE id = ?`).bind(orgId))
+  }
+
+  // Delete user — cascades to session, account rows
   statements.push(db.prepare(`DELETE FROM user WHERE id = ?`).bind(userId))
-  
-  // Execute all statements in batch (atomic operation)
+
   if (statements.length > 0) {
     await db.batch(statements)
   }
