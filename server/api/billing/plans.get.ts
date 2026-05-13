@@ -164,7 +164,7 @@ function isMarketingFeatureArray(value: unknown): value is MarketingFeature[] {
 }
 
 async function fetchStripeProducts(env: Record<string, string | undefined>): Promise<Plan[]> {
-  const stripe = new Stripe(env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' })
+  const stripe = new Stripe(env.STRIPE_SECRET_KEY!)
 
   const products = await stripe.products.list({
     active: true,
@@ -236,7 +236,7 @@ async function fetchStripeProducts(env: Record<string, string | undefined>): Pro
     return aPrice - bPrice
   })
 
-  return [STATIC_PLANS[0], ...plans]
+  return [STATIC_PLANS[0]!, ...plans]
 }
 
 export default defineEventHandler(async (event) => {

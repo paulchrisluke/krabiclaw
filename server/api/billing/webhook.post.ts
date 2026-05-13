@@ -39,9 +39,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Parse webhook event
-    const stripe = new Stripe(env.STRIPE_SECRET_KEY!, {
-      apiVersion: '2024-06-20'
-    })
+    const stripe = new Stripe(env.STRIPE_SECRET_KEY!)
     
     const webhookEvent = stripe.webhooks.constructEvent(
       body.toString(),
@@ -122,11 +120,12 @@ async function handleCheckoutCompleted(env: Record<string, string | undefined>, 
 
   try {
     // Fetch subscription to get the item ID (needed for per-location quantity updates)
-    const stripe = new Stripe(env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' })
+    const stripe = new Stripe(env.STRIPE_SECRET_KEY!)
     const subscription = await stripe.subscriptions.retrieve(subscriptionId)
     const subscriptionItemId = subscription.items.data[0]?.id ?? null
-    const periodEnd = subscription.current_period_end
-      ? new Date(subscription.current_period_end * 1000).toISOString()
+    const sub = subscription as any
+    const periodEnd = sub.current_period_end
+      ? new Date(sub.current_period_end * 1000).toISOString()
       : null
 
     await db.prepare(`
@@ -169,8 +168,9 @@ async function handleSubscriptionUpdated(env: Record<string, string | undefined>
   }
 
   const status = subscription.status
-  const currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString()
-  const cancelAtPeriodEnd = subscription.cancel_at_period_end || false
+  const sub = subscription as any
+  const currentPeriodEnd = new Date(sub.current_period_end * 1000).toISOString()
+  const cancelAtPeriodEnd = sub.cancel_at_period_end || false
   
   try {
     // Update organization_billing subscription status

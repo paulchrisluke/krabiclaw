@@ -36,9 +36,7 @@ export function getStripe(env: BillingEnv): Stripe {
     throw new Error('Stripe secret key not configured')
   }
   
-  return new Stripe(env.STRIPE_SECRET_KEY, {
-    apiVersion: '2024-06-20'
-  })
+  return new Stripe(env.STRIPE_SECRET_KEY)
 }
 
 // Get organization billing status
@@ -200,17 +198,17 @@ export async function updateSubscriptionQuantity(
       SELECT stripe_subscription_item_id, plan
       FROM organization_billing
       WHERE organization_id = ?
-    `).bind(organizationId).first<{ stripe_subscription_item_id: string | null; plan: string }>()
+    `).bind(organizationId).first() as { stripe_subscription_item_id: string | null; plan: string } | null
 
     stripeSubscriptionItemId = billing?.stripe_subscription_item_id ?? null
-    if (!stripeSubscriptionItemId || billing.plan !== 'pro') return
+    if (!billing || !stripeSubscriptionItemId || billing.plan !== 'pro') return
 
     const result = await db.prepare(`
       SELECT COUNT(*) AS count
       FROM business_locations bl
       JOIN sites s ON bl.site_id = s.id
       WHERE s.organization_id = ? AND bl.status = 'active'
-    `).bind(organizationId).first<{ count: number }>()
+    `).bind(organizationId).first() as { count: number } | null
 
     const quantity = Math.max(1, result?.count ?? 1)
 
