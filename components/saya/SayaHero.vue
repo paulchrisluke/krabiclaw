@@ -21,11 +21,11 @@
     <div class="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center justify-center px-4 py-12 text-center">
       <!-- Establishment Year -->
       <div v-if="establishmentYear" class="inline-flex items-center gap-2 mb-6">
-        <span class="w-8 h-px bg-default opacity-30"></span>
+        <span class="w-8 h-px bg-inverted-muted opacity-30"></span>
         <span class="text-[10px] font-bold uppercase tracking-[0.3em] text-inverted opacity-60 italic">
           EST. {{ establishmentYear }}
         </span>
-        <span class="w-8 h-px bg-default opacity-30"></span>
+        <span class="w-8 h-px bg-inverted-muted opacity-30"></span>
       </div>
 
       <EditableField

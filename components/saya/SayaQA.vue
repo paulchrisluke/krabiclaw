@@ -16,7 +16,7 @@
         class="bg-default border border-default rounded-3xl p-8 shadow-sm hover:shadow-md transition-shadow"
       >
         <div class="flex items-start gap-4 mb-6">
-          <div class="h-10 w-10 shrink-0 rounded-full bg-muted flex items-center justify-center text-muted font-bold text-sm">
+          <div class="h-10 w-10 shrink-0 rounded-full bg-inverted flex items-center justify-center text-inverted font-bold text-sm">
             Q
           </div>
           <div>
@@ -56,7 +56,7 @@
             </div>
           </div>
           <div class="flex items-start gap-4 bg-muted rounded-2xl p-6">
-            <div class="h-8 w-8 shrink-0 rounded-full bg-muted animate-pulse flex items-center justify-center text-inverted font-bold text-xs">
+            <div class="h-8 w-8 shrink-0 rounded-full bg-inverted animate-pulse flex items-center justify-center text-inverted font-bold text-xs">
               A
             </div>
             <div class="flex-1 space-y-2">

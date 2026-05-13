@@ -56,7 +56,7 @@
 
         <!-- Mascot / hero visual -->
         <div class="hidden lg:flex justify-center">
-          <div class="bg-(--kc-coral-50) rounded-4xl p-7 shadow-xl max-w-lg w-full">
+          <div class="bg-(--kc-coral-50) rounded-3xl p-7 shadow-xl max-w-lg w-full">
             <img
               src="/krabiclaw-login-mascot.png"
               alt="KrabiClaw mascot"

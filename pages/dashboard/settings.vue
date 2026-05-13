@@ -145,7 +145,7 @@ const organization = computed(() => unref(organizationsState)?.data?.[0] || null
 const organizationRole = computed(() => {
   const metadata = organization.value?.metadata
   if (metadata && typeof metadata === 'object' && 'role' in metadata && typeof metadata.role === 'string' && metadata.role.trim()) {
-    return metadata.role
+    return metadata.role.trim()
   }
   return 'Member'
 })

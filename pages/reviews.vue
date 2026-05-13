@@ -15,7 +15,7 @@
     />
     <AppSection v-if="googleReviews.length === 0 && isAuthenticated" bg="alt" padding="sm">
       <div class="text-center">
-        <NuxtLink to="/dashboard/integrations" class="font-semibold text-default underline decoration-default underline-offset-4 hover:decoration-default">
+        <NuxtLink to="/dashboard/integrations" class="font-semibold text-default underline decoration-default underline-offset-4 hover:decoration-primary">
           Connect Google Business →
         </NuxtLink>
       </div>

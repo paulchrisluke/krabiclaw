@@ -38,9 +38,9 @@
           </div>
 
           <div class="absolute top-4 left-4 flex gap-2">
-            <UBadge v-if="post.event" color="neutral" variant="solid" size="xs" class="bg-default backdrop-blur shadow-sm text-default">Event</UBadge>
-            <UBadge v-else-if="post.offer" color="neutral" variant="solid" size="xs" class="bg-default backdrop-blur shadow-sm text-default">Offer</UBadge>
-            <UBadge v-else color="neutral" variant="solid" size="xs" class="bg-default backdrop-blur shadow-sm text-default">Update</UBadge>
+            <UBadge v-if="post.event" color="neutral" variant="solid" size="xs" class="bg-black/80 backdrop-blur shadow-sm text-white">Event</UBadge>
+            <UBadge v-else-if="post.offer" color="neutral" variant="solid" size="xs" class="bg-black/80 backdrop-blur shadow-sm text-white">Offer</UBadge>
+            <UBadge v-else color="neutral" variant="solid" size="xs" class="bg-black/80 backdrop-blur shadow-sm text-white">Update</UBadge>
           </div>
         </div>
 

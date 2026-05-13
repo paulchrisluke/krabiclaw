@@ -79,7 +79,7 @@
                  prose-strong:text-default
                  prose-li:text-muted
                  prose-hr:border-default
-                 prose-blockquote:border-l-[--kc-teal] prose-blockquote:text-muted"
+                 prose-blockquote:border-l-(--kc-teal) prose-blockquote:text-muted"
           v-html="renderedBody"
         />
 
@@ -103,7 +103,7 @@
             </div>
             <div>
               <p class="font-semibold text-default text-sm">{{ post.author_name || 'KrabiClaw' }}</p>
-              <p class="text-xs text-dimmed">Restaurant website builder built in Krabi, Thailand</p>
+              <p v-if="authorSubtitle" class="text-xs text-dimmed">{{ authorSubtitle }}</p>
             </div>
           </div>
           <UButton to="/blog" variant="outline" color="neutral" size="sm">More Articles</UButton>
@@ -123,6 +123,7 @@ definePageMeta({ layout: 'platform' })
 const route = useRoute()
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
+const postEndpoint = computed<string>(() => `/api/public/blog/posts/${String(route.params.slug)}`)
 
 const CATEGORY_CLASSES: Record<string, string> = {
   Marketing: 'bg-amber-100 text-amber-800',
@@ -135,10 +136,26 @@ const CATEGORY_CLASSES: Record<string, string> = {
 
 const { data, pending, error } = await useAsyncData(
   `blog-post-${route.params.slug}`,
-  () => $fetch(`/api/public/blog/posts/${route.params.slug}`)
+  () => $fetch(postEndpoint.value),
+  {
+    transform: (payload: any) => {
+      const rawPost = payload?.post
+      if (!rawPost) return payload
+      const authorSubtitle = rawPost.author_subtitle || rawPost.author_bio || rawPost.author?.bio || ''
+      return {
+        ...payload,
+        post: {
+          ...rawPost,
+          author_subtitle: authorSubtitle
+        }
+      }
+    }
+  }
 )
 
 const post = computed(() => (data.value as any)?.post ?? null)
+
+const authorSubtitle = computed(() => post.value?.author_subtitle || '')
 
 const renderedBody = computed(() => {
   if (!post.value?.body) return ''

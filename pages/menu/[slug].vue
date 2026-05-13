@@ -20,7 +20,7 @@
             <span
               :class="[
                 'inline-flex items-center rounded-full px-3 py-1 text-sm font-medium',
-                item.available ? 'bg-elevated text-stone-800' : 'bg-red-50 text-red-700'
+                item.available ? 'bg-elevated text-default' : 'bg-red-50 text-red-700'
               ]"
             >
               {{ item.available ? 'Available today' : 'Currently unavailable' }}
@@ -42,9 +42,9 @@
                 v-if="imageGallery[0]"
                 :src="imageGallery[0]"
                 :alt="item.name"
-                class="aspect-[4/3] w-full object-cover"
+                class="aspect-4/3 w-full object-cover"
               />
-              <div v-else class="flex aspect-[4/3] w-full items-center justify-center px-6 text-center">
+              <div v-else class="flex aspect-4/3 w-full items-center justify-center px-6 text-center">
                 <span class="text-sm text-dimmed">No image available yet</span>
               </div>
             </UCard>
@@ -153,7 +153,7 @@
                   type="text"
                   required
                   maxlength="80"
-                  class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline outline-1 -outline-offset-1 outline-default placeholder:text-dimmed focus:outline-2 focus:-outline-offset-2 focus:outline-black"
+                  class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline-solid outline-1 -outline-offset-1 outline-default placeholder:text-dimmed focus:outline-2 focus:-outline-offset-2 focus:outline-black"
                 />
               </div>
               <div>
@@ -161,7 +161,7 @@
                 <select
                   id="review-rating"
                   v-model.number="reviewForm.rating"
-                  class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline outline-1 -outline-offset-1 outline-default focus:outline-2 focus:-outline-offset-2 focus:outline-black"
+                  class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline-solid outline-1 -outline-offset-1 outline-default focus:outline-2 focus:-outline-offset-2 focus:outline-black"
                 >
                   <option v-for="rating in [5, 4, 3, 2, 1]" :key="rating" :value="rating">
                     {{ rating }} stars
@@ -177,7 +177,7 @@
                 type="text"
                 required
                 maxlength="120"
-                class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline outline-1 -outline-offset-1 outline-default placeholder:text-dimmed focus:outline-2 focus:-outline-offset-2 focus:outline-black"
+                class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline-solid outline-1 -outline-offset-1 outline-default placeholder:text-dimmed focus:outline-2 focus:-outline-offset-2 focus:outline-black"
               />
             </div>
             <div>
@@ -189,7 +189,7 @@
                 minlength="10"
                 maxlength="1200"
                 rows="4"
-                class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline outline-1 -outline-offset-1 outline-default placeholder:text-dimmed focus:outline-2 focus:-outline-offset-2 focus:outline-black"
+                class="mt-2 block w-full rounded-md bg-default px-3 py-2 text-base text-highlighted outline-solid outline-1 -outline-offset-1 outline-default placeholder:text-dimmed focus:outline-2 focus:-outline-offset-2 focus:outline-black"
               />
             </div>
             <div v-if="turnstileEnabled" ref="turnstileContainer" class="min-h-16"></div>

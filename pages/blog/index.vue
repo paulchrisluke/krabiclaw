@@ -137,7 +137,7 @@ const apiUrl = computed(() =>
 )
 
 const { data, pending } = useAsyncData(
-  `blog-${activeCategory.value ?? 'all'}`,
+  () => `blog-${activeCategory.value ?? 'all'}`,
   () => $fetch(apiUrl.value),
   { watch: [activeCategory] }
 )

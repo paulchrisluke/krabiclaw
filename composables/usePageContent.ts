@@ -87,7 +87,7 @@ export const usePageContent = (pageName?: string) => {
 
   const needsSanitization = (field: string) => {
     const def = getFieldDef(page.value, field)
-    return def?.type === 'richtext'
+    return def?.type === 'rich_text'
   }
 
   const handlePreviewUpdate = async (event: MessageEvent) => {

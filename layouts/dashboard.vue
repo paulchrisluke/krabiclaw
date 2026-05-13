@@ -104,7 +104,7 @@
               :avatar="{
                 src: sessionData?.user?.image ?? undefined,
                 loading: 'lazy',
-                alt: sessionData?.user?.name ?? 'User avatar'
+                alt: sessionData?.user?.name || 'User avatar'
               }"
               color="neutral"
               variant="ghost"

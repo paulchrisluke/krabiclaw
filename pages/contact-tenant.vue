@@ -11,7 +11,6 @@
         <div
           v-html="sanitizedIntro"
           class="prose prose-lg max-w-none text-muted"
-          :style="{ '--tw-prose-body': 'var(--ui-text-muted)', '--tw-prose-bold': 'var(--ui-text)' }"
         />
       </UCard>
 

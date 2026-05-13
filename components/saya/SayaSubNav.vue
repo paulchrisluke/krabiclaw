@@ -9,7 +9,7 @@
         :class="[
           'inline-flex shrink-0 items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-medium tracking-wide transition-colors',
           active === item.key
-            ? 'border-default bg-default text-inverted'
+            ? 'border-inverted bg-inverted text-inverted'
             : 'border-default bg-default text-default hover:border-muted'
         ]"
       >

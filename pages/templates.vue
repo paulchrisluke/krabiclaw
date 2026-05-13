@@ -28,7 +28,7 @@
               <div class="md:w-1/2 p-8">
                 <div class="flex items-center justify-between mb-4">
                   <h2 class="text-3xl font-bold text-default">Saya</h2>
-                  <span class="bg-(--kc-teal-100) text-(--kc-teal-600) px-3 py-1 rounded-full text-sm font-medium">Included</span>
+                  <span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium">Included</span>
                 </div>
                 <p class="text-muted mb-6">
                   Our flagship theme designed for modern restaurants. Features clean typography, 
@@ -36,25 +36,25 @@
                 </p>
                 <div class="space-y-3 mb-8">
                   <div class="flex items-center">
-                    <svg class="w-5 h-5 text-(--kc-teal) mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <svg class="w-5 h-5 text-primary mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
                     <span class="text-default">Mobile-first responsive design</span>
                   </div>
                   <div class="flex items-center">
-                    <svg class="w-5 h-5 text-(--kc-teal) mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <svg class="w-5 h-5 text-primary mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
                     <span class="text-default">Google Business integration</span>
                   </div>
                   <div class="flex items-center">
-                    <svg class="w-5 h-5 text-(--kc-teal) mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <svg class="w-5 h-5 text-primary mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
                     <span class="text-default">Visual content editor</span>
                   </div>
                   <div class="flex items-center">
-                    <svg class="w-5 h-5 text-(--kc-teal) mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <svg class="w-5 h-5 text-primary mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
                     <span class="text-default">SEO optimized</span>

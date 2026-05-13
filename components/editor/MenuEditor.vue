@@ -252,7 +252,8 @@ const handleCreateMenu = async () => {
     createMenuForm.name = ''
     createMenuForm.description = ''
     showCreateMenuForm.value = false
-  } catch {
+  } catch (err) {
+    console.error('handleCreateMenu failed:', err)
     toast.addToast('Failed to create menu', 'error')
   }
 }
@@ -283,7 +284,8 @@ const handleSaveItem = async (itemId: string) => {
     })
     expandedItemId.value = null
     toast.addToast('Item saved', 'success')
-  } catch {
+  } catch (err) {
+    console.error('handleSaveItem failed:', err)
     toast.addToast('Failed to save item', 'error')
   }
 }
@@ -293,7 +295,8 @@ const handleDeleteItem = async (itemId: string) => {
     await deleteMenuItem(itemId)
     expandedItemId.value = null
     toast.addToast('Item deleted', 'success')
-  } catch {
+  } catch (err) {
+    console.error('handleDeleteItem failed:', err)
     toast.addToast('Failed to delete item', 'error')
   }
 }
@@ -332,7 +335,8 @@ const handleAddItem = async (section: string) => {
     pendingSections.value = pendingSections.value.filter((s: string) => s !== section)
     addingItemSection.value = null
     toast.addToast('Item added', 'success')
-  } catch {
+  } catch (err) {
+    console.error('handleAddItem failed:', err)
     toast.addToast('Failed to add item', 'error')
   }
 }

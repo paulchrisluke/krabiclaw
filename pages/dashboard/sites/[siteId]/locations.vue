@@ -220,7 +220,11 @@ const headerLinks = computed(() => [
 ])
 
 const setLocationActive = (v: boolean | 'indeterminate') => {
-  locationEditForm.status = v === true ? 'active' : 'inactive'
+  if (v === 'indeterminate') {
+    // indeterminate means no change — leave status unchanged
+    return
+  }
+  locationEditForm.status = v ? 'active' : 'inactive'
 }
 
 const generateSlug = (name: string) =>

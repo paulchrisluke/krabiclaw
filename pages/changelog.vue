@@ -22,7 +22,7 @@
             <h3 class="text-lg font-semibold text-default mb-1">{{ commit.description }}</h3>
             <p class="text-sm text-muted">
               {{ commit.author }} · {{ formatDate(commit.date) }}
-              <span v-if="commit.scope" class="ml-2 text-(--kc-teal-600)">({{ commit.scope }})</span>
+              <span v-if="commit.scope" class="ml-2 text-muted">({{ commit.scope }})</span>
             </p>
           </div>
         </div>

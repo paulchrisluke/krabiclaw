@@ -124,9 +124,27 @@ export default defineEventHandler(async (event) => {
       SELECT COUNT(*) AS count
       FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND status = 'active'
-    `).bind(site.organization_id, siteId).first() as CountRow | null
+    `).bind(site.organization_id, siteId).first<CountRow>()
 
-    const isPrimary = body.is_primary === true || Number(activeCount?.count ?? 0) === 0
+    if (!activeCount) {
+      console.error('Null active location count when creating location', {
+        organizationId: site.organization_id,
+        siteId
+      })
+      return jsonResponse({ error: 'Unable to verify active locations' }, { status: 500 })
+    }
+
+    const activeLocationCount = Number(activeCount.count)
+    if (!Number.isFinite(activeLocationCount)) {
+      console.error('Invalid active location count when creating location', {
+        count: activeCount.count,
+        organizationId: site.organization_id,
+        siteId
+      })
+      return jsonResponse({ error: 'Unable to verify active locations' }, { status: 500 })
+    }
+
+    const isPrimary = body.is_primary === true || activeLocationCount === 0
     const locationId = crypto.randomUUID()
     const now = new Date().toISOString()
     const statements = []

@@ -17,7 +17,7 @@
           :key="item.label"
           :to="item.to"
           class="px-4 py-2 rounded-full text-[13.5px] font-medium text-muted transition-colors hover:text-default no-underline"
-          :class="$route.fullPath === item.to || ($route.fullPath.startsWith(item.to) && item.to !== '/') ? 'bg-elevated text-default shadow-[0_1px_2px_rgba(31,37,71,0.06)]' : ''"
+          :class="isActiveRoute(item.to) ? 'bg-elevated text-default shadow-[0_1px_2px_rgba(31,37,71,0.06)]' : ''"
         >
           {{ item.label }}
         </NuxtLink>
@@ -69,7 +69,7 @@
           :key="item.label"
           :to="item.to"
           class="block px-4 py-3 rounded-lg text-[13.5px] font-medium text-muted hover:text-default hover:bg-muted transition-colors no-underline"
-          :class="$route.fullPath === item.to || ($route.fullPath.startsWith(item.to) && item.to !== '/') ? 'bg-muted text-default' : ''"
+          :class="isActiveRoute(item.to) ? 'bg-muted text-default' : ''"
           @click="closeMobileMenu"
         >
           {{ item.label }}
@@ -94,7 +94,7 @@
   </header>
 </template>
 
-<script setup>
+<script setup lang="ts">
 const { isAuthenticated } = useAuth()
 
 const navItems = [
@@ -103,6 +103,14 @@ const navItems = [
   { label: 'Templates', to: '/templates' },
   { label: 'Docs', to: '/docs' },
 ]
+
+const route = useRoute()
+
+function isActiveRoute(to: string) {
+  const path = to.split('#')[0]!
+  if (path === '/') return route.fullPath === to
+  return route.fullPath === to || route.fullPath.startsWith(path)
+}
 
 const isMobileMenuOpen = ref(false)
 
@@ -114,7 +122,7 @@ function closeMobileMenu() {
   isMobileMenuOpen.value = false
 }
 
-watch(() => useRoute().fullPath, () => {
+watch(() => route.fullPath, () => {
   closeMobileMenu()
 })
 </script>

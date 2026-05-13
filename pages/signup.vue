@@ -2,7 +2,7 @@
   <div class="flex-1 grid lg:grid-cols-2">
 
     <!-- Mascot side -->
-    <aside class="hidden lg:flex flex-col items-center justify-center bg-(--kc-coral-50) px-12 py-12">
+    <aside class="hidden lg:flex flex-col items-center justify-center bg-elevated px-12 py-12">
       <img src="/krabiclaw-login-mascot.png" alt="KrabicLaw mascot" class="w-full max-w-115 block" />
       <p class="text-[14px] text-muted text-center max-w-sm mt-5 leading-relaxed">
         "We launched our menu in 12 minutes and got our first online reservation the same night." —
@@ -58,7 +58,7 @@
         <!-- Sign In Link -->
         <div class="mt-6 text-center text-sm text-muted">
           Already have an account?
-          <NuxtLink to="/login" class="text-(--kc-teal-600) font-semibold hover:underline no-underline">
+          <NuxtLink to="/login" class="text-primary font-semibold hover:underline no-underline">
             Sign in →
           </NuxtLink>
         </div>

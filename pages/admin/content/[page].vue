@@ -2,7 +2,7 @@
   <div class="platform-theme min-h-screen bg-default">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="mb-8">
-        <NuxtLink to="/admin" class="text-primary hover:text-primary mb-4 inline-block">← Back to Dashboard</NuxtLink>
+        <NuxtLink to="/admin" class="text-primary hover:text-primary/80 mb-4 inline-block">← Back to Dashboard</NuxtLink>
         <h1 class="text-3xl font-bold text-default capitalize">Edit {{ page }}</h1>
       </div>
 

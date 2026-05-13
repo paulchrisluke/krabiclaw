@@ -65,7 +65,7 @@ async function save(publish: boolean) {
     const res = await $fetch<CreatePostResponse>('/api/admin/blog/posts', {
       method: 'POST',
       body: { ...form, publish }
-    } as any)
+    })
     await navigateTo(`/admin/blog/${res.id}`)
   } catch (err: any) {
     errorMessage.value = err?.data?.error ?? 'Failed to save post.'

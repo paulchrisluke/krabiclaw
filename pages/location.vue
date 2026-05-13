@@ -76,6 +76,7 @@ definePageMeta({ layout: 'saya' })
 import { formatGoogleHours } from '~/utils/formatters'
 import { usePageContent } from '~/composables/usePageContent'
 import { useTenantSite } from '~/composables/useTenantSite'
+import DOMPurify from 'isomorphic-dompurify'
 
 const { getField } = usePageContent('location')
 
@@ -105,20 +106,12 @@ const defaultHours = [
 const parkingInfo = computed(() => {
   const raw = getField('parking.info', '')
   if (!raw || typeof raw !== 'string') return ''
-  if (process.client) {
-    const DOMPurify = require('dompurify')
-    return DOMPurify.sanitize(raw)
-  }
-  return raw
+  return DOMPurify.sanitize(raw)
 })
 const extraNotes = computed(() => {
   const raw = getField('extra.notes', '')
   if (!raw || typeof raw !== 'string') return ''
-  if (process.client) {
-    const DOMPurify = require('dompurify')
-    return DOMPurify.sanitize(raw)
-  }
-  return raw
+  return DOMPurify.sanitize(raw)
 })
 useSeoMeta({ 
   title: `Location & Hours | ${getField('businessName', businessName) || 'Restaurant'}`, 
