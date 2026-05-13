@@ -118,39 +118,34 @@ async function handleCheckoutCompleted(env: Record<string, string | undefined>, 
     return
   }
 
-  try {
-    // Fetch subscription to get the item ID (needed for per-location quantity updates)
-    const stripe = new Stripe(env.STRIPE_SECRET_KEY!)
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-    const subscriptionItemId = subscription.items.data[0]?.id ?? null
-    const sub = subscription as any
-    const periodEnd = sub.billing_cycle_anchor
-      ? new Date(sub.billing_cycle_anchor * 1000).toISOString()
-      : null
+  const stripe = new Stripe(env.STRIPE_SECRET_KEY!)
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+  const subscriptionItemId = subscription.items.data[0]?.id ?? null
+  const sub = subscription as any
+  const periodEnd = sub.billing_cycle_anchor
+    ? new Date(sub.billing_cycle_anchor * 1000).toISOString()
+    : null
 
-    await db.prepare(`
-      INSERT OR REPLACE INTO organization_billing
-      (id, organization_id, stripe_customer_id, stripe_subscription_id, stripe_subscription_item_id,
-       plan, status, current_period_end, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      `billing-${organizationId}`,
-      organizationId,
-      customerId,
-      subscriptionId,
-      subscriptionItemId,
-      plan,
-      'active',
-      periodEnd,
-      new Date().toISOString()
-    ).run()
+  await db.prepare(`
+    INSERT OR REPLACE INTO organization_billing
+    (id, organization_id, stripe_customer_id, stripe_subscription_id, stripe_subscription_item_id,
+     plan, status, current_period_end, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    `billing-${organizationId}`,
+    organizationId,
+    customerId,
+    subscriptionId,
+    subscriptionItemId,
+    plan,
+    'active',
+    periodEnd,
+    new Date().toISOString()
+  ).run()
 
-    await setOrganizationEntitlementsFromPlan(env, db, organizationId, plan)
+  await setOrganizationEntitlementsFromPlan(env, db, organizationId, plan)
 
-    console.log(`Checkout completed for organization ${organizationId}, plan ${plan}, item ${subscriptionItemId}`)
-  } catch (error) {
-    console.error('Failed to handle checkout completion:', error)
-  }
+  console.log(`Checkout completed for organization ${organizationId}, plan ${plan}, item ${subscriptionItemId}`)
 }
 
 // Handle subscription updates
@@ -172,32 +167,26 @@ async function handleSubscriptionUpdated(env: Record<string, string | undefined>
   const currentPeriodEnd = new Date(sub.billing_cycle_anchor * 1000).toISOString()
   const cancelAtPeriodEnd = sub.cancel_at_period_end || false
   
-  try {
-    // Update organization_billing subscription status
-    await db.prepare(`
-      UPDATE organization_billing 
-      SET stripe_subscription_id = ?, status = ?, 
-          current_period_end = ?, cancel_at_period_end = ?, updated_at = ?
-      WHERE organization_id = ?
-    `).bind(
-      subscription.id,
-      status,
-      currentPeriodEnd,
-      cancelAtPeriodEnd,
-      new Date().toISOString(),
-      billing.organization_id
-    ).run()
+  await db.prepare(`
+    UPDATE organization_billing
+    SET stripe_subscription_id = ?, status = ?,
+        current_period_end = ?, cancel_at_period_end = ?, updated_at = ?
+    WHERE organization_id = ?
+  `).bind(
+    subscription.id,
+    status,
+    currentPeriodEnd,
+    cancelAtPeriodEnd,
+    new Date().toISOString(),
+    billing.organization_id
+  ).run()
 
-    // Update plan based on subscription items
-    const plan = getPlanFromSubscription(env, subscription)
-    if (plan) {
-      await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, plan)
-    }
-    
-    console.log(`Subscription updated for organization ${billing.organization_id}, status ${status}`)
-  } catch (error) {
-    console.error('Failed to handle subscription update:', error)
+  const plan = getPlanFromSubscription(env, subscription)
+  if (plan) {
+    await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, plan)
   }
+
+  console.log(`Subscription updated for organization ${billing.organization_id}, status ${status}`)
 }
 
 // Handle subscription deletion/cancellation
