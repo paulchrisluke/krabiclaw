@@ -24,13 +24,7 @@
           :description="errorMessage"
         />
 
-        <UAlert
-          v-if="successMessage"
-          color="success"
-          variant="soft"
-          icon="i-heroicons-check-circle"
-          :description="successMessage"
-        />
+
 
         <UCard v-if="billing">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -79,11 +73,13 @@
                   :loading="addingCredits"
                   @click="addDevCredits(500)"
                 >
-                  + 500 dev credits
+                  500 dev credits
                 </UButton>
-                <UButton v-else size="xs" color="primary" variant="soft" icon="i-heroicons-credit-card">
-                  Buy credits
-                </UButton>
+                <UDropdownMenu v-else :items="creditBundles" :content="{ align: 'end' }">
+                  <UButton size="xs" color="primary" variant="soft" icon="i-heroicons-credit-card" trailing-icon="i-heroicons-chevron-down" :loading="buyingCredits">
+                    Buy credits
+                  </UButton>
+                </UDropdownMenu>
               </div>
             </div>
           </template>
@@ -227,7 +223,9 @@
 </template>
 
 <script setup lang="ts">
-import { usePlans } from '~/composables/usePlans'
+
+import { useToast } from '~/composables/useToast'
+const { addToast } = useToast()
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -243,6 +241,28 @@ const successMessage = ref('')
 const errorMessage = ref('')
 const annual = ref(false)
 const isDev = useRequestURL().hostname === 'localhost'
+const buyingCredits = ref(false)
+
+async function purchaseCredits(bundle: 500 | 2500 | 5000) {
+  buyingCredits.value = true
+  try {
+    const res = await $fetch<{ checkoutUrl: string }>('/api/billing/credits/add', {
+      method: 'POST',
+      body: { bundle }
+    } as any)
+    if (res.checkoutUrl) await navigateTo(res.checkoutUrl, { external: true })
+  } finally {
+    buyingCredits.value = false
+  }
+}
+
+const creditBundles = [
+  [
+    { label: '500 credits — $9', icon: 'i-heroicons-bolt', onSelect: () => purchaseCredits(500) },
+    { label: '2,500 credits — $29', icon: 'i-heroicons-bolt', onSelect: () => purchaseCredits(2500) },
+    { label: '5,000 credits — $49', icon: 'i-heroicons-bolt', onSelect: () => purchaseCredits(5000) },
+  ]
+]
 
 const { plans, displayPrice } = usePlans()
 
@@ -352,7 +372,15 @@ const formatDate = (dateString: string) => {
 }
 
 onMounted(async () => {
-  if (route.query.success === 'true') successMessage.value = 'Payment successful. Your plan has been updated.'
+  if (route.query.success === 'true') {
+    addToast('Payment successful. Your plan has been updated.', 'success')
+    // Remove the query param from the URL
+    if (window && window.history && window.location) {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('success')
+      window.history.replaceState({}, '', url.pathname + url.search)
+    }
+  }
   if (route.query.canceled === 'true') errorMessage.value = 'Payment was canceled. Your plan was not changed.'
   await Promise.all([loadBillingData(), loadCredits()])
 })

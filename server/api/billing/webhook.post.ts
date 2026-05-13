@@ -113,9 +113,15 @@ export default defineEventHandler(async (event) => {
   }
 })
 
-// Handle checkout session completion
+// Handle checkout session completion — routes to credit top-up or plan upgrade
 async function handleCheckoutCompleted(env: Record<string, string | undefined>, db: any, session: Stripe.Checkout.Session) {
   const organizationId = session.metadata?.organization_id
+
+  if (session.metadata?.type === 'credit_topup') {
+    await handleCreditTopup(db, organizationId!, Number(session.metadata.credits))
+    return
+  }
+
   const plan = session.metadata?.plan
   const customerId = session.customer as string
 
@@ -263,6 +269,25 @@ async function handlePaymentFailed(db: any, invoice: Stripe.Invoice) {
   }
 
   console.log(`Payment failed for organization ${billing.organization_id}`)
+}
+
+// Add purchased credits to org balance
+async function handleCreditTopup(db: any, organizationId: string, credits: number) {
+  const now = new Date().toISOString()
+  const existing = await db.prepare(
+    'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1'
+  ).bind(organizationId).first()
+
+  if (existing) {
+    await db.prepare(
+      'UPDATE ai_credits SET balance = balance + ?, last_topped_up_at = ?, updated_at = ? WHERE organization_id = ?'
+    ).bind(credits, now, now, organizationId).run()
+  } else {
+    await db.prepare(
+      'INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at) VALUES (?, ?, 0, ?, ?)'
+    ).bind(organizationId, credits, now, now).run()
+  }
+  console.log(`Credit top-up: +${credits} credits for org ${organizationId}`)
 }
 
 // Extract plan from subscription items
