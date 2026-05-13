@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const member = await db.prepare(
     'SELECT organizationId FROM member WHERE userId = ? LIMIT 1'
   ).bind(session.user.id).first()
-  if (!member) return jsonResponse({ error: 'No organisation found' }, { status: 404 })
+  if (!member) return jsonResponse({ balance: 0, lifetime_used: 0, usage: [], by_action: [] })
 
   const orgId = member.organizationId as string
   const credits = await getOrCreateCredits(db, orgId)
