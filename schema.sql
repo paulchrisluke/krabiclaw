@@ -689,6 +689,69 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE INDEX IF NOT EXISTS idx_notifications_org ON notifications(organization_id, created_at DESC);
 
 --------------------------------------------------------------------------------
+-- ChowBot Conversations
+--------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS chowbot_conversations (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  active_channel TEXT NOT NULL DEFAULT 'dashboard' CHECK (active_channel IN ('dashboard', 'whatsapp')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'deleted')),
+  selected_location_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
+  FOREIGN KEY (selected_location_id) REFERENCES business_locations(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_chowbot_conversations_site
+  ON chowbot_conversations(site_id, user_id, status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS chowbot_messages (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  user_id TEXT,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
+  channel TEXT NOT NULL CHECK (channel IN ('dashboard', 'whatsapp')),
+  content TEXT,
+  media TEXT,
+  meta_message_id TEXT UNIQUE,
+  tool_calls TEXT,
+  status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('pending', 'processing', 'sent', 'failed', 'read')),
+  error TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (conversation_id) REFERENCES chowbot_conversations(id) ON DELETE CASCADE,
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_chowbot_messages_conversation
+  ON chowbot_messages(conversation_id, created_at ASC);
+
+CREATE TABLE IF NOT EXISTS chowbot_channel_state (
+  user_id TEXT NOT NULL,
+  channel TEXT NOT NULL CHECK (channel IN ('dashboard', 'whatsapp')),
+  selected_site_id TEXT,
+  active_conversation_id TEXT,
+  pending_media TEXT,
+  pending_confirmation TEXT,
+  last_inbound_id TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  PRIMARY KEY (user_id, channel),
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
+  FOREIGN KEY (selected_site_id) REFERENCES sites(id) ON DELETE SET NULL,
+  FOREIGN KEY (active_conversation_id) REFERENCES chowbot_conversations(id) ON DELETE SET NULL
+);
+
+--------------------------------------------------------------------------------
 -- AI Credits & Usage
 --------------------------------------------------------------------------------
 

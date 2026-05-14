@@ -1,50 +1,66 @@
-import type { ChowbotMessage } from './useChowBot'
+import type { ChowbotMessage, ChowbotToolCall } from './useChowBot'
 
 export interface ChowBotConv {
   id: string
-  siteId: string
+  site_id: string
   title: string
-  messages: ChowbotMessage[]
-  updatedAt: number
+  active_channel: 'dashboard' | 'whatsapp'
+  updated_at: string
 }
 
-const STORAGE_KEY = 'chowbot:conversations'
-const MAX_STORED = 20
-
-function readStorage(): ChowBotConv[] {
-  if (!import.meta.client) return []
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
-  } catch {
-    return []
-  }
+interface StoredMessage {
+  id: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string | null
+  tool_calls: string | null
+  status: string
+  error: string | null
 }
 
-function writeStorage(convs: ChowBotConv[]) {
-  if (!import.meta.client) return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(convs))
-}
+const conversationsState = () => useState<Record<string, ChowBotConv[]>>('chowbot:server-conversations', () => ({}))
 
 export const useChowBotHistory = () => {
-  // Revision counter — incremented on every write so computed properties
-  // that call forSite() will re-run reactively after a save.
-  const rev = useState<number>('chowbot:history-rev', () => 0)
+  const conversationsBySite = conversationsState()
 
-  const save = (conv: ChowBotConv) => {
-    const all = readStorage().filter(c => c.id !== conv.id)
-    writeStorage([conv, ...all].slice(0, MAX_STORED))
-    rev.value++
+  const load = async (siteId: string) => {
+    const res = await $fetch<{ conversations: ChowBotConv[] }>(`/api/ai/${siteId}/conversations`)
+    conversationsBySite.value = {
+      ...conversationsBySite.value,
+      [siteId]: res.conversations ?? [],
+    }
   }
 
-  const remove = (id: string) => {
-    writeStorage(readStorage().filter(c => c.id !== id))
-    rev.value++
+  const forSite = (siteId: string): ChowBotConv[] => conversationsBySite.value[siteId] ?? []
+
+  const get = async (siteId: string, conversationId: string): Promise<{ conversation: ChowBotConv; messages: ChowbotMessage[] }> => {
+    const res = await $fetch<{ conversation: ChowBotConv; messages: StoredMessage[] }>(`/api/ai/${siteId}/conversations/${conversationId}`)
+    return {
+      conversation: res.conversation,
+      messages: (res.messages ?? [])
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content ?? '',
+          error: m.status === 'failed' || Boolean(m.error),
+          toolCalls: parseToolCalls(m.tool_calls),
+        })),
+    }
   }
 
-  const forSite = (siteId: string): ChowBotConv[] => {
-    void rev.value // reactive dependency — re-runs when rev changes
-    return readStorage().filter(c => c.siteId === siteId).slice(0, 8)
+  const remove = async (siteId: string, conversationId: string) => {
+    await $fetch(`/api/ai/${siteId}/conversations/${conversationId}`, { method: 'DELETE' })
+    await load(siteId)
   }
 
-  return { save, remove, forSite }
+  return { load, forSite, get, remove }
+}
+
+function parseToolCalls(raw: string | null): ChowbotToolCall[] | undefined {
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw) as Array<{ name: string; input: ApiValue; result: ApiValue }>
+    return parsed.map((tool) => ({ ...tool, status: 'done' as const }))
+  } catch {
+    return undefined
+  }
 }

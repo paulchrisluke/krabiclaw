@@ -50,27 +50,12 @@ export const useChowBot = () => {
     isOpen.value = true
   }
 
-  const loadConversation = (conv: ChowBotConv) => {
-    messages.value = [...conv.messages]
-    conversationId.value = conv.id
+  const loadConversation = async (conv: ChowBotConv) => {
+    if (!siteId.value) return
+    const loaded = await history.get(siteId.value, conv.id)
+    messages.value = [...loaded.messages]
+    conversationId.value = loaded.conversation.id
     isOpen.value = true
-  }
-
-  const persistConversation = () => {
-    if (!siteId.value || !messages.value.length) return
-    const userMessages = messages.value.filter(m => m.role === 'user')
-    if (!userMessages.length) return
-
-    const id = conversationId.value ?? crypto.randomUUID()
-    conversationId.value = id
-
-    history.save({
-      id,
-      siteId: siteId.value,
-      title: (userMessages[0]!.content).slice(0, 45),
-      messages: messages.value.filter(m => !m.streaming),
-      updatedAt: Date.now(),
-    })
   }
 
   const handlePostActionNav = async (toolCalls: ChowbotToolCall[]) => {
@@ -161,15 +146,16 @@ export const useChowBot = () => {
     ]
     isLoading.value = true
 
-    const history_msgs = messages.value
-      .filter(m => !m.error && !m.streaming)
-      .map(m => ({ role: m.role, content: m.content }))
-
     try {
       const response = await fetch(`/api/ai/${siteId.value}/agent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history_msgs, currentPage: route.name, locationId: locationId.value }),
+        body: JSON.stringify({
+          conversationId: conversationId.value,
+          message: text.trim(),
+          currentPage: route.name,
+          locationId: locationId.value,
+        }),
       })
 
       if (!response.ok) {
@@ -209,9 +195,10 @@ export const useChowBot = () => {
             }
 
             if (ev.type === 'done') {
+              if (ev.conversationId) conversationId.value = ev.conversationId
               updateLastMessage({ toolCalls: ev.toolCalls, streaming: false })
               updateCredits(ev.creditsRemaining ?? null)
-              persistConversation()
+              if (siteId.value) await history.load(siteId.value)
               await handlePostActionNav(ev.toolCalls ?? [])
             }
 
