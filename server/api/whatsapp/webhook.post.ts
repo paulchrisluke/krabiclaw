@@ -109,11 +109,15 @@ async function resolveUser(db: D1Database, from: string): Promise<UserRow | null
 
 function parsePendingMedia(raw: string | null | undefined): { assetId: string; siteId: string } | null {
   if (!raw) return null
-  const parsed = JSON.parse(raw) as { assetId?: unknown; siteId?: unknown }
-  if (typeof parsed.assetId !== 'string' || typeof parsed.siteId !== 'string') {
-    throw new Error('Invalid pending WhatsApp media state.')
+  try {
+    const parsed = JSON.parse(raw) as { assetId?: unknown; siteId?: unknown }
+    if (typeof parsed.assetId !== 'string' || typeof parsed.siteId !== 'string') {
+      return null
+    }
+    return { assetId: parsed.assetId, siteId: parsed.siteId }
+  } catch {
+    return null
   }
-  return { assetId: parsed.assetId, siteId: parsed.siteId }
 }
 
 async function runChowBotAndReply(
