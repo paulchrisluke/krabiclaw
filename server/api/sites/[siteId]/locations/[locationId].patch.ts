@@ -57,6 +57,22 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
 
+async function ensureUniqueLocationSlug(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  locationId: string,
+  slug: string
+) {
+  const duplicate = await db.prepare(`
+    SELECT id FROM business_locations
+    WHERE organization_id = ? AND site_id = ? AND slug = ? AND id != ?
+    LIMIT 1
+  `).bind(organizationId, siteId, slug, locationId).first()
+
+  return !duplicate
+}
+
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locationId = getRouterParam(event, 'locationId')
@@ -112,8 +128,21 @@ export default defineEventHandler(async (event) => {
       if (!body.title.trim()) {
         return jsonResponse({ error: 'Location title is required' }, { status: 400 })
       }
+      const titleSlug = slugify(body.title)
+      if (body.slug === undefined) {
+        if (!titleSlug) {
+          return jsonResponse({ error: 'Location slug is required' }, { status: 400 })
+        }
+        if (!(await ensureUniqueLocationSlug(db, site.organization_id, siteId, locationId, titleSlug))) {
+          return jsonResponse({ error: 'Location slug already exists' }, { status: 409 })
+        }
+      }
       setParts.push('title = ?')
       params.push(body.title.trim())
+      if (body.slug === undefined) {
+        setParts.push('slug = ?')
+        params.push(titleSlug)
+      }
     }
 
     if (body.slug !== undefined) {
@@ -122,13 +151,7 @@ export default defineEventHandler(async (event) => {
         return jsonResponse({ error: 'Location slug is required' }, { status: 400 })
       }
 
-      const duplicate = await db.prepare(`
-        SELECT id FROM business_locations
-        WHERE organization_id = ? AND site_id = ? AND slug = ? AND id != ?
-        LIMIT 1
-      `).bind(site.organization_id, siteId, slug, locationId).first()
-
-      if (duplicate) {
+      if (!(await ensureUniqueLocationSlug(db, site.organization_id, siteId, locationId, slug))) {
         return jsonResponse({ error: 'Location slug already exists' }, { status: 409 })
       }
 

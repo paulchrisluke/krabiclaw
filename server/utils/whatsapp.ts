@@ -1,6 +1,6 @@
 // Meta Cloud API — WhatsApp Business send-only notifications.
 // All messages use pre-approved templates (WhatsApp requires this for business-initiated messages).
-// Phone numbers stored and sent in E.164 format (+14233585761).
+// Phone numbers stored and sent in E.164 format (+66946230215).
 
 const GRAPH_API_VERSION = 'v25.0'
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
@@ -8,7 +8,10 @@ const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 interface WhatsAppEnv {
   WHATSAPP_PHONE_NUMBER_ID?: string
   WHATSAPP_ACCESS_TOKEN?: string
+  MAX_WHATSAPP_MEDIA_BYTES?: string
 }
+
+const DEFAULT_MAX_WHATSAPP_MEDIA_BYTES = 20 * 1024 * 1024
 
 interface MetaGraphErrorPayload {
   message?: string
@@ -23,6 +26,15 @@ interface MetaGraphResponse {
   messages?: MetaGraphMessagePayload[]
 }
 
+interface MetaMediaResponse {
+  url?: string
+  mime_type?: string
+  sha256?: string
+  file_size?: number
+  id?: string
+  error?: MetaGraphErrorPayload
+}
+
 export type WhatsAppTemplate =
   | 'draft_published'
   | 'new_review'
@@ -33,10 +45,19 @@ export type WhatsAppTemplate =
   | 'domain_update'
   | 'otp_code'
 
-interface TemplateComponent {
+interface TemplateBodyComponent {
   type: 'body'
   parameters: Array<{ type: 'text'; text: string }>
 }
+
+interface TemplateButtonComponent {
+  type: 'button'
+  sub_type: 'url'
+  index: string
+  parameters: Array<{ type: 'text'; text: string }>
+}
+
+type TemplateComponent = TemplateBodyComponent | TemplateButtonComponent
 
 // Map our template names to Meta template names + variable builders.
 // Meta template names must match exactly what was approved in Business Manager.
@@ -130,22 +151,32 @@ const TEMPLATES: Record<
   otp_code: (v) => ({
     name: 'otp_code',
     language: 'en_US',
-    components: [{
-      type: 'body',
-      parameters: [
-        { type: 'text', text: v.code ?? '' },
-      ],
-    }],
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: v.code ?? '' },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [
+          { type: 'text', text: v.code ?? '' },
+        ],
+      },
+    ],
   }),
 }
 
-/** Normalize any phone number to E.164. Assumes US if no country code. */
+/** Normalize any phone number to E.164. Assumes Thailand if no country code. */
 export function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
-  if (digits.startsWith('1') && digits.length === 11) return `+${digits}`
-  if (digits.length === 10) return `+1${digits}`   // US default
-  if (digits.length > 10) return `+${digits}`
-  return `+${digits}`
+  if (digits.startsWith('0') && digits.length >= 9) return `+66${digits.slice(1)}`
+  if (digits.startsWith('66') && digits.length >= 11) return `+${digits}`
+  if (digits.length >= 10) return `+${digits}`
+  throw new Error(`Invalid phone number: ${phone}`)
 }
 
 export interface SendWhatsAppResult {
@@ -298,6 +329,115 @@ export async function sendWhatsAppOtp(
   if (!response.ok) {
     const err: MetaGraphResponse = await response.json()
     throw new Error(err?.error?.message ?? `WhatsApp OTP send failed: HTTP ${response.status}`)
+  }
+}
+
+export async function sendWhatsAppText(
+  env: WhatsAppEnv,
+  toPhone: string,
+  body: string
+): Promise<SendWhatsAppResult> {
+  const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = env.WHATSAPP_ACCESS_TOKEN
+
+  if (!phoneNumberId || !accessToken) {
+    return { success: false, error: 'WhatsApp env vars not configured' }
+  }
+
+  try {
+    const normalized = normalizePhone(toPhone)
+    const response = await fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: normalized,
+        type: 'text',
+        text: { preview_url: true, body },
+      }),
+    })
+
+    const data = await response.json().catch(() => ({})) as MetaGraphResponse
+    if (!response.ok || data.error) {
+      return { success: false, error: data.error?.message ?? `HTTP ${response.status}` }
+    }
+
+    return { success: true, messageId: data.messages?.[0]?.id }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export async function fetchWhatsAppMedia(
+  env: WhatsAppEnv,
+  mediaId: string
+): Promise<{ bytes: ArrayBuffer; mimeType: string; fileSize: number; sha256?: string }> {
+  const accessToken = env.WHATSAPP_ACCESS_TOKEN
+  if (!accessToken) throw new Error('WHATSAPP_ACCESS_TOKEN not configured')
+
+  const configuredMaxBytes = Number(env.MAX_WHATSAPP_MEDIA_BYTES)
+  const maxBytes = Number.isFinite(configuredMaxBytes) && configuredMaxBytes > 0
+    ? configuredMaxBytes
+    : DEFAULT_MAX_WHATSAPP_MEDIA_BYTES
+
+  const metaResponse = await fetch(`${GRAPH_BASE}/${mediaId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  const meta = await metaResponse.json().catch(() => ({})) as MetaMediaResponse
+  if (!metaResponse.ok || meta.error || !meta.url || !meta.mime_type) {
+    throw new Error(meta.error?.message ?? 'Failed to fetch WhatsApp media metadata')
+  }
+  if (typeof meta.file_size === 'number' && meta.file_size > maxBytes) {
+    throw new Error(`WhatsApp media ${mediaId} exceeds max size (${meta.file_size} > ${maxBytes} bytes)`) 
+  }
+
+  const mediaResponse = await fetch(meta.url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!mediaResponse.ok) {
+    throw new Error(`Failed to download WhatsApp media: HTTP ${mediaResponse.status}`)
+  }
+
+  const declaredContentLength = Number(mediaResponse.headers.get('content-length') ?? '')
+  if (Number.isFinite(declaredContentLength) && declaredContentLength > maxBytes) {
+    throw new Error(`WhatsApp media ${mediaId} content-length exceeds max size (${declaredContentLength} > ${maxBytes} bytes)`)
+  }
+
+  if (!mediaResponse.body) {
+    throw new Error(`Failed to download WhatsApp media ${mediaId}: empty response body`)
+  }
+
+  const reader = mediaResponse.body.getReader()
+  const chunks: Uint8Array[] = []
+  let totalSize = 0
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value) continue
+    totalSize += value.byteLength
+    if (totalSize > maxBytes) {
+      await reader.cancel(`WhatsApp media ${mediaId} exceeded max size while streaming`)
+      throw new Error(`WhatsApp media ${mediaId} exceeds max size while streaming (${totalSize} > ${maxBytes} bytes)`)
+    }
+    chunks.push(value)
+  }
+
+  const merged = new Uint8Array(totalSize)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+
+  return {
+    bytes: merged.buffer,
+    mimeType: meta.mime_type,
+    fileSize: meta.file_size ?? totalSize,
+    sha256: meta.sha256,
   }
 }
 

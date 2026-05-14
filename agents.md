@@ -48,6 +48,18 @@ Never add fallbacks ever.
 - Platform admin emails configured via secure config or PLATFORM_ADMIN_EMAILS env var
 - Admin support impersonation uses `authClient.admin.impersonateUser({ userId })`; dashboard must show the impersonation banner and `authClient.admin.stopImpersonating()`
 
+## ChowBot Ownership Boundary
+
+- ChowBot is the product owner and durable system of record for AI conversations, messages, tool calls, media context, and channel state.
+- D1 tables `chowbot_conversations`, `chowbot_messages`, and `chowbot_channel_state` are canonical. Do not reintroduce browser `localStorage` chat history or channel-specific shadow history.
+- Dashboard and WhatsApp are clients of the same ChowBot backend. Both must route owner intent through shared ChowBot utilities, especially `runChowBot(...)`.
+- WhatsApp is an interface/transport only. Webhooks may verify Meta, identify the sender, select the site, dedupe Meta message IDs, download inbound media, persist the inbound message/media, and send ChowBot's final plain-text reply.
+- WhatsApp webhooks must not own product workflows, parse business intents, or directly execute domain actions such as menu import, post creation, publishing, deleting, or media task decisions. Those belong in ChowBot tools/core logic.
+- If WhatsApp receives media, persist it as a ChowBot message attachment and pass pending media context into ChowBot. ChowBot decides whether to import menu items, save media, use it for another task, ask a clarifying question, or cancel.
+- Tool calls/results must be stored on ChowBot assistant messages so dashboard and WhatsApp see the same conversation truth.
+- Keep confirmation rules centralized in ChowBot: publish/delete/destructive tools require confirmation; draft creates/updates can run directly.
+- Do not hide ChowBot API failures by fabricating conversations, messages, empty histories, or successful channel responses.
+
 ## Local Login & Browser Testing
 
 - Start local app with `yarn dev`; it normally serves `http://localhost:3000`, but Nuxt may choose `3001` if `3000` is already occupied
@@ -76,6 +88,15 @@ Never add fallbacks ever.
 4. No inline migration blocks, compatibility columns, duplicate indexes, or legacy aliases in `schema.sql`
 5. Better Auth tables (`user`, `session`, `account`, `verification`, `organization`, `member`, `invitation`) must use Better Auth's exact camelCase column names; app-owned tables use snake_case
 6. Any schema change must be checked against current server queries before finishing
+
+### Auth/App Naming Boundary
+
+- Better Auth physical columns are vendor/auth-owned and must not be renamed in this repo
+- App-owned tables must remain snake_case; do not introduce new app camelCase columns to match Better Auth naming
+- Cross-domain joins are expected to bridge naming domains explicitly, e.g. `sites.organization_id = member.organizationId`
+- Standard membership access pattern: `sites.organization_id = member.organizationId` and `member.userId = session.user.id`
+- Remove unnecessary joins through `organization` when membership alone proves access
+- Centralize access checks only when repeated SQL justifies it; avoid abstraction churn
 
 ---
 

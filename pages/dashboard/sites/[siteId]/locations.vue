@@ -31,7 +31,7 @@
           <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-muted" />
           <h2 class="mt-4 text-base font-semibold text-highlighted">Add your first location</h2>
           <p class="mt-1 text-sm text-muted">Local content, menus, hours, and Google Business mapping start here.</p>
-          <UButton class="mt-5" icon="i-heroicons-plus" color="primary" @click="showAddLocationForm = true">Add Location</UButton>
+          <UButton class="mt-5" icon="i-heroicons-plus" color="primary" @click="openAddLocationForm">Add Location</UButton>
         </div>
 
         <!-- Location list -->
@@ -44,7 +44,12 @@
             >
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class="font-medium text-highlighted">{{ location.title }}</span>
+                  <NuxtLink
+                    :to="`/dashboard/sites/${siteId}/locations/${location.id}`"
+                    class="font-medium text-highlighted hover:underline"
+                  >
+                    {{ location.title }}
+                  </NuxtLink>
                   <UBadge v-if="location.is_primary" color="primary" variant="soft" size="xs">Primary</UBadge>
                   <UBadge :color="location.status === 'active' ? 'success' : 'neutral'" variant="soft" size="xs">
                     {{ location.status }}
@@ -57,29 +62,22 @@
               </div>
               <div class="flex shrink-0 items-center gap-2">
                 <UButton
-                  :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`"
+                  :to="`/dashboard/sites/${siteId}/locations/${location.id}`"
                   color="neutral"
                   variant="outline"
                   size="xs"
                 >
-                  Edit menu
+                  Manage
                 </UButton>
-                <UButton
-                  :to="`/dashboard/sites/${siteId}/content?locationId=${location.id}&page=location`"
-                  color="neutral"
-                  variant="outline"
-                  size="xs"
-                >
-                  Edit content
-                </UButton>
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  icon="i-heroicons-pencil-square"
-                  aria-label="Edit location"
-                  @click="openEditLocation(location)"
-                />
+                <UDropdownMenu :items="locationActionItems(location)" :content="{ align: 'end' }">
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    icon="i-heroicons-ellipsis-horizontal"
+                    aria-label="Location actions"
+                  />
+                </UDropdownMenu>
               </div>
             </div>
 
@@ -109,7 +107,7 @@
                   <UButton
                     color="neutral" variant="ghost" size="sm" icon="i-heroicons-trash"
                     :loading="locationSaving"
-                    @click="handleDeleteLocation(location.id)"
+                    @click="confirmDeleteLocation(location)"
                   >Delete</UButton>
                   <div class="flex gap-2">
                     <UButton color="neutral" variant="ghost" size="sm" @click="expandedLocationId = null">Cancel</UButton>
@@ -174,7 +172,11 @@
             <UFormField v-if="addLocationForm.address" label="Address">
               <UInput :model-value="addLocationForm.address" disabled />
             </UFormField>
-            <UCheckbox v-model="addLocationForm.is_primary" label="Set as primary location" />
+            <UCheckbox
+              v-model="addLocationForm.is_primary"
+              label="Set as primary location"
+              :disabled="locations.length === 0"
+            />
             <div class="flex justify-end gap-2">
               <UButton color="neutral" variant="ghost" size="sm" @click="cancelAddLocation">Cancel</UButton>
               <UButton size="sm" color="primary" :loading="locationSaving" :disabled="!addLocationForm.title.trim()" @click="handleCreateLocation">
@@ -226,8 +228,15 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
+function openAddLocationForm() {
+  showAddLocationForm.value = true
+  if (locations.value.length === 0) {
+    addLocationForm.is_primary = true
+  }
+}
+
 const headerLinks = computed(() => [
-  { label: 'Add location', icon: 'i-heroicons-plus', color: 'primary' as const, onClick: () => { showAddLocationForm.value = true } }
+  { label: 'Add location', icon: 'i-heroicons-plus', color: 'primary' as const, onClick: openAddLocationForm }
 ])
 
 const setLocationActive = (v: boolean | 'indeterminate') => {
@@ -237,9 +246,6 @@ const setLocationActive = (v: boolean | 'indeterminate') => {
   }
   locationEditForm.status = v ? 'active' : 'inactive'
 }
-
-const generateSlug = (name: string) =>
-  name.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
 
 // Inline edit state
 const expandedLocationId = ref<string | null>(null)
@@ -292,6 +298,36 @@ const handleDeleteLocation = async (id: string) => {
     locationSaving.value = false
   }
 }
+
+const confirmDeleteLocation = async (location: BusinessLocation) => {
+  if (!confirm(`Delete "${location.title}"? This cannot be undone.`)) return
+  await handleDeleteLocation(location.id)
+}
+
+const locationActionItems = (location: BusinessLocation) => [[
+  {
+    label: 'Edit details',
+    icon: 'i-heroicons-pencil-square',
+    onSelect: () => openEditLocation(location),
+  },
+  {
+    label: 'Edit menu',
+    icon: 'i-heroicons-list-bullet',
+    to: `/dashboard/sites/${siteId}/menu?locationId=${location.id}`,
+  },
+  {
+    label: 'Edit content',
+    icon: 'i-heroicons-document-text',
+    to: `/dashboard/sites/${siteId}/content?locationId=${location.id}&page=location`,
+  },
+], [
+  {
+    label: 'Delete',
+    icon: 'i-heroicons-trash',
+    color: 'error' as const,
+    onSelect: () => confirmDeleteLocation(location),
+  },
+]]
 
 // Add location inline form
 const showAddLocationForm = ref(false)
@@ -377,7 +413,7 @@ const cancelAddLocation = () => {
   addLocationForm.website_url = ''
   addLocationForm.opening_hours = null
   addLocationForm._placeId = ''
-  addLocationForm.is_primary = false
+  addLocationForm.is_primary = locations.value.length === 0
 }
 
 const handleCreateLocation = async () => {
@@ -390,14 +426,13 @@ const handleCreateLocation = async () => {
         method: 'POST',
         body: {
           title: addLocationForm.title.trim(),
-          slug: generateSlug(addLocationForm.title),
           city: addLocationForm.city.trim() || null,
           phone: addLocationForm.phone.trim() || null,
           address: addLocationForm.address ? { addressLines: [addLocationForm.address] } : undefined,
           maps_url: addLocationForm.maps_url || null,
           website_url: addLocationForm.website_url || null,
           opening_hours: addLocationForm.opening_hours ? { weekdayDescriptions: addLocationForm.opening_hours } : undefined,
-          is_primary: addLocationForm.is_primary,
+          is_primary: locations.value.length === 0 ? true : addLocationForm.is_primary,
         }
       } as ApiValue
     )
@@ -424,6 +459,7 @@ const loadLocationsWorkspace = async () => {
     if (!locationsResponse.success) throw new Error('Failed to load locations')
     site.value = settingsResponse.settings
     locations.value = locationsResponse.locations
+    addLocationForm.is_primary = locations.value.length === 0
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load locations'
   } finally {

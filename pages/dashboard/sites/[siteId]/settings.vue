@@ -79,6 +79,14 @@
                 />
               </UFormField>
             </div>
+            <UFormField label="Menu Currency">
+              <USelect
+                v-model="form.default_currency"
+                :items="currencyOptions"
+                value-key="value"
+                label-key="label"
+              />
+            </UFormField>
             <UFormField label="Public URL">
               <div class="flex gap-2">
                 <UInput :model-value="settings.public_url" readonly class="flex-1 opacity-50" />
@@ -274,6 +282,8 @@
 </template>
 
 <script setup lang="ts">
+import { CURRENCY_OPTIONS, DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
@@ -284,6 +294,8 @@ const urlStructureOptions = [
   { label: 'Location subdirectories', value: 'location_subdirectories' },
   { label: 'Brand pages only', value: 'brand_pages' }
 ]
+
+const currencyOptions = CURRENCY_OPTIONS.map(option => ({ ...option }))
 
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -305,6 +317,7 @@ const form = reactive({
   logo_url: '',
   contact_email: '',
   brand_color: '',
+  default_currency: DEFAULT_CURRENCY,
   primary_location_id: null as string | null,
   url_structure: 'location_subdirectories'
 } as {
@@ -313,6 +326,7 @@ const form = reactive({
   logo_url: string
   contact_email: string
   brand_color: string
+  default_currency: CurrencyCode
   primary_location_id: string | null
   url_structure: string
 })
@@ -333,6 +347,7 @@ const isDirty = computed(() => {
     form.logo_url !== settings.value.logo_url ||
     form.contact_email !== settings.value.contact_email ||
     form.brand_color !== (settings.value.brand_color || '') ||
+    form.default_currency !== (settings.value.default_currency || DEFAULT_CURRENCY) ||
     form.url_structure !== settings.value.url_structure
   )
 })
@@ -385,6 +400,8 @@ const resetForm = () => {
   form.logo_url = settings.value.logo_url || ''
   form.contact_email = settings.value.contact_email || ''
   form.brand_color = (settings.value as ApiValue).brand_color || ''
+  const currency = (settings.value as ApiValue).default_currency
+  form.default_currency = isCurrencyCode(currency) ? currency : DEFAULT_CURRENCY
   form.primary_location_id = settings.value.primary_location_id || null
   form.url_structure = settings.value.url_structure || 'location_subdirectories'
 }

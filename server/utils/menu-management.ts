@@ -4,6 +4,24 @@ const MAX_SUFFIX_ATTEMPTS = 50
 
 type SqlBindValue = string | number | boolean | null
 
+export class MenuSectionConflictError extends Error {
+  code = 'MENU_SECTION_CONFLICT' as const
+
+  constructor(message = 'Section already exists') {
+    super(message)
+    this.name = 'MenuSectionConflictError'
+  }
+}
+
+export class MenuSectionNotFoundError extends Error {
+  code = 'MENU_SECTION_NOT_FOUND' as const
+
+  constructor(message = 'Section not found') {
+    super(message)
+    this.name = 'MenuSectionNotFoundError'
+  }
+}
+
 function slugify(name: string): string {
   const slug = name
     .toLowerCase()
@@ -434,6 +452,75 @@ export async function deleteMenuItem(
   if (!result.success) {
     throw new Error('Failed to delete menu item')
   }
+}
+
+// Rename a menu section by updating every item that belongs to it
+export async function renameMenuSection(
+  db: D1Database,
+  menuId: string,
+  oldSection: string,
+  newSection: string,
+  updatedBy: string
+): Promise<number> {
+  const now = new Date().toISOString()
+  const result = await db.prepare(`
+    UPDATE menu_items
+    SET section = ?, updated_at = ?, updated_by = ?
+    WHERE menu_id = ? AND section = ?
+      AND NOT EXISTS (
+        SELECT 1 FROM menu_items
+        WHERE menu_id = ? AND section = ?
+      )
+  `).bind(newSection, now, updatedBy, menuId, oldSection, menuId, newSection).run()
+
+  if (!result.success) {
+    throw new Error('Failed to rename menu section')
+  }
+
+  const changes = Number(result.meta.changes ?? 0)
+  if (changes > 0) {
+    return changes
+  }
+
+  const oldSectionExists = await db.prepare(`
+    SELECT id FROM menu_items
+    WHERE menu_id = ? AND section = ?
+    LIMIT 1
+  `).bind(menuId, oldSection).first()
+
+  if (!oldSectionExists) {
+    throw new MenuSectionNotFoundError()
+  }
+
+  const newSectionExists = await db.prepare(`
+    SELECT id FROM menu_items
+    WHERE menu_id = ? AND section = ?
+    LIMIT 1
+  `).bind(menuId, newSection).first()
+
+  if (newSectionExists) {
+    throw new MenuSectionConflictError()
+  }
+
+  throw new Error('Failed to rename menu section')
+}
+
+// Delete every item in a menu section
+export async function deleteMenuSection(
+  db: D1Database,
+  menuId: string,
+  section: string
+): Promise<number> {
+  const result = await db.prepare(`
+    DELETE FROM menu_items
+    WHERE menu_id = ? AND section = ?
+  `).bind(menuId, section).run()
+
+  if (!result.success) {
+    throw new Error('Failed to delete menu section')
+  }
+
+  return result.meta.changes
 }
 
 // Reorder menu items

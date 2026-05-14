@@ -26,6 +26,8 @@
 
 /* ── KrabiClaw brand palette ──────────────────────────────── */
 :root {
+  /* Global type scaling belongs at the root so rem-based sizing stays predictable. */
+  font-size: 106%;
 
   --kc-navy:        #1F2547;
   --kc-navy-700:    #2C3360;

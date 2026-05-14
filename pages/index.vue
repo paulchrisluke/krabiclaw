@@ -112,43 +112,7 @@
             <span class="kc-eyebrow text-dimmed">Simple pricing</span>
             <h2 class="text-[44px] font-extrabold tracking-tight leading-[1.05] text-default m-0">Start free. Grow when you're ready.</h2>
           </div>
-          <div class="grid md:grid-cols-2 gap-5 max-w-3xl mx-auto">
-            <!-- Free -->
-            <div v-if="freePlanData" class="bg-elevated border border-default rounded-[20px] p-8 relative">
-              <div class="text-[14px] font-semibold text-muted uppercase tracking-[0.18em] mb-4">{{ freePlanData.name }}</div>
-              <div class="flex items-baseline gap-2 mb-1.5">
-                <span class="text-[56px] font-extrabold text-default tracking-tight leading-none">$0</span>
-                <span class="text-[14px] text-muted">forever</span>
-              </div>
-              <ul class="mt-5 mb-6 space-y-2.5">
-                <li v-for="f in freePlanData.features" :key="f" class="flex items-center gap-2.5 text-[14px] text-default">
-                  <UIcon name="i-heroicons-check" class="size-4 text-(--kc-teal) shrink-0" />
-                  {{ f }}
-                </li>
-              </ul>
-              <NuxtLink v-if="freePlanData?.cta?.href" :to="freePlanData.cta.href" class="block text-center font-semibold text-[14px] py-3.5 rounded-[10px] bg-inverted text-inverted hover:opacity-90 transition-opacity no-underline">
-                {{ freePlanData?.cta?.label }}
-              </NuxtLink>
-            </div>
-            <!-- Pro -->
-            <div v-if="proPlanData" class="bg-inverted rounded-[20px] p-8 relative shadow-[0_24px_48px_rgba(31,37,71,0.18)]">
-              <div v-if="proPlanData.badge" class="absolute -top-3 right-5 bg-(--kc-coral) text-white text-[11px] font-bold tracking-[0.18em] px-3 py-1.5 rounded-full uppercase">{{ proPlanData.badge }}</div>
-              <div class="text-[14px] font-semibold text-(--kc-coral-200) uppercase tracking-[0.18em] mb-4">{{ proPlanData.name }}</div>
-              <div class="flex items-baseline gap-2 mb-1.5">
-                <span class="text-[56px] font-extrabold text-white tracking-tight leading-none">{{ displayPrice(proPlanData, false) }}</span>
-                <span class="text-[14px] text-white/70">per location / mo</span>
-              </div>
-              <ul class="mt-5 mb-6 space-y-2.5">
-                <li v-for="f in proPlanData.features" :key="f" class="flex items-center gap-2.5 text-[14px] text-white/85">
-                  <UIcon name="i-heroicons-check" class="size-4 text-(--kc-coral) shrink-0" />
-                  {{ f }}
-                </li>
-              </ul>
-              <NuxtLink v-if="proPlanData?.cta?.href" :to="proPlanData.cta.href" class="block text-center font-semibold text-[14px] py-3.5 rounded-[10px] bg-(--kc-coral) text-white hover:opacity-90 transition-opacity no-underline">
-                {{ proPlanData?.cta?.label }}
-              </NuxtLink>
-            </div>
-          </div>
+          <BillingPricingTable />
         </div>
       </section>
     </div>
@@ -452,14 +416,12 @@ const avatars = [
 ]
 const features = [
   { icon: 'i-heroicons-paint-brush', title: 'Beautiful themes', body: 'Conversion-optimized themes built for restaurants. Pick one, swap a color, you\'re live.' },
-  { icon: 'i-heroicons-sparkles', title: 'AI-powered content', body: 'Mouth-watering descriptions, allergens, translations — generated in one click.', muted: true },
+  { icon: 'i-heroicons-sparkles', title: 'AI-powered content', body: 'Mouth-watering descriptions, allergens, translations — generated in one click.' },
   { icon: 'i-heroicons-globe-alt', title: 'Google Business sync', body: 'Hours, photos, menu — pushed to Google so guests find the right info every time.' },
   { icon: 'i-heroicons-calendar-days', title: 'Reservations + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.', dark: true },
   { icon: 'i-heroicons-shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
   { icon: 'i-heroicons-chart-bar', title: 'Real-time insights', body: 'See covers, top dishes, busy hours — all in one dashboard.' },
 ]
-const { freePlan: freePlanData, proPlan: proPlanData, displayPrice } = usePlans()
-
 const { getField, getFieldStr } = usePageContent('home')
 const heroVideoUrl = computed(() => getField('hero.video'))
 const heroImageUrl = computed(() => getField('hero.image'))

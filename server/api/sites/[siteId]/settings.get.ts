@@ -77,6 +77,7 @@ export default defineEventHandler(async (event) => {
       logo_url: site.logo_url,
       contact_email: site.contact_email,
       brand_color: siteConfig.brand_color || '',
+      default_currency: siteConfig.default_currency || 'THB',
       url_structure: siteSettings.url_structure || 'location_subdirectories',
       last_published_at: site.last_published_at,
       created_at: site.created_at,

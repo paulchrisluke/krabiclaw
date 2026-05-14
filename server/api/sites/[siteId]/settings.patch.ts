@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import { createSystemSubdomain } from '~/server/utils/domains'
+import { isCurrencyCode } from '~/shared/currencies'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 
 export default defineEventHandler(async (event) => {
@@ -97,6 +98,20 @@ export default defineEventHandler(async (event) => {
         await deleteConfig(db, site.organization_id as string, siteId, 'brand_color')
       }
     }
+    if (body.default_currency !== undefined) {
+      if (typeof body.default_currency !== 'string') {
+        return jsonResponse({
+          error: 'Invalid default currency'
+        }, { status: 400 })
+      }
+      const currency = body.default_currency.toUpperCase().trim()
+      if (!isCurrencyCode(currency)) {
+        return jsonResponse({
+          error: 'Invalid default currency'
+        }, { status: 400 })
+      }
+      await setConfig(db, site.organization_id as string, siteId, 'default_currency', currency)
+    }
     if (body.primary_location_id !== undefined) {
       if (body.primary_location_id !== null && body.primary_location_id !== '') {
         const location = await db.prepare(`
@@ -183,6 +198,7 @@ export default defineEventHandler(async (event) => {
       logo_url: updatedSite.logo_url,
       contact_email: updatedSite.contact_email,
       brand_color: siteConfig.brand_color || '',
+      default_currency: siteConfig?.default_currency || 'THB',
       url_structure: siteSettings.url_structure || 'location_subdirectories',
       last_published_at: updatedSite.last_published_at,
       created_at: updatedSite.created_at,

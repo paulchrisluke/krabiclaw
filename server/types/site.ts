@@ -1,5 +1,9 @@
 // Site management types
 
+import type { CurrencyCode } from '~/shared/currencies'
+
+export type { CurrencyCode }
+
 export interface SiteSettings {
   id: string
   organization_id: string
@@ -15,6 +19,7 @@ export interface SiteSettings {
   logo_url: string | null
   contact_email: string | null
   brand_color: string
+  default_currency: CurrencyCode
   url_structure: 'location_subdirectories' | 'brand_pages'
   last_published_at: string | null
   created_at: string
@@ -28,6 +33,7 @@ export interface UpdateSiteSettingsRequest {
   logo_url?: string
   contact_email?: string
   brand_color?: string
+  default_currency?: CurrencyCode
   primary_location_id?: string
   url_structure?: 'location_subdirectories' | 'brand_pages'
 }

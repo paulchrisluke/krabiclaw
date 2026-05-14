@@ -239,6 +239,11 @@ const routeSiteId = computed(() => {
   return typeof param === 'string' && route.path.startsWith('/dashboard/sites/') ? param : null
 })
 
+watch(routeSiteId, (siteId) => {
+  if (!import.meta.client) return
+  if (siteId) chowBotHistory.load(siteId).catch(console.error)
+}, { immediate: true })
+
 const inSiteWorkspace = computed(() => Boolean(routeSiteId.value))
 const inAdminWorkspace = computed(() => route.path.startsWith('/admin'))
 const activeSiteId = computed(() => routeSiteId.value || selectedSiteId.value)

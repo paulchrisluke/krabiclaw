@@ -1,5 +1,7 @@
 import { useChowBotHistory, type ChowBotConv } from './useChowBotHistory'
 
+const MENU_TOOLS = new Set(['create_menu', 'rename_menu', 'rename_menu_section', 'delete_menu_section', 'add_menu_item', 'update_menu_item', 'delete_menu_item', 'sync_menu_items', 'publish_menu', 'add_menu_items_batch', 'delete_menu', 'set_default_currency'])
+
 export interface ChowbotToolCall {
   name: string
   input: ApiValue
@@ -50,39 +52,29 @@ export const useChowBot = () => {
     isOpen.value = true
   }
 
-  const loadConversation = (conv: ChowBotConv) => {
-    messages.value = [...conv.messages]
-    conversationId.value = conv.id
-    isOpen.value = true
-  }
+  const loadConversation = async (conv: ChowBotConv) => {
+    if (!siteId.value) return
 
-  const persistConversation = () => {
-    if (!siteId.value || !messages.value.length) return
-    const userMessages = messages.value.filter(m => m.role === 'user')
-    if (!userMessages.length) return
+    try {
+      const loaded = await history.get(siteId.value, conv.id)
+      if (!Array.isArray(loaded.messages) || !loaded.conversation?.id) return
 
-    const id = conversationId.value ?? crypto.randomUUID()
-    conversationId.value = id
-
-    history.save({
-      id,
-      siteId: siteId.value,
-      title: (userMessages[0]!.content).slice(0, 45),
-      messages: messages.value.filter(m => !m.streaming),
-      updatedAt: Date.now(),
-    })
+      messages.value = [...loaded.messages]
+      conversationId.value = loaded.conversation.id
+      isOpen.value = true
+    } catch (error) {
+      console.error('[ChowBot] loadConversation error:', error)
+    }
   }
 
   const handlePostActionNav = async (toolCalls: ChowbotToolCall[]) => {
     if (!siteId.value || !toolCalls.length) return
     const names = new Set(toolCalls.map(t => t.name))
 
-    if (names.has('rename_site')) {
+    if (names.has('rename_site') || names.has('set_default_currency')) {
       useState<number>('site:refresh').value++
-      return
     }
 
-    const MENU_TOOLS = new Set(['create_menu', 'rename_menu', 'add_menu_item', 'update_menu_item', 'publish_menu', 'add_menu_items_batch', 'delete_menu'])
     if ([...names].some(n => MENU_TOOLS.has(n))) {
       useState<number>('menu:refresh', () => 0).value++
     }
@@ -94,7 +86,7 @@ export const useChowBot = () => {
       target = `/dashboard/sites/${siteId.value}/posts`
     } else if (names.has('create_location') || names.has('update_location')) {
       target = `/dashboard/sites/${siteId.value}/locations`
-    } else if (names.has('create_menu') || names.has('rename_menu') || names.has('add_menu_item') || names.has('update_menu_item') || names.has('publish_menu') || names.has('add_menu_items_batch')) {
+    } else if ([...names].some(n => MENU_TOOLS.has(n))) {
       const locId = locationId.value
       target = `/dashboard/sites/${siteId.value}/menu${locId ? `?locationId=${encodeURIComponent(locId)}` : ''}`
     }
@@ -162,15 +154,16 @@ export const useChowBot = () => {
     ]
     isLoading.value = true
 
-    const history_msgs = messages.value
-      .filter(m => !m.error && !m.streaming)
-      .map(m => ({ role: m.role, content: m.content }))
-
     try {
       const response = await fetch(`/api/ai/${siteId.value}/agent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history_msgs, currentPage: route.name, locationId: locationId.value }),
+        body: JSON.stringify({
+          conversationId: conversationId.value,
+          message: text.trim(),
+          currentPage: route.name,
+          locationId: locationId.value,
+        }),
       })
 
       if (!response.ok) {
@@ -194,33 +187,41 @@ export const useChowBot = () => {
         for (const part of parts) {
           const line = part.trim()
           if (!line.startsWith('data: ')) continue
+          let ev: ApiRecord
           try {
-            const ev = JSON.parse(line.slice(6))
+            ev = JSON.parse(line.slice(6)) as ApiRecord
+          } catch (parseErr) {
+            console.error('[ChowBot] SSE parse error:', parseErr)
+            continue
+          }
 
+          try {
             if (ev.type === 'tool_start') {
-              addToolToLast({ name: ev.name, input: {}, result: null, status: 'running' })
+              addToolToLast({ name: String(ev.name ?? ''), input: {}, result: null, status: 'running' })
             }
 
             if (ev.type === 'tool_done') {
-              markToolDone(ev.name)
+              markToolDone(String(ev.name ?? ''))
             }
 
             if (ev.type === 'text') {
-              updateLastMessage({ content: ev.content })
+              updateLastMessage({ content: String(ev.content ?? '') })
             }
 
             if (ev.type === 'done') {
-              updateLastMessage({ toolCalls: ev.toolCalls, streaming: false })
-              updateCredits(ev.creditsRemaining ?? null)
-              persistConversation()
-              await handlePostActionNav(ev.toolCalls ?? [])
+              if (typeof ev.conversationId === 'string') conversationId.value = ev.conversationId
+              const toolCalls = Array.isArray(ev.toolCalls) ? ev.toolCalls as ChowbotToolCall[] : []
+              updateLastMessage({ toolCalls, streaming: false })
+              updateCredits(typeof ev.creditsRemaining === 'number' ? ev.creditsRemaining : null)
+              if (siteId.value) await history.load(siteId.value)
+              await handlePostActionNav(toolCalls)
             }
 
             if (ev.type === 'error') {
-              updateLastMessage({ content: ev.message, error: true, streaming: false })
+              updateLastMessage({ content: String(ev.message ?? 'Something went wrong.'), error: true, streaming: false })
             }
-          } catch (parseErr) {
-            console.error('[ChowBot] SSE parse error:', parseErr)
+          } catch (eventErr) {
+            console.error('[ChowBot] SSE event handling error:', eventErr)
           }
         }
       }

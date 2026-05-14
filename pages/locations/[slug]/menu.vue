@@ -196,12 +196,6 @@ useSeoMeta({
 const locationCurrency = computed(() => {
   const loc = location.value as ApiValue
   if (loc?.currency && typeof loc.currency === 'string') return loc.currency
-
-  const country = String(loc?.country || loc?.country_code || '').toUpperCase()
-  if (country === 'TH' || country === 'THA') return 'THB'
-  if (country === 'US' || country === 'USA') return 'USD'
-  if (country === 'GB' || country === 'GBR') return 'GBP'
-
   return 'THB'
 })
 

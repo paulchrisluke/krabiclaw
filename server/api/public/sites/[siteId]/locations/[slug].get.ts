@@ -1,9 +1,12 @@
 // Get public business location by slug
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { getConfig } from '~/server/utils/site-config'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const slug = getRouterParam(event, 'slug')
+  const runtimeConfig = useRuntimeConfig(event)
+  const DEFAULT_CURRENCY = runtimeConfig.defaultCurrency
   
   if (!siteId || !slug) {
     return jsonResponse({ 
@@ -52,6 +55,8 @@ export default defineEventHandler(async (event) => {
       }, { status: 404 })
     }
 
+    const siteConfig = await getConfig(db, site.organization_id as string, siteId)
+
     // Counts for sub-nav badges
     const photoCount = await db.prepare(
       `SELECT COUNT(*) as n FROM media_assets WHERE location_id = ? AND status = 'active'`
@@ -90,6 +95,7 @@ export default defineEventHandler(async (event) => {
       status: location.status,
       image_url: location.image_url,
       city: location.city,
+      currency: siteConfig?.default_currency || DEFAULT_CURRENCY,
       google_place_id: location.google_place_id,
       gmb_review_url,
       gmb_qa_url
