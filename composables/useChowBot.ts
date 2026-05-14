@@ -29,6 +29,11 @@ export const useChowBot = () => {
     return typeof param === 'string' ? param : null
   })
 
+  const locationId = computed(() => {
+    const param = route.query.locationId
+    return typeof param === 'string' ? param : null
+  })
+
   const { update: updateCredits } = useAiCredits(siteId)
 
   const toggle = () => { isOpen.value = !isOpen.value }
@@ -77,6 +82,11 @@ export const useChowBot = () => {
       return
     }
 
+    const MENU_TOOLS = new Set(['create_menu', 'rename_menu', 'add_menu_item', 'update_menu_item', 'publish_menu', 'add_menu_items_batch', 'delete_menu'])
+    if ([...names].some(n => MENU_TOOLS.has(n))) {
+      useState<number>('menu:refresh', () => 0).value++
+    }
+
     // Keep panel open across navigation — set isLoading briefly as a guard
     // so the overlay @click doesn't fire during the route transition
     let target = ''
@@ -85,7 +95,8 @@ export const useChowBot = () => {
     } else if (names.has('create_location') || names.has('update_location')) {
       target = `/dashboard/sites/${siteId.value}/locations`
     } else if (names.has('create_menu') || names.has('rename_menu') || names.has('add_menu_item') || names.has('update_menu_item') || names.has('publish_menu') || names.has('add_menu_items_batch')) {
-      target = `/dashboard/sites/${siteId.value}/menu`
+      const locId = locationId.value
+      target = `/dashboard/sites/${siteId.value}/menu${locId ? `?locationId=${locId}` : ''}`
     }
 
     if (target) {
@@ -159,7 +170,7 @@ export const useChowBot = () => {
       const response = await fetch(`/api/ai/${siteId.value}/agent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history_msgs, currentPage: route.name }),
+        body: JSON.stringify({ messages: history_msgs, currentPage: route.name, locationId: locationId.value }),
       })
 
       if (!response.ok) {

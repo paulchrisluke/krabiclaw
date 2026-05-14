@@ -20,7 +20,9 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
   const isEditingBrandMenu = computed(() => locationId !== undefined ? (locationId === null || locationId === '') : isBrandScope.value)
 
   // Load menus for current scope
+  let loadMenusRequestId = 0
   const loadMenus = async () => {
+    const requestId = ++loadMenusRequestId
     loading.value = true
     error.value = null
 
@@ -32,10 +34,13 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
         menus: Menu[]
       }>(`/api/editor/sites/${siteId}/menus${params.toString() ? `?${params.toString()}` : ''}`)
 
+      // Ignore stale responses
+      if (requestId !== loadMenusRequestId) return
+
       if (response.success) {
         menus.value = response.menus
         currentMenu.value = null
-        
+
         // Auto-select first menu if none selected
         if (response.menus.length > 0 && !currentMenu.value) {
           await loadMenu(response.menus[0]!.id)
@@ -44,9 +49,13 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
         error.value = 'Failed to load menus'
       }
     } catch (err) {
+      // Ignore stale errors
+      if (requestId !== loadMenusRequestId) return
       error.value = err instanceof Error ? err.message : 'Unknown error'
     } finally {
-      loading.value = false
+      if (requestId === loadMenusRequestId) {
+        loading.value = false
+      }
     }
   }
 
@@ -311,6 +320,10 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
   watch(effectiveLocationId, () => {
     loadMenus()
   }, { immediate: true })
+
+  // Reload when ChowBot makes menu changes
+  const menuRefreshSignal = useState<number>('menu:refresh', () => 0)
+  watch([menuRefreshSignal, effectiveLocationId], () => loadMenus())
 
   return {
     // State

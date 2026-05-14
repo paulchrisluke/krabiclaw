@@ -15,19 +15,60 @@
       <UAlert v-else-if="error" color="error" variant="soft" icon="i-heroicons-exclamation-triangle" :description="error" />
 
       <div v-else-if="settings" class="space-y-0 divide-y divide-default rounded-lg border border-default">
+        <!-- Brand -->
+        <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
+          <div>
+            <h2 class="font-semibold text-highlighted">Brand</h2>
+            <p class="mt-1 text-sm text-muted">Your restaurant's identity. This name and description appear on your public website and in search results.</p>
+          </div>
+          <div class="space-y-5">
+            <UFormField label="Restaurant Name">
+              <UInput v-model="form.brand_name" placeholder="Your Restaurant Name" />
+            </UFormField>
+            <UFormField label="Short Description" help="Used for SEO and homepage tagline.">
+              <UTextarea v-model="form.brand_description" :rows="3" placeholder="Authentic dining experience in your city" />
+            </UFormField>
+            <div class="grid gap-5 sm:grid-cols-2">
+              <UFormField label="Logo URL">
+                <UInput v-model="form.logo_url" type="url" placeholder="https://example.com/logo.png" />
+              </UFormField>
+              <UFormField label="Contact Email">
+                <UInput v-model="form.contact_email" type="email" placeholder="contact@yourrestaurant.com" />
+              </UFormField>
+            </div>
+          </div>
+        </div>
+
+        <!-- Appearance -->
+        <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
+          <div>
+            <h2 class="font-semibold text-highlighted">Appearance</h2>
+            <p class="mt-1 text-sm text-muted">Control your site's color scheme. The brand color is applied to buttons, links, and accent elements.</p>
+          </div>
+          <div class="space-y-5">
+            <UFormField label="Brand Color" help="Primary color used for buttons and accents.">
+              <div class="flex items-center gap-3">
+                <UInput v-model="form.brand_color" type="color" class="h-9 w-16 cursor-pointer p-1" />
+                <UInput v-model="form.brand_color" placeholder="#e87f67" class="w-32 font-mono text-sm" />
+              </div>
+            </UFormField>
+            <UFormField label="Theme">
+              <UInput :model-value="settings.theme" readonly class="opacity-50" />
+              <template #help>More themes coming soon.</template>
+            </UFormField>
+          </div>
+        </div>
+
         <!-- General -->
         <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
           <div>
             <h2 class="font-semibold text-highlighted">General</h2>
-            <p class="mt-1 text-sm text-muted">Basic website configuration. Your subdomain is permanent and cannot be changed.</p>
+            <p class="mt-1 text-sm text-muted">Basic website configuration. Changing the restaurant name updates your URL.</p>
           </div>
           <div class="space-y-5">
-            <UFormField label="Site Name">
-              <UInput v-model="form.name" placeholder="Your restaurant name" />
-            </UFormField>
             <div class="grid gap-5 sm:grid-cols-2">
               <UFormField label="Subdomain">
-                <UInput :model-value="settings.subdomain" readonly class="opacity-50" />
+                <UInput :model-value="previewSubdomain" readonly class="opacity-50 font-mono" />
               </UFormField>
               <UFormField label="URL Structure">
                 <USelect
@@ -139,50 +180,6 @@
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-
-        <!-- Brand -->
-        <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
-          <div>
-            <h2 class="font-semibold text-highlighted">Brand</h2>
-            <p class="mt-1 text-sm text-muted">Your restaurant's identity. This name and description appear on your public website and in search results.</p>
-          </div>
-          <div class="space-y-5">
-            <UFormField label="Restaurant Name">
-              <UInput v-model="form.brand_name" placeholder="Your Restaurant Name" />
-            </UFormField>
-            <UFormField label="Short Description" help="Used for SEO and homepage tagline.">
-              <UTextarea v-model="form.brand_description" :rows="3" placeholder="Authentic dining experience in your city" />
-            </UFormField>
-            <div class="grid gap-5 sm:grid-cols-2">
-              <UFormField label="Logo URL">
-                <UInput v-model="form.logo_url" type="url" placeholder="https://example.com/logo.png" />
-              </UFormField>
-              <UFormField label="Contact Email">
-                <UInput v-model="form.contact_email" type="email" placeholder="contact@yourrestaurant.com" />
-              </UFormField>
-            </div>
-          </div>
-        </div>
-
-        <!-- Appearance -->
-        <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
-          <div>
-            <h2 class="font-semibold text-highlighted">Appearance</h2>
-            <p class="mt-1 text-sm text-muted">Control your site's color scheme. The brand color is applied to buttons, links, and accent elements.</p>
-          </div>
-          <div class="space-y-5">
-            <UFormField label="Brand Color" help="Primary color used for buttons and accents.">
-              <div class="flex items-center gap-3">
-                <UInput v-model="form.brand_color" type="color" class="h-9 w-16 cursor-pointer p-1" />
-                <UInput v-model="form.brand_color" placeholder="#e87f67" class="w-32 font-mono text-sm" />
-              </div>
-            </UFormField>
-            <UFormField label="Theme">
-              <UInput :model-value="settings.theme" readonly class="opacity-50" />
-              <template #help>More themes coming soon.</template>
-            </UFormField>
           </div>
         </div>
 
@@ -303,7 +300,6 @@ const domainForm = reactive({
 })
 
 const form = reactive({
-  name: '',
   brand_name: '',
   brand_description: '',
   logo_url: '',
@@ -312,7 +308,6 @@ const form = reactive({
   primary_location_id: null as string | null,
   url_structure: 'location_subdirectories'
 } as {
-  name: string
   brand_name: string
   brand_description: string
   logo_url: string
@@ -322,10 +317,17 @@ const form = reactive({
   url_structure: string
 })
 
+const toSubdomainSlug = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 30)
+
+const previewSubdomain = computed(() => {
+  const slug = toSubdomainSlug(form.brand_name)
+  return slug || (settings.value?.subdomain ?? '')
+})
+
 const isDirty = computed(() => {
   if (!settings.value) return false
   return (
-    form.name !== settings.value.name ||
     form.brand_name !== settings.value.brand_name ||
     form.brand_description !== settings.value.brand_description ||
     form.logo_url !== settings.value.logo_url ||
@@ -364,6 +366,10 @@ const saveSettings = async () => {
 
     if (!response.success) throw new Error('Failed to save settings')
     settings.value = response.settings
+    resetForm()
+    await loadDomains()
+    const siteRefresh = useState<number>('site:refresh', () => 0)
+    siteRefresh.value++
     toast.add({ description: 'Settings saved', color: 'success' })
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to save settings'
@@ -374,7 +380,6 @@ const saveSettings = async () => {
 
 const resetForm = () => {
   if (!settings.value) return
-  form.name = settings.value.name || ''
   form.brand_name = settings.value.brand_name || ''
   form.brand_description = settings.value.brand_description || ''
   form.logo_url = settings.value.logo_url || ''

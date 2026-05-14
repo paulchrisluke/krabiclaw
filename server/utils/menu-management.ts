@@ -52,8 +52,9 @@ export async function getMenus(
   `
   const params: (string | null)[] = [organizationId, siteId]
 
-  if (locationId !== undefined) {
-    query += ` AND location_id = ?`
+  if (locationId !== undefined && locationId !== null && locationId !== '') {
+    // Include menus for this specific location AND site-wide menus (location_id IS NULL)
+    query += ` AND (location_id = ? OR location_id IS NULL)`
     params.push(locationId)
   }
 

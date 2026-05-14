@@ -45,13 +45,13 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user belongs to organization that owns this site (owner/dashboard only for publish)
     const site = await db.prepare(`
-      SELECT s.id, s.organization_id, s.name, s.status, s.onboarding_status
+      SELECT s.id, s.organization_id, s.brand_name, s.status, s.onboarding_status
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
       LIMIT 1
-    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; name: string; status: string; onboarding_status: string | null }>()
+    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; brand_name: string; status: string; onboarding_status: string | null }>()
     
     if (!site) {
       return jsonResponse({ 
@@ -78,7 +78,7 @@ export default defineEventHandler(async (event) => {
           toPhone: phone,
           template: 'draft_published',
           vars: {
-            site_name: site.name ?? siteId,
+            site_name: site.brand_name ?? siteId,
             url: `https://${env.NUXT_PUBLIC_PLATFORM_DOMAIN ? env.NUXT_PUBLIC_PLATFORM_DOMAIN.replace('https://', '') : 'krabiclaw.com'}`,
           },
         }).catch(console.error)

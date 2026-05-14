@@ -2,7 +2,7 @@
   <UPage>
     <UPageHeader
       title="Locations"
-      :description="site ? `Physical locations for ${site.name}` : 'Physical locations for this website.'"
+      :description="site ? `Physical locations for ${site.brand_name || 'this website'}` : 'Physical locations for this website.'"
       :links="headerLinks"
     />
 

@@ -91,37 +91,39 @@
             orientation="vertical"
           />
 
-          <template v-if="inSiteWorkspace && !collapsed">
-            <div class="mt-2 border-t border-default pt-2 px-2">
-              <div class="flex items-center justify-between px-1 py-1 mb-1">
-                <span class="text-xs font-medium text-muted">ChowBot</span>
-                <UTooltip text="New conversation">
-                  <UButton
-                    icon="i-heroicons-plus"
-                    size="xs"
-                    variant="ghost"
-                    color="neutral"
-                    @click="newChowBotChat"
-                  />
-                </UTooltip>
+          <ClientOnly>
+            <template v-if="inSiteWorkspace && !collapsed">
+              <div class="mt-2 border-t border-default pt-2 px-2">
+                <div class="flex items-center justify-between px-1 py-1 mb-1">
+                  <span class="text-xs font-medium text-muted">ChowBot</span>
+                  <UTooltip text="New conversation">
+                    <UButton
+                      icon="i-heroicons-plus"
+                      size="xs"
+                      variant="ghost"
+                      color="neutral"
+                      @click="newChowBotChat"
+                    />
+                  </UTooltip>
+                </div>
+                <UButton
+                  v-for="conv in siteConversations"
+                  :key="conv.id"
+                  :label="conv.title"
+                  icon="i-lucide-message-square"
+                  variant="ghost"
+                  color="neutral"
+                  size="xs"
+                  class="w-full justify-start mb-0.5"
+                  :ui="{ label: 'truncate text-left' }"
+                  @click="loadChowBotChat(conv)"
+                />
+                <p v-if="!siteConversations.length" class="px-1 text-xs text-muted italic">
+                  No conversations yet
+                </p>
               </div>
-              <UButton
-                v-for="conv in siteConversations"
-                :key="conv.id"
-                :label="conv.title"
-                icon="i-lucide-message-square"
-                variant="ghost"
-                color="neutral"
-                size="xs"
-                class="w-full justify-start mb-0.5"
-                :ui="{ label: 'truncate text-left' }"
-                @click="loadChowBotChat(conv)"
-              />
-              <p v-if="!siteConversations.length" class="px-1 text-xs text-muted italic">
-                No conversations yet
-              </p>
-            </div>
-          </template>
+            </template>
+          </ClientOnly>
         </template>
 
         <template #footer="{ collapsed }">

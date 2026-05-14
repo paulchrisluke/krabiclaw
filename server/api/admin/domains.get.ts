@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const where = [`sd.type = 'custom'`, `sd.status != 'deleted'`]
 
   if (search) {
-    where.push(`(lower(sd.domain) LIKE ? OR lower(s.name) LIKE ? OR lower(o.name) LIKE ?)`)
+    where.push(`(lower(sd.domain) LIKE ? OR lower(s.brand_name) LIKE ? OR lower(o.name) LIKE ?)`)
     params.push(`%${search}%`, `%${search}%`, `%${search}%`)
   }
 
@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const domains = await db.prepare(`
-    SELECT sd.*, s.name AS site_name, o.name AS organization_name
+    SELECT sd.*, s.brand_name AS site_name, o.name AS organization_name
     FROM site_domains sd
     JOIN sites s ON s.id = sd.site_id
     JOIN organization o ON o.id = sd.organization_id

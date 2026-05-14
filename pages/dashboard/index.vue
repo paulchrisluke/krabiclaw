@@ -65,7 +65,7 @@
             >
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
-                  <p class="truncate font-medium text-highlighted">{{ site.brand_name || site.name }}</p>
+                  <p class="truncate font-medium text-highlighted">{{ site.brand_name }}</p>
                   <UBadge :color="site.status === 'active' ? 'success' : 'warning'" variant="soft" size="xs">
                     {{ site.status }}
                   </UBadge>
@@ -98,8 +98,7 @@ definePageMeta({ layout: 'dashboard' })
 
 interface DashboardSite {
   id: string
-  name: string
-  brand_name: string | null
+  brand_name: string
   subdomain: string | null
   custom_domain: string | null
   status: string

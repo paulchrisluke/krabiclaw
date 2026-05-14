@@ -1,7 +1,7 @@
 // Retry onboarding for failed/incomplete sites
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getSayaThemeSeedContent, getDefaultMenuSeedData } from '../../utils/content-seeding'
+import { getSayaThemeSeedContent } from '../../utils/content-seeding'
 
 interface RetrySiteRequest {
   siteId: string
@@ -101,51 +101,6 @@ export default defineEventHandler(async (event) => {
         content.content,
         content.type,
         content.updated_at
-      ).run()
-    }
-    
-    // Seed required menu
-    const menuSeedData = getDefaultMenuSeedData({
-      organizationId: site.organization_id,
-      siteId,
-      restaurantName: site.organization_name
-    })
-    
-    // Insert menu
-      await db.prepare(`
-        INSERT OR REPLACE INTO menus (
-          id, organization_id, site_id, location_id, name, 
-          status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        menuSeedData.menu.id,
-        menuSeedData.menu.organization_id,
-        menuSeedData.menu.site_id,
-        menuSeedData.menu.location_id,
-        menuSeedData.menu.name,
-        menuSeedData.menu.status,
-        menuSeedData.menu.created_at,
-        menuSeedData.menu.updated_at
-    ).run()
-    
-    // Insert required menu items
-    for (const item of menuSeedData.items) {
-      await db.prepare(`
-        INSERT OR REPLACE INTO menu_items (
-          id, menu_id, section, name, description, price, 
-          available, sort_order, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        item.id,
-        item.menu_id,
-        item.section,
-        item.name,
-        item.description,
-        item.price,
-        item.available,
-        item.sort_order,
-        item.created_at,
-        item.updated_at
       ).run()
     }
     

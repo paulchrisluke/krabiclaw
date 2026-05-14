@@ -398,7 +398,7 @@ const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu',
 
 function requiresConfirmation(name: string, recentMessages: AiMessage[]): boolean {
   if (!CONFIRM_REQUIRED.has(name)) return false
-  const CONFIRM_WORDS = /\b(yes|ok|go ahead|do it|publish|confirm|proceed|sure|delete|remove)\b/i
+  const CONFIRM_WORDS = /\b(yes|yea|yeah|yep|yup|ok|okay|go ahead|do it|do that|publish|confirm|proceed|sure|absolutely|fine|sounds good|let'?s go|delete|remove)\b/i
   const userTurns = recentMessages.filter(m => m.role === 'user').slice(-3)
     .map(m => (typeof m.content === 'string' ? m.content : ''))
   return !userTurns.some(t => CONFIRM_WORDS.test(t))
@@ -407,7 +407,7 @@ function requiresConfirmation(name: string, recentMessages: AiMessage[]): boolea
 async function executeTool(
   name: string,
   input: ApiRecord,
-  ctx: { db: D1Database; env: ApiRecord; orgId: string; siteId: string; userId: string; agentMessages?: AiMessage[] }
+  ctx: { db: D1Database; env: ApiRecord; orgId: string; siteId: string; userId: string; agentMessages?: AiMessage[]; locationId?: string | null }
 ): Promise<ApiValue> {
   const { db, env, orgId, siteId, userId } = ctx
 
@@ -451,13 +451,17 @@ async function executeTool(
         if (!menu) return { error: 'Menu not found.' }
         return menu
       }
-      const menus = await getMenus(db, orgId, siteId)
+      // Filter by current location when available so we only see relevant menus
+      const locationFilter = (input.location_id as string | undefined) ?? ctx.locationId ?? undefined
+      const menus = await getMenus(db, orgId, siteId, locationFilter || undefined)
       if (!menus.length) return { message: 'No menus found for this site.' }
       return await getMenuWithItems(db, orgId, siteId, menus[0]!.id) ?? { error: 'Failed to load menu.' }
     }
 
     case 'create_menu': {
-      const menu = await createMenu(db, orgId, siteId, { name: input.name, description: input.description, locationId: input.location_id }, userId)
+      // Use the explicit location from the AI, fall back to the page's current location
+      const effectiveLocationId = (input.location_id as string | undefined) ?? ctx.locationId ?? undefined
+      const menu = await createMenu(db, orgId, siteId, { name: input.name, description: input.description, locationId: effectiveLocationId }, userId)
       return { id: menu.id, name: menu.name, description: menu.description, status: menu.status }
     }
 
@@ -764,8 +768,8 @@ async function executeTool(
       const now = new Date().toISOString()
       const newSubdomain = toSlug(input.brand_name)
       await db.prepare(
-        `UPDATE sites SET brand_name = ?, name = ?, subdomain = ?, updated_at = ? WHERE id = ? AND organization_id = ?`
-      ).bind(input.brand_name, input.brand_name, newSubdomain, now, siteId, orgId).run()
+        `UPDATE sites SET brand_name = ?, subdomain = ?, updated_at = ? WHERE id = ? AND organization_id = ?`
+      ).bind(input.brand_name, newSubdomain, now, siteId, orgId).run()
       return { brand_name: input.brand_name, subdomain: newSubdomain, updated: true }
     }
 
@@ -796,13 +800,10 @@ export default defineEventHandler(async (event) => {
   const orgId: string = site.organization_id
   const userId: string = session.user.id
 
-  const isDev = process.env.NODE_ENV === 'development'
-  if (!isDev) {
-    const creditOk = await hasCredits(db, orgId)
-    if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
-  }
+  const creditOk = await hasCredits(db, orgId)
+  if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
 
-  let body: { messages?: IncomingMessage[]; currentPage?: string }
+  let body: { messages?: IncomingMessage[]; currentPage?: string; locationId?: string | null }
   try { body = await readBody(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
@@ -812,12 +813,22 @@ export default defineEventHandler(async (event) => {
 
   const siteName = (site.brand_name as string | null) ?? 'your site'
   const currentPage = body.currentPage ?? 'dashboard'
+  const locationId = typeof body.locationId === 'string' && body.locationId ? body.locationId : null
+
+  // Resolve current location name for richer context
+  let locationName: string | null = null
+  if (locationId) {
+    const loc = await db.prepare(
+      `SELECT title FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`
+    ).bind(locationId, siteId).first<{ title: string }>()
+    locationName = loc?.title ?? null
+  }
 
   const SYSTEM = `You are ChowBot, an AI assistant for restaurant website owners using Kikuzuki.
 Help manage all site content with concise, action-oriented responses.
 
 Site: ${siteName}
-Current page: ${currentPage}
+Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ''}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create (standard/offer/event/update with CTA), publish — optionally location-scoped
@@ -833,11 +844,12 @@ Capabilities (always use tools — never say you can't do something the tools su
 Guidelines:
 - Use tools immediately — never say "I'll do that" without calling a tool
 - When adding multiple menu items, ALWAYS use add_menu_items_batch — all items in one call
+- When creating menus, omit location_id — the server links it to the current location automatically
 - Before publish_post, publish_menu, delete_menu, delete_location_photo, delete_qa — confirm first
 - Menus are DRAFT by default — publish_menu makes them live
 - Keep responses short — this is a chat panel`
 
-  const MAX_MSG_CHARS = 4000
+  const MAX_MSG_CHARS = 20000
   let initialMessages = body.messages.slice(-8)
   while (initialMessages.length > 0 && initialMessages[0]?.role !== 'user') {
     initialMessages = initialMessages.slice(1)
@@ -864,7 +876,7 @@ Guidelines:
     }
   }
 
-  const ctx = { db, env, orgId, siteId, userId, agentMessages }
+  const ctx = { db, env, orgId, siteId, userId, agentMessages, locationId }
   const toolCalls: Array<{ name: string; input: JsonSerializable; result: JsonSerializable }> = []
   let totalInput = 0, totalOutput = 0, cfLogId: string | null = null
 
@@ -924,16 +936,12 @@ Guidelines:
         break
       }
 
-      let creditsRemaining: number | null = null
-      if (!isDev) {
-        const charged = await chargeCredits(db, orgId, {
-          siteId, action: 'chowbot', model: MODEL,
-          inputTokens: totalInput, outputTokens: totalOutput, cfGatewayLogId: cfLogId,
-        })
-        creditsRemaining = charged.newBalance
-      }
+      const charged = await chargeCredits(db, orgId, {
+        siteId, action: 'chowbot', model: MODEL,
+        inputTokens: totalInput, outputTokens: totalOutput, cfGatewayLogId: cfLogId,
+      })
 
-      await push({ type: 'done', toolCalls, creditsRemaining })
+      await push({ type: 'done', toolCalls, creditsRemaining: charged.newBalance })
     } catch (err) {
       await push({ type: 'error', message: getErrorMessage(err, 'Something went wrong.') })
     } finally {

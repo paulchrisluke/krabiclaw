@@ -46,47 +46,42 @@
 
     <!-- Menu content -->
     <template v-else>
-      <!-- Menu selector / toolbar -->
+      <!-- Toolbar -->
       <div class="flex items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <USelect
-            v-if="menuOptions.length > 1"
-            v-model="selectedMenuId"
-            :items="menuOptions"
-            size="sm"
-            @update:model-value="handleMenuChange"
-          />
-          <div v-else class="flex items-center gap-2">
-            <span class="text-sm font-medium text-highlighted">{{ currentMenu?.name }}</span>
-            <UBadge :color="currentMenu?.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs">
-              {{ currentMenu?.status }}
-            </UBadge>
-          </div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-medium text-highlighted">{{ currentMenu?.name }}</span>
+          <UBadge :color="currentMenu?.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs">
+            {{ currentMenu?.status }}
+          </UBadge>
         </div>
         <div class="flex items-center gap-2">
           <AiMenuImport :site-id="props.siteId" :menu-id="currentMenu?.id" @imported="handleAiImport" />
-          <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-plus" @click="showCreateMenuForm = true">
-            New menu
-          </UButton>
+          <UButton
+            color="error"
+            variant="ghost"
+            size="sm"
+            icon="i-heroicons-trash"
+            :disabled="saving"
+            @click="confirmDeleteOpen = true"
+          />
         </div>
       </div>
 
-      <!-- Inline create menu form -->
-      <div v-if="showCreateMenuForm && hasMenus" class="rounded-lg border border-default bg-elevated p-4">
-        <h3 class="mb-3 text-sm font-semibold text-highlighted">New menu</h3>
-        <div class="space-y-3">
-          <UFormField label="Menu name">
-            <UInput v-model="createMenuForm.name" placeholder="Lunch Menu" autofocus />
-          </UFormField>
-          <UFormField label="Description">
-            <UTextarea v-model="createMenuForm.description" :rows="2" placeholder="Optional description..." />
-          </UFormField>
-          <div class="flex justify-end gap-2">
-            <UButton color="neutral" variant="ghost" size="sm" @click="showCreateMenuForm = false">Cancel</UButton>
-            <UButton size="sm" :loading="saving" :disabled="!createMenuForm.name.trim()" @click="handleCreateMenu">Create menu</UButton>
+      <!-- Delete confirmation modal -->
+      <UModal v-model:open="confirmDeleteOpen" :ui="{ content: 'max-w-sm' }">
+        <template #content>
+          <div class="p-6">
+            <h3 class="text-base font-semibold text-default mb-1">Delete menu?</h3>
+            <p class="text-sm text-muted mb-6">
+              This will permanently delete <strong>{{ currentMenu?.name }}</strong> and all its items. This cannot be undone.
+            </p>
+            <div class="flex justify-end gap-2">
+              <UButton variant="ghost" color="neutral" @click="confirmDeleteOpen = false">Cancel</UButton>
+              <UButton color="error" :loading="saving" @click="handleDeleteMenu">Delete</UButton>
+            </div>
           </div>
-        </div>
-      </div>
+        </template>
+      </UModal>
 
       <!-- Single bordered list: sections + items -->
       <div class="overflow-hidden rounded-lg border border-default">
@@ -225,7 +220,6 @@ const props = defineProps<{
 const toast = useToast()
 
 const {
-  menus,
   currentMenu,
   loading,
   error,
@@ -234,27 +228,28 @@ const {
   menuItemsBySection,
   loadMenu,
   createMenu,
+  deleteMenu,
   createMenuItem,
   updateMenuItem,
   deleteMenuItem
 } = useMenuEditor(props.siteId, props.locationId)
 
-// Menu selector
-const selectedMenuId = ref<string | null>(null)
-const menuOptions = computed(() =>
-  menus.value.map((m: ApiValue) => ({ value: m.id, label: m.name }))
-)
-
-watch(currentMenu, (menu: ApiValue) => {
-  selectedMenuId.value = menu?.id ?? null
-})
-
-const handleMenuChange = async (id: string) => {
-  await loadMenu(id)
-}
-
 const handleAiImport = async (menuId: string) => {
   await loadMenu(menuId)
+}
+
+const confirmDeleteOpen = ref(false)
+
+const handleDeleteMenu = async () => {
+  if (!currentMenu.value) return
+  try {
+    await deleteMenu(currentMenu.value.id)
+    confirmDeleteOpen.value = false
+    toast.addToast('Menu deleted', 'success')
+  } catch (err) {
+    console.error('handleDeleteMenu failed:', err)
+    toast.addToast('Failed to delete menu', 'error')
+  }
 }
 
 // Create menu inline form

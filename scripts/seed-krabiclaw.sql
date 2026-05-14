@@ -19,8 +19,8 @@ ON CONFLICT(id) DO NOTHING;
 
 -- 4. Create a site
 DELETE FROM sites WHERE id = 'site_demo';
-INSERT INTO sites (id, organization_id, theme_id, name, slug, subdomain, status, onboarding_status) 
-VALUES ('site_demo', 'org_demo', 'saya-theme-v1', 'Demo Restaurant', 'demo-restaurant', 'demo', 'active', 'active');
+INSERT INTO sites (id, organization_id, theme_id, slug, subdomain, status, onboarding_status)
+VALUES ('site_demo', 'org_demo', 'saya-theme-v1', 'demo-restaurant', 'demo', 'active', 'active');
 
 -- 5. Create a domain for the site
 DELETE FROM site_domains WHERE id = 'domain_demo';

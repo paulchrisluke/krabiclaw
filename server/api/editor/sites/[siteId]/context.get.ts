@@ -5,7 +5,7 @@ import { createPreviewToken } from '~/server/utils/preview-token'
 
 interface SiteRow {
   id: string
-  name: string
+  brand_name: string
   subdomain: string
   organization_id: string
   status: string
@@ -66,7 +66,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user belongs to organization that owns the site
     const site = await db.prepare(`
-      SELECT s.id, s.name, s.subdomain, s.organization_id, s.status, s.onboarding_status,
+      SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status,
              o.name as organization_name
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
@@ -142,7 +142,7 @@ export default defineEventHandler(async (event) => {
       context: {
         site: {
           id: site.id,
-          name: site.name,
+          name: site.brand_name,
           subdomain: site.subdomain,
           status: site.status,
           onboarding_status: site.onboarding_status

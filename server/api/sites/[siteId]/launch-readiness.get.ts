@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user belongs to organization that owns the site
     const site = await db.prepare(`
-      SELECT s.id, s.organization_id, s.name, s.subdomain, s.status, s.public_url,
+      SELECT s.id, s.organization_id, s.subdomain, s.status, s.public_url,
              s.brand_name, s.brand_description, s.contact_email, s.last_published_at
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
@@ -50,9 +50,9 @@ export default defineEventHandler(async (event) => {
 
     // Check site identity
     const siteIdentity = {
-      ready: !!(site.name && site.subdomain && site.status === 'active'),
+      ready: !!(site.brand_name && site.subdomain && site.status === 'active'),
       items: {
-        name: !!site.name,
+        brand_name: !!site.brand_name,
         subdomain: !!site.subdomain,
         theme: true, // Always has Saya theme
         status: site.status === 'active',
@@ -172,10 +172,10 @@ export default defineEventHandler(async (event) => {
       action_url?: string
     }> = []
     
-    if (!siteIdentity.items.name) {
+    if (!siteIdentity.items.brand_name) {
       actionItems.push({
         section: 'site_identity',
-        item: 'name',
+        item: 'brand_name',
         priority: 'critical' as const,
         description: 'Add a site name',
         action_url: `/dashboard/sites/${siteId}/settings`

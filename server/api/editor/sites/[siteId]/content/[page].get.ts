@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user belongs to organization that owns the site
     const site = await db.prepare(`
-      SELECT s.id, s.organization_id, s.name, s.status, s.onboarding_status
+      SELECT s.id, s.organization_id, s.status, s.onboarding_status
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
