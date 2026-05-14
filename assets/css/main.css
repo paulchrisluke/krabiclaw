@@ -80,6 +80,9 @@
   --ui-text-inverted:     var(--kc-cream-elev);
   --ui-border:            var(--kc-border);
   --ui-border-muted:      var(--kc-border-muted);
+
+  /* Global font scaling for dashboard readability */
+  font-size: 106%;
 }
 
 /* ── Platform theme dark mode ─────────────────────────────── */

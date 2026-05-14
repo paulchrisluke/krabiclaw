@@ -1,37 +1,35 @@
 <template>
-  <div class="p-4 lg:p-6 max-w-4xl">
-    <h1 class="text-2xl font-bold text-default mb-6">New Blog Post</h1>
-
-    <UCard>
-      <div class="space-y-6">
-        <div>
-          <label class="block text-sm font-medium text-default mb-2">Title <span class="text-red-500">*</span></label>
-          <UInput v-model="form.title" placeholder="How to..." size="lg" />
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-default mb-2">Excerpt</label>
-          <UTextarea v-model="form.excerpt" placeholder="One or two sentences summarising the post..." :rows="2" />
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-default mb-2">Category</label>
-          <USelect v-model="form.category" :options="categories" placeholder="Select a category" />
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-default mb-2">Body (Markdown) <span class="text-red-500">*</span></label>
-          <UTextarea v-model="form.body" placeholder="Write your post in Markdown..." :rows="20" class="font-mono text-sm" />
-        </div>
-
-        <p v-if="errorMessage" class="text-red-600 text-sm">{{ errorMessage }}</p>
-
-        <div class="flex gap-3 pt-2">
-          <UButton @click="save(false)" :loading="saving" variant="outline" color="neutral">Save Draft</UButton>
-          <UButton @click="save(true)" :loading="saving" color="primary">Publish</UButton>
-        </div>
+  <div class="p-4 lg:p-6">
+    <div class="mb-6 flex items-center justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold text-default">New Blog Post</h1>
+        <p class="mt-1 text-sm text-muted">Draft and publish platform blog content.</p>
       </div>
-    </UCard>
+      <UButton to="/admin" color="neutral" variant="soft" icon="i-heroicons-arrow-left">Admin</UButton>
+    </div>
+
+    <PostEditor
+      v-model:title="form.title"
+      v-model:excerpt="form.excerpt"
+      v-model:category="form.category"
+      v-model:body="form.body"
+      eyebrow="Platform blog"
+      status-text="Draft"
+      :categories="categories"
+      :show-excerpt="true"
+      :show-category="true"
+      :saving="saving"
+      :publishing="saving"
+      :error-message="errorMessage"
+      markdown
+      body-label="Body (Markdown)"
+      body-placeholder="Write your post in Markdown..."
+      :body-rows="18"
+      save-label="Save draft"
+      publish-label="Publish"
+      @save="save(false)"
+      @publish="save(true)"
+    />
   </div>
 </template>
 
@@ -49,6 +47,17 @@ const form = reactive({ title: '', excerpt: '', category: '', body: '' })
 const saving = ref(false)
 const errorMessage = ref('')
 
+function getErrorMessage(error: unknown, message: string): string {
+  if (error && typeof error === 'object') {
+    const data = (error as Record<string, unknown>).data
+    if (data && typeof data === 'object') {
+      const dataError = (data as Record<string, unknown>).error
+      if (typeof dataError === 'string' && dataError) return dataError
+    }
+  }
+  return message
+}
+
 async function save(publish: boolean) {
   if (!form.title.trim() || !form.body.trim()) {
     errorMessage.value = 'Title and body are required.'
@@ -63,8 +72,7 @@ async function save(publish: boolean) {
     })
     await navigateTo(`/admin/blog/${res.id}`)
   } catch (err) {
-    const message = err instanceof Error ? err.message : (err && typeof err === 'object' && 'data' in err && typeof err.data === 'object' && err.data && 'error' in err.data && typeof err.data.error === 'string') ? err.data.error : 'Failed to save post.'
-    errorMessage.value = message
+    errorMessage.value = getErrorMessage(err, 'Failed to save post.')
   } finally {
     saving.value = false
   }

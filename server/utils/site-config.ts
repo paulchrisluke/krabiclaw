@@ -6,6 +6,7 @@ export interface SiteConfig {
   gbp_location_id?: string
   gbp_account_id?: string
   brand_color?: string
+  default_currency?: string
 }
 
 export const getConfig = async (

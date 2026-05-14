@@ -3,8 +3,6 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
 
-const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
 function auditLog(action: string, payload: ApiRecord) {
   console.info('[audit]', { action, timestamp: new Date().toISOString(), ...payload })
 }
@@ -12,9 +10,6 @@ function auditLog(action: string, payload: ApiRecord) {
 export default defineEventHandler(async (event) => {
   const postId = getRouterParam(event, 'postId')
   if (!postId) return jsonResponse({ error: 'Post ID required' }, { status: 400 })
-  if (!UUID_V4_PATTERN.test(postId)) {
-    return jsonResponse({ error: 'Invalid postId format' }, { status: 400 })
-  }
 
   const env = cloudflareEnv(event)
   const db = env.REVIEWS_DB

@@ -452,7 +452,7 @@ const avatars = [
 ]
 const features = [
   { icon: 'i-heroicons-paint-brush', title: 'Beautiful themes', body: 'Conversion-optimized themes built for restaurants. Pick one, swap a color, you\'re live.' },
-  { icon: 'i-heroicons-sparkles', title: 'AI-powered content', body: 'Mouth-watering descriptions, allergens, translations — generated in one click.', muted: true },
+  { icon: 'i-heroicons-sparkles', title: 'AI-powered content', body: 'Mouth-watering descriptions, allergens, translations — generated in one click.' },
   { icon: 'i-heroicons-globe-alt', title: 'Google Business sync', body: 'Hours, photos, menu — pushed to Google so guests find the right info every time.' },
   { icon: 'i-heroicons-calendar-days', title: 'Reservations + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.', dark: true },
   { icon: 'i-heroicons-shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },

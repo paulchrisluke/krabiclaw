@@ -79,6 +79,14 @@
                 />
               </UFormField>
             </div>
+            <UFormField label="Menu Currency">
+              <USelect
+                v-model="form.default_currency"
+                :items="currencyOptions"
+                value-key="value"
+                label-key="label"
+              />
+            </UFormField>
             <UFormField label="Public URL">
               <div class="flex gap-2">
                 <UInput :model-value="settings.public_url" readonly class="flex-1 opacity-50" />
@@ -285,6 +293,23 @@ const urlStructureOptions = [
   { label: 'Brand pages only', value: 'brand_pages' }
 ]
 
+const currencyOptions = [
+  { label: 'Thai Baht (THB)', value: 'THB' },
+  { label: 'US Dollar (USD)', value: 'USD' },
+  { label: 'Euro (EUR)', value: 'EUR' },
+  { label: 'British Pound (GBP)', value: 'GBP' },
+  { label: 'Japanese Yen (JPY)', value: 'JPY' },
+  { label: 'Australian Dollar (AUD)', value: 'AUD' },
+  { label: 'Canadian Dollar (CAD)', value: 'CAD' },
+  { label: 'Singapore Dollar (SGD)', value: 'SGD' },
+  { label: 'Hong Kong Dollar (HKD)', value: 'HKD' },
+  { label: 'Malaysian Ringgit (MYR)', value: 'MYR' },
+  { label: 'Indonesian Rupiah (IDR)', value: 'IDR' },
+  { label: 'Philippine Peso (PHP)', value: 'PHP' },
+  { label: 'Vietnamese Dong (VND)', value: 'VND' },
+  { label: 'Indian Rupee (INR)', value: 'INR' }
+]
+
 const loading = ref(true)
 const error = ref<string | null>(null)
 const saving = ref(false)
@@ -305,6 +330,7 @@ const form = reactive({
   logo_url: '',
   contact_email: '',
   brand_color: '',
+  default_currency: 'THB',
   primary_location_id: null as string | null,
   url_structure: 'location_subdirectories'
 } as {
@@ -313,6 +339,7 @@ const form = reactive({
   logo_url: string
   contact_email: string
   brand_color: string
+  default_currency: string
   primary_location_id: string | null
   url_structure: string
 })
@@ -333,6 +360,7 @@ const isDirty = computed(() => {
     form.logo_url !== settings.value.logo_url ||
     form.contact_email !== settings.value.contact_email ||
     form.brand_color !== (settings.value.brand_color || '') ||
+    form.default_currency !== (settings.value.default_currency || 'THB') ||
     form.url_structure !== settings.value.url_structure
   )
 })
@@ -385,6 +413,7 @@ const resetForm = () => {
   form.logo_url = settings.value.logo_url || ''
   form.contact_email = settings.value.contact_email || ''
   form.brand_color = (settings.value as ApiValue).brand_color || ''
+  form.default_currency = ((settings.value as ApiValue).default_currency as string | undefined) || 'THB'
   form.primary_location_id = settings.value.primary_location_id || null
   form.url_structure = settings.value.url_structure || 'location_subdirectories'
 }

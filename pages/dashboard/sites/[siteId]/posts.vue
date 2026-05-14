@@ -88,64 +88,31 @@
 
         <!-- Right: Editor + preview -->
         <div v-if="selectedPost || composing" class="space-y-4">
-          <div class="overflow-hidden rounded-lg border border-default">
-            <div class="flex items-center justify-between gap-2 border-b border-default bg-elevated px-4 py-2.5">
-              <span class="text-xs font-semibold uppercase tracking-wider text-muted">
-                {{ composing ? 'New post' : (selectedPost?.status === 'published' ? 'Published' : 'Draft') }}
-              </span>
-              <div class="flex gap-1">
-                <UButton v-if="selectedPost" size="xs" color="neutral" variant="ghost" icon="i-heroicons-trash" @click="handleDelete" />
-                <UButton size="xs" color="neutral" variant="ghost" @click="selectedPost = null; composing = false">✕</UButton>
-              </div>
-            </div>
-
-            <div class="space-y-3 p-4">
-              <UFormField label="Title" size="sm">
-                <UInput v-model="editForm.title" placeholder="Optional headline…" />
-              </UFormField>
-              <UFormField label="Body" size="sm">
-                <UTextarea v-model="editForm.body" :rows="5" placeholder="What's the post about?" />
-              </UFormField>
-              <UFormField label="Image" size="sm">
-                <MediaPicker
-                  v-model="editForm.image_asset_id"
-                  :site-id="siteId"
-                  accept="image"
-                  title="Select post image"
-                  @change="onImageChange"
-                />
-              </UFormField>
-
-              <!-- Channel selector -->
-              <div class="border-t border-default pt-3">
-                <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">Publish to</p>
-                <div class="space-y-1.5">
-                  <label v-for="ch in channelOptions" :key="ch.value" class="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" :value="ch.value" v-model="selectedChannels" :disabled="ch.disabled" class="rounded" />
-                    <span class="text-sm" :class="ch.disabled ? 'text-muted' : 'text-default'">{{ ch.label }}</span>
-                    <UBadge v-if="ch.disabled" size="xs" color="neutral" variant="soft">Not connected</UBadge>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex gap-2">
-            <UButton color="neutral" variant="ghost" :loading="saving" @click="handleSaveDraft">Save draft</UButton>
-            <UButton class="flex-1" :loading="publishing" :disabled="!editForm.body.trim() || selectedChannels.length === 0" @click="handlePublish">
-              Publish{{ selectedChannels.length > 1 ? ` to ${selectedChannels.length} channels` : '' }}
-            </UButton>
-          </div>
-
-          <!-- Preview -->
-          <div v-if="editForm.body" class="overflow-hidden rounded-lg border border-default">
-            <p class="border-b border-default bg-elevated px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted">Site preview</p>
-            <div class="p-4">
-              <img v-if="editForm.imagePreviewUrl" :src="editForm.imagePreviewUrl" class="mb-3 w-full rounded-lg object-cover max-h-48" />
-              <p v-if="editForm.title" class="mb-1 text-base font-bold text-highlighted">{{ editForm.title }}</p>
-              <p class="text-sm leading-relaxed text-muted">{{ editForm.body }}</p>
-            </div>
-          </div>
+          <PostEditor
+            v-model:title="editForm.title"
+            v-model:body="editForm.body"
+            v-model:image-asset-id="editForm.image_asset_id"
+            v-model:image-preview-url="editForm.imagePreviewUrl"
+            v-model:selected-channels="selectedChannels"
+            :eyebrow="composing ? 'New post' : 'Site post'"
+            :status-text="composing ? 'Draft' : String(selectedPost?.status ?? 'Draft')"
+            :site-id="siteId"
+            :channel-options="channelOptions"
+            :show-image="true"
+            :show-channels="true"
+            :show-preview="true"
+            :can-delete="Boolean(selectedPost)"
+            :can-close="true"
+            :saving="saving"
+            :publishing="publishing"
+            body-placeholder="What's the post about?"
+            :body-rows="6"
+            :publish-label="selectedChannels.length > 1 ? `Publish to ${selectedChannels.length} channels` : 'Publish'"
+            @save="handleSaveDraft"
+            @publish="handlePublish"
+            @delete="handleDelete"
+            @close="closeEditor"
+          />
         </div>
 
         <!-- Right: empty state -->
@@ -193,10 +160,6 @@ const channelOptions = [
   { value: 'facebook', label: 'Facebook', disabled: true },
 ]
 
-function onImageChange(asset: { id: string; publicUrl: string; thumbnailUrl: string } | null) {
-  editForm.imagePreviewUrl = asset?.thumbnailUrl ?? asset?.publicUrl ?? null
-}
-
 const openCompose = () => {
   selectedPost.value = null
   composing.value = true
@@ -205,6 +168,11 @@ const openCompose = () => {
   editForm.image_asset_id = null
   editForm.imagePreviewUrl = null
   selectedChannels.value = ['site']
+}
+
+const closeEditor = () => {
+  selectedPost.value = null
+  composing.value = false
 }
 
 const selectPost = (post: ApiRecord) => {

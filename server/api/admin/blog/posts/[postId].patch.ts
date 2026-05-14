@@ -74,7 +74,7 @@ export default defineEventHandler(async (event) => {
   
   try {
     const result = await db.prepare(`UPDATE platform_blog_posts SET ${updates.join(', ')} WHERE id = ?`).bind(...params).run()
-  if (!result.meta.changes || result.meta.changes === 0) {
+    if (!result.meta.changes || result.meta.changes === 0) {
       return jsonResponse({ error: 'Post not found' }, { status: 404 })
     }
   } catch (err) {
@@ -85,5 +85,12 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to update post' }, { status: 500 })
   }
 
-  return jsonResponse({ success: true, updated_at: now })
+  const post = await db.prepare(
+    `SELECT id, title, slug, body, excerpt, category, published_at, created_at, updated_at
+     FROM platform_blog_posts
+     WHERE id = ?
+     LIMIT 1`
+  ).bind(postId).first()
+
+  return jsonResponse({ success: true, post })
 })

@@ -15,6 +15,7 @@ export interface SiteSettings {
   logo_url: string | null
   contact_email: string | null
   brand_color: string
+  default_currency: string
   url_structure: 'location_subdirectories' | 'brand_pages'
   last_published_at: string | null
   created_at: string
@@ -28,6 +29,7 @@ export interface UpdateSiteSettingsRequest {
   logo_url?: string
   contact_email?: string
   brand_color?: string
+  default_currency?: string
   primary_location_id?: string
   url_structure?: 'location_subdirectories' | 'brand_pages'
 }

@@ -436,6 +436,46 @@ export async function deleteMenuItem(
   }
 }
 
+// Rename a menu section by updating every item that belongs to it
+export async function renameMenuSection(
+  db: D1Database,
+  menuId: string,
+  oldSection: string,
+  newSection: string,
+  updatedBy: string
+): Promise<number> {
+  const now = new Date().toISOString()
+  const result = await db.prepare(`
+    UPDATE menu_items
+    SET section = ?, updated_at = ?, updated_by = ?
+    WHERE menu_id = ? AND section = ?
+  `).bind(newSection, now, updatedBy, menuId, oldSection).run()
+
+  if (!result.success) {
+    throw new Error('Failed to rename menu section')
+  }
+
+  return result.meta.changes
+}
+
+// Delete every item in a menu section
+export async function deleteMenuSection(
+  db: D1Database,
+  menuId: string,
+  section: string
+): Promise<number> {
+  const result = await db.prepare(`
+    DELETE FROM menu_items
+    WHERE menu_id = ? AND section = ?
+  `).bind(menuId, section).run()
+
+  if (!result.success) {
+    throw new Error('Failed to delete menu section')
+  }
+
+  return result.meta.changes
+}
+
 // Reorder menu items
 export async function reorderMenuItems(
   db: D1Database,

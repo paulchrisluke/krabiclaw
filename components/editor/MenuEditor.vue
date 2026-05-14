@@ -83,15 +83,59 @@
         </template>
       </UModal>
 
+      <UModal v-model:open="confirmDeleteSectionOpen" :ui="{ content: 'max-w-sm' }">
+        <template #content>
+          <div class="p-6">
+            <h3 class="text-base font-semibold text-default mb-1">Delete section?</h3>
+            <p class="text-sm text-muted mb-6">
+              This will permanently delete <strong>{{ sectionDeleteTarget }}</strong> and every item inside it.
+            </p>
+            <div class="flex justify-end gap-2">
+              <UButton variant="ghost" color="neutral" @click="confirmDeleteSectionOpen = false">Cancel</UButton>
+              <UButton color="error" :loading="saving" @click="handleDeleteSection">Delete</UButton>
+            </div>
+          </div>
+        </template>
+      </UModal>
+
       <!-- Single bordered list: sections + items -->
       <div class="overflow-hidden rounded-lg border border-default">
         <template v-for="section in allSections" :key="section">
           <!-- Section header row -->
-          <div class="flex items-center justify-between gap-4 border-b border-default bg-elevated px-4 py-2.5">
-            <span class="text-xs font-semibold uppercase tracking-wider text-muted">{{ section }}</span>
-            <UButton size="xs" color="neutral" variant="ghost" icon="i-heroicons-plus" @click="openAddItem(section)">
-              Add item
-            </UButton>
+          <div class="border-b border-default bg-elevated px-4 py-2.5">
+            <div v-if="editingSection === section" class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <UInput v-model="sectionEditName" size="sm" class="sm:max-w-xs" autofocus />
+              <div class="flex justify-end gap-2">
+                <UButton size="sm" color="neutral" variant="ghost" @click="cancelRenameSection">Cancel</UButton>
+                <UButton size="sm" :loading="saving" :disabled="!sectionEditName.trim()" @click="handleRenameSection(section)">
+                  Save
+                </UButton>
+              </div>
+            </div>
+            <div v-else class="flex items-center justify-between gap-4">
+              <span class="text-xs font-semibold uppercase tracking-wider text-muted">{{ section }}</span>
+              <div class="flex items-center gap-1">
+                <UButton
+                  size="xs"
+                  color="neutral"
+                  variant="ghost"
+                  icon="i-heroicons-pencil-square"
+                  aria-label="Rename section"
+                  @click="openRenameSection(section)"
+                />
+                <UButton
+                  size="xs"
+                  color="error"
+                  variant="ghost"
+                  icon="i-heroicons-trash"
+                  aria-label="Delete section"
+                  @click="openDeleteSection(section)"
+                />
+                <UButton size="sm" color="primary" variant="soft" icon="i-heroicons-plus" @click="openAddItem(section)">
+                  Add item
+                </UButton>
+              </div>
+            </div>
           </div>
 
           <!-- Items -->
@@ -121,7 +165,7 @@
                     <UInput v-model="editForm.name" placeholder="Item name" autofocus />
                   </UFormField>
                   <UFormField label="Price">
-                    <UInput v-model="editForm.price" placeholder="฿250" />
+                    <UInput v-model="editForm.price" :placeholder="pricePlaceholder" />
                   </UFormField>
                 </div>
                 <UFormField label="Description">
@@ -161,11 +205,11 @@
               <div class="grid gap-3 sm:grid-cols-2">
                 <UFormField label="Name">
                   <UInput v-model="addItemForm.name" placeholder="Item name" autofocus />
-                </UFormField>
-                <UFormField label="Price">
-                  <UInput v-model="addItemForm.price" placeholder="฿250" />
-                </UFormField>
-              </div>
+                  </UFormField>
+                  <UFormField label="Price">
+                    <UInput v-model="addItemForm.price" :placeholder="pricePlaceholder" />
+                  </UFormField>
+                </div>
               <UFormField label="Description">
                 <UTextarea v-model="addItemForm.description" :rows="2" placeholder="Short description..." />
               </UFormField>
@@ -215,6 +259,7 @@ import { useToast } from '~/composables/useToast'
 const props = defineProps<{
   siteId: string
   locationId?: string | null
+  defaultCurrency?: string
 }>()
 
 const toast = useToast()
@@ -231,19 +276,47 @@ const {
   deleteMenu,
   createMenuItem,
   updateMenuItem,
-  deleteMenuItem
+  deleteMenuItem,
+  renameMenuSection,
+  deleteMenuSection
 } = useMenuEditor(props.siteId, props.locationId)
+
+const currencySymbols: Record<string, string> = {
+  THB: '฿',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  JPY: '¥',
+  AUD: 'A$',
+  CAD: 'C$',
+  SGD: 'S$',
+  HKD: 'HK$',
+  MYR: 'RM',
+  IDR: 'Rp',
+  PHP: '₱',
+  VND: '₫',
+  INR: '₹',
+}
+
+const pricePlaceholder = computed(() => {
+  const currency = (props.defaultCurrency || 'THB').toUpperCase()
+  const symbol = currencySymbols[currency] || currency
+  return `${symbol}250`
+})
 
 const handleAiImport = async (menuId: string) => {
   await loadMenu(menuId)
   expandedItemId.value = null
   addingItemSection.value = null
+  editingSection.value = null
   pendingSections.value = []
   newSectionName.value = ''
   showAddSectionForm.value = false
 }
 
 const confirmDeleteOpen = ref(false)
+const confirmDeleteSectionOpen = ref(false)
+const sectionDeleteTarget = ref<string | null>(null)
 
 const handleDeleteMenu = async () => {
   if (!currentMenu.value) return
@@ -252,6 +325,7 @@ const handleDeleteMenu = async () => {
     confirmDeleteOpen.value = false
     expandedItemId.value = null
     addingItemSection.value = null
+    editingSection.value = null
     pendingSections.value = []
     newSectionName.value = ''
     showAddSectionForm.value = false
@@ -324,12 +398,45 @@ const handleDeleteItem = async (itemId: string) => {
   }
 }
 
+const openDeleteSection = (section: string) => {
+  expandedItemId.value = null
+  addingItemSection.value = null
+  editingSection.value = null
+  sectionDeleteTarget.value = section
+  confirmDeleteSectionOpen.value = true
+}
+
+const handleDeleteSection = async () => {
+  if (!sectionDeleteTarget.value) return
+  const section = sectionDeleteTarget.value
+
+  if (pendingSections.value.includes(section) && !menuItemsBySection.value[section]?.length) {
+    pendingSections.value = pendingSections.value.filter((pending: string) => pending !== section)
+    sectionDeleteTarget.value = null
+    confirmDeleteSectionOpen.value = false
+    toast.addToast('Section deleted', 'success')
+    return
+  }
+
+  try {
+    await deleteMenuSection(section)
+    pendingSections.value = pendingSections.value.filter((pending: string) => pending !== section)
+    sectionDeleteTarget.value = null
+    confirmDeleteSectionOpen.value = false
+    toast.addToast('Section deleted', 'success')
+  } catch (err) {
+    console.error('handleDeleteSection failed:', err)
+    toast.addToast('Failed to delete section', 'error')
+  }
+}
+
 // Add item inline form
 const addingItemSection = ref<string | null>(null)
 const addItemForm = reactive({ name: '', description: '', price: '', available: true, image_asset_id: null as string | null })
 
 const openAddItem = (section: string) => {
   expandedItemId.value = null
+  editingSection.value = null
   addItemForm.name = ''
   addItemForm.description = ''
   addItemForm.price = ''
@@ -370,6 +477,8 @@ const handleAddItem = async (section: string) => {
 const pendingSections = ref<string[]>([])
 const showAddSectionForm = ref(false)
 const newSectionName = ref('')
+const editingSection = ref<string | null>(null)
+const sectionEditName = ref('')
 
 const allSections = computed(() => {
   const existing = Object.keys(menuItemsBySection.value)
@@ -391,5 +500,42 @@ const handleAddSection = () => {
 const cancelAddSection = () => {
   newSectionName.value = ''
   showAddSectionForm.value = false
+}
+
+const openRenameSection = (section: string) => {
+  expandedItemId.value = null
+  addingItemSection.value = null
+  showAddSectionForm.value = false
+  editingSection.value = section
+  sectionEditName.value = section
+}
+
+const cancelRenameSection = () => {
+  editingSection.value = null
+  sectionEditName.value = ''
+}
+
+const handleRenameSection = async (section: string) => {
+  const name = sectionEditName.value.trim()
+  if (!name || name === section) {
+    cancelRenameSection()
+    return
+  }
+  if (pendingSections.value.includes(section) && !menuItemsBySection.value[section]?.length) {
+    pendingSections.value = pendingSections.value.map((pending: string) => pending === section ? name : pending)
+    if (addingItemSection.value === section) addingItemSection.value = name
+    editingSection.value = null
+    sectionEditName.value = ''
+    return
+  }
+  try {
+    await renameMenuSection(section, name)
+    editingSection.value = null
+    sectionEditName.value = ''
+    toast.addToast('Section renamed', 'success')
+  } catch (err) {
+    console.error('handleRenameSection failed:', err)
+    toast.addToast('Failed to rename section', 'error')
+  }
 }
 </script>

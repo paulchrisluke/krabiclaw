@@ -77,12 +77,11 @@ export const useChowBot = () => {
     if (!siteId.value || !toolCalls.length) return
     const names = new Set(toolCalls.map(t => t.name))
 
-    if (names.has('rename_site')) {
+    if (names.has('rename_site') || names.has('set_default_currency')) {
       useState<number>('site:refresh').value++
-      return
     }
 
-    const MENU_TOOLS = new Set(['create_menu', 'rename_menu', 'add_menu_item', 'update_menu_item', 'publish_menu', 'add_menu_items_batch', 'delete_menu'])
+    const MENU_TOOLS = new Set(['create_menu', 'rename_menu', 'rename_menu_section', 'delete_menu_section', 'add_menu_item', 'update_menu_item', 'delete_menu_item', 'sync_menu_items', 'publish_menu', 'add_menu_items_batch', 'delete_menu', 'set_default_currency'])
     if ([...names].some(n => MENU_TOOLS.has(n))) {
       useState<number>('menu:refresh', () => 0).value++
     }
@@ -94,7 +93,7 @@ export const useChowBot = () => {
       target = `/dashboard/sites/${siteId.value}/posts`
     } else if (names.has('create_location') || names.has('update_location')) {
       target = `/dashboard/sites/${siteId.value}/locations`
-    } else if (names.has('create_menu') || names.has('rename_menu') || names.has('add_menu_item') || names.has('update_menu_item') || names.has('publish_menu') || names.has('add_menu_items_batch')) {
+    } else if ([...names].some(n => MENU_TOOLS.has(n))) {
       const locId = locationId.value
       target = `/dashboard/sites/${siteId.value}/menu${locId ? `?locationId=${encodeURIComponent(locId)}` : ''}`
     }

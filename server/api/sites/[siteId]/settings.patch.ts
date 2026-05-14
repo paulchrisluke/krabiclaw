@@ -5,6 +5,8 @@ import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import { createSystemSubdomain } from '~/server/utils/domains'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 
+const SUPPORTED_CURRENCIES = new Set(['THB', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'SGD', 'HKD', 'MYR', 'IDR', 'PHP', 'VND', 'INR'])
+
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const body = await readBody(event) as UpdateSiteSettingsRequest
@@ -97,6 +99,20 @@ export default defineEventHandler(async (event) => {
         await deleteConfig(db, site.organization_id as string, siteId, 'brand_color')
       }
     }
+    if (body.default_currency !== undefined) {
+      if (typeof body.default_currency !== 'string') {
+        return jsonResponse({
+          error: 'Invalid default currency'
+        }, { status: 400 })
+      }
+      const currency = body.default_currency.toUpperCase().trim()
+      if (!SUPPORTED_CURRENCIES.has(currency)) {
+        return jsonResponse({
+          error: 'Invalid default currency'
+        }, { status: 400 })
+      }
+      await setConfig(db, site.organization_id as string, siteId, 'default_currency', currency)
+    }
     if (body.primary_location_id !== undefined) {
       if (body.primary_location_id !== null && body.primary_location_id !== '') {
         const location = await db.prepare(`
@@ -183,6 +199,7 @@ export default defineEventHandler(async (event) => {
       logo_url: updatedSite.logo_url,
       contact_email: updatedSite.contact_email,
       brand_color: siteConfig.brand_color || '',
+      default_currency: siteConfig.default_currency || 'THB',
       url_structure: siteSettings.url_structure || 'location_subdirectories',
       last_published_at: updatedSite.last_published_at,
       created_at: updatedSite.created_at,

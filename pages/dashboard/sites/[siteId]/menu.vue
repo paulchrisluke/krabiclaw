@@ -60,6 +60,7 @@
           :key="`${selectedLocation.id}-${locationId}`"
           :site-id="siteId"
           :location-id="selectedLocation.id"
+          :default-currency="defaultCurrency"
         />
       </div>
     </UPageBody>
@@ -93,6 +94,7 @@ if (!siteId) {
 const loading = ref(true)
 const error = ref<string | null>(null)
 const locations = ref<BusinessLocation[]>([])
+const defaultCurrency = ref('THB')
 
 const selectedLocation = computed(() => locations.value.find((location: BusinessLocation) => location.id === locationId.value) || null)
 
@@ -116,9 +118,14 @@ const loadMenuWorkspace = async () => {
   loading.value = true
   error.value = null
   try {
-    const response = await $fetch<{ success: boolean; locations: BusinessLocation[] }>(`/api/sites/${siteId}/locations`)
-    if (!response.success) throw new Error('Failed to load locations')
-    locations.value = response.locations
+    const [locationsResponse, settingsResponse] = await Promise.all([
+      $fetch<{ success: boolean; locations: BusinessLocation[] }>(`/api/sites/${siteId}/locations`),
+      $fetch<{ success: boolean; settings: { default_currency?: string } }>(`/api/sites/${siteId}/settings`)
+    ])
+    if (!locationsResponse.success) throw new Error('Failed to load locations')
+    if (!settingsResponse.success) throw new Error('Failed to load settings')
+    locations.value = locationsResponse.locations
+    defaultCurrency.value = settingsResponse.settings.default_currency || 'THB'
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load menu workspace'
   } finally {

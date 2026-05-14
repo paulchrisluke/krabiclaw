@@ -4,8 +4,10 @@ import { getAuthSession } from '~/server/utils/auth'
 import { callAiGateway, type AiTool, type AiMessage } from '~/server/utils/ai-gateway'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { listPosts, createPost, publishPost } from '~/server/utils/post-management'
-import { getMenus, getMenuWithItems, createMenu, updateMenu, createMenuItem, updateMenuItem, deleteMenu } from '~/server/utils/menu-management'
+import { getMenus, getMenuWithItems, createMenu, updateMenu, createMenuItem, updateMenuItem, deleteMenuItem, deleteMenu, renameMenuSection, deleteMenuSection } from '~/server/utils/menu-management'
+import { getConfig, setConfig } from '~/server/utils/site-config'
 import { getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
+import type { MenuItem, UpdateMenuItemRequest } from '~/server/types/menu'
 
 const MAX_ITERATIONS = 10
 const MODEL = 'claude-sonnet-4-6'
@@ -55,6 +57,62 @@ function toSqlText(value: ApiValue): string | null | undefined {
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return null
+}
+
+function menuItemKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+}
+
+function menuItemLookupKey(name: string): string {
+  const key = menuItemKey(name)
+  return key || name.trim().toLowerCase()
+}
+
+function getToolString(record: Record<string, unknown>, key: string, maxLength: number): string | undefined {
+  const value = record[key]
+  return typeof value === 'string' ? value.slice(0, maxLength) : undefined
+}
+
+function getToolBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
+  const value = record[key]
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function findMenuItemMatch(itemRecord: Record<string, unknown>, menuItems: MenuItem[]): MenuItem | null {
+  const itemId = getToolString(itemRecord, 'item_id', 120)
+  if (itemId) {
+    return menuItems.find((item) => item.id === itemId) ?? null
+  }
+
+  const name = getToolString(itemRecord, 'name', 200)?.trim()
+  if (!name) return null
+
+  const key = menuItemLookupKey(name)
+  const lowerName = name.toLowerCase()
+  return menuItems.find((item) => item.slug === key || item.name.toLowerCase() === lowerName) ?? null
+}
+
+function buildMenuItemUpdates(itemRecord: Record<string, unknown>, match?: MenuItem | null): UpdateMenuItemRequest {
+  const updates: UpdateMenuItemRequest = {}
+  const section = getToolString(itemRecord, 'section', 100)
+  const name = getToolString(itemRecord, 'name', 200)
+  const description = getToolString(itemRecord, 'description', 500)
+  const price = getToolString(itemRecord, 'price', 50)
+  const imageAssetId = getToolString(itemRecord, 'image_asset_id', 120)
+  const available = getToolBoolean(itemRecord, 'available')
+
+  if (section !== undefined && section.trim() && section !== match?.section) updates.section = section
+  if (name !== undefined && name !== match?.name) updates.name = name
+  if (description !== undefined && description !== match?.description) updates.description = description
+  if (price !== undefined && price !== match?.price) updates.price = price
+  if (imageAssetId !== undefined && imageAssetId !== match?.image_asset_id) updates.image_asset_id = imageAssetId
+  if (available !== undefined && available !== Boolean(match?.available)) updates.available = available
+
+  return updates
+}
+
+function hasMenuItemUpdates(updates: UpdateMenuItemRequest): boolean {
+  return Object.keys(updates).length > 0
 }
 
 const TOOLS: AiTool[] = [
@@ -142,8 +200,33 @@ const TOOLS: AiTool[] = [
     },
   },
   {
+    name: 'rename_menu_section',
+    description: 'Rename a menu category/section, such as Appetizers, Drinks, Mains, or Desserts. Updates all items in that section.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        menu_id: { type: 'string', description: 'ID of the menu.' },
+        old_section: { type: 'string', description: 'Current section/category title.' },
+        new_section: { type: 'string', description: 'New section/category title.' },
+      },
+      required: ['menu_id', 'old_section', 'new_section'],
+    },
+  },
+  {
+    name: 'delete_menu_section',
+    description: 'Permanently delete a menu category/section and every item in it. Confirm with user first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        menu_id: { type: 'string', description: 'ID of the menu.' },
+        section: { type: 'string', description: 'Section/category title to delete.' },
+      },
+      required: ['menu_id', 'section'],
+    },
+  },
+  {
     name: 'add_menu_items_batch',
-    description: 'Add multiple menu items in one call. ALWAYS use this instead of looping add_menu_item. Up to 100 items.',
+    description: 'Add multiple brand-new menu items in one call. Do not use for edits, replacements, renamed items, revised prices, or existing menu content. Up to 100 items.',
     input_schema: {
       type: 'object',
       properties: {
@@ -161,6 +244,37 @@ const TOOLS: AiTool[] = [
             },
             required: ['section', 'name'],
           },
+        },
+      },
+      required: ['menu_id', 'items'],
+    },
+  },
+  {
+    name: 'sync_menu_items',
+    description: 'Reconcile a menu item list with an existing menu. Use this for menu updates, replacements, revised prices/descriptions, renamed items, or mixed create/update work.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        menu_id: { type: 'string', description: 'Menu to update.' },
+        items: {
+          type: 'array',
+          description: 'Items to reconcile. Existing items match by item_id first, then by normalized name/slug.',
+          items: {
+            type: 'object',
+            properties: {
+              item_id: { type: 'string', description: 'Existing menu item ID when known.' },
+              section: { type: 'string', description: 'Section/category name.' },
+              name: { type: 'string', description: 'Dish name.' },
+              description: { type: 'string', description: 'Short description. Optional.' },
+              price: { type: 'string', description: 'Price string, e.g. "฿120". Optional.' },
+              image_asset_id: { type: 'string', description: 'Media asset ID from generate_image. Optional.' },
+              available: { type: 'boolean', description: 'Whether the item should be shown as available.' },
+            },
+          },
+        },
+        set_missing_unavailable: {
+          type: 'boolean',
+          description: 'Only true when the user explicitly asks to remove, replace, hide, or make omitted items unavailable.',
         },
       },
       required: ['menu_id', 'items'],
@@ -189,6 +303,7 @@ const TOOLS: AiTool[] = [
       type: 'object',
       properties: {
         item_id: { type: 'string', description: 'ID of the item.' },
+        section: { type: 'string' },
         name: { type: 'string' },
         description: { type: 'string' },
         price: { type: 'string' },
@@ -196,6 +311,18 @@ const TOOLS: AiTool[] = [
         available: { type: 'boolean' },
       },
       required: ['item_id'],
+    },
+  },
+  {
+    name: 'delete_menu_item',
+    description: 'Permanently delete one menu item. Confirm with user first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        menu_id: { type: 'string', description: 'Menu ID for verification.' },
+        item_id: { type: 'string', description: 'ID of the item.' },
+      },
+      required: ['menu_id', 'item_id'],
     },
   },
   {
@@ -406,9 +533,20 @@ const TOOLS: AiTool[] = [
       required: ['brand_name'],
     },
   },
+  {
+    name: 'set_default_currency',
+    description: 'Set the default menu currency for this site.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        currency: { type: 'string', enum: ['THB', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'SGD', 'HKD', 'MYR', 'IDR', 'PHP', 'VND', 'INR'] },
+      },
+      required: ['currency'],
+    },
+  },
 ]
 
-const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu', 'delete_media_asset', 'delete_qa'])
+const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu', 'delete_menu_item', 'delete_menu_section', 'delete_media_asset', 'delete_qa'])
 
 function requiresConfirmation(name: string, recentMessages: AiMessage[]): boolean {
   if (!CONFIRM_REQUIRED.has(name)) return false
@@ -492,26 +630,205 @@ async function executeTool(
       return { id: menu.id, name: menu.name, description: menu.description, status: menu.status }
     }
 
+    case 'rename_menu_section': {
+      const menuId = toSqlText(input.menu_id)
+      const oldSection = toSqlText(input.old_section)?.trim()
+      const newSection = toSqlText(input.new_section)?.trim()
+      if (!menuId || !oldSection || !newSection) {
+        return { error: 'menu_id, old_section, and new_section are required.' }
+      }
+      if (oldSection === newSection) {
+        return { error: 'New section must be different.' }
+      }
+
+      const menu = await getMenuWithItems(db, orgId, siteId, menuId)
+      if (!menu) return { error: 'Menu not found.' }
+      if (!menu.items.some((item) => item.section === oldSection)) {
+        return { error: 'Section not found.' }
+      }
+      if (menu.items.some((item) => item.section === newSection)) {
+        return { error: 'Section already exists.' }
+      }
+
+      const updated = await renameMenuSection(db, menuId, oldSection, newSection, userId)
+      return { menu_id: menuId, old_section: oldSection, new_section: newSection, updated }
+    }
+
+    case 'delete_menu_section': {
+      const menuId = toSqlText(input.menu_id)
+      const section = toSqlText(input.section)?.trim()
+      if (!menuId || !section) return { error: 'menu_id and section are required.' }
+
+      const menu = await getMenuWithItems(db, orgId, siteId, menuId)
+      if (!menu) return { error: 'Menu not found.' }
+      if (!menu.items.some((item) => item.section === section)) {
+        return { error: 'Section not found.' }
+      }
+
+      const deleted = await deleteMenuSection(db, menuId, section)
+      return { menu_id: menuId, section, deleted }
+    }
+
     case 'add_menu_items_batch': {
+      const menuId = toSqlText(input.menu_id)
+      if (!menuId) return { error: 'menu_id is required.' }
+      const menu = await getMenuWithItems(db, orgId, siteId, menuId)
+      if (!menu) return { error: 'Menu not found.' }
+
       const items: unknown[] = Array.isArray(input.items) ? input.items.slice(0, 100) : []
-      const created = await Promise.all(items.map((item) => {
-        const itemRecord = (item && typeof item === 'object') ? item : null
-        const getString = (key: string): string | undefined => {
-          if (!itemRecord) return undefined
-          const value = (itemRecord as Record<string, unknown>)[key]
-          return typeof value === 'string' ? value : undefined
+      const existingKeys = new Set(menu.items.map((item) => item.slug || menuItemLookupKey(item.name)))
+      const inputKeys = new Set<string>()
+      const created: Array<{ id: string; name: string; section: string; price: string | null }> = []
+      const skipped: Array<{ name: string; reason: string; existing_item_id?: string }> = []
+
+      for (const item of items) {
+        const itemRecord = (item && typeof item === 'object') ? item as Record<string, unknown> : null
+        const name = itemRecord ? getToolString(itemRecord, 'name', 200)?.trim() : ''
+        if (!itemRecord || !name) {
+          skipped.push({ name: '', reason: 'missing_name' })
+          continue
         }
-        return (
-        createMenuItem(db, input.menu_id, {
-          section: (getString('section') || 'Menu').slice(0, 100),
-          name: (getString('name') || '').slice(0, 200),
-          description: getString('description')?.slice(0, 500),
-          price: getString('price')?.slice(0, 50),
-          image_asset_id: getString('image_asset_id'),
-        }, userId)
-        )
-      }))
-      return { added: created.length, menu_id: input.menu_id }
+        const section = itemRecord ? getToolString(itemRecord, 'section', 100)?.trim() : ''
+        if (!section) {
+          skipped.push({ name, reason: 'missing_section' })
+          continue
+        }
+
+        const key = menuItemLookupKey(name)
+        const existing = menu.items.find((menuItem) => menuItem.slug === key || menuItem.name.toLowerCase() === name.toLowerCase())
+        if (existing || existingKeys.has(key)) {
+          skipped.push({ name, reason: 'already_exists', existing_item_id: existing?.id })
+          continue
+        }
+        if (inputKeys.has(key)) {
+          skipped.push({ name, reason: 'duplicate_in_request' })
+          continue
+        }
+
+        inputKeys.add(key)
+
+        try {
+          const createdItem = await createMenuItem(db, menuId, {
+            section,
+            name,
+            description: getToolString(itemRecord, 'description', 500),
+            price: getToolString(itemRecord, 'price', 50),
+            image_asset_id: getToolString(itemRecord, 'image_asset_id', 120),
+          }, userId)
+          existingKeys.add(createdItem.slug || menuItemLookupKey(createdItem.name))
+          created.push({ id: createdItem.id, name: createdItem.name, section: createdItem.section, price: createdItem.price })
+        } catch (error) {
+          if (!isUniqueConstraintError(error)) throw error
+          skipped.push({ name, reason: 'unique_conflict' })
+        }
+      }
+
+      return { added: created.length, created, skipped, menu_id: menuId }
+    }
+
+    case 'sync_menu_items': {
+      const menuId = toSqlText(input.menu_id)
+      if (!menuId) return { error: 'menu_id is required.' }
+      const menu = await getMenuWithItems(db, orgId, siteId, menuId)
+      if (!menu) return { error: 'Menu not found.' }
+
+      const items: unknown[] = Array.isArray(input.items) ? input.items.slice(0, 100) : []
+      const workingItems = [...menu.items]
+      const touchedItemIds = new Set<string>()
+      const created: Array<{ id: string; name: string; section: string; price: string | null }> = []
+      const updated: Array<{ id: string; name: string; section: string; price: string | null; available: boolean }> = []
+      const unchanged: Array<{ id: string; name: string }> = []
+      const skipped: Array<{ name: string; reason: string; item_id?: string }> = []
+
+      for (const item of items) {
+        const itemRecord = (item && typeof item === 'object') ? item as Record<string, unknown> : null
+        if (!itemRecord) {
+          skipped.push({ name: '', reason: 'invalid_item' })
+          continue
+        }
+
+        const name = getToolString(itemRecord, 'name', 200)?.trim()
+        const match = findMenuItemMatch(itemRecord, workingItems)
+
+        if (match) {
+          const updates = buildMenuItemUpdates(itemRecord, match)
+          touchedItemIds.add(match.id)
+
+          if (!hasMenuItemUpdates(updates)) {
+            unchanged.push({ id: match.id, name: match.name })
+            continue
+          }
+
+          try {
+            const updatedItem = await updateMenuItem(db, match.id, updates, userId)
+            const index = workingItems.findIndex((menuItem) => menuItem.id === updatedItem.id)
+            if (index >= 0) workingItems[index] = updatedItem
+            updated.push({
+              id: updatedItem.id,
+              name: updatedItem.name,
+              section: updatedItem.section,
+              price: updatedItem.price,
+              available: Boolean(updatedItem.available),
+            })
+          } catch (error) {
+            if (!isUniqueConstraintError(error)) throw error
+            skipped.push({ name: name || match.name, reason: 'unique_conflict', item_id: match.id })
+          }
+          continue
+        }
+
+        if (!name) {
+          skipped.push({ name: '', reason: 'missing_name' })
+          continue
+        }
+        const section = getToolString(itemRecord, 'section', 100)?.trim()
+        if (!section) {
+          skipped.push({ name, reason: 'missing_section' })
+          continue
+        }
+
+        try {
+          const createdItem = await createMenuItem(db, menuId, {
+            section,
+            name,
+            description: getToolString(itemRecord, 'description', 500),
+            price: getToolString(itemRecord, 'price', 50),
+            image_asset_id: getToolString(itemRecord, 'image_asset_id', 120),
+            available: getToolBoolean(itemRecord, 'available'),
+          }, userId)
+          workingItems.push(createdItem)
+          touchedItemIds.add(createdItem.id)
+          created.push({ id: createdItem.id, name: createdItem.name, section: createdItem.section, price: createdItem.price })
+        } catch (error) {
+          if (!isUniqueConstraintError(error)) throw error
+          skipped.push({ name, reason: 'unique_conflict' })
+        }
+      }
+
+      const madeUnavailable: Array<{ id: string; name: string }> = []
+      if (input.set_missing_unavailable === true) {
+        for (const item of workingItems) {
+          if (touchedItemIds.has(item.id) || !item.available) continue
+          const updatedItem = await updateMenuItem(db, item.id, { available: false }, userId)
+          madeUnavailable.push({ id: updatedItem.id, name: updatedItem.name })
+        }
+      }
+
+      return {
+        menu_id: menuId,
+        created,
+        updated,
+        unchanged,
+        made_unavailable: madeUnavailable,
+        skipped,
+        summary: {
+          created: created.length,
+          updated: updated.length,
+          unchanged: unchanged.length,
+          made_unavailable: madeUnavailable.length,
+          skipped: skipped.length,
+        },
+      }
     }
 
     case 'add_menu_item': {
@@ -524,11 +841,25 @@ async function executeTool(
 
     case 'update_menu_item': {
       const updates: Record<string, string | boolean | null> = {}
-      for (const f of ['name', 'description', 'price', 'image_asset_id', 'available']) {
+      for (const f of ['section', 'name', 'description', 'price', 'image_asset_id', 'available']) {
         if (input[f] !== undefined) updates[f] = input[f]
       }
       const item = await updateMenuItem(db, input.item_id, updates, userId)
       return { id: item.id, name: item.name, price: item.price, available: item.available }
+    }
+
+    case 'delete_menu_item': {
+      const menuId = toSqlText(input.menu_id)
+      const itemId = toSqlText(input.item_id)
+      if (!menuId || !itemId) return { error: 'menu_id and item_id are required.' }
+
+      const menu = await getMenuWithItems(db, orgId, siteId, menuId)
+      if (!menu) return { error: 'Menu not found.' }
+      const item = menu.items.find((menuItem) => menuItem.id === itemId)
+      if (!item) return { error: 'Menu item not found.' }
+
+      await deleteMenuItem(db, itemId)
+      return { menu_id: menuId, item_id: itemId, name: item.name, deleted: true }
     }
 
     case 'publish_menu': {
@@ -860,6 +1191,16 @@ async function executeTool(
       return { brand_name: input.brand_name, subdomain: newSubdomain, updated: true }
     }
 
+    case 'set_default_currency': {
+      const currency = toSqlText(input.currency)?.trim().toUpperCase()
+      const supportedCurrencies = new Set(['THB', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'SGD', 'HKD', 'MYR', 'IDR', 'PHP', 'VND', 'INR'])
+      if (!currency || !supportedCurrencies.has(currency)) {
+        return { error: 'Unsupported currency.' }
+      }
+      await setConfig(db, orgId, siteId, 'default_currency', currency)
+      return { default_currency: currency, updated: true }
+    }
+
     default:
       return { error: `Unknown tool: ${name}` }
   }
@@ -886,6 +1227,8 @@ export default defineEventHandler(async (event) => {
 
   const orgId: string = site.organization_id
   const userId: string = session.user.id
+  const siteConfig = await getConfig(db, orgId, siteId)
+  const defaultCurrency = siteConfig.default_currency || 'THB'
 
   const creditOk = await hasCredits(db, orgId)
   if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
@@ -915,24 +1258,30 @@ export default defineEventHandler(async (event) => {
 Help manage all site content with concise, action-oriented responses.
 
 Site: ${siteName}
+Default menu currency: ${defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ''}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create (standard/offer/event/update with CTA), publish — optionally location-scoped
-- Menus: create, rename, view, add items (batch with image_asset_id), update items, publish, delete
+- Menus: create, rename, view, rename/delete sections/categories, add brand-new items, reconcile/update item lists, update/delete individual items, publish, delete
 - Locations: list, create, update (title syncs slug, plus description/email/socials/price_level), lookup from Google Maps URL
 - Reviews: get (with star distribution), reply as owner
 - Media: list per location, delete, generate AI images with Flux (auto-saved, returns asset_id)
 - Q&A: list, add, delete per location
 - Contact & reservation submissions: read
-- Site: rename (updates subdomain)
+- Site: rename (updates subdomain), set default menu currency
 - Stats: posts, menus, locations, reviews
 
 Guidelines:
 - Use tools immediately — never say "I'll do that" without calling a tool
-- When adding multiple menu items, ALWAYS use add_menu_items_batch — all items in one call
+- For existing menu edits, replacements, revised prices/descriptions, renamed dishes, or mixed create/update work, inspect the menu with get_menu and then use sync_menu_items or update_menu_item
+- For menu category changes like renaming Appetizers to Starters or Drinks to Beverages, use rename_menu_section
+- For deleting one dish use delete_menu_item; for deleting a whole category and all dishes inside it use delete_menu_section
+- Use the default menu currency for new or revised menu prices unless the user gives another currency
+- Use add_menu_items_batch only when the user is clearly adding brand-new items that are not already on the menu
+- Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
 - When creating menus, omit location_id — the server links it to the current location automatically
-- Before publish_post, publish_menu, delete_menu, delete_media_asset, delete_qa — confirm first
+- Before publish_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_media_asset, delete_qa — confirm first
 - Menus are DRAFT by default — publish_menu makes them live
 - Keep responses short — this is a chat panel`
 

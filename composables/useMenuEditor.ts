@@ -186,6 +186,52 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     }
   }
 
+  const renameMenuSection = async (oldSection: string, newSection: string) => {
+    if (!currentMenu.value) throw new Error('No menu selected')
+    saving.value = true
+    error.value = null
+    try {
+      const response = await $fetch<{ success: boolean; old_section: string; new_section: string; updated: number }>(
+        `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/sections`,
+        { method: 'PATCH', body: { old_section: oldSection, new_section: newSection } }
+      )
+      if (response.success) {
+        currentMenu.value.items = currentMenu.value.items.map(item =>
+          item.section === oldSection ? { ...item, section: response.new_section } : item
+        )
+        return response
+      }
+      throw new Error('Failed to rename menu section')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    } finally {
+      saving.value = false
+    }
+  }
+
+  const deleteMenuSection = async (section: string) => {
+    if (!currentMenu.value) throw new Error('No menu selected')
+    saving.value = true
+    error.value = null
+    try {
+      const response = await $fetch<{ success: boolean; section: string; deleted: number }>(
+        `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/sections`,
+        { method: 'DELETE', body: { section } }
+      )
+      if (response.success) {
+        currentMenu.value.items = currentMenu.value.items.filter(item => item.section !== response.section)
+        return response
+      }
+      throw new Error('Failed to delete menu section')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    } finally {
+      saving.value = false
+    }
+  }
+
   const reorderMenuItems = async (items: Array<{ id: string; sort_order: number }>) => {
     if (!currentMenu.value) throw new Error('No menu selected')
     saving.value = true
@@ -241,6 +287,8 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     createMenuItem,
     updateMenuItem,
     deleteMenuItem,
+    renameMenuSection,
+    deleteMenuSection,
     reorderMenuItems,
   }
 }
