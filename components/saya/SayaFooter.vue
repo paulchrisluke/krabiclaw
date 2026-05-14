@@ -132,8 +132,8 @@ const { getField } = usePageContent('contact')
 
 const year = new Date().getFullYear()
 const restaurantName = computed(() => {
-  if (site && typeof site === 'object' && 'name' in site && typeof site.name === 'string' && site.name.trim()) {
-    return site.name
+  if (site && typeof site === 'object' && 'brand_name' in site && typeof site.brand_name === 'string' && site.brand_name.trim()) {
+    return site.brand_name
   }
   return DEFAULT_RESTAURANT_NAME
 })

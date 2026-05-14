@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user belongs to organization that owns the site
     const site = await db.prepare(`
-      SELECT s.id, s.organization_id, s.name, s.subdomain, s.theme, s.status, 
+      SELECT s.id, s.organization_id, s.subdomain, s.theme, s.status,
              s.primary_location_id, s.public_url, s.custom_domain_status,
              s.brand_name, s.brand_description, s.logo_url, s.contact_email,
              s.settings, s.last_published_at, s.created_at, s.updated_at,
@@ -66,14 +66,13 @@ export default defineEventHandler(async (event) => {
       id: site.id,
       organization_id: site.organization_id,
       site_id: site.id,
-      name: site.name,
       subdomain: site.subdomain,
       theme: site.theme || 'saya',
       status: site.status,
       primary_location_id: site.primary_location_id,
       public_url: site.public_url,
       custom_domain_status: site.custom_domain_status || 'none',
-      brand_name: site.brand_name || site.name,
+      brand_name: site.brand_name,
       brand_description: site.brand_description,
       logo_url: site.logo_url,
       contact_email: site.contact_email,

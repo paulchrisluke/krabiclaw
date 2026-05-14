@@ -1,6 +1,6 @@
 // Site creation API with idempotency and rollback safety
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
-import { getSayaThemeSeedContent, getDefaultMenuSeedData } from '../../utils/content-seeding'
+import { getSayaThemeSeedContent } from '../../utils/content-seeding'
 import { getAuthSession } from '../../utils/auth'
 import { createSystemSubdomain } from '../../utils/domains'
 import { defineEventHandler, readBody } from 'h3'
@@ -177,16 +177,16 @@ export default defineEventHandler(async (event) => {
     try {
       await db.prepare(`
         INSERT INTO sites (
-          id, organization_id, theme_id, name, slug, subdomain, 
+          id, organization_id, theme_id, slug, subdomain, brand_name,
           status, plan, onboarding_status, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         siteId,
         organizationId,
         'saya-theme-v1',
+        normalizedSubdomain,
+        normalizedSubdomain,
         restaurantName,
-        normalizedSubdomain,
-        normalizedSubdomain,
         'active',
         'free',
         'pending',
@@ -264,51 +264,6 @@ async function performRequiredSeeding(env: OnboardingEnv, db: D1Database, siteId
         content.content,
         content.type,
         content.updated_at
-      ).run()
-    }
-    
-    // Step 2: Create required default menu (must succeed)
-    const menuSeedData = getDefaultMenuSeedData({
-      organizationId,
-      siteId,
-      restaurantName
-    })
-    
-    // Insert menu
-    await db.prepare(`
-      INSERT OR REPLACE INTO menus (
-        id, organization_id, site_id, location_id, name, 
-        status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      menuSeedData.menu.id,
-      menuSeedData.menu.organization_id,
-      menuSeedData.menu.site_id,
-      menuSeedData.menu.location_id,
-      menuSeedData.menu.name,
-      menuSeedData.menu.status,
-      menuSeedData.menu.created_at,
-      menuSeedData.menu.updated_at
-    ).run()
-    
-    // Insert required menu items (must succeed)
-    for (const item of menuSeedData.items) {
-      await db.prepare(`
-        INSERT OR REPLACE INTO menu_items (
-          id, menu_id, section, name, description, price, 
-          available, sort_order, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        item.id,
-        item.menu_id,
-        item.section,
-        item.name,
-        item.description,
-        item.price,
-        item.available,
-        item.sort_order,
-        item.created_at,
-        item.updated_at
       ).run()
     }
     

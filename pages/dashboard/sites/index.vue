@@ -41,7 +41,7 @@
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
-                <h2 class="truncate text-lg font-semibold text-highlighted">{{ site.name }}</h2>
+                <h2 class="truncate text-lg font-semibold text-highlighted">{{ site.brand_name }}</h2>
                 <UBadge :color="site.status === 'active' ? 'success' : 'warning'" variant="soft">{{ site.status }}</UBadge>
                 <UBadge color="neutral" variant="soft">{{ site.plan }}</UBadge>
               </div>
@@ -76,7 +76,7 @@ definePageMeta({ layout: 'dashboard' })
 
 interface DashboardSite {
   id: string
-  name: string
+  brand_name: string
   subdomain: string | null
   custom_domain: string | null
   status: string

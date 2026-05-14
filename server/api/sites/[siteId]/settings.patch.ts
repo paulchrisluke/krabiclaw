@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
+import { createSystemSubdomain } from '~/server/utils/domains'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 
 export default defineEventHandler(async (event) => {
@@ -58,13 +59,24 @@ export default defineEventHandler(async (event) => {
     const setParts = []
     const params = []
 
-    if (body.name !== undefined) {
-      setParts.push('name = ?')
-      params.push(body.name)
-    }
     if (body.brand_name !== undefined) {
-      setParts.push('brand_name = ?')
-      params.push(body.brand_name)
+      const slug = body.brand_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 30)
+      if (!slug) {
+        return jsonResponse({
+          error: 'Brand name must contain at least one alphanumeric character'
+        }, { status: 400 })
+      }
+      const existing = await db.prepare(`
+        SELECT id FROM sites WHERE subdomain = ? AND id != ? AND organization_id = ?
+        LIMIT 1
+      `).bind(slug, siteId, site.organization_id).first()
+      if (existing) {
+        return jsonResponse({
+          error: 'This brand name is already in use'
+        }, { status: 400 })
+      }
+      setParts.push('brand_name = ?', 'subdomain = ?')
+      params.push(body.brand_name, slug)
     }
     if (body.brand_description !== undefined) {
       setParts.push('brand_description = ?')
@@ -132,9 +144,15 @@ export default defineEventHandler(async (event) => {
       throw new Error('Failed to update site settings')
     }
 
+    // If brand_name changed, sync subdomain record and public_url via createSystemSubdomain
+    if (body.brand_name !== undefined) {
+      const slug = body.brand_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 30)
+      await createSystemSubdomain(env, db, siteId, site.organization_id as string, slug)
+    }
+
     // Get updated settings
     const updatedSite = await db.prepare(`
-      SELECT id, organization_id, name, subdomain, theme, status, 
+      SELECT id, organization_id, subdomain, theme, status,
              primary_location_id, public_url, custom_domain_status,
              brand_name, brand_description, logo_url, contact_email,
              settings, last_published_at, created_at, updated_at
@@ -154,14 +172,13 @@ export default defineEventHandler(async (event) => {
       id: updatedSite.id,
       organization_id: updatedSite.organization_id,
       site_id: updatedSite.id,
-      name: updatedSite.name,
       subdomain: updatedSite.subdomain,
       theme: updatedSite.theme || 'saya',
       status: updatedSite.status,
       primary_location_id: updatedSite.primary_location_id,
       public_url: updatedSite.public_url,
       custom_domain_status: updatedSite.custom_domain_status || 'none',
-      brand_name: updatedSite.brand_name || updatedSite.name,
+      brand_name: updatedSite.brand_name,
       brand_description: updatedSite.brand_description,
       logo_url: updatedSite.logo_url,
       contact_email: updatedSite.contact_email,

@@ -33,20 +33,19 @@ export default defineEventHandler(async (event) => {
 
   // Fetch site and member role for actor attribution
   const siteResult = await db.prepare(`
-    SELECT s.id, s.organization_id, s.name, m.role as member_role
+    SELECT s.id, s.organization_id, m.role as member_role
     FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin')
     LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; name: string; member_role: 'owner' | 'admin' }>()
+  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; member_role: 'owner' | 'admin' }>()
   if (!siteResult) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   // For backward compatibility with existing code
   const site = {
     id: siteResult.id,
-    organization_id: siteResult.organization_id,
-    name: siteResult.name
+    organization_id: siteResult.organization_id
   }
   const actorType = siteResult.member_role
 

@@ -4,7 +4,6 @@ export interface SiteSettings {
   id: string
   organization_id: string
   site_id: string
-  name: string
   subdomain: string
   theme: string
   status: 'active' | 'pending' | 'failed'
@@ -42,7 +41,7 @@ export interface LaunchReadiness {
     site_identity: {
       ready: boolean
       items: {
-        name: boolean
+        brand_name: boolean
         subdomain: boolean
         theme: boolean
         status: boolean

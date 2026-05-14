@@ -5,6 +5,7 @@ import { callAiGateway, type AiTool, type AiMessage } from '~/server/utils/ai-ga
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { listPosts, createPost, publishPost } from '~/server/utils/post-management'
 import { getMenus, getMenuWithItems, createMenu, updateMenu, createMenuItem, updateMenuItem, deleteMenu } from '~/server/utils/menu-management'
+import { getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
 
 const MAX_ITERATIONS = 10
 const MODEL = 'claude-sonnet-4-6'
@@ -263,6 +264,19 @@ const TOOLS: AiTool[] = [
     },
   },
 
+  // ── Maps lookup ────────────────────────────────────────────────────────────
+  {
+    name: 'lookup_maps_url',
+    description: 'Look up a Google Maps URL or share link to get location details — address, phone, coordinates, hours. Use when someone pastes a Google Maps link and wants to update their location details. After getting results, call update_location with the relevant fields.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Google Maps URL or share link (e.g. https://maps.app.goo.gl/... or https://www.google.com/maps/place/...)' },
+      },
+      required: ['url'],
+    },
+  },
+
   // ── Reviews ────────────────────────────────────────────────────────────────
   {
     name: 'get_reviews',
@@ -398,7 +412,7 @@ const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu',
 
 function requiresConfirmation(name: string, recentMessages: AiMessage[]): boolean {
   if (!CONFIRM_REQUIRED.has(name)) return false
-  const CONFIRM_WORDS = /\b(yes|ok|go ahead|do it|publish|confirm|proceed|sure|delete|remove)\b/i
+  const CONFIRM_WORDS = /\b(yes|yea|yeah|yep|yup|ok|okay|go ahead|do it|do that|publish|confirm|proceed|sure|absolutely|fine|sounds good|let'?s go|delete|remove)\b/i
   const userTurns = recentMessages.filter(m => m.role === 'user').slice(-3)
     .map(m => (typeof m.content === 'string' ? m.content : ''))
   return !userTurns.some(t => CONFIRM_WORDS.test(t))
@@ -407,7 +421,7 @@ function requiresConfirmation(name: string, recentMessages: AiMessage[]): boolea
 async function executeTool(
   name: string,
   input: ApiRecord,
-  ctx: { db: D1Database; env: ApiRecord; orgId: string; siteId: string; userId: string; agentMessages?: AiMessage[] }
+  ctx: { db: D1Database; env: ApiRecord; orgId: string; siteId: string; userId: string; agentMessages?: AiMessage[]; locationId?: string | null }
 ): Promise<ApiValue> {
   const { db, env, orgId, siteId, userId } = ctx
 
@@ -451,13 +465,25 @@ async function executeTool(
         if (!menu) return { error: 'Menu not found.' }
         return menu
       }
-      const menus = await getMenus(db, orgId, siteId)
+      // Filter by current location when available so we only see relevant menus
+      const locationFilter = (input.location_id as string | undefined) ?? ctx.locationId ?? undefined
+      const menus = await getMenus(db, orgId, siteId, locationFilter || undefined)
       if (!menus.length) return { message: 'No menus found for this site.' }
       return await getMenuWithItems(db, orgId, siteId, menus[0]!.id) ?? { error: 'Failed to load menu.' }
     }
 
     case 'create_menu': {
-      const menu = await createMenu(db, orgId, siteId, { name: input.name, description: input.description, locationId: input.location_id }, userId)
+      // Use the explicit location from the AI, fall back to the page's current location
+      const effectiveLocationId = (input.location_id as string | undefined) ?? ctx.locationId ?? undefined
+      if (effectiveLocationId) {
+        const location = await db.prepare(`
+          SELECT 1 FROM business_locations
+          WHERE id = ? AND organization_id = ? AND site_id = ?
+          LIMIT 1
+        `).bind(effectiveLocationId, orgId, siteId).first()
+        if (!location) return { error: 'Location not found or access denied' }
+      }
+      const menu = await createMenu(db, orgId, siteId, { name: input.name, description: input.description, locationId: effectiveLocationId }, userId)
       return { id: menu.id, name: menu.name, description: menu.description, status: menu.status }
     }
 
@@ -619,6 +645,71 @@ async function executeTool(
       return updated ?? { error: 'Location not found.' }
     }
 
+    case 'lookup_maps_url': {
+      const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
+      if (!apiKey) return { error: 'Google Places API not configured.' }
+
+      const rawUrl = typeof input.url === 'string' ? input.url.trim() : ''
+      if (!rawUrl) return { error: 'url is required.' }
+
+      // Validate it looks like a Google Maps URL before fetching
+      if (!rawUrl.includes('google.com/maps') && !rawUrl.includes('maps.app.goo.gl') && !rawUrl.includes('maps.google.com')) {
+        return { error: 'URL does not appear to be a Google Maps link.' }
+      }
+
+      // Follow redirects to resolve short URLs (maps.app.goo.gl)
+      let resolvedUrl = rawUrl
+      try {
+        const probe = await fetch(rawUrl, { method: 'HEAD', redirect: 'follow' })
+        resolvedUrl = probe.url || rawUrl
+      } catch { /* keep rawUrl */ }
+
+      // Extract place ID from the canonical URL data parameter: !1s{placeId}
+      const placeIdMatch = resolvedUrl.match(/!1s([^!&]+)/)
+      const placeId = placeIdMatch?.[1] ?? null
+
+      if (placeId) {
+        try {
+          const details = await getPlaceDetails(apiKey, placeId)
+          return {
+            found: true,
+            name: details.name,
+            address: details.formattedAddress,
+            city: details.city,
+            phone: details.phone,
+            website_url: details.websiteUrl,
+            maps_url: details.mapsUrl,
+            latitude: details.lat,
+            longitude: details.lng,
+            rating: details.rating,
+            opening_hours: details.openingHours,
+            hint: 'Use update_location with location_id plus the fields above to apply these details.',
+          }
+        } catch { /* fall through to text search */ }
+      }
+
+      // Fallback: extract business name from URL and text-search
+      const nameMatch = resolvedUrl.match(/\/maps\/place\/([^/@]+)/)
+      const nameQuery = nameMatch ? decodeURIComponent(nameMatch[1].replace(/\+/g, ' ')) : ''
+      if (!nameQuery) return { error: 'Could not extract a place from that URL. Try sharing the full Google Maps link.' }
+
+      const results = await searchPlaces(apiKey, nameQuery)
+      if (!results.length) return { error: `No places found for "${nameQuery}".` }
+
+      const top = results[0]!
+      return {
+        found: true,
+        name: top.name,
+        address: top.formattedAddress,
+        phone: top.phone,
+        maps_url: top.mapsUrl,
+        latitude: top.lat,
+        longitude: top.lng,
+        rating: top.rating,
+        hint: 'Use update_location with location_id plus the fields above to apply these details.',
+      }
+    }
+
     case 'get_reviews': {
       const { results } = await db.prepare(
         `SELECT id, author_name, rating, title, content, owner_reply, source, created_at
@@ -764,8 +855,8 @@ async function executeTool(
       const now = new Date().toISOString()
       const newSubdomain = toSlug(input.brand_name)
       await db.prepare(
-        `UPDATE sites SET brand_name = ?, name = ?, subdomain = ?, updated_at = ? WHERE id = ? AND organization_id = ?`
-      ).bind(input.brand_name, input.brand_name, newSubdomain, now, siteId, orgId).run()
+        `UPDATE sites SET brand_name = ?, subdomain = ?, updated_at = ? WHERE id = ? AND organization_id = ?`
+      ).bind(input.brand_name, newSubdomain, now, siteId, orgId).run()
       return { brand_name: input.brand_name, subdomain: newSubdomain, updated: true }
     }
 
@@ -796,13 +887,10 @@ export default defineEventHandler(async (event) => {
   const orgId: string = site.organization_id
   const userId: string = session.user.id
 
-  const isDev = process.env.NODE_ENV === 'development'
-  if (!isDev) {
-    const creditOk = await hasCredits(db, orgId)
-    if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
-  }
+  const creditOk = await hasCredits(db, orgId)
+  if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
 
-  let body: { messages?: IncomingMessage[]; currentPage?: string }
+  let body: { messages?: IncomingMessage[]; currentPage?: string; locationId?: string | null }
   try { body = await readBody(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
@@ -812,17 +900,27 @@ export default defineEventHandler(async (event) => {
 
   const siteName = (site.brand_name as string | null) ?? 'your site'
   const currentPage = body.currentPage ?? 'dashboard'
+  const locationId = typeof body.locationId === 'string' && body.locationId ? body.locationId : null
+
+  // Resolve current location name for richer context
+  let locationName: string | null = null
+  if (locationId) {
+    const loc = await db.prepare(
+      `SELECT title FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`
+    ).bind(locationId, siteId).first<{ title: string }>()
+    locationName = loc?.title ?? null
+  }
 
   const SYSTEM = `You are ChowBot, an AI assistant for restaurant website owners using Kikuzuki.
 Help manage all site content with concise, action-oriented responses.
 
 Site: ${siteName}
-Current page: ${currentPage}
+Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ''}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create (standard/offer/event/update with CTA), publish — optionally location-scoped
 - Menus: create, rename, view, add items (batch with image_asset_id), update items, publish, delete
-- Locations: list, create, update (title syncs slug, plus description/email/socials/price_level)
+- Locations: list, create, update (title syncs slug, plus description/email/socials/price_level), lookup from Google Maps URL
 - Reviews: get (with star distribution), reply as owner
 - Media: list per location, delete, generate AI images with Flux (auto-saved, returns asset_id)
 - Q&A: list, add, delete per location
@@ -833,11 +931,12 @@ Capabilities (always use tools — never say you can't do something the tools su
 Guidelines:
 - Use tools immediately — never say "I'll do that" without calling a tool
 - When adding multiple menu items, ALWAYS use add_menu_items_batch — all items in one call
-- Before publish_post, publish_menu, delete_menu, delete_location_photo, delete_qa — confirm first
+- When creating menus, omit location_id — the server links it to the current location automatically
+- Before publish_post, publish_menu, delete_menu, delete_media_asset, delete_qa — confirm first
 - Menus are DRAFT by default — publish_menu makes them live
 - Keep responses short — this is a chat panel`
 
-  const MAX_MSG_CHARS = 4000
+  const MAX_MSG_CHARS = 20000
   let initialMessages = body.messages.slice(-8)
   while (initialMessages.length > 0 && initialMessages[0]?.role !== 'user') {
     initialMessages = initialMessages.slice(1)
@@ -864,7 +963,7 @@ Guidelines:
     }
   }
 
-  const ctx = { db, env, orgId, siteId, userId, agentMessages }
+  const ctx = { db, env, orgId, siteId, userId, agentMessages, locationId }
   const toolCalls: Array<{ name: string; input: JsonSerializable; result: JsonSerializable }> = []
   let totalInput = 0, totalOutput = 0, cfLogId: string | null = null
 
@@ -924,16 +1023,12 @@ Guidelines:
         break
       }
 
-      let creditsRemaining: number | null = null
-      if (!isDev) {
-        const charged = await chargeCredits(db, orgId, {
-          siteId, action: 'chowbot', model: MODEL,
-          inputTokens: totalInput, outputTokens: totalOutput, cfGatewayLogId: cfLogId,
-        })
-        creditsRemaining = charged.newBalance
-      }
+      const charged = await chargeCredits(db, orgId, {
+        siteId, action: 'chowbot', model: MODEL,
+        inputTokens: totalInput, outputTokens: totalOutput, cfGatewayLogId: cfLogId,
+      })
 
-      await push({ type: 'done', toolCalls, creditsRemaining })
+      await push({ type: 'done', toolCalls, creditsRemaining: charged.newBalance })
     } catch (err) {
       await push({ type: 'error', message: getErrorMessage(err, 'Something went wrong.') })
     } finally {

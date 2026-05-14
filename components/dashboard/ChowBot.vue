@@ -25,7 +25,7 @@
           <div class="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-primary px-8 py-10">
             <UIcon name="i-heroicons-arrow-up-tray" class="size-10 text-primary" />
             <p class="font-medium">Drop menu image or PDF</p>
-            <p class="text-xs text-muted">JPEG, PNG, WEBP or PDF — max 10 MB</p>
+            <p class="text-xs text-muted">JPEG, PNG, WEBP, PDF or TXT — max 10 MB</p>
           </div>
         </div>
       </Transition>
@@ -138,6 +138,20 @@
       </div>
 
       <div class="shrink-0 border-t border-default p-3">
+        <!-- pending text chip -->
+        <div v-if="pendingText" class="mb-2 flex items-center gap-2 rounded-lg border border-default bg-elevated px-3 py-1.5">
+          <UIcon name="i-heroicons-document-text" class="size-3.5 shrink-0 text-muted" />
+          <span class="min-w-0 flex-1 truncate text-xs">{{ pendingText.name }} — {{ pendingText.content.length.toLocaleString() }} chars</span>
+          <UButton
+            icon="i-heroicons-x-mark"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            class="shrink-0"
+            @click="pendingText = null"
+          />
+        </div>
+
         <!-- pending file chip -->
         <div v-if="pendingFile" class="mb-2 flex items-center gap-2 rounded-lg border border-default bg-elevated px-3 py-1.5">
           <UIcon name="i-heroicons-paper-clip" class="size-3.5 shrink-0 text-muted" />
@@ -154,15 +168,27 @@
 
         <UChatPrompt
           v-model="input"
-          :placeholder="isDepleted ? 'Purchase credits above to continue…' : pendingFile ? 'Add a caption (optional) then press send…' : 'Ask ChowBot anything…'"
+          :placeholder="isDepleted ? 'Purchase credits above to continue…' : pendingFile ? 'Add a caption (optional) then press send…' : pendingText ? 'Add a note (optional) then press send…' : 'Ask ChowBot anything…'"
           :disabled="isLoading || isUploading || !siteId || isDepleted"
           :loading="isLoading || isUploading"
           :maxrows="8"
           @submit="handleSubmit"
         />
-        <p v-if="input.length > 1000" class="mt-1 text-right text-xs" :class="input.length > 4000 ? 'text-warning' : 'text-muted'">
-          {{ input.length.toLocaleString() }} chars{{ input.length > 4000 ? ' — will be truncated' : '' }}
-        </p>
+        <div class="mt-1 flex items-center justify-end gap-2">
+          <p v-if="input.length > 1000" class="text-right text-xs" :class="input.length > 20000 ? 'text-warning' : 'text-muted'">
+            {{ input.length.toLocaleString() }} chars{{ input.length > 20000 ? ' — will be truncated' : '' }}
+          </p>
+          <UButton
+            v-if="input.length > 3000 && !pendingText"
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            icon="i-heroicons-paper-clip"
+            @click="convertToAttachment"
+          >
+            Attach as file
+          </UButton>
+        </div>
         <div class="mt-2 flex items-center gap-2">
           <UTooltip text="Attach menu image or PDF">
             <UButton
@@ -186,7 +212,7 @@
         ref="fileInputRef"
         type="file"
         class="hidden"
-        accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+        accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,.txt"
         @change="handleFileInput"
       />
     </div>
@@ -252,6 +278,7 @@ async function purchaseCredits(bundle: 500 | 2500 | 5000) {
 const input = ref('')
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const pendingFile = ref<File | null>(null)
+const pendingText = ref<{ name: string; content: string } | null>(null)
 const isUploading = ref(false)
 const dragCounter = ref(0)
 const isDragging = computed(() => dragCounter.value > 0)
@@ -263,14 +290,25 @@ const starterPrompts = [
   'Give me a site overview',
 ]
 
+const convertToAttachment = () => {
+  if (!input.value.trim()) return
+  pendingText.value = { name: 'message.txt', content: input.value.trim() }
+  input.value = ''
+}
+
 const handleSubmit = async () => {
   const text = input.value.trim()
-  if (!text && !pendingFile.value) return
+  if (!text && !pendingFile.value && !pendingText.value) return
   input.value = ''
   if (pendingFile.value) {
     const file = pendingFile.value
     pendingFile.value = null
     await processFile(file, text)
+  } else if (pendingText.value) {
+    const pt = pendingText.value
+    pendingText.value = null
+    const combined = text ? `${text}\n\n---\n${pt.content}` : pt.content
+    await sendMessage(combined)
   } else {
     await sendMessage(text)
   }
@@ -298,11 +336,13 @@ const handleFileInput = (e: Event) => {
 }
 
 const stageFile = (file: File) => {
-  const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
-  if (!allowed.includes(file.type.toLowerCase())) {
+  const isText = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt')
+  const allowedMedia = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
+
+  if (!isText && !allowedMedia.includes(file.type.toLowerCase())) {
     messages.value = [...messages.value, {
       role: 'assistant',
-      content: `Unsupported file type (${file.type}). Please attach a JPEG, PNG, WEBP, GIF, or PDF.`,
+      content: `Unsupported file type (${file.type}). Please attach a JPEG, PNG, WEBP, GIF, PDF, or TXT.`,
       error: true,
     }]
     return
@@ -316,6 +356,26 @@ const stageFile = (file: File) => {
     }]
     return
   }
+
+  if (isText) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const content = (e.target?.result as string | null)?.trim() ?? ''
+      if (!content) return
+      pendingText.value = { name: file.name, content }
+    }
+    reader.onerror = (e) => {
+      console.error('[ChowBot] FileReader error:', e)
+      messages.value = [...messages.value, {
+        role: 'assistant',
+        content: `Failed to read **${file.name}**. The file may be corrupted or inaccessible.`,
+        error: true,
+      }]
+    }
+    reader.readAsText(file)
+    return
+  }
+
   pendingFile.value = file
 }
 

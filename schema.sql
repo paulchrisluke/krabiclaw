@@ -117,7 +117,6 @@ CREATE TABLE IF NOT EXISTS sites (
   organization_id TEXT NOT NULL,
   theme_id TEXT NOT NULL DEFAULT 'saya-theme-v1',
   theme TEXT NOT NULL DEFAULT 'saya',
-  name TEXT NOT NULL,
   slug TEXT UNIQUE NOT NULL,
   subdomain TEXT UNIQUE,
   custom_domain TEXT,
