@@ -4,6 +4,7 @@ import { createMenu, createMenuItem } from '~/server/utils/menu-management'
 import { uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { buildR2Key, uploadToR2 } from '~/server/utils/cloudflare-r2'
 import { createMediaAsset, getMediaAsset, type MediaAsset } from '~/server/utils/media-asset-manager'
+import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
 
 const EXTRACT_SYSTEM = `You are a restaurant menu data extractor. The user will provide a photo or scan of a restaurant menu. Extract ONLY text you can actually see — do not infer or hallucinate dishes.
 
@@ -141,7 +142,7 @@ export async function extractMenuFromMediaAsset(
   const charged = await chargeCredits(db, opts.organizationId, {
     siteId: opts.siteId,
     action: 'menu_extract',
-    model: 'claude-sonnet-4-6',
+    model: CHOWBOT_MODEL,
     inputTokens: aiResponse.usage.input_tokens,
     outputTokens: aiResponse.usage.output_tokens,
     cfGatewayLogId: aiResponse.cfLogId,

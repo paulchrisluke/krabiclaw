@@ -6,10 +6,11 @@ import { setConfig } from '~/server/utils/site-config'
 import { getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
 import { extractMenuFromMediaAsset } from '~/server/utils/chowbot-media'
 import { upsertChannelState } from '~/server/utils/chowbot-conversations'
+import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
+import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import type { MenuItem, UpdateMenuItemRequest } from '~/server/types/menu'
 
 const MAX_ITERATIONS = 10
-export const CHOWBOT_MODEL = 'claude-sonnet-4-6'
 const MAX_SLUG_ATTEMPTS = 10
 
 type SqlBindValue = string | number | boolean | null
@@ -596,7 +597,7 @@ const TOOLS: AiTool[] = [
     input_schema: {
       type: 'object',
       properties: {
-        currency: { type: 'string', enum: ['THB', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'SGD', 'HKD', 'MYR', 'IDR', 'PHP', 'VND', 'INR'] },
+        currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
       },
       required: ['currency'],
     },
@@ -1368,7 +1369,7 @@ async function executeTool(
 
     case 'set_default_currency': {
       const currency = toSqlText(input.currency)?.trim().toUpperCase()
-      const supportedCurrencies = new Set(['THB', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'SGD', 'HKD', 'MYR', 'IDR', 'PHP', 'VND', 'INR'])
+      const supportedCurrencies = new Set<string>(SUPPORTED_CURRENCIES)
       if (!currency || !supportedCurrencies.has(currency)) {
         return { error: 'Unsupported currency.' }
       }

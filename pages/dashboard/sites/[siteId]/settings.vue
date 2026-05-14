@@ -282,6 +282,8 @@
 </template>
 
 <script setup lang="ts">
+import { CURRENCY_OPTIONS, DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
@@ -293,22 +295,7 @@ const urlStructureOptions = [
   { label: 'Brand pages only', value: 'brand_pages' }
 ]
 
-const currencyOptions = [
-  { label: 'Thai Baht (THB)', value: 'THB' },
-  { label: 'US Dollar (USD)', value: 'USD' },
-  { label: 'Euro (EUR)', value: 'EUR' },
-  { label: 'British Pound (GBP)', value: 'GBP' },
-  { label: 'Japanese Yen (JPY)', value: 'JPY' },
-  { label: 'Australian Dollar (AUD)', value: 'AUD' },
-  { label: 'Canadian Dollar (CAD)', value: 'CAD' },
-  { label: 'Singapore Dollar (SGD)', value: 'SGD' },
-  { label: 'Hong Kong Dollar (HKD)', value: 'HKD' },
-  { label: 'Malaysian Ringgit (MYR)', value: 'MYR' },
-  { label: 'Indonesian Rupiah (IDR)', value: 'IDR' },
-  { label: 'Philippine Peso (PHP)', value: 'PHP' },
-  { label: 'Vietnamese Dong (VND)', value: 'VND' },
-  { label: 'Indian Rupee (INR)', value: 'INR' }
-]
+const currencyOptions = CURRENCY_OPTIONS.map(option => ({ ...option }))
 
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -330,7 +317,7 @@ const form = reactive({
   logo_url: '',
   contact_email: '',
   brand_color: '',
-  default_currency: 'THB',
+  default_currency: DEFAULT_CURRENCY,
   primary_location_id: null as string | null,
   url_structure: 'location_subdirectories'
 } as {
@@ -339,7 +326,7 @@ const form = reactive({
   logo_url: string
   contact_email: string
   brand_color: string
-  default_currency: string
+  default_currency: CurrencyCode
   primary_location_id: string | null
   url_structure: string
 })
@@ -360,7 +347,7 @@ const isDirty = computed(() => {
     form.logo_url !== settings.value.logo_url ||
     form.contact_email !== settings.value.contact_email ||
     form.brand_color !== (settings.value.brand_color || '') ||
-    form.default_currency !== (settings.value.default_currency || 'THB') ||
+    form.default_currency !== (settings.value.default_currency || DEFAULT_CURRENCY) ||
     form.url_structure !== settings.value.url_structure
   )
 })
@@ -413,7 +400,8 @@ const resetForm = () => {
   form.logo_url = settings.value.logo_url || ''
   form.contact_email = settings.value.contact_email || ''
   form.brand_color = (settings.value as ApiValue).brand_color || ''
-  form.default_currency = ((settings.value as ApiValue).default_currency as string | undefined) || 'THB'
+  const currency = (settings.value as ApiValue).default_currency
+  form.default_currency = isCurrencyCode(currency) ? currency : DEFAULT_CURRENCY
   form.primary_location_id = settings.value.primary_location_id || null
   form.url_structure = settings.value.url_structure || 'location_subdirectories'
 }

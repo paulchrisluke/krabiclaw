@@ -68,6 +68,10 @@ function nowIso() {
   return new Date().toISOString()
 }
 
+function jsonOrNull(value: JsonSerializable | null | undefined): string | null {
+  return value == null ? null : JSON.stringify(value)
+}
+
 function titleFromText(text: string): string {
   const title = text.replace(/\s+/g, ' ').trim().slice(0, 45)
   return title || 'New ChowBot chat'
@@ -348,8 +352,8 @@ export async function upsertChannelState(
     opts.channel,
     opts.selectedSiteId ?? null,
     opts.activeConversationId ?? null,
-    opts.pendingMedia ? JSON.stringify(opts.pendingMedia) : null,
-    opts.pendingConfirmation ? JSON.stringify(opts.pendingConfirmation) : null,
+    jsonOrNull(opts.pendingMedia),
+    jsonOrNull(opts.pendingConfirmation),
     opts.lastInboundId ?? null,
     nowIso()
   ).run()

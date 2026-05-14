@@ -1,4 +1,8 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
+
+const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
+
 export default defineNuxtConfig({
   modules: ['nitro-cloudflare-dev', 'nuxt-gtag', '@nuxtjs/robots', '@nuxtjs/sitemap', 'nuxt-schema-org', '@nuxtjs/i18n', '@nuxt/ui', '@nuxt/eslint'],
 
@@ -32,7 +36,7 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
-    defaultCurrency: process.env.DEFAULT_CURRENCY || 'THB',
+    defaultCurrency: isCurrencyCode(configuredDefaultCurrency) ? configuredDefaultCurrency : DEFAULT_CURRENCY,
     public: {
       platformDomain: process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || '',
       freeSiteDomain: process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN || '',

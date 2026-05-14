@@ -176,7 +176,7 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
   let selectedSiteId = existingState?.selected_site_id ?? null
   let activeConversationId = existingState?.active_conversation_id ?? null
   const text = messageText(message)
-  let selectedSiteNow = false
+  let selectedSiteFromList = false
 
   const pendingMedia = parsePendingMedia(existingState?.pending_media)
 
@@ -197,12 +197,11 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
       return
     }
     selectedSiteId = selected.id
-    selectedSiteNow = true
+    selectedSiteFromList = true
   }
 
   if (!selectedSiteId && sites.length === 1) {
     selectedSiteId = sites[0]!.id
-    selectedSiteNow = true
   }
   if (!selectedSiteId) {
     await reply(null, env, toPhone, 'Choose a site before using ChowBot.')
@@ -224,7 +223,7 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
     return
   }
 
-  if (selectedSiteNow && message.type === 'text' && /^\d+$/.test(text)) {
+  if (selectedSiteFromList && message.type === 'text' && /^\d+$/.test(text)) {
     await upsertChannelState(db, {
       userId: user.id,
       channel: 'whatsapp',

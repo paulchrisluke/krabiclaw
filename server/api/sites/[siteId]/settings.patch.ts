@@ -3,9 +3,8 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import { createSystemSubdomain } from '~/server/utils/domains'
+import { isCurrencyCode } from '~/shared/currencies'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
-
-const SUPPORTED_CURRENCIES = new Set(['THB', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'SGD', 'HKD', 'MYR', 'IDR', 'PHP', 'VND', 'INR'])
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -106,7 +105,7 @@ export default defineEventHandler(async (event) => {
         }, { status: 400 })
       }
       const currency = body.default_currency.toUpperCase().trim()
-      if (!SUPPORTED_CURRENCIES.has(currency)) {
+      if (!isCurrencyCode(currency)) {
         return jsonResponse({
           error: 'Invalid default currency'
         }, { status: 400 })

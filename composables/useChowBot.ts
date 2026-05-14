@@ -1,5 +1,7 @@
 import { useChowBotHistory, type ChowBotConv } from './useChowBotHistory'
 
+const MENU_TOOLS = new Set(['create_menu', 'rename_menu', 'rename_menu_section', 'delete_menu_section', 'add_menu_item', 'update_menu_item', 'delete_menu_item', 'sync_menu_items', 'publish_menu', 'add_menu_items_batch', 'delete_menu', 'set_default_currency'])
+
 export interface ChowbotToolCall {
   name: string
   input: ApiValue
@@ -73,7 +75,6 @@ export const useChowBot = () => {
       useState<number>('site:refresh').value++
     }
 
-    const MENU_TOOLS = new Set(['create_menu', 'rename_menu', 'rename_menu_section', 'delete_menu_section', 'add_menu_item', 'update_menu_item', 'delete_menu_item', 'sync_menu_items', 'publish_menu', 'add_menu_items_batch', 'delete_menu', 'set_default_currency'])
     if ([...names].some(n => MENU_TOOLS.has(n))) {
       useState<number>('menu:refresh', () => 0).value++
     }
@@ -186,34 +187,41 @@ export const useChowBot = () => {
         for (const part of parts) {
           const line = part.trim()
           if (!line.startsWith('data: ')) continue
+          let ev: ApiRecord
           try {
-            const ev = JSON.parse(line.slice(6))
+            ev = JSON.parse(line.slice(6)) as ApiRecord
+          } catch (parseErr) {
+            console.error('[ChowBot] SSE parse error:', parseErr)
+            continue
+          }
 
+          try {
             if (ev.type === 'tool_start') {
-              addToolToLast({ name: ev.name, input: {}, result: null, status: 'running' })
+              addToolToLast({ name: String(ev.name ?? ''), input: {}, result: null, status: 'running' })
             }
 
             if (ev.type === 'tool_done') {
-              markToolDone(ev.name)
+              markToolDone(String(ev.name ?? ''))
             }
 
             if (ev.type === 'text') {
-              updateLastMessage({ content: ev.content })
+              updateLastMessage({ content: String(ev.content ?? '') })
             }
 
             if (ev.type === 'done') {
-              if (ev.conversationId) conversationId.value = ev.conversationId
-              updateLastMessage({ toolCalls: ev.toolCalls, streaming: false })
-              updateCredits(ev.creditsRemaining ?? null)
+              if (typeof ev.conversationId === 'string') conversationId.value = ev.conversationId
+              const toolCalls = Array.isArray(ev.toolCalls) ? ev.toolCalls as ChowbotToolCall[] : []
+              updateLastMessage({ toolCalls, streaming: false })
+              updateCredits(typeof ev.creditsRemaining === 'number' ? ev.creditsRemaining : null)
               if (siteId.value) await history.load(siteId.value)
-              await handlePostActionNav(ev.toolCalls ?? [])
+              await handlePostActionNav(toolCalls)
             }
 
             if (ev.type === 'error') {
-              updateLastMessage({ content: ev.message, error: true, streaming: false })
+              updateLastMessage({ content: String(ev.message ?? 'Something went wrong.'), error: true, streaming: false })
             }
-          } catch (parseErr) {
-            console.error('[ChowBot] SSE parse error:', parseErr)
+          } catch (eventErr) {
+            console.error('[ChowBot] SSE event handling error:', eventErr)
           }
         }
       }

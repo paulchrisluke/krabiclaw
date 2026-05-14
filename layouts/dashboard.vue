@@ -240,6 +240,7 @@ const routeSiteId = computed(() => {
 })
 
 watch(routeSiteId, (siteId) => {
+  if (!import.meta.client) return
   if (siteId) chowBotHistory.load(siteId).catch(console.error)
 }, { immediate: true })
 

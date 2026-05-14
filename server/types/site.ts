@@ -1,6 +1,8 @@
 // Site management types
 
-export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'CAD' | 'AUD' | 'JPY' // extend as needed
+import type { CurrencyCode } from '~/shared/currencies'
+
+export type { CurrencyCode }
 
 export interface SiteSettings {
   id: string
