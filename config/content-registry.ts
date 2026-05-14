@@ -1,24 +1,48 @@
 export type FieldSource = 'manual' | 'google' | 'static' | 'computed'
-export type FieldType = 'text' | 'textarea' | 'richtext' | 'image' | 'menu_items' | 'business_hours' | 'location' | 'products'
 
-export interface FieldDefinition {
-  label: string
-  type: FieldType
-  sources: FieldSource[] // Array of allowed sources for this field
-  defaultValue?: string
-  /** For google fields: dot-path into the google business object */
-  googlePath?: string
-  placeholder?: string
-  /** Manual input configuration */
-  manualInput?: ManualInputConfig
-  /** Integration configuration */
-  integrationConfig?: IntegrationConfig
-  /** Feature gating */
-  requiredEntitlement?: string
-  /** Google Business upsell gate for fields that can sync from Google */
-  googleLocked?: boolean
-  /** Custom validation function */
-  validate?: (value: string) => string | boolean
+export type FieldDefinition = TextField | TextareaField | RichTextField | ImageField | MediaField | MenuItemsField | BusinessHoursField | LocationField | ProductsField;
+export type FieldType = FieldDefinition;
+
+interface BaseField {
+  label: string;
+  sources: FieldSource[];
+  defaultValue?: string;
+  googlePath?: string;
+  placeholder?: string;
+  manualInput?: ManualInputConfig;
+  integrationConfig?: IntegrationConfig;
+  requiredEntitlement?: string;
+  googleLocked?: boolean;
+  validate?: (_value: string) => string | boolean;
+}
+
+export interface TextField extends BaseField {
+  type: 'text';
+}
+export interface TextareaField extends BaseField {
+  type: 'textarea';
+}
+export interface RichTextField extends BaseField {
+  type: 'richtext';
+}
+export interface ImageField extends BaseField {
+  type: 'image';
+}
+export interface MediaField extends BaseField {
+  type: 'media';
+  mediaKind: 'image' | 'video' | 'any';
+}
+export interface MenuItemsField extends BaseField {
+  type: 'menu_items';
+}
+export interface BusinessHoursField extends BaseField {
+  type: 'business_hours';
+}
+export interface LocationField extends BaseField {
+  type: 'location';
+}
+export interface ProductsField extends BaseField {
+  type: 'products';
 }
 
 export interface ManualInputConfig {
@@ -107,11 +131,19 @@ export const contentRegistry: Record<string, PageDefinition> = {
         defaultValue: '',
         placeholder: 'Two or three sentences about your restaurant — what you cook, how you cook it, why it matters.'
       },
-      'hero.video_url': {
-        label: 'Hero Background Video URL',
-        type: 'text',
+      'hero.image': {
+        label: 'Hero Background Image',
+        type: 'media',
+        mediaKind: 'image',
         sources: ['manual'],
-        defaultValue: '/videos/hero-video.mp4'
+        defaultValue: ''
+      },
+      'hero.video': {
+        label: 'Hero Background Video',
+        type: 'media',
+        mediaKind: 'video',
+        sources: ['manual'],
+        defaultValue: ''
       },
       'cta.title': {
         label: 'CTA Heading',

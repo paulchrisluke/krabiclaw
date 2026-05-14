@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
      LIMIT 50`
   ).bind(location.id).all()
 
-  const reviews = (results ?? []).map((r: any) => ({
+  const reviews = (results ?? []).map((r: ApiValue) => ({
     ...r,
     photo_urls: r.photo_urls ? JSON.parse(r.photo_urls) : [],
   }))
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
   // Compute star distribution from stored reviews
   const dist = [1, 2, 3, 4, 5].map(star => ({
     star,
-    count: reviews.filter((r: any) => r.rating === star).length,
+    count: reviews.filter((r: ApiValue) => r.rating === star).length,
   }))
 
   return jsonResponse({

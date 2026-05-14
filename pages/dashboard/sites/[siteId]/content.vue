@@ -181,10 +181,11 @@
                   class="justify-start"
                   @click="selectField(fieldKey)"
                 >
-                  <span class="flex min-w-0 flex-1 items-start gap-2 text-left">
+                    <span class="flex min-w-0 flex-1 items-start gap-2 text-left">
                     <UIcon
-                      :name="fieldSupportsGoogle(fieldKey) ? 'i-heroicons-lock-closed' : 'i-heroicons-bars-3-bottom-left'"
-                      class="mt-0.5 size-4 shrink-0 text-dimmed"
+                      :name="fieldHasActiveGoogleSync(fieldKey) ? 'i-simple-icons-google' : 'i-heroicons-bars-3-bottom-left'"
+                      class="mt-0.5 size-4 shrink-0"
+                      :class="fieldHasActiveGoogleSync(fieldKey) ? 'text-primary' : 'text-dimmed'"
                     />
                     <span class="min-w-0 flex-1">
                       <span class="flex items-center gap-2">
@@ -223,7 +224,7 @@
         </div>
 
         <div class="min-h-0 flex-1 overflow-auto p-4">
-          <div class="relative mx-auto h-full min-h-[640px] max-w-7xl overflow-hidden rounded-lg border border-default bg-default shadow-sm  ">
+          <div class="relative mx-auto h-full min-h-160 max-w-7xl overflow-hidden rounded-lg border border-default bg-default shadow-sm  ">
         <iframe
           id="site-preview-frame"
           ref="previewFrame"
@@ -306,6 +307,7 @@
                 {{ cmd.label }}
               </UButton>
             </div>
+            <!-- eslint-disable vue/no-v-html -->
             <div
               :id="`field-${activeField}`"
               contenteditable="true"
@@ -314,33 +316,27 @@
               v-html="DOMPurify.sanitize(editingValue || '')"
               @blur="onRichTextBlur"
             />
+            <!-- eslint-enable vue/no-v-html -->
           </div>
 
-          <UCard v-if="activeFieldRequiresGoogleUpgrade">
-            <div class="space-y-4">
-              <div class="flex items-start gap-3">
-                <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-elevated text-primary">
-                  <UIcon name="i-simple-icons-google" class="size-5" />
-                </div>
-                <div>
-                  <p class="text-sm font-semibold text-highlighted ">Auto-sync from Google Business</p>
-                  <p class="mt-1 text-sm text-muted">Save hours keeping your site updated — connect once, sync forever.</p>
-                </div>
-              </div>
-              <UButton to="/dashboard/billing" color="primary" block>
-                Upgrade to Pro — $25/mo
-              </UButton>
-            </div>
-          </UCard>
+          <div v-else-if="activeFieldDef?.type === 'media'" class="space-y-2">
+            <label class="block text-sm font-medium text-default">{{ activeFieldDef.label }}</label>
+            <MediaPicker
+              :model-value="editingValue || null"
+              :site-id="siteId"
+              :accept="activeFieldDef?.mediaKind ?? 'any'"
+              :title="activeFieldDef.label"
+              @change="onMediaChange"
+            />
+          </div>
 
           <div
-            v-else-if="activeFieldDef?.googleLocked"
+            v-if="activeFieldDef?.googleLocked && hasGoogleBusinessEntitlement"
             class="flex items-center gap-2 rounded-lg border border-default bg-muted px-3 py-2 text-sm text-default"
           >
             <UBadge color="neutral" variant="soft" size="sm">
               Synced from Google Business
             </UBadge>
-            <span class="text-xs text-muted">Manual edits remain available.</span>
           </div>
 
           <UButton
@@ -352,6 +348,18 @@
             @click="applyField"
           >
             Apply
+          </UButton>
+
+          <UButton
+            v-if="activeFieldRequiresGoogleUpgrade"
+            color="neutral"
+            variant="soft"
+            icon="i-heroicons-sparkles"
+            block
+            class="justify-start text-left"
+            @click="openUpgradeModal('google-business-sync')"
+          >
+            Upgrade to Pro to fill this from Google Business
           </UButton>
 
                   </div>
@@ -374,7 +382,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import DOMPurify from 'isomorphic-dompurify'
-import { contentRegistry, editablePages, getFieldDef } from '~/config/content-registry'
+import { editablePages, getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
 
 definePageMeta({ layout: 'editor', ssr: false })
@@ -395,9 +403,9 @@ const platformHostname = computed(() => {
 })
 
 // ─── Site Context ───────────────────────────────────────────────────────
-const siteData = ref<any>(null)
+const siteData = ref<ApiRecord | null>(null)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
-const organizationEntitlements = ref<Record<string, any>>({})
+const organizationEntitlements = ref<ApiRecord>({})
 const previewToken = ref('')
 const siteName = computed(() => siteData.value?.name || 'Loading...')
 const siteDomain = computed(() => siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : 'localhost:3000')
@@ -415,7 +423,7 @@ const sitePreviewBaseUrl = computed(() => {
 // Load editor context
 const loadEditorContext = async () => {
   try {
-    const response = await $fetch<{ context: any }>(`/api/editor/sites/${siteId}/context`)
+    const response = await $fetch<{ context: ApiValue }>(`/api/editor/sites/${siteId}/context`)
     siteData.value = response.context.site
     siteLocations.value = response.context.locations || []
     organizationEntitlements.value = response.context.organization.entitlements || {}
@@ -522,7 +530,7 @@ const openGroups = ref<string[]>(['hero'])
 
 const groupConfig: Record<string, Array<{ id: string; label: string; icon: string; fields: string[] }>> = {
   home: [
-    { id: 'hero',   label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.video'] },
+    { id: 'hero',   label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
     { id: 'cta',    label: 'Call to Action',  icon: 'i-heroicons-megaphone', fields: ['cta.title', 'cta.description'] },
     { id: 'business', label: 'Business Info', icon: 'i-heroicons-building-storefront', fields: ['business.name', 'business.description', 'business.establishment_year'] },
     { id: 'contact', label: 'Contact & Hours', icon: 'i-heroicons-clock', fields: ['business.address', 'business.phone', 'business.hours'] },
@@ -579,9 +587,12 @@ const hasGoogleBusinessEntitlement = computed(() => organizationEntitlements.val
 const activeFieldRequiresGoogleUpgrade = computed(() =>
   activeFieldDef.value?.googleLocked === true && !hasGoogleBusinessEntitlement.value
 )
+const { open: openUpgradeModal } = useUpgradeModal()
 
 const fieldSupportsGoogle = (fieldKey: string): boolean =>
   getFieldDef(selectedPageId.value, fieldKey)?.sources.includes('google') === true
+const fieldHasActiveGoogleSync = (fieldKey: string): boolean =>
+  hasGoogleBusinessEntitlement.value && fieldSupportsGoogle(fieldKey)
 
 const selectField = (key: string) => {
   activeField.value = key
@@ -615,6 +626,10 @@ watch(editingValue, () => {
 
 const onRichTextBlur = (e: FocusEvent) => {
   editingValue.value = DOMPurify.sanitize((e.target as HTMLElement).innerHTML)
+}
+
+function onMediaChange(asset: { id: string; publicUrl: string } | null) {
+  editingValue.value = asset?.id ?? ''
 }
 
 const richtextCommands = [
@@ -658,20 +673,41 @@ const saving = ref(false)
 const publishing = ref(false)
 const discardPending = ref(false)
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const response = (error as Record<string, unknown>).response
+    if (response && typeof response === 'object') {
+      const responseData = (response as Record<string, unknown>)._data
+      if (responseData && typeof responseData === 'object') {
+        const statusMessage = (responseData as Record<string, unknown>).statusMessage
+        if (typeof statusMessage === 'string' && statusMessage) return statusMessage
+      }
+    }
+
+    const message = (error as Record<string, unknown>).message
+    if (typeof message === 'string' && message) return message
+  }
+
+  return fallback
+}
+
 const loadPageContent = async () => {
   if (requiresLocationSelection.value) return
 
   try {
-    const res = await $fetch<{ content: any[]; hasDrafts: boolean }>(
+    const res = await $fetch<{ content: ApiRecord[]; hasDrafts: boolean }>(
       endpointWithContentScope(`/api/editor/sites/${siteId}/content/${selectedPageId.value}`)
     )
     const map: Record<string, string> = {}
     for (const row of res.content || []) {
       if (row.field === 'hero') {
-        // Hero fields use dedicated columns
+        // Hero fields use dedicated columns, support both asset_id and url for migration
         if (row.hero_title) map['hero.title'] = row.hero_title
         if (row.hero_subtitle) map['hero.subtitle'] = row.hero_subtitle
-        if (row.hero_video_url) map['hero.video'] = row.hero_video_url
+        if (row.hero_image_asset_id) map['hero.image'] = row.hero_image_asset_id
+        else if (row.hero_image_url) map['hero.image'] = row.hero_image_url
+        if (row.hero_video_asset_id) map['hero.video'] = row.hero_video_asset_id
+        else if (row.hero_video_url) map['hero.video'] = row.hero_video_url
       } else {
         map[row.field] = row.content || ''
       }
@@ -705,10 +741,10 @@ const handleSaveDraft = async () => {
     serverHasDrafts.value = true
     iframeLoading.value = true
     previewReloadToken.value = Date.now()
-  } catch (error: any) {
-    const msg = error?.response?._data?.statusMessage || error.message || 'Unknown error'
+  } catch (error) {
+    const msg = getErrorMessage(error, 'Unknown error')
     toast.add({ description: `Save failed: ${msg}`, color: 'error' })
-    throw error // Re-throw so callers like handlePublish know it failed
+    throw error instanceof Error ? error : new Error(String(error)) // Re-throw so callers like handlePublish know it failed
   } finally {
     saving.value = false
   }
@@ -727,8 +763,8 @@ const handlePublish = async () => {
     toast.add({ description: 'Published live!', color: 'success' })
     iframeLoading.value = true
     previewReloadToken.value = Date.now()
-  } catch (error: any) {
-    const msg = error?.response?._data?.statusMessage || error.message || 'Unknown error'
+  } catch (error) {
+    const msg = getErrorMessage(error, 'Unknown error')
     toast.add({ description: `Publish failed: ${msg}`, color: 'error' })
   } finally {
     publishing.value = false
@@ -763,7 +799,7 @@ const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '').trim()
 
 const fieldPreview = (fieldKey: string): string => {
   const raw = currentValues.value[fieldKey] || getFieldDef(selectedPageId.value, fieldKey)?.defaultValue
-  if (!raw) return fieldSupportsGoogle(fieldKey) ? 'Syncs from Google Business' : 'Add content'
+  if (!raw) return fieldHasActiveGoogleSync(fieldKey) ? 'Synced from Google Business' : 'Add content'
   const text = stripHtml(raw)
   return text.length > 48 ? text.substring(0, 45) + '…' : text || 'Add content'
 }

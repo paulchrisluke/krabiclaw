@@ -189,7 +189,7 @@ const siteId = route.params.siteId as string
 
 const loading = ref(true)
 const error = ref<string | null>(null)
-const site = ref<any>(null)
+const site = ref<ApiRecord | null>(null)
 const locations = ref<BusinessLocation[]>([])
 const menuItemsCount = ref(0)
 const reviewCount = ref(0)
@@ -241,10 +241,10 @@ const loadSiteData = async () => {
 
   try {
     const [settingsResponse, locationsResponse, menuResponse, googleResponse] = await Promise.all([
-      $fetch<any>(`/api/sites/${siteId}/settings`),
-      $fetch<any>(`/api/sites/${siteId}/locations`),
-      $fetch<any>(`/api/public/sites/${siteId}/menus`),
-      $fetch<any>(`/api/public/sites/${siteId}/google-business`)
+      $fetch<ApiRecord>(`/api/sites/${siteId}/settings`),
+      $fetch<ApiRecord>(`/api/sites/${siteId}/locations`),
+      $fetch<ApiRecord>(`/api/public/sites/${siteId}/menus`),
+      $fetch<ApiRecord>(`/api/public/sites/${siteId}/google-business`)
     ])
 
     if (!settingsResponse.success) throw new Error('Failed to load site settings')

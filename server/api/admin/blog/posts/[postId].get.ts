@@ -5,7 +5,7 @@ import { isPlatformOwner } from '~/server/utils/platform-auth'
 
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-function auditLog(action: string, payload: Record<string, unknown>) {
+function auditLog(action: string, payload: ApiRecord) {
   console.info('[audit]', { action, timestamp: new Date().toISOString(), ...payload })
 }
 
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformOwner(session.user.email)) {
+  if (!isPlatformOwner(session.user.email, env)) {
     auditLog('admin_read_denied', {
       email: session.user.email,
       postId
@@ -31,11 +31,11 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
   }
 
-  let post: Record<string, unknown> | null = null
+  let post: ApiRecord | null = null
   try {
     post = await db.prepare(
       `SELECT id, title, slug, body, excerpt, category, published_at, created_at, updated_at FROM platform_blog_posts WHERE id = ?`
-    ).bind(postId).first() as Record<string, unknown> | null
+    ).bind(postId).first() as ApiRecord | null
   } catch (err) {
     console.error('Failed to fetch admin blog post', { postId, error: err })
     return jsonResponse({ error: 'Failed to load post' }, { status: 500 })

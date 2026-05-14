@@ -126,24 +126,24 @@ definePageMeta({ layout: 'saya' })
 const route = useRoute()
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
-const plan = computed(() => (site as any)?.value?.plan || (site as any)?.plan)
+const plan = computed(() => (site as ApiValue)?.value?.plan || (site as ApiValue)?.plan)
 const isFree = computed(() => !plan.value || plan.value === 'free')
 const { open: openUpgrade } = useUpgradeModal()
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as any)?.value?.name || (site as any)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
 
 const { data: locData } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}`,
   { key: () => `loc-qa-loc-${siteId}-${slug.value}`, default: () => ({ location: null }) }
 )
-const location = computed(() => (locData as any).value?.location ?? null)
+const location = computed(() => (locData as ApiValue).value?.location ?? null)
 
 const { data, pending } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}/qa`,
   { key: () => `loc-qa-${siteId}-${slug.value}`, default: () => ({ qa: [] }) }
 )
-const qa = computed(() => (data as any).value?.qa ?? [])
+const qa = computed(() => (data as ApiValue).value?.qa ?? [])
 
 const sorted = computed(() =>
   [...qa.value].sort((a, b) => {
@@ -177,7 +177,7 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'FAQPage',
     name: `${location.value?.title ?? ''} Q&A`,
-    mainEntity: sorted.value.filter((q: any) => q.answer).map((q: any) => ({
+    mainEntity: sorted.value.filter((q: ApiValue) => q.answer).map((q: ApiValue) => ({
       '@type': 'Question',
       name: q.question,
       acceptedAnswer: { '@type': 'Answer', text: q.answer }

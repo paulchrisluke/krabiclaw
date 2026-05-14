@@ -2,7 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
-import { callAiGateway, textBlock } from '~/server/utils/ai-gateway'
+import { callAiGateway } from '~/server/utils/ai-gateway'
 
 const MAX_PROMPT_LENGTH = 5000
 
@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformOwner(session.user.email)) {
+  if (!isPlatformOwner(session.user.email, env)) {
     return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
   }
 
@@ -40,16 +40,17 @@ export default defineEventHandler(async (event) => {
       metadata: { action: 'platform_content_generation' },
     })
 
-    const contentBlock = aiResponse.content.find((b: any) => b.type === 'text')
+    const contentBlock = aiResponse.content.find((b: ApiValue) => b.type === 'text')
     const content = contentBlock?.text || ''
     
     return jsonResponse({ success: true, content })
-  } catch (err: any) {
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err))
     console.error('AI generation failed', {
       userId: session.user.id,
       promptLength: prompt.length,
-      error: err,
-      stack: err?.stack
+      error: error.message,
+      stack: error.stack
     })
     return jsonResponse({ error: 'AI generation failed. Please try again.' }, { status: 502 })
   }

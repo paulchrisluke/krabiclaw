@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
   const limit = Math.max(1, Math.min(parsedLimit, 100))
 
   let sql = `SELECT id, title, slug, excerpt, category, published_at FROM platform_blog_posts WHERE published_at IS NOT NULL`
-  const params: unknown[] = []
+  const params: ApiRecord[] = []
 
   if (category) {
     sql += ` AND category = ?`

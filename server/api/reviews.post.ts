@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const config = useRuntimeConfig()
   const request = toWebRequest(event)
-  let body: Record<string, unknown>
+  let body: ApiRecord
 
   try {
     body = await readBody(event)

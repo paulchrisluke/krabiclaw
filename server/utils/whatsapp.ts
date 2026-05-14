@@ -5,6 +5,24 @@
 const GRAPH_API_VERSION = 'v25.0'
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 
+interface WhatsAppEnv {
+  WHATSAPP_PHONE_NUMBER_ID?: string
+  WHATSAPP_ACCESS_TOKEN?: string
+}
+
+interface MetaGraphErrorPayload {
+  message?: string
+}
+
+interface MetaGraphMessagePayload {
+  id?: string
+}
+
+interface MetaGraphResponse {
+  error?: MetaGraphErrorPayload
+  messages?: MetaGraphMessagePayload[]
+}
+
 export type WhatsAppTemplate =
   | 'draft_published'
   | 'new_review'
@@ -12,6 +30,7 @@ export type WhatsAppTemplate =
   | 'low_credits'
   | 'new_contact_msg'
   | 'new_reservation'
+  | 'domain_update'
   | 'otp_code'
 
 interface TemplateComponent {
@@ -23,7 +42,7 @@ interface TemplateComponent {
 // Meta template names must match exactly what was approved in Business Manager.
 const TEMPLATES: Record<
   WhatsAppTemplate,
-  (vars: Record<string, string>) => { name: string; language: string; components: TemplateComponent[] }
+  (_vars: Record<string, string>) => { name: string; language: string; components: TemplateComponent[] }
 > = {
   draft_published: (v) => ({
     name: 'draft_published',
@@ -96,6 +115,18 @@ const TEMPLATES: Record<
       ],
     }],
   }),
+  domain_update: (v) => ({
+    name: 'domain_update',
+    language: 'en_US',
+    components: [{
+      type: 'body',
+      parameters: [
+        { type: 'text', text: v.domain ?? 'your domain' },
+        { type: 'text', text: v.status ?? 'updated' },
+        { type: 'text', text: v.dashboard_url ?? 'https://krabiclaw.com/dashboard' },
+      ],
+    }],
+  }),
   otp_code: (v) => ({
     name: 'otp_code',
     language: 'en_US',
@@ -128,8 +159,8 @@ export interface SendWhatsAppResult {
  * Returns immediately — does not retry on failure.
  */
 export async function sendWhatsAppNotification(
-  env: Record<string, any>,
-  db: any,
+  env: WhatsAppEnv,
+  db: D1Database,
   opts: {
     organizationId: string
     siteId?: string | null
@@ -187,7 +218,7 @@ export async function sendWhatsAppNotification(
       }
     )
 
-    const data = await response.json() as any
+    const data: MetaGraphResponse = await response.json()
 
     if (!response.ok || data.error) {
       const errMsg = data.error?.message ?? `HTTP ${response.status}`
@@ -196,14 +227,14 @@ export async function sendWhatsAppNotification(
       ).bind(errMsg, now, notificationId).run()
       result = { success: false, error: errMsg }
     } else {
-      const messageId = data.messages?.[0]?.id ?? null
+      const messageId = data.messages?.[0]?.id
       await db.prepare(
         `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`
       ).bind(messageId, now, notificationId).run()
       result = { success: true, messageId }
     }
-  } catch (err: any) {
-    const errMsg = err?.message ?? 'Network error'
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Network error'
     await db.prepare(
       `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`
     ).bind(errMsg, now, notificationId).run()
@@ -218,7 +249,7 @@ export async function sendWhatsAppNotification(
  * Returns null if not set — callers should skip sending rather than throw.
  */
 export async function getOrgWhatsAppPhone(
-  db: any,
+  db: D1Database,
   organizationId: string,
   siteId: string
 ): Promise<string | null> {
@@ -226,7 +257,7 @@ export async function getOrgWhatsAppPhone(
     SELECT value FROM site_config
     WHERE organization_id = ? AND site_id = ? AND key = 'whatsapp_phone'
     LIMIT 1
-  `).bind(organizationId, siteId).first()
+  `).bind(organizationId, siteId).first<{ value: string }>()
   return row?.value ?? null
 }
 
@@ -236,7 +267,7 @@ export async function getOrgWhatsAppPhone(
  * since Better Auth's verification table tracks the code lifecycle.
  */
 export async function sendWhatsAppOtp(
-  env: Record<string, any>,
+  env: WhatsAppEnv,
   toPhone: string,
   code: string
 ): Promise<void> {
@@ -265,7 +296,7 @@ export async function sendWhatsAppOtp(
   })
 
   if (!response.ok) {
-    const err = await response.json() as any
+    const err: MetaGraphResponse = await response.json()
     throw new Error(err?.error?.message ?? `WhatsApp OTP send failed: HTTP ${response.status}`)
   }
 }
@@ -275,7 +306,7 @@ export async function sendWhatsAppOtp(
  * Normalizes to E.164 before saving.
  */
 export async function setOrgWhatsAppPhone(
-  db: any,
+  db: D1Database,
   organizationId: string,
   siteId: string,
   phone: string

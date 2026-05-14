@@ -13,13 +13,13 @@ export function tokensToCredits(inputTokens: number, outputTokens: number): numb
 
 /** Returns current balance, creating the row with signup credits if new org */
 export async function getOrCreateCredits(
-  db: any,
+  db: D1Database,
   organizationId: string
 ): Promise<{ balance: number; lifetime_used: number }> {
   const existing = await db
     .prepare('SELECT balance, lifetime_used FROM ai_credits WHERE organization_id = ? LIMIT 1')
     .bind(organizationId)
-    .first()
+    .first<{ balance: number; lifetime_used: number }>()
 
   if (existing) return existing
 
@@ -36,7 +36,7 @@ export async function getOrCreateCredits(
 }
 
 /** Returns true if org has enough credits, false if exhausted */
-export async function hasCredits(db: any, organizationId: string): Promise<boolean> {
+export async function hasCredits(db: D1Database, organizationId: string): Promise<boolean> {
   const row = await getOrCreateCredits(db, organizationId)
   return row.balance > 0
 }
@@ -46,7 +46,7 @@ export async function hasCredits(db: any, organizationId: string): Promise<boole
  * Must be called after a successful AI Gateway response.
  */
 export async function chargeCredits(
-  db: any,
+  db: D1Database,
   organizationId: string,
   opts: {
     siteId?: string
@@ -94,7 +94,7 @@ export async function chargeCredits(
   const updated = await db
     .prepare('SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1')
     .bind(organizationId)
-    .first()
+    .first<{ balance: number }>()
 
   return { creditsCharged, newBalance: updated?.balance ?? 0 }
 }

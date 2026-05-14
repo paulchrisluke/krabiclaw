@@ -25,6 +25,7 @@ const updateValue = (event: Event) => {
 </script>
 
 <template>
+  <!-- eslint-disable vue/no-v-html, vue/no-v-text-v-html-on-component -->
   <component
     :is="tag || 'span'"
     v-if="editMode"
@@ -33,6 +34,7 @@ const updateValue = (event: Event) => {
     @blur="updateValue"
     v-html="sanitizedValue"
   />
+  <!-- eslint-enable vue/no-v-html, vue/no-v-text-v-html-on-component -->
 
   <component :is="tag || 'span'" v-else>
     <slot>{{ modelValue }}</slot>

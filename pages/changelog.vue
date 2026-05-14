@@ -53,7 +53,7 @@ onMounted(async () => {
   try {
     const response = await $fetch('/api/changelog')
     changelog.value = response
-  } catch (err) {
+  } catch {
     error.value = 'Failed to load changelog'
   } finally {
     loading.value = false

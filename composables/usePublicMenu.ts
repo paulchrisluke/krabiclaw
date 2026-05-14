@@ -39,7 +39,7 @@ export const usePublicMenu = (siteId: string, locationId?: string | null) => {
   const menuItemsBySection = computed(() => {
     if (!menu.value) return {}
     
-    const grouped: Record<string, any[]> = {}
+    const grouped: Record<string, typeof menu.value.items> = {}
     menu.value.items.forEach(item => {
       const section = item.section || 'Uncategorized'
       if (!grouped[section]) {

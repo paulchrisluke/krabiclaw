@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
+    `).bind(siteId, session.user.id).first<ApiRecord>()
     
     if (!site) {
       return jsonResponse({ 
@@ -99,7 +99,7 @@ export default defineEventHandler(async (event) => {
     const locationsCount = await db.prepare(`
       SELECT COUNT(*) as count FROM business_locations 
       WHERE organization_id = ? AND site_id = ? AND status = 'active'
-    `).bind(site.organization_id, siteId).first()
+    `).bind(site.organization_id, siteId).first<{ count: number }>()
 
     const integrations = {
       ready: !!googleBusinessConnection,
@@ -114,29 +114,29 @@ export default defineEventHandler(async (event) => {
       SELECT id FROM site_content 
       WHERE organization_id = ? AND site_id = ? AND page = 'home' AND field = 'hero.title'
       LIMIT 1
-    `).bind(site.organization_id, siteId).first()
+    `).bind(site.organization_id, siteId).first<{ id: string }>()
 
     const menuExists = await db.prepare(`
       SELECT id FROM menus 
       WHERE organization_id = ? AND site_id = ? AND location_id IS NULL AND status = 'published'
       LIMIT 1
-    `).bind(site.organization_id, siteId).first()
+    `).bind(site.organization_id, siteId).first<{ id: string }>()
 
     const menuItemsCount = menuExists ? await db.prepare(`
       SELECT COUNT(*) as count FROM menu_items WHERE menu_id = ?
-    `).bind(menuExists.id).first() : { count: 0 }
+    `).bind(menuExists.id).first<{ count: number }>() : { count: 0 }
 
     const contactDetails = await db.prepare(`
       SELECT id FROM site_content 
       WHERE organization_id = ? AND site_id = ? AND page = 'contact' AND field = 'email'
       LIMIT 1
-    `).bind(site.organization_id, siteId).first()
+    `).bind(site.organization_id, siteId).first<{ count: number }>()
 
     const seoMetadata = await db.prepare(`
       SELECT COUNT(*) as count FROM site_content 
       WHERE organization_id = ? AND site_id = ? AND page = 'home' 
       AND field IN ('seo.title', 'seo.description')
-    `).bind(site.organization_id, siteId).first()
+    `).bind(site.organization_id, siteId).first<{ count: number }>()
 
     const contentReadiness = {
       ready: !!(homepageHero && menuExists && (menuItemsCount?.count || 0) > 0 && contactDetails),

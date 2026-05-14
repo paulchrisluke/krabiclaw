@@ -1,7 +1,23 @@
 // Handle Stripe webhooks for subscription management
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { verifyStripeWebhook, setOrganizationEntitlementsFromPlan } from '../../utils/billing'
+import { deleteOrganizationCustomDomains } from '../../utils/domains'
 import Stripe from 'stripe'
+
+interface BillingOrgRow {
+  organization_id: string
+}
+
+interface ExpandedCheckoutSubscription {
+  id?: string
+  items?: { data?: Array<{ id?: string }> }
+  billing_cycle_anchor?: number
+}
+
+interface SubscriptionTimingFields {
+  billing_cycle_anchor?: number
+  cancel_at_period_end?: boolean
+}
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -114,7 +130,7 @@ export default defineEventHandler(async (event) => {
 })
 
 // Handle checkout session completion — routes to credit top-up or plan upgrade
-async function handleCheckoutCompleted(env: Record<string, string | undefined>, db: any, session: Stripe.Checkout.Session) {
+async function handleCheckoutCompleted(env: Record<string, string | undefined>, db: D1Database, session: Stripe.Checkout.Session) {
   const organizationId = session.metadata?.organization_id
 
   if (session.metadata?.type === 'credit_topup') {
@@ -132,8 +148,10 @@ async function handleCheckoutCompleted(env: Record<string, string | undefined>, 
 
   // In Stripe v22 the subscription is expanded inline in the webhook payload
   const subRef = session.subscription
-  const sub: any = typeof subRef === 'object' ? subRef : null
-  const subscriptionId: string = sub?.id ?? (subRef as string)
+  const sub: ExpandedCheckoutSubscription | null = typeof subRef === 'object' && subRef !== null
+    ? subRef as ExpandedCheckoutSubscription
+    : null
+  const subscriptionId: string = sub?.id ?? (typeof subRef === 'string' ? subRef : '')
 
   if (!organizationId || !plan || !subscriptionId) {
     console.error('Missing metadata or subscription in checkout session:', session.id)
@@ -168,13 +186,13 @@ async function handleCheckoutCompleted(env: Record<string, string | undefined>, 
 }
 
 // Handle subscription updates
-async function handleSubscriptionUpdated(env: Record<string, string | undefined>, db: any, subscription: Stripe.Subscription) {
+async function handleSubscriptionUpdated(env: Record<string, string | undefined>, db: D1Database, subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string
   
   // Find organization by customer ID
   const billing = await db.prepare(`
     SELECT organization_id FROM organization_billing WHERE stripe_customer_id = ?
-  `).bind(customerId).first()
+  `).bind(customerId).first<{ organization_id: string }>()
   
   if (!billing) {
     console.error('Organization billing not found for customer:', customerId)
@@ -182,11 +200,11 @@ async function handleSubscriptionUpdated(env: Record<string, string | undefined>
   }
 
   const status = subscription.status
-  const sub = subscription as any
+  const sub = subscription as Stripe.Subscription & SubscriptionTimingFields
   const currentPeriodEnd = sub.billing_cycle_anchor
     ? new Date(sub.billing_cycle_anchor * 1000).toISOString()
     : new Date().toISOString()
-  const cancelAtPeriodEnd = sub.cancel_at_period_end || false
+  const cancelAtPeriodEnd = sub.cancel_at_period_end === true
   
   await db.prepare(`
     UPDATE organization_billing
@@ -205,19 +223,34 @@ async function handleSubscriptionUpdated(env: Record<string, string | undefined>
   const plan = getPlanFromSubscription(env, subscription)
   if (plan) {
     await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, plan)
+  } else {
+    console.warn('Unrecognized Stripe price ID in subscription update; falling back to free entitlements', {
+      organizationId: billing.organization_id,
+      subscriptionId: subscription.id,
+      priceIds: subscription.items.data.map((item) => item.price?.id).filter(Boolean)
+    })
+    await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, 'free')
+    try {
+      await deleteOrganizationCustomDomains(env, db, billing.organization_id)
+    } catch (error) {
+      console.error('Failed to delete custom domains during subscription update fallback', {
+        organizationId: billing.organization_id,
+        error
+      })
+    }
   }
 
   console.log(`Subscription updated for organization ${billing.organization_id}, status ${status}`)
 }
 
 // Handle subscription deletion/cancellation
-async function handleSubscriptionDeleted(env: Record<string, string | undefined>, db: any, subscription: Stripe.Subscription) {
+async function handleSubscriptionDeleted(env: Record<string, string | undefined>, db: D1Database, subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string
   
   // Find organization by customer ID
   const billing = await db.prepare(`
     SELECT organization_id FROM organization_billing WHERE stripe_customer_id = ?
-  `).bind(customerId).first()
+  `).bind(customerId).first<{ organization_id: string }>()
   
   if (!billing) {
     console.error('Organization billing not found for customer:', customerId)
@@ -235,6 +268,11 @@ async function handleSubscriptionDeleted(env: Record<string, string | undefined>
 
     // Set free entitlements
     await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, 'free')
+    try {
+      await deleteOrganizationCustomDomains(env, db, billing.organization_id)
+    } catch (error) {
+      console.error(`Failed to delete custom domains for org ${billing.organization_id} during subscription deletion`, error)
+    }
     
     console.log(`Subscription deleted for organization ${billing.organization_id}`)
   } catch (error) {
@@ -243,13 +281,13 @@ async function handleSubscriptionDeleted(env: Record<string, string | undefined>
 }
 
 // Handle successful payment
-async function handlePaymentSucceeded(db: any, invoice: Stripe.Invoice) {
+async function handlePaymentSucceeded(db: D1Database, invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string
   
   // Find organization by customer ID
   const billing = await db.prepare(`
     SELECT organization_id FROM organization_billing WHERE stripe_customer_id = ?
-  `).bind(customerId).first()
+  `).bind(customerId).first() as BillingOrgRow | null
   
   if (!billing) {
     console.error('Organization billing not found for customer:', customerId)
@@ -260,13 +298,13 @@ async function handlePaymentSucceeded(db: any, invoice: Stripe.Invoice) {
 }
 
 // Handle failed payment
-async function handlePaymentFailed(db: any, invoice: Stripe.Invoice) {
+async function handlePaymentFailed(db: D1Database, invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string
   
   // Find organization by customer ID
   const billing = await db.prepare(`
     SELECT organization_id FROM organization_billing WHERE stripe_customer_id = ?
-  `).bind(customerId).first()
+  `).bind(customerId).first() as BillingOrgRow | null
   
   if (!billing) {
     console.error('Organization billing not found for customer:', customerId)
@@ -277,7 +315,7 @@ async function handlePaymentFailed(db: any, invoice: Stripe.Invoice) {
 }
 
 // Add purchased credits to org balance — atomic upsert on PRIMARY KEY
-async function handleCreditTopup(db: any, organizationId: string, credits: number) {
+async function handleCreditTopup(db: D1Database, organizationId: string, credits: number) {
   const now = new Date().toISOString()
   await db.prepare(`
     INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)

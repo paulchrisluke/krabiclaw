@@ -1,6 +1,49 @@
 // Get public business locations for a site
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 
+type JsonPrimitive = string | number | boolean | null
+type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
+interface JsonObject {
+  [key: string]: JsonValue
+}
+
+interface SiteRow {
+  id: string
+  organization_id: string
+  status: 'active'
+}
+
+interface LocationRow {
+  id: string
+  slug: string
+  title: string
+  address: string | null
+  phone: string | null
+  website_url: string | null
+  maps_url: string | null
+  latitude: number | null
+  longitude: number | null
+  opening_hours: string | null
+  rating: number | null
+  review_count: number | null
+  is_primary: number | boolean
+  status: string
+  last_synced_at: string | null
+  google_location_id: string | null
+  google_connection_id: string | null
+  city: string | null
+  image_url: string | null
+}
+
+const parseJson = (raw: string | null): JsonValue => {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as JsonValue
+  } catch {
+    return null
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   
@@ -25,7 +68,7 @@ export default defineEventHandler(async (event) => {
       SELECT id, organization_id, status FROM sites 
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `).bind(siteId).first()
+    `).bind(siteId).first() as SiteRow | null
     
     if (!site) {
       return jsonResponse({ 
@@ -35,29 +78,32 @@ export default defineEventHandler(async (event) => {
 
     // Get active business locations for this site
     const locations = await db.prepare(`
-      SELECT id, slug, title, address, phone, website_url, maps_url, latitude, longitude,
-             opening_hours, rating, review_count, is_primary, status, last_synced_at,
-             google_location_id, google_connection_id, image_url, city
-      FROM business_locations 
-      WHERE organization_id = ? AND site_id = ? AND status = 'active'
-      ORDER BY is_primary DESC, title ASC
+      SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
+             bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
+             bl.is_primary, bl.status, bl.last_synced_at, bl.google_location_id,
+             bl.google_connection_id, bl.city, ma.public_url as image_url
+      FROM business_locations bl
+      LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
+      WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
+      ORDER BY bl.is_primary DESC, bl.title ASC
     `).bind(site.organization_id, siteId).all()
+    const locationRows = (locations.results || []) as unknown as LocationRow[]
     
     // Parse JSON fields and return public-safe data
-    const parsedLocations = (locations.results || []).map((location: any) => ({
+    const parsedLocations = locationRows.map((location) => ({
       id: location.id,
       slug: location.slug,
       title: location.title,
-      address: location.address ? JSON.parse(location.address) : null,
+      address: parseJson(location.address),
       phone: location.phone,
       website_url: location.website_url,
       maps_url: location.maps_url,
       latitude: location.latitude,
       longitude: location.longitude,
-      opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null,
+      opening_hours: parseJson(location.opening_hours),
       rating: location.rating,
       review_count: location.review_count,
-      is_primary: location.is_primary,
+      is_primary: Boolean(location.is_primary),
       status: location.status,
       image_url: location.image_url,
       city: location.city

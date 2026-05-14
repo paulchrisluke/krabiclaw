@@ -303,7 +303,7 @@ async function runExtraction() {
     const res = await $fetch<{
       success: boolean
       menuId: string
-      menuItems: any[]
+      menuItems: ApiRecord[]
       warning?: string | null
       credits: { charged: number; remaining: number }
       error?: string
@@ -314,7 +314,7 @@ async function runExtraction() {
     creditsRemaining.value = res.credits?.remaining ?? null
     extractWarning.value = res.warning ?? null
 
-    editedItems.value = (res.menuItems ?? []).map((item: any) => ({
+    editedItems.value = (res.menuItems ?? []).map((item: ApiValue) => ({
       section: item.section ?? '',
       name: item.name ?? '',
       description: item.description ?? '',
@@ -322,8 +322,8 @@ async function runExtraction() {
     }))
 
     step.value = 'preview'
-  } catch (err: any) {
-    const msg = err?.data?.error ?? err?.message ?? 'Extraction failed. Please try again.'
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : (err && typeof err === 'object' && 'data' in err && typeof err.data === 'object' && err.data && 'error' in err.data && typeof err.data.error === 'string') ? err.data.error : 'Extraction failed. Please try again.'
     uploadError.value = msg
     step.value = 'idle'
     toast.addToast(msg, 'error')

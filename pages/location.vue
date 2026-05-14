@@ -44,10 +44,12 @@
           </div>
           <div v-if="parkingInfo" class="mt-8">
             <h3 class="font-semibold text-highlighted mb-2 uppercase tracking-wider text-xs">Parking</h3>
+            <!-- eslint-disable-next-line vue/no-v-html -->
             <div v-html="parkingInfo" class="text-muted text-sm" />
           </div>
           <div v-if="extraNotes" class="mt-4">
             <h3 class="font-semibold text-highlighted mb-2 uppercase tracking-wider text-xs">Additional Notes</h3>
+            <!-- eslint-disable-next-line vue/no-v-html -->
             <div v-html="extraNotes" class="text-muted text-sm" />
           </div>
         </div>

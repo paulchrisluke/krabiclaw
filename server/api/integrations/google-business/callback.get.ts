@@ -17,12 +17,11 @@ export default defineEventHandler(async (event) => {
     return new Response(null, { status: 302, headers: { Location: '/dashboard?gb=error' } })
   }
 
-  let stateData: { siteId: string; organizationId: string; userId: string; locationId?: string; timestamp: number } | null
   const hmacSecret = env.CONNECTOR_TOKEN_ENCRYPTION_KEY as string | undefined
   if (!hmacSecret) {
     return new Response('Server misconfiguration.', { status: 500 })
   }
-  stateData = await verifyOAuthState<{ siteId: string; organizationId: string; userId: string; locationId?: string; timestamp: number }>(hmacSecret, state)
+  const stateData = await verifyOAuthState<{ siteId: string; organizationId: string; userId: string; locationId?: string; timestamp: number }>(hmacSecret, state)
   if (!stateData) {
     return new Response(null, { status: 302, headers: { Location: '/dashboard?gb=error' } })
   }

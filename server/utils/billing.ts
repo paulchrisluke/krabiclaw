@@ -1,6 +1,40 @@
 // Billing and entitlement utilities for KrabiClaw SaaS
 import Stripe from 'stripe'
 
+type EntitlementValue = string | number | boolean
+type EntitlementsMap = Record<string, EntitlementValue>
+
+interface BillingRow {
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  plan: string | null
+  status: string | null
+  current_period_end: string | null
+  cancel_at_period_end: boolean | null
+}
+
+interface EntitlementRow {
+  key: string
+  value: string
+}
+
+interface EntitlementValueRow {
+  value: string
+}
+
+interface SubscriptionItemRow {
+  stripe_subscription_item_id: string | null
+  plan: string
+}
+
+interface CountRow {
+  count: number
+}
+
+interface MembershipRow {
+  role: string
+}
+
 export interface BillingEnv {
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
@@ -27,7 +61,7 @@ export interface BillingStatus {
   subscriptionStatus?: string
   currentPeriodEnd?: string
   cancelAtPeriodEnd?: boolean
-  entitlements: Record<string, any>
+  entitlements: EntitlementsMap
 }
 
 // Get Stripe instance
@@ -42,7 +76,7 @@ export function getStripe(env: BillingEnv): Stripe {
 // Get organization billing status
 export async function getOrganizationBillingStatus(
   env: BillingEnv, 
-  db: any, 
+  db: D1Database, 
   organizationId: string
 ): Promise<BillingStatus> {
   // Get entitlements
@@ -54,15 +88,15 @@ export async function getOrganizationBillingStatus(
            current_period_end, cancel_at_period_end
     FROM organization_billing 
     WHERE organization_id = ?
-  `).bind(organizationId).first()
+  `).bind(organizationId).first<BillingRow>()
   
   return {
-    plan: billing?.plan || entitlements.plan || 'free',
-    stripeCustomerId: billing?.stripe_customer_id,
-    stripeSubscriptionId: billing?.stripe_subscription_id,
-    subscriptionStatus: billing?.status,
-    currentPeriodEnd: billing?.current_period_end,
-    cancelAtPeriodEnd: billing?.cancel_at_period_end,
+    plan: billing?.plan ?? String(entitlements.plan ?? 'free'),
+    stripeCustomerId: billing?.stripe_customer_id ?? undefined,
+    stripeSubscriptionId: billing?.stripe_subscription_id ?? undefined,
+    subscriptionStatus: billing?.status ?? undefined,
+    currentPeriodEnd: billing?.current_period_end ?? undefined,
+    cancelAtPeriodEnd: billing?.cancel_at_period_end ?? undefined,
     entitlements
   }
 }
@@ -70,16 +104,18 @@ export async function getOrganizationBillingStatus(
 // Get all organization entitlements
 export async function getOrganizationEntitlements(
   env: BillingEnv, 
-  db: any, 
+  db: D1Database, 
   organizationId: string
-): Promise<Record<string, any>> {
+): Promise<EntitlementsMap> {
+  void env
   const entitlements = await db.prepare(`
     SELECT key, value FROM organization_entitlements 
     WHERE organization_id = ?
-  `).bind(organizationId).all()
+  `).bind(organizationId).all<EntitlementRow>()
   
-  const result: Record<string, any> = {}
-  for (const entitlement of entitlements.results || []) {
+  const rows = entitlements.results ?? []
+  const result: EntitlementsMap = {}
+  for (const entitlement of rows) {
     // Convert string values to appropriate types
     const value = entitlement.value.toLowerCase()
     if (value === 'true' || value === 'false') {
@@ -97,15 +133,16 @@ export async function getOrganizationEntitlements(
 // Check if organization has specific entitlement
 export async function hasEntitlement(
   env: BillingEnv, 
-  db: any, 
+  db: D1Database, 
   organizationId: string, 
   key: string
 ): Promise<boolean> {
+  void env
   const entitlement = await db.prepare(`
     SELECT value FROM organization_entitlements 
     WHERE organization_id = ? AND key = ?
     LIMIT 1
-  `).bind(organizationId, key).first()
+  `).bind(organizationId, key).first<EntitlementValueRow>()
   
   if (!entitlement) return false
   return entitlement.value.toLowerCase() === 'true'
@@ -114,10 +151,11 @@ export async function hasEntitlement(
 // Set organization entitlements based on plan
 export async function setOrganizationEntitlementsFromPlan(
   env: BillingEnv, 
-  db: any, 
+  db: D1Database, 
   organizationId: string, 
   plan: string
 ): Promise<void> {
+  void env
   const planEntitlements = getPlanEntitlements(plan)
   const now = new Date().toISOString()
   
@@ -139,7 +177,7 @@ export async function setOrganizationEntitlementsFromPlan(
 }
 
 // Get entitlements for different plans
-function getPlanEntitlements(plan: string): Record<string, any> {
+function getPlanEntitlements(plan: string): EntitlementsMap {
   const baseEntitlements = {
     plan,
     custom_domains: false,
@@ -188,7 +226,7 @@ function getPlanEntitlements(plan: string): Record<string, any> {
 // Called fire-and-forget from location create/delete; errors are logged but never bubble up.
 export async function updateSubscriptionQuantity(
   env: BillingEnv,
-  db: any,
+  db: D1Database,
   organizationId: string
 ): Promise<void> {
   let stripeSubscriptionItemId: string | null = null
@@ -198,7 +236,7 @@ export async function updateSubscriptionQuantity(
       SELECT stripe_subscription_item_id, plan
       FROM organization_billing
       WHERE organization_id = ?
-    `).bind(organizationId).first() as { stripe_subscription_item_id: string | null; plan: string } | null
+    `).bind(organizationId).first<SubscriptionItemRow>()
 
     stripeSubscriptionItemId = billing?.stripe_subscription_item_id ?? null
     if (!billing || !stripeSubscriptionItemId || billing.plan !== 'pro') return
@@ -208,7 +246,7 @@ export async function updateSubscriptionQuantity(
       FROM business_locations bl
       JOIN sites s ON bl.site_id = s.id
       WHERE s.organization_id = ? AND bl.status = 'active'
-    `).bind(organizationId).first() as { count: number } | null
+    `).bind(organizationId).first<CountRow>()
 
     const quantity = Math.max(1, result?.count ?? 1)
 
@@ -229,15 +267,16 @@ export async function updateSubscriptionQuantity(
 // Require billing access for organization
 export async function requireBillingAccess(
   env: BillingEnv, 
-  db: any, 
+  db: D1Database, 
   organizationId: string, 
   userId: string
 ): Promise<void> {
+  void env
   const membership = await db.prepare(`
       SELECT role FROM member
       WHERE organizationId = ? AND userId = ?
       LIMIT 1
-    `).bind(organizationId, userId).first()
+    `).bind(organizationId, userId).first() as MembershipRow | null
   
   if (!membership) {
     throw new Error('Access denied: Not a member of this organization')

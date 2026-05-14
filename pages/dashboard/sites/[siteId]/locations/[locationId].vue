@@ -160,6 +160,38 @@
             </div>
           </dl>
         </UCard>
+
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold text-highlighted">Hero Media</h2>
+              <UButton v-if="heroSaved" size="xs" color="success" variant="soft" icon="i-heroicons-check">Saved</UButton>
+            </div>
+          </template>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <UFormField label="Hero Image">
+              <MediaPicker
+                v-model="heroImageAssetId"
+                :site-id="siteId"
+                :location-id="locationId"
+                accept="image"
+                title="Location hero image"
+                @change="debouncedSaveHeroMedia"
+              />
+            </UFormField>
+            <UFormField label="Hero Video">
+              <MediaPicker
+                v-model="heroVideoAssetId"
+                :site-id="siteId"
+                :location-id="locationId"
+                accept="video"
+                title="Location hero video"
+                @change="debouncedSaveHeroMedia"
+              />
+            </UFormField>
+          </div>
+        </UCard>
       </div>
     </UPageBody>
   </UPage>
@@ -182,6 +214,8 @@ interface BusinessLocation {
   status: string
   google_location_id: string | null
   last_synced_at: string | null
+  hero_image_asset_id?: string | null
+  hero_video_asset_id?: string | null
 }
 
 interface GbConnection {
@@ -201,9 +235,9 @@ const locationId = route.params.locationId as string
 
 const loading = ref(true)
 const error = ref<string | null>(null)
-const site = ref<any>(null)
+const site = ref<ApiRecord | null>(null)
 const location = ref<BusinessLocation | null>(null)
-const menus = ref<any[]>([])
+const menus = ref<ApiRecord[]>([])
 const gbConnection = ref<GbConnection | null>(null)
 const connectingGoogle = ref(false)
 
@@ -232,6 +266,53 @@ const workspaceActions = computed(() => [
   { label: 'Edit Brand Content', icon: 'i-heroicons-building-storefront', to: `/dashboard/sites/${siteId}/content` }
 ])
 
+const heroImageAssetId = ref<string | null>(null)
+const heroVideoAssetId = ref<string | null>(null)
+const heroSaved = ref(false)
+let heroSaveTimeout: ReturnType<typeof setTimeout> | null = null
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const data = (error as Record<string, unknown>).data
+    if (data && typeof data === 'object') {
+      const errorMessage = (data as Record<string, unknown>).error
+      if (typeof errorMessage === 'string' && errorMessage) return errorMessage
+    }
+    const message = (error as Record<string, unknown>).message
+    if (typeof message === 'string' && message) return message
+  }
+  return fallback
+}
+
+watch(location, (loc) => {
+  if (loc) {
+    heroImageAssetId.value = loc.hero_image_asset_id ?? null
+    heroVideoAssetId.value = loc.hero_video_asset_id ?? null
+  }
+})
+
+async function saveHeroMedia() {
+  try {
+    await $fetch(`/api/sites/${siteId}/locations/${locationId}`, {
+      method: 'PATCH',
+      body: { hero_image_asset_id: heroImageAssetId.value, hero_video_asset_id: heroVideoAssetId.value },
+    })
+    heroSaved.value = true
+    setTimeout(() => { heroSaved.value = false }, 2000)
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Failed to save'), color: 'error' })
+  }
+}
+
+function debouncedSaveHeroMedia() {
+  if (heroSaveTimeout) {
+    clearTimeout(heroSaveTimeout)
+  }
+  heroSaveTimeout = setTimeout(() => {
+    saveHeroMedia()
+  }, 500)
+}
+
 const connectGoogleBusiness = async () => {
   connectingGoogle.value = true
   try {
@@ -251,8 +332,8 @@ const connectGoogleBusiness = async () => {
         connectingGoogle.value = false
       }
     }
-  } catch (err: any) {
-    toast.add({ description: err?.data?.error || 'Failed to start Google Business connection', color: 'error' })
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Failed to start Google Business connection'), color: 'error' })
     connectingGoogle.value = false
   }
 }
@@ -263,7 +344,9 @@ const loadGbConnection = async () => {
       `/api/sites/${siteId}/locations/${locationId}/integrations/google-business`
     )
     gbConnection.value = res.connection
-  } catch {}
+  } catch {
+    // Google Business connection is optional for a location.
+  }
 }
 
 const loadLocationWorkspace = async () => {
@@ -271,9 +354,9 @@ const loadLocationWorkspace = async () => {
   error.value = null
   try {
     const [settingsResponse, locationResponse, menusResponse] = await Promise.all([
-      $fetch<any>(`/api/sites/${siteId}/settings`),
+      $fetch<ApiRecord>(`/api/sites/${siteId}/settings`),
       $fetch<{ success: boolean; location: BusinessLocation }>(`/api/sites/${siteId}/locations/${locationId}`),
-      $fetch<{ success: boolean; menus: any[] }>(`/api/editor/sites/${siteId}/menus?locationId=${locationId}`)
+      $fetch<{ success: boolean; menus: ApiRecord[] }>(`/api/editor/sites/${siteId}/menus?locationId=${locationId}`)
     ])
 
     if (!settingsResponse.success) throw new Error('Failed to load site settings')

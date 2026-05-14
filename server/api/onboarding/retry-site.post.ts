@@ -7,8 +7,20 @@ interface RetrySiteRequest {
   siteId: string
 }
 
+interface RetrySiteRow {
+  id: string
+  organization_id: string
+  organization_name: string
+  onboarding_status: string
+}
+
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event) as RetrySiteRequest
+  const body = await readBody<RetrySiteRequest>(event)
+  if (!body || typeof body !== 'object') {
+    return jsonResponse({
+      error: 'Site ID is required'
+    }, { status: 400 })
+  }
   const { siteId } = body
   
   if (!siteId) {
@@ -44,7 +56,7 @@ export default defineEventHandler(async (event) => {
         SELECT organizationId FROM member WHERE userId = ?
       )
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
+    `).bind(siteId, session.user.id).first<RetrySiteRow>()
     
     if (!site) {
       return jsonResponse({ 
@@ -150,7 +162,8 @@ export default defineEventHandler(async (event) => {
     })
     
   } catch (error) {
-    console.error('Retry onboarding failed:', error)
+    const normalizedError = error instanceof Error ? error : new Error('Unknown error')
+    console.error('Retry onboarding failed:', normalizedError)
     
     // Mark site as failed
     await db.prepare(`

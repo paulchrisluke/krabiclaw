@@ -220,16 +220,14 @@ definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const loading = ref(true)
-const billing = ref<any>(null)
-const credits = ref<any>(null)
+const billing = ref<ApiRecord | null>(null)
+const credits = ref<ApiRecord | null>(null)
 const creditsLoading = ref(true)
 const upgrading = ref<string | null>(null)
 const portalLoading = ref(false)
-const addingCredits = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
 const annual = ref(false)
-const isDev = useRequestURL().hostname === 'localhost'
 const buyingCredits = ref<number | null>(null)
 
 async function purchaseCredits(bundle: 500 | 2500 | 5000) {
@@ -250,8 +248,9 @@ async function purchaseCredits(bundle: 500 | 2500 | 5000) {
     } else {
       errorMessage.value = res.error ?? 'Failed to start checkout'
     }
-  } catch (err: any) {
-    errorMessage.value = err?.data?.error ?? err?.message ?? 'Failed to start checkout'
+  } catch (err) {
+    const message = err instanceof Error ? err.message : (err && typeof err === 'object' && 'data' in err && typeof err.data === 'object' && err.data && 'error' in err.data && typeof err.data.error === 'string') ? err.data.error : 'Failed to start checkout'
+    errorMessage.value = message
   } finally {
     buyingCredits.value = null
   }
@@ -270,26 +269,12 @@ const { plans, displayPrice } = usePlans()
 const loadCredits = async () => {
   creditsLoading.value = true
   try {
-    credits.value = await $fetch<any>('/api/billing/credits')
+    credits.value = await $fetch<ApiRecord>('/api/billing/credits')
   } catch {
     // non-critical
     credits.value = null
   } finally {
     creditsLoading.value = false
-  }
-}
-
-const addDevCredits = async (amount: number) => {
-  addingCredits.value = true
-  try {
-    const res = await $fetch<{ balance: number }>('/api/billing/credits/add', { method: 'POST', body: { amount } })
-    successMessage.value = `Added ${amount} dev credits. New balance: ${res.balance}`
-    addToast(successMessage.value, 'success')
-    await loadCredits()
-  } catch (err) {
-    errorMessage.value = err instanceof Error ? err.message : 'Failed to add credits'
-  } finally {
-    addingCredits.value = false
   }
 }
 
@@ -308,7 +293,7 @@ const formatRelative = (iso: string) => {
 const loadBillingData = async () => {
   loading.value = true
   try {
-    const response = await $fetch<any>('/api/billing/status')
+    const response = await $fetch<ApiRecord>('/api/billing/status')
     billing.value = response.billing
   } catch (err) {
     console.error('Failed to load billing data:', err)

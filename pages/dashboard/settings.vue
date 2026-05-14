@@ -155,6 +155,29 @@ const deleteConfirmText = ref('')
 const deleting = ref(false)
 const deleteError = ref('')
 
+interface DeleteErrorBody {
+  error?: string
+  message?: string
+}
+
+function getDeleteErrorBody(error: unknown): DeleteErrorBody {
+  if (!error || typeof error !== 'object') return {}
+  const record = error as Record<string, unknown>
+
+  const data = record.data
+  if (data && typeof data === 'object') return data as DeleteErrorBody
+
+  const response = record.response
+  if (response && typeof response === 'object') {
+    const responseData = (response as Record<string, unknown>)._data
+    if (responseData && typeof responseData === 'object') {
+      return responseData as DeleteErrorBody
+    }
+  }
+
+  return {}
+}
+
 function resetDeleteModal() {
   deleteModalOpen.value = false
   deleteConfirmText.value = ''
@@ -175,7 +198,8 @@ async function confirmDeleteAccount() {
       try {
         await authClient.signOut()
       } catch (signOutErr) {
-        console.error('Sign out failed after account deletion:', signOutErr)
+        const error = signOutErr instanceof Error ? signOutErr : new Error(String(signOutErr))
+        console.error('Sign out failed after account deletion:', error.message)
       }
       deleteError.value = ''
       deleting.value = false
@@ -183,15 +207,16 @@ async function confirmDeleteAccount() {
       try {
         await navigateTo('/')
       } catch (navErr) {
-        console.error('Navigation failed after account deletion:', navErr)
+        const error = navErr instanceof Error ? navErr : new Error(String(navErr))
+        console.error('Navigation failed after account deletion:', error.message)
         window.location.href = '/'
       }
     } else {
       deleteError.value = 'Account deletion failed. Please try again.'
       deleting.value = false
     }
-  } catch (err: any) {
-    const body = err?.data ?? err?.response?._data
+  } catch (err) {
+    const body = getDeleteErrorBody(err instanceof Error ? err : new Error(String(err)))
     if (body?.error === 'active_subscription') {
       deleteError.value = 'You have an active subscription. Please cancel it from the Billing page before deleting your account.'
     } else {

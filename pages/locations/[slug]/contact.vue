@@ -122,13 +122,13 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as any)?.value?.name || (site as any)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
 
 const { data, pending } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}`,
   { key: () => `loc-contact-${siteId}-${slug.value}`, default: () => ({ location: null }) }
 )
-const location = computed(() => (data as any).value?.location ?? null)
+const location = computed(() => (data as ApiValue).value?.location ?? null)
 
 const formattedAddress = computed(() => {
   const loc = location.value
@@ -184,7 +184,7 @@ useSchemaOrg([
   computed(() => {
     const loc = location.value
     if (!loc) return {}
-    const schemaHours = weekHours.value.map((h: any) => {
+    const schemaHours = weekHours.value.map((h: ApiValue) => {
       if (!h.hours || typeof h.hours !== 'string' || !h.hours.includes('–')) return null
       if (h.hours.toLowerCase() === 'closed') return null
       const parts = h.hours.split('–')
@@ -198,7 +198,7 @@ useSchemaOrg([
         opens,
         closes
       }
-    }).filter((h: any) => h && h.opens)
+    }).filter((h: ApiValue) => h && h.opens)
     return {
       '@type': ['LocalBusiness', 'Restaurant'],
       name: `${siteName.value} — ${loc.title}`,

@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const allowed = ['question', 'answer', 'question_author', 'is_owner_answer', 'status', 'sort_order']
   const sets: string[] = ['updated_at = ?']
-  const params: any[] = [new Date().toISOString()]
+  const params: ApiRecord[] = [new Date().toISOString()]
 
   for (const key of allowed) {
     if (key in body) { sets.push(`${key} = ?`); params.push(body[key]) }

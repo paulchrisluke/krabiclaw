@@ -3,6 +3,39 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createPreviewToken } from '~/server/utils/preview-token'
 
+interface SiteRow {
+  id: string
+  name: string
+  subdomain: string
+  organization_id: string
+  status: string
+  onboarding_status: string
+  organization_name: string
+}
+
+interface LocationRow {
+  id: string
+  slug: string
+  title: string
+  is_primary: number | boolean
+  status: 'active' | 'inactive' | 'sync_error'
+}
+
+interface ParsedLocation extends Omit<LocationRow, 'is_primary'> {
+  is_primary: boolean
+}
+
+interface EntitlementRow {
+  key: string
+  value: string
+}
+
+interface ScopeItem {
+  id: string | null
+  label: string
+  type: 'brand' | 'location'
+}
+
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   
@@ -40,7 +73,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
+    `).bind(siteId, session.user.id).first() as SiteRow | null
     
     if (!site) {
       return jsonResponse({ 
@@ -57,7 +90,8 @@ export default defineEventHandler(async (event) => {
     `).bind(site.organization_id, siteId).all()
     
     // Parse locations
-    const parsedLocations = (locations.results || []).map((location: any) => ({
+    const locationRows = (locations.results || []) as unknown as LocationRow[]
+    const parsedLocations: ParsedLocation[] = locationRows.map((location) => ({
       ...location,
       is_primary: Boolean(location.is_primary)
     }))
@@ -68,7 +102,8 @@ export default defineEventHandler(async (event) => {
       WHERE organization_id = ?
     `).bind(site.organization_id).all()
 
-    const entitlements = (entitlementsResult.results || []).reduce((acc: Record<string, string | boolean>, row: any) => {
+    const entitlementRows = (entitlementsResult.results || []) as unknown as EntitlementRow[]
+    const entitlements = entitlementRows.reduce((acc: Record<string, string | boolean>, row) => {
       acc[row.key] = row.value === 'true' ? true : row.value === 'false' ? false : row.value
       return acc
     }, {})
@@ -95,12 +130,12 @@ export default defineEventHandler(async (event) => {
         label: "Brand-wide",
         type: "brand"
       },
-      ...parsedLocations.map((location: any) => ({
+      ...parsedLocations.map((location) => ({
         id: location.id,
         label: location.title,
         type: "location"
       }))
-    ]
+    ] as ScopeItem[]
 
     return jsonResponse({
       success: true,

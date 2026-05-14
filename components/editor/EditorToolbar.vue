@@ -84,7 +84,6 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useRoute } from '#app'
 import { useEditorContext } from '~/composables/useEditorContext'
 import { useEditMode } from '~/composables/useEditMode'
 

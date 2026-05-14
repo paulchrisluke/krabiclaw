@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformOwner(session.user.email)) {
+  if (!isPlatformOwner(session.user.email, env)) {
     return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
   }
 
@@ -40,8 +40,9 @@ export default defineEventHandler(async (event) => {
       },
       recentSites: recentSites.results ?? []
     })
-  } catch (err: any) {
-    console.error('Failed to fetch analytics:', err?.stack || err)
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err))
+    console.error('Failed to fetch analytics:', error.stack || error.message)
     return jsonResponse({ error: 'Failed to fetch analytics' }, { status: 500 })
   }
 })

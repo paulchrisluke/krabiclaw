@@ -25,7 +25,7 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (m) => map[m] || m)
 }
 
-function getClientIp(event: any): string {
+function getClientIp(event: ApiValue): string {
   const rawForwardedFor = event.node.req.headers['x-forwarded-for']
   const forwardedFor = Array.isArray(rawForwardedFor)
     ? rawForwardedFor.join(',')
@@ -39,7 +39,7 @@ function getClientIp(event: any): string {
   return firstForwardedIp || event.node.req.socket.remoteAddress || 'unknown'
 }
 
-async function incrementRateLimit(db: any, key: string, limit: number): Promise<boolean> {
+async function incrementRateLimit(db: D1Database, key: string, limit: number): Promise<boolean> {
   const result = await db.prepare(`
     INSERT INTO rate_limits (key, count)
     VALUES (?, 1)

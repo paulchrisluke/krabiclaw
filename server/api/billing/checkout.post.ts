@@ -84,7 +84,7 @@ export default defineEventHandler(async (event) => {
       SELECT o.name, b.stripe_customer_id FROM organization o
       LEFT JOIN organization_billing b ON o.id = b.organization_id
       WHERE o.id = ?
-    `).bind(orgId).first()
+    `).bind(orgId).first<{ name: string; stripe_customer_id: string | null }>()
     
     if (!organization) {
       return jsonResponse({ 

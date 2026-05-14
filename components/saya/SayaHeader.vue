@@ -145,11 +145,11 @@ interface Site {
 interface I18nComposable {
   locale: Ref<string>
   locales: Ref<Array<{ code: string; name: string }>>
-  setLocale: (code: string) => void
+  setLocale: (_code: string) => void
 }
 
 const { isPlatform, siteId, site } = useTenantSite()
-const i18n = useI18n() as unknown as I18nComposable
+const i18n = useI18n() as ApiValue as I18nComposable
 const mobileMenuOpen = ref(false)
 
 const currentLocale = computed(() => i18n.locale.value)
@@ -179,7 +179,7 @@ const languageItems = computed(() =>
 // No await — this is a layout component, not a page. Data arrives reactively.
 const currentSiteId = computed(() => siteId || '')
 
-const { data: locationsData, error: locationsError, execute: loadLocations } = useFetch<{ locations: any[] }>(
+const { data: locationsData, error: locationsError, execute: loadLocations } = useFetch<{ locations: ApiRecord[] }>(
   () => `/api/public/sites/${currentSiteId.value}/locations`,
   {
     key: () => `header-locs-${currentSiteId.value || 'none'}`,
@@ -215,5 +215,5 @@ const locationDropdownItems = computed(() => [
     to: `/locations/${loc.slug}/menu`,
     icon: 'i-heroicons-map-pin'
   }))
-].filter((group: any[]) => group.length > 0))
+].filter((group: ApiRecord[]) => group.length > 0))
 </script>

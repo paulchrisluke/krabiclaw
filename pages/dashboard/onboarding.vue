@@ -184,7 +184,6 @@
 definePageMeta({ layout: 'dashboard', ssr: false })
 
 const config = useRuntimeConfig()
-const toast = useToast()
 
 const steps = [
   { label: 'Restaurant Info' },
@@ -212,10 +211,57 @@ const form = ref({
 
 // Google Places autocomplete
 interface PlaceSearchResult { placeId: string; name: string; formattedAddress: string }
+interface PlaceDetails {
+  name?: string
+  city?: string
+  phone?: string
+  formattedAddress?: string
+  mapsUrl?: string
+  websiteUrl?: string
+  openingHours?: string[] | null
+}
 const placesQuery = ref('')
 const placesResults = ref<PlaceSearchResult[]>([])
 const placesSearching = ref(false)
 let placesTimer: ReturnType<typeof setTimeout> | null = null
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>
+    const data = record.data
+    if (data && typeof data === 'object') {
+      const message = (data as Record<string, unknown>).message
+      if (typeof message === 'string' && message) return message
+    }
+    const message = record.message
+    if (typeof message === 'string' && message) return message
+  }
+  return fallback
+}
+
+function getErrorStatus(error: unknown): number {
+  if (!error || typeof error !== 'object') return 0
+  const response = (error as Record<string, unknown>).response
+  if (response && typeof response === 'object') {
+    const status = (response as Record<string, unknown>).status
+    if (typeof status === 'number') return status
+  }
+  return 0
+}
+
+function getErrorCode(error: unknown): string {
+  if (!error || typeof error !== 'object') return ''
+  const data = (error as Record<string, unknown>).data
+  if (data && typeof data === 'object') {
+    const code = (data as Record<string, unknown>).code
+    return typeof code === 'string' ? code : ''
+  }
+  return ''
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
 
 const onPlacesInput = () => {
   placesResults.value = []
@@ -229,7 +275,7 @@ const doPlacesSearch = async (query: string) => {
   placesSearching.value = true
   try {
     const res = await $fetch<{ success: boolean; results: PlaceSearchResult[] }>(
-      '/api/places/search', { method: 'POST', body: { query } } as any
+      '/api/places/search', { method: 'POST', body: { query } }
     )
     if (res.success) placesResults.value = res.results
   } catch { /* ignore — manual entry still works */ }
@@ -240,7 +286,7 @@ const selectPlace = async (placeId: string) => {
   placesResults.value = []
   placesSearching.value = true
   try {
-    const res = await $fetch<{ success: boolean; details: any }>(`/api/places/${placeId}`)
+    const res = await $fetch<{ success: boolean; details: PlaceDetails }>(`/api/places/${placeId}`)
     if (!res.success) return
     const d = res.details
     form.value.locationName = d.name || form.value.locationName
@@ -310,11 +356,11 @@ watch(() => form.value.subdomain, (newSubdomain) => {
         subdomainAvailable.value = available
         if (!available) subdomainError.value = message || 'Subdomain is not available.'
       }
-    } catch (e: any) {
-      if (e.name === 'AbortError') return
+    } catch (e) {
+      if (isAbortError(e)) return
       if (requested === form.value.subdomain) {
         subdomainAvailable.value = false
-        subdomainError.value = e.data?.message || e.message || 'Error checking subdomain availability.'
+        subdomainError.value = getErrorMessage(e, 'Error checking subdomain availability.')
       }
     }
   }, 400)
@@ -351,16 +397,16 @@ async function handleStep1Next() {
       form.value.locationName = form.value.restaurantName.trim()
     }
     currentStep.value++
-  } catch (error: any) {
+  } catch (error) {
     const isTaken =
-      error.response?.status === 409 ||
-      error.data?.code === 'subdomain_taken' ||
-      error.data?.message?.includes('taken')
+      getErrorStatus(error) === 409 ||
+      getErrorCode(error) === 'subdomain_taken' ||
+      getErrorMessage(error, '').includes('taken')
     if (isTaken) {
       subdomainAvailable.value = false
       subdomainError.value = 'Subdomain is already taken.'
     } else {
-      step1Error.value = error.data?.message || error.message || 'Error creating site.'
+      step1Error.value = getErrorMessage(error, 'Error creating site.')
     }
   } finally {
     loading.value = false
@@ -387,8 +433,8 @@ async function handleStep2Next() {
       }
     })
     currentStep.value++
-  } catch (error: any) {
-    step2Error.value = error.data?.message || error.message || 'Failed to create location. Please try again.'
+  } catch (error) {
+    step2Error.value = getErrorMessage(error, 'Failed to create location. Please try again.')
   } finally {
     loading.value = false
   }

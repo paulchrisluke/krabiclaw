@@ -1,44 +1,40 @@
-// Platform owner authentication utilities
-// Platform owners: configured via PLATFORM_OWNER_EMAILS environment variable
+import { createHmac, timingSafeEqual } from 'node:crypto'
 
-function timingSafeEqual(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a, 'utf8')
-  const bBuf = Buffer.from(b, 'utf8')
-
-  if (aBuf.length !== bBuf.length) return false
-
-  try {
-    return require('crypto').timingSafeEqual(aBuf, bBuf)
-  } catch {
-    // Fallback for environments without timingSafeEqual
-    let result = 0
-    const maxLen = Math.max(aBuf.length, bBuf.length)
-    for (let i = 0; i < maxLen; i++) {
-      result |= (aBuf[i] || 0) ^ (bBuf[i] || 0)
-    }
-    return result === 0
-  }
+function requireAuthSecret(env: ApiRecord): string {
+  const secret = String(env?.BETTER_AUTH_SECRET ?? '').trim()
+  if (!secret) throw new Error('BETTER_AUTH_SECRET is required')
+  return secret
 }
 
-export function isPlatformOwner(email: string | null | undefined): boolean {
+export function isPlatformOwner(email: string | null | undefined, env: ApiRecord): boolean {
   if (!email) return false
-  
-  const platformOwnerEmails = process.env.PLATFORM_OWNER_EMAILS || ''
-  const emails = platformOwnerEmails.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+
+  const platformOwnerEmails = String(env?.PLATFORM_OWNER_EMAILS ?? '')
+  const emails = platformOwnerEmails.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean)
+  if (emails.length === 0) return false
+
+  const hmacKey = requireAuthSecret(env)
   const normalizedEmail = email.toLowerCase()
-  
-  // Use timing-safe comparison for each candidate
+  const normalizedEmailHash = createHmac('sha256', hmacKey).update(normalizedEmail).digest()
+  let matched = false
+
   for (const candidate of emails) {
-    if (timingSafeEqual(candidate, normalizedEmail)) {
-      return true
-    }
+    const candidateHash = createHmac('sha256', hmacKey).update(candidate).digest()
+    const isMatch = timingSafeEqual(normalizedEmailHash, candidateHash)
+    matched = isMatch || matched
   }
-  
-  return false
+
+  return matched
 }
 
-export function requirePlatformOwner(email: string | null | undefined): void {
-  if (!isPlatformOwner(email)) {
+export function requirePlatformOwner(email: string | null | undefined, env: ApiRecord): void {
+  if (!isPlatformOwner(email, env)) {
     throw new Error('Platform owner access required')
   }
+}
+
+export function anonymizeId(id: string | null | undefined, env: ApiRecord): string {
+  const key = requireAuthSecret(env)
+  const normalized = id == null ? '__NULLISH__' : String(id)
+  return createHmac('sha256', key).update(normalized).digest('hex')
 }

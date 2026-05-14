@@ -9,6 +9,7 @@ interface ContentRow {
   content: string | null
   hero_title: string | null
   hero_subtitle: string | null
+  hero_image_url: string | null
   hero_video_url: string | null
   updated_at: string
 }
@@ -87,7 +88,7 @@ export const usePageContent = (pageName?: string) => {
 
   const needsSanitization = (field: string) => {
     const def = getFieldDef(page.value, field)
-    return def?.type === 'rich_text'
+    return def?.type === 'richtext'
   }
 
   const handlePreviewUpdate = async (event: MessageEvent) => {
@@ -120,14 +121,14 @@ export const usePageContent = (pageName?: string) => {
 
   /** Map of field → ContentRow for quick lookup */
   const contentMap = computed<Record<string, ContentRow>>(() => {
-    const rows: ContentRow[] = (data.value as any)?.content || []
+    const rows: ContentRow[] = (data.value as ApiValue)?.content || []
     return rows.reduce((acc, row) => {
       acc[row.field] = row
       return acc
     }, {} as Record<string, ContentRow>)
   })
 
-  const hasDrafts = computed(() => (data.value as any)?.hasDrafts === true)
+  const hasDrafts = computed(() => (data.value as ApiValue)?.hasDrafts === true)
 
   /**
    * Get a field value from the DB.
@@ -139,11 +140,12 @@ export const usePageContent = (pageName?: string) => {
       return previewOverrides.value[field] ?? null
     }
 
-    if (field === 'hero.title' || field === 'hero.subtitle' || field === 'hero.video') {
+    if (['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'].includes(field)) {
       const heroRow = contentMap.value['hero']
       const fieldRow = contentMap.value[field]
       if (field === 'hero.title') return heroRow?.hero_title ?? fieldRow?.content ?? defaultValue
       if (field === 'hero.subtitle') return heroRow?.hero_subtitle ?? fieldRow?.content ?? defaultValue
+      if (field === 'hero.image') return heroRow?.hero_image_url ?? fieldRow?.content ?? defaultValue
       if (field === 'hero.video') return heroRow?.hero_video_url ?? fieldRow?.content ?? defaultValue
     }
     const row = contentMap.value[field]
@@ -163,12 +165,13 @@ export const usePageContent = (pageName?: string) => {
   /**
    * Returns a { title, subtitle, video } object for hero sections.
    */
-  const getHero = (defaults = { title: '', subtitle: '', video: '' }) => {
+  const getHero = (defaults = { title: '', subtitle: '', image: '', video: '' }) => {
     const row = contentMap.value['hero']
     return {
       title: getField('hero.title', row?.hero_title ?? defaults.title) ?? defaults.title,
       subtitle: getField('hero.subtitle', row?.hero_subtitle ?? defaults.subtitle) ?? defaults.subtitle,
-      video: getField('hero.video', row?.hero_video_url ?? defaults.video) ?? defaults.video
+      image: getField('hero.image', row?.hero_image_url ?? defaults.image) ?? defaults.image,
+      video: getField('hero.video', row?.hero_video_url ?? defaults.video) ?? defaults.video,
     }
   }
 

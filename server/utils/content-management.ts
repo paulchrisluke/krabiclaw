@@ -13,7 +13,12 @@ export interface SiteContent {
   content?: string
   hero_title?: string
   hero_subtitle?: string
-  hero_video_url?: string
+  hero_image_asset_id?: string
+  hero_video_asset_id?: string
+  /** Resolved public URL of hero_image_asset_id — injected by getPageContent/getDraftContent JOINs */
+  hero_image_url?: string | null
+  /** Resolved public URL of hero_video_asset_id — injected by getPageContent/getDraftContent JOINs */
+  hero_video_url?: string | null
   updated_at: string
 }
 
@@ -43,7 +48,7 @@ export interface AwardRecognition {
 // Site Content
 export const getSiteContent = async (db: D1Database, organizationId: string, siteId: string, locationId?: string): Promise<SiteContent[]> => {
   let query = `
-    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url, updated_at 
+    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, updated_at 
      FROM site_content 
      WHERE organization_id = ? AND site_id = ?
   `
@@ -64,28 +69,33 @@ export const getSiteContent = async (db: D1Database, organizationId: string, sit
 
 export const getPageContent = async (db: D1Database, organizationId: string, siteId: string, page: string, locationId?: string): Promise<SiteContent[]> => {
   let query = `
-    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url, updated_at 
-     FROM site_content 
-     WHERE organization_id = ? AND site_id = ? AND page = ?
+    SELECT sc.id, sc.organization_id, sc.site_id, sc.location_id, sc.page, sc.field,
+           sc.value, sc.type, sc.source, sc.content, sc.hero_title, sc.hero_subtitle,
+           sc.hero_image_asset_id, sc.hero_video_asset_id, sc.updated_at,
+           img.public_url AS hero_image_url, vid.public_url AS hero_video_url
+    FROM site_content sc
+    LEFT JOIN media_assets img ON sc.hero_image_asset_id = img.id AND img.status = 'active'
+    LEFT JOIN media_assets vid ON sc.hero_video_asset_id = vid.id AND vid.status = 'active'
+    WHERE sc.organization_id = ? AND sc.site_id = ? AND sc.page = ?
   `
   const params = [organizationId, siteId, page]
-  
+
   if (locationId) {
-    query += ` AND location_id = ?`
+    query += ` AND sc.location_id = ?`
     params.push(locationId)
   } else {
-    query += ` AND location_id IS NULL`
+    query += ` AND sc.location_id IS NULL`
   }
-  
-  query += ` ORDER BY field`
-  
+
+  query += ` ORDER BY sc.field`
+
   const { results } = await db.prepare(query).bind(...params).all<SiteContent>()
   return results ?? []
 }
 
 export const getSiteContentField = async (db: D1Database, organizationId: string, siteId: string, locationId: string | null, page: string, field: string): Promise<SiteContent | null> => {
   let query = `
-    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url, updated_at 
+    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, updated_at 
      FROM site_content 
      WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ?
   `
@@ -107,17 +117,22 @@ export const getSiteContentField = async (db: D1Database, organizationId: string
 // Draft Management
 export const getDraftContent = async (db: D1Database, organizationId: string, siteId: string, page: string, locationId?: string): Promise<SiteContent[]> => {
   let query = `
-    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url, updated_at 
-     FROM site_content_drafts 
-     WHERE organization_id = ? AND site_id = ? AND page = ?
+    SELECT sc.id, sc.organization_id, sc.site_id, sc.location_id, sc.page, sc.field,
+           sc.value, sc.type, sc.source, sc.content, sc.hero_title, sc.hero_subtitle,
+           sc.hero_image_asset_id, sc.hero_video_asset_id, sc.updated_at,
+           img.public_url AS hero_image_url, vid.public_url AS hero_video_url
+    FROM site_content_drafts sc
+    LEFT JOIN media_assets img ON sc.hero_image_asset_id = img.id AND img.status = 'active'
+    LEFT JOIN media_assets vid ON sc.hero_video_asset_id = vid.id AND vid.status = 'active'
+    WHERE sc.organization_id = ? AND sc.site_id = ? AND sc.page = ?
   `
   const params = [organizationId, siteId, page]
-  
+
   if (locationId) {
-    query += ` AND location_id = ?`
+    query += ` AND sc.location_id = ?`
     params.push(locationId)
   } else {
-    query += ` AND location_id IS NULL`
+    query += ` AND sc.location_id IS NULL`
   }
   
   query += ` ORDER BY field`
@@ -140,13 +155,14 @@ export const buildUpsertDraftStmt = (db: D1Database, content: Omit<SiteContent, 
     content.content || null,
     content.hero_title || null,
     content.hero_subtitle || null,
-    content.hero_video_url || null
+    content.hero_image_asset_id || null,
+    content.hero_video_asset_id || null,
   ]
 
   if (!content.location_id) {
     return db.prepare(`
-      INSERT INTO site_content_drafts (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO site_content_drafts (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(organization_id, site_id, page, field) WHERE location_id IS NULL DO UPDATE SET
         value = excluded.value,
         type = excluded.type,
@@ -154,14 +170,15 @@ export const buildUpsertDraftStmt = (db: D1Database, content: Omit<SiteContent, 
         content = excluded.content,
         hero_title = excluded.hero_title,
         hero_subtitle = excluded.hero_subtitle,
-        hero_video_url = excluded.hero_video_url,
+        hero_image_asset_id = excluded.hero_image_asset_id,
+        hero_video_asset_id = excluded.hero_video_asset_id,
         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
     `).bind(...values)
   }
 
   return db.prepare(`
-    INSERT INTO site_content_drafts (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO site_content_drafts (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(organization_id, site_id, location_id, page, field) DO UPDATE SET
       value = excluded.value,
       type = excluded.type,
@@ -169,7 +186,8 @@ export const buildUpsertDraftStmt = (db: D1Database, content: Omit<SiteContent, 
       content = excluded.content,
       hero_title = excluded.hero_title,
       hero_subtitle = excluded.hero_subtitle,
-      hero_video_url = excluded.hero_video_url,
+      hero_image_asset_id = excluded.hero_image_asset_id,
+      hero_video_asset_id = excluded.hero_video_asset_id,
       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   `).bind(...values)
 }
@@ -192,18 +210,20 @@ export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, '
     content.content || null,
     content.hero_title || null,
     content.hero_subtitle || null,
-    content.hero_video_url || null
+    content.hero_image_asset_id || null,
+    content.hero_video_asset_id || null,
   ]
 
   if (!content.location_id) {
     return db.prepare(`
-      INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(organization_id, site_id, page, field) WHERE location_id IS NULL DO UPDATE SET
         content = excluded.content,
         hero_title = excluded.hero_title,
         hero_subtitle = excluded.hero_subtitle,
-        hero_video_url = excluded.hero_video_url,
+        hero_image_asset_id = excluded.hero_image_asset_id,
+        hero_video_asset_id = excluded.hero_video_asset_id,
         value = excluded.value,
         type = excluded.type,
         source = excluded.source,
@@ -212,13 +232,14 @@ export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, '
   }
 
   return db.prepare(`
-    INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_video_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(organization_id, site_id, location_id, page, field) DO UPDATE SET
       content = excluded.content,
       hero_title = excluded.hero_title,
       hero_subtitle = excluded.hero_subtitle,
-      hero_video_url = excluded.hero_video_url,
+      hero_image_asset_id = excluded.hero_image_asset_id,
+      hero_video_asset_id = excluded.hero_video_asset_id,
       value = excluded.value,
       type = excluded.type,
       source = excluded.source,
@@ -286,7 +307,7 @@ export const publishDrafts = async (db: D1Database, organizationId: string, site
 
 export const publishAllDrafts = async (db: D1Database) => {
   const { results: drafts } = await db.prepare(
-    `SELECT id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_video_url, updated_at FROM site_content_drafts ORDER BY organization_id, site_id, location_id, page, field`
+    `SELECT id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, updated_at FROM site_content_drafts ORDER BY organization_id, site_id, location_id, page, field`
   ).all<SiteContent>()
   
   if (!drafts || drafts.length === 0) return

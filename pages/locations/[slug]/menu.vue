@@ -113,13 +113,13 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as any)?.value?.name || (site as any)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
 
 const { data: locData } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}`,
   { key: () => `loc-menu-${siteId}-${slug.value}`, default: () => ({ location: null }) }
 )
-const location = computed(() => (locData as any).value?.location ?? null)
+const location = computed(() => (locData as ApiValue).value?.location ?? null)
 
 if (!location.value) throw createError({ statusCode: 404 })
 
@@ -162,11 +162,11 @@ function scrollToCategory(id: string) {
   document.getElementById(`cat-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-function itemSlug(item: any): string {
+function itemSlug(item: ApiValue): string {
   return item.slug || item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-function getDietaryTags(item: any): string[] {
+function getDietaryTags(item: ApiValue): string[] {
   const tags: string[] = []
   // D1 items: boolean flags (future); static items: dietaryNotes array
   const notes = Array.isArray(item.dietaryNotes) ? item.dietaryNotes : []
@@ -194,7 +194,7 @@ useSeoMeta({
 })
 
 const locationCurrency = computed(() => {
-  const loc = location.value as any
+  const loc = location.value as ApiValue
   if (loc?.currency && typeof loc.currency === 'string') return loc.currency
 
   const country = String(loc?.country || loc?.country_code || '').toUpperCase()
@@ -212,8 +212,8 @@ useSchemaOrg([
     hasMenuSection: categories.value.map((cat: { id: string; name: string }) => ({
       '@type': 'MenuSection',
       name: cat.name,
-      hasMenuItem: (menuItemsBySection.value[cat.name] ?? []).map((item: any) => {
-        const menuItem: any = {
+      hasMenuItem: (menuItemsBySection.value[cat.name] ?? []).map((item: ApiValue) => {
+        const menuItem: ApiValue = {
           '@type': 'MenuItem',
           name: item.name,
           description: item.description

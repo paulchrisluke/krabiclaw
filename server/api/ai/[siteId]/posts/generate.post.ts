@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor') LIMIT 1
-  `).bind(siteId, session.user.id).first()
+  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; brand_name: string | null }>()
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const orgId: string = site.organization_id
@@ -49,12 +49,12 @@ export default defineEventHandler(async (event) => {
   if (!prompt) return jsonResponse({ error: 'prompt is required' }, { status: 400 })
 
   const restaurantName = (site.brand_name as string | null) ?? 'the restaurant'
-  const userContent: any[] = []
+  const userContent: ApiRecord[] = []
 
   if (body.image_base64 && body.image_mime) {
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
     if (allowed.includes(body.image_mime)) {
-      userContent.push(imageBlock(body.image_base64, body.image_mime as any))
+      userContent.push(imageBlock(body.image_base64, body.image_mime as ApiValue))
     }
   }
 
@@ -69,7 +69,7 @@ export default defineEventHandler(async (event) => {
       maxTokens: 512,
       metadata: { org_id: orgId, site_id: siteId, action: 'post_generate' },
     })
-  } catch (err: any) {
+  } catch {
     return jsonResponse({ error: 'AI generation failed. Please try again.' }, { status: 502 })
   }
 
@@ -82,7 +82,7 @@ export default defineEventHandler(async (event) => {
     cfGatewayLogId: aiResponse.cfLogId,
   })
 
-  const rawText = aiResponse.content.find((b: any) => b.type === 'text')?.text ?? ''
+  const rawText = aiResponse.content.find((b: ApiValue) => b.type === 'text')?.text ?? ''
   let parsed: { title: string | null; body: string }
   try {
     parsed = JSON.parse(rawText)

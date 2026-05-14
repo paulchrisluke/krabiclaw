@@ -21,13 +21,13 @@ export default defineEventHandler(async (event) => {
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor') LIMIT 1
-  `).bind(siteId, session.user.id).first()
+  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const post = await updatePost(db, site.organization_id, siteId, postId, {
     title: body.title,
     body: body.body,
-    image_url: body.image_url,
+    image_asset_id: body.image_asset_id,
     scheduled_for: body.scheduled_for,
     location_id: body.location_id,
     post_type: body.post_type,

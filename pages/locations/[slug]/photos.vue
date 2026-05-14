@@ -149,19 +149,19 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as any)?.value?.name || (site as any)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
 
 const { data: locData } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}`,
   { key: () => `loc-photos-loc-${siteId}-${slug.value}`, default: () => ({ location: null }) }
 )
-const location = computed(() => (locData as any).value?.location ?? null)
+const location = computed(() => (locData as ApiValue).value?.location ?? null)
 
 const { data, pending } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}/photos`,
   { key: () => `loc-photos-${siteId}-${slug.value}`, default: () => ({ photos: [] }) }
 )
-const photos = computed(() => (data as any).value?.photos ?? [])
+const photos = computed(() => (data as ApiValue).value?.photos ?? [])
 
 const cats = [
   { key: 'ALL', label: 'All' },
@@ -175,7 +175,7 @@ const activeCategory = ref('ALL')
 
 const counts = computed(() => {
   const m: Record<string, number> = { ALL: photos.value.length }
-  photos.value.forEach((p: any) => {
+  photos.value.forEach((p: ApiValue) => {
     if (p.category && typeof p.category === 'string') {
       const trimmed = p.category.trim()
       if (!trimmed) return
@@ -186,8 +186,8 @@ const counts = computed(() => {
 })
 
 const sorted = computed(() => {
-  const filtered = activeCategory.value === 'ALL' ? photos.value : photos.value.filter((p: any) => p.category === activeCategory.value)
-  return [...filtered].sort((a: any, b: any) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
+  const filtered = activeCategory.value === 'ALL' ? photos.value : photos.value.filter((p: ApiValue) => p.category === activeCategory.value)
+  return [...filtered].sort((a: ApiValue, b: ApiValue) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
 })
 
 // Lightbox
@@ -238,7 +238,7 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'ImageGallery',
     name: `${location.value?.title ?? ''} Photos`,
-    image: photos.value.slice(0, 20).map((p: any) => {
+    image: photos.value.slice(0, 20).map((p: ApiValue) => {
       const contentUrl = toAbsoluteUrl(p.thumbnail_url || p.local_url || p.google_url)
       const thumbnailUrl = toAbsoluteUrl(p.thumbnail_url || p.local_url || p.google_url)
       if (!contentUrl) return null

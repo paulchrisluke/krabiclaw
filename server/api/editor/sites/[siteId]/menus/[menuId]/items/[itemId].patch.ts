@@ -83,6 +83,19 @@ export default defineEventHandler(async (event) => {
       }, { status: 404 })
     }
 
+    if (body.image_asset_id !== undefined && body.image_asset_id !== null && body.image_asset_id !== '') {
+      const asset = await db.prepare(`
+        SELECT id
+        FROM media_assets
+        WHERE id = ? AND organization_id = ? AND site_id = ?
+        LIMIT 1
+      `).bind(body.image_asset_id, site.organization_id, siteId).first()
+
+      if (!asset) {
+        return jsonResponse({ error: 'Invalid image_asset_id' }, { status: 400 })
+      }
+    }
+
     const menuItem = await updateMenuItem(db, itemId, body, session.user.id)
     
     return jsonResponse({

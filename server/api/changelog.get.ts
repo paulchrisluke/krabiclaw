@@ -7,6 +7,12 @@ const execPromise = promisify(exec)
 const DEFAULT_COMMIT_LIMIT = 200
 const MAX_COMMIT_LIMIT = 1000
 
+interface ExecErrorLike {
+  stack?: string
+  stderr?: string
+  message?: string
+}
+
 export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
@@ -26,8 +32,9 @@ export default defineEventHandler(async (event) => {
       if (insideWorkTree.trim() !== 'true') {
         return jsonResponse({ error: 'not a git repository' }, { status: 400 })
       }
-    } catch (err: any) {
-      console.error('Failed git repository check:', err?.stack || err)
+    } catch (err) {
+      const execError = err as ExecErrorLike
+      console.error('Failed git repository check:', execError.stack ?? execError.message ?? err)
       return jsonResponse({ error: 'not a git repository' }, { status: 400 })
     }
 
@@ -43,9 +50,10 @@ export default defineEventHandler(async (event) => {
         }
       )
       gitLog = result.stdout
-    } catch (err: any) {
-      const gitError = err?.stderr || err?.message || 'git log failed'
-      console.error('Failed to execute git log:', err?.stack || err)
+    } catch (err) {
+      const execError = err as ExecErrorLike
+      const gitError = execError.stderr ?? execError.message ?? 'git log failed'
+      console.error('Failed to execute git log:', execError.stack ?? execError.message ?? err)
       return jsonResponse({ error: `Failed to generate changelog: ${String(gitError).trim()}` }, { status: 500 })
     }
 

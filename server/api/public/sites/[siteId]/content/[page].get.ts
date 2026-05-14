@@ -6,13 +6,14 @@ import { verifyPreviewToken } from '~/server/utils/preview-token'
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const page = getRouterParam(event, 'page')
-  const locationSlug = getQuery(event).location as string || undefined
+  const query = getQuery(event)
+  const locationSlug = typeof query.location === 'string' && query.location ? query.location : undefined
   
   // Initialize env first
   const env = cloudflareEnv(event)
   
-  const preview = getQuery(event).preview === 'true'
-  const previewToken = getQuery(event).token as string || undefined
+  const preview = query.preview === 'true'
+  const previewToken = typeof query.token === 'string' && query.token ? query.token : undefined
   
   let isPreviewAuthorized = false
   if (preview && previewToken) {
@@ -52,7 +53,7 @@ export default defineEventHandler(async (event) => {
       FROM sites 
       WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
       LIMIT 1
-    `).bind(siteId).first()
+    `).bind(siteId).first<{ id: string; organization_id: string; status: string; onboarding_status: string }>()
     
     if (!site) {
       return jsonResponse({ 
@@ -61,13 +62,13 @@ export default defineEventHandler(async (event) => {
     }
 
     // Find location by slug if provided
-    let locationId = null
+    let locationId: string | undefined
     if (locationSlug) {
       const location = await db.prepare(`
         SELECT id FROM business_locations 
         WHERE site_id = ? AND slug = ? AND status = 'active'
         LIMIT 1
-      `).bind(siteId, locationSlug).first()
+      `).bind(siteId, locationSlug).first<{ id: string }>()
       
       if (location) {
         locationId = location.id

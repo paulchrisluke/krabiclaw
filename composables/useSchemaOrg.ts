@@ -1,5 +1,5 @@
 // Composable for adding JSON-LD schema markup to pages
-export function useSchemaOrg(schema: Record<string, any>) {
+export function useSchemaOrg(schema: ApiRecord) {
   // Sanitize JSON to prevent script tag injection
   const sanitizedJson = JSON.stringify(schema).replace(/</g, '\\u003c')
   useHead({
@@ -66,7 +66,7 @@ export function useBreadcrumbSchema(items: Array<{ name: string; url: string }>)
   
   // Convert relative URLs to absolute
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://krabiclaw.com'
-  const itemListElement = validItems.reduce((acc: Array<Record<string, any>>, item) => {
+  const itemListElement = validItems.reduce((acc: ApiRecord[], item) => {
     try {
       const itemUrl = new URL(item.url, baseUrl).toString()
       acc.push({
@@ -92,8 +92,8 @@ export function useBreadcrumbSchema(items: Array<{ name: string; url: string }>)
   })
 }
 
-export function useArticleSchema(title: string, description: string, author: string): void
-export function useArticleSchema(title: string, description: string, publishedAt: string | undefined, author: string): void
+export function useArticleSchema(_title: string, _description: string, _author: string): void
+export function useArticleSchema(_title: string, _description: string, _publishedAt: string | undefined, _author: string): void
 export function useArticleSchema(title: string, description: string, publishedAtOrAuthor?: string, maybeAuthor?: string) {
   const publishedAt = maybeAuthor === undefined ? undefined : publishedAtOrAuthor
   const author = maybeAuthor === undefined ? publishedAtOrAuthor : maybeAuthor
@@ -124,7 +124,7 @@ export function useArticleSchema(title: string, description: string, publishedAt
     }
   }
   
-  const articleSchema: Record<string, any> = {
+  const articleSchema: ApiRecord = {
     '@context': 'https://schema.org',
     '@type': 'Article',
     headline: trimmedTitle,

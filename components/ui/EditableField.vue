@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { getFieldDef } from '~/config/content-registry'
-import type { FieldType } from '~/config/content-registry'
 import { computed } from 'vue'
 import { useEditMode } from '@/composables/useEditMode'
 import { navigateTo } from '#app'
@@ -42,8 +41,6 @@ const source = computed(() => {
   return 'manual'
 })
 
-const fieldType = computed<FieldType>(() => fieldDef.value?.type ?? 'text')
-
 const isEditable = computed(() => editMode.value && source.value === 'manual')
 const isGoogle = computed(() => editMode.value && source.value === 'google')
 
@@ -68,6 +65,7 @@ const placeholder = computed(
 </script>
 
 <template>
+  <!-- eslint-disable vue/no-v-html, vue/no-v-text-v-html-on-component -->
   <!-- ─── EDIT MODE: Google-managed overlay ─────────────────────────── -->
   <div v-if="isGoogle" class="relative inline-block w-full group">
     <component :is="tag" v-html="modelValue" />
@@ -90,7 +88,7 @@ const placeholder = computed(
     v-else-if="isEditable"
     contenteditable="true"
     :class="[
-      'outline outline-2 outline-offset-2 outline-amber-400/50 hover:outline-amber-500',
+      'outline-2 outline-offset-2 outline-amber-400/50 hover:outline-amber-500',
       'focus:outline-amber-600 focus:bg-amber-50/30 rounded transition-all',
       'min-h-[1em] cursor-text',
       props.class
@@ -110,6 +108,7 @@ const placeholder = computed(
 
   <!-- ─── NORMAL VIEW: empty value in non-edit mode → render nothing ── -->
   <!-- Nothing rendered intentionally when modelValue is empty and not in edit mode -->
+  <!-- eslint-enable vue/no-v-html, vue/no-v-text-v-html-on-component -->
 </template>
 
 <style scoped>

@@ -1,6 +1,6 @@
 // Handle Google Business OAuth callback
 import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
-import { exchangeGoogleBusinessCode, storeGoogleBusinessConnection, getGoogleBusinessAccounts, getGoogleBusinessLocations, syncGoogleLocations } from '../../../utils/google-business'
+import { exchangeGoogleBusinessCode, storeGoogleBusinessConnection } from '../../../utils/google-business'
 import { verifyOAuthState } from '../../../utils/encryption'
 
 interface CallbackRequest {
@@ -33,8 +33,7 @@ export default defineEventHandler(async (event) => {
     if (!hmacSecret) {
       return jsonResponse({ error: 'Server misconfiguration: encryption key not set' }, { status: 500 })
     }
-    let stateData: { siteId: string; organizationId: string; userId: string; locationId: string; timestamp: number } | null
-    stateData = await verifyOAuthState<{ siteId: string; organizationId: string; userId: string; locationId: string; timestamp: number }>(hmacSecret, state)
+    const stateData = await verifyOAuthState<{ siteId: string; organizationId: string; userId: string; locationId: string; timestamp: number }>(hmacSecret, state)
     if (!stateData) {
       return jsonResponse({ error: 'Invalid or tampered state parameter' }, { status: 400 })
     }

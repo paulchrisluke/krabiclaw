@@ -8,10 +8,12 @@
     />
     <UContainer class="py-12">
       <UCard class="mb-12">
+        <!-- eslint-disable vue/no-v-html -->
         <div
           v-html="sanitizedIntro"
           class="prose prose-lg max-w-none text-muted"
         />
+        <!-- eslint-enable vue/no-v-html -->
       </UCard>
 
       <div class="grid md:grid-cols-2 gap-12">

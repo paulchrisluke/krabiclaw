@@ -208,12 +208,23 @@ const toast = useToast()
 
 const loading = ref(true)
 const error = ref<string | null>(null)
-const site = ref<any>(null)
+const site = ref<ApiRecord | null>(null)
 const locations = ref<BusinessLocation[]>([])
 const locationSaving = ref(false)
-
-const primaryLocation = computed(() => locations.value.find((l: BusinessLocation) => l.is_primary) || null)
 const addressLabel = (location: BusinessLocation) => location.address?.addressLines?.join(', ') || ''
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const data = (error as Record<string, unknown>).data
+    if (data && typeof data === 'object') {
+      const message = (data as Record<string, unknown>).message
+      if (typeof message === 'string' && message) return message
+    }
+    const message = (error as Record<string, unknown>).message
+    if (typeof message === 'string' && message) return message
+  }
+  return fallback
+}
 
 const headerLinks = computed(() => [
   { label: 'Add location', icon: 'i-heroicons-plus', color: 'primary' as const, onClick: () => { showAddLocationForm.value = true } }
@@ -254,15 +265,15 @@ const handleSaveLocation = async (id: string) => {
   try {
     const response = await $fetch<{ success: boolean; location: BusinessLocation }>(
       `/api/sites/${siteId}/locations/${id}`,
-      { method: 'PATCH', body: { ...locationEditForm } } as any
+      { method: 'PATCH', body: { ...locationEditForm } }
     )
     if (!response.success) throw new Error('Failed to save location')
     const idx = locations.value.findIndex((l: BusinessLocation) => l.id === id)
     if (idx !== -1) locations.value[idx] = response.location
     expandedLocationId.value = null
     toast.add({ description: 'Location saved', color: 'success' })
-  } catch (err: any) {
-    toast.add({ description: err.data?.message || 'Failed to save location', color: 'error' })
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err instanceof Error ? err : new Error(String(err)), 'Failed to save location'), color: 'error' })
   } finally {
     locationSaving.value = false
   }
@@ -275,8 +286,8 @@ const handleDeleteLocation = async (id: string) => {
     locations.value = locations.value.filter((l: BusinessLocation) => l.id !== id)
     expandedLocationId.value = null
     toast.add({ description: 'Location deleted', color: 'neutral' })
-  } catch (err: any) {
-    toast.add({ description: err.data?.message || 'Failed to delete location', color: 'error' })
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Failed to delete location'), color: 'error' })
   } finally {
     locationSaving.value = false
   }
@@ -321,7 +332,7 @@ const doPlacesSearch = async (query: string) => {
   try {
     const response = await $fetch<{ success: boolean; results: PlaceSearchResult[] }>(
       '/api/places/search',
-      { method: 'POST', body: { query } } as any
+      { method: 'POST', body: { query } } as ApiValue
     )
     if (response.success) placesResults.value = response.results
   } catch {
@@ -335,7 +346,7 @@ const selectPlace = async (placeId: string) => {
   placesResults.value = []
   placesSearching.value = true
   try {
-    const response = await $fetch<{ success: boolean; details: any }>(`/api/places/${placeId}`)
+    const response = await $fetch<{ success: boolean; details: ApiValue }>(`/api/places/${placeId}`)
     if (!response.success) return
     const d = response.details
     addLocationForm.title = d.name || addLocationForm.title
@@ -388,14 +399,14 @@ const handleCreateLocation = async () => {
           opening_hours: addLocationForm.opening_hours ? { weekdayDescriptions: addLocationForm.opening_hours } : undefined,
           is_primary: addLocationForm.is_primary,
         }
-      } as any
+      } as ApiValue
     )
     if (!response.success) throw new Error('Failed to create location')
     locations.value.push(response.location)
     cancelAddLocation()
     toast.add({ description: 'Location added', color: 'success' })
-  } catch (err: any) {
-    toast.add({ description: err.data?.message || 'Failed to create location', color: 'error' })
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Failed to create location'), color: 'error' })
   } finally {
     locationSaving.value = false
   }
@@ -406,7 +417,7 @@ const loadLocationsWorkspace = async () => {
   error.value = null
   try {
     const [settingsResponse, locationsResponse] = await Promise.all([
-      $fetch<any>(`/api/sites/${siteId}/settings`),
+      $fetch<ApiRecord>(`/api/sites/${siteId}/settings`),
       $fetch<{ success: boolean; locations: BusinessLocation[] }>(`/api/sites/${siteId}/locations`)
     ])
     if (!settingsResponse.success) throw new Error('Failed to load site settings')

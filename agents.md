@@ -40,10 +40,31 @@ Never add fallbacks ever.
 - Single catch-all handler: `server/api/auth/[...].ts`
 - Auth factory: `server/utils/auth.ts` — `createAuth(env: CloudflareEnv)` — takes full CF env
 - WeakMap cache keyed on the D1 binding instance — safe for Worker lifecycle
-- Google OAuth (social sign-in) + `organization` plugin + `phoneNumber` plugin (WhatsApp OTP delivery)
+- Google OAuth (social sign-in) + Better Auth `admin` plugin + `organization` plugin + `phoneNumber` plugin (WhatsApp OTP delivery)
 - Account linking enabled for Google as trusted provider
 - Client: `lib/auth-client.ts` → `createAuthClient` from `better-auth/client`
 - `authClient` is auto-imported via Nuxt plugin — no explicit import needed in `<script setup>`
+- Platform admin access uses Better Auth `user.role = 'admin'`; org/site access uses Better Auth organization `member.role`
+- Platform admin emails configured via secure config or PLATFORM_ADMIN_EMAILS env var
+- Admin support impersonation uses `authClient.admin.impersonateUser({ userId })`; dashboard must show the impersonation banner and `authClient.admin.stopImpersonating()`
+
+## Local Login & Browser Testing
+
+- Start local app with `yarn dev`; it normally serves `http://localhost:3000`, but Nuxt may choose `3001` if `3000` is already occupied
+- Dev-only login endpoint: `http://localhost:<port>/api/dev/login`
+  - Only works in `import.meta.dev`
+  - Creates a Better Auth session for the first local D1 user
+  - Redirects to `/dashboard`
+- The Google refresh token in `.env` is for Google Business/Profile API access, not browser login
+- Existing Playwright helper scripts:
+  - `node scripts/bugcheck-setup.mjs` hits `/api/dev/login` and saves `scripts/.auth-state.json`
+  - `node scripts/bugcheck.mjs` reuses that saved state for dashboard crawling
+  - These scripts assume port `3000`; if Nuxt moved to `3001`, either free port `3000` or adjust the script before running
+- To test `/admin` locally, the local D1 user must have `user.role = 'admin'`
+  - Check: `npx wrangler d1 execute REVIEWS_DB --local --command "SELECT email, role FROM user;"`
+  - WARNING: Replace admin@example.com with your intended address before running to avoid accidentally granting admin privileges
+  - Promote local user: `npx wrangler d1 execute REVIEWS_DB --local --command "UPDATE user SET role = 'admin' WHERE lower(email) = 'admin@example.com';"`
+- To test client/owner view, use a non-admin email/user so the `/admin` route redirects away and the dashboard behaves like a normal restaurant owner
 
 ---
 

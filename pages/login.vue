@@ -88,7 +88,7 @@ const handleGoogleSignIn = async () => {
   error.value = null
   try {
     await authClient.signIn.social({ provider: 'google', callbackURL: '/dashboard' })
-  } catch (err) {
+  } catch {
     error.value = 'Google sign in failed. Please try again.'
   } finally {
     loading.value = false
@@ -115,7 +115,7 @@ const handleSendOtp = async () => {
   try {
     await authClient.phoneNumber.sendOtp({ phoneNumber: phone.value.trim() })
     otpStep.value = 'code'
-  } catch (err) {
+  } catch {
     error.value = err?.message ?? 'Failed to send code. Check your number and try again.'
   } finally {
     loading.value = false
@@ -133,7 +133,7 @@ const handleVerifyOtp = async () => {
       callbackURL: '/dashboard',
     })
     router.push('/dashboard')
-  } catch (err) {
+  } catch {
     error.value = err?.message ?? 'Invalid or expired code. Please try again.'
     code.value = ''
   } finally {

@@ -9,7 +9,7 @@ type PendingChanges = Record<string, string>
 export const useEditMode = (siteId?: string, locationId?: string | null) => {
   const route = useRoute()
   const { addToast } = useAppToast()
-  const { currentLocationId, setScope } = useEditorContext(siteId)
+  const { currentLocationId } = useEditorContext(siteId)
 
   const editMode = computed(() => route.query.edit === 'true')
   const hasChanges = ref(false)

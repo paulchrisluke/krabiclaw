@@ -1,6 +1,7 @@
 <template>
   <div class="min-h-screen bg-muted">
     <slot />
+    <SayaUpgradeModal />
   </div>
 </template>
 

@@ -53,7 +53,7 @@ export default defineEventHandler(async (event) => {
     WHERE organization_id = ? AND site_id = ? AND status = 'active'
     ORDER BY is_primary DESC, created_at ASC
     LIMIT 1
-  `).bind(membership.id, site.id).first() as any
+  `).bind(membership.id, site.id).first() as ApiValue
 
   if (!location) {
     return {

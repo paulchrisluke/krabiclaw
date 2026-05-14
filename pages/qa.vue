@@ -36,15 +36,6 @@ const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/goo
 
 const googleQA = computed(() => googleBusiness.value?.qa || [])
 
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
-}
-
 // SEO Meta
 useSeoMeta({
   title: 'Q&A | Your Restaurant | Customer Questions',

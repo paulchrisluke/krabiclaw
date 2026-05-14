@@ -6,7 +6,7 @@
  */
 
 import { chromium } from '@playwright/test'
-import { writeFileSync, mkdirSync } from 'fs'
+import { mkdirSync } from 'fs'
 
 const BASE = 'http://localhost:3000'
 const STATE_FILE = './scripts/.auth-state.json'

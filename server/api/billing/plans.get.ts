@@ -170,7 +170,7 @@ function parseLimits(metadata: Record<string, string>): Partial<PlanLimits> {
   }
 }
 
-function isMarketingFeatureArray(value: unknown): value is MarketingFeature[] {
+function isMarketingFeatureArray(value: ApiValue): value is MarketingFeature[] {
   return Array.isArray(value)
     && value.every(item => typeof item === 'object' && item !== null && typeof (item as MarketingFeature).name === 'string')
 }
@@ -217,7 +217,7 @@ async function fetchStripeProducts(env: Record<string, string | undefined>): Pro
     if (!planId || planId === 'free') continue
 
     const staticFallback = STATIC_PLANS.find(p => p.id === planId)
-    const productWithMarketing = product as Stripe.Product & { marketing_features?: unknown }
+    const productWithMarketing = product as Stripe.Product & { marketing_features?: ApiValue }
     const features = isMarketingFeatureArray(productWithMarketing.marketing_features)
       ? productWithMarketing.marketing_features.map(f => f.name)
       : (staticFallback?.features ?? [])

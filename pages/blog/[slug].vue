@@ -71,6 +71,7 @@
         <div class="h-64 bg-muted rounded-2xl mb-10" aria-hidden="true" />
 
         <!-- Body -->
+        <!-- eslint-disable vue/no-v-html -->
         <div
           class="prose prose-lg dark:prose-invert max-w-none
                  prose-headings:font-bold prose-headings:text-default
@@ -82,6 +83,7 @@
                  prose-blockquote:border-l-(--kc-teal) prose-blockquote:text-muted"
           v-html="renderedBody"
         />
+        <!-- eslint-enable vue/no-v-html -->
 
         <!-- Bottom author card -->
         <div class="mt-16 pt-8 border-t border-default flex items-center justify-between gap-6">
@@ -138,7 +140,7 @@ const { data, pending, error } = await useAsyncData(
   () => `blog-post-${postEndpoint.value}`,
   () => $fetch(postEndpoint.value),
   {
-    transform: (payload: any) => {
+    transform: (payload: ApiValue) => {
       const rawPost = payload?.post
       if (!rawPost) return payload
       const authorSubtitle = rawPost.author_subtitle || rawPost.author_bio || rawPost.author?.bio || ''
@@ -153,7 +155,7 @@ const { data, pending, error } = await useAsyncData(
   }
 )
 
-const post = computed(() => (data.value as any)?.post ?? null)
+const post = computed(() => (data.value as ApiValue)?.post ?? null)
 
 const authorSubtitle = computed(() => post.value?.author_subtitle || '')
 

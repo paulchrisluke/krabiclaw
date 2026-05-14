@@ -17,7 +17,7 @@ export interface SiteContent {
 }
 
 export const useScopedContent = (siteId: string, page: string, locationId?: string | null) => {
-  const { context, currentLocationId, currentLocation } = useEditorContext(siteId)
+  const { currentLocationId } = useEditorContext(siteId)
   const content = ref<SiteContent[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)

@@ -65,7 +65,7 @@ onMounted(() => {
       await $fetch('/api/site-status')
       // If successful, redirect to homepage
       await navigateTo('/')
-    } catch (error) {
+    } catch {
       // Still setting up, continue checking
     }
   }, 5000)

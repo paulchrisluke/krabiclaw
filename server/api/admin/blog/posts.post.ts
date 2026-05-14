@@ -13,8 +13,8 @@ function randomSlugSuffix(): string {
   return Math.random().toString(36).slice(2, 8)
 }
 
-function isSlugUniqueConstraintError(err: unknown): boolean {
-  const message = String((err as any)?.message || err || '')
+function isSlugUniqueConstraintError(err: ApiValue): boolean {
+  const message = String((err as ApiValue)?.message || err || '')
   return message.includes('platform_blog_posts.slug') || message.includes('UNIQUE constraint failed')
 }
 
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformOwner(session.user.email)) {
+  if (!isPlatformOwner(session.user.email, env)) {
     return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
   }
 

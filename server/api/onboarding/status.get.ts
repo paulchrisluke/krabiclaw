@@ -57,7 +57,7 @@ export default defineEventHandler(async (event) => {
     const sites = sitesResult.results || []
     
     // Check if any site is active
-    const activeSite = sites.find((site: any) => site.onboarding_status === 'active')
+    const activeSite = sites.find((site: ApiValue) => site.onboarding_status === 'active')
     
     return jsonResponse({
       needsOnboarding: !activeSite,

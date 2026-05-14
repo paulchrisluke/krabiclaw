@@ -1,91 +1,41 @@
 <template>
-  <UModal v-model:open="isOpen" :ui="{ content: 'max-w-lg' }">
+  <UModal v-model:open="isOpen" :ui="{ content: 'max-w-md' }">
     <template #content>
-      <div class="p-8">
-        <div class="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <p class="saya-eyebrow mb-3 text-muted">Upgrade required</p>
-            <h2 class="saya-display saya-italic text-3xl text-default leading-tight">
-              {{ featureTitle }}
-            </h2>
+      <div class="p-5">
+        <div class="mb-4 flex items-start justify-between gap-4">
+          <div class="flex min-w-0 items-start gap-3">
+            <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <UIcon name="i-heroicons-sparkles" class="size-5" />
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted">Pro feature</p>
+              <h2 class="mt-1 text-lg font-semibold text-highlighted">
+                {{ featureTitle }}
+              </h2>
+            </div>
           </div>
-          <button
-            class="flex size-8 shrink-0 items-center justify-center rounded-full hover:bg-muted transition-colors"
+          <UButton
+            icon="i-heroicons-x-mark"
+            color="neutral"
+            variant="ghost"
+            size="sm"
             aria-label="Close modal"
             @click="close"
-          >
-            <UIcon name="i-heroicons-x-mark" class="size-4 text-muted" />
-          </button>
+          />
         </div>
 
-        <p class="text-sm leading-relaxed text-muted mb-8">{{ featureDescription }}</p>
+        <p class="text-sm leading-relaxed text-muted">{{ featureDescription }}</p>
 
-        <!-- Plan comparison -->
-        <div class="grid grid-cols-2 gap-3 mb-8">
-          <div class="rounded-2xl border border-default bg-elevated p-4">
-            <p class="saya-eyebrow mb-3 text-muted">Free</p>
-            <ul class="space-y-2 text-sm text-muted">
-              <li class="flex items-center gap-2">
-                <UIcon name="i-heroicons-check" class="size-3.5 shrink-0 text-default" />
-                Saya website theme
-              </li>
-              <li class="flex items-center gap-2">
-                <UIcon name="i-heroicons-check" class="size-3.5 shrink-0 text-default" />
-                Subdomain hosting
-              </li>
-              <li class="flex items-center gap-2">
-                <UIcon name="i-heroicons-check" class="size-3.5 shrink-0 text-default" />
-                Manual editor
-              </li>
-              <li class="flex items-center gap-2 opacity-40">
-                <UIcon name="i-heroicons-x-mark" class="size-3.5 shrink-0" />
-                {{ featureTitle }}
-              </li>
-            </ul>
-          </div>
-          <div class="rounded-2xl border-2 border-primary bg-elevated p-4">
-            <div class="mb-3 flex items-center justify-between">
-              <p class="saya-eyebrow text-primary">Pro · {{ proPrice }}/mo</p>
-              <UBadge color="primary" size="xs">Recommended</UBadge>
-            </div>
-            <ul class="space-y-2 text-sm text-default">
-              <li class="flex items-center gap-2">
-                <UIcon name="i-heroicons-check" class="size-3.5 shrink-0 text-primary" />
-                Everything in Free
-              </li>
-              <li class="flex items-center gap-2">
-                <UIcon name="i-heroicons-check" class="size-3.5 shrink-0 text-primary" />
-                Custom domain
-              </li>
-              <li class="flex items-center gap-2">
-                <UIcon name="i-heroicons-check" class="size-3.5 shrink-0 text-primary" />
-                Google Business sync
-              </li>
-              <li class="flex items-center gap-2">
-                <UIcon name="i-heroicons-check" class="size-3.5 shrink-0 text-primary" />
-                {{ featureTitle }}
-              </li>
-            </ul>
-          </div>
-        </div>
+        <ul class="mt-5 space-y-2 text-sm text-default">
+          <li v-for="item in featureBullets" :key="item" class="flex gap-2">
+            <UIcon name="i-heroicons-check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
+            <span>{{ item }}</span>
+          </li>
+        </ul>
 
-        <div class="flex gap-3">
-          <UButton
-            to="/signup?plan=pro"
-            color="neutral"
-            variant="solid"
-            block
-            class="rounded-full"
-          >
-            Upgrade to Pro
-          </UButton>
-          <UButton
-            color="neutral"
-            variant="outline"
-            class="rounded-full shrink-0"
-            @click="close"
-          >
-            Not now
+        <div class="mt-6">
+          <UButton to="/dashboard/billing" color="primary" block @click="close">
+            Get Pro
           </UButton>
         </div>
       </div>
@@ -94,14 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { usePlans } from '~/composables/usePlans'
-
 const { isOpen, feature, close } = useUpgradeModal()
-const { proPlan, monthlyPrice, formatPrice } = usePlans()
-const proPrice = computed(() => {
-  const cents = proPlan.value ? monthlyPrice(proPlan.value) : null
-  return cents ? formatPrice(cents) : '$29'
-})
 
 const featureMap: Record<string, { title: string; description: string }> = {
   'qa-writeback': {
@@ -120,6 +63,10 @@ const featureMap: Record<string, { title: string; description: string }> = {
     title: 'Connect Google Business',
     description: 'Sync hours, reviews, photos, and posts automatically from your Google Business Profile. Included in Pro.'
   },
+  'google-business-sync': {
+    title: 'Google Business sync',
+    description: 'Auto-sync Google Business fields while keeping manual edits available in the site editor. Included in Pro.'
+  },
   'remove-branding': {
     title: 'Remove KrabiClaw branding',
     description: 'Remove the "Powered by krabiclaw.com" footer strip from your tenant site. Included in Pro.'
@@ -130,4 +77,25 @@ const featureTitle = computed(() => featureMap[feature.value]?.title ?? 'Pro fea
 const featureDescription = computed(
   () => featureMap[feature.value]?.description ?? 'This feature is available on the Pro plan.'
 )
+const featureBullets = computed(() => {
+  if (feature.value === 'google-business-sync' || feature.value === 'connect-gmb') {
+    return [
+      'Auto-fill Google Business fields when connected',
+      'Keep manual edits available in the content editor',
+      'Sync business details, hours, photos, reviews, and posts'
+    ]
+  }
+  if (feature.value === 'custom-domain') {
+    return [
+      'Connect your own domain',
+      'Use managed HTTPS certificates',
+      'Keep your krabiclaw.com subdomain available'
+    ]
+  }
+  return [
+    'Unlock this Pro workflow',
+    'Manage it from the dashboard',
+    'Keep the rest of your current site setup'
+  ]
+})
 </script>

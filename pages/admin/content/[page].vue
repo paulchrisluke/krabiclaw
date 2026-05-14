@@ -31,7 +31,7 @@ definePageMeta({ layout: 'default' })
 const route = useRoute()
 const page = route.params.page
 
-const session = await useAuth()
+await useAuth()
 const content = ref('')
 const loading = ref(true)
 const error = ref('')

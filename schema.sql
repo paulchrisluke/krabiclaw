@@ -1,4 +1,4 @@
--- KrabiClaw canonical D1 schema.
+-- KrabiClaw canonical D1 schema. v2 (media assets + domain overhaul).
 -- Edit this file directly when the database shape changes.
 
 PRAGMA foreign_keys = ON;
@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS user (
   image TEXT,
   phoneNumber TEXT UNIQUE,
   phoneNumberVerified INTEGER NOT NULL DEFAULT 0,
+  role TEXT DEFAULT 'user',
+  banned INTEGER DEFAULT 0,
+  banReason TEXT,
+  banExpires TEXT,
   createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -29,6 +33,7 @@ CREATE TABLE IF NOT EXISTS session (
   userAgent TEXT,
   activeOrganizationId TEXT,
   activeTeamId TEXT,
+  impersonatedBy TEXT,
   userId TEXT NOT NULL,
   FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE
 );
@@ -146,18 +151,76 @@ CREATE TABLE IF NOT EXISTS site_domains (
   site_id TEXT NOT NULL,
   domain TEXT UNIQUE NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('subdomain', 'custom')),
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'verifying', 'active', 'verification_required', 'failed', 'disabled')),
-  verification_token TEXT,
-  verification_method TEXT,
-  ssl_status TEXT DEFAULT 'pending',
-  last_checked_at TEXT,
-  verified_at TEXT,
+  role TEXT NOT NULL DEFAULT 'secondary' CHECK (role IN ('canonical', 'secondary')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'verifying', 'active', 'blocked', 'failed', 'disabled', 'deleted')),
+  cloudflare_hostname_id TEXT UNIQUE,
+  cloudflare_hostname_status TEXT,
+  cloudflare_ssl_status TEXT,
+  ownership_validation_name TEXT,
+  ownership_validation_type TEXT,
+  ownership_validation_value TEXT,
+  ssl_validation_name TEXT,
+  ssl_validation_type TEXT,
+  ssl_validation_value TEXT,
+  dns_target TEXT,
+  dns_status TEXT NOT NULL DEFAULT 'pending' CHECK (dns_status IN ('pending', 'valid', 'invalid', 'unknown')),
+  last_synced_at TEXT,
+  next_check_at TEXT,
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  activated_at TEXT,
   error_message TEXT,
+  metadata TEXT,
   created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_site_domains_one_canonical
+  ON site_domains(site_id)
+  WHERE role = 'canonical' AND status = 'active';
+
+CREATE INDEX IF NOT EXISTS idx_site_domains_reconcile
+  ON site_domains(status, next_check_at);
+
+CREATE TABLE IF NOT EXISTS site_domain_events (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  domain_id TEXT,
+  event_type TEXT NOT NULL,
+  actor_type TEXT NOT NULL DEFAULT 'system' CHECK (actor_type IN ('owner', 'admin', 'system', 'cloudflare')),
+  actor_id TEXT,
+  message TEXT,
+  before_state TEXT,
+  after_state TEXT,
+  metadata TEXT,
+  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (domain_id) REFERENCES site_domains(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_domain_events_domain
+  ON site_domain_events(domain_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_site_domain_events_site
+  ON site_domain_events(site_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS domain_reconciliation_jobs (
+  id TEXT PRIMARY KEY,
+  domain_id TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
+  run_after TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (domain_id) REFERENCES site_domains(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_domain_reconciliation_jobs_due
+  ON domain_reconciliation_jobs(status, run_after);
 
 --------------------------------------------------------------------------------
 -- Business Locations and Google Business
@@ -201,7 +264,6 @@ CREATE TABLE IF NOT EXISTS business_locations (
   address TEXT,
   city TEXT,
   phone TEXT,
-  image_url TEXT,
   website_url TEXT,
   maps_url TEXT,
   latitude REAL,
@@ -215,7 +277,6 @@ CREATE TABLE IF NOT EXISTS business_locations (
   last_synced_at TEXT,
   description TEXT,
   short_description TEXT,
-  hero_video_url TEXT,
   special_hours TEXT,
   price_level TEXT,
   attributes TEXT,
@@ -224,11 +285,15 @@ CREATE TABLE IF NOT EXISTS business_locations (
   instagram_url TEXT,
   tiktok_url TEXT,
   google_place_id TEXT,
+  hero_image_asset_id TEXT,
+  hero_video_asset_id TEXT,
   created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
   FOREIGN KEY (google_connection_id) REFERENCES google_business_connections(id) ON DELETE SET NULL,
+  FOREIGN KEY (hero_image_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL,
+  FOREIGN KEY (hero_video_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL,
   UNIQUE(organization_id, site_id, slug)
 );
 
@@ -261,7 +326,8 @@ CREATE TABLE IF NOT EXISTS site_content (
   content TEXT,
   hero_title TEXT,
   hero_subtitle TEXT,
-  hero_video_url TEXT,
+  hero_image_asset_id TEXT,
+  hero_video_asset_id TEXT,
   value TEXT,
   type TEXT NOT NULL DEFAULT 'text',
   source TEXT NOT NULL DEFAULT 'manual',
@@ -270,6 +336,8 @@ CREATE TABLE IF NOT EXISTS site_content (
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE,
+  FOREIGN KEY (hero_image_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL,
+  FOREIGN KEY (hero_video_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL,
   UNIQUE(organization_id, site_id, location_id, page, field)
 );
 
@@ -287,7 +355,8 @@ CREATE TABLE IF NOT EXISTS site_content_drafts (
   content TEXT,
   hero_title TEXT,
   hero_subtitle TEXT,
-  hero_video_url TEXT,
+  hero_image_asset_id TEXT,
+  hero_video_asset_id TEXT,
   value TEXT,
   type TEXT NOT NULL DEFAULT 'text',
   source TEXT NOT NULL DEFAULT 'manual',
@@ -296,6 +365,8 @@ CREATE TABLE IF NOT EXISTS site_content_drafts (
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE,
+  FOREIGN KEY (hero_image_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL,
+  FOREIGN KEY (hero_video_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL,
   UNIQUE(organization_id, site_id, location_id, page, field)
 );
 
@@ -314,6 +385,55 @@ CREATE TABLE IF NOT EXISTS site_config (
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
 );
 
+
+--------------------------------------------------------------------------------
+-- Media Assets
+--------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS media_assets (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  location_id TEXT,
+  kind TEXT NOT NULL CHECK (kind IN ('image', 'video', 'file')),
+  provider TEXT NOT NULL CHECK (provider IN ('cloudflare_images', 'cloudflare_r2', 'google_business', 'external_url', 'chowbot')),
+  source TEXT NOT NULL CHECK (source IN ('uploaded', 'google_sync', 'generated', 'external')),
+
+  -- Provider-specific identifiers
+  cloudflare_image_id TEXT,
+  r2_key TEXT,
+  google_media_name TEXT,
+
+  -- URLs
+  public_url TEXT,
+  thumbnail_url TEXT,
+
+  -- Metadata
+  mime_type TEXT,
+  file_name TEXT,
+  file_size INTEGER,
+  width INTEGER,
+  height INTEGER,
+  duration INTEGER,
+  alt_text TEXT,
+
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('pending', 'active', 'deleted', 'failed')),
+  created_by_user_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by_user_id) REFERENCES user(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_assets_site
+  ON media_assets(site_id, status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_media_assets_location
+  ON media_assets(location_id, status, created_at DESC)
+  WHERE location_id IS NOT NULL;
 
 --------------------------------------------------------------------------------
 -- Menus and Reviews
@@ -344,14 +464,15 @@ CREATE TABLE IF NOT EXISTS menu_items (
   slug TEXT NOT NULL DEFAULT '',
   description TEXT,
   price TEXT,
-  image_url TEXT,
+  image_asset_id TEXT,
   available BOOLEAN NOT NULL DEFAULT true,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   created_by TEXT,
   updated_by TEXT,
-  FOREIGN KEY (menu_id) REFERENCES menus(id) ON DELETE CASCADE
+  FOREIGN KEY (menu_id) REFERENCES menus(id) ON DELETE CASCADE,
+  FOREIGN KEY (image_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_menu_items_menu_slug
@@ -459,7 +580,7 @@ CREATE TABLE IF NOT EXISTS posts (
     CHECK (post_type IN ('standard','offer','event','update')),
   title TEXT,
   body TEXT NOT NULL,
-  image_url TEXT,
+  image_asset_id TEXT,
   cta_type TEXT,                    -- BOOK | ORDER | SHOP | LEARN_MORE | SIGN_UP | CALL
   cta_url TEXT,
   event_title TEXT,
@@ -474,7 +595,8 @@ CREATE TABLE IF NOT EXISTS posts (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
-  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (image_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_google_id
@@ -550,12 +672,15 @@ CREATE TABLE IF NOT EXISTS notifications (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
   site_id TEXT,
-  channel TEXT NOT NULL DEFAULT 'whatsapp',
+  channel TEXT NOT NULL DEFAULT 'dashboard' CHECK (channel IN ('dashboard', 'email', 'whatsapp')),
   template TEXT NOT NULL,
+  recipient TEXT,
+  title TEXT,
   payload TEXT,                     -- JSON: template variable values
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed')),
-  provider_message_id TEXT,         -- WhatsApp message_id for debugging
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed', 'read')),
+  provider_message_id TEXT,         -- Provider message id for debugging
   error TEXT,
+  read_at TEXT,
   sent_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
@@ -617,35 +742,10 @@ ON CONFLICT(id) DO UPDATE SET
   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
 
 --------------------------------------------------------------------------------
--- Location Photos & Q&A
+-- Location Q&A
 --------------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS location_photos (
-  id TEXT PRIMARY KEY,
-  organization_id TEXT NOT NULL,
-  site_id TEXT NOT NULL,
-  location_id TEXT NOT NULL,
-  google_media_name TEXT,
-  google_url TEXT,
-  thumbnail_url TEXT,
-  local_url TEXT,
-  category TEXT NOT NULL DEFAULT 'GENERAL'
-    CHECK (category IN ('EXTERIOR','INTERIOR','FOOD','MENU','TEAM','ADDITIONAL','GENERAL')),
-  description TEXT,
-  source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('gmb','manual')),
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
-  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
-  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_location_photos_google_name
-  ON location_photos(google_media_name) WHERE google_media_name IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_location_photos_location
-  ON location_photos(location_id, category, sort_order);
+DROP TABLE IF EXISTS location_photos;
 
 CREATE TABLE IF NOT EXISTS location_qa (
   id TEXT PRIMARY KEY,

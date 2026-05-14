@@ -125,11 +125,13 @@
                 />
               </div>
               <!-- Message text (empty while tools are still running) -->
+              <!-- eslint-disable vue/no-v-html -->
               <div
                 v-if="msg.content"
                 class="prose prose-sm dark:prose-invert max-w-none"
                 v-html="renderMarkdown(msg.content)"
               />
+              <!-- eslint-enable vue/no-v-html -->
             </template>
           </UChatMessage>
         </UChatMessages>
@@ -196,7 +198,12 @@ import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
 
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages } = useChowBot()
-const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId) as any
+const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message
+  return fallback
+}
 
 watch(isOpen, (open: boolean) => { if (open && siteId.value) fetchCredits() })
 
@@ -230,11 +237,11 @@ async function purchaseCredits(bundle: 500 | 2500 | 5000) {
       }
     }
     if (res.balance !== undefined) await fetchCredits()
-  } catch (err: any) {
+  } catch (err) {
     console.error('[ChowBot] purchaseCredits failed:', err)
     messages.value = [...messages.value, {
       role: 'assistant',
-      content: err?.message || 'Credit purchase failed. Please try again.',
+      content: getErrorMessage(err, 'Credit purchase failed. Please try again.'),
       error: true,
     }]
   } finally {
@@ -324,7 +331,7 @@ const processFile = async (file: File, caption = '') => {
     formData.append('file', file)
     if (caption) formData.append('menuName', caption)
 
-    let json: any = null
+    let json: ApiValue = null
     let httpOk = false
     let httpStatus = 0
     try {
@@ -332,7 +339,7 @@ const processFile = async (file: File, caption = '') => {
       httpOk = raw.ok
       httpStatus = raw.status
       json = await raw.json().catch(() => null)
-    } catch (networkErr: any) {
+    } catch (networkErr) {
       // Connection dropped (e.g. server crash) — make the error visible
       console.error('[ChowBot] menu extract network error:', networkErr)
       throw new Error('Connection lost during upload. Please try again.')
@@ -344,7 +351,7 @@ const processFile = async (file: File, caption = '') => {
       throw new Error(tip)
     }
 
-    const res: { success: boolean; menuId: string; menuItems: any[]; warning: string | null } = json
+    const res: { success: boolean; menuId: string; menuItems: ApiRecord[]; warning: string | null } = json
 
     const count = res.menuItems?.length ?? 0
     const msg = count > 0
@@ -353,11 +360,12 @@ const processFile = async (file: File, caption = '') => {
 
     messages.value = [...messages.value, { role: 'assistant', content: msg }]
     if (count > 0) await navigateTo(`/dashboard/sites/${siteId.value}/menu`)
-  } catch (err: any) {
-    console.error('[ChowBot] processFile failed:', err)
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err))
+    console.error('[ChowBot] processFile failed:', error.message)
     messages.value = [...messages.value, {
       role: 'assistant',
-      content: err?.message ?? 'Menu extraction failed. Please try again.',
+      content: error.message || 'Menu extraction failed. Please try again.',
       error: true,
     }]
   } finally {
@@ -387,9 +395,9 @@ const toolLabel = (name: string): string => {
     rename_menu: 'Renaming menu…',
     get_reviews: 'Fetching reviews…',
     reply_to_review: 'Saving reply…',
-    get_location_photos: 'Fetching photos…',
-    add_location_photo: 'Adding photo…',
-    delete_location_photo: 'Deleting photo…',
+    get_location_media: 'Fetching media…',
+    delete_media_asset: 'Deleting media…',
+    generate_image: 'Generating image with AI…',
     get_location_qa: 'Fetching Q&A…',
     add_qa: 'Adding Q&A…',
     delete_qa: 'Deleting Q&A…',

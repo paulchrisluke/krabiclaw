@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
       JOIN member m ON o.id = m.organizationId
       WHERE m.userId = ?
       LIMIT 1
-    `).bind(session.user.id).first()
+    `).bind(session.user.id).first<{ id: string }>()
     
     if (!userOrg) {
       return jsonResponse({ error: 'No organization found' }, { status: 404 })

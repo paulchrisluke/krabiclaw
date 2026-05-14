@@ -29,14 +29,14 @@ export default defineEventHandler(async (event) => {
     ) = 1
   `).bind(userId).all() as { results?: Array<{ id: string }> } | null
 
-  const soleOwnedOrgIds: string[] = (ownedOrgsResult?.results ?? []).map((r: any) => r.id)
+  const soleOwnedOrgIds: string[] = (ownedOrgsResult?.results ?? []).map((r: ApiValue) => r.id)
 
   // Find all org memberships for cleanup
   const allMemberships = await db.prepare(`
     SELECT DISTINCT organizationId FROM member WHERE userId = ?
   `).bind(userId).all() as { results?: Array<{ organizationId: string }> } | null
 
-  const allOrgIds: string[] = (allMemberships?.results ?? []).map((r: any) => r.organizationId)
+  const allOrgIds: string[] = (allMemberships?.results ?? []).map((r: ApiValue) => r.organizationId)
 
   // Single query: block deletion if any org has an active subscription
   if (allOrgIds.length > 0) {

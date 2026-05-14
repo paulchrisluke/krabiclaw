@@ -13,7 +13,6 @@ export default defineEventHandler(async (event) => {
 
   // Get site context from middleware
   const siteId = event.context.siteId
-  const onboardingStatus = event.context.onboardingStatus
 
   if (!siteId) {
     return jsonResponse({ 

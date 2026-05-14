@@ -26,7 +26,7 @@ export interface EditorContext {
     status: string
   }>
   scopes: EditorScope[]
-  contentRegistry?: Record<string, any>
+  contentRegistry?: ApiRecord
 }
 
 export const useEditorContext = (siteId?: string) => {
@@ -35,7 +35,7 @@ export const useEditorContext = (siteId?: string) => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const currentScope = ref<EditorScope | null>(null)
-  const tenant = ref<any>(null)
+  const tenant = ref<ApiRecord | null>(null)
 
   // Get siteId from tenant if not provided
   const effectiveSiteId = computed(() => siteId || tenant.value?.siteId)

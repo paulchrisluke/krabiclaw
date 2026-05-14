@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
         om.role = 'owner' OR om.role = 'admin' OR om.role = 'editor'
       )
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
+    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; name: string; status: string; onboarding_status: string | null }>()
     
     if (!site) {
       return jsonResponse({ 

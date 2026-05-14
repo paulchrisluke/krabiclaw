@@ -3,9 +3,10 @@
     <div class="aspect-square w-full overflow-hidden rounded-2xl bg-elevated relative">
 
       <!-- Video support -->
+
       <video
         v-if="isVideo"
-        :src="item.image_url"
+        :src="mediaUrl"
         :poster="item.poster"
         autoplay
         muted
@@ -18,8 +19,8 @@
 
       <!-- Image -->
       <img
-        v-else-if="item.image_url"
-        :src="item.image_url"
+        v-else-if="mediaUrl"
+        :src="mediaUrl"
         :alt="item.name"
         class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
       />
@@ -56,7 +57,8 @@
 interface MenuItem {
   slug: string
   name: string
-  image_url?: string
+  image_asset_id?: string | null
+  image_url?: string // joined asset URL from backend, for compatibility
   poster?: string
   price?: string
   available?: boolean
@@ -65,16 +67,23 @@ interface MenuItem {
 
 const props = defineProps<{
   item: MenuItem
+  resolveAssetUrl?: (_assetId: string) => string
 }>()
 
+const mediaUrl = computed(() => {
+  if (props.item.image_url) return props.item.image_url
+  if (props.item.image_asset_id && props.resolveAssetUrl) {
+    return props.resolveAssetUrl(props.item.image_asset_id)
+  }
+  return ''
+})
+
 const isVideo = computed(() => {
-  const url = props.item?.image_url || ''
-  // Only check for video file extensions, not generic 'video' in URL
+  const url = mediaUrl.value
   return /\.(mp4|webm|mov)$/i.test(url)
 })
 
 const handleVideoError = () => {
-  // Handle video loading errors - could emit event or show fallback
-  console.warn('[MenuItemCard] Video failed to load:', props.item?.image_url)
+  console.warn('[MenuItemCard] Video failed to load:', mediaUrl.value)
 }
 </script>

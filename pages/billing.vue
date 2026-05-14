@@ -122,8 +122,9 @@ async function selectPlan(plan: string) {
     if (res.checkoutUrl) {
       window.location.href = res.checkoutUrl
     }
-  } catch (error: any) {
-    alert(error.data?.message || 'Failed to initiate checkout')
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : (error && typeof error === 'object' && 'data' in error && typeof error.data === 'object' && error.data && 'message' in error.data && typeof error.data.message === 'string') ? error.data.message : 'Failed to initiate checkout'
+    alert(errorMessage)
   }
 }
 

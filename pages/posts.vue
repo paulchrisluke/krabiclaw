@@ -39,15 +39,6 @@ const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/goo
 
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
 
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
-}
-
 // SEO Meta
 useSeoMeta({
   title: 'Posts | Restaurant Website | Business Updates',

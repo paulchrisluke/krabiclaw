@@ -3,7 +3,7 @@
 
 export interface AiMessage {
   role: 'user' | 'assistant'
-  content: string | any[]
+  content: string | ApiRecord[]
 }
 
 export interface AiContentBlock {
@@ -21,7 +21,7 @@ export interface AiTool {
   description: string
   input_schema: {
     type: 'object'
-    properties: Record<string, any>
+    properties: ApiRecord
     required?: string[]
   }
 }
@@ -36,7 +36,7 @@ export interface AiGatewayOptions {
 }
 
 export interface AiGatewayResponse {
-  content: Array<{ type: string; text?: string; id?: string; name?: string; input?: any }>
+  content: Array<{ type: string; text?: string; id?: string; name?: string; input?: ApiValue }>
   stop_reason: string
   usage: {
     input_tokens: number
@@ -47,7 +47,7 @@ export interface AiGatewayResponse {
 }
 
 export async function callAiGateway(
-  env: Record<string, any>,
+  env: ApiRecord,
   messages: AiMessage[],
   opts: AiGatewayOptions = {}
 ): Promise<AiGatewayResponse> {
@@ -72,7 +72,7 @@ export async function callAiGateway(
     headers['cf-aig-metadata'] = JSON.stringify(opts.metadata)
   }
 
-  const body: Record<string, unknown> = {
+  const body: ApiRecord = {
     model,
     max_tokens: opts.maxTokens ?? 4096,
     messages,
@@ -97,7 +97,7 @@ export async function callAiGateway(
     throw new Error(`AI Gateway error ${response.status}: ${errorText}`)
   }
 
-  const data = await response.json() as any
+  const data = await response.json() as ApiValue
   const cfLogId = response.headers.get('cf-aig-log-id')
 
   return {
@@ -128,7 +128,7 @@ export function textBlock(text: string): AiContentBlock {
 }
 
 /** Build a PDF document block (Claude supports PDFs up to 32 MB decoded) */
-export function documentBlock(base64Data: string): any {
+export function documentBlock(base64Data: string): ApiValue {
   return {
     type: 'document',
     source: { type: 'base64', media_type: 'application/pdf', data: base64Data },

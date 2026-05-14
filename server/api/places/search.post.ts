@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Places API not configured' }, { status: 503 })
   }
 
-  const body = await readBody(event) as { query?: unknown }
+  const body = await readBody(event) as { query?: ApiValue }
   const query = typeof body?.query === 'string' ? body.query.trim() : ''
   if (!query || query.length < 2) {
     return jsonResponse({ error: 'query must be at least 2 characters' }, { status: 400 })

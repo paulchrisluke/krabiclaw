@@ -38,7 +38,7 @@
           </span>
         </div>
         
-        <blockquote class="flex-grow">
+        <blockquote class="grow">
           <p class="text-default leading-relaxed italic text-sm">
             "{{ reviewText(review) }}"
           </p>
@@ -69,7 +69,7 @@
           <div class="flex items-center gap-1 text-yellow-400 mb-4">
           <span v-for="starIndex in 5" :key="starIndex" class="text-sm">☆</span>
         </div>
-          <div class="flex-grow space-y-3">
+          <div class="grow space-y-3">
             <USkeleton class="h-3" />
             <USkeleton class="h-3 w-4/5" />
             <USkeleton class="h-3 w-3/4" />

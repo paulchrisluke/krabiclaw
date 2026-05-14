@@ -4,8 +4,8 @@ import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
 import slugify from 'slugify'
 
-function isSlugUniqueConstraintError(err: unknown): boolean {
-  const message = String((err as any)?.message || err || '')
+function isSlugUniqueConstraintError(err: ApiValue): boolean {
+  const message = String((err as ApiValue)?.message || err || '')
   return message.includes('platform_blog_posts.slug') || message.includes('UNIQUE constraint failed')
 }
 
@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformOwner(session.user.email)) {
+  if (!isPlatformOwner(session.user.email, env)) {
     return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
   }
 
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
 
   const now = new Date().toISOString()
   const updates: string[] = ['updated_at = ?']
-  const params: any[] = [now]
+  const params: ApiRecord[] = [now]
 
   if (body.title !== undefined) {
     const slug = slugify(body.title, { lower: true, strict: true, trim: true })
@@ -74,7 +74,7 @@ export default defineEventHandler(async (event) => {
   
   try {
     const result = await db.prepare(`UPDATE platform_blog_posts SET ${updates.join(', ')} WHERE id = ?`).bind(...params).run()
-    if (!result.changes || result.changes === 0) {
+  if (!result.meta.changes || result.meta.changes === 0) {
       return jsonResponse({ error: 'Post not found' }, { status: 404 })
     }
   } catch (err) {

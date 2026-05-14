@@ -143,7 +143,7 @@ export async function signOAuthState(secret: string, payload: object): Promise<s
   return `${payloadB64}.${sigB64}`
 }
 
-export async function verifyOAuthState<T = Record<string, unknown>>(
+export async function verifyOAuthState<T = ApiRecord>(
   secret: string, signed: string
 ): Promise<T | null> {
   if (!secret) return null

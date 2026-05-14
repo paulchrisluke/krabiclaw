@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
       FROM sites 
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `).bind(siteId).first()
+    `).bind(siteId).first<{ id: string; organization_id: string; name: string; status: string }>()
     
     if (!site) {
       return jsonResponse({ 

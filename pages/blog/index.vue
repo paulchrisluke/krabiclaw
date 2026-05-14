@@ -142,7 +142,7 @@ const { data, pending } = useAsyncData(
   { watch: [activeCategory] }
 )
 
-const posts = computed(() => (data.value as any)?.posts ?? [])
+const posts = computed(() => (data.value as ApiValue)?.posts ?? [])
 
 function toggleCategory(cat: string) {
   activeCategory.value = activeCategory.value === cat ? null : cat
@@ -156,7 +156,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-function readTime(post: any) {
+function readTime(post: ApiValue) {
   const words = (post.body ?? post.excerpt ?? '').split(/\s+/).length
   return Math.max(1, Math.ceil(words / 200))
 }

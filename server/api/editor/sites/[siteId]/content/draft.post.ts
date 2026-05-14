@@ -47,7 +47,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
+    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; name: string; status: string; onboarding_status: string | null }>()
     
     if (!site) {
       return jsonResponse({ 
@@ -71,9 +71,10 @@ export default defineEventHandler(async (event) => {
     for (const [field, value] of Object.entries(changes)) {
       if (heroFields.includes(field)) {
         hasHeroChange = true
-        if (field === 'hero.title')    heroChange.hero_title = value || undefined
-        if (field === 'hero.subtitle') heroChange.hero_subtitle = value || undefined
-        if (field === 'hero.video')    heroChange.hero_video_url = value || undefined
+        if (field === 'hero.title')       heroChange.hero_title = value || undefined
+        if (field === 'hero.subtitle')    heroChange.hero_subtitle = value || undefined
+        if (field === 'hero.image')       heroChange.hero_image_asset_id = value || undefined
+        if (field === 'hero.video')       heroChange.hero_video_asset_id = value || undefined
       } else {
         const fieldDef = getFieldDef(page, field)
         await upsertDraftContent(db, {
@@ -89,7 +90,8 @@ export default defineEventHandler(async (event) => {
           content: value,
           hero_title: undefined,
           hero_subtitle: undefined,
-          hero_video_url: undefined
+          hero_image_asset_id: undefined,
+          hero_video_asset_id: undefined
         })
       }
     }

@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformOwner(session.user.email)) {
+  if (!isPlatformOwner(session.user.email, env)) {
     return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
   }
 
@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const status = query.status as string | undefined
 
   let sql = `SELECT id, title, slug, excerpt, category, author_id, published_at, created_at, updated_at FROM platform_blog_posts`
-  const params: any[] = []
+  const params: ApiRecord[] = []
 
   if (status === 'published') {
     sql += ` WHERE published_at IS NOT NULL`

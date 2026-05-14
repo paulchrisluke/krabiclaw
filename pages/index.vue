@@ -157,21 +157,26 @@
     <div v-else class="saya-restaurant-theme">
 
       <!-- ── Brand hero ─────────────────────────────────────── -->
-      <section class="relative min-h-160 overflow-hidden flex items-center">
-        <!-- Background photo -->
+      <section id="section-hero" class="relative min-h-160 overflow-hidden flex items-center">
+        <!-- Background video (takes precedence over photo) -->
+        <div v-if="heroVideoUrl" data-field="hero.video" class="absolute inset-0">
+          <video :src="heroVideoUrl" autoplay muted loop playsinline aria-hidden="true" role="presentation" class="w-full h-full object-cover opacity-50" />
+        </div>
+        <!-- Background photo: media asset takes precedence, then Google Business photo -->
         <div
-          v-if="businessPrimaryPhoto"
+          v-else-if="heroImageUrl || businessPrimaryPhoto"
+          data-field="hero.image"
           class="absolute inset-0 bg-cover bg-center opacity-50"
-          :style="`background-image: url(${businessPrimaryPhoto.googleUrl})`"
+          :style="`background-image: url(${heroImageUrl || businessPrimaryPhoto?.googleUrl})`"
         />
-        <div class="absolute inset-0 bg-zinc-950" :class="businessPrimaryPhoto ? 'opacity-50' : ''" />
+        <div class="absolute inset-0 bg-zinc-950" :class="(heroImageUrl || businessPrimaryPhoto || heroVideoUrl) ? 'opacity-50' : ''" />
         <div class="relative mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">
-          <p class="saya-eyebrow mb-8 text-white/70">
+          <p data-field="hero.eyebrow" class="saya-eyebrow mb-8 text-white/70">
             {{ getField('hero.eyebrow', businessCity || 'A neighbourhood restaurant') }}
           </p>
-          <h1 class="saya-display-lg text-white max-w-4xl">
+          <h1 data-field="hero.title" class="saya-display-lg text-white max-w-4xl">
             {{ getField('hero.title', businessTitle) }}<br>
-            <em class="saya-italic">{{ getField('hero.subtitle', businessSubtitle) }}</em>
+            <em data-field="hero.subtitle" class="saya-italic">{{ getField('hero.subtitle', businessSubtitle) }}</em>
           </h1>
 
           <!-- Location pills -->
@@ -428,7 +433,6 @@
 </template>
 
 <script setup>
-import { getTodayGoogleHours, getSpecialHoursNotice } from '~/utils/formatters'
 import { usePageContent } from '~/composables/usePageContent'
 import { useTenantSite } from '~/composables/useTenantSite'
 import { usePublicMenu } from '~/composables/usePublicMenu'
@@ -457,6 +461,8 @@ const features = [
 const { freePlan: freePlanData, proPlan: proPlanData, displayPrice } = usePlans()
 
 const { getField, getFieldStr } = usePageContent('home')
+const heroVideoUrl = computed(() => getField('hero.video'))
+const heroImageUrl = computed(() => getField('hero.image'))
 const { isAuthenticated } = useAuth()
 
 // Validate tenant context ONLY for tenant sites
@@ -511,27 +517,11 @@ const { data: locationsData } = isPlatform
 const locations = computed(() => locationsData.value?.locations || [])
 const hasLocations = computed(() => locations.value.length > 0)
 
-// Location CTA logic
-const locationsCtaUrl = computed(() => {
-  if (locations.value.length === 1) {
-    return `/locations/${locations.value[0].slug}`
-  }
-  return '/locations'
-})
-
-const locationsCtaText = computed(() => {
-  if (locations.value.length === 1) {
-    return 'View Location'
-  }
-  return 'Choose Location'
-})
-
 // Get brand menu for preview
 const {
   menu,
-  hasMenu,
   menuItemsBySection
-} = isPlatform ? { menu: ref(null), hasMenu: ref(false), menuItemsBySection: ref({}) } : usePublicMenu(siteId, null)
+} = isPlatform ? { menu: ref(null), menuItemsBySection: ref({}) } : usePublicMenu(siteId, null)
 
 // Featured menu items (first 6 items from all sections)
 const featuredMenuItems = computed(() => {
@@ -549,43 +539,11 @@ const { data: googleBusiness } = isPlatform
     })
 
 const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
-const sayaGalleryPlaceholders = [
-  {
-    src: 'https://images.unsplash.com/photo-1553621042-f6e147245754?auto=format&fit=crop&w=900&q=80',
-    alt: 'Assorted sushi on a dark plate'
-  },
-  {
-    src: 'https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&w=900&q=80',
-    alt: 'Grilled skewers over flame'
-  },
-  {
-    src: 'https://images.unsplash.com/photo-1617196034796-73dfa7b1fd56?auto=format&fit=crop&w=900&q=80',
-    alt: 'Japanese ramen and side dishes'
-  },
-  {
-    src: 'https://images.unsplash.com/photo-1611143669185-af224c5e3252?auto=format&fit=crop&w=900&q=80',
-    alt: 'Fresh sushi rolls with garnish'
-  }
-]
-
 const businessTitle = computed(() => googleBusiness.value?.business?.title || 'Saya Kitchen')
 const businessSubtitle = computed(() => googleBusiness.value?.business?.profile?.description || 'Authentic Japanese Robatayaki in Krabi, Thailand')
 const businessPrimaryPhoto = computed(() => googleBusiness.value?.media?.[0])
-const businessAddress = computed(() => {
-  const addr = googleBusiness.value?.business?.storefrontAddress
-  if (!addr) return ''
-  return `${addr.addressLines?.[0] || ''}, ${addr.locality || ''}, ${addr.administrativeArea || ''} ${addr.postalCode || ''}`.replace(/^,\s*/, '')
-})
 const businessCity = computed(() => googleBusiness.value?.business?.storefrontAddress?.locality || '')
-const businessPhone = computed(() => googleBusiness.value?.business?.phoneNumbers?.[0]?.phoneNumber || '')
-const businessHours = computed(() => getTodayGoogleHours(googleBusiness.value?.business?.regularHours))
-const specialHoursNotice = computed(() => getSpecialHoursNotice(googleBusiness.value?.business?.specialHours))
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
-const googleMedia = computed(() => googleBusiness.value?.media || [])
-const businessCoordinates = computed(() => {
-  const coords = googleBusiness.value?.business?.latlng
-  return coords ? { lat: coords.latitude, lng: coords.longitude } : null
-})
 const googleReviews = computed(() => googleBusiness.value?.reviews ?? [])
 const googleReviewRating = review => starRatingMap[review.starRating] ?? Number(review.starRating ?? 0)
 const googleReviewSummary = computed(() => {

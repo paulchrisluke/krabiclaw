@@ -55,7 +55,32 @@ const route = useRoute()
 const postId = route.params.postId as string
 const categories = ['Marketing', 'Technology', 'Design', 'Business', 'SEO', 'Social Media']
 
-const post = ref<any>(null)
+interface BlogPost {
+  title: string
+  excerpt?: string | null
+  category?: string | null
+  body: string
+  published_at?: string | null
+}
+
+interface BlogPostResponse {
+  post?: BlogPost
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const data = (error as Record<string, unknown>).data
+    if (data && typeof data === 'object') {
+      const dataError = (data as Record<string, unknown>).error
+      if (typeof dataError === 'string' && dataError) return dataError
+    }
+    const message = (error as Record<string, unknown>).message
+    if (typeof message === 'string' && message) return message
+  }
+  return fallback
+}
+
+const post = ref<BlogPost | null>(null)
 const form = reactive({ title: '', excerpt: '', category: '', body: '' })
 const loadPending = ref(true)
 const loadError = ref('')
@@ -66,7 +91,7 @@ const successMessage = ref('')
 
 onMounted(async () => {
   try {
-    const res = await $fetch(`/api/admin/blog/posts/${postId}`) as any
+    const res = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId}`)
     if (!res?.post) {
       loadError.value = 'Failed to load post: unexpected response from server.'
       console.error('Unexpected API response loading post', postId, res)
@@ -77,8 +102,8 @@ onMounted(async () => {
     form.excerpt = res.post.excerpt ?? ''
     form.category = res.post.category ?? ''
     form.body = res.post.body
-  } catch (err: any) {
-    loadError.value = `Failed to load post: ${err?.message ?? err}`
+  } catch (err) {
+    loadError.value = `Failed to load post: ${getErrorMessage(err, 'Unknown error')}`
     console.error('Error loading post', postId, err)
   } finally {
     loadPending.value = false
@@ -94,20 +119,20 @@ async function update(publish = false) {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const updated = await $fetch(`/api/admin/blog/posts/${postId}`, {
+    const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId}`, {
       method: 'PATCH',
       body: { ...form, ...(publish ? { publish: true } : {}) }
-    }) as any
+    })
     if (updated?.post) {
       post.value = updated.post
     } else if (publish) {
       // fallback: re-fetch if server didn't return the updated post
-      const refetched = await $fetch(`/api/admin/blog/posts/${postId}`) as any
+      const refetched = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId}`)
       if (refetched?.post) post.value = refetched.post
     }
     successMessage.value = 'Saved.'
-  } catch (err: any) {
-    errorMessage.value = err?.data?.error ?? 'Failed to save.'
+  } catch (err) {
+    errorMessage.value = getErrorMessage(err, 'Failed to save.')
   } finally {
     saving.value = false
   }
@@ -118,10 +143,10 @@ async function unpublish() {
   errorMessage.value = ''
   try {
     await $fetch(`/api/admin/blog/posts/${postId}`, { method: 'PATCH', body: { unpublish: true } })
-    post.value.published_at = null
+    if (post.value) post.value.published_at = null
     successMessage.value = 'Post unpublished.'
-  } catch (err: any) {
-    errorMessage.value = err?.data?.error ?? 'Failed to unpublish.'
+  } catch (err) {
+    errorMessage.value = getErrorMessage(err, 'Failed to unpublish.')
   } finally {
     saving.value = false
   }
@@ -133,8 +158,8 @@ async function remove() {
   try {
     await $fetch(`/api/admin/blog/posts/${postId}`, { method: 'DELETE' })
     await navigateTo('/admin')
-  } catch (err: any) {
-    errorMessage.value = err?.data?.error ?? 'Failed to delete.'
+  } catch (err) {
+    errorMessage.value = getErrorMessage(err, 'Failed to delete.')
     deleting.value = false
   }
 }

@@ -51,7 +51,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
+    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
     
     if (!site) {
       return jsonResponse({ 
@@ -92,7 +92,6 @@ export default defineEventHandler(async (event) => {
 
     if (!existingPrimary && selectedLocations.length > 0) {
       // Set first location as primary
-      const firstLocationId = selectedLocations[0]?.name?.split('/').pop() || ''
       await db.prepare(`
         UPDATE business_locations 
         SET is_primary = false 
@@ -112,7 +111,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({
       success: true,
       message: `Successfully synced ${selectedLocations.length} locations`,
-      syncedCount: (syncedCount as any)?.count || 0,
+      syncedCount: (syncedCount as ApiValue)?.count || 0,
       totalLocations: selectedLocations.length
     })
     

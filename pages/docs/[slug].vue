@@ -15,6 +15,7 @@
 
       <div v-else>
         <h1 class="text-4xl font-bold text-default mb-6">{{ doc.title }}</h1>
+        <!-- eslint-disable-next-line vue/no-v-html -->
         <div class="prose prose-lg max-w-none text-default" v-html="renderedContent"></div>
       </div>
     </div>

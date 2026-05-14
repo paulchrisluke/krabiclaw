@@ -112,8 +112,8 @@
       <div class="flex flex-wrap items-center justify-between gap-4 pt-6 text-xs text-inverted/40">
         <div>© {{ year }} {{ restaurantName }}</div>
         <div class="flex gap-6">
-          <NuxtLink to="/privacy-policy" class="transition hover:text-inverted/70">Privacy</NuxtLink>
-          <NuxtLink to="/terms-and-conditions" class="transition hover:text-inverted/70">Terms</NuxtLink>
+          <NuxtLink to="/privacy" class="transition hover:text-inverted/70">Privacy</NuxtLink>
+          <NuxtLink to="/terms" class="transition hover:text-inverted/70">Terms</NuxtLink>
           <a href="https://krabiclaw.com" target="_blank" rel="noopener noreferrer" class="transition hover:text-inverted/70">
             Powered by krabiclaw.com
           </a>
@@ -161,7 +161,7 @@ interface PublicLocation {
   } | string | null
   city?: string | null
   phone?: string | null
-  googleBusinessHours?: unknown
+  googleBusinessHours?: ApiValue
 }
 
 interface PublicLocationsResponse {

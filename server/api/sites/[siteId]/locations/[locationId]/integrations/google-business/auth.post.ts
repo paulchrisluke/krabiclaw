@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
+    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -39,7 +39,7 @@ export default defineEventHandler(async (event) => {
 
     const location = await db.prepare(`
       SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1
-    `).bind(locationId, siteId).first()
+    `).bind(locationId, siteId).first<{ id: string }>()
 
     if (!location) {
       return jsonResponse({ error: 'Location not found' }, { status: 404 })

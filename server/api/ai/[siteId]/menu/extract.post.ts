@@ -66,7 +66,7 @@ export default defineEventHandler(async (event) => {
     JOIN member om ON o.id = om.organizationId
     WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
     LIMIT 1
-  `).bind(siteId, session.user.id).first()
+  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
 
   if (!site) {
     return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -151,7 +151,7 @@ export default defineEventHandler(async (event) => {
         metadata: { org_id: orgId, site_id: siteId, action: 'menu_extract' },
       }
     )
-  } catch (err: any) {
+  } catch (err) {
     console.error('AI Gateway error:', err)
     return jsonResponse({ error: 'AI extraction failed. Please try again.' }, { status: 502 })
   }
@@ -175,7 +175,7 @@ export default defineEventHandler(async (event) => {
     if (obj) return obj[0]
     return rawText.trim()
   })()
-  let parsed: { items: any[]; warning?: string }
+  let parsed: { items: ApiRecord[]; warning?: string }
   try {
     parsed = JSON.parse(jsonText)
   } catch {
@@ -186,7 +186,7 @@ export default defineEventHandler(async (event) => {
     )
   }
 
-  const extractedItems: any[] = Array.isArray(parsed.items) ? parsed.items : []
+  const extractedItems: ApiRecord[] = Array.isArray(parsed.items) ? parsed.items : []
 
   if (extractedItems.length === 0) {
     return jsonResponse({
@@ -214,7 +214,7 @@ export default defineEventHandler(async (event) => {
 
   // Write items to draft menu (created_by marks them as AI-sourced)
   const createdItems = await Promise.all(
-    extractedItems.map((item: any) =>
+    extractedItems.map((item: ApiValue) =>
       createMenuItem(
         db,
         menuId!,

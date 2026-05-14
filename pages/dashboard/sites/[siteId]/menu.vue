@@ -112,8 +112,6 @@ const headerLinks = computed(() => [
   { label: 'Add Location', icon: 'i-heroicons-plus', to: `/dashboard/sites/${siteId}/settings?tab=locations`, color: 'neutral' as const, variant: 'soft' as const }
 ])
 
-const addressLabel = (location: BusinessLocation) => location.address?.addressLines?.join(', ') || ''
-
 const loadMenuWorkspace = async () => {
   loading.value = true
   error.value = null

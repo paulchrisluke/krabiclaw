@@ -15,7 +15,7 @@
         :key="getPostSlug(post.name) || `post-${index}`"
         class="flex flex-col bg-default border border-default rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group"
       >
-        <div class="aspect-[4/5] overflow-hidden bg-muted relative">
+        <div class="aspect-4/5 overflow-hidden bg-muted relative">
           <template v-if="post.media?.[0]">
             <video
               v-if="post.media[0].mediaFormat === 'VIDEO'"
@@ -44,13 +44,13 @@
           </div>
         </div>
 
-        <div class="p-8 flex flex-col flex-grow">
+        <div class="p-8 flex flex-col grow">
           <time :datetime="post.createTime" class="text-[10px] text-muted font-bold uppercase tracking-widest mb-3">
             {{ formatDate(post.createTime) }}
           </time>
           <h3 class="text-xl font-bold text-default mb-3 leading-tight">{{ post.title || 'Business Update' }}</h3>
 
-          <div :class="['text-muted text-sm leading-relaxed mb-6 flex-grow', { 'line-clamp-3': limit }]">
+          <div :class="['text-muted text-sm leading-relaxed mb-6 grow', { 'line-clamp-3': limit }]">
             {{ post.summary }}
           </div>
 
@@ -89,10 +89,10 @@
 
       <template v-if="posts.length === 0 && showEmptyState">
         <div v-for="i in (limit || 3)" :key="`placeholder-${i}`" class="flex flex-col bg-default border border-default rounded-3xl overflow-hidden">
-          <div class="flex aspect-[4/5] items-center justify-center bg-muted p-8">
+          <div class="flex aspect-4/5 items-center justify-center bg-muted p-8">
             <div class="h-full w-full animate-pulse rounded-2xl bg-default" />
           </div>
-          <div class="p-8 flex flex-col flex-grow">
+          <div class="p-8 flex flex-col grow">
             <div class="h-3 bg-default rounded animate-pulse mb-3" />
             <div class="h-6 bg-default rounded animate-pulse mb-4" />
             <div class="flex-1 space-y-2">

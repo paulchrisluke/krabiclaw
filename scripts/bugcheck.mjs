@@ -13,8 +13,6 @@ const BASE = 'http://localhost:3000'
 const SCREENSHOT_DIR = './scripts/screenshots'
 mkdirSync(SCREENSHOT_DIR, { recursive: true })
 
-const errors = []
-const warnings = []
 const pageResults = []
 
 function slug(label) {
@@ -91,8 +89,8 @@ const STATE_FILE = './scripts/.auth-state.json'
   // Verify session is still valid
   try {
     await page.goto(`${BASE}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 30000 })
-  } catch (e) {
-    console.error('Could not reach localhost:3000 — is yarn dev running?')
+  } catch {
+    console.error('Could not reach localhost:3000 - is yarn dev running?')
     await browser.close()
     process.exit(1)
   }
@@ -128,7 +126,9 @@ const STATE_FILE = './scripts/.auth-state.json'
   try {
     const href = await manageLink.getAttribute('href', { timeout: 3000 })
     siteId = href?.match(/sites\/(site-[^/]+)/)?.[1]
-  } catch {}
+  } catch {
+    // No site manage link is available for org-only accounts.
+  }
 
   console.log(`\nSite ID: ${siteId || '(none found — org-level pages only)'}`)
 
@@ -157,7 +157,9 @@ const STATE_FILE = './scripts/.auth-state.json'
     try {
       const href = await editMenuBtn.getAttribute('href', { timeout: 3000 })
       locationId = href?.match(/locationId=([^&]+)/)?.[1]
-    } catch {}
+    } catch {
+      // No location-specific menu link was found.
+    }
 
     if (locationId) {
       await checkPage(page, 'Menu (with location)', `${base}/menu?locationId=${locationId}`)

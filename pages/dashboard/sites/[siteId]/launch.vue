@@ -135,7 +135,7 @@ const siteId = route.params.siteId as string
 
 const loading = ref(true)
 const error = ref<string | null>(null)
-const readiness = ref<any>(null)
+const readiness = ref<ApiRecord | null>(null)
 const siteUrl = ref('')
 
 const headerLinks = computed(() => [
@@ -162,8 +162,9 @@ const labelize = (key: string) =>
 const readinessSections = computed(() => {
   if (!readiness.value?.sections) return []
 
-  return Object.entries(readiness.value.sections).map(([key, section]: [string, any]) => {
-    const items = Object.entries(section.items || {}).map(([itemKey, checked]) => ({
+  return Object.entries(readiness.value.sections).map(([key, section]) => {
+    const sectionRecord = section as ApiRecord
+    const items = Object.entries(sectionRecord.items || {}).map(([itemKey, checked]) => ({
       label: labelize(itemKey),
       checked: Boolean(checked)
     }))
@@ -182,8 +183,8 @@ const loadReadiness = async () => {
   error.value = null
   try {
     const [readinessResponse, settingsResponse] = await Promise.all([
-      $fetch<any>(`/api/sites/${siteId}/launch-readiness`),
-      $fetch<any>(`/api/sites/${siteId}/settings`)
+      $fetch<ApiRecord>(`/api/sites/${siteId}/launch-readiness`),
+      $fetch<ApiRecord>(`/api/sites/${siteId}/settings`)
     ])
 
     if (!readinessResponse.success) throw new Error('Failed to load launch readiness')

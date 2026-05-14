@@ -256,7 +256,6 @@
 
 <script setup>
 definePageMeta({ layout: 'saya' })
-import { useTenantSite } from '~/composables/useTenantSite'
 import { menuData } from '~/data/menu'
 import AppBreadcrumb from '~/components/ui/AppBreadcrumb.vue'
 

@@ -106,11 +106,10 @@ interface DashboardSite {
 }
 
 const config = useRuntimeConfig()
-const router = useRouter()
 const organizationsState = authClient.useListOrganizations()
 const organizations = computed(() => unref(organizationsState)?.data ?? [])
 const sites = ref<DashboardSite[]>([])
-const billing = ref<any>(null)
+const billing = ref<ApiRecord | null>(null)
 const sitesLoading = ref(false)
 
 // Check onboarding status and redirect if needed
@@ -153,7 +152,7 @@ watch(organizations, async (newOrgs: typeof organizations.value) => {
   try {
     const [sitesResponse, billingResponse] = await Promise.all([
       $fetch<{ sites: DashboardSite[] }>('/api/sites'),
-      $fetch<any>('/api/billing/status')
+      $fetch<ApiRecord>('/api/billing/status')
     ])
     sites.value = sitesResponse.sites || []
     billing.value = billingResponse.billing

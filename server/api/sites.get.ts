@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    const orgIds = organization.results.map((org: any) => org.id)
+    const orgIds = organization.results.map((org: ApiValue) => org.id)
     
     // Build WHERE clause for multiple organization IDs
     const placeholders = orgIds.map(() => '?').join(',')

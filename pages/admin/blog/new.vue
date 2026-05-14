@@ -43,7 +43,7 @@
 <script setup lang="ts">
 interface CreatePostResponse {
   id: string | number
-  [key: string]: unknown
+  [key: string]: ApiValue
 }
 
 definePageMeta({ layout: 'default' })
@@ -67,8 +67,9 @@ async function save(publish: boolean) {
       body: { ...form, publish }
     })
     await navigateTo(`/admin/blog/${res.id}`)
-  } catch (err: any) {
-    errorMessage.value = err?.data?.error ?? 'Failed to save post.'
+  } catch (err) {
+    const message = err instanceof Error ? err.message : (err && typeof err === 'object' && 'data' in err && typeof err.data === 'object' && err.data && 'error' in err.data && typeof err.data.error === 'string') ? err.data.error : 'Failed to save post.'
+    errorMessage.value = message
   } finally {
     saving.value = false
   }

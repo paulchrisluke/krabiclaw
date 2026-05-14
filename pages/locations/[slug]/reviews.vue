@@ -204,21 +204,21 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as any)?.value?.name || (site as any)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
 
 const { data: locData } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}`,
   { key: () => `loc-reviews-loc-${siteId}-${slug.value}`, default: () => ({ location: null }) }
 )
-const location = computed(() => (locData as any).value?.location ?? null)
+const location = computed(() => (locData as ApiValue).value?.location ?? null)
 
 const { data, pending } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}/reviews`,
   { key: () => `loc-reviews-${siteId}-${slug.value}`, default: () => ({ aggregate: null, reviews: [] }) }
 )
 
-const aggregate = computed(() => (data as any).value?.aggregate ?? null)
-const reviews = computed(() => (data as any).value?.reviews ?? [])
+const aggregate = computed(() => (data as ApiValue).value?.aggregate ?? null)
+const reviews = computed(() => (data as ApiValue).value?.reviews ?? [])
 
 const filters = [
   { key: 'recent', label: 'Most recent' },
@@ -234,7 +234,7 @@ const filtered = computed(() => {
   else if (activeFilter.value === 'lowest') list.sort((a, b) => a.rating - b.rating)
   else if (activeFilter.value === 'photos') list = list.filter(r => r.photo_urls?.length)
   else {
-    const ts = (value: unknown) => {
+    const ts = (value: ApiValue) => {
       if (typeof value !== 'string' || !value) return 0
       const parsed = Date.parse(value)
       return Number.isNaN(parsed) ? 0 : parsed
@@ -245,14 +245,14 @@ const filtered = computed(() => {
 })
 
 const maxBarCount = computed(() =>
-  Math.max(...(aggregate.value?.distribution ?? []).map((d: any) => d.count), 1)
+  Math.max(...(aggregate.value?.distribution ?? []).map((d: ApiValue) => d.count), 1)
 )
 function barPct(star: number) {
-  const row = aggregate.value?.distribution?.find((d: any) => d.star === star)
+  const row = aggregate.value?.distribution?.find((d: ApiValue) => d.star === star)
   return row ? (row.count / maxBarCount.value) * 100 : 0
 }
 function distCount(star: number) {
-  return aggregate.value?.distribution?.find((d: any) => d.star === star)?.count ?? 0
+  return aggregate.value?.distribution?.find((d: ApiValue) => d.star === star)?.count ?? 0
 }
 
 const failedPhotoIndices = ref<Record<string, boolean>>({})
@@ -261,7 +261,7 @@ function handleReviewImageError(reviewId: string | number, index: string | numbe
   failedPhotoIndices.value[`${String(reviewId)}-${String(index)}`] = true
 }
 
-function initials(name: any) {
+function initials(name: ApiValue) {
   if (typeof name !== 'string' || !name.trim()) return ''
   return name.trim().split(/\s+/).filter(Boolean).map(s => s[0]).slice(0, 2).join('').toUpperCase()
 }
@@ -294,7 +294,7 @@ useSchemaOrg([
         reviewCount: aggregate.value.review_count ?? 0
       }
     } : {}),
-    review: reviews.value.slice(0, 10).map((r: any) => ({
+    review: reviews.value.slice(0, 10).map((r: ApiValue) => ({
       '@type': 'Review',
       author: { '@type': 'Person', name: r.author_name },
       datePublished: r.created_at,

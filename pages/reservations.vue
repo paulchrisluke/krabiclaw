@@ -115,6 +115,7 @@
 
           <UCard class="mb-6 rounded-lg bg-muted">
             <h3 class="text-lg font-semibold text-default mb-4">Reservation Policies</h3>
+            <!-- eslint-disable-next-line vue/no-v-html -->
             <div v-html="policiesBody" class="text-muted" />
           </UCard>
 
@@ -238,7 +239,6 @@ const handleReservation = async () => {
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
 const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
 const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '').replace(/\/$/, '') || 'krabiclaw.com'
 
 useBreadcrumbSchema([

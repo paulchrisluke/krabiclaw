@@ -106,6 +106,11 @@ const { isAuthenticated } = useAuth()
 const upgrading = ref<string | null>(null)
 const checkoutError = ref<string>('')
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message
+  return fallback
+}
+
 async function handleUpgrade(planId: string) {
   if (!isAuthenticated.value) {
     const next = encodeURIComponent(`/dashboard/billing?plan=${planId}`)
@@ -118,14 +123,14 @@ async function handleUpgrade(planId: string) {
     const res = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
       method: 'POST',
       body: { plan: planId, interval: annual.value ? 'year' : 'month' }
-    } as Parameters<typeof $fetch>[1])
+    })
     if (res.checkoutUrl) {
       await navigateTo(res.checkoutUrl, { external: true })
     } else {
       checkoutError.value = 'Unable to start checkout. Please try again.'
     }
-  } catch (err: any) {
-    checkoutError.value = err?.message || 'Checkout failed. Please try again.'
+  } catch (err) {
+    checkoutError.value = getErrorMessage(err, 'Checkout failed. Please try again.')
     console.error('Checkout failed:', err)
   } finally {
     upgrading.value = null

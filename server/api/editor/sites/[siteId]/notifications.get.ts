@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     JOIN member om ON o.id = om.organizationId
     WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
     LIMIT 1
-  `).bind(siteId, session.user.id).first()
+  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 

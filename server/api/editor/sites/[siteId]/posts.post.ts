@@ -21,13 +21,33 @@ export default defineEventHandler(async (event) => {
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor') LIMIT 1
-  `).bind(siteId, session.user.id).first()
+  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+
+  const imageAssetId = typeof body.image_asset_id === 'string' ? body.image_asset_id.trim() : ''
+  if (imageAssetId) {
+    let asset: { id: string; organization_id: string } | null
+    try {
+      asset = await db.prepare(
+        `SELECT id, organization_id FROM media_assets WHERE id = ? LIMIT 1`
+      ).bind(imageAssetId).first<{ id: string; organization_id: string }>()
+    } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error('Unknown database error')
+      console.error('post_create_asset_lookup_failed', {
+        imageAssetId,
+        error: normalizedError.message
+      })
+      return jsonResponse({ error: 'Failed to validate image asset' }, { status: 500 })
+    }
+
+    if (!asset) return jsonResponse({ error: 'Invalid image asset' }, { status: 400 })
+    if (asset.organization_id !== site.organization_id) return jsonResponse({ error: 'Forbidden image asset' }, { status: 403 })
+  }
 
   const post = await createPost(db, site.organization_id, siteId, {
     title: body.title?.trim() || undefined,
     body: body.body.trim(),
-    image_url: body.image_url?.trim() || undefined,
+    image_asset_id: imageAssetId || undefined,
     scheduled_for: body.scheduled_for || undefined,
     location_id: body.location_id || undefined,
     post_type: body.post_type || undefined,

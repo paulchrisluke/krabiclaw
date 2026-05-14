@@ -2,8 +2,8 @@ import { useChowBotHistory, type ChowBotConv } from './useChowBotHistory'
 
 export interface ChowbotToolCall {
   name: string
-  input: any
-  result: any
+  input: ApiValue
+  result: ApiValue
   status: 'running' | 'done'
 }
 
@@ -163,8 +163,8 @@ export const useChowBot = () => {
       })
 
       if (!response.ok) {
-        const err = await response.json().catch(() => ({}))
-        throw new Error((err as any)?.error ?? `Error ${response.status}`)
+        const payload = await response.json().catch(() => ({})) as { error?: string }
+        throw new Error(payload.error ?? `Error ${response.status}`)
       }
 
       const reader = response.body!.getReader()
@@ -213,9 +213,9 @@ export const useChowBot = () => {
           }
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('[ChowBot] sendMessage error:', err)
-      updateLastMessage({ content: err?.message ?? 'Something went wrong. Please try again.', error: true, streaming: false })
+      updateLastMessage({ content: err instanceof Error ? err.message : 'Something went wrong. Please try again.', error: true, streaming: false })
     } finally {
       isLoading.value = false
     }

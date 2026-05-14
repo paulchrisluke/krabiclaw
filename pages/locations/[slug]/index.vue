@@ -234,21 +234,21 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as any)?.value?.name || (site as any)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
 
 // Fetch location
 const { data, pending } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}`,
   { key: () => `public-location-${siteId}-${slug.value}`, default: () => ({ location: null }) }
 )
-const location = computed(() => (data as any).value?.location ?? null)
+const location = computed(() => (data as ApiValue).value?.location ?? null)
 
 // Fetch reviews preview (first 3)
 const { data: reviewsData } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}/reviews`,
   { key: () => `public-reviews-preview-${siteId}-${slug.value}`, default: () => ({ reviews: [] }) }
 )
-const reviewsPreview = computed(() => ((reviewsData as any).value?.reviews ?? []).slice(0, 3))
+const reviewsPreview = computed(() => ((reviewsData as ApiValue).value?.reviews ?? []).slice(0, 3))
 
 // Sanitize hero background URL to prevent CSS injection
 const heroBackgroundStyle = computed(() => {
@@ -286,8 +286,8 @@ watch(() => location.value?.id, (id: string | undefined) => {
   if (id) fetchMenu()
 }, { immediate: true })
 const featuredItems = computed(() => {
-  const items = (menuData as any).value?.menu?.items ?? []
-  return items.filter((i: any) => i.featured || i.available !== false).slice(0, 3)
+  const items = (menuData as ApiValue).value?.menu?.items ?? []
+  return items.filter((i: ApiValue) => i.featured || i.available !== false).slice(0, 3)
 })
 
 // Derived location data
@@ -306,7 +306,7 @@ const weekHours = computed(() => {
   if (!hours) return []
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
   const today = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][new Date().getDay()]
-  return formatGoogleHours(hours).map((h: any, i: number) => ({
+  return formatGoogleHours(hours).map((h: ApiValue, i: number) => ({
     ...h,
     today: days[i] === today
   }))

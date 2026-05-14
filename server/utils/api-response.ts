@@ -1,4 +1,4 @@
-export const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
+export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), {
     ...init,
     headers: {
@@ -7,10 +7,12 @@ export const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
     }
   })
 
-export const cleanString = (value: unknown, maxLength: number) =>
+export const cleanString = (value: ApiValue, maxLength: number) =>
   typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 
-export const cloudflareEnv = (event: any) => ({
+export const cloudflareEnv = (event: H3Event): CloudflareEnv => ({
   ...process.env,
   ...(event.context.cloudflare?.env ?? {})
-})
+} as CloudflareEnv)
+import type { H3Event } from 'h3'
+import type { CloudflareEnv } from './auth'

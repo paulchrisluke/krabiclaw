@@ -213,7 +213,6 @@ const releaseLabels = {
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
 const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
 const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
 
 useBreadcrumbSchema([

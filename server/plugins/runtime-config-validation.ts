@@ -45,6 +45,6 @@ export default defineNitroPlugin(() => {
 })
 
 // Helper function to get nested object values by string path
-function getNestedValue(obj: any, path: string): string {
+function getNestedValue(obj: ApiValue, path: string): string {
   return path.split('.').reduce((current, key) => current?.[key], obj) || ''
 }

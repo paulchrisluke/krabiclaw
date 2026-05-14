@@ -1,6 +1,14 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { encryptSecret, decryptSecret } from './encryption'
 
+type JsonPrimitive = string | number | boolean | null
+type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
+interface JsonObject {
+  [key: string]: JsonValue
+}
+
+type JsonRecord = Record<string, JsonValue>
+
 export interface GoogleBusinessEnv {
   REVIEWS_DB: D1Database
   GOOGLE_CLIENT_ID?: string
@@ -15,10 +23,10 @@ export interface GoogleBusinessEnv {
 
 export interface GoogleBusinessSyncResult {
   syncedAt: string
-  business: unknown
-  reviews: unknown[]
-  media: unknown[]
-  posts: unknown[]
+  business: JsonValue
+  reviews: JsonRecord[]
+  media: JsonRecord[]
+  posts: JsonRecord[]
   errors: Array<{ source: string; message: string }>
 }
 
@@ -28,24 +36,6 @@ const googleJson = async <T>(url: string, accessToken: string): Promise<T> => {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json'
     }
-  })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`${response.status} ${response.statusText}: ${text.slice(0, 300)}`)
-  }
-
-  return (await response.json()) as T
-}
-
-const googlePatch = async <T>(url: string, accessToken: string, body: unknown): Promise<T> => {
-  const response = await fetch(url, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'content-type': 'application/json; charset=utf-8'
-    },
-    body: JSON.stringify(body)
   })
 
   if (!response.ok) {
@@ -120,10 +110,10 @@ export const getGoogleBusinessData = async (env: GoogleBusinessEnv, locationId?:
   const accessToken = await getGoogleAccessToken(env)
   const locName = locationName(locationId)
   
-  let business: unknown = null
-  let reviews: unknown[] = []
-  let media: unknown[] = []
-  let posts: unknown[] = []
+  let business: JsonValue = null
+  let reviews: JsonRecord[] = []
+  let media: JsonRecord[] = []
+  let posts: JsonRecord[] = []
   const errors: { source: string; message: string }[] = []
 
   if (!locName) {
@@ -146,7 +136,7 @@ export const getGoogleBusinessData = async (env: GoogleBusinessEnv, locationId?:
   }
 
   try {
-    const response = await googleJson<{ reviews?: unknown[] }>(
+    const response = await googleJson<{ reviews?: JsonRecord[] }>(
       `https://mybusinessreviews.googleapis.com/v1/${locName}/reviews?pageSize=50`,
       accessToken
     )
@@ -156,7 +146,7 @@ export const getGoogleBusinessData = async (env: GoogleBusinessEnv, locationId?:
   }
 
   try {
-    const response = await googleJson<{ mediaItems?: unknown[] }>(
+    const response = await googleJson<{ mediaItems?: JsonRecord[] }>(
       `https://mybusinessmedia.googleapis.com/v1/${locName}/media?pageSize=50`,
       accessToken
     )
@@ -166,7 +156,7 @@ export const getGoogleBusinessData = async (env: GoogleBusinessEnv, locationId?:
   }
 
   try {
-    const response = await googleJson<{ localPosts?: unknown[] }>(
+    const response = await googleJson<{ localPosts?: JsonRecord[] }>(
       `https://mybusinessposts.googleapis.com/v1/${locName}/localPosts?pageSize=20`,
       accessToken
     )
@@ -385,6 +375,7 @@ export const getGoogleBusinessAccounts = async (
   env: GoogleBusinessEnv,
   accessToken: string
 ): Promise<GoogleAccount[]> => {
+  void env
   const response = await googleJson<{ accounts?: GoogleAccount[] }>(
     'https://mybusinessbusinessinformation.googleapis.com/v1/accounts',
     accessToken
@@ -399,6 +390,7 @@ export const getGoogleBusinessLocations = async (
   accessToken: string,
   accountId: string
 ): Promise<GoogleLocation[]> => {
+  void env
   const readMask = [
     'name', 'title', 'storefrontAddress', 'phoneNumbers', 'websiteUri',
     'latlng', 'categories', 'rating', 'reviewCount'

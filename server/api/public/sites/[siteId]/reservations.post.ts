@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const db = env.REVIEWS_DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  let body: Record<string, unknown>
+  let body: ApiRecord
   try { body = await readBody(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
