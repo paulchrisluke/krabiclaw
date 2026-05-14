@@ -2,10 +2,6 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { deleteMenuSection } from '~/server/utils/menu-management'
 
-interface DeleteSectionBody {
-  section?: string
-}
-
 interface SiteRow {
   id: string
   organization_id: string
@@ -18,13 +14,14 @@ interface MenuRow {
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const menuId = getRouterParam(event, 'menuId')
-  const body = await readBody(event) as DeleteSectionBody
+  const query = getQuery(event)
 
   if (!siteId || !menuId) {
     return jsonResponse({ error: 'Site ID and menu ID are required' }, { status: 400 })
   }
 
-  const section = body.section?.trim()
+  const rawSection = Array.isArray(query.section) ? query.section[0] : query.section
+  const section = typeof rawSection === 'string' ? rawSection.trim() : ''
   if (!section) {
     return jsonResponse({ error: 'Section is required' }, { status: 400 })
   }
@@ -72,7 +69,6 @@ export default defineEventHandler(async (event) => {
 
     return jsonResponse({
       success: true,
-      menuId,
       section,
       deleted
     })

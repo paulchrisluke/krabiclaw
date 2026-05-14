@@ -727,6 +727,7 @@ CREATE TABLE IF NOT EXISTS chowbot_messages (
   status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('pending', 'processing', 'sent', 'failed', 'read')),
   error TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  CHECK (content IS NOT NULL OR media IS NOT NULL OR tool_calls IS NOT NULL),
   FOREIGN KEY (conversation_id) REFERENCES chowbot_conversations(id) ON DELETE CASCADE,
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
@@ -735,6 +736,32 @@ CREATE TABLE IF NOT EXISTS chowbot_messages (
 
 CREATE INDEX IF NOT EXISTS idx_chowbot_messages_conversation
   ON chowbot_messages(conversation_id, created_at ASC);
+
+CREATE TRIGGER IF NOT EXISTS trg_chowbot_messages_consistency_insert
+BEFORE INSERT ON chowbot_messages
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1
+  FROM chowbot_conversations c
+  WHERE c.id = NEW.conversation_id
+    AND (c.organization_id != NEW.organization_id OR c.site_id != NEW.site_id)
+)
+BEGIN
+  SELECT RAISE(ABORT, 'chowbot_messages conversation organization/site mismatch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_chowbot_messages_consistency_update
+BEFORE UPDATE ON chowbot_messages
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1
+  FROM chowbot_conversations c
+  WHERE c.id = NEW.conversation_id
+    AND (c.organization_id != NEW.organization_id OR c.site_id != NEW.site_id)
+)
+BEGIN
+  SELECT RAISE(ABORT, 'chowbot_messages conversation organization/site mismatch');
+END;
 
 CREATE TABLE IF NOT EXISTS chowbot_channel_state (
   user_id TEXT NOT NULL,
@@ -750,6 +777,64 @@ CREATE TABLE IF NOT EXISTS chowbot_channel_state (
   FOREIGN KEY (selected_site_id) REFERENCES sites(id) ON DELETE SET NULL,
   FOREIGN KEY (active_conversation_id) REFERENCES chowbot_conversations(id) ON DELETE SET NULL
 );
+
+CREATE TRIGGER IF NOT EXISTS trg_chowbot_channel_state_conversation_user_insert
+BEFORE INSERT ON chowbot_channel_state
+FOR EACH ROW
+WHEN NEW.active_conversation_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM chowbot_conversations c
+    WHERE c.id = NEW.active_conversation_id
+      AND c.user_id = NEW.user_id
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'active conversation must belong to the same user');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_chowbot_channel_state_conversation_user_update
+BEFORE UPDATE ON chowbot_channel_state
+FOR EACH ROW
+WHEN NEW.active_conversation_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM chowbot_conversations c
+    WHERE c.id = NEW.active_conversation_id
+      AND c.user_id = NEW.user_id
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'active conversation must belong to the same user');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_chowbot_channel_state_conversation_site_insert
+BEFORE INSERT ON chowbot_channel_state
+FOR EACH ROW
+WHEN NEW.active_conversation_id IS NOT NULL
+  AND NEW.selected_site_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM chowbot_conversations c
+    WHERE c.id = NEW.active_conversation_id
+      AND c.site_id = NEW.selected_site_id
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'active conversation site must match selected site');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_chowbot_channel_state_conversation_site_update
+BEFORE UPDATE ON chowbot_channel_state
+FOR EACH ROW
+WHEN NEW.active_conversation_id IS NOT NULL
+  AND NEW.selected_site_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM chowbot_conversations c
+    WHERE c.id = NEW.active_conversation_id
+      AND c.site_id = NEW.selected_site_id
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'active conversation site must match selected site');
+END;
 
 --------------------------------------------------------------------------------
 -- AI Credits & Usage

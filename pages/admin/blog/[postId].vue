@@ -165,6 +165,7 @@ async function remove() {
     await navigateTo('/admin')
   } catch (err) {
     errorMessage.value = getErrorMessage(err, 'Failed to delete.')
+  } finally {
     saving.value = false
   }
 }

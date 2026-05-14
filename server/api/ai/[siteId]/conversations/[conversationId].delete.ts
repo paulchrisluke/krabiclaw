@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { deleteConversation, getSiteForMember } from '~/server/utils/chowbot-conversations'
+import { ConversationNotFoundError, deleteConversation, getSiteForMember } from '~/server/utils/chowbot-conversations'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -22,8 +22,8 @@ export default defineEventHandler(async (event) => {
     await deleteConversation(db, conversationId, siteId, session.user.id)
     return jsonResponse({ success: true })
   } catch (err) {
-    const message = err instanceof Error ? err.message : ''
-    if (message === 'ChowBot conversation not found') {
+    const code = (err && typeof err === 'object' && 'code' in err) ? (err as { code?: string }).code : undefined
+    if (err instanceof ConversationNotFoundError || code === 'CONVERSATION_NOT_FOUND') {
       return jsonResponse({ error: 'Conversation not found' }, { status: 404 })
     }
     console.error('Failed to delete conversation:', err)

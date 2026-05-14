@@ -4,6 +4,24 @@ const MAX_SUFFIX_ATTEMPTS = 50
 
 type SqlBindValue = string | number | boolean | null
 
+export class MenuSectionConflictError extends Error {
+  code = 'MENU_SECTION_CONFLICT' as const
+
+  constructor(message = 'Section already exists') {
+    super(message)
+    this.name = 'MenuSectionConflictError'
+  }
+}
+
+export class MenuSectionNotFoundError extends Error {
+  code = 'MENU_SECTION_NOT_FOUND' as const
+
+  constructor(message = 'Section not found') {
+    super(message)
+    this.name = 'MenuSectionNotFoundError'
+  }
+}
+
 function slugify(name: string): string {
   const slug = name
     .toLowerCase()
@@ -449,13 +467,42 @@ export async function renameMenuSection(
     UPDATE menu_items
     SET section = ?, updated_at = ?, updated_by = ?
     WHERE menu_id = ? AND section = ?
-  `).bind(newSection, now, updatedBy, menuId, oldSection).run()
+      AND NOT EXISTS (
+        SELECT 1 FROM menu_items
+        WHERE menu_id = ? AND section = ?
+      )
+  `).bind(newSection, now, updatedBy, menuId, oldSection, menuId, newSection).run()
 
   if (!result.success) {
     throw new Error('Failed to rename menu section')
   }
 
-  return result.meta.changes
+  const changes = Number(result.meta.changes ?? 0)
+  if (changes > 0) {
+    return changes
+  }
+
+  const oldSectionExists = await db.prepare(`
+    SELECT id FROM menu_items
+    WHERE menu_id = ? AND section = ?
+    LIMIT 1
+  `).bind(menuId, oldSection).first()
+
+  if (!oldSectionExists) {
+    throw new MenuSectionNotFoundError()
+  }
+
+  const newSectionExists = await db.prepare(`
+    SELECT id FROM menu_items
+    WHERE menu_id = ? AND section = ?
+    LIMIT 1
+  `).bind(menuId, newSection).first()
+
+  if (newSectionExists) {
+    throw new MenuSectionConflictError()
+  }
+
+  throw new Error('Failed to rename menu section')
 }
 
 // Delete every item in a menu section

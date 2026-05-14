@@ -1,7 +1,7 @@
 // PATCH rename menu section
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { renameMenuSection } from '~/server/utils/menu-management'
+import { MenuSectionConflictError, MenuSectionNotFoundError, renameMenuSection } from '~/server/utils/menu-management'
 
 interface RenameSectionBody {
   old_section?: string
@@ -11,19 +11,9 @@ interface RenameSectionBody {
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const menuId = getRouterParam(event, 'menuId')
-  const body = await readBody(event) as RenameSectionBody
-
-  const oldSection = body.old_section?.trim()
-  const newSection = body.new_section?.trim()
 
   if (!siteId || !menuId) {
     return jsonResponse({ error: 'Site ID and menu ID are required' }, { status: 400 })
-  }
-  if (!oldSection || !newSection) {
-    return jsonResponse({ error: 'Old section and new section are required' }, { status: 400 })
-  }
-  if (oldSection === newSection) {
-    return jsonResponse({ error: 'New section must be different' }, { status: 400 })
   }
 
   const env = cloudflareEnv(event)
@@ -38,6 +28,17 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    const body = await readBody(event) as RenameSectionBody
+    const oldSection = body.old_section?.trim()
+    const newSection = body.new_section?.trim()
+
+    if (!oldSection || !newSection) {
+      return jsonResponse({ error: 'Old section and new section are required' }, { status: 400 })
+    }
+    if (oldSection === newSection) {
+      return jsonResponse({ error: 'New section must be different' }, { status: 400 })
+    }
+
     const site = await db.prepare(`
       SELECT s.id, s.organization_id
       FROM sites s
@@ -60,26 +61,6 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Menu not found' }, { status: 404 })
     }
 
-    const oldSectionExists = await db.prepare(`
-      SELECT id FROM menu_items
-      WHERE menu_id = ? AND section = ?
-      LIMIT 1
-    `).bind(menuId, oldSection).first()
-
-    if (!oldSectionExists) {
-      return jsonResponse({ error: 'Section not found' }, { status: 404 })
-    }
-
-    const newSectionExists = await db.prepare(`
-      SELECT id FROM menu_items
-      WHERE menu_id = ? AND section = ?
-      LIMIT 1
-    `).bind(menuId, newSection).first()
-
-    if (newSectionExists) {
-      return jsonResponse({ error: 'Section already exists' }, { status: 409 })
-    }
-
     const updated = await renameMenuSection(db, menuId, oldSection, newSection, session.user.id)
 
     return jsonResponse({
@@ -90,6 +71,15 @@ export default defineEventHandler(async (event) => {
       updated,
     })
   } catch (error) {
+    if (error instanceof SyntaxError || error instanceof TypeError) {
+      return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
+    }
+    if (error instanceof MenuSectionNotFoundError) {
+      return jsonResponse({ error: 'Section not found' }, { status: 404 })
+    }
+    if (error instanceof MenuSectionConflictError) {
+      return jsonResponse({ error: 'Section already exists' }, { status: 409 })
+    }
     console.error('Failed to rename menu section:', error)
     return jsonResponse({ error: 'Failed to rename menu section' }, { status: 500 })
   }

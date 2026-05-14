@@ -69,7 +69,7 @@ export default defineEventHandler(async (event) => {
     role: 'user',
     channel: 'dashboard',
     content: userText,
-  })
+  }, session.user.id)
 
   const messages = await getRecentAgentMessages(db, conversation.id, siteId, session.user.id)
   const siteConfig = await getConfig(db, site.organization_id, siteId)
@@ -111,7 +111,7 @@ export default defineEventHandler(async (event) => {
         channel: 'dashboard',
         content: assistantText,
         toolCalls: finalEvent?.toolCalls ?? [],
-      })
+      }, session.user.id)
     } catch (error) {
       await createMessage(db, {
         conversationId: conversation.id,
@@ -123,7 +123,7 @@ export default defineEventHandler(async (event) => {
         content: error instanceof Error ? error.message : 'Something went wrong.',
         status: 'failed',
         error: error instanceof Error ? error.message : 'Something went wrong.',
-      })
+      }, session.user.id)
       throw error
     }
   })

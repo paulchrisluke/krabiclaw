@@ -123,6 +123,9 @@ export async function extractMenuFromMediaAsset(
   const imageType = IMAGE_TYPES[asset.mime_type]
   if (!isPdf && !imageType) throw new Error(`Unsupported media type: ${asset.mime_type}`)
 
+  const creditOk = await hasCredits(db, opts.organizationId)
+  if (!creditOk) throw new Error('No AI credits remaining.')
+
   const base64 = base64FromArrayBuffer(bytes)
   const fileContentBlock = isPdf ? documentBlock(base64) : imageBlock(base64, imageType)
   const aiResponse = await callAiGateway(
@@ -148,8 +151,11 @@ export async function extractMenuFromMediaAsset(
   const jsonText = (() => {
     const fenced = rawText.match(/```(?:json)?\s*([\s\S]*?)```/)
     if (fenced) return (fenced[1] ?? '').trim()
-    const obj = rawText.match(/\{[\s\S]*?\}/)
-    if (obj) return obj[0]
+    const firstBrace = rawText.indexOf('{')
+    const lastBrace = rawText.lastIndexOf('}')
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
+      return rawText.slice(firstBrace, lastBrace + 1)
+    }
     return rawText.trim()
   })()
   let parsed: { items: ApiRecord[]; warning?: string }

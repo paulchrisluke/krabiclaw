@@ -422,8 +422,6 @@ const features = [
   { icon: 'i-heroicons-shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
   { icon: 'i-heroicons-chart-bar', title: 'Real-time insights', body: 'See covers, top dishes, busy hours — all in one dashboard.' },
 ]
-const { freePlan: freePlanData, proPlan: proPlanData, displayPrice } = usePlans()
-
 const { getField, getFieldStr } = usePageContent('home')
 const heroVideoUrl = computed(() => getField('hero.video'))
 const heroImageUrl = computed(() => getField('hero.image'))

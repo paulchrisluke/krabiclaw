@@ -215,9 +215,10 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
+      const encodedSection = encodeURIComponent(section)
       const response = await $fetch<{ success: boolean; section: string; deleted: number }>(
-        `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/sections`,
-        { method: 'DELETE', body: { section } }
+        `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/sections?section=${encodedSection}`,
+        { method: 'DELETE' }
       )
       if (response.success) {
         currentMenu.value.items = currentMenu.value.items.filter(item => item.section !== response.section)

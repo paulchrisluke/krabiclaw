@@ -48,8 +48,23 @@ export const useChowBotHistory = () => {
   }
 
   const remove = async (siteId: string, conversationId: string) => {
-    await $fetch(`/api/ai/${siteId}/conversations/${conversationId}`, { method: 'DELETE' })
-    await load(siteId)
+    const previousConversations = conversationsBySite.value[siteId] ?? []
+    const optimisticUpdate = previousConversations.filter((c) => c.id !== conversationId)
+    conversationsBySite.value = {
+      ...conversationsBySite.value,
+      [siteId]: optimisticUpdate,
+    }
+
+    try {
+      await $fetch(`/api/ai/${siteId}/conversations/${conversationId}`, { method: 'DELETE' })
+      await load(siteId)
+    } catch (error) {
+      console.error('Failed to remove conversation:', error)
+      conversationsBySite.value = {
+        ...conversationsBySite.value,
+        [siteId]: previousConversations,
+      }
+    }
   }
 
   return { load, forSite, get, remove }
@@ -57,10 +72,6 @@ export const useChowBotHistory = () => {
 
 function parseToolCalls(raw: string | null): ChowbotToolCall[] | undefined {
   if (!raw) return undefined
-  try {
-    const parsed = JSON.parse(raw) as Array<{ name: string; input: ApiValue; result: ApiValue }>
-    return parsed.map((tool) => ({ ...tool, status: 'done' as const }))
-  } catch {
-    return undefined
-  }
+  const parsed = JSON.parse(raw) as Array<{ name: string; input: unknown; result: unknown }>
+  return parsed.map((tool) => ({ ...tool, status: 'done' as const }))
 }

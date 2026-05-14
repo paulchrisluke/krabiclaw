@@ -73,33 +73,23 @@ export default defineEventHandler(async (event) => {
   params.push(postId)
   
   try {
-    const result = await db.prepare(`UPDATE platform_blog_posts SET ${updates.join(', ')} WHERE id = ?`).bind(...params).run()
-    if (!result.meta.changes || result.meta.changes === 0) {
+    const post = await db.prepare(
+      `UPDATE platform_blog_posts
+       SET ${updates.join(', ')}
+       WHERE id = ?
+       RETURNING id, title, slug, body, excerpt, category, published_at, created_at, updated_at`
+    ).bind(...params).first()
+
+    if (!post) {
       return jsonResponse({ error: 'Post not found' }, { status: 404 })
     }
+
+    return jsonResponse({ success: true, post })
   } catch (err) {
     if (isSlugUniqueConstraintError(err)) {
       return jsonResponse({ error: 'Slug already in use' }, { status: 400 })
     }
     console.error('Failed to update blog post:', err)
     return jsonResponse({ error: 'Failed to update post' }, { status: 500 })
-  }
-
-  try {
-    const post = await db.prepare(
-      `SELECT id, title, slug, body, excerpt, category, published_at, created_at, updated_at
-       FROM platform_blog_posts
-       WHERE id = ?
-       LIMIT 1`
-    ).bind(postId).first()
-
-    if (!post) {
-      return jsonResponse({ success: true })
-    }
-
-    return jsonResponse({ success: true, post })
-  } catch (err) {
-    console.error('Failed to fetch updated post:', err)
-    return jsonResponse({ success: true })
   }
 })

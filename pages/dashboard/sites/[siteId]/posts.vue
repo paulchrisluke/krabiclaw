@@ -173,6 +173,11 @@ const openCompose = () => {
 const closeEditor = () => {
   selectedPost.value = null
   composing.value = false
+  editForm.title = ''
+  editForm.body = ''
+  editForm.image_asset_id = null
+  editForm.imagePreviewUrl = null
+  selectedChannels.value = []
 }
 
 const selectPost = (post: ApiRecord) => {

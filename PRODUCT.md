@@ -92,6 +92,7 @@ Pricing is managed entirely in Stripe — never duplicated here. See Stripe dash
 
 Key tables (see `schema.sql` for authoritative list):
 - `ai_credits` / `ai_usage_log` — credit billing, usage tracking, CF Gateway log reconciliation
+- `chowbot_conversations` / `chowbot_messages` / `chowbot_channel_state` — canonical ChowBot conversation history, persisted messages/tool calls/media context, and per-channel state
 - `notifications` — channel-agnostic outbound notification log
 - `contact_submissions` / `reservation_submissions` — Saya theme form submissions
 - `posts` / `post_channel_jobs` — post source of truth + per-channel distribution queue (location-scoped, post_type, CTA, event/offer fields)
@@ -150,10 +151,14 @@ Removed: `staff_profiles`, `awards_recognition` (no GMB source, no routes)
 
 ---
 
-### ✅ 6. ChowBot — Dashboard AI Chat Agent
+### ✅ 6. ChowBot — D1-Owned AI Agent
 **Status: Live**
 
-A Shopify Sidekick-style chat panel on every dashboard page. Owner types natural language → ChowBot takes action via tools → streams live tool indicators → confirms before publishing.
+ChowBot is the durable owner-facing AI agent. Conversations, messages, tool calls, media context, and channel state live in D1. Dashboard chat and WhatsApp are clients of the same ChowBot backend, not separate bots.
+
+Dashboard: Shopify Sidekick-style chat panel on every dashboard page. Owner types natural language → ChowBot takes action via tools → streams live tool indicators → confirms before publishing.
+
+WhatsApp: owner/admin/editor messages are normalized, associated with the verified user and selected site, persisted into the same ChowBot D1 conversation tables, processed by the same `runChowBot(...)` tool loop, then returned as concise plain text.
 
 **Tools covering:**
 - Posts: list, create (all types + CTA/event/offer), publish
@@ -167,7 +172,8 @@ A Shopify Sidekick-style chat panel on every dashboard page. Owner types natural
 
 **SSE streaming** — tool indicators appear live as each tool runs.
 **Dev bypass** — no credits charged in `NODE_ENV=development`.
-**WhatsApp-native** — same tools will be exposed via WhatsApp once number is registered.
+**WhatsApp-native interface** — WhatsApp is transport only. It may verify Meta, identify the user, pick the site, dedupe inbound Meta IDs, download and persist media, and deliver ChowBot's final reply. It must not own menu import, publish/delete flows, media task decisions, or other business workflows.
+**Media ownership** — inbound WhatsApp media is saved as ChowBot message media context. ChowBot then decides whether to import menu items, save media, use it for a post/image task, ask a clarifying question, or cancel.
 
 ---
 
@@ -254,6 +260,8 @@ Per-tenant API key system so restaurant owners can connect their own AI to manag
 - All location data is CRUD-available in D1 regardless of GMB connection — GMB sync is additive, not required
 - Notification delivery is channel-agnostic — `notifications.channel` column means email/push can be added with no schema change
 - WhatsApp and Instagram both go through the same Facebook app — single OAuth covers both
-- Agent (ChowBot) actions write through existing editor APIs — keeps audit trail and draft/publish workflow intact
+- ChowBot is the owner of AI conversations, messages, tools, media context, and channel state; dashboard and WhatsApp are interfaces over the same D1-backed backend
+- WhatsApp webhooks are transport glue only: verify, identify, select site, dedupe, persist inbound message/media, call ChowBot, send final plain-text reply
+- Agent (ChowBot) actions write through shared tool/core logic and existing editor APIs — keeps audit trail and draft/publish workflow intact
 - Credit system enforced at the `/api/ai/*` route layer — 402 on exhaustion with upgrade prompt
 - `layout: 'saya'` is the correct layout name for all Saya theme pages — `tenant` is dead

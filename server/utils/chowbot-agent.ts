@@ -4,6 +4,8 @@ import { listPosts, createPost, publishPost } from '~/server/utils/post-manageme
 import { getMenus, getMenuWithItems, createMenu, updateMenu, createMenuItem, updateMenuItem, deleteMenuItem, deleteMenu, renameMenuSection, deleteMenuSection } from '~/server/utils/menu-management'
 import { setConfig } from '~/server/utils/site-config'
 import { getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
+import { extractMenuFromMediaAsset } from '~/server/utils/chowbot-media'
+import { upsertChannelState } from '~/server/utils/chowbot-conversations'
 import type { MenuItem, UpdateMenuItemRequest } from '~/server/types/menu'
 
 const MAX_ITERATIONS = 10
@@ -48,6 +50,8 @@ export interface RunChowBotOptions {
   messages: ChowBotIncomingMessage[]
   currentPage?: string
   locationId?: string | null
+  channel?: 'dashboard' | 'whatsapp'
+  pendingMedia?: { assetId: string; siteId: string }
   onEvent?: (_event: ChowBotRunEvent) => Promise<void> | void
 }
 
@@ -486,6 +490,27 @@ const TOOLS: AiTool[] = [
     },
   },
   {
+    name: 'import_menu_from_pending_media',
+    description: 'Import menu items from the currently pending WhatsApp image or document. Use only when the user asks to import, extract, or read menu items from the pending file.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        menu_name: { type: 'string', description: 'Optional draft menu name.' },
+      },
+    },
+  },
+  {
+    name: 'resolve_pending_media',
+    description: 'Resolve the currently pending WhatsApp media without importing it. Use when the user wants to save the already-uploaded media as-is or cancel the pending media task.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['save_media', 'cancel'] },
+      },
+      required: ['action'],
+    },
+  },
+  {
     name: 'generate_image',
     description: 'Generate an AI image from a text prompt using Flux. The image is automatically saved to the media library. Use for menu item photos, hero images, or social posts.',
     input_schema: {
@@ -580,9 +605,17 @@ const TOOLS: AiTool[] = [
 
 const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu', 'delete_menu_item', 'delete_menu_section', 'delete_media_asset', 'delete_qa'])
 
+function isAllowedGoogleMapsHost(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  return host === 'maps.app.goo.gl'
+    || host === 'maps.google.com'
+    || host === 'google.com'
+    || host.endsWith('.google.com')
+}
+
 function requiresConfirmation(name: string, recentMessages: AiMessage[]): boolean {
   if (!CONFIRM_REQUIRED.has(name)) return false
-  const CONFIRM_WORDS = /\b(yes|yea|yeah|yep|yup|ok|okay|go ahead|do it|do that|publish|confirm|proceed|sure|absolutely|fine|sounds good|let'?s go|delete|remove)\b/i
+  const CONFIRM_WORDS = /\b(yes|yea|yeah|yep|yup|ok|okay|go ahead|do it|do that|publish|confirm|proceed|sure|absolutely|fine|sounds good|let'?s go)\b/i
   const userTurns = recentMessages.filter(m => m.role === 'user').slice(-3)
     .map(m => (typeof m.content === 'string' ? m.content : ''))
   return !userTurns.some(t => CONFIRM_WORDS.test(t))
@@ -591,7 +624,17 @@ function requiresConfirmation(name: string, recentMessages: AiMessage[]): boolea
 async function executeTool(
   name: string,
   input: ApiRecord,
-  ctx: { db: D1Database; env: ApiRecord; orgId: string; siteId: string; userId: string; agentMessages?: AiMessage[]; locationId?: string | null }
+  ctx: {
+    db: D1Database
+    env: ApiRecord
+    orgId: string
+    siteId: string
+    userId: string
+    agentMessages?: AiMessage[]
+    locationId?: string | null
+    channel?: 'dashboard' | 'whatsapp'
+    pendingMedia?: { assetId: string; siteId: string }
+  }
 ): Promise<ApiValue> {
   const { db, env, orgId, siteId, userId } = ctx
 
@@ -896,9 +939,12 @@ async function executeTool(
 
     case 'publish_menu': {
       const now = new Date().toISOString()
-      await db.prepare(
+      const result = await db.prepare(
         `UPDATE menus SET status = 'published', updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND site_id = ?`
       ).bind(now, userId, input.menu_id, orgId, siteId).run()
+      if (!result.meta.changes || result.meta.changes === 0) {
+        return { error: 'Menu not found or access denied.' }
+      }
       return { menu_id: input.menu_id, status: 'published' }
     }
 
@@ -982,10 +1028,10 @@ async function executeTool(
             return { error: 'Unable to update location slug.' }
           }
           updateParams[slugParamIndex] = slug
-          updateParams.push(locationId, orgId)
+          updateParams.push(locationId, orgId, siteId)
 
           try {
-            await db.prepare(`UPDATE business_locations SET ${sets.join(', ')} WHERE id = ? AND organization_id = ?`).bind(...updateParams).run()
+            await db.prepare(`UPDATE business_locations SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`).bind(...updateParams).run()
             updated = true
             break
           } catch (error) {
@@ -998,8 +1044,8 @@ async function executeTool(
           throw new Error(`Unable to allocate a unique location slug after ${MAX_SLUG_ATTEMPTS} attempts`)
         }
       } else {
-        params.push(locationId, orgId)
-        await db.prepare(`UPDATE business_locations SET ${sets.join(', ')} WHERE id = ? AND organization_id = ?`).bind(...params).run()
+        params.push(locationId, orgId, siteId)
+        await db.prepare(`UPDATE business_locations SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`).bind(...params).run()
       }
 
       const updated = await db.prepare(
@@ -1015,17 +1061,46 @@ async function executeTool(
       const rawUrl = typeof input.url === 'string' ? input.url.trim() : ''
       if (!rawUrl) return { error: 'url is required.' }
 
-      // Validate it looks like a Google Maps URL before fetching
-      if (!rawUrl.includes('google.com/maps') && !rawUrl.includes('maps.app.goo.gl') && !rawUrl.includes('maps.google.com')) {
+      let parsedRawUrl: URL
+      try {
+        parsedRawUrl = new URL(rawUrl)
+      } catch {
+        return { error: 'Invalid URL format.' }
+      }
+
+      if (!isAllowedGoogleMapsHost(parsedRawUrl.hostname)) {
         return { error: 'URL does not appear to be a Google Maps link.' }
       }
 
-      // Follow redirects to resolve short URLs (maps.app.goo.gl)
-      let resolvedUrl = rawUrl
+      // Resolve one redirect hop safely for short URLs.
+      let resolvedUrl = parsedRawUrl.toString()
       try {
-        const probe = await fetch(rawUrl, { method: 'HEAD', redirect: 'follow' })
-        resolvedUrl = probe.url || rawUrl
+        const probe = await fetch(parsedRawUrl.toString(), { method: 'HEAD', redirect: 'manual' })
+        const location = probe.headers.get('location')
+        if (location) {
+          const redirected = new URL(location, parsedRawUrl)
+          if (!isAllowedGoogleMapsHost(redirected.hostname)) {
+            return { error: 'URL redirects to a non-Google host.' }
+          }
+          resolvedUrl = redirected.toString()
+        } else {
+          const probeUrl = probe.url || parsedRawUrl.toString()
+          const parsedProbeUrl = new URL(probeUrl)
+          if (!isAllowedGoogleMapsHost(parsedProbeUrl.hostname)) {
+            return { error: 'Resolved URL is not a Google Maps host.' }
+          }
+          resolvedUrl = parsedProbeUrl.toString()
+        }
       } catch { /* keep rawUrl */ }
+
+      try {
+        const resolvedHost = new URL(resolvedUrl).hostname
+        if (!isAllowedGoogleMapsHost(resolvedHost)) {
+          return { error: 'Resolved URL is not a Google Maps host.' }
+        }
+      } catch {
+        return { error: 'Resolved URL is invalid.' }
+      }
 
       // Extract place ID from the canonical URL data parameter: !1s{placeId}
       const placeIdMatch = resolvedUrl.match(/!1s([^!&]+)/)
@@ -1053,7 +1128,8 @@ async function executeTool(
 
       // Fallback: extract business name from URL and text-search
       const nameMatch = resolvedUrl.match(/\/maps\/place\/([^/@]+)/)
-      const nameQuery = nameMatch ? decodeURIComponent(nameMatch[1].replace(/\+/g, ' ')) : ''
+      const placePath = nameMatch?.[1] ?? ''
+      const nameQuery = placePath ? decodeURIComponent(placePath.replace(/\+/g, ' ')) : ''
       if (!nameQuery) return { error: 'Could not extract a place from that URL. Try sharing the full Google Maps link.' }
 
       const results = await searchPlaces(apiKey, nameQuery)
@@ -1108,6 +1184,55 @@ async function executeTool(
       const { deleteMediaAsset } = await import('~/server/utils/media-asset-manager')
       await deleteMediaAsset(db, env, input.asset_id, siteId)
       return { asset_id: input.asset_id, deleted: true }
+    }
+
+    case 'import_menu_from_pending_media': {
+      if (!ctx.pendingMedia?.assetId || ctx.pendingMedia.siteId !== siteId) {
+        return { error: 'No pending WhatsApp media is available to import.' }
+      }
+      const result = await extractMenuFromMediaAsset(db, env, {
+        organizationId: orgId,
+        siteId,
+        userId,
+        assetId: ctx.pendingMedia.assetId,
+        menuName: toSqlText(input.menu_name)?.trim() || undefined,
+      })
+      if (ctx.channel === 'whatsapp') {
+        await upsertChannelState(db, {
+          userId,
+          channel: 'whatsapp',
+          selectedSiteId: siteId,
+          pendingMedia: null,
+          pendingConfirmation: null,
+        })
+      }
+      return {
+        asset_id: ctx.pendingMedia.assetId,
+        menu_id: result.menuId,
+        imported_items: result.count,
+        warning: result.warning,
+        credits_remaining: result.creditsRemaining,
+      }
+    }
+
+    case 'resolve_pending_media': {
+      if (!ctx.pendingMedia?.assetId || ctx.pendingMedia.siteId !== siteId) {
+        return { error: 'No pending WhatsApp media is available to resolve.' }
+      }
+      const action = toSqlText(input.action)
+      if (action !== 'save_media' && action !== 'cancel') {
+        return { error: 'action must be save_media or cancel.' }
+      }
+      if (ctx.channel === 'whatsapp') {
+        await upsertChannelState(db, {
+          userId,
+          channel: 'whatsapp',
+          selectedSiteId: siteId,
+          pendingMedia: null,
+          pendingConfirmation: null,
+        })
+      }
+      return { asset_id: ctx.pendingMedia.assetId, action, resolved: true }
     }
 
     case 'generate_image': {
@@ -1269,6 +1394,7 @@ export async function runChowBot(opts: RunChowBotOptions): Promise<RunChowBotRes
   const siteName = opts.siteName
   const currentPage = opts.currentPage ?? 'dashboard'
   const locationId = typeof opts.locationId === 'string' && opts.locationId ? opts.locationId : null
+  const channel = opts.channel ?? 'dashboard'
 
   // Resolve current location name for richer context
   let locationName: string | null = null
@@ -1285,6 +1411,7 @@ Help manage all site content with concise, action-oriented responses.
 Site: ${siteName}
 Default menu currency: ${opts.defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ''}
+${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. If the user wants to import, extract, or read menu items from it, call import_menu_from_pending_media. If the user wants to save it as-is or cancel, call resolve_pending_media. If their intent is unclear, ask a short clarifying question.` : ''}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create (standard/offer/event/update with CTA), publish — optionally location-scoped
@@ -1330,7 +1457,7 @@ Guidelines:
     if (opts.onEvent) await opts.onEvent(event)
   }
 
-  const ctx = { db, env, orgId, siteId, userId, agentMessages, locationId }
+  const ctx = { db, env, orgId, siteId, userId, agentMessages, locationId, channel, pendingMedia: opts.pendingMedia }
   const toolCalls: ChowBotToolCall[] = []
   let totalInput = 0, totalOutput = 0, cfLogId: string | null = null
   let responseText = ''

@@ -26,7 +26,6 @@
 
 /* ── KrabiClaw brand palette ──────────────────────────────── */
 :root {
-
   /* Global type scaling belongs at the root so rem-based sizing stays predictable. */
   font-size: 106%;
 

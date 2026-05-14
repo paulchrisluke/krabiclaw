@@ -109,7 +109,7 @@
         <div class="sticky top-4 space-y-3">
           <p class="text-xs font-semibold uppercase tracking-wider text-muted">Preview</p>
           <div class="overflow-hidden rounded-lg border border-default bg-default">
-            <img v-if="imagePreviewUrl" :src="imagePreviewUrl" class="max-h-56 w-full object-cover" />
+            <img v-if="imagePreviewUrl" :src="imagePreviewUrl" :alt="title || 'Post image'" class="max-h-56 w-full object-cover" />
             <div class="space-y-3 p-4">
               <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
                 <UBadge v-if="category" color="neutral" variant="soft">{{ category }}</UBadge>

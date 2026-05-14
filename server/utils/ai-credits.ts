@@ -63,29 +63,26 @@ export async function chargeCredits(
   const now = new Date().toISOString()
   const logId = crypto.randomUUID()
 
-  // Atomic check-and-deduct: only update if balance >= creditsCharged
-  const updateResult = await db
-    .prepare(
+  // Ensure a row exists so atomic decrement doesn't treat missing rows as insufficient credits.
+  await getOrCreateCredits(db, organizationId)
+
+  const [updateResult] = await db.batch([
+    db.prepare(
       `UPDATE ai_credits
        SET balance = balance - ?,
            lifetime_used = lifetime_used + ?,
            updated_at = ?
        WHERE organization_id = ? AND balance >= ?`
-    )
-    .bind(creditsCharged, creditsCharged, now, organizationId, creditsCharged)
-    .run()
-
-  if (updateResult.meta.changes === 0) {
-    throw new Error('Insufficient AI credits remaining.')
-  }
-
-  await db
-    .prepare(
+    ).bind(creditsCharged, creditsCharged, now, organizationId, creditsCharged),
+    db.prepare(
       `INSERT INTO ai_usage_log
          (id, organization_id, site_id, action, model, input_tokens, output_tokens, credits_charged, cf_gateway_log_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .bind(
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+       WHERE EXISTS (
+         SELECT 1 FROM ai_credits
+         WHERE organization_id = ? AND updated_at = ?
+       )`
+    ).bind(
       logId,
       organizationId,
       opts.siteId ?? null,
@@ -95,9 +92,26 @@ export async function chargeCredits(
       opts.outputTokens,
       creditsCharged,
       opts.cfGatewayLogId ?? null,
+      now,
+      organizationId,
       now
-    )
-    .run()
+    ),
+  ])
+
+  if (!updateResult) {
+    throw new Error('AI credit deduction failed.')
+  }
+
+  if (updateResult.meta.changes === 0) {
+    const row = await db
+      .prepare('SELECT 1 AS found FROM ai_credits WHERE organization_id = ? LIMIT 1')
+      .bind(organizationId)
+      .first<{ found: number }>()
+    if (!row) {
+      throw new Error('AI credits row missing for organization.')
+    }
+    throw new Error('Insufficient AI credits remaining.')
+  }
 
   const updated = await db
     .prepare('SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1')

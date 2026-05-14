@@ -55,6 +55,15 @@ export interface CreateMessageInput {
   error?: string | null
 }
 
+export class ConversationNotFoundError extends Error {
+  code = 'CONVERSATION_NOT_FOUND' as const
+
+  constructor(message = 'ChowBot conversation not found') {
+    super(message)
+    this.name = 'ConversationNotFoundError'
+  }
+}
+
 function nowIso() {
   return new Date().toISOString()
 }
@@ -213,13 +222,13 @@ export async function deleteConversation(
   `).bind(nowIso(), conversationId, siteId, userId).run()
 
   if (!result.meta.changes || result.meta.changes === 0) {
-    throw new Error('ChowBot conversation not found')
+    throw new ConversationNotFoundError()
   }
 }
 
-export async function createMessage(db: D1Database, input: CreateMessageInput): Promise<ChowBotMessage> {
+export async function createMessage(db: D1Database, input: CreateMessageInput, actorUserId: string): Promise<ChowBotMessage> {
   // Verify conversation exists and user has access
-  const conversation = await getConversation(db, input.conversationId, input.siteId, input.userId ?? '')
+  const conversation = await getConversation(db, input.conversationId, input.siteId, actorUserId)
   if (!conversation) {
     throw new Error('ChowBot conversation not found or access denied')
   }
@@ -240,10 +249,10 @@ export async function createMessage(db: D1Database, input: CreateMessageInput): 
     input.role,
     input.channel,
     input.content ?? null,
-    input.media ?? null,
+    input.media == null ? null : JSON.stringify(input.media),
     input.metaMessageId ?? null,
     input.toolCalls ? JSON.stringify(input.toolCalls) : null,
-    input.status ?? 'pending',
+    input.status ?? 'sent',
     input.error ?? null,
     now
   ).run()
@@ -320,17 +329,20 @@ export async function upsertChannelState(
     lastInboundId?: string | null
   }
 ): Promise<void> {
+  const updateFields: string[] = []
+  if ('selectedSiteId' in opts) updateFields.push('selected_site_id = excluded.selected_site_id')
+  if ('activeConversationId' in opts) updateFields.push('active_conversation_id = excluded.active_conversation_id')
+  if ('pendingMedia' in opts) updateFields.push('pending_media = excluded.pending_media')
+  if ('pendingConfirmation' in opts) updateFields.push('pending_confirmation = excluded.pending_confirmation')
+  if ('lastInboundId' in opts) updateFields.push('last_inbound_id = excluded.last_inbound_id')
+  updateFields.push('updated_at = excluded.updated_at')
+
   await db.prepare(`
     INSERT INTO chowbot_channel_state
       (user_id, channel, selected_site_id, active_conversation_id, pending_media, pending_confirmation, last_inbound_id, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, channel) DO UPDATE SET
-      selected_site_id = excluded.selected_site_id,
-      active_conversation_id = excluded.active_conversation_id,
-      pending_media = excluded.pending_media,
-      pending_confirmation = excluded.pending_confirmation,
-      last_inbound_id = excluded.last_inbound_id,
-      updated_at = excluded.updated_at
+      ${updateFields.join(',\n      ')}
   `).bind(
     opts.userId,
     opts.channel,
