@@ -19,8 +19,9 @@ export default defineEventHandler(async (event) => {
   if (preview && previewToken) {
     const previewSecret = env.PREVIEW_SECRET
     if (!previewSecret) {
+      console.error('Critical: PREVIEW_SECRET is not configured in this environment.')
       return jsonResponse({ 
-        error: 'Preview not configured' 
+        error: 'Site configuration error: Preview secret missing' 
       }, { status: 500 })
     }
     isPreviewAuthorized = await verifyPreviewToken(String(previewSecret), String(siteId), previewToken)
