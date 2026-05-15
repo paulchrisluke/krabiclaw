@@ -74,7 +74,6 @@ export default defineEventHandler(async (event) => {
 
     await db.batch(statements)
 
-    // Run in background when supported; otherwise await to keep sync reliable.
     const syncPromise = updateSubscriptionQuantity(env, db, site.organization_id).catch((err) =>
       console.error('Failed to update Stripe subscription quantity after location delete:', err)
     )

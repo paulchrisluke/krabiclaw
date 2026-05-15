@@ -112,6 +112,48 @@ export const getSiteContentField = async (db: D1Database, organizationId: string
   return result ?? null
 }
 
+export const deleteSiteContentField = async (
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  page: string,
+  field: string,
+  locationId?: string,
+) => {
+  let query = `DELETE FROM site_content WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ?`
+  const params: Array<string> = [organizationId, siteId, page, field]
+
+  if (locationId) {
+    query += ` AND location_id = ?`
+    params.push(locationId)
+  } else {
+    query += ` AND location_id IS NULL`
+  }
+
+  await db.prepare(query).bind(...params).run()
+}
+
+export const deleteDraftContentField = async (
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  page: string,
+  field: string,
+  locationId?: string,
+) => {
+  let query = `DELETE FROM site_content_drafts WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ?`
+  const params: Array<string> = [organizationId, siteId, page, field]
+
+  if (locationId) {
+    query += ` AND location_id = ?`
+    params.push(locationId)
+  } else {
+    query += ` AND location_id IS NULL`
+  }
+
+  await db.prepare(query).bind(...params).run()
+}
+
 
 
 // Draft Management

@@ -1,6 +1,6 @@
 // Site creation API with idempotency and rollback safety
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
-import { getSayaThemeSeedContent } from '../../utils/content-seeding'
+import { seedNewSite } from '../../utils/site-template'
 import { getAuthSession } from '../../utils/auth'
 import { createSystemSubdomain } from '../../utils/domains'
 import { defineEventHandler, readBody } from 'h3'
@@ -242,30 +242,8 @@ async function performRequiredSeeding(env: OnboardingEnv, db: D1Database, siteId
   const now = new Date().toISOString()
   
   try {
-    // Step 1: Seed required Saya theme content (must succeed)
-    const contentSeedData = getSayaThemeSeedContent({
-      organizationId,
-      siteId,
-      restaurantName
-    })
-    
-    for (const content of contentSeedData) {
-      await db.prepare(`
-        INSERT OR REPLACE INTO site_content (
-          organization_id, site_id, location_id, page, field,
-          content, type, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        content.organization_id,
-        content.site_id,
-        content.location_id,
-        content.page,
-        content.field,
-        content.content,
-        content.type,
-        content.updated_at
-      ).run()
-    }
+    // Step 1: Seed template content (location, menu, reviews, Q&A, posts, site_content)
+    await seedNewSite(db, { organizationId, siteId, restaurantName })
     
     const resolvedSubdomain = subdomain || await db.prepare('SELECT subdomain FROM sites WHERE id = ?').bind(siteId).first<SubdomainRow>().then((r) => r?.subdomain)
     if (!resolvedSubdomain || typeof resolvedSubdomain !== 'string' || !resolvedSubdomain.trim()) {

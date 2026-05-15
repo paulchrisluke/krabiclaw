@@ -96,6 +96,23 @@
                   <UInput v-model="locationEditForm.phone" type="tel" placeholder="+66 2 123 4567" />
                 </UFormField>
                 <div class="grid gap-4 sm:grid-cols-2">
+                  <UFormField label="Rating">
+                    <UInput v-model="locationEditForm.rating" type="number" min="0" max="5" step="0.1" placeholder="4.8" />
+                  </UFormField>
+                  <UFormField label="Review Count">
+                    <UInput v-model="locationEditForm.review_count" type="number" min="0" step="1" placeholder="124" />
+                  </UFormField>
+                </div>
+                <UFormField label="Google Maps URL">
+                  <UInput v-model="locationEditForm.maps_url" type="url" placeholder="https://maps.google.com/..." />
+                </UFormField>
+                <UFormField label="Google Place ID">
+                  <UInput v-model="locationEditForm.google_place_id" />
+                </UFormField>
+                <UFormField label="Description">
+                  <UTextarea v-model="locationEditForm.description" :rows="3" />
+                </UFormField>
+                <div class="grid gap-4 sm:grid-cols-2">
                   <UFormField label="Hero Image">
                     <MediaPicker
                       v-model="locationEditForm.hero_image_asset_id"
@@ -187,6 +204,23 @@
             <UFormField label="Phone">
               <UInput v-model="addLocationForm.phone" type="tel" placeholder="+66 2 123 4567" />
             </UFormField>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <UFormField label="Rating">
+                <UInput v-model="addLocationForm.rating" type="number" min="0" max="5" step="0.1" placeholder="4.8" />
+              </UFormField>
+              <UFormField label="Review Count">
+                <UInput v-model="addLocationForm.review_count" type="number" min="0" step="1" placeholder="124" />
+              </UFormField>
+            </div>
+            <UFormField label="Google Maps URL">
+              <UInput v-model="addLocationForm.maps_url" type="url" />
+            </UFormField>
+            <UFormField label="Google Place ID">
+              <UInput v-model="addLocationForm.google_place_id" />
+            </UFormField>
+            <UFormField label="Description">
+              <UTextarea v-model="addLocationForm.description" :rows="3" />
+            </UFormField>
             <UFormField v-if="addLocationForm.address" label="Address">
               <UInput :model-value="addLocationForm.address" disabled />
             </UFormField>
@@ -218,6 +252,11 @@ interface BusinessLocation {
   address: { addressLines?: string[] } | null
   city: string | null
   phone: string | null
+  maps_url: string | null
+  description: string | null
+  google_place_id: string | null
+  rating: number | null
+  review_count: number | null
   hero_image_asset_id: string | null
   hero_video_asset_id: string | null
   is_primary: boolean
@@ -273,6 +312,11 @@ const locationEditForm = reactive({
   title: '',
   city: '',
   phone: '',
+  maps_url: '',
+  google_place_id: '',
+  description: '',
+  rating: '',
+  review_count: '',
   hero_image_asset_id: null as string | null,
   hero_video_asset_id: null as string | null,
   is_primary: false,
@@ -284,6 +328,11 @@ const openEditLocation = (location: BusinessLocation) => {
   locationEditForm.title = location.title
   locationEditForm.city = location.city ?? ''
   locationEditForm.phone = location.phone ?? ''
+  locationEditForm.maps_url = location.maps_url ?? ''
+  locationEditForm.google_place_id = location.google_place_id ?? ''
+  locationEditForm.description = location.description ?? ''
+  locationEditForm.rating = location.rating === null || location.rating === undefined ? '' : String(location.rating)
+  locationEditForm.review_count = location.review_count === null || location.review_count === undefined ? '' : String(location.review_count)
   locationEditForm.hero_image_asset_id = location.hero_image_asset_id ?? null
   locationEditForm.hero_video_asset_id = location.hero_video_asset_id ?? null
   locationEditForm.is_primary = location.is_primary
@@ -361,6 +410,10 @@ const addLocationForm = reactive({
   phone: '',
   address: '',
   maps_url: '',
+  google_place_id: '',
+  description: '',
+  rating: '',
+  review_count: '',
   website_url: '',
   opening_hours: null as string[] | null,
   is_primary: false,
@@ -414,6 +467,7 @@ const selectPlace = async (placeId: string) => {
     addLocationForm.phone = d.phone || addLocationForm.phone
     addLocationForm.address = d.formattedAddress || ''
     addLocationForm.maps_url = d.mapsUrl || ''
+    addLocationForm.google_place_id = placeId
     addLocationForm.website_url = d.websiteUrl || ''
     addLocationForm.opening_hours = d.openingHours || null
     addLocationForm._placeId = placeId
@@ -434,6 +488,10 @@ const cancelAddLocation = () => {
   addLocationForm.phone = ''
   addLocationForm.address = ''
   addLocationForm.maps_url = ''
+  addLocationForm.google_place_id = ''
+  addLocationForm.description = ''
+  addLocationForm.rating = ''
+  addLocationForm.review_count = ''
   addLocationForm.website_url = ''
   addLocationForm.opening_hours = null
   addLocationForm._placeId = ''
@@ -454,6 +512,10 @@ const handleCreateLocation = async () => {
           phone: addLocationForm.phone.trim() || null,
           address: addLocationForm.address ? { addressLines: [addLocationForm.address] } : undefined,
           maps_url: addLocationForm.maps_url || null,
+          google_place_id: addLocationForm.google_place_id || null,
+          description: addLocationForm.description || null,
+          rating: addLocationForm.rating,
+          review_count: addLocationForm.review_count,
           website_url: addLocationForm.website_url || null,
           opening_hours: addLocationForm.opening_hours ? { weekdayDescriptions: addLocationForm.opening_hours } : undefined,
           is_primary: locations.value.length === 0 ? true : addLocationForm.is_primary,

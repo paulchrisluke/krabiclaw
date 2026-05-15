@@ -23,6 +23,8 @@ interface UpdateLocationBody {
   instagram_url?: string
   tiktok_url?: string
   google_place_id?: string
+  rating?: number | string | null
+  review_count?: number | string | null
   is_primary?: boolean
   status?: 'active' | 'inactive' | 'sync_error'
 }
@@ -44,6 +46,16 @@ interface LocationRow {
   website_url: string | null
   maps_url: string | null
   opening_hours: string | null
+  description: string | null
+  short_description: string | null
+  email: string | null
+  price_level: string | null
+  facebook_url: string | null
+  instagram_url: string | null
+  tiktok_url: string | null
+  google_place_id: string | null
+  rating: number | null
+  review_count: number | null
   is_primary: number | boolean
   status: string
   created_at: string
@@ -191,6 +203,32 @@ export default defineEventHandler(async (event) => {
       setParts.push('opening_hours = ?')
       params.push(body.opening_hours ? JSON.stringify(body.opening_hours) : null)
     }
+    if (body.rating !== undefined) {
+      if (body.rating === null || body.rating === '') {
+        setParts.push('rating = ?')
+        params.push(null)
+      } else {
+        const rating = Number(body.rating)
+        if (!Number.isFinite(rating) || rating < 0 || rating > 5) {
+          return jsonResponse({ error: 'Rating must be between 0 and 5' }, { status: 400 })
+        }
+        setParts.push('rating = ?')
+        params.push(rating)
+      }
+    }
+    if (body.review_count !== undefined) {
+      if (body.review_count === null || body.review_count === '') {
+        setParts.push('review_count = ?')
+        params.push(null)
+      } else {
+        const reviewCount = Number(body.review_count)
+        if (!Number.isInteger(reviewCount) || reviewCount < 0) {
+          return jsonResponse({ error: 'Review count must be a whole number greater than or equal to 0' }, { status: 400 })
+        }
+        setParts.push('review_count = ?')
+        params.push(reviewCount)
+      }
+    }
     if (body.status !== undefined) {
       const allowedStatuses = ['active', 'inactive', 'sync_error']
       if (!allowedStatuses.includes(body.status)) {
@@ -257,7 +295,9 @@ export default defineEventHandler(async (event) => {
 
     const location = await db.prepare(`
       SELECT id, slug, title, address, city, phone, hero_image_asset_id, hero_video_asset_id, website_url,
-             maps_url, opening_hours, is_primary, status, created_at, updated_at
+             maps_url, opening_hours, description, short_description, email, price_level,
+             facebook_url, instagram_url, tiktok_url, google_place_id, rating, review_count,
+             is_primary, status, created_at, updated_at
       FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1

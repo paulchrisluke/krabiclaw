@@ -18,6 +18,10 @@ interface CreateLocationBody {
   hero_image_asset_id?: string
   website_url?: string
   maps_url?: string
+  description?: string
+  google_place_id?: string
+  rating?: number | string | null
+  review_count?: number | string | null
   opening_hours?: JsonValue
   is_primary?: boolean
 }
@@ -50,6 +54,10 @@ interface LocationRow {
   hero_image_asset_id: string | null
   website_url: string | null
   maps_url: string | null
+  description: string | null
+  google_place_id: string | null
+  rating: number | null
+  review_count: number | null
   opening_hours: string | null
   is_primary: number | boolean
   status: string
@@ -171,6 +179,20 @@ export default defineEventHandler(async (event) => {
     }
 
     const isPrimary = body.is_primary === true || activeLocationCount === 0
+    let rating: number | null = null
+    if (body.rating !== undefined && body.rating !== null && body.rating !== '') {
+      rating = Number(body.rating)
+      if (!Number.isFinite(rating) || rating < 0 || rating > 5) {
+        return jsonResponse({ error: 'Rating must be between 0 and 5' }, { status: 400 })
+      }
+    }
+    let reviewCount: number | null = null
+    if (body.review_count !== undefined && body.review_count !== null && body.review_count !== '') {
+      reviewCount = Number(body.review_count)
+      if (!Number.isInteger(reviewCount) || reviewCount < 0) {
+        return jsonResponse({ error: 'Review count must be a whole number greater than or equal to 0' }, { status: 400 })
+      }
+    }
     const locationId = crypto.randomUUID()
     const now = new Date().toISOString()
     const statements: D1PreparedStatement[] = []
@@ -186,10 +208,11 @@ export default defineEventHandler(async (event) => {
     statements.push(db.prepare(`
       INSERT INTO business_locations (
         id, organization_id, site_id, slug, title, address, city, phone,
-        hero_image_asset_id, website_url, maps_url, opening_hours, is_primary, status,
+        hero_image_asset_id, website_url, maps_url, description, google_place_id,
+        rating, review_count, opening_hours, is_primary, status,
         created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
     `).bind(
       locationId,
       site.organization_id,
@@ -202,6 +225,10 @@ export default defineEventHandler(async (event) => {
       body.hero_image_asset_id || null,
       body.website_url || null,
       body.maps_url || null,
+      body.description || null,
+      body.google_place_id || null,
+      rating,
+      reviewCount,
       body.opening_hours ? JSON.stringify(body.opening_hours) : null,
       isPrimary ? 1 : 0,
       now,
@@ -220,7 +247,8 @@ export default defineEventHandler(async (event) => {
 
     const location = await db.prepare(`
       SELECT id, slug, title, address, city, phone, hero_image_asset_id, website_url,
-             maps_url, opening_hours, is_primary, status, created_at, updated_at
+             maps_url, description, google_place_id, rating, review_count,
+             opening_hours, is_primary, status, created_at, updated_at
       FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1

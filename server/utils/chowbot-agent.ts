@@ -2,16 +2,22 @@ import { callAiGateway, type AiTool, type AiMessage } from '~/server/utils/ai-ga
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { listPosts, createPost, publishPost } from '~/server/utils/post-management'
 import { getMenus, getMenuWithItems, createMenu, updateMenu, createMenuItem, updateMenuItem, deleteMenuItem, deleteMenu, renameMenuSection, deleteMenuSection } from '~/server/utils/menu-management'
+import { deleteDraftContentField, deleteSiteContentField, discardDrafts, getDraftContent, getPageContent, getSiteContentField, publishDrafts, upsertDraftContent, upsertSiteContent } from '~/server/utils/content-management'
 import { setConfig } from '~/server/utils/site-config'
 import { getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
 import { extractMenuFromMediaAsset } from '~/server/utils/chowbot-media'
 import { upsertChannelState } from '~/server/utils/chowbot-conversations'
 import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
+import { contentRegistry, getFieldDef } from '~/config/content-registry'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import type { MenuItem, UpdateMenuItemRequest } from '~/server/types/menu'
 
 const MAX_ITERATIONS = 10
 const MAX_SLUG_ATTEMPTS = 10
+const RESERVATIONS_PAGE = 'reservations'
+const RESERVATION_POLICIES_FIELD = 'policies.body'
+const HERO_FIELDS = new Set(['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'])
+const PLATFORM_PAGES = ['about', 'contact', 'help'] as const
 
 type SqlBindValue = string | number | boolean | null
 export type JsonSerializable = string | number | boolean | null | JsonSerializable[] | { [key: string]: JsonSerializable }
@@ -113,6 +119,106 @@ function getToolString(record: Record<string, unknown>, key: string, maxLength: 
 function getToolBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
   const value = record[key]
   return typeof value === 'boolean' ? value : undefined
+}
+
+function normalizeAddressLines(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+}
+
+function isSiteContentPage(page: string): page is keyof typeof contentRegistry {
+  return Object.prototype.hasOwnProperty.call(contentRegistry, page)
+}
+
+function isHeroField(field: string): field is 'hero.title' | 'hero.subtitle' | 'hero.image' | 'hero.video' {
+  return HERO_FIELDS.has(field)
+}
+
+function heroColumnForField(field: 'hero.title' | 'hero.subtitle' | 'hero.image' | 'hero.video') {
+  if (field === 'hero.title') return 'hero_title'
+  if (field === 'hero.subtitle') return 'hero_subtitle'
+  if (field === 'hero.image') return 'hero_image_asset_id'
+  return 'hero_video_asset_id'
+}
+
+async function readHeroContentState(db: D1Database, orgId: string, siteId: string, page: string, locationId?: string) {
+  const liveRow = await getSiteContentField(db, orgId, siteId, locationId ?? null, page, 'hero')
+  const draftRow = locationId
+    ? await db.prepare(
+        `SELECT id, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, updated_at
+         FROM site_content_drafts
+         WHERE organization_id = ? AND site_id = ? AND page = ? AND field = 'hero' AND location_id = ?
+         LIMIT 1`
+      ).bind(orgId, siteId, page, locationId).first<Record<string, unknown>>()
+    : await db.prepare(
+        `SELECT id, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, updated_at
+         FROM site_content_drafts
+         WHERE organization_id = ? AND site_id = ? AND page = ? AND field = 'hero' AND location_id IS NULL
+         LIMIT 1`
+      ).bind(orgId, siteId, page).first<Record<string, unknown>>()
+
+  const base = draftRow ?? liveRow ?? null
+  return {
+    id: typeof base?.id === 'string' ? base.id : undefined,
+    hero_title: typeof base?.hero_title === 'string' ? base.hero_title : null,
+    hero_subtitle: typeof base?.hero_subtitle === 'string' ? base.hero_subtitle : null,
+    hero_image_asset_id: typeof base?.hero_image_asset_id === 'string' ? base.hero_image_asset_id : null,
+    hero_video_asset_id: typeof base?.hero_video_asset_id === 'string' ? base.hero_video_asset_id : null,
+  }
+}
+
+function isEmptyHeroState(state: { hero_title: string | null; hero_subtitle: string | null; hero_image_asset_id: string | null; hero_video_asset_id: string | null }) {
+  return !state.hero_title && !state.hero_subtitle && !state.hero_image_asset_id && !state.hero_video_asset_id
+}
+
+function isPlatformPage(page: string): page is typeof PLATFORM_PAGES[number] {
+  return PLATFORM_PAGES.includes(page as typeof PLATFORM_PAGES[number])
+}
+
+async function upsertHeroContentState(
+  db: D1Database,
+  orgId: string,
+  siteId: string,
+  page: string,
+  locationId: string | undefined,
+  state: { hero_title: string | null; hero_subtitle: string | null; hero_image_asset_id: string | null; hero_video_asset_id: string | null },
+) {
+  const id = `content::${orgId}::${siteId}::${locationId ?? 'site'}::${page}::hero`
+  const payload = {
+    id,
+    organization_id: orgId,
+    site_id: siteId,
+    location_id: locationId,
+    page,
+    field: 'hero',
+    value: undefined,
+    type: 'text',
+    source: 'manual',
+    content: undefined,
+    hero_title: state.hero_title ?? undefined,
+    hero_subtitle: state.hero_subtitle ?? undefined,
+    hero_image_asset_id: state.hero_image_asset_id ?? undefined,
+    hero_video_asset_id: state.hero_video_asset_id ?? undefined,
+  }
+
+  await upsertSiteContent(db, payload)
+  await upsertDraftContent(db, payload)
+}
+
+function getToolNumber(record: Record<string, unknown>, key: string): number | null | undefined {
+  const value = record[key]
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : undefined
+}
+
+function getToolInteger(record: Record<string, unknown>, key: string): number | null | undefined {
+  const numeric = getToolNumber(record, key)
+  if (numeric === undefined || numeric === null) return numeric
+  return Number.isInteger(numeric) ? numeric : undefined
 }
 
 function findMenuItemMatch(itemRecord: Record<string, unknown>, menuItems: MenuItem[]): MenuItem | null {
@@ -398,7 +504,20 @@ const TOOLS: AiTool[] = [
         phone: { type: 'string' },
         address: { type: 'string' },
         email: { type: 'string' },
+        website_url: { type: 'string' },
+        maps_url: { type: 'string' },
+        google_place_id: { type: 'string' },
         description: { type: 'string', description: 'About this location.' },
+        short_description: { type: 'string', description: 'One-line tagline.' },
+        opening_hours: { type: 'string', description: 'Opening hours, one line per day.' },
+        rating: { type: 'number', description: 'Manual review rating from 0 to 5.' },
+        review_count: { type: 'integer', description: 'Manual total review count.' },
+        price_level: { type: 'string', enum: ['FREE', 'INEXPENSIVE', 'MODERATE', 'EXPENSIVE', 'VERY_EXPENSIVE'] },
+        facebook_url: { type: 'string' },
+        instagram_url: { type: 'string' },
+        tiktok_url: { type: 'string' },
+        hero_image_asset_id: { type: 'string', description: 'Media asset ID for hero image.' },
+        hero_video_asset_id: { type: 'string', description: 'Media asset ID for hero video.' },
         is_primary: { type: 'boolean' },
       },
       required: ['title'],
@@ -416,13 +535,33 @@ const TOOLS: AiTool[] = [
         phone: { type: 'string' },
         address: { type: 'string' },
         email: { type: 'string' },
+        website_url: { type: 'string' },
+        maps_url: { type: 'string' },
+        google_place_id: { type: 'string' },
         description: { type: 'string', description: 'About this location.' },
         short_description: { type: 'string', description: 'One-line tagline.' },
+        opening_hours: { type: 'string', description: 'Opening hours, one line per day.' },
+        rating: { type: 'number', description: 'Manual review rating from 0 to 5.' },
+        review_count: { type: 'integer', description: 'Manual total review count.' },
         price_level: { type: 'string', enum: ['FREE', 'INEXPENSIVE', 'MODERATE', 'EXPENSIVE', 'VERY_EXPENSIVE'] },
         facebook_url: { type: 'string' },
         instagram_url: { type: 'string' },
         tiktok_url: { type: 'string' },
-        website_url: { type: 'string' },
+        hero_image_asset_id: { type: 'string', description: 'Media asset ID for hero image.' },
+        hero_video_asset_id: { type: 'string', description: 'Media asset ID for hero video.' },
+        is_primary: { type: 'boolean' },
+        status: { type: 'string', enum: ['active', 'inactive', 'sync_error'] },
+      },
+      required: ['location_id'],
+    },
+  },
+  {
+    name: 'delete_location',
+    description: 'Permanently delete a location/branch. Confirm with user first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        location_id: { type: 'string', description: 'ID from get_locations.' },
       },
       required: ['location_id'],
     },
@@ -463,6 +602,51 @@ const TOOLS: AiTool[] = [
         reply: { type: 'string', description: 'Owner reply text.' },
       },
       required: ['review_id', 'reply'],
+    },
+  },
+  {
+    name: 'create_review',
+    description: 'Create a manual customer review for a location.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        location_id: { type: 'string', description: 'Location ID from get_locations.' },
+        author_name: { type: 'string', description: 'Guest name.' },
+        rating: { type: 'integer', description: '1 to 5 stars.' },
+        title: { type: 'string', description: 'Optional short review title.' },
+        content: { type: 'string', description: 'Review text.' },
+        created_at: { type: 'string', description: 'Optional ISO date/time for the review.' },
+        status: { type: 'string', enum: ['pending', 'approved', 'rejected'], description: 'Default approved.' },
+      },
+      required: ['location_id', 'author_name', 'rating', 'content'],
+    },
+  },
+  {
+    name: 'update_review',
+    description: 'Update a manual customer review.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        review_id: { type: 'string', description: 'Review ID from get_reviews.' },
+        author_name: { type: 'string' },
+        rating: { type: 'integer', description: '1 to 5 stars.' },
+        title: { type: 'string' },
+        content: { type: 'string' },
+        created_at: { type: 'string' },
+        status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
+      },
+      required: ['review_id'],
+    },
+  },
+  {
+    name: 'delete_review',
+    description: 'Permanently delete a review. Confirm with user first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        review_id: { type: 'string', description: 'Review ID from get_reviews.' },
+      },
+      required: ['review_id'],
     },
   },
 
@@ -573,6 +757,128 @@ const TOOLS: AiTool[] = [
     description: 'List reservation requests for this site.',
     input_schema: { type: 'object', properties: {} },
   },
+  {
+    name: 'get_reservation_policies',
+    description: 'Read the reservation policy copy for this site.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'save_reservation_policies',
+    description: 'Update the live reservation policy copy for this site.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        body: { type: 'string', description: 'Reservation policy HTML or rich text.' },
+      },
+      required: ['body'],
+    },
+  },
+  {
+    name: 'delete_reservation_policies',
+    description: 'Remove the custom reservation policy copy and restore the default. Confirm with the user first.',
+    input_schema: { type: 'object', properties: {} },
+  },
+
+  // ── Site Content ──────────────────────────────────────────────────────────
+  {
+    name: 'get_site_content_page',
+    description: 'Read the current live and draft content for a tenant site page.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page: { type: 'string', enum: Object.keys(contentRegistry), description: 'Site page to inspect.' },
+        location_id: { type: 'string', description: 'Optional location scope for location-specific pages.' },
+      },
+      required: ['page'],
+    },
+  },
+  {
+    name: 'save_site_content_field',
+    description: 'Save a draft value for a site page field.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page: { type: 'string', enum: Object.keys(contentRegistry), description: 'Site page to update.' },
+        field: { type: 'string', description: 'Field key from the content registry.' },
+        value: { type: 'string', description: 'New field value.' },
+        location_id: { type: 'string', description: 'Optional location scope for location-specific pages.' },
+      },
+      required: ['page', 'field', 'value'],
+    },
+  },
+  {
+    name: 'publish_site_content_page',
+    description: 'Publish all draft content for a site page.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page: { type: 'string', enum: Object.keys(contentRegistry), description: 'Site page to publish.' },
+        location_id: { type: 'string', description: 'Optional location scope for location-specific pages.' },
+      },
+      required: ['page'],
+    },
+  },
+  {
+    name: 'discard_site_content_page',
+    description: 'Discard all draft content for a site page.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page: { type: 'string', enum: Object.keys(contentRegistry), description: 'Site page to reset.' },
+        location_id: { type: 'string', description: 'Optional location scope for location-specific pages.' },
+      },
+      required: ['page'],
+    },
+  },
+  {
+    name: 'delete_site_content_field',
+    description: 'Delete a site page field from live content and drafts. Confirm with the user first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page: { type: 'string', enum: Object.keys(contentRegistry), description: 'Site page that owns the field.' },
+        field: { type: 'string', description: 'Field key from the content registry.' },
+        location_id: { type: 'string', description: 'Optional location scope for location-specific pages.' },
+      },
+      required: ['page', 'field'],
+    },
+  },
+
+  // ── Platform Content ──────────────────────────────────────────────────────
+  {
+    name: 'get_platform_content_page',
+    description: 'Read a platform admin content page.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page: { type: 'string', enum: [...PLATFORM_PAGES], description: 'Platform page to inspect.' },
+      },
+      required: ['page'],
+    },
+  },
+  {
+    name: 'save_platform_content_page',
+    description: 'Update a platform admin content page.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page: { type: 'string', enum: [...PLATFORM_PAGES], description: 'Platform page to update.' },
+        content: { type: 'string', description: 'Raw page content.' },
+      },
+      required: ['page', 'content'],
+    },
+  },
+  {
+    name: 'delete_platform_content_page',
+    description: 'Delete a platform admin content page. Confirm with the user first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page: { type: 'string', enum: [...PLATFORM_PAGES], description: 'Platform page to delete.' },
+      },
+      required: ['page'],
+    },
+  },
 
   // ── Site ───────────────────────────────────────────────────────────────────
   {
@@ -615,7 +921,7 @@ const TOOLS: AiTool[] = [
   },
 ]
 
-const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu', 'delete_menu_item', 'delete_menu_section', 'delete_media_asset', 'delete_qa'])
+const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu', 'delete_menu_item', 'delete_menu_section', 'delete_location', 'delete_review', 'delete_media_asset', 'delete_qa', 'delete_reservation_policies', 'delete_site_content_field', 'delete_platform_content_page'])
 
 function isAllowedGoogleMapsHost(hostname: string): boolean {
   const host = hostname.toLowerCase()
@@ -967,7 +1273,10 @@ async function executeTool(
 
     case 'get_locations': {
       const rows = await db.prepare(
-        `SELECT id, title, city, phone, email, description, price_level, instagram_url, facebook_url, tiktok_url, status, is_primary
+        `SELECT id, slug, title, city, phone, email, website_url, maps_url, google_place_id,
+                rating, review_count, description, short_description, price_level,
+                instagram_url, facebook_url, tiktok_url, hero_image_asset_id, hero_video_asset_id,
+                status, is_primary
          FROM business_locations WHERE organization_id = ? AND site_id = ? ORDER BY is_primary DESC, title ASC`
       ).bind(orgId, siteId).all()
       return rows.results ?? []
@@ -976,20 +1285,77 @@ async function executeTool(
     case 'create_location': {
       const id = crypto.randomUUID()
       const now = new Date().toISOString()
-      const baseSlug = toSlug(input.title)
+      const title = toSqlText(input.title)?.trim()
+      if (!title) return { error: 'title is required.' }
+      const baseSlug = toSlug(title)
+      const rating = getToolNumber(input, 'rating')
+      if (rating !== undefined && rating !== null && (rating < 0 || rating > 5)) {
+        return { error: 'rating must be between 0 and 5.' }
+      }
+      const reviewCount = getToolInteger(input, 'review_count')
+      if (reviewCount !== undefined && reviewCount !== null && reviewCount < 0) {
+        return { error: 'review_count must be a whole number greater than or equal to 0.' }
+      }
+      const isPrimary = getToolBoolean(input, 'is_primary') === true
 
       for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
         const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`
 
         try {
-          await db.prepare(
-            `INSERT INTO business_locations (id, organization_id, site_id, title, slug, city, phone, email, description, address, is_primary, status, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`
-          ).bind(id, orgId, siteId, input.title, slug, input.city ?? null, input.phone ?? null,
-            input.email ?? null, input.description ?? null,
-            input.address ? JSON.stringify({ street: input.address }) : null,
-            input.is_primary ? 1 : 0, now, now).run()
-          return { id, title: input.title, slug, status: 'active' }
+          const statements: D1PreparedStatement[] = []
+          if (isPrimary) {
+            statements.push(db.prepare(
+              `UPDATE business_locations SET is_primary = 0, updated_at = ? WHERE organization_id = ? AND site_id = ?`
+            ).bind(now, orgId, siteId))
+          }
+          statements.push(db.prepare(
+            `INSERT INTO business_locations (
+              id, organization_id, site_id, title, slug, city, phone, email, website_url, maps_url,
+              google_place_id, description, short_description, address, opening_hours, rating,
+              review_count, price_level, facebook_url, instagram_url, tiktok_url,
+              hero_image_asset_id, hero_video_asset_id, is_primary, status, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`
+          ).bind(
+            id,
+            orgId,
+            siteId,
+            title,
+            slug,
+            toSqlText(input.city) ?? null,
+            toSqlText(input.phone) ?? null,
+            toSqlText(input.email) ?? null,
+            toSqlText(input.website_url) ?? null,
+            toSqlText(input.maps_url) ?? null,
+            toSqlText(input.google_place_id) ?? null,
+            toSqlText(input.description) ?? null,
+            toSqlText(input.short_description) ?? null,
+            (() => {
+              const normalizedAddress = toSqlText(input.address)
+              if (normalizedAddress === null || normalizedAddress === undefined) return null
+              const addressLines = normalizeAddressLines(String(normalizedAddress))
+              return addressLines.length ? JSON.stringify({ addressLines }) : null
+            })(),
+            input.opening_hours ? JSON.stringify({ weekdayDescriptions: String(input.opening_hours).split('\n').map(line => line.trim()).filter(Boolean) }) : null,
+            rating ?? null,
+            reviewCount ?? null,
+            toSqlText(input.price_level) ?? null,
+            toSqlText(input.facebook_url) ?? null,
+            toSqlText(input.instagram_url) ?? null,
+            toSqlText(input.tiktok_url) ?? null,
+            toSqlText(input.hero_image_asset_id) ?? null,
+            toSqlText(input.hero_video_asset_id) ?? null,
+            isPrimary ? 1 : 0,
+            now,
+            now
+          ))
+          if (isPrimary) {
+            statements.push(db.prepare(
+              `UPDATE sites SET primary_location_id = ?, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ?`
+            ).bind(id, now, userId, siteId, orgId))
+          }
+          await db.batch(statements)
+          return { id, title, slug, status: 'active' }
         } catch (error) {
           if (isUniqueConstraintError(error)) continue
           throw error
@@ -1005,22 +1371,32 @@ async function executeTool(
       if (!locationId) {
         return { error: 'location_id is required.' }
       }
+      const location = await db.prepare(
+        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
+      ).bind(locationId, orgId, siteId).first()
+      if (!location) return { error: 'Location not found.' }
+
       const sets: string[] = ['updated_at = ?']
       const params: SqlBindValue[] = [now]
       let slugParamIndex: number | null = null
       let slugBase: string | null = null
       const normalizedTitle = toSqlText(input.title)
       if (normalizedTitle !== undefined) {
+        if (!normalizedTitle?.trim()) return { error: 'title cannot be empty.' }
         sets.push('title = ?', 'slug = ?')
-        slugBase = toSlug(normalizedTitle ?? '')
+        slugBase = toSlug(normalizedTitle)
         params.push(normalizedTitle, slugBase)
         slugParamIndex = params.length - 1
       }
       const simpleFields = ['city', 'phone', 'email', 'description', 'short_description', 'price_level',
-        'facebook_url', 'instagram_url', 'tiktok_url', 'website_url'] as const
+        'facebook_url', 'instagram_url', 'tiktok_url', 'website_url', 'maps_url', 'google_place_id',
+        'hero_image_asset_id', 'hero_video_asset_id', 'status'] as const
       for (const field of simpleFields) {
         const normalizedValue = toSqlText(input[field])
         if (normalizedValue !== undefined) {
+          if (field === 'status' && normalizedValue && !['active', 'inactive', 'sync_error'].includes(normalizedValue)) {
+            return { error: 'Invalid location status.' }
+          }
           sets.push(`${field} = ?`)
           params.push(normalizedValue)
         }
@@ -1028,7 +1404,54 @@ async function executeTool(
       if (input.address !== undefined) {
         const normalizedAddress = toSqlText(input.address)
         sets.push('address = ?')
-        params.push(normalizedAddress === null ? null : JSON.stringify({ street: normalizedAddress ?? '' }))
+        if (normalizedAddress === null) {
+          params.push(null)
+        } else {
+          const addressLines = normalizeAddressLines(String(normalizedAddress))
+          params.push(addressLines.length ? JSON.stringify({ addressLines }) : null)
+        }
+      }
+      if (input.opening_hours !== undefined) {
+        const normalizedHours = toSqlText(input.opening_hours)
+        sets.push('opening_hours = ?')
+        params.push(normalizedHours === null ? null : JSON.stringify({ weekdayDescriptions: String(normalizedHours ?? '').split('\n').map(line => line.trim()).filter(Boolean) }))
+      }
+      if (input.rating !== undefined) {
+        const rating = getToolNumber(input, 'rating')
+        if (rating === undefined || (rating !== null && (rating < 0 || rating > 5))) return { error: 'rating must be between 0 and 5.' }
+        sets.push('rating = ?')
+        params.push(rating)
+      }
+      if (input.review_count !== undefined) {
+        const reviewCount = getToolInteger(input, 'review_count')
+        if (reviewCount === undefined || (reviewCount !== null && reviewCount < 0)) return { error: 'review_count must be a whole number greater than or equal to 0.' }
+        sets.push('review_count = ?')
+        params.push(reviewCount)
+      }
+      const isPrimary = getToolBoolean(input, 'is_primary')
+      if (isPrimary !== undefined) {
+        sets.push('is_primary = ?')
+        params.push(isPrimary ? 1 : 0)
+      }
+
+      const runLocationUpdate = async (boundParams: SqlBindValue[]) => {
+        const statements: D1PreparedStatement[] = []
+        if (isPrimary === true) {
+          statements.push(db.prepare(
+            `UPDATE business_locations SET is_primary = 0, updated_at = ? WHERE organization_id = ? AND site_id = ?`
+          ).bind(now, orgId, siteId))
+          statements.push(db.prepare(
+            `UPDATE sites SET primary_location_id = ?, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ?`
+          ).bind(locationId, now, userId, siteId, orgId))
+        } else if (isPrimary === false) {
+          statements.push(db.prepare(
+            `UPDATE sites SET primary_location_id = NULL, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND primary_location_id = ?`
+          ).bind(now, userId, siteId, orgId, locationId))
+        }
+        statements.push(db.prepare(
+          `UPDATE business_locations SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`
+        ).bind(...boundParams))
+        await db.batch(statements)
       }
 
       if (slugBase) {
@@ -1043,7 +1466,7 @@ async function executeTool(
           updateParams.push(locationId, orgId, siteId)
 
           try {
-            await db.prepare(`UPDATE business_locations SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`).bind(...updateParams).run()
+            await runLocationUpdate(updateParams)
             updated = true
             break
           } catch (error) {
@@ -1057,13 +1480,30 @@ async function executeTool(
         }
       } else {
         params.push(locationId, orgId, siteId)
-        await db.prepare(`UPDATE business_locations SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`).bind(...params).run()
+        await runLocationUpdate(params)
       }
 
       const updated = await db.prepare(
-        `SELECT id, title, city, phone, email, description, status FROM business_locations WHERE id = ? LIMIT 1`
-      ).bind(locationId).first()
+        `SELECT id, slug, title, city, phone, email, website_url, maps_url, google_place_id,
+                rating, review_count, description, short_description, status, is_primary
+         FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
+      ).bind(locationId, orgId, siteId).first()
       return updated ?? { error: 'Location not found.' }
+    }
+
+    case 'delete_location': {
+      const locationId = toSqlText(input.location_id)
+      if (!locationId) return { error: 'location_id is required.' }
+      const result = await db.prepare(
+        `DELETE FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`
+      ).bind(locationId, orgId, siteId).run()
+      if (!result.meta.changes || result.meta.changes === 0) {
+        return { error: 'Location not found.' }
+      }
+      await db.prepare(
+        `UPDATE sites SET primary_location_id = NULL, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND primary_location_id = ?`
+      ).bind(new Date().toISOString(), userId, siteId, orgId, locationId).run()
+      return { location_id: locationId, deleted: true }
     }
 
     case 'lookup_maps_url': {
@@ -1167,17 +1607,134 @@ async function executeTool(
       ).bind(input.location_id, orgId, siteId).first()
       if (!loc) return { error: 'Location not found.' }
       const { results } = await db.prepare(
-        `SELECT * FROM reviews WHERE location_id = ?`
-      ).bind(input.location_id).all()
+        `SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply,
+                owner_reply_at, photo_urls, source, status, created_at, updated_at
+         FROM reviews
+         WHERE site_id = ? AND location_id = ?
+         ORDER BY created_at DESC`
+      ).bind(siteId, input.location_id).all()
       return results ?? []
     }
 
     case 'reply_to_review': {
       const now = new Date().toISOString()
-      await db.prepare(
+      const result = await db.prepare(
         `UPDATE reviews SET owner_reply = ?, owner_reply_at = ?, updated_at = ? WHERE id = ? AND site_id = ?`
       ).bind(input.reply, now, now, input.review_id, siteId).run()
+      if (!result.meta.changes || result.meta.changes === 0) {
+        return { error: 'Review not found.' }
+      }
       return { review_id: input.review_id, replied: true }
+    }
+
+    case 'create_review': {
+      const locationId = toSqlText(input.location_id)
+      const authorName = toSqlText(input.author_name)?.trim()
+      const content = toSqlText(input.content)?.trim()
+      const rating = getToolInteger(input, 'rating')
+      const status = toSqlText(input.status) ?? 'approved'
+      if (!locationId) return { error: 'location_id is required.' }
+      if (!authorName) return { error: 'author_name is required.' }
+      if (!content) return { error: 'content is required.' }
+      if (rating === undefined || rating === null || rating < 1 || rating > 5) return { error: 'rating must be between 1 and 5.' }
+      if (!['pending', 'approved', 'rejected'].includes(status)) return { error: 'Invalid review status.' }
+
+      const loc = await db.prepare(
+        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
+      ).bind(locationId, orgId, siteId).first()
+      if (!loc) return { error: 'Location not found.' }
+
+      const id = crypto.randomUUID()
+      const now = new Date().toISOString()
+      const createdAt = toSqlText(input.created_at) ?? now
+      await db.prepare(
+        `INSERT INTO reviews (
+          id, organization_id, site_id, location_id, author_name, rating, title, content,
+          status, source, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?)`
+      ).bind(
+        id,
+        orgId,
+        siteId,
+        locationId,
+        authorName,
+        rating,
+        toSqlText(input.title) ?? null,
+        content,
+        status,
+        createdAt,
+        now
+      ).run()
+      return { id, location_id: locationId, author_name: authorName, rating, status, source: 'manual', created: true }
+    }
+
+    case 'update_review': {
+      const reviewId = toSqlText(input.review_id)
+      if (!reviewId) return { error: 'review_id is required.' }
+      const sets: string[] = []
+      const params: SqlBindValue[] = []
+
+      if (input.author_name !== undefined) {
+        const authorName = toSqlText(input.author_name)?.trim()
+        if (!authorName) return { error: 'author_name cannot be empty.' }
+        sets.push('author_name = ?')
+        params.push(authorName)
+      }
+      if (input.title !== undefined) {
+        sets.push('title = ?')
+        params.push(toSqlText(input.title) ?? null)
+      }
+      if (input.content !== undefined) {
+        const content = toSqlText(input.content)?.trim()
+        if (!content) return { error: 'content cannot be empty.' }
+        sets.push('content = ?')
+        params.push(content)
+      }
+      if (input.rating !== undefined) {
+        const rating = getToolInteger(input, 'rating')
+        if (rating === undefined || rating === null || rating < 1 || rating > 5) return { error: 'rating must be between 1 and 5.' }
+        sets.push('rating = ?')
+        params.push(rating)
+      }
+      if (input.status !== undefined) {
+        const status = toSqlText(input.status)
+        if (!status || !['pending', 'approved', 'rejected'].includes(status)) return { error: 'Invalid review status.' }
+        sets.push('status = ?')
+        params.push(status)
+      }
+      if (input.created_at !== undefined) {
+        sets.push('created_at = ?')
+        params.push(toSqlText(input.created_at) ?? new Date().toISOString())
+      }
+      if (!sets.length) return { error: 'No review fields provided.' }
+
+      const now = new Date().toISOString()
+      sets.push('updated_at = ?')
+      params.push(now, reviewId, orgId, siteId)
+      const result = await db.prepare(
+        `UPDATE reviews SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`
+      ).bind(...params).run()
+      if (!result.meta.changes || result.meta.changes === 0) {
+        return { error: 'Review not found.' }
+      }
+      const updated = await db.prepare(
+        `SELECT id, author_name, rating, title, content, source, status, created_at, updated_at
+         FROM reviews WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
+      ).bind(reviewId, orgId, siteId).first()
+      return updated ?? { error: 'Review not found.' }
+    }
+
+    case 'delete_review': {
+      const reviewId = toSqlText(input.review_id)
+      if (!reviewId) return { error: 'review_id is required.' }
+      const result = await db.prepare(
+        `DELETE FROM reviews WHERE id = ? AND organization_id = ? AND site_id = ?`
+      ).bind(reviewId, orgId, siteId).run()
+      if (!result.meta.changes || result.meta.changes === 0) {
+        return { error: 'Review not found.' }
+      }
+      return { review_id: reviewId, deleted: true }
     }
 
     case 'get_location_media': {
@@ -1341,6 +1898,221 @@ async function executeTool(
       return results ?? []
     }
 
+    case 'get_reservation_policies': {
+      const defaultBody = getFieldDef(RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)?.defaultValue ?? ''
+      const liveRow = await getSiteContentField(db, orgId, siteId, null, RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)
+      const draftRow = await db.prepare(
+        `SELECT content, type, source, updated_at
+         FROM site_content_drafts
+         WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ? AND location_id IS NULL
+         LIMIT 1`
+      ).bind(orgId, siteId, RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD).first<{ content: string | null; type: string; source: string; updated_at: string }>()
+
+      return {
+        body: liveRow?.content ?? defaultBody,
+        default_body: defaultBody,
+        live_body: liveRow?.content ?? null,
+        draft_body: draftRow?.content ?? null,
+        has_custom_policy: Boolean(liveRow?.content),
+        has_draft_policy: Boolean(draftRow?.content),
+        updated_at: draftRow?.updated_at ?? liveRow?.updated_at ?? null,
+      }
+    }
+
+    case 'save_reservation_policies': {
+      const body = getToolString(input, 'body', 20000)?.trim()
+      if (!body) return { error: 'Reservation policy body is required.' }
+
+      const id = `content::${orgId}::${siteId}::site::${RESERVATIONS_PAGE}::${RESERVATION_POLICIES_FIELD}`
+
+      await upsertSiteContent(db, {
+        id,
+        organization_id: orgId,
+        site_id: siteId,
+        location_id: undefined,
+        page: RESERVATIONS_PAGE,
+        field: RESERVATION_POLICIES_FIELD,
+        value: body,
+        type: 'richtext',
+        source: 'manual',
+        content: body,
+        hero_title: undefined,
+        hero_subtitle: undefined,
+        hero_image_asset_id: undefined,
+        hero_video_asset_id: undefined,
+      })
+
+      await deleteDraftContentField(db, orgId, siteId, RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)
+
+      return { body, updated: true }
+    }
+
+    case 'delete_reservation_policies': {
+      await deleteSiteContentField(db, orgId, siteId, RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)
+      await deleteDraftContentField(db, orgId, siteId, RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)
+      return { deleted: true, restored_default: true }
+    }
+
+    case 'get_site_content_page': {
+      const page = getToolString(input, 'page', 40)
+      if (!page || !isSiteContentPage(page)) return { error: 'Invalid page.' }
+
+      const targetLocationId = typeof input.location_id === 'string' && input.location_id.trim()
+        ? input.location_id.trim()
+        : ctx.locationId ?? undefined
+
+      const live = await getPageContent(db, orgId, siteId, page, targetLocationId)
+      const drafts = await getDraftContent(db, orgId, siteId, page, targetLocationId)
+
+      return {
+        page,
+        location_id: targetLocationId ?? null,
+        fields: (contentRegistry[page]?.fields ? Object.keys(contentRegistry[page].fields) : []).map(field => ({
+          field,
+          label: getFieldDef(page, field)?.label ?? field,
+          type: getFieldDef(page, field)?.type ?? 'text',
+        })),
+        live,
+        drafts,
+      }
+    }
+
+    case 'save_site_content_field': {
+      const page = getToolString(input, 'page', 40)
+      const field = getToolString(input, 'field', 80)
+      const value = getToolString(input, 'value', 20000)
+      if (!page || !isSiteContentPage(page)) return { error: 'Invalid page.' }
+      if (!field) return { error: 'Field is required.' }
+
+      const fieldDef = getFieldDef(page, field)
+      if (!fieldDef) return { error: `Unknown field: ${field}` }
+
+      const targetLocationId = typeof input.location_id === 'string' && input.location_id.trim()
+        ? input.location_id.trim()
+        : ctx.locationId ?? undefined
+
+      if (isHeroField(field)) {
+        const heroState = await readHeroContentState(db, orgId, siteId, page, targetLocationId)
+        const nextState = { ...heroState }
+        nextState[heroColumnForField(field)] = value ?? null
+        await upsertHeroContentState(db, orgId, siteId, page, targetLocationId, nextState)
+      } else {
+        const id = `draft::${orgId}::${siteId}::${targetLocationId ?? 'site'}::${page}::${field}`
+        await upsertDraftContent(db, {
+          id,
+          organization_id: orgId,
+          site_id: siteId,
+          location_id: targetLocationId,
+          page,
+          field,
+          value: value ?? undefined,
+          type: fieldDef.type,
+          source: 'manual',
+          content: value ?? undefined,
+          hero_title: undefined,
+          hero_subtitle: undefined,
+          hero_image_asset_id: undefined,
+          hero_video_asset_id: undefined,
+        })
+      }
+
+      return { page, field, value, location_id: targetLocationId ?? null, saved: true, draft: true }
+    }
+
+    case 'publish_site_content_page': {
+      const page = getToolString(input, 'page', 40)
+      if (!page || !isSiteContentPage(page)) return { error: 'Invalid page.' }
+
+      const targetLocationId = typeof input.location_id === 'string' && input.location_id.trim()
+        ? input.location_id.trim()
+        : ctx.locationId ?? undefined
+
+      await publishDrafts(db, orgId, siteId, page, targetLocationId)
+      return { page, location_id: targetLocationId ?? null, published: true }
+    }
+
+    case 'discard_site_content_page': {
+      const page = getToolString(input, 'page', 40)
+      if (!page || !isSiteContentPage(page)) return { error: 'Invalid page.' }
+
+      const targetLocationId = typeof input.location_id === 'string' && input.location_id.trim()
+        ? input.location_id.trim()
+        : ctx.locationId ?? undefined
+
+      await discardDrafts(db, orgId, siteId, page, targetLocationId)
+      return { page, location_id: targetLocationId ?? null, discarded: true }
+    }
+
+    case 'delete_site_content_field': {
+      const page = getToolString(input, 'page', 40)
+      const field = getToolString(input, 'field', 80)
+      if (!page || !isSiteContentPage(page)) return { error: 'Invalid page.' }
+      if (!field) return { error: 'Field is required.' }
+
+      const targetLocationId = typeof input.location_id === 'string' && input.location_id.trim()
+        ? input.location_id.trim()
+        : ctx.locationId ?? undefined
+
+      if (isHeroField(field)) {
+        const heroState = await readHeroContentState(db, orgId, siteId, page, targetLocationId)
+        const nextState = { ...heroState }
+        nextState[heroColumnForField(field)] = null
+        if (isEmptyHeroState(nextState)) {
+          await deleteSiteContentField(db, orgId, siteId, page, 'hero', targetLocationId)
+          await deleteDraftContentField(db, orgId, siteId, page, 'hero', targetLocationId)
+        } else {
+          await upsertHeroContentState(db, orgId, siteId, page, targetLocationId, nextState)
+        }
+      } else {
+        await deleteSiteContentField(db, orgId, siteId, page, field, targetLocationId)
+        await deleteDraftContentField(db, orgId, siteId, page, field, targetLocationId)
+      }
+
+      return { page, field, location_id: targetLocationId ?? null, deleted: true }
+    }
+
+    case 'get_platform_content_page': {
+      const page = getToolString(input, 'page', 40)
+      if (!page || !isPlatformPage(page)) return { error: 'Invalid page.' }
+
+      const row = await db.prepare(
+        `SELECT id, page, content, updated_by, updated_at FROM platform_content WHERE page = ? LIMIT 1`
+      ).bind(page).first<{ id: string; page: string; content: string; updated_by: string | null; updated_at: string }>()
+
+      return {
+        page,
+        exists: Boolean(row),
+        content: row?.content ?? '',
+        updated_by: row?.updated_by ?? null,
+        updated_at: row?.updated_at ?? null,
+      }
+    }
+
+    case 'save_platform_content_page': {
+      const page = getToolString(input, 'page', 40)
+      const content = getToolString(input, 'content', 1_000_000)
+      if (!page || !isPlatformPage(page)) return { error: 'Invalid page.' }
+      if (content === undefined) return { error: 'content is required.' }
+
+      const now = new Date().toISOString()
+      const id = crypto.randomUUID()
+      await db.prepare(
+        `INSERT INTO platform_content (id, page, content, updated_by, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(page) DO UPDATE SET content = excluded.content, updated_by = excluded.updated_by, updated_at = excluded.updated_at`
+      ).bind(id, page, content, userId, now).run()
+
+      return { page, content, updated_at: now, updated: true }
+    }
+
+    case 'delete_platform_content_page': {
+      const page = getToolString(input, 'page', 40)
+      if (!page || !isPlatformPage(page)) return { error: 'Invalid page.' }
+
+      await db.prepare(`DELETE FROM platform_content WHERE page = ?`).bind(page).run()
+      return { page, deleted: true }
+    }
+
     case 'get_site_stats': {
       const [postStats, menuCount, itemCount, locationCount, reviewCount] = await Promise.all([
         db.prepare(`SELECT status, COUNT(*) as count FROM posts WHERE organization_id = ? AND site_id = ? GROUP BY status`).bind(orgId, siteId).all(),
@@ -1460,12 +2232,13 @@ ${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.asse
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create (standard/offer/event/update with CTA), publish — optionally location-scoped
 - Menus: create, rename, view, rename/delete sections/categories, add brand-new items, reconcile/update item lists, update/delete individual items, publish, delete
-- Locations: list, create, update (title syncs slug, plus description/email/socials/price_level), lookup from Google Maps URL
-- Reviews: get (with star distribution), reply as owner
+- Locations: list, create, update, delete (title syncs slug, plus manual address, hours, maps URL, Place ID, rating, review count, description, email, website, socials, price level, hero media), lookup from Google Maps URL
+- Reviews: get, create manual reviews, update manual reviews, reply as owner, delete reviews
 - Media: list per location, delete, generate AI images with Flux (auto-saved, returns asset_id)
 - Q&A: list, add, delete per location
 - Contact & reservation submissions: read
-- Site: rename (updates subdomain), set default menu currency
+- Site: rename (updates subdomain), set default menu currency, manage reservation policies, read/write site page content
+- Platform admin pages: read/write/delete about, contact, help content
 - Stats: posts, menus, locations, reviews
 
 Guidelines:
@@ -1477,7 +2250,10 @@ Guidelines:
 - Use add_menu_items_batch only when the user is clearly adding brand-new items that are not already on the menu
 - Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
 - When creating menus, omit location_id — the server links it to the current location automatically
-- Before publish_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_media_asset, delete_qa — confirm first
+- Use get_reservation_policies, save_reservation_policies, and delete_reservation_policies when the user asks about reservation rules, hold times, cancellation windows, deposits, or dietary accommodations
+- Use get_site_content_page, save_site_content_field, publish_site_content_page, discard_site_content_page, and delete_site_content_field for tenant page content such as home, about, contact, location notes, menu intro, and reservations
+- Use get_platform_content_page, save_platform_content_page, and delete_platform_content_page for platform admin pages about, contact, and help
+- Before publish_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_review, delete_media_asset, delete_qa — confirm first
 - Menus are DRAFT by default — publish_menu makes them live
 - Keep responses short — this is a chat panel`
 

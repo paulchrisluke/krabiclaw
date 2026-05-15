@@ -147,7 +147,7 @@ interface PlatformMediaAsset {
 const isOpen = ref(false)
 const panel = ref<Panel>('library')
 const pendingAsset = ref<{ id: string; publicUrl: string; thumbnailUrl: string } | null>(null)
-const generatePanel = ref(null)
+const generatePanel = ref<{ canKeep: boolean; keep: () => void } | null>(null)
 const loading = ref(false)
 const images = ref<PlatformMediaAsset[]>([])
 

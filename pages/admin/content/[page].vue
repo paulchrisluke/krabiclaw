@@ -16,6 +16,7 @@
       </UFormGroup>
       <div class="flex gap-4">
         <UButton @click="saveContent" :loading="saving">Save</UButton>
+        <UButton color="neutral" variant="soft" :loading="deleting" @click="deleteContent">Delete</UButton>
         <UButton variant="outline" to="/admin?tab=content">Cancel</UButton>
       </div>
     </UCard>
@@ -33,6 +34,7 @@ const content = ref('')
 const loading = ref(true)
 const error = ref('')
 const saving = ref(false)
+const deleting = ref(false)
 
 function validatePage(value) {
   return !!value && /^[a-zA-Z0-9_-]+$/.test(String(value))
@@ -74,6 +76,31 @@ async function saveContent() {
     alert('Failed to save content')
   } finally {
     saving.value = false
+  }
+}
+
+async function deleteContent() {
+  if (!validatePage(page)) {
+    alert('Invalid page parameter')
+    return
+  }
+
+  if (!confirm(`Delete all content for ${page}?`)) {
+    return
+  }
+
+  deleting.value = true
+  try {
+    await $fetch(`/api/admin/content/${page}`, {
+      method: 'DELETE'
+    })
+    content.value = ''
+    alert('Content deleted successfully!')
+  } catch (err) {
+    console.error('Failed to delete content:', err)
+    alert('Failed to delete content')
+  } finally {
+    deleting.value = false
   }
 }
 </script>

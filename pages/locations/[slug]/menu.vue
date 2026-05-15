@@ -109,6 +109,8 @@
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
+const config = useRuntimeConfig()
+const siteUrl = config.public.siteUrl
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
@@ -186,11 +188,7 @@ const breadcrumb = computed(() => [
 useSeoMeta({
   title: () => `Menu · ${location.value?.title || slug.value}`,
   description: () => `Full menu for ${location.value?.title} at ${siteName.value}.`,
-  ogUrl: () => {
-    const config = useRuntimeConfig()
-    const origin = config.public.siteUrl
-    return `${origin}/locations/${slug.value}/menu`
-  }
+  ogUrl: () => `${siteUrl}/locations/${slug.value}/menu`
 })
 
 const locationCurrency = computed(() => {
@@ -220,18 +218,14 @@ useSchemaOrg([
       })
     }))
   })),
-  computed(() => {
-    const config = useRuntimeConfig()
-    const siteUrl = config.public.siteUrl
-    return {
-      '@type': 'BreadcrumbList',
-      itemListElement: [
-        { '@type': 'ListItem', position: 1, name: siteName.value, item: `${siteUrl}/` },
-        { '@type': 'ListItem', position: 2, name: 'Locations', item: `${siteUrl}/locations` },
-        { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${siteUrl}/locations/${slug.value}` },
-        { '@type': 'ListItem', position: 4, name: 'Menu', item: `${siteUrl}/locations/${slug.value}/menu` }
-      ]
-    }
-  })
+  computed(() => ({
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: siteName.value, item: `${siteUrl}/` },
+      { '@type': 'ListItem', position: 2, name: 'Locations', item: `${siteUrl}/locations` },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${siteUrl}/locations/${slug.value}` },
+      { '@type': 'ListItem', position: 4, name: 'Menu', item: `${siteUrl}/locations/${slug.value}/menu` }
+    ]
+  }))
 ])
 </script>

@@ -76,7 +76,7 @@ export async function getMenus(
     params.push(locationId)
   }
 
-  query += ` ORDER BY location_id IS NULL, name`
+  query += ` ORDER BY location_id IS NULL, (status = 'published') DESC, name`
 
   const results = await db.prepare(query).bind(...params).all()
   return (results.results || []) as unknown as Menu[]

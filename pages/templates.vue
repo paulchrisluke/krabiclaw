@@ -1,219 +1,198 @@
 <template>
-  <div class="container mx-auto px-4 py-16">
-      <div class="max-w-6xl mx-auto">
-        <!-- Header -->
-        <div class="text-center mb-16">
-          <h1 class="text-5xl font-bold text-default mb-6">Beautiful Restaurant Themes</h1>
-          <p class="text-xl text-muted max-w-3xl mx-auto">
-            Professional, conversion-optimized themes designed specifically for restaurants. 
-            Each theme is fully responsive and SEO-ready.
-          </p>
-        </div>
+  <div>
+    <!-- ── Theme preview hero ──────────────────────────────────────────── -->
+    <section class="relative bg-zinc-950 overflow-hidden" style="height: 520px">
+      <!-- Iframe preview of the live demo site -->
+      <div class="absolute inset-0 pointer-events-none overflow-hidden">
+        <iframe
+          :src="demoUrl"
+          class="w-full border-0 origin-top-left"
+          style="height: 900px; transform: scale(0.578); transform-origin: top left; width: 172.8%;"
+          loading="lazy"
+          sandbox="allow-scripts allow-same-origin"
+          title="Saya theme live preview"
+        />
+        <div class="absolute inset-0 bg-linear-to-b from-transparent via-transparent to-zinc-950" />
+      </div>
 
-        <!-- Featured Theme -->
-        <div class="mb-16">
-          <div class="bg-elevated rounded-2xl shadow-lg overflow-hidden border border-default">
-            <div class="md:flex">
-              <div class="md:w-1/2">
-                <div class="h-96 bg-muted flex items-center justify-center">
-                  <div class="text-center">
-                    <div class="w-24 h-24 bg-inverted rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                      <span class="text-inverted text-3xl font-bold">S</span>
-                    </div>
-                    <h3 class="text-2xl font-bold text-default">Saya Theme</h3>
-                    <p class="text-muted mt-2">Elegant & Minimal</p>
-                  </div>
-                </div>
-              </div>
-              <div class="md:w-1/2 p-8">
-                <div class="flex items-center justify-between mb-4">
-                  <h2 class="text-3xl font-bold text-default">Saya</h2>
-                  <span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium">Included</span>
-                </div>
-                <p class="text-muted mb-6">
-                  Our flagship theme designed for modern restaurants. Features clean typography, 
-                  elegant layouts, and seamless integration with Google Business data.
-                </p>
-                <div class="space-y-3 mb-8">
-                  <div class="flex items-center">
-                    <svg class="w-5 h-5 text-primary mr-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                    </svg>
-                    <span class="text-default">Mobile-first responsive design</span>
-                  </div>
-                  <div class="flex items-center">
-                    <svg class="w-5 h-5 text-primary mr-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                    </svg>
-                    <span class="text-default">Google Business integration</span>
-                  </div>
-                  <div class="flex items-center">
-                    <svg class="w-5 h-5 text-primary mr-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                    </svg>
-                    <span class="text-default">Visual content editor</span>
-                  </div>
-                  <div class="flex items-center">
-                    <svg class="w-5 h-5 text-primary mr-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                    </svg>
-                    <span class="text-default">SEO optimized</span>
-                  </div>
-                </div>
-                <UButton color="neutral" size="xl" class="bg-inverted text-inverted hover:opacity-90">
-                  Use Saya Theme
-                </UButton>
-              </div>
+      <!-- Action bar overlaid at bottom -->
+      <div class="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-zinc-950/80 backdrop-blur-sm">
+        <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <div class="flex items-center gap-4">
+            <div class="flex size-9 items-center justify-center rounded-lg bg-white text-zinc-950">
+              <span class="text-sm font-bold">S</span>
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-white">Saya</p>
+              <p class="text-xs text-white/50">by KrabiClaw · Included free</p>
             </div>
           </div>
+          <div class="flex items-center gap-3">
+            <a
+              :href="demoUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-2 text-sm font-medium text-white no-underline transition hover:bg-white/10"
+            >
+              <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4" />
+              View demo
+            </a>
+            <NuxtLink
+              to="/signup"
+              class="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-950 no-underline transition hover:bg-zinc-100"
+            >
+              Get started free
+              <UIcon name="i-heroicons-arrow-right" class="size-4" />
+            </NuxtLink>
+          </div>
         </div>
+      </div>
+    </section>
 
-        <!-- Coming Soon Themes -->
+    <!-- ── Theme detail ────────────────────────────────────────────────── -->
+    <div class="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+      <div class="grid gap-16 lg:grid-cols-[1fr_360px]">
+
+        <!-- Left: description + features -->
         <div>
-          <h2 class="text-3xl font-bold text-default text-center mb-12">Coming Soon</h2>
-          <div class="grid md:grid-cols-3 gap-8">
-            <!-- Theme 2 -->
-            <div class="bg-elevated rounded-2xl shadow-sm border border-default overflow-hidden">
-              <div class="h-48 bg-muted flex items-center justify-center">
-                <div class="text-center">
-                  <div class="w-16 h-16 bg-amber-600 rounded-xl mx-auto mb-2 flex items-center justify-center">
-                    <span class="text-white text-2xl font-bold">M</span>
-                  </div>
-                  <h3 class="text-lg font-bold text-default">Modern</h3>
-                </div>
+          <div class="mb-2 flex items-center gap-3">
+            <h1 class="text-3xl font-bold text-default">Saya</h1>
+            <span class="rounded-full bg-primary/10 px-3 py-0.5 text-sm font-medium text-primary">Included free</span>
+          </div>
+          <p class="mt-3 text-lg leading-relaxed text-muted">
+            The flagship KrabiClaw theme. Editorial typography, location-centric navigation,
+            and deep Google Business integration — designed for restaurants that want to look
+            as good online as they do in person.
+          </p>
+
+          <!-- Feature screenshots grid -->
+          <div class="mt-10 grid gap-4 sm:grid-cols-2">
+            <div v-for="feature in featureScreenshots" :key="feature.label" class="overflow-hidden rounded-xl border border-default bg-elevated">
+              <div class="flex aspect-video items-center justify-center bg-muted">
+                <UIcon :name="feature.icon" class="size-10 text-muted" />
               </div>
-              <div class="p-6">
-                <h3 class="text-xl font-bold text-default mb-2">Modern Theme</h3>
-                <p class="text-muted mb-4">
-                  Bold design with vibrant colors and dynamic layouts perfect for contemporary restaurants.
-                </p>
-                <div class="flex items-center justify-between">
-                  <span class="text-dimmed text-sm">{{ releaseLabels.modern }}</span>
-                  <UButton variant="outline" size="sm" disabled>Notify Me</UButton>
-                </div>
+              <div class="p-4">
+                <p class="text-sm font-semibold text-default">{{ feature.label }}</p>
+                <p class="mt-1 text-xs leading-relaxed text-muted">{{ feature.description }}</p>
               </div>
             </div>
+          </div>
 
-            <!-- Theme 3 -->
-            <div class="bg-elevated rounded-2xl shadow-sm border border-default overflow-hidden">
-              <div class="h-48 bg-muted flex items-center justify-center">
-                <div class="text-center">
-                  <div class="w-16 h-16 bg-emerald-600 rounded-xl mx-auto mb-2 flex items-center justify-center">
-                    <span class="text-white text-2xl font-bold">R</span>
-                  </div>
-                  <h3 class="text-lg font-bold text-default">Rustic</h3>
-                </div>
-              </div>
-              <div class="p-6">
-                <h3 class="text-xl font-bold text-default mb-2">Rustic Theme</h3>
-                <p class="text-muted mb-4">
-                  Warm, traditional design perfect for farm-to-table and family-style restaurants.
-                </p>
-                <div class="flex items-center justify-between">
-                  <span class="text-dimmed text-sm">{{ releaseLabels.rustic }}</span>
-                  <UButton variant="outline" size="sm" disabled>Notify Me</UButton>
-                </div>
-              </div>
-            </div>
-
-            <!-- Theme 4 -->
-            <div class="bg-elevated rounded-2xl shadow-sm border border-default overflow-hidden">
-              <div class="h-48 bg-muted flex items-center justify-center">
-                <div class="text-center">
-                  <div class="w-16 h-16 bg-indigo-600 rounded-xl mx-auto mb-2 flex items-center justify-center">
-                    <span class="text-white text-2xl font-bold">F</span>
-                  </div>
-                  <h3 class="text-lg font-bold text-default">Fusion</h3>
-                </div>
-              </div>
-              <div class="p-6">
-                <h3 class="text-xl font-bold text-default mb-2">Fusion Theme</h3>
-                <p class="text-muted mb-4">
-                  Contemporary design blending Eastern and Western aesthetics for fusion cuisine.
-                </p>
-                <div class="flex items-center justify-between">
-                  <span class="text-dimmed text-sm">{{ releaseLabels.fusion }}</span>
-                  <UButton variant="outline" size="sm" disabled>Notify Me</UButton>
-                </div>
+          <!-- What's included -->
+          <div class="mt-12">
+            <h2 class="text-xl font-semibold text-default mb-6">What's included</h2>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div v-for="item in included" :key="item" class="flex items-start gap-3">
+                <UIcon name="i-heroicons-check" class="mt-0.5 size-4 shrink-0 text-primary" />
+                <span class="text-sm text-default">{{ item }}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Features -->
-        <div class="mt-20 bg-elevated rounded-2xl border border-default p-8">
-          <h2 class="text-3xl font-bold text-default text-center mb-12">All Themes Include</h2>
-          <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div class="text-center">
-              <div class="w-12 h-12 bg-inverted rounded-xl mx-auto mb-4 flex items-center justify-center">
-                <svg class="w-6 h-6 text-inverted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 class="font-semibold text-default mb-2">Mobile Responsive</h3>
-              <p class="text-muted text-sm">Looks perfect on all devices</p>
+        <!-- Right: sticky sidebar -->
+        <div class="lg:sticky lg:top-8 lg:self-start">
+          <div class="rounded-2xl border border-default bg-elevated p-6">
+            <div class="flex size-12 items-center justify-center rounded-xl bg-inverted text-inverted mb-4">
+              <span class="text-lg font-bold">S</span>
             </div>
-            <div class="text-center">
-              <div class="w-12 h-12 bg-inverted rounded-xl mx-auto mb-4 flex items-center justify-center">
-                <svg class="w-6 h-6 text-inverted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <h3 class="font-semibold text-default mb-2">Visual Editor</h3>
-              <p class="text-muted text-sm">Easy drag-and-drop editing</p>
+            <h3 class="text-xl font-bold text-default">Saya</h3>
+            <p class="mt-1 text-sm text-muted">Elegant &amp; Minimal Restaurant Theme</p>
+
+            <div class="mt-4 rounded-lg bg-primary/5 border border-primary/10 px-4 py-3">
+              <p class="text-sm font-semibold text-primary">Free on all plans</p>
+              <p class="mt-0.5 text-xs text-muted">No purchase needed — start building immediately</p>
             </div>
-            <div class="text-center">
-              <div class="w-12 h-12 bg-inverted rounded-xl mx-auto mb-4 flex items-center justify-center">
-                <svg class="w-6 h-6 text-inverted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                </svg>
-              </div>
-              <h3 class="font-semibold text-default mb-2">SEO Optimized</h3>
-              <p class="text-muted text-sm">Built for search engines</p>
+
+            <div class="mt-6 space-y-3">
+              <NuxtLink
+                to="/signup"
+                class="flex w-full items-center justify-center gap-2 rounded-full bg-inverted px-5 py-3 text-sm font-semibold text-inverted no-underline transition hover:opacity-90"
+              >
+                Get started free
+                <UIcon name="i-heroicons-arrow-right" class="size-4" />
+              </NuxtLink>
+              <a
+                :href="demoUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex w-full items-center justify-center gap-2 rounded-full border border-default px-5 py-3 text-sm font-medium text-default no-underline transition hover:bg-elevated"
+              >
+                <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4" />
+                View live demo
+              </a>
             </div>
-            <div class="text-center">
-              <div class="w-12 h-12 bg-inverted rounded-xl mx-auto mb-4 flex items-center justify-center">
-                <svg class="w-6 h-6 text-inverted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+
+            <div class="mt-6 border-t border-default pt-6 space-y-2">
+              <div v-for="spec in specs" :key="spec.label" class="flex justify-between text-sm">
+                <span class="text-muted">{{ spec.label }}</span>
+                <span class="font-medium text-default">{{ spec.value }}</span>
               </div>
-              <h3 class="font-semibold text-default mb-2">Fast Loading</h3>
-              <p class="text-muted text-sm">Optimized for speed</p>
             </div>
           </div>
         </div>
       </div>
     </div>
+  </div>
 </template>
 
 <script setup>
 definePageMeta({ layout: 'platform' })
 
-// Reactive release labels based on current date
-const currentYear = new Date().getFullYear()
-const currentQuarter = Math.ceil((new Date().getMonth() + 1) / 3)
-
-const getReleaseLabel = (targetQuarter, targetYear = currentYear) => {
-  const yearDiff = targetYear - currentYear
-  const quarterDiff = targetQuarter - currentQuarter
-  
-  if (yearDiff === 0 && quarterDiff === 0) return 'Coming this quarter'
-  if (yearDiff === 0 && quarterDiff === 1) return `Coming Q${targetQuarter}`
-  if (yearDiff === 0 && quarterDiff > 1) return `Coming Q${targetQuarter}`
-  if (yearDiff === 1) return `Coming Q${targetQuarter} ${targetYear}`
-  return 'Coming soon'
-}
-
-const releaseLabels = {
-  modern: getReleaseLabel(2),
-  rustic: getReleaseLabel(3),
-  fusion: getReleaseLabel(4)
-}
-
-import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
-
 const config = useRuntimeConfig()
 const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
+
+// The live demo site — matches seeds/demo.sql subdomain
+const demoUrl = computed(() =>
+  import.meta.dev
+    ? 'http://demo.localhost:3000'
+    : `https://demo.${platformHostname}`
+)
+
+const featureScreenshots = [
+  {
+    icon: 'i-heroicons-map-pin',
+    label: 'Location pages',
+    description: 'Hours, map embed, address, menu preview, reviews, photos, and Q&A — all under one location URL.'
+  },
+  {
+    icon: 'i-heroicons-star',
+    label: 'Reviews & ratings',
+    description: 'Star distribution histogram, owner replies, and a filterable review feed.'
+  },
+  {
+    icon: 'i-heroicons-list-bullet',
+    label: 'Full menu',
+    description: 'Sections, item photos, prices, dietary flags, and availability — all editable from the dashboard.'
+  },
+  {
+    icon: 'i-heroicons-sparkles',
+    label: 'ChowBot AI',
+    description: 'Update content, generate descriptions, publish posts, and manage your site by chatting.'
+  }
+]
+
+const included = [
+  'Homepage with hero, location grid, and review highlights',
+  'Location sub-pages: menu, reviews, photos, Q&A, contact',
+  'Google Business data sync (Pro plan)',
+  'ChowBot AI content management',
+  'Reservation form',
+  'Brand story / about page',
+  'SEO-optimised with schema markup',
+  'Mobile-first responsive layout',
+  'Dark mode support',
+  'Multi-location support (Pro plan)',
+  'Custom domain (Pro plan)',
+  'Starter AI credits on signup'
+]
+
+const specs = [
+  { label: 'Price', value: 'Free' },
+  { label: 'Locations', value: '1 free / unlimited Pro' },
+  { label: 'Mobile', value: 'Fully responsive' },
+  { label: 'Languages', value: 'EN / TH' }
+]
 
 useBreadcrumbSchema([
   { name: 'Home', url: `https://${platformHostname}/` },
@@ -221,8 +200,8 @@ useBreadcrumbSchema([
 ])
 
 useSeoMeta({
-  title: 'Templates | KrabiClaw',
-  description: 'Beautiful, professional restaurant themes. Mobile-responsive, SEO-optimized, and easy to customize.',
+  title: 'Saya Theme | KrabiClaw',
+  description: 'The Saya restaurant theme — editorial design, Google Business integration, AI content management. Free on all plans.',
   ogImage: '/og-image.jpg',
   ogUrl: `https://${platformHostname}/templates`,
   ogType: 'website'

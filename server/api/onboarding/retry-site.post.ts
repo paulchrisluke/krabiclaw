@@ -1,7 +1,7 @@
 // Retry onboarding for failed/incomplete sites
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getSayaThemeSeedContent } from '../../utils/content-seeding'
+import { seedNewSite } from '../../utils/site-template'
 
 interface RetrySiteRequest {
   siteId: string
@@ -79,30 +79,7 @@ export default defineEventHandler(async (event) => {
     `).bind(new Date().toISOString(), siteId).run()
     
     // Perform required seeding
-    const contentSeedData = getSayaThemeSeedContent({
-      organizationId: site.organization_id,
-      siteId,
-      restaurantName: site.organization_name
-    })
-    
-    // Seed required content
-    for (const content of contentSeedData) {
-      await db.prepare(`
-        INSERT OR REPLACE INTO site_content (
-          organization_id, site_id, location_id, page, field,
-          content, type, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        content.organization_id,
-        content.site_id,
-        content.location_id,
-        content.page,
-        content.field,
-        content.content,
-        content.type,
-        content.updated_at
-      ).run()
-    }
+    await seedNewSite(db, { organizationId: site.organization_id, siteId, restaurantName: site.organization_name })
     
     // Mark site as active (success)
     await db.prepare(`
