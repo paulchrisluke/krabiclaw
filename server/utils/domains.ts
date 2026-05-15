@@ -201,11 +201,30 @@ export async function createSystemSubdomain(
   const domain = `${subdomain}.${platformHostname(env)}`
   const id = `domain-${siteId}-subdomain`
 
+  let cloudflareId: string | null = null
+  let cloudflareStatus: string | null = null
+
+  try {
+    // Best-effort: provision in Cloudflare Custom Hostnames for tracking/SSL control
+    const hostname = await createCloudflareHostname(env, siteId, organizationId, domain)
+    cloudflareId = hostname.id
+    cloudflareStatus = hostname.status || 'pending'
+  } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error('Cloudflare provisioning failed')
+    console.error('createSystemSubdomain: Cloudflare API failed', { domain, error: normalizedError.message })
+    // We continue so the user still has a working site record in our DB
+  }
+
   await db.prepare(`
     INSERT OR REPLACE INTO site_domains
-    (id, organization_id, site_id, domain, type, role, status, dns_status, dns_target, activated_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'subdomain', 'canonical', 'active', 'valid', ?, ?, ?, ?)
-  `).bind(id, organizationId, siteId, domain, platformHostname(env), now, now, now).run()
+    (id, organization_id, site_id, domain, type, role, status, dns_status, dns_target, cloudflare_hostname_id, cloudflare_hostname_status, activated_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'subdomain', 'canonical', 'active', 'valid', ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id, organizationId, siteId, domain, 
+    platformHostname(env), 
+    cloudflareId, cloudflareStatus,
+    now, now, now
+  ).run()
 
   await db.prepare(`
     UPDATE sites
