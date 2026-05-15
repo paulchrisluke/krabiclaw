@@ -67,6 +67,8 @@ export interface PageDefinition {
   path: string
   fields: Record<string, FieldDefinition>
   groups?: Array<{ id: string; label: string; icon: string; fields: string[] }>
+  /** If true, this page is scoped to a specific location (location/menu pages) */
+  locationScoped?: boolean
 }
 
 /** Shared validator for social URLs to reject common placeholder patterns */
@@ -469,6 +471,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
   location: {
     label: 'Location',
     path: '/location',
+    locationScoped: true,
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Location & Hours' },
       'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Visit us in Ao Nang, Krabi' },
@@ -557,6 +560,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
   menu: {
     label: 'Menu',
     path: '/menu',
+    locationScoped: true,
     groups: [
       { id: 'hero',    label: 'Hero Section',      icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
       { id: 'content', label: 'Menu Introduction', icon: 'i-heroicons-document-text', fields: ['description'] },
