@@ -15,17 +15,21 @@
         </div>
       </div>
 
-      <div class="hidden min-w-0 items-center gap-2 md:flex">
-        <USelect
-          id="content-location-selector"
-          v-model="selectedLocationId"
-          :items="locationOptions"
-          value-key="id"
-          label-key="label"
-          class="w-52"
-          icon="i-heroicons-map-pin"
-          @update:model-value="onLocationChange"
+      <!-- Location tabs — only shown for location-scoped pages (Location, Menu) -->
+      <div v-if="currentPageIsLocationScoped" class="hidden min-w-0 items-center gap-1 md:flex">
+        <UButton
+          v-for="loc in siteLocations"
+          :key="loc.id"
+          :label="loc.title"
+          size="sm"
+          :color="selectedLocationId === loc.id ? 'primary' : 'neutral'"
+          :variant="selectedLocationId === loc.id ? 'soft' : 'ghost'"
+          @click="selectLocation(loc.id)"
         />
+      </div>
+
+      <!-- Page selector always visible -->
+      <div class="hidden min-w-0 items-center gap-2 md:flex">
         <USelect
           id="content-page-selector"
           v-model="selectedPageId"
@@ -35,7 +39,6 @@
           class="w-44"
           @update:model-value="onPageChange"
         />
-        <UBadge color="neutral" variant="subtle" size="sm">{{ selectedPageLabel }}</UBadge>
       </div>
 
       <div class="flex items-center gap-2">
@@ -73,6 +76,7 @@
       </div>
     </header>
 
+    <!-- No locations added yet (only blocks location-scoped pages) -->
     <div
       v-if="requiresLocationSelection"
       class="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted p-6"
@@ -80,24 +84,16 @@
       <UCard class="w-full max-w-xl">
         <div class="text-center">
           <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-muted" />
-          <h1 class="mt-4 text-xl font-semibold text-highlighted">Choose a location first</h1>
+          <h1 class="mt-4 text-xl font-semibold text-highlighted">Add a location first</h1>
           <p class="mt-2 text-sm text-muted">
-            Location and menu pages are edited per physical location, so add or select a location before editing this page.
+            The Location and Menu pages are per-location. Add your first location to start editing.
           </p>
           <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
             <UButton
-              v-if="siteLocations.length === 0"
-              :to="`/dashboard/sites/${siteId}/settings?tab=locations`"
+              :to="`/dashboard/sites/${siteId}/locations`"
               icon="i-heroicons-plus"
             >
               Add Location
-            </UButton>
-            <UButton
-              v-else
-              :to="`/dashboard/sites/${siteId}/locations`"
-              icon="i-heroicons-map-pin"
-            >
-              Choose Location
             </UButton>
             <UButton
               :to="`/dashboard/sites/${siteId}/content?page=home`"
@@ -105,7 +101,7 @@
               variant="soft"
               icon="i-heroicons-document-text"
             >
-              Edit Brand Pages
+              Edit Brand Pages Instead
             </UButton>
           </div>
         </div>
@@ -114,16 +110,20 @@
 
     <div v-else class="grid min-h-0 flex-1 grid-cols-[20rem_minmax(0,1fr)_22rem] overflow-hidden">
       <aside class="flex min-h-0 flex-col border-r border-default bg-default  ">
-        <div class="border-b border-default p-3  md:hidden">
+        <!-- Mobile: location tabs + page selector -->
+        <div class="border-b border-default p-3 md:hidden">
           <div class="space-y-2">
-            <USelect
-              v-model="selectedLocationId"
-              :items="locationOptions"
-              value-key="id"
-              label-key="label"
-              icon="i-heroicons-map-pin"
-              @update:model-value="onLocationChange"
-            />
+            <div v-if="currentPageIsLocationScoped" class="flex flex-wrap gap-1">
+              <UButton
+                v-for="loc in siteLocations"
+                :key="loc.id"
+                :label="loc.title"
+                size="xs"
+                :color="selectedLocationId === loc.id ? 'primary' : 'neutral'"
+                :variant="selectedLocationId === loc.id ? 'soft' : 'ghost'"
+                @click="selectLocation(loc.id)"
+              />
+            </div>
             <USelect
               v-model="selectedPageId"
               :items="pages"
@@ -407,7 +407,7 @@ const siteData = ref<ApiRecord | null>(null)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
 const organizationEntitlements = ref<ApiRecord>({})
 const previewToken = ref('')
-const siteName = computed(() => siteData.value?.name || 'Loading...')
+const siteName = computed(() => siteData.value?.brand_name || 'Loading...')
 const siteDomain = computed(() => siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : 'localhost:3000')
 const sitePreviewBaseUrl = computed(() => {
   if (!siteData.value?.subdomain) return ''
@@ -436,22 +436,25 @@ const loadEditorContext = async () => {
 }
 
 // ─── Location Scope ───────────────────────────────────────────────────
+import { contentRegistry } from '~/config/content-registry'
+
 const selectedLocationId = ref<string | null>(null)
-const locationOptions = computed(() => [
-  { id: null, label: 'All Locations' },
-  ...siteLocations.value.map(location => ({
-    id: location.id,
-    label: location.is_primary ? `${location.title} (Primary)` : location.title
-  }))
-])
+
 const selectedLocation = computed(() =>
   siteLocations.value.find(location => location.id === selectedLocationId.value) || null
 )
 const selectedLocationLabel = computed(() => selectedLocation.value?.title || 'All Locations')
-const locationRequiredPageIds = new Set(['location', 'menu'])
-const requiresLocationSelection = computed(() =>
-  locationRequiredPageIds.has(selectedPageId.value) && !selectedLocation.value
+
+/** Pages that require a specific location to be selected */
+const currentPageIsLocationScoped = computed(() =>
+  contentRegistry[selectedPageId.value]?.locationScoped === true
 )
+
+/** Only block rendering when a location-scoped page has no locations at all */
+const requiresLocationSelection = computed(() =>
+  currentPageIsLocationScoped.value && siteLocations.value.length === 0
+)
+
 const contentQuery = computed(() => {
   const params = new URLSearchParams()
   if (selectedLocationId.value) params.set('locationId', selectedLocationId.value)
@@ -459,6 +462,11 @@ const contentQuery = computed(() => {
 })
 const endpointWithContentScope = (path: string) =>
   contentQuery.value ? `${path}?${contentQuery.value}` : path
+
+const selectLocation = (id: string) => {
+  selectedLocationId.value = id
+  activeField.value = null
+}
 
 const onLocationChange = () => {
   iframeLoading.value = true
@@ -511,10 +519,16 @@ const iframeSrc = computed(() => {
 })
 
 const onPageChange = () => {
-  iframeLoading.value = true
   activeField.value = null
-  if (requiresLocationSelection.value) return
-  loadPageContent()
+  // When switching to a location-scoped page, auto-select the primary/first location
+  if (currentPageIsLocationScoped.value && !selectedLocationId.value && siteLocations.value.length > 0) {
+    const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]!
+    selectedLocationId.value = primary.id
+  }
+  // When switching away from a location-scoped page, clear the location selection
+  if (!currentPageIsLocationScoped.value) {
+    selectedLocationId.value = null
+  }
 }
 
 watch(selectedPageId, () => {
@@ -537,31 +551,31 @@ const groupConfig: Record<string, Array<{ id: string; label: string; icon: strin
     { id: 'media', label: 'Gallery & Media', icon: 'i-heroicons-photo', fields: ['business.photos'] }
   ],
   about: [
-    { id: 'hero',    label: 'Hero Section', icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'hero',    label: 'Hero Section', icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
     { id: 'story',   label: 'Story',        icon: 'i-heroicons-book-open', fields: ['story.intro', 'journey.title', 'journey.body', 'experience.body'] },
     { id: 'cuisine', label: 'Cuisine',      icon: 'i-heroicons-sparkles', fields: ['grill.title', 'grill.description', 'sushi.title', 'sushi.description'] },
     { id: 'business',  label: 'Business Info', icon: 'i-heroicons-building-storefront', fields: ['business.description', 'business.establishment_year'] }
   ],
   contact: [
-    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
     { id: 'content', label: 'Page Content',    icon: 'i-heroicons-document-text', fields: ['intro.body'] },
     { id: 'social',  label: 'Social Links',    icon: 'i-heroicons-link', fields: ['social.facebook', 'social.instagram', 'social.tiktok'] },
     { id: 'business', label: 'Business Info', icon: 'i-heroicons-building-storefront', fields: ['business.name', 'business.establishment_year'] },
     { id: 'contact-hours', label: 'Contact & Hours', icon: 'i-heroicons-clock', fields: ['business.address', 'business.phone', 'business.hours'] }
   ],
   location: [
-    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
     { id: 'content', label: 'Additional Info', icon: 'i-heroicons-document-text', fields: ['parking.info', 'extra.notes'] },
     { id: 'business', label: 'Business Info', icon: 'i-heroicons-building-storefront', fields: ['business.name', 'business.establishment_year'] },
     { id: 'contact-hours', label: 'Contact & Hours', icon: 'i-heroicons-clock', fields: ['business.address', 'business.phone', 'business.hours'] }
   ],
   menu: [
-    { id: 'hero',    label: 'Hero Section',      icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'hero',    label: 'Hero Section',      icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
     { id: 'content', label: 'Menu Introduction', icon: 'i-heroicons-document-text', fields: ['description'] },
     { id: 'media',  label: 'Gallery & Media',   icon: 'i-heroicons-photo', fields: ['business.products'] }
   ],
   reservations: [
-    { id: 'hero',     label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'hero',     label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
     { id: 'contact',  label: 'Contact Details', icon: 'i-heroicons-phone', fields: ['contact.phone', 'contact.email'] },
     { id: 'policies', label: 'Policies',        icon: 'i-heroicons-clipboard-document-list', fields: ['policies.body'] }
   ]

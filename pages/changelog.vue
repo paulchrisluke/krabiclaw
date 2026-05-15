@@ -18,10 +18,12 @@
             <span :class="getBadgeClass(type)" class="text-white px-3 py-1 rounded-full text-sm font-medium capitalize">{{ type }}</span>
             <span class="text-muted text-sm">{{ commits.length }} commits</span>
           </div>
-          <div v-for="commit in commits" :key="commit.hash" class="mb-4 last:mb-0">
-            <h3 class="text-lg font-semibold text-default mb-1">{{ commit.description }}</h3>
+          <div v-for="commit in commits" :key="commit.number" class="mb-4 last:mb-0">
+            <h3 class="text-lg font-semibold text-default mb-1">
+              <a :href="commit.url" target="_blank" rel="noopener" class="hover:underline">{{ commit.description }}</a>
+            </h3>
             <p class="text-sm text-muted">
-              {{ commit.author }} · {{ formatDate(commit.date) }}
+              {{ commit.author }} · {{ formatDate(commit.mergedAt) }}
               <span v-if="commit.scope" class="ml-2 text-muted">({{ commit.scope }})</span>
             </p>
           </div>

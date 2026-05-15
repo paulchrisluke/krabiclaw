@@ -13,7 +13,11 @@
       </div>
 
       <div v-else>
-        <div class="grid md:grid-cols-2 gap-6 mb-12">
+        <div v-if="docs.length === 0" class="text-center py-12">
+          <p class="text-muted">No documentation available yet.</p>
+        </div>
+
+        <div v-else class="grid md:grid-cols-2 gap-6 mb-12">
           <NuxtLink
             v-for="doc in docs"
             :key="doc.slug"
@@ -21,8 +25,16 @@
             class="block"
           >
             <UCard class="hover:shadow-md transition-shadow cursor-pointer h-full">
+              <div class="flex flex-wrap gap-2 mb-2">
+                <span v-if="doc.category" class="px-2 py-1 rounded-full text-xs font-medium bg-(--kc-teal) text-white">
+                  {{ doc.category }}
+                </span>
+                <span v-if="doc.difficulty_level" class="px-2 py-1 rounded-full text-xs font-medium bg-(--kc-navy) text-white">
+                  {{ doc.difficulty_level }}
+                </span>
+              </div>
               <h3 class="text-xl font-bold text-default mb-2">{{ doc.title }}</h3>
-              <p class="text-muted mb-4">Learn about {{ doc.title?.toLowerCase() || 'this topic' }}</p>
+              <p v-if="doc.excerpt" class="text-muted mb-4 line-clamp-2">{{ doc.excerpt }}</p>
               <UButton variant="outline" color="neutral">View Guide</UButton>
             </UCard>
           </NuxtLink>
@@ -51,7 +63,7 @@ useBreadcrumbSchema([
   { name: 'Documentation', url: `${siteUrl}/docs` }
 ])
 
-const { data, pending, error: docsError } = await useFetch('/api/docs', {
+const { data, pending, error: docsError } = await useFetch('/api/public/docs', {
   default: () => ({ docs: [] })
 })
 

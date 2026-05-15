@@ -1,16 +1,8 @@
 <template>
-  <Transition name="chowbot-overlay">
-    <div
-      v-if="isOpen"
-      class="fixed inset-0 z-40 bg-black/20"
-      @click="!isLoading && close()"
-    />
-  </Transition>
-
   <Transition name="chowbot-panel">
     <div
       v-if="isOpen"
-      class="fixed right-0 top-0 bottom-0 z-50 flex w-96 flex-col border-l border-default bg-default shadow-xl"
+      class="flex w-96 shrink-0 flex-col border-l border-default bg-default"
       @dragenter.prevent="onDragEnter"
       @dragover.prevent
       @dragleave="onDragLeave"
@@ -114,24 +106,29 @@
             :parts="[{ type: 'text', text: msg.content }]"
             :side="msg.role === 'user' ? 'right' : 'left'"
           >
-            <template v-if="msg.role === 'assistant'" #content>
-              <!-- Running tools appear first while streaming -->
-              <div v-if="msg.toolCalls?.length" class="mb-2 flex flex-col gap-1">
-                <UChatTool
-                  v-for="(tool, ti) in msg.toolCalls"
-                  :key="tool.name + i + ti"
-                  :text="toolLabel(tool.name)"
-                  :loading="tool.status === 'running'"
+            <template #content>
+              <div v-if="msg.role === 'assistant'" class="space-y-2">
+                <!-- Running tools appear first while streaming -->
+                <div v-if="msg.toolCalls?.length" class="flex flex-col gap-1">
+                  <UChatTool
+                    v-for="(tool, ti) in msg.toolCalls"
+                    :key="tool.name + i + ti"
+                    :text="toolLabel(tool.name)"
+                    :loading="tool.status === 'running'"
+                  />
+                </div>
+                <!-- Message text (empty while tools are still running) -->
+                <!-- eslint-disable vue/no-v-html -->
+                <div
+                  v-if="msg.content"
+                  class="prose prose-sm dark:prose-invert max-w-none"
+                  v-html="renderMarkdown(msg.content)"
                 />
+                <!-- eslint-enable vue/no-v-html -->
               </div>
-              <!-- Message text (empty while tools are still running) -->
-              <!-- eslint-disable vue/no-v-html -->
-              <div
-                v-if="msg.content"
-                class="prose prose-sm dark:prose-invert max-w-none"
-                v-html="renderMarkdown(msg.content)"
-              />
-              <!-- eslint-enable vue/no-v-html -->
+              <div v-else class="prose prose-sm dark:prose-invert max-w-none">
+                {{ msg.content }}
+              </div>
             </template>
           </UChatMessage>
         </UChatMessages>
@@ -222,6 +219,7 @@
 <script setup lang="ts">
 import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
+import DOMPurify from 'isomorphic-dompurify'
 
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages } = useChowBot()
 const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
@@ -475,7 +473,7 @@ const toolLabel = (name: string): string => {
 // --- markdown ---
 
 function renderMarkdown(text: string): string {
-  return text
+  const html = text
     .replace(/```[\s\S]*?```/g, m => `<pre><code>${m.slice(3, -3).replace(/^[^\n]*\n/, '')}</code></pre>`)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
@@ -485,6 +483,7 @@ function renderMarkdown(text: string): string {
     .replace(/\n\n/g, '</p><p>')
     .replace(/\n/g, '<br>')
     .replace(/^(.+)$/, '<p>$1</p>')
+  return DOMPurify.sanitize(html)
 }
 </script>
 

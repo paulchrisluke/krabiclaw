@@ -83,6 +83,24 @@ export default defineEventHandler(async (event) => {
       setParts.push('brand_description = ?')
       params.push(body.brand_description)
     }
+    if (body.logo_asset_id !== undefined) {
+      if (body.logo_asset_id !== null && body.logo_asset_id !== '') {
+        const asset = await db.prepare(`
+          SELECT id
+          FROM media_assets
+          WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active' AND kind = 'image'
+          LIMIT 1
+        `).bind(body.logo_asset_id, site.organization_id, siteId).first()
+
+        if (!asset) {
+          return jsonResponse({
+            error: 'Logo asset not found, unauthorized, or not an image'
+          }, { status: 400 })
+        }
+      }
+      setParts.push('logo_asset_id = ?')
+      params.push(body.logo_asset_id || null)
+    }
     if (body.logo_url !== undefined) {
       setParts.push('logo_url = ?')
       params.push(body.logo_url)
@@ -143,6 +161,11 @@ export default defineEventHandler(async (event) => {
       params.push(JSON.stringify(settings))
     }
 
+    if (body.last_published_at !== undefined) {
+      setParts.push('last_published_at = ?')
+      params.push(body.last_published_at)
+    }
+
     setParts.push('updated_at = ?')
     setParts.push('updated_by = ?')
     params.push(new Date().toISOString(), session.user.id)
@@ -169,9 +192,9 @@ export default defineEventHandler(async (event) => {
     const updatedSite = await db.prepare(`
       SELECT id, organization_id, subdomain, theme, status,
              primary_location_id, public_url, custom_domain_status,
-             brand_name, brand_description, logo_url, contact_email,
+             brand_name, brand_description, logo_url, logo_asset_id, contact_email,
              settings, last_published_at, created_at, updated_at
-      FROM sites 
+      FROM sites
       WHERE id = ? AND organization_id = ?
       LIMIT 1
     `).bind(siteId, site.organization_id).first()
@@ -196,6 +219,7 @@ export default defineEventHandler(async (event) => {
       brand_name: updatedSite.brand_name,
       brand_description: updatedSite.brand_description,
       logo_url: updatedSite.logo_url,
+      logo_asset_id: updatedSite.logo_asset_id,
       contact_email: updatedSite.contact_email,
       brand_color: siteConfig.brand_color || '',
       default_currency: siteConfig?.default_currency || 'THB',

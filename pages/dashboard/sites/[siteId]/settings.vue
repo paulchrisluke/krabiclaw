@@ -29,8 +29,14 @@
               <UTextarea v-model="form.brand_description" :rows="3" placeholder="Authentic dining experience in your city" />
             </UFormField>
             <div class="grid gap-5 sm:grid-cols-2">
-              <UFormField label="Logo URL">
-                <UInput v-model="form.logo_url" type="url" placeholder="https://example.com/logo.png" />
+              <UFormField label="Logo">
+                <MediaPicker
+                  v-model="form.logo_asset_id"
+                  :site-id="siteId"
+                  accept="image"
+                  title="Select logo"
+                  @change="handleLogoChange"
+                />
               </UFormField>
               <UFormField label="Contact Email">
                 <UInput v-model="form.contact_email" type="email" placeholder="contact@yourrestaurant.com" />
@@ -314,7 +320,7 @@ const domainForm = reactive({
 const form = reactive({
   brand_name: '',
   brand_description: '',
-  logo_url: '',
+  logo_asset_id: '' as string | null,
   contact_email: '',
   brand_color: '',
   default_currency: DEFAULT_CURRENCY,
@@ -323,7 +329,7 @@ const form = reactive({
 } as {
   brand_name: string
   brand_description: string
-  logo_url: string
+  logo_asset_id: string | null
   contact_email: string
   brand_color: string
   default_currency: CurrencyCode
@@ -344,7 +350,7 @@ const isDirty = computed(() => {
   return (
     form.brand_name !== settings.value.brand_name ||
     form.brand_description !== settings.value.brand_description ||
-    form.logo_url !== settings.value.logo_url ||
+    form.logo_asset_id !== settings.value.logo_asset_id ||
     form.contact_email !== settings.value.contact_email ||
     form.brand_color !== (settings.value.brand_color || '') ||
     form.default_currency !== (settings.value.default_currency || DEFAULT_CURRENCY) ||
@@ -397,13 +403,17 @@ const resetForm = () => {
   if (!settings.value) return
   form.brand_name = settings.value.brand_name || ''
   form.brand_description = settings.value.brand_description || ''
-  form.logo_url = settings.value.logo_url || ''
+  form.logo_asset_id = settings.value.logo_asset_id || null
   form.contact_email = settings.value.contact_email || ''
   form.brand_color = (settings.value as ApiValue).brand_color || ''
   const currency = (settings.value as ApiValue).default_currency
   form.default_currency = isCurrencyCode(currency) ? currency : DEFAULT_CURRENCY
   form.primary_location_id = settings.value.primary_location_id || null
   form.url_structure = settings.value.url_structure || 'location_subdirectories'
+}
+
+function handleLogoChange(_asset: { id: string; publicUrl: string; thumbnailUrl: string } | null) {
+  // Logo change is handled by v-model, this is for any additional logic if needed
 }
 
 const copyToClipboard = async (text: string) => {

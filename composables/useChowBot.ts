@@ -22,6 +22,8 @@ export const useChowBot = () => {
   const messages = useState<ChowbotMessage[]>('chowbot:messages', () => [])
   const isLoading = useState<boolean>('chowbot:loading', () => false)
   const conversationId = useState<string | null>('chowbot:convId', () => null)
+  // Pages can override the currentPage sent to the agent (e.g. 'onboarding')
+  const currentPageOverride = useState<string | null>('chowbot:currentPageOverride', () => null)
 
   const route = useRoute()
   const history = useChowBotHistory()
@@ -161,7 +163,7 @@ export const useChowBot = () => {
         body: JSON.stringify({
           conversationId: conversationId.value,
           message: text.trim(),
-          currentPage: route.name,
+          currentPage: currentPageOverride.value ?? route.name,
           locationId: locationId.value,
         }),
       })
@@ -234,7 +236,7 @@ export const useChowBot = () => {
   }
 
   return {
-    isOpen, messages, isLoading, siteId, conversationId,
+    isOpen, messages, isLoading, siteId, conversationId, currentPageOverride,
     toggle, open, close, sendMessage, clearMessages, startNewConversation, loadConversation,
   }
 }

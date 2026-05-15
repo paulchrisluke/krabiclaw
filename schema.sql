@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS sites (
   brand_name TEXT,
   brand_description TEXT,
   logo_url TEXT,
+  logo_asset_id TEXT,
   contact_email TEXT,
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),
   plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'paid', 'starter', 'pro', 'business')),
@@ -137,7 +138,8 @@ CREATE TABLE IF NOT EXISTS sites (
   updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_by TEXT,
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
-  FOREIGN KEY (theme_id) REFERENCES themes(id)
+  FOREIGN KEY (theme_id) REFERENCES themes(id),
+  FOREIGN KEY (logo_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_custom_domain_unique
@@ -548,24 +550,6 @@ CREATE TABLE IF NOT EXISTS stripe_webhook_events (
 );
 
 --------------------------------------------------------------------------------
--- Onboarding
---------------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS onboarding_steps (
-  id TEXT PRIMARY KEY,
-  site_id TEXT NOT NULL,
-  step_name TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'in_progress', 'completed', 'skipped', 'failed')),
-  completed_at TEXT,
-  error_message TEXT,
-  metadata TEXT,
-  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
-  UNIQUE(site_id, step_name)
-);
-
---------------------------------------------------------------------------------
 -- Posts & Channel Publishing
 --------------------------------------------------------------------------------
 
@@ -950,6 +934,32 @@ CREATE TABLE IF NOT EXISTS platform_blog_posts (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (author_id) REFERENCES user(id) ON DELETE SET NULL
 );
+
+CREATE TABLE IF NOT EXISTS platform_docs (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  body TEXT NOT NULL,
+  excerpt TEXT,
+  category TEXT CHECK (category IN ('Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced')),
+  author_id TEXT,
+  seo_description TEXT,
+  seo_keywords TEXT,
+  featured_image_asset_id TEXT,
+  sort_order INTEGER DEFAULT 0,
+  parent_doc_id TEXT,
+  difficulty_level TEXT CHECK (difficulty_level IN ('Beginner', 'Intermediate', 'Advanced')),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+  published_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (author_id) REFERENCES user(id) ON DELETE SET NULL,
+  FOREIGN KEY (featured_image_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL,
+  FOREIGN KEY (parent_doc_id) REFERENCES platform_docs(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_platform_docs_category ON platform_docs(category, status, sort_order);
+CREATE INDEX IF NOT EXISTS idx_platform_docs_parent ON platform_docs(parent_doc_id, status, sort_order);
 
 CREATE TABLE IF NOT EXISTS platform_contact_submissions (
   id TEXT PRIMARY KEY,

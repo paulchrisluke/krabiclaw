@@ -47,25 +47,22 @@
         <div class="mb-16">
           <h1 class="text-4xl font-bold text-default mb-4">About KrabiClaw</h1>
           <p class="text-xl text-muted">
-            A restaurant website builder born in Krabi, Thailand — built by someone who's spent 15 years helping
-            businesses get found online, and got tired of watching great restaurants stay invisible.
+            A restaurant website platform inspired by the restaurants we love in Krabi — built to help independent restaurants compete online without needing technical skills or expensive agencies.
           </p>
         </div>
         <article class="prose prose-lg max-w-none text-default space-y-8">
           <section>
-            <h2 class="text-2xl font-bold text-default mb-4">The Problem We Kept Seeing</h2>
-            <p class="text-muted">The best meal I had in Krabi in 2024 was at a tiny robatayaki restaurant tucked behind a mango farm. No website. A blurry photo on Google Maps. Reviews that said "great food" but no address, no hours, no menu. Half the tables were empty every night.</p>
-            <p class="text-muted">That restaurant was KIKUZUKI — and it became the first site built on what is now KrabiClaw.</p>
+            <h2 class="text-2xl font-bold text-default mb-4">How It Started</h2>
+            <p class="text-muted">KrabiClaw began during COVID, when restaurants suddenly needed online ordering, delivery systems, and websites just to survive. Early versions of the platform were built to help restaurants get online quickly and manage food delivery operations without complicated software.</p>
+            <p class="text-muted">But one problem kept appearing: menu management.</p>
+            <p class="text-muted">Most restaurant owners didn't want to log into dashboards or learn website builders. They wanted to send a WhatsApp message like "add this item," "change this price," or upload a photo of a new menu page.</p>
+            <p class="text-muted">Then AI changed what was possible.</p>
+            <p class="text-muted">That led to ChowBot — the assistant behind KrabiClaw. Restaurant owners can simply message ChowBot on WhatsApp to update menus, generate food images, create marketing content, publish announcements, and manage their restaurant website using natural conversation.</p>
           </section>
           <section>
-            <h2 class="text-2xl font-bold text-default mb-4">Who Built This</h2>
-            <p class="text-muted">I'm Paul Chris Luke — half Chinese, half American, originally from Chattanooga, Tennessee. I've spent over 15 years in eCommerce, conversion rate optimization, and digital marketing. I'm a Google Certified CRO specialist, a Shopify Plus partner, and I've managed millions of dollars in ad spend across Google and Meta.</p>
-            <p class="text-muted">A few years ago I moved to Southeast Asia — not for the lifestyle arbitrage that word implies, but because I wanted my work to matter in places where a single well-built website can be the difference between a family business surviving or not. I run <a href="https://whynotearth.com" class="underline hover:no-underline" target="_blank" rel="noopener">Why Not Earth</a>, a marketing agency that charges commercial clients for high-quality work and uses that revenue to provide the same services free to nonprofits working on trafficking prevention, job creation, and rural internet access.</p>
-          </section>
-          <section>
-            <h2 class="text-2xl font-bold text-default mb-4">Why Not Just Use Squarespace?</h2>
-            <p class="text-muted">Generic website builders don't understand restaurants. They don't know what a menu section is, they don't sync to Google Business Profile, they don't handle multiple locations under one brand, and they're built for an English-speaking small business owner in San Francisco — not a Thai restaurant owner in Krabi.</p>
-            <p class="text-muted">KrabiClaw is built specifically for restaurants. Every feature — the menu builder, Google Business sync, AI menu extraction, draft/publish workflow — came from a real problem we hit building real restaurant sites.</p>
+            <h2 class="text-2xl font-bold text-default mb-4">Why KrabiClaw Exists</h2>
+            <p class="text-muted">Generic website builders weren't made for restaurants. They don't understand menus, delivery workflows, Google Business integration, or how restaurant owners actually operate day to day.</p>
+            <p class="text-muted">KrabiClaw is built specifically for restaurants. Every feature comes from solving real operational problems faced by real restaurant owners.</p>
           </section>
           <section>
             <h2 class="text-2xl font-bold text-default mb-4">Get in Touch</h2>

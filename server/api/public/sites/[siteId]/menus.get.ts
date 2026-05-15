@@ -24,11 +24,11 @@ export default defineEventHandler(async (event) => {
   try {
     // Get site and organization info
     const site = await db.prepare(`
-      SELECT id, organization_id, name, status
+      SELECT id, organization_id, brand_name, status
       FROM sites 
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `).bind(siteId).first<{ id: string; organization_id: string; name: string; status: string }>()
+    `).bind(siteId).first<{ id: string; organization_id: string; brand_name: string; status: string }>()
     
     if (!site) {
       return jsonResponse({ 

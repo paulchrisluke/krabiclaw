@@ -1,71 +1,92 @@
-// GET /api/changelog - Auto-generated changelog from git commits
-import { exec } from 'child_process'
-import { promisify } from 'util'
+// GET /api/changelog - Auto-generated changelog from GitHub merged PRs
 import { jsonResponse } from '~/server/utils/api-response'
 
-const execPromise = promisify(exec)
-const DEFAULT_COMMIT_LIMIT = 200
-const MAX_COMMIT_LIMIT = 1000
+const DEFAULT_PR_LIMIT = 50
+const MAX_PR_LIMIT = 100
 
-interface ExecErrorLike {
-  stack?: string
-  stderr?: string
-  message?: string
+interface GitHubPR {
+  number: number
+  title: string
+  body: string | null
+  user: {
+    login: string
+  }
+  merged_at: string | null
+  closed_at: string | null
+  html_url: string
 }
 
 export default defineEventHandler(async (event) => {
   try {
+    const env = cloudflareEnv(event)
     const query = getQuery(event)
     const requestedLimit = Number.parseInt(String(query.limit || ''), 10)
-    const commitLimit = Number.isFinite(requestedLimit)
-      ? Math.max(1, Math.min(requestedLimit, MAX_COMMIT_LIMIT))
-      : DEFAULT_COMMIT_LIMIT
+    const prLimit = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(requestedLimit, MAX_PR_LIMIT))
+      : DEFAULT_PR_LIMIT
 
-    try {
-      const { stdout: insideWorkTree } = await execPromise('git rev-parse --is-inside-work-tree', {
-        cwd: process.cwd(),
-        encoding: 'utf-8',
-        timeout: 5000,
-        maxBuffer: 256 * 1024
-      })
+    const githubToken = env.GITHUB_TOKEN
+    const repoOwner = env.GITHUB_REPO_OWNER || 'paulchrisluke'
+    const repoName = env.GITHUB_REPO_NAME || 'kikuzuki-thailand-marketing'
 
-      if (insideWorkTree.trim() !== 'true') {
-        return jsonResponse({ error: 'not a git repository' }, { status: 400 })
-      }
-    } catch (err) {
-      const execError = err as ExecErrorLike
-      console.error('Failed git repository check:', execError.stack ?? execError.message ?? err)
-      return jsonResponse({ error: 'not a git repository' }, { status: 400 })
+    if (!githubToken) {
+      return jsonResponse({ error: 'GITHUB_TOKEN not configured' }, { status: 500 })
     }
 
-    let gitLog = ''
-    try {
-      const result = await execPromise(
-        `git log --max-count=${commitLimit} --pretty=format:"%H%x1E%s%x1E%an%x1E%cI" --date=iso-strict`,
-        {
-          cwd: process.cwd(),
-          encoding: 'utf-8',
-          timeout: 30000,
-          maxBuffer: 4 * 1024 * 1024
+    // Fetch merged PRs from GitHub with pagination and timeout
+    const allMergedPRs: GitHubPR[] = []
+    let page = 1
+    const perPage = 100
+
+    while (allMergedPRs.length < prLimit) {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 10000)
+
+      try {
+        const response = await fetch(
+          `https://api.github.com/repos/${repoOwner}/${repoName}/pulls?state=closed&sort=updated&direction=desc&per_page=${perPage}&page=${page}`,
+          {
+            signal: controller.signal,
+            headers: {
+              'Authorization': `Bearer ${githubToken}`,
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28'
+            }
+          }
+        )
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('GitHub API error:', response.status, errorText)
+          return jsonResponse({ error: `GitHub API error: ${response.status}` }, { status: 500 })
         }
-      )
-      gitLog = result.stdout
-    } catch (err) {
-      const execError = err as ExecErrorLike
-      const gitError = execError.stderr ?? execError.message ?? 'git log failed'
-      console.error('Failed to execute git log:', execError.stack ?? execError.message ?? err)
-      return jsonResponse({ error: `Failed to generate changelog: ${String(gitError).trim()}` }, { status: 500 })
+
+        const pullRequests = (await response.json()) as GitHubPR[]
+        if (pullRequests.length === 0) break
+
+        const mergedInPage = pullRequests.filter(pr => pr.merged_at !== null)
+        allMergedPRs.push(...mergedInPage)
+
+        if (pullRequests.length < perPage) break
+        page++
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.error('GitHub API request timed out')
+          return jsonResponse({ error: 'GitHub API request timed out' }, { status: 504 })
+        }
+        throw err
+      } finally {
+        clearTimeout(timeout)
+      }
     }
 
-    const commits = gitLog.trim().split('\n').map(line => {
-      const parts = line.split('\x1E')
-      if (parts.length < 4) return null
-      const [hash, message, author, date] = parts
-      return { hash, message, author, date }
-    }).filter(Boolean) as Array<{ hash: string; message: string; author: string; date: string }>
+    // Sort by merged_at descending and slice to requested limit
+    const mergedPRs = allMergedPRs
+      .sort((a, b) => new Date(b.merged_at!).getTime() - new Date(a.merged_at!).getTime())
+      .slice(0, prLimit)
 
-    // Categorize commits by type
-    const categorized: Record<string, Array<{ hash: string; message: string; author: string; date: string; type: string; scope: string | null; description: string }>> = {
+    // Categorize PRs by type based on title
+    const categorized: Record<string, Array<{ number: number; title: string; body: string | null; author: string; mergedAt: string; url: string; type: string; scope: string | null; description: string }>> = {
       feat: [],
       fix: [],
       chore: [],
@@ -79,13 +100,18 @@ export default defineEventHandler(async (event) => {
       other: []
     }
 
-    for (const commit of commits) {
-      const match = commit.message.match(/^(feat|fix|chore|docs|style|refactor|perf|test|build|ci)(\(.+\))?:\s*(.+)/)
+    for (const pr of mergedPRs) {
+      const match = pr.title.match(/^(feat|fix|chore|docs|style|refactor|perf|test|build|ci)(\(.+\))?:\s*(.+)/)
       if (match) {
         const [, type, scope, description] = match
         if (type && categorized[type]) {
           categorized[type].push({
-            ...commit,
+            number: pr.number,
+            title: pr.title,
+            body: pr.body,
+            author: pr.user.login,
+            mergedAt: pr.merged_at!,
+            url: pr.html_url,
             type,
             scope: scope?.replace(/[()]/g, '') || null,
             description: description || ''
@@ -94,10 +120,15 @@ export default defineEventHandler(async (event) => {
       } else {
         if (categorized.other) {
           categorized.other.push({
-            ...commit,
+            number: pr.number,
+            title: pr.title,
+            body: pr.body,
+            author: pr.user.login,
+            mergedAt: pr.merged_at!,
+            url: pr.html_url,
             type: 'other',
             scope: null,
-            description: commit.message
+            description: pr.title
           })
         }
       }
@@ -105,9 +136,9 @@ export default defineEventHandler(async (event) => {
 
     return jsonResponse({
       commits: categorized,
-      total: commits.length,
-      lastUpdated: commits[0]?.date || null,
-      limit: commitLimit
+      total: mergedPRs.length,
+      lastUpdated: mergedPRs[0]?.merged_at || null,
+      limit: prLimit
     })
   } catch (error) {
     console.error('Failed to generate changelog:', error)

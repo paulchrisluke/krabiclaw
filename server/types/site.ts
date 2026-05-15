@@ -17,6 +17,7 @@ export interface SiteSettings {
   brand_name: string
   brand_description: string | null
   logo_url: string | null
+  logo_asset_id: string | null
   contact_email: string | null
   brand_color: string
   default_currency: CurrencyCode
@@ -31,11 +32,13 @@ export interface UpdateSiteSettingsRequest {
   brand_name?: string
   brand_description?: string
   logo_url?: string
+  logo_asset_id?: string
   contact_email?: string
   brand_color?: string
   default_currency?: CurrencyCode
   primary_location_id?: string
   url_structure?: 'location_subdirectories' | 'brand_pages'
+  last_published_at?: string
 }
 
 export interface LaunchReadiness {

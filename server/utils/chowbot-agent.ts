@@ -602,6 +602,17 @@ const TOOLS: AiTool[] = [
       required: ['currency'],
     },
   },
+  {
+    name: 'save_brand_description',
+    description: 'Save a one-line brand description for the site homepage and SEO.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', description: 'One-line brand description.' },
+      },
+      required: ['description'],
+    },
+  },
 ]
 
 const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu', 'delete_menu_item', 'delete_menu_section', 'delete_media_asset', 'delete_qa'])
@@ -1367,6 +1378,15 @@ async function executeTool(
       return { error: `Unable to allocate a unique subdomain after ${MAX_SLUG_ATTEMPTS} attempts` }
     }
 
+    case 'save_brand_description': {
+      const description = toSqlText(input.description)?.trim()
+      if (!description) return { error: 'Description is required.' }
+      await db.prepare(
+        `UPDATE sites SET brand_description = ?, updated_at = ? WHERE id = ? AND organization_id = ?`
+      ).bind(description, new Date().toISOString(), siteId, orgId).run()
+      return { brand_description: description, updated: true }
+    }
+
     case 'set_default_currency': {
       const currency = toSqlText(input.currency)?.trim().toUpperCase()
       const supportedCurrencies = new Set<string>(SUPPORTED_CURRENCIES)
@@ -1406,9 +1426,32 @@ export async function runChowBot(opts: RunChowBotOptions): Promise<RunChowBotRes
     locationName = loc?.title ?? null
   }
 
+  const isOnboarding = currentPage === 'onboarding'
+
+  const ONBOARDING_PREAMBLE = isOnboarding ? `
+You are in SETUP MODE. Your job is to guide the restaurant owner through a structured setup interview to get their site live.
+
+Setup order (ask one topic at a time, save each answer immediately using tools before moving on):
+1. Greet the owner warmly. Confirm the restaurant name — if they want to change it call rename_site.
+2. Ask for the primary location — accept a Google Maps URL (use lookup_maps_url), or typed address. Use create_location to save immediately.
+3. Ask for opening hours if not captured from Google Maps. Use update_location to save.
+4. Ask for the first menu: "What dishes do you serve? List a few items with prices or paste your menu." Use create_menu then add_menu_items_batch then publish_menu.
+5. Ask for a one-line brand description (for SEO and the homepage hero). Use save_brand_description to save immediately.
+6. Summarise what was set up and tell them they can publish from the Overview page when ready.
+
+Rules in setup mode:
+- Ask ONE question at a time. Wait for the answer before moving to the next topic.
+- Save answers IMMEDIATELY with tools before asking the next question. Never batch questions.
+- Be warm, concise, and encouraging. First impressions matter.
+- If the owner pastes a Google Maps link, call lookup_maps_url immediately then create_location.
+- If they paste a menu list, call create_menu then add_menu_items_batch then publish_menu immediately.
+- Never ask for information already visible from the site context above.
+- If the owner skips a step, acknowledge it and move forward.
+` : ''
+
   const SYSTEM = `You are ChowBot, an AI assistant for restaurant website owners using Kikuzuki.
 Help manage all site content with concise, action-oriented responses.
-
+${ONBOARDING_PREAMBLE}
 Site: ${siteName}
 Default menu currency: ${opts.defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ''}
