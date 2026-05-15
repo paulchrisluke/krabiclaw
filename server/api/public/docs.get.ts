@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   const db = env.REVIEWS_DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const sql = `SELECT id, title, slug, excerpt, category, difficulty_level, published_at, updated_at FROM platform_docs WHERE status = 'published' ORDER BY category, order, published_at DESC`
+  const sql = `SELECT id, title, slug, excerpt, category, difficulty_level, published_at, updated_at FROM platform_docs WHERE status = 'published' ORDER BY category, sort_order, published_at DESC`
 
   try {
     const { results } = await db.prepare(sql).all()

@@ -100,12 +100,16 @@
 </template>
 
 <script setup lang="ts">
+import { categories, difficultyLevels } from '~/config/documentation'
+import { getErrorMessage } from '~/utils/errors'
+import { useDocForm } from '~/composables/useDocForm'
+
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const docId = route.params.docId as string
-const categories = ['Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced']
-const difficultyLevels = ['Beginner', 'Intermediate', 'Advanced']
+
+const { form, canSave, canPublish, handleImageChange } = useDocForm()
 
 const categoryItems = computed(() => categories.map((item) => ({ label: item, value: item })))
 const difficultyItems = computed(() => difficultyLevels.map((item) => ({ label: item, value: item })))
@@ -129,34 +133,7 @@ interface DocResponse {
   doc?: Doc
 }
 
-function getErrorMessage(error: unknown, message: string): string {
-  if (error && typeof error === 'object') {
-    const data = (error as Record<string, unknown>).data
-    if (data && typeof data === 'object') {
-      const dataError = (data as Record<string, unknown>).error
-      if (typeof dataError === 'string' && dataError) return dataError
-    }
-    const errorMessage = (error as Record<string, unknown>).message
-    if (typeof errorMessage === 'string' && errorMessage) return errorMessage
-  }
-  return message
-}
-
-function handleImageChange(asset: { id: string; publicUrl: string; thumbnailUrl: string } | null) {
-  // Image change is handled by v-model, this is for any additional logic if needed
-}
-
 const doc = ref<Doc | null>(null)
-const form = reactive({
-  title: '',
-  excerpt: '',
-  category: '',
-  difficulty_level: '',
-  seo_description: '',
-  seo_keywords: '',
-  body: '',
-  featured_image_asset_id: ''
-})
 const loadPending = ref(true)
 const loadError = ref('')
 const saving = ref(false)
@@ -240,8 +217,6 @@ async function remove() {
   }
 }
 
-const canSave = computed(() => Boolean(form.title.trim() || form.body.trim()))
-const canPublish = computed(() => Boolean(form.title.trim() && form.body.trim()))
 
 useSeoMeta({ title: 'Edit Documentation | Admin' })
 </script>

@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
 
     // Fetch merged PRs from GitHub
     const response = await fetch(
-      `https://api.github.com/repos/${repoOwner}/${repoName}/pulls?state=closed&sort=updated&direction=desc&per_page=${prLimit}`,
+      `https://api.github.com/repos/${repoOwner}/${repoName}/pulls?state=closed&sort=updated&direction=desc&per_page=${Math.min(prLimit * 2, 100)}`,
       {
         headers: {
           'Authorization': `Bearer ${githubToken}`,
@@ -53,8 +53,8 @@ export default defineEventHandler(async (event) => {
 
     const pullRequests = (await response.json()) as GitHubPR[]
 
-    // Filter for merged PRs only
-    const mergedPRs = pullRequests.filter(pr => pr.merged_at !== null)
+    // Filter for merged PRs only and slice to requested limit
+    const mergedPRs = pullRequests.filter(pr => pr.merged_at !== null).slice(0, prLimit)
 
     // Categorize PRs by type based on title
     const categorized: Record<string, Array<{ number: number; title: string; body: string | null; author: string; mergedAt: string; url: string; type: string; scope: string | null; description: string }>> = {

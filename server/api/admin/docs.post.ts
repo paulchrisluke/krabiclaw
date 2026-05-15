@@ -78,6 +78,20 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: `invalid difficulty_level. Must be one of: ${VALID_DIFFICULTY.join(', ')}` }, { status: 400 })
   }
 
+  if (body.parent_doc_id) {
+    const parentDoc = await db.prepare('SELECT id FROM platform_docs WHERE id = ? LIMIT 1').bind(body.parent_doc_id).first()
+    if (!parentDoc) {
+      return jsonResponse({ error: 'parent_doc_id not found' }, { status: 400 })
+    }
+  }
+
+  if (body.featured_image_asset_id) {
+    const asset = await db.prepare('SELECT id FROM media_assets WHERE id = ? LIMIT 1').bind(body.featured_image_asset_id).first()
+    if (!asset) {
+      return jsonResponse({ error: 'featured_image_asset_id not found' }, { status: 400 })
+    }
+  }
+
   const id = crypto.randomUUID()
   const baseSlug = body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 

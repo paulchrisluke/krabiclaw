@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
     sql += ` WHERE status = 'draft'`
   }
 
-  sql += ` ORDER BY category, order, created_at DESC`
+  sql += ` ORDER BY category, sort_order, created_at DESC`
 
   const { results } = await db.prepare(sql).bind(...params).all()
   return jsonResponse({ docs: results ?? [] })

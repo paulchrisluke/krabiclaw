@@ -76,6 +76,21 @@ export default defineEventHandler(async (event) => {
       if (field === 'difficulty_level' && body.difficulty_level && !VALID_DIFFICULTY.includes(body.difficulty_level)) {
         return jsonResponse({ error: `invalid difficulty_level. Must be one of: ${VALID_DIFFICULTY.join(', ')}` }, { status: 400 })
       }
+      if (field === 'parent_doc_id' && body.parent_doc_id) {
+        if (body.parent_doc_id === docId) {
+          return jsonResponse({ error: 'A document cannot be its own parent' }, { status: 400 })
+        }
+        const parentDoc = await db.prepare('SELECT id FROM platform_docs WHERE id = ? LIMIT 1').bind(body.parent_doc_id).first()
+        if (!parentDoc) {
+          return jsonResponse({ error: 'parent_doc_id not found' }, { status: 400 })
+        }
+      }
+      if (field === 'featured_image_asset_id' && body.featured_image_asset_id) {
+        const asset = await db.prepare('SELECT id FROM media_assets WHERE id = ? LIMIT 1').bind(body.featured_image_asset_id).first()
+        if (!asset) {
+          return jsonResponse({ error: 'featured_image_asset_id not found' }, { status: 400 })
+        }
+      }
       updates.push(`${field} = ?`)
       params.push(body[field])
     }

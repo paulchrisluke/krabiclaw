@@ -57,7 +57,7 @@
             <p class="text-muted">But one problem kept appearing: menu management.</p>
             <p class="text-muted">Most restaurant owners didn't want to log into dashboards or learn website builders. They wanted to send a WhatsApp message like "add this item," "change this price," or upload a photo of a new menu page.</p>
             <p class="text-muted">Then AI changed what was possible.</p>
-            <p class="text-muted">That led to Chowbot — the assistant behind KrabiClaw. Restaurant owners can simply message Chowbot on WhatsApp to update menus, generate food images, create marketing content, publish announcements, and manage their restaurant website using natural conversation.</p>
+            <p class="text-muted">That led to ChowBot — the assistant behind KrabiClaw. Restaurant owners can simply message ChowBot on WhatsApp to update menus, generate food images, create marketing content, publish announcements, and manage their restaurant website using natural conversation.</p>
           </section>
           <section>
             <h2 class="text-2xl font-bold text-default mb-4">Why KrabiClaw Exists</h2>

@@ -138,7 +138,8 @@ CREATE TABLE IF NOT EXISTS sites (
   updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_by TEXT,
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
-  FOREIGN KEY (theme_id) REFERENCES themes(id)
+  FOREIGN KEY (theme_id) REFERENCES themes(id),
+  FOREIGN KEY (logo_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_custom_domain_unique

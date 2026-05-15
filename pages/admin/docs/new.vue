@@ -79,6 +79,10 @@
 </template>
 
 <script setup lang="ts">
+import { categories, difficultyLevels } from '~/config/documentation'
+import { getErrorMessage } from '~/utils/errors'
+import { useDocForm } from '~/composables/useDocForm'
+
 interface CreateDocResponse {
   id: string | number
   [key: string]: ApiValue
@@ -86,46 +90,23 @@ interface CreateDocResponse {
 
 definePageMeta({ layout: 'dashboard' })
 
-const categories = ['Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced']
-const difficultyLevels = ['Beginner', 'Intermediate', 'Advanced']
+const { form, canSave, canPublish, handleImageChange } = useDocForm()
 
 const categoryItems = computed(() => categories.map((item) => ({ label: item, value: item })))
 const difficultyItems = computed(() => difficultyLevels.map((item) => ({ label: item, value: item })))
 
-const form = reactive({
-  title: '',
-  excerpt: '',
-  category: '',
-  difficulty_level: '',
-  seo_description: '',
-  seo_keywords: '',
-  body: '',
-  featured_image_asset_id: ''
-})
 const saving = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 
-function getErrorMessage(error: unknown, message: string): string {
-  if (error && typeof error === 'object') {
-    const data = (error as Record<string, unknown>).data
-    if (data && typeof data === 'object') {
-      const dataError = (data as Record<string, unknown>).error
-      if (typeof dataError === 'string' && dataError) return dataError
-    }
-    const errorMessage = (error as Record<string, unknown>).message
-    if (typeof errorMessage === 'string' && errorMessage) return errorMessage
-  }
-  return message
-}
-
-function handleImageChange(asset: { id: string; publicUrl: string; thumbnailUrl: string } | null) {
-  // Image change is handled by v-model, this is for any additional logic if needed
-}
 
 async function save(publish: boolean) {
-  if (!form.title.trim() || !form.body.trim()) {
-    errorMessage.value = 'Title and body are required.'
+  if (publish && (!form.title.trim() || !form.body.trim())) {
+    errorMessage.value = 'Title and body are required to publish.'
+    return
+  }
+  if (!publish && !form.title.trim() && !form.body.trim()) {
+    errorMessage.value = 'Title or body is required to save a draft.'
     return
   }
   saving.value = true
@@ -138,14 +119,12 @@ async function save(publish: boolean) {
     })
     await navigateTo(`/admin/docs/${res.id}`)
   } catch (err) {
-    errorMessage.value = getErrorMessage(err, 'Failed to save doc.')
+    errorMessage.value = getErrorMessage(err, publish ? 'Failed to publish.' : 'Failed to save draft.')
   } finally {
     saving.value = false
   }
 }
 
-const canSave = computed(() => Boolean(form.title.trim() || form.body.trim()))
-const canPublish = computed(() => Boolean(form.title.trim() && form.body.trim()))
 
 useSeoMeta({ title: 'New Documentation | Admin' })
 </script>
