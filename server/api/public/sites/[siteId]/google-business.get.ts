@@ -96,6 +96,9 @@ export default defineEventHandler(async (event) => {
       websiteUri: location.website_url,
       latlng: location.latitude && location.longitude ? { latitude: location.latitude, longitude: location.longitude } : null,
       categories: (parseJson(location.categories) as JsonValue[] | null) ?? [],
+      profile: {
+        description: (location as LocationRow & { description?: string | null }).description ?? null
+      },
       reviewSummary: {
         averageRating: location.rating,
         totalReviewCount: location.review_count

@@ -318,11 +318,11 @@
       <section class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
         <div class="mb-16 max-w-2xl">
           <p class="saya-kicker mb-6">Reviews</p>
-          <template v-if="hasGoogleBusiness && googleReviewSummary">
+          <template v-if="hasGoogleBusiness && googleReviewSummary && Number(googleReviewSummary.average) > 0">
             <h2 class="saya-display-md flex flex-wrap items-center gap-4 text-default">
               <UIcon name="i-heroicons-star-solid" class="size-8 text-primary" />
               {{ googleReviewSummary.average }}
-              <span class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
+              <span v-if="googleReviewSummary.count" class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
             </h2>
             <p class="mt-6 text-sm text-muted">Synced live from Google Business across all locations.</p>
           </template>

@@ -34,7 +34,7 @@
           </div>
           <p class="text-muted whitespace-pre-line">{{ experienceBody }}</p>
           <div v-if="businessDescription" class="mt-20 pt-20 border-t border-default">
-            <h4 class="text-sm font-bold uppercase tracking-widest text-dimmed mb-8">From Google Business</h4>
+            <h4 class="text-sm font-bold uppercase tracking-widest text-dimmed mb-8">About</h4>
             <p class="text-muted">{{ businessDescription }}</p>
           </div>
         </div>
