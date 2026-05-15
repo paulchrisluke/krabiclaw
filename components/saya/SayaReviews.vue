@@ -16,7 +16,7 @@
           </span>
         </div>
         <p class="text-sm font-medium text-muted">
-          {{ ratingSummary.average }} / 5.0 from {{ ratingSummary.count }} Google reviews
+          {{ ratingSummary.average }} / 5.0 from {{ ratingSummary.count }} reviews
         </p>
       </div>
     </div>
@@ -25,7 +25,7 @@
       <!-- Real reviews -->
       <UCard
         v-for="review in displayedReviews"
-        :key="review.reviewId || review.name || review.createTime"
+        :key="review.reviewId || review.id || review.name || review.createTime"
         class="flex flex-col bg-default p-8 shadow-sm border border-default hover:shadow-md transition-all"
       >
         <div
@@ -56,33 +56,13 @@
           </div>
           <div>
             <p class="text-sm font-bold text-default">{{ reviewAuthor(review) }}</p>
-            <time v-if="review.createTime" :datetime="review.createTime" class="block text-xs text-muted">
-              {{ formatDate(review.createTime) }}
+            <time v-if="review.createTime || review.created_at" :datetime="review.createTime || review.created_at" class="block text-xs text-muted">
+              {{ formatDate(review.createTime || review.created_at) }}
             </time>
           </div>
         </div>
       </UCard>
 
-      <!-- Placeholder cards when no reviews -->
-      <template v-if="reviews.length === 0">
-        <UCard v-for="i in (limit || 3)" :key="`placeholder-${i}`" class="flex flex-col bg-default p-8 shadow-sm border border-default">
-          <div class="flex items-center gap-1 text-yellow-400 mb-4">
-          <span v-for="starIndex in 5" :key="starIndex" class="text-sm">☆</span>
-        </div>
-          <div class="grow space-y-3">
-            <USkeleton class="h-3" />
-            <USkeleton class="h-3 w-4/5" />
-            <USkeleton class="h-3 w-3/4" />
-          </div>
-          <div class="mt-6 flex items-center gap-3 pt-6 border-t border-default">
-            <USkeleton class="h-10 w-10 rounded-full" />
-            <div class="flex-1">
-              <USkeleton class="h-4 mb-2" />
-              <USkeleton class="h-3 w-20" />
-            </div>
-          </div>
-        </UCard>
-      </template>
     </div>
     
     <div v-if="showViewMore && reviews.length > 0" class="mt-12 text-center">
@@ -137,11 +117,10 @@ const starRatingMap = {
 }
 
 const reviewAuthor = review => {
-  const name = review.reviewer?.displayName?.trim()
-  return name && name.length ? name : 'Google guest'
+  return review.reviewer?.displayName?.trim() || review.author_name?.trim() || 'Anonymous'
 }
 const reviewText = review => {
-  const text = typeof review.comment === 'string' ? review.comment : review.comment?.text ?? ''
+  const text = typeof review.comment === 'string' ? review.comment : review.comment?.text ?? review.content ?? ''
   if (props.limit && text.length > 280) {
     return text.slice(0, 280) + '...'
   }
@@ -150,7 +129,7 @@ const reviewText = review => {
 const reviewRating = review => {
   const mapped = starRatingMap[review.starRating]
   if (mapped !== undefined) return mapped
-  const numeric = Number(review.starRating ?? 0)
+  const numeric = Number(review.starRating ?? review.rating ?? 0)
   return isNaN(numeric) ? 0 : numeric
 }
 

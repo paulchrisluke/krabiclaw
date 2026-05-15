@@ -49,9 +49,11 @@ export default defineEventHandler(async (event) => {
     const locations = await db.prepare(`
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone,
              bl.website_url, bl.maps_url, bl.latitude, bl.longitude,
-             bl.opening_hours, bl.rating, bl.review_count, bl.is_primary, bl.status,
+             bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level,
+             bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id,
+             bl.rating, bl.review_count, bl.is_primary, bl.status,
              bl.last_synced_at, bl.google_location_id, bl.google_connection_id,
-             bl.hero_image_asset_id, ma.public_url as image_url
+             bl.hero_image_asset_id, bl.hero_video_asset_id, ma.public_url as image_url
       FROM business_locations bl
       LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
       WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'

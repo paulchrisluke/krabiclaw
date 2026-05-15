@@ -138,6 +138,7 @@
 
 <script setup>
 definePageMeta({ layout: 'saya' })
+import { getFieldDef } from '~/config/content-registry'
 import { usePageContent } from '~/composables/usePageContent'
 
 const { getField } = usePageContent('reservations')
@@ -157,23 +158,13 @@ const guestOptions = [
 
 // Sanitized policies body to prevent XSS
 const policiesBody = ref('')
-const rawPoliciesHtml = getField('policies.body',
-  '<ul class="space-y-2">' +
-  '<li>• Reservations are held for 15 minutes</li>' +
-  '<li>• Cancellations required 2 hours in advance</li>' +
-  '<li>• Large parties (6+ guests) may require deposit</li>' +
-  '<li>• Special dietary requests accommodated with advance notice</li>' +
-  '</ul>'
-)
+const reservationPoliciesDefault = getFieldDef('reservations', 'policies.body')?.defaultValue ?? ''
+const rawPoliciesHtml = getField('policies.body', reservationPoliciesDefault) ?? reservationPoliciesDefault
 
 // Sanitize on client side only
 onMounted(async () => {
-  if (process.client) {
-    const DOMPurify = await import('dompurify')
-    policiesBody.value = DOMPurify.default.sanitize(rawPoliciesHtml)
-  } else {
-    policiesBody.value = rawPoliciesHtml
-  }
+  const DOMPurify = await import('dompurify')
+  policiesBody.value = DOMPurify.default.sanitize(rawPoliciesHtml)
 })
 
 // Set initial value for SSR

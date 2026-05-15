@@ -115,6 +115,12 @@ npx wrangler d1 execute REVIEWS_DB --local --file scripts/seed-krabiclaw.sql
 
 You only need to seed if you reset/drop the database or clear `.wrangler/state`. Seeding is not required for every server restart.
 
+Remote demo seeding is guarded and should only be run intentionally:
+
+```bash
+yarn seed:remote --confirm-production
+```
+
 ## Local Development Flows
 
 ### Fast Hot-Reload Dev (Recommended)

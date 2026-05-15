@@ -17,6 +17,8 @@
     "postinstall": "nuxt prepare",
     "schema:local": "npx wrangler d1 execute REVIEWS_DB --local --file schema.sql",
     "schema:remote": "npx wrangler d1 execute REVIEWS_DB --remote --file schema.sql",
+    "seed:local": "npx wrangler d1 execute REVIEWS_DB --local --file seeds/demo.sql",
+    "seed:remote": "node scripts/seed-remote-guard.mjs",
     "stripe:listen": "stripe listen --forward-to localhost:3000/api/billing/webhook"
   },
   "devDependencies": {

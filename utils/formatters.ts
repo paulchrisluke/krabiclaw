@@ -1,5 +1,5 @@
-export const formatGoogleTime = (time: { hours?: number; minutes?: number }) => {
-  if (time.hours === undefined || time.minutes === undefined) return ''
+export const formatGoogleTime = (time: { hours?: number; minutes?: number } | null | undefined) => {
+  if (!time || time.hours === undefined || time.minutes === undefined) return ''
   const h = time.hours % 12 || 12
   const m = time.minutes.toString().padStart(2, '0')
   const ampm = time.hours >= 12 ? 'PM' : 'AM'
@@ -19,6 +19,22 @@ interface GoogleRegularPeriod {
 
 interface GoogleRegularHours {
   periods?: GoogleRegularPeriod[]
+  // Simple string-time format used by seed/manual entry: openTime/closeTime are "HH:MM"
+  // weekdayDescriptions format written by ChowBot
+  weekdayDescriptions?: string[]
+}
+
+// Parse "HH:MM" string into {hours, minutes} object
+function parseTimeStr(t: unknown): GoogleTime | null {
+  if (typeof t === 'object' && t !== null) return t as GoogleTime
+  if (t === null || t === undefined) return null
+  const str = String(t).trim()
+  if (!str) return null
+  const [hoursRaw, minutesRaw] = str.split(':')
+  const h = Number(hoursRaw)
+  const m = Number(minutesRaw)
+  if (isNaN(h)) return null
+  return { hours: h, minutes: isNaN(m) ? 0 : m }
 }
 
 interface GoogleDate {
@@ -38,32 +54,56 @@ interface GoogleSpecialHours {
   specialHourPeriods?: GoogleSpecialPeriod[]
 }
 
-export const formatGoogleHours = (regularHours: GoogleRegularHours | null | undefined) => {
-  if (!regularHours?.periods?.length) return []
-
+export const formatGoogleHours = (regularHours: GoogleRegularHours | GoogleRegularPeriod[] | null | undefined) => {
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
-  
+
+  // Handle weekdayDescriptions format (ChowBot plain-text storage)
+  if (regularHours && !Array.isArray(regularHours) && (regularHours as GoogleRegularHours).weekdayDescriptions?.length) {
+    const descs = (regularHours as GoogleRegularHours).weekdayDescriptions!
+    return descs.map(line => {
+      const [dayPart, ...rest] = line.split(/:\s*/)
+      return { day: (dayPart ?? line).trim(), hours: rest.join(': ').trim() || line }
+    })
+  }
+
+  // Handle flat array format: [{openDay, openTime, closeTime}]
+  // openTime/closeTime may be "HH:MM" strings or {hours, minutes} objects
+  const periods: GoogleRegularPeriod[] = Array.isArray(regularHours)
+    ? (regularHours as GoogleRegularPeriod[])
+    : (regularHours as GoogleRegularHours)?.periods ?? []
+
+  if (!periods.length) return []
+
   return days.map(day => {
-    const period = regularHours.periods?.find((p) => p.openDay === day)
+    const period = periods.find((p) => p.openDay === day)
     return {
       day: day.charAt(0) + day.slice(1).toLowerCase(),
-      hours: period 
-        ? `${formatGoogleTime(period.openTime ?? {})} – ${formatGoogleTime(period.closeTime ?? {})}`
+      today: days[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1] === day,
+      hours: period
+        ? `${formatGoogleTime(parseTimeStr(period.openTime))} – ${formatGoogleTime(parseTimeStr(period.closeTime))}`
         : 'Closed'
     }
   })
 }
 
-export const getTodayGoogleHours = (regularHours: GoogleRegularHours | null | undefined) => {
-  if (!regularHours?.periods?.length) return 'Contact us for hours'
-  
+export const getTodayGoogleHours = (regularHours: GoogleRegularHours | GoogleRegularPeriod[] | null | undefined) => {
   const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
   const today = days[new Date().getDay()]
-  const period = regularHours.periods.find((p) => p.openDay === today)
-  
-  if (!period) return 'Closed today'
-  
-  return `Open today: ${formatGoogleTime(period.openTime ?? {})} – ${formatGoogleTime(period.closeTime ?? {})}`
+  const descriptions = !Array.isArray(regularHours)
+    ? (regularHours as GoogleRegularHours)?.weekdayDescriptions ?? []
+    : []
+  const todayDescription = descriptions.find(line => line.trim().toUpperCase().startsWith(`${today}:`))
+
+  const periods: GoogleRegularPeriod[] = Array.isArray(regularHours)
+    ? (regularHours as GoogleRegularPeriod[])
+    : (regularHours as GoogleRegularHours)?.periods ?? []
+
+  if (!periods.length) return todayDescription || 'Contact us for hours'
+
+  const period = periods.find((p) => p.openDay === today)
+  if (!period) return todayDescription || 'Closed today'
+
+  return `${formatGoogleTime(parseTimeStr(period.openTime))} – ${formatGoogleTime(parseTimeStr(period.closeTime))}`
 }
 
 export const getSchemaOpeningHours = (regularHours: GoogleRegularHours | null | undefined) => {

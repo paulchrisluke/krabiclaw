@@ -163,6 +163,87 @@
 
         <UCard>
           <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="font-semibold text-highlighted">Location Fields</h2>
+              <UButton v-if="detailsSaved" size="xs" color="success" variant="soft" icon="i-heroicons-check">Saved</UButton>
+            </div>
+          </template>
+
+          <div class="space-y-5">
+            <div class="grid gap-4 md:grid-cols-2">
+              <UFormField label="Name">
+                <UInput v-model="detailsForm.title" />
+              </UFormField>
+              <UFormField label="Slug">
+                <UInput v-model="detailsForm.slug" />
+              </UFormField>
+              <UFormField label="City">
+                <UInput v-model="detailsForm.city" />
+              </UFormField>
+              <UFormField label="Phone">
+                <UInput v-model="detailsForm.phone" type="tel" />
+              </UFormField>
+              <UFormField label="Email">
+                <UInput v-model="detailsForm.email" type="email" />
+              </UFormField>
+              <UFormField label="Website URL">
+                <UInput v-model="detailsForm.website_url" type="url" />
+              </UFormField>
+              <UFormField label="Maps URL">
+                <UInput v-model="detailsForm.maps_url" type="url" />
+              </UFormField>
+              <UFormField label="Google Place ID">
+                <UInput v-model="detailsForm.google_place_id" />
+              </UFormField>
+              <UFormField label="Rating">
+                <UInput v-model="detailsForm.rating" type="number" min="0" max="5" step="0.1" />
+              </UFormField>
+              <UFormField label="Review Count">
+                <UInput v-model="detailsForm.review_count" type="number" min="0" step="1" />
+              </UFormField>
+              <UFormField label="Price Level">
+                <UInput v-model="detailsForm.price_level" />
+              </UFormField>
+              <UFormField label="Facebook URL">
+                <UInput v-model="detailsForm.facebook_url" type="url" />
+              </UFormField>
+              <UFormField label="Instagram URL">
+                <UInput v-model="detailsForm.instagram_url" type="url" />
+              </UFormField>
+              <UFormField label="TikTok URL">
+                <UInput v-model="detailsForm.tiktok_url" type="url" />
+              </UFormField>
+            </div>
+
+            <UFormField label="Address">
+              <UTextarea v-model="detailsForm.address" :rows="2" />
+            </UFormField>
+            <UFormField label="Short Description">
+              <UInput v-model="detailsForm.short_description" />
+            </UFormField>
+            <UFormField label="Description">
+              <UTextarea v-model="detailsForm.description" :rows="4" />
+            </UFormField>
+            <UFormField label="Opening Hours">
+              <UTextarea v-model="detailsForm.opening_hours" :rows="7" />
+            </UFormField>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-default pt-5">
+              <div class="flex items-center gap-6">
+                <UCheckbox v-model="detailsForm.is_primary" label="Primary location" />
+                <UCheckbox
+                  :model-value="detailsForm.status === 'active'"
+                  label="Active"
+                  @update:model-value="setDetailsActive"
+                />
+              </div>
+              <UButton :loading="detailsSaving" icon="i-heroicons-check" @click="saveLocationDetails">Save fields</UButton>
+            </div>
+          </div>
+        </UCard>
+
+        <UCard>
+          <template #header>
             <div class="flex items-center justify-between">
               <h2 class="font-semibold text-highlighted">Hero Media</h2>
               <UButton v-if="heroSaved" size="xs" color="success" variant="soft" icon="i-heroicons-check">Saved</UButton>
@@ -192,6 +273,67 @@
             </UFormField>
           </div>
         </UCard>
+
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="font-semibold text-highlighted">Manual Reviews</h2>
+              <UButton size="sm" icon="i-heroicons-plus" @click="startNewReview">Add review</UButton>
+            </div>
+          </template>
+
+          <div class="space-y-5">
+            <div v-if="reviewFormVisible" class="rounded-lg border border-default bg-elevated p-4">
+              <div class="grid gap-4 md:grid-cols-2">
+                <UFormField label="Guest Name">
+                  <UInput v-model="reviewForm.author_name" />
+                </UFormField>
+                <UFormField label="Rating">
+                  <UInput v-model="reviewForm.rating" type="number" min="1" max="5" step="1" />
+                </UFormField>
+                <UFormField label="Title">
+                  <UInput v-model="reviewForm.title" />
+                </UFormField>
+                <UFormField label="Date">
+                  <UInput v-model="reviewForm.created_at" type="date" />
+                </UFormField>
+              </div>
+              <UFormField class="mt-4" label="Review">
+                <UTextarea v-model="reviewForm.content" :rows="4" />
+              </UFormField>
+              <div class="mt-4 flex justify-end gap-2">
+                <UButton color="neutral" variant="ghost" @click="cancelReviewEdit">Cancel</UButton>
+                <UButton :loading="reviewSaving" @click="saveReview">Save review</UButton>
+              </div>
+            </div>
+
+            <div v-if="reviewsLoading" class="flex items-center gap-3 text-sm text-muted">
+              <UIcon name="i-heroicons-arrow-path" class="size-4 animate-spin" />
+              Loading reviews...
+            </div>
+            <div v-else-if="manualReviews.length === 0" class="rounded-lg border border-dashed border-default px-6 py-10 text-center">
+              <UIcon name="i-heroicons-star" class="mx-auto size-8 text-muted" />
+              <p class="mt-3 text-sm text-muted">No manual reviews yet.</p>
+            </div>
+            <div v-else class="divide-y divide-default rounded-lg border border-default">
+              <div v-for="review in manualReviews" :key="review.id" class="flex flex-col gap-3 p-4 md:flex-row md:items-start md:justify-between">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p class="font-medium text-highlighted">{{ review.author_name }}</p>
+                    <UBadge color="neutral" variant="soft">{{ review.rating }} stars</UBadge>
+                    <UBadge :color="review.status === 'approved' ? 'success' : 'neutral'" variant="soft">{{ review.status }}</UBadge>
+                  </div>
+                  <p v-if="review.title" class="mt-2 text-sm font-medium text-highlighted">{{ review.title }}</p>
+                  <p class="mt-1 text-sm text-muted">{{ review.content }}</p>
+                </div>
+                <div class="flex shrink-0 gap-2">
+                  <UButton size="xs" color="neutral" variant="soft" icon="i-heroicons-pencil-square" @click="editReview(review)">Edit</UButton>
+                  <UButton size="xs" color="error" variant="ghost" icon="i-heroicons-trash" @click="deleteReview(review)">Delete</UButton>
+                </div>
+              </div>
+            </div>
+          </div>
+        </UCard>
       </div>
     </UPageBody>
   </UPage>
@@ -207,7 +349,17 @@ interface BusinessLocation {
   address: { addressLines?: string[] } | null
   city: string | null
   phone: string | null
+  email: string | null
+  website_url: string | null
   maps_url: string | null
+  description: string | null
+  short_description: string | null
+  price_level: string | null
+  facebook_url: string | null
+  instagram_url: string | null
+  tiktok_url: string | null
+  google_place_id: string | null
+  opening_hours: { weekdayDescriptions?: string[] } | null
   rating: number | null
   review_count: number | null
   is_primary: boolean
@@ -216,6 +368,18 @@ interface BusinessLocation {
   last_synced_at: string | null
   hero_image_asset_id?: string | null
   hero_video_asset_id?: string | null
+}
+
+interface ManualReview {
+  id: string
+  author_name: string
+  rating: number
+  title: string | null
+  content: string
+  status: string
+  source: string
+  created_at: string
+  updated_at: string
 }
 
 interface GbConnection {
@@ -270,6 +434,44 @@ const heroImageAssetId = ref<string | null>(null)
 const heroVideoAssetId = ref<string | null>(null)
 const heroSaved = ref(false)
 let heroSaveTimeout: ReturnType<typeof setTimeout> | null = null
+const detailsSaving = ref(false)
+const detailsSaved = ref(false)
+const reviewsLoading = ref(false)
+const reviewSaving = ref(false)
+const reviewFormVisible = ref(false)
+const editingReviewId = ref<string | null>(null)
+const manualReviews = ref<ManualReview[]>([])
+
+const detailsForm = reactive({
+  title: '',
+  slug: '',
+  city: '',
+  phone: '',
+  email: '',
+  website_url: '',
+  maps_url: '',
+  google_place_id: '',
+  rating: '',
+  review_count: '',
+  price_level: '',
+  facebook_url: '',
+  instagram_url: '',
+  tiktok_url: '',
+  address: '',
+  short_description: '',
+  description: '',
+  opening_hours: '',
+  is_primary: false,
+  status: 'active'
+})
+
+const reviewForm = reactive({
+  author_name: '',
+  rating: '5',
+  title: '',
+  content: '',
+  created_at: ''
+})
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {
@@ -288,8 +490,91 @@ watch(location, (loc) => {
   if (loc) {
     heroImageAssetId.value = loc.hero_image_asset_id ?? null
     heroVideoAssetId.value = loc.hero_video_asset_id ?? null
+    fillDetailsForm(loc)
   }
 })
+
+function fillDetailsForm(loc: BusinessLocation) {
+  detailsForm.title = loc.title
+  detailsForm.slug = loc.slug
+  detailsForm.city = loc.city ?? ''
+  detailsForm.phone = loc.phone ?? ''
+  detailsForm.email = loc.email ?? ''
+  detailsForm.website_url = loc.website_url ?? ''
+  detailsForm.maps_url = loc.maps_url ?? ''
+  detailsForm.google_place_id = loc.google_place_id ?? ''
+  detailsForm.rating = loc.rating === null || loc.rating === undefined ? '' : String(loc.rating)
+  detailsForm.review_count = loc.review_count === null || loc.review_count === undefined ? '' : String(loc.review_count)
+  detailsForm.price_level = loc.price_level ?? ''
+  detailsForm.facebook_url = loc.facebook_url ?? ''
+  detailsForm.instagram_url = loc.instagram_url ?? ''
+  detailsForm.tiktok_url = loc.tiktok_url ?? ''
+  detailsForm.address = loc.address?.addressLines?.join('\n') ?? ''
+  detailsForm.short_description = loc.short_description ?? ''
+  detailsForm.description = loc.description ?? ''
+  detailsForm.opening_hours = loc.opening_hours?.weekdayDescriptions?.join('\n') ?? ''
+  detailsForm.is_primary = loc.is_primary
+  detailsForm.status = loc.status
+}
+
+const setDetailsActive = (v: boolean | 'indeterminate') => {
+  if (v === 'indeterminate') return
+  detailsForm.status = v ? 'active' : 'inactive'
+}
+
+const optionalNumber = (value: string) => {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const optionalInteger = (value: string) => {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const parsed = Number(trimmed)
+  return Number.isInteger(parsed) ? parsed : null
+}
+
+async function saveLocationDetails() {
+  detailsSaving.value = true
+  try {
+    const response = await $fetch<{ success: boolean; location: BusinessLocation }>(`/api/sites/${siteId}/locations/${locationId}`, {
+      method: 'PATCH',
+      body: {
+        title: detailsForm.title,
+        slug: detailsForm.slug,
+        city: detailsForm.city || null,
+        phone: detailsForm.phone || null,
+        email: detailsForm.email || null,
+        website_url: detailsForm.website_url || null,
+        maps_url: detailsForm.maps_url || null,
+        google_place_id: detailsForm.google_place_id || null,
+        rating: optionalNumber(detailsForm.rating),
+        review_count: optionalInteger(detailsForm.review_count),
+        price_level: detailsForm.price_level || null,
+        facebook_url: detailsForm.facebook_url || null,
+        instagram_url: detailsForm.instagram_url || null,
+        tiktok_url: detailsForm.tiktok_url || null,
+        address: detailsForm.address ? { addressLines: detailsForm.address.split('\n').map(line => line.trim()).filter(Boolean) } : null,
+        short_description: detailsForm.short_description || null,
+        description: detailsForm.description || null,
+        opening_hours: detailsForm.opening_hours ? { weekdayDescriptions: detailsForm.opening_hours.split('\n').map(line => line.trim()).filter(Boolean) } : null,
+        is_primary: detailsForm.is_primary,
+        status: detailsForm.status
+      }
+    })
+    if (!response.success) throw new Error('Failed to save location')
+    location.value = response.location
+    detailsSaved.value = true
+    toast.add({ description: 'Location fields saved', color: 'success' })
+    setTimeout(() => { detailsSaved.value = false }, 2000)
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Failed to save location fields'), color: 'error' })
+  } finally {
+    detailsSaving.value = false
+  }
+}
 
 async function saveHeroMedia() {
   try {
@@ -349,6 +634,102 @@ const loadGbConnection = async () => {
   }
 }
 
+function resetReviewForm() {
+  editingReviewId.value = null
+  reviewForm.author_name = ''
+  reviewForm.rating = '5'
+  reviewForm.title = ''
+  reviewForm.content = ''
+  reviewForm.created_at = new Date().toISOString().slice(0, 10)
+}
+
+function startNewReview() {
+  resetReviewForm()
+  reviewFormVisible.value = true
+}
+
+function editReview(review: ManualReview) {
+  editingReviewId.value = review.id
+  reviewForm.author_name = review.author_name
+  reviewForm.rating = String(review.rating)
+  reviewForm.title = review.title ?? ''
+  reviewForm.content = review.content
+  reviewForm.created_at = review.created_at ? review.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
+  reviewFormVisible.value = true
+}
+
+function cancelReviewEdit() {
+  reviewFormVisible.value = false
+  resetReviewForm()
+}
+
+async function loadManualReviews() {
+  reviewsLoading.value = true
+  try {
+    const response = await $fetch<{ success: boolean; reviews: ManualReview[] }>(
+      `/api/sites/${siteId}/locations/${locationId}/reviews`
+    )
+    if (!response.success) throw new Error('Failed to load manual reviews')
+    manualReviews.value = response.reviews
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Failed to load manual reviews'), color: 'error' })
+  } finally {
+    reviewsLoading.value = false
+  }
+}
+
+async function saveReview() {
+  reviewSaving.value = true
+  try {
+    const rating = Number(reviewForm.rating)
+    const body = {
+      author_name: reviewForm.author_name,
+      rating: Number.isInteger(rating) ? rating : 5,
+      title: reviewForm.title || null,
+      content: reviewForm.content,
+      status: 'approved',
+      created_at: reviewForm.created_at ? `${reviewForm.created_at}T00:00:00.000Z` : new Date().toISOString()
+    }
+    if (editingReviewId.value) {
+      const response = await $fetch<{ success: boolean; review: ManualReview }>(
+        `/api/sites/${siteId}/locations/${locationId}/reviews/${editingReviewId.value}`,
+        { method: 'PATCH', body }
+      )
+      if (!response.success) throw new Error('Failed to update review')
+      const idx = manualReviews.value.findIndex(review => review.id === editingReviewId.value)
+      if (idx !== -1) manualReviews.value[idx] = response.review
+    } else {
+      const response = await $fetch<{ success: boolean; review: ManualReview }>(
+        `/api/sites/${siteId}/locations/${locationId}/reviews`,
+        { method: 'POST', body }
+      )
+      if (!response.success) throw new Error('Failed to create review')
+      manualReviews.value.unshift(response.review)
+    }
+    reviewFormVisible.value = false
+    resetReviewForm()
+    toast.add({ description: 'Review saved', color: 'success' })
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Failed to save review'), color: 'error' })
+  } finally {
+    reviewSaving.value = false
+  }
+}
+
+async function deleteReview(review: ManualReview) {
+  if (!confirm(`Delete review from "${review.author_name}"? This cannot be undone.`)) return
+  reviewSaving.value = true
+  try {
+    await $fetch(`/api/sites/${siteId}/locations/${locationId}/reviews/${review.id}`, { method: 'DELETE' })
+    manualReviews.value = manualReviews.value.filter(item => item.id !== review.id)
+    toast.add({ description: 'Review deleted', color: 'neutral' })
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Failed to delete review'), color: 'error' })
+  } finally {
+    reviewSaving.value = false
+  }
+}
+
 const loadLocationWorkspace = async () => {
   loading.value = true
   error.value = null
@@ -366,16 +747,19 @@ const loadLocationWorkspace = async () => {
     site.value = settingsResponse.settings
     location.value = locationResponse.location
     menus.value = menusResponse.menus
+    return true
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load location'
+    return false
   } finally {
     loading.value = false
   }
 }
 
 onMounted(async () => {
-  await loadLocationWorkspace()
+  const workspaceLoaded = await loadLocationWorkspace()
   await loadGbConnection()
+  if (workspaceLoaded) await loadManualReviews()
 
   if (route.query.gb === 'connected') {
     toast.add({ description: 'Google Business connected successfully', color: 'success' })

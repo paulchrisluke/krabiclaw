@@ -10,6 +10,7 @@ interface JsonObject {
 interface LocationRow {
   id: string
   title: string
+  city: string | null
   address: string | null
   phone: string | null
   website_url: string | null
@@ -18,6 +19,7 @@ interface LocationRow {
   categories: string | null
   rating: number | null
   review_count: number | null
+  description: string | null
   last_synced_at: string | null
 }
 
@@ -26,6 +28,14 @@ interface ReviewRow {
   rating: number | null
   content: string | null
   date: string | null
+}
+
+interface PostRow {
+  id: string
+  title: string | null
+  body: string
+  image_url: string | null
+  published_at: string | null
 }
 
 const parseJson = (raw: string | null): JsonValue => {
@@ -91,13 +101,14 @@ export default defineEventHandler(async (event) => {
     // Map business info from business_locations columns
     const business = {
       title: location.title,
+      city: location.city,
       storefrontAddress: parseJson(location.address),
       phoneNumbers: location.phone ? [{ phoneNumber: location.phone }] : [],
       websiteUri: location.website_url,
       latlng: location.latitude && location.longitude ? { latitude: location.latitude, longitude: location.longitude } : null,
       categories: (parseJson(location.categories) as JsonValue[] | null) ?? [],
       profile: {
-        description: (location as LocationRow & { description?: string | null }).description ?? null
+        description: location.description
       },
       reviewSummary: {
         averageRating: location.rating,
@@ -105,11 +116,32 @@ export default defineEventHandler(async (event) => {
       }
     }
     
+    // Get published posts for this site (used for homepage highlights + /posts feed)
+    const postsResult = await db.prepare(`
+      SELECT p.id, p.title, p.body, p.published_at,
+             ma.public_url as image_url
+      FROM posts p
+      LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
+      WHERE p.site_id = ? AND p.status = 'published'
+      ORDER BY p.published_at DESC
+      LIMIT 6
+    `).bind(siteId).all()
+    const postRows = (postsResult.results ?? []) as unknown as PostRow[]
+
+    // Shape posts to match the GMB post format the frontend expects
+    const posts = postRows.map(p => ({
+      name: `posts/${p.id}`,
+      summary: p.body,
+      title: p.title ?? '',
+      createTime: p.published_at ?? '',
+      media: p.image_url ? [{ googleUrl: p.image_url }] : []
+    }))
+
     return jsonResponse({
       business,
       reviews: reviewRows,
-      media: [], // Media and posts are currently not stored in specific columns
-      posts: [],
+      media: [],
+      posts,
       syncedAt: location.last_synced_at
     })
     

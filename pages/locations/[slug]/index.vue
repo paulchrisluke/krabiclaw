@@ -326,8 +326,12 @@ const isOpenNow = computed(() => {
 const mapEmbedSrc = computed(() => {
   const loc = location.value
   if (!loc) return null
-  if (loc.latitude && loc.longitude) {
-    return `https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d500!2d${loc.longitude}!3d${loc.latitude}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2sth`
+  if (loc.latitude != null && loc.longitude != null) {
+    return `https://maps.google.com/maps?q=${loc.latitude},${loc.longitude}&output=embed`
+  }
+  const addressLines = (loc.address as Record<string, unknown> | null)?.addressLines
+  if (Array.isArray(addressLines) && addressLines[0]) {
+    return `https://maps.google.com/maps?q=${encodeURIComponent(String(addressLines[0]))}&output=embed`
   }
   return null
 })

@@ -135,8 +135,8 @@
         />
         <div class="absolute inset-0 bg-zinc-950" :class="(heroImageUrl || businessPrimaryPhoto || heroVideoUrl) ? 'opacity-50' : ''" />
         <div class="relative mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">
-          <p data-field="hero.eyebrow" class="saya-eyebrow mb-8 text-white/70">
-            {{ getField('hero.eyebrow', businessCity || 'A neighbourhood restaurant') }}
+          <p v-if="getField('hero.eyebrow', businessCity)" data-field="hero.eyebrow" class="saya-eyebrow mb-8 text-white/70">
+            {{ getField('hero.eyebrow', businessCity) }}
           </p>
           <h1 data-field="hero.title" class="saya-display-lg text-white max-w-4xl">
             {{ getField('hero.title', businessTitle) }}<br>
@@ -184,14 +184,32 @@
                 :alt="loc.title"
                 class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               >
+              <iframe
+                v-else-if="loc.latitude != null && loc.longitude != null"
+                :src="`https://maps.google.com/maps?q=${loc.latitude},${loc.longitude}&output=embed`"
+                class="h-full w-full border-0 pointer-events-none"
+                loading="lazy"
+                tabindex="-1"
+                referrerpolicy="no-referrer-when-downgrade"
+                aria-hidden="true"
+              />
+              <iframe
+                v-else-if="locAddressLine(loc)"
+                :src="`https://maps.google.com/maps?q=${encodeURIComponent(locAddressLine(loc))}&output=embed`"
+                class="h-full w-full border-0 pointer-events-none"
+                loading="lazy"
+                tabindex="-1"
+                referrerpolicy="no-referrer-when-downgrade"
+                aria-hidden="true"
+              />
               <div v-else class="flex h-full w-full items-center justify-center">
                 <UIcon name="i-heroicons-map-pin" class="size-10 text-muted" />
               </div>
             </div>
             <div class="p-8 pb-9">
-              <div class="saya-eyebrow mb-5 flex items-center gap-2 text-muted">
+              <div v-if="loc.city" class="saya-eyebrow mb-5 flex items-center gap-2 text-muted">
                 <span class="size-1.5 rounded-full bg-zinc-300" />
-                {{ loc.city || 'Location' }}
+                {{ loc.city }}
               </div>
               <div class="saya-display saya-italic text-4xl text-default leading-none">{{ loc.title }}</div>
               <div class="mt-6 border-t border-default pt-5">
@@ -324,12 +342,12 @@
               {{ googleReviewSummary.average }}
               <span v-if="googleReviewSummary.count" class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
             </h2>
-            <p class="mt-6 text-sm text-muted">Synced live from Google Business across all locations.</p>
+            <p class="mt-6 text-sm text-muted">Guest feedback from this restaurant.</p>
           </template>
           <template v-else>
             <h2 class="saya-display-md text-default">What your guests say.</h2>
             <p class="mt-6 text-sm text-muted">
-              Connect Google Business to automatically display fresh guest reviews here.
+              Add guest reviews in the dashboard to display them here.
             </p>
             <NuxtLink
               v-if="isAuthenticated"
@@ -363,30 +381,12 @@
             </div>
           </div>
         </div>
-
-        <!-- Placeholder review cards -->
-        <div v-else class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div v-for="i in 3" :key="i" class="bg-elevated p-8">
-            <div class="mb-4 flex gap-1">
-              <span v-for="s in 5" :key="s" class="size-3.5 rounded-sm bg-zinc-200" />
-            </div>
-            <div class="space-y-2">
-              <div class="h-3 rounded bg-zinc-200 animate-[sayaPulse_1.6s_ease-in-out_infinite]" />
-              <div class="h-3 w-4/5 rounded bg-zinc-200 animate-[sayaPulse_1.6s_ease-in-out_infinite]" />
-              <div class="h-3 w-3/5 rounded bg-zinc-200 animate-[sayaPulse_1.6s_ease-in-out_infinite]" />
-            </div>
-            <div class="mt-6 flex items-center gap-3 border-t border-default pt-4">
-              <div class="size-8 rounded-full bg-zinc-200 animate-[sayaPulse_1.6s_ease-in-out_infinite]" />
-              <div class="h-3 w-24 rounded bg-zinc-200 animate-[sayaPulse_1.6s_ease-in-out_infinite]" />
-            </div>
-          </div>
-        </div>
       </section>
 
       <!-- ── CTA strip ───────────────────────────────────────── -->
       <section class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-20 pb-28 sm:px-6 lg:px-8">
-        <h3 class="saya-display saya-italic text-5xl text-default leading-none">
-          {{ getField('cta.title', 'Come hungry.') }}
+        <h3 v-if="getField('cta.title')" class="saya-display saya-italic text-5xl text-default leading-none">
+          {{ getField('cta.title') }}
         </h3>
         <UButton to="/reservations" color="primary" variant="solid" size="xl" class="rounded-full">
           Reserve a table
@@ -501,13 +501,18 @@ const { data: googleBusiness } = isPlatform
     })
 
 const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
-const businessTitle = computed(() => googleBusiness.value?.business?.title || 'Saya Kitchen')
-const businessSubtitle = computed(() => googleBusiness.value?.business?.profile?.description || 'Authentic Japanese Robatayaki in Krabi, Thailand')
+const locAddressLine = (loc) => {
+  const lines = loc?.address?.addressLines
+  return Array.isArray(lines) && lines[0] ? String(lines[0]) : ''
+}
+
+const businessTitle = computed(() => googleBusiness.value?.business?.title ?? null)
+const businessSubtitle = computed(() => googleBusiness.value?.business?.profile?.description ?? null)
 const businessPrimaryPhoto = computed(() => googleBusiness.value?.media?.[0])
-const businessCity = computed(() => googleBusiness.value?.business?.storefrontAddress?.locality || '')
+const businessCity = computed(() => googleBusiness.value?.business?.city ?? null)
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
 const googleReviews = computed(() => googleBusiness.value?.reviews ?? [])
-const googleReviewRating = review => starRatingMap[review.starRating] ?? Number(review.starRating ?? 0)
+const googleReviewRating = review => starRatingMap[review.starRating] ?? Number(review.starRating ?? review.rating ?? 0)
 const googleReviewSummary = computed(() => {
   const summary = googleBusiness.value?.business?.reviewSummary
   if (!summary) {
@@ -515,7 +520,9 @@ const googleReviewSummary = computed(() => {
     if (ratings.length === 0) return null
     return { average: (ratings.reduce((s, r) => s + r, 0) / ratings.length).toFixed(1), count: ratings.length }
   }
-  return { average: Number(summary.averageRating).toFixed(1), count: summary.totalReviewCount }
+  const average = Number(summary.averageRating)
+  if (!Number.isFinite(average) || average <= 0) return null
+  return { average: average.toFixed(1), count: summary.totalReviewCount }
 })
 
 const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
@@ -549,7 +556,7 @@ const highlights = computed(() => {
   const reviews = googleReviews.value.filter(r => (r.comment?.text || r.content)?.length > 40)
   for (let i = 0; i < Math.min(2, reviews.length); i++) {
     const r = reviews[i]
-    tiles.push({ type: 'review', text: (r.comment?.text || r.content || '').slice(0, 160), author: r.reviewer?.displayName || r.author_name || 'Guest' })
+    tiles.push({ type: 'review', text: (r.comment?.text || r.content || '').slice(0, 160), author: r.reviewer?.displayName || r.author_name || 'Anonymous' })
   }
 
   return tiles.slice(0, 7)

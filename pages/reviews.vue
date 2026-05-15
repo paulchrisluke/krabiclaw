@@ -56,10 +56,10 @@ const starRatingMap = {
 }
 
 const googleReviews = computed(() => googleBusiness.value?.reviews ?? [])
-const googleReviewRating = review => starRatingMap[review.starRating] ?? Number(review.starRating ?? 0)
+const googleReviewRating = review => starRatingMap[review.starRating] ?? Number(review.starRating ?? review.rating ?? 0)
 const googleReviewText = review => typeof review.comment === 'string'
   ? review.comment
-  : review.comment?.text ?? ''
+  : review.comment?.text ?? review.content ?? ''
 
 const googleReviewSummary = computed(() => {
   const summary = googleBusiness.value?.business?.reviewSummary
@@ -72,10 +72,9 @@ const googleReviewSummary = computed(() => {
     }
   }
 
-  return {
-    average: Number(summary.averageRating).toFixed(1),
-    count: summary.totalReviewCount
-  }
+  const average = Number(summary.averageRating)
+  if (!Number.isFinite(average) || average <= 0) return null
+  return { average: average.toFixed(1), count: summary.totalReviewCount }
 })
 
 // SEO Meta
