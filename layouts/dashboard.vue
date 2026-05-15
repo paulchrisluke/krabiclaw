@@ -1,6 +1,5 @@
 <template>
   <div class="platform-theme">
-    <ChowBot />
     <div v-if="impersonatedBy" class="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2">
       <div class="pointer-events-auto flex items-center gap-3 rounded-full border border-warning/40 bg-default px-5 py-2.5 shadow-xl">
         <span class="relative flex size-2 shrink-0">
@@ -187,6 +186,8 @@
           <slot />
         </template>
       </UDashboardPanel>
+
+      <ChowBot />
     </UDashboardGroup>
   </div>
 </template>

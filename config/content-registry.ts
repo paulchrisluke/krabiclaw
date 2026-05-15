@@ -260,6 +260,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
         sources: ['manual'],
         defaultValue: 'Japanese fire, Southern Thai hospitality'
       },
+      'hero.image': {
+        label: 'Hero Image',
+        type: 'media',
+        mediaKind: 'image',
+        sources: ['manual'],
+        defaultValue: ''
+      },
       'story.intro': {
         label: 'Story Introduction',
         type: 'richtext',
@@ -308,10 +315,10 @@ export const contentRegistry: Record<string, PageDefinition> = {
         sources: ['manual'],
         defaultValue: '<p>Settle in for grilled skewers, chilled sake, bright sushi, and a room that moves at the pace of a long dinner with friends.</p>'
       },
-      'business.establishment_year': { 
-        label: 'Establishment Year', 
-        type: 'text', 
-        sources: ['manual', 'google'], 
+      'business.establishment_year': {
+        label: 'Establishment Year',
+        type: 'text',
+        sources: ['manual', 'google'],
         googlePath: 'establishmentYear',
         googleLocked: true,
         integrationConfig: {
@@ -320,10 +327,10 @@ export const contentRegistry: Record<string, PageDefinition> = {
           conflictResolution: 'integration_wins'
         }
       },
-      'business.description': { 
-        label: 'Google Business Description', 
-        type: 'richtext', 
-        sources: ['manual', 'google'], 
+      'business.description': {
+        label: 'Google Business Description',
+        type: 'richtext',
+        sources: ['manual', 'google'],
         googlePath: 'profile.description',
         googleLocked: true,
         integrationConfig: {
@@ -350,6 +357,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
         type: 'textarea',
         sources: ['manual'],
         defaultValue: 'Book a table or ask us anything'
+      },
+      'hero.image': {
+        label: 'Hero Image',
+        type: 'media',
+        mediaKind: 'image',
+        sources: ['manual'],
+        defaultValue: ''
       },
       'intro.body': {
         label: 'Introduction Text',
@@ -458,6 +472,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Location & Hours' },
       'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Visit us in Ao Nang, Krabi' },
+      'hero.image': {
+        label: 'Hero Image',
+        type: 'media',
+        mediaKind: 'image',
+        sources: ['manual'],
+        defaultValue: ''
+      },
       'parking.info': {
         label: 'Parking Information',
         type: 'richtext',
@@ -537,7 +558,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
     label: 'Menu',
     path: '/menu',
     groups: [
-      { id: 'hero',    label: 'Hero Section',      icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
+      { id: 'hero',    label: 'Hero Section',      icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
       { id: 'content', label: 'Menu Introduction', icon: 'i-heroicons-document-text', fields: ['description'] },
       { id: 'items',   label: 'Menu Items',        icon: 'i-heroicons-list-bullet', fields: ['menu_items'] },
       { id: 'google',  label: 'Google Products',   icon: 'i-heroicons-circle-stack', fields: ['business.products'] }
@@ -545,6 +566,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Saya Menu' },
       'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Robatayaki, sushi, and seasonal plates' },
+      'hero.image': {
+        label: 'Hero Image',
+        type: 'media',
+        mediaKind: 'image',
+        sources: ['manual'],
+        defaultValue: ''
+      },
       'description': {
         label: 'Menu Introduction',
         type: 'richtext',
@@ -577,6 +605,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Reserve a Table at Saya Kitchen' },
       'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Plan your evening around the grill' },
+      'hero.image': {
+        label: 'Hero Image',
+        type: 'media',
+        mediaKind: 'image',
+        sources: ['manual'],
+        defaultValue: ''
+      },
       'policies.body': {
         label: 'Reservation Policies',
         type: 'richtext',

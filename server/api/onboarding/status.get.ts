@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
     
     // Get sites for this organization
     const sitesResult = await db.prepare(`
-      SELECT id, name, subdomain, status, onboarding_status, created_at
+      SELECT id, brand_name, subdomain, status, onboarding_status, created_at
       FROM sites 
       WHERE organization_id = ?
       ORDER BY created_at DESC

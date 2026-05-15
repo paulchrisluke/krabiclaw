@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
   
   try {
     const site = await db.prepare(`
-      SELECT id, organization_id, theme_id, name, slug, subdomain, 
+      SELECT id, organization_id, theme_id, brand_name, slug, subdomain, 
              custom_domain, status, plan, created_at, updated_at,
              onboarding_status
       FROM sites 

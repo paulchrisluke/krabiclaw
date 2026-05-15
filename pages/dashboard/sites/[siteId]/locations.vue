@@ -95,6 +95,24 @@
                 <UFormField label="Phone">
                   <UInput v-model="locationEditForm.phone" type="tel" placeholder="+66 2 123 4567" />
                 </UFormField>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <UFormField label="Hero Image">
+                    <MediaPicker
+                      v-model="locationEditForm.hero_image_asset_id"
+                      :site-id="siteId"
+                      accept="image"
+                      title="Location hero image"
+                    />
+                  </UFormField>
+                  <UFormField label="Hero Video">
+                    <MediaPicker
+                      v-model="locationEditForm.hero_video_asset_id"
+                      :site-id="siteId"
+                      accept="video"
+                      title="Location hero video"
+                    />
+                  </UFormField>
+                </div>
                 <div class="flex items-center gap-6">
                   <UCheckbox v-model="locationEditForm.is_primary" label="Primary location" />
                   <UCheckbox
@@ -200,6 +218,8 @@ interface BusinessLocation {
   address: { addressLines?: string[] } | null
   city: string | null
   phone: string | null
+  hero_image_asset_id: string | null
+  hero_video_asset_id: string | null
   is_primary: boolean
   status: string
 }
@@ -253,6 +273,8 @@ const locationEditForm = reactive({
   title: '',
   city: '',
   phone: '',
+  hero_image_asset_id: null as string | null,
+  hero_video_asset_id: null as string | null,
   is_primary: false,
   status: 'active'
 })
@@ -262,6 +284,8 @@ const openEditLocation = (location: BusinessLocation) => {
   locationEditForm.title = location.title
   locationEditForm.city = location.city ?? ''
   locationEditForm.phone = location.phone ?? ''
+  locationEditForm.hero_image_asset_id = location.hero_image_asset_id ?? null
+  locationEditForm.hero_video_asset_id = location.hero_video_asset_id ?? null
   locationEditForm.is_primary = location.is_primary
   locationEditForm.status = location.status
 }
