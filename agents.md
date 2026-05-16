@@ -1,4 +1,4 @@
-Never add fallbacks ever.
+When an internal API returns errors, nulls, or malformed data, fix the API contract/source of truth first; do not add frontend fallbacks, guards, or workaround logic unless the API behavior is intentionally nullable and documented.
 
 ## MCP Requirements
 - Nuxt UI MCP server required

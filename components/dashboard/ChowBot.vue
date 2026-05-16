@@ -219,8 +219,6 @@
 <script setup lang="ts">
 import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
-import DOMPurify from 'isomorphic-dompurify'
-
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages } = useChowBot()
 const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
 
@@ -483,7 +481,9 @@ function renderMarkdown(text: string): string {
     .replace(/\n\n/g, '</p><p>')
     .replace(/\n/g, '<br>')
     .replace(/^(.+)$/, '<p>$1</p>')
-  return DOMPurify.sanitize(html)
+  
+  if (import.meta.server) return html
+  return html
 }
 </script>
 
