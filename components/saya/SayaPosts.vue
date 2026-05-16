@@ -105,7 +105,7 @@
     </div>
 
     <div v-if="showViewMore && limit && posts.length > 0" class="mt-12 text-center">
-      <UButton to="/posts" color="neutral" variant="outline" size="xl">
+      <UButton to="/posts" color="primary" variant="outline" size="xl">
         View All Updates
       </UButton>
     </div>

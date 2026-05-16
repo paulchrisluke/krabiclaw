@@ -50,9 +50,6 @@
           @click="activeCategory = cat.key"
         >
           {{ cat.label }}
-          <span
-            class="ml-1.5 tabular-nums text-[10px] opacity-50"
-          >{{ counts[cat.key] ?? 0 }}</span>
 
           <!-- Active indicator -->
           <div 

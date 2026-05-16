@@ -94,7 +94,7 @@
                 />
               </UFormField>
 
-              <UButton type="submit" color="neutral" variant="solid" size="xl" block :loading="submitting" :disabled="submitted">
+              <UButton type="submit" color="primary" variant="solid" size="xl" block :loading="submitting" :disabled="submitted">
                 {{ submitted ? 'Request received!' : 'Make Reservation' }}
               </UButton>
             </UForm>
@@ -120,13 +120,13 @@
           </UCard>
 
           <div class="space-y-4">
-            <UButton :to="`tel:${contactPhone.replace(/\s/g, '')}`" color="neutral" variant="outline" class="w-full">
+            <UButton :to="`tel:${contactPhone.replace(/\s/g, '')}`" color="primary" variant="outline" class="w-full">
               Call {{ contactPhone }}
             </UButton>
-            <UButton to="/contact" color="neutral" variant="outline" class="w-full">
+            <UButton to="/contact" color="primary" variant="outline" class="w-full">
               Contact Form
             </UButton>
-            <UButton to="/menu" color="neutral" variant="outline" class="w-full">
+            <UButton to="/menu" color="primary" variant="outline" class="w-full">
               View Menu
             </UButton>
           </div>

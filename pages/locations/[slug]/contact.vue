@@ -107,7 +107,7 @@
               v-if="location.maps_url"
               :to="location.maps_url"
               target="_blank"
-              color="neutral"
+              color="primary"
               variant="outline"
               size="sm"
               class="rounded-full"

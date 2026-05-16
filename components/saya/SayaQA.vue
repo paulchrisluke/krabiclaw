@@ -69,7 +69,7 @@
     </div>
 
     <div v-if="showViewMore && limit && qa.length > limit" class="mt-12 text-center">
-      <UButton to="/qa" color="neutral" variant="outline" size="xl">
+      <UButton to="/qa" color="primary" variant="outline" size="xl">
         View All Q&A
       </UButton>
     </div>

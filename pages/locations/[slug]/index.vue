@@ -64,7 +64,7 @@
               <UButton
                 to="/reservations"
                 size="lg"
-                color="neutral"
+                color="primary"
                 class="rounded-full bg-white! text-black! hover:bg-zinc-100!"
               >
                 Reserve a table
@@ -230,7 +230,7 @@
     <div v-else class="mx-auto max-w-xl px-4 py-24 text-center">
       <UIcon name="i-heroicons-map-pin" class="mx-auto mb-4 size-12 text-muted" />
       <h1 class="saya-display-sm text-default">Location Not Found</h1>
-      <UButton to="/locations" color="neutral" variant="solid" class="mt-8 rounded-full">View all locations</UButton>
+      <UButton to="/locations" color="primary" variant="solid" class="mt-8 rounded-full">View all locations</UButton>
     </div>
   </div>
 </template>

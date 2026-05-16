@@ -72,7 +72,7 @@
         <div class="mt-8">
           <UButton
             v-if="isFree"
-            color="neutral"
+            color="primary"
             variant="soft"
             size="sm"
             class="rounded-full"

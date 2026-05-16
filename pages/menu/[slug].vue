@@ -161,7 +161,7 @@
           <h3 class="mt-4 text-sm font-medium text-highlighted">No reviews yet</h3>
           <p class="mt-1 text-sm text-muted">Have you tried this dish? Be the first to share your experience.</p>
           <div class="mt-6">
-            <UButton color="neutral" variant="soft" size="sm" @click="scrollToReviewForm">
+            <UButton color="primary" variant="soft" size="sm" @click="scrollToReviewForm">
               Write a review
             </UButton>
           </div>

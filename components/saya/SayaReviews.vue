@@ -66,7 +66,7 @@
     </div>
     
     <div v-if="showViewMore && reviews.length > 0" class="mt-12 text-center">
-      <UButton to="/reviews" color="neutral" variant="outline" size="xl">
+      <UButton to="/reviews" color="primary" variant="outline" size="xl">
         View All Reviews
       </UButton>
     </div>
