@@ -22,6 +22,12 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    // Validate site is active
+    const site = await db.prepare(`SELECT status FROM sites WHERE id = ? LIMIT 1`).bind(siteId).first()
+    if (!site || (site as any).status !== 'active') {
+      return jsonResponse({ error: 'Menu item not found' }, { status: 404 })
+    }
+
     const item = await getPublicMenuItem(db, siteId, slug)
     
     if (!item) {

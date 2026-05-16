@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
       ma.public_url,
       ma.kind
     FROM platform_blog_posts p
-    LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id
+    LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
     WHERE p.published_at IS NOT NULL
   `
   const params: (string | number)[] = []

@@ -588,9 +588,11 @@ const highlights = computed(() => {
   for (let i = 0; i < Math.min(2, posts.length); i++) {
     const post = posts[i]
     const image = post?.media?.[0]?.googleUrl || null
+    const kind = post?.media?.[0]?.kind || 'image'
     tiles.push({
       type: 'post',
       image,
+      imageKind: kind,
       text: post?.summary || post?.name,
       alt: post?.summary || post?.name || 'Google post image',
       wide: i === 0

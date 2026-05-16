@@ -271,6 +271,17 @@ const config = useRuntimeConfig()
 const turnstileEnabled = computed(() => config.public.turnstileEnabled === true || config.public.turnstileEnabled === 'true')
 const turnstileSiteKey = computed(() => config.public.turnstileSiteKey)
 
+interface Review {
+  id: string
+  author: string
+  rating: number
+  title: string
+  content: string
+  date?: string
+  createdAt?: string
+  datetime?: string
+}
+
 interface MenuItemType {
   id: string
   slug: string
@@ -286,7 +297,7 @@ interface MenuItemType {
   ingredients?: string[]
   dietaryNotes?: string[]
   servingNote?: string
-  reviews?: any[]
+  reviews?: Review[]
   priceCurrency?: string
 }
 
@@ -294,7 +305,7 @@ interface ApiValue {
   item: MenuItemType | null
 }
 
-const { data: itemData, pending } = await useFetch(
+const { data: itemData } = await useFetch(
   () => `/api/public/sites/${siteId}/menu-items/${route.params.slug}`,
   { key: `menu-item-${siteId}-${route.params.slug}` }
 )
@@ -315,7 +326,6 @@ const mainMedia = computed(() => resolveMedia({
   kind: item.value?.kind
 }))
 
-const secondaryImages = computed(() => []) // Currently our DB only supports one primary image per item
 
 const visibleAllergens = computed(() =>
   item.value?.allergens?.filter(allergen => !allergen.includes('PLACEHOLDER')) ?? []
@@ -405,7 +415,7 @@ const reviewDateLabel = review => {
 }
 
 const schemaImage = computed(() =>
-  imageGallery.value[0] ?? undefined
+  mainMedia.value.url ?? undefined
 )
 
 const loadReviews = async () => {

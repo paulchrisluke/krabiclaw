@@ -38,14 +38,20 @@ function slugify(name: string): string {
 }
 
 async function uniqueSlug(db: D1Database, menuId: string, base: string, excludeId?: string): Promise<string> {
+  // Get site_id from menuId to ensure site-wide uniqueness for public URLs
+  const menu = await db.prepare(`SELECT site_id FROM menus WHERE id = ?`).bind(menuId).first() as { site_id: string } | null
+  const siteId = menu?.site_id
+  
+  if (!siteId) throw new Error('Menu not found for slug generation')
+
   const baseSlug = slugify(base)
   let candidate = baseSlug
   let suffix = 1
   while (suffix <= MAX_SUFFIX_ATTEMPTS) {
     const query = excludeId
-      ? `SELECT id FROM menu_items WHERE menu_id = ? AND slug = ? AND id != ? LIMIT 1`
-      : `SELECT id FROM menu_items WHERE menu_id = ? AND slug = ? LIMIT 1`
-    const params = excludeId ? [menuId, candidate, excludeId] : [menuId, candidate]
+      ? `SELECT mi.id FROM menu_items mi JOIN menus m ON m.id = mi.menu_id WHERE m.site_id = ? AND mi.slug = ? AND mi.id != ? LIMIT 1`
+      : `SELECT mi.id FROM menu_items mi JOIN menus m ON m.id = mi.menu_id WHERE m.site_id = ? AND mi.slug = ? LIMIT 1`
+    const params = excludeId ? [siteId, candidate, excludeId] : [siteId, candidate]
     const existing = await db.prepare(query).bind(...params).first()
     if (!existing) return candidate
     candidate = `${baseSlug}-${suffix}`

@@ -121,14 +121,14 @@ export default defineEventHandler(async (event) => {
     // Get published posts for this site (used for homepage highlights + /posts feed)
     const postsResult = await db.prepare(`
       SELECT p.id, p.title, p.body, p.published_at,
-             ma.public_url
+             ma.public_url, ma.kind
       FROM posts p
       LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
       WHERE p.site_id = ? AND p.status = 'published'
       ORDER BY p.published_at DESC
       LIMIT 6
     `).bind(siteId).all()
-    const postRows = (postsResult.results ?? []) as unknown as PostRow[]
+    const postRows = (postsResult.results ?? []) as unknown as (PostRow & { kind: string | null })[]
 
     // Shape posts to match the GMB post format the frontend expects
     const posts = postRows.map(p => ({
@@ -136,7 +136,7 @@ export default defineEventHandler(async (event) => {
       summary: p.body,
       title: p.title ?? '',
       createTime: p.published_at ?? '',
-      media: p.public_url ? [{ googleUrl: p.public_url }] : []
+      media: p.public_url ? [{ googleUrl: p.public_url, kind: p.kind }] : []
     }))
 
     return jsonResponse({

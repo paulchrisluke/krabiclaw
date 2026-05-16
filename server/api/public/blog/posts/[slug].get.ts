@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
       ma.kind
     FROM platform_blog_posts p
     LEFT JOIN user u ON u.id = p.author_id
-    LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id
+    LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
     WHERE p.slug = ? AND p.published_at IS NOT NULL
   `).bind(slug).first()
 

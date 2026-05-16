@@ -241,7 +241,7 @@ export async function getPublishedPosts(
     title: p.title ?? '',
     summary: p.body,
     createTime: p.published_at ?? p.created_at,
-    media: p.public_url ? [{
+    media: (p.public_url && (p.kind === 'image' || p.kind === 'video')) ? [{
       googleUrl: p.public_url,
       mediaFormat: p.kind === 'video' ? 'VIDEO' : 'IMAGE'
     }] : [],
