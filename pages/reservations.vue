@@ -209,7 +209,6 @@ const reservationForm = ref({
 })
 
 const today = new Date().toISOString().slice(0, 10)
-
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const validateReservation = (state) => {

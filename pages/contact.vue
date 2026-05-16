@@ -145,8 +145,8 @@ const toast = useToast()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // ── Tenant contact info ──────────────────────────────────
-const contactPhone = computed(() => getField('contact.phone', ''))
-const contactEmail = computed(() => getField('contact.email', ''))
+const contactPhone = computed(() => getField('contact.phone', site.value?.config?.phone || ''))
+const contactEmail = computed(() => getField('contact.email', site.value?.config?.email || ''))
 const contactAddress = computed(() => getField('contact.address', ''))
 
 const tenantForm = ref({ name: '', email: '', message: '' })
