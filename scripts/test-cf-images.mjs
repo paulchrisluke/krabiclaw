@@ -11,13 +11,13 @@ async function main() {
     }
 
     console.log('Testing CF Images direct_upload...');
+    const formData = new FormData();
     const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/images/v2/direct_upload`, {
       method: 'POST',
       headers: { 
-        Authorization: `Bearer ${TOKEN}`,
-        'Content-Type': 'application/json' 
+        Authorization: `Bearer ${TOKEN}`
       },
-      body: JSON.stringify({})
+      body: formData
     });
 
     if (!res.ok) {

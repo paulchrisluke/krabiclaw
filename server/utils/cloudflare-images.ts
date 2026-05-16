@@ -21,10 +21,11 @@ function authHeader(env: CloudflareImagesEnv): Record<string, string> {
 
 /** Request a one-time Direct Creator Upload URL. Client uploads directly to CF Images — no server buffering. */
 export async function requestImageUpload(env: CloudflareImagesEnv): Promise<{ imageId: string; uploadUrl: string }> {
+  const formData = new FormData()
   const res = await fetch(`${apiBase(env)}/v2/direct_upload`, {
     method: 'POST',
-    headers: { ...authHeader(env), 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+    headers: authHeader(env),
+    body: formData,
   })
   if (!res.ok) throw new Error(`CF Images direct_upload error ${res.status}: ${await res.text()}`)
   const data = await res.json() as CloudflareImagesResponse
