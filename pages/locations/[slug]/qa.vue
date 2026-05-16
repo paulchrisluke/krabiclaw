@@ -1,21 +1,31 @@
 <template>
   <div class="min-h-screen bg-default text-default">
 
-    <nav class="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-      <UBreadcrumb :items="breadcrumb" />
-    </nav>
+    <template v-if="location">
+      <!-- Sub-nav (Level 2) -->
+      <SayaSubNav 
+        :location-slug="slug" 
+        active="qa" 
+        :review-count="location?.review_count" 
+        :photo-count="location?.photo_count"
+        :qa-count="location?.qa_count"
+      />
 
-    <header class="mx-auto max-w-7xl px-4 py-14 text-center sm:px-6 lg:px-8">
-      <p class="saya-kicker mb-6">{{ location?.title }}</p>
-      <h1 class="saya-display-lg text-default">
-        <em class="saya-italic">Frequently</em> asked
-      </h1>
-      <p class="mx-auto mt-5 max-w-md text-sm text-muted">
-        Questions asked by guests on Google. Owner-answered questions are pinned to the top.
-      </p>
-    </header>
+      <!-- Compact Page header -->
+      <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
+        <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
+          ← Back to {{ location?.title }}
+        </NuxtLink>
+        
+        <div class="flex flex-col gap-2">
+          <h1 class="saya-display-md text-default"><em class="saya-italic">Frequently</em> asked</h1>
+          <p class="text-sm text-muted">
+            Q&A · {{ location?.title }}
+          </p>
+        </div>
+      </header>
+    </template>
 
-    <SayaSubNav :location-slug="slug" active="qa" :review-count="location?.review_count" :qa-count="qa.length" />
 
     <!-- Ask a question band -->
     <section class="border-b border-default border-t bg-elevated">
@@ -157,12 +167,6 @@ function formatDate(ts: string | null) {
   return new Date(ts).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
-const breadcrumb = computed(() => [
-  { label: siteName.value, to: '/' },
-  { label: 'Locations', to: '/locations' },
-  { label: location.value?.title || slug.value, to: `/locations/${slug.value}` },
-  { label: 'Q&A' }
-])
 
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl

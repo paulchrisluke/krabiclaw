@@ -1,49 +1,9 @@
 <template>
   <div class="min-h-screen bg-default text-default">
 
-    <nav class="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-      <UBreadcrumb :items="breadcrumb" />
-    </nav>
-
-    <header class="mx-auto max-w-7xl px-4 py-14 text-center sm:px-6 lg:px-8">
-      <p class="saya-kicker mb-6">{{ location?.title }}</p>
-      <h1 class="saya-display-lg text-default">
-        Inside <em class="saya-italic">the room</em>
-      </h1>
-      <p class="mx-auto mt-5 text-sm text-muted">{{ photos.length }} photos · synced from Google Business and uploaded directly.</p>
-    </header>
-
-    <SayaSubNav :location-slug="slug" active="photos" :review-count="location?.review_count" :photo-count="photos.length" />
-
-    <!-- Category filter tabs -->
-    <div class="border-b border-default bg-default">
-      <div class="mx-auto flex max-w-7xl gap-3 overflow-x-auto px-4 py-5 sm:px-6 lg:px-8">
-        <button
-          v-for="cat in cats"
-          :key="cat.key"
-          :class="[
-            'inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors',
-            activeCategory === cat.key
-              ? 'border-default bg-default text-inverted'
-              : 'border-default text-default hover:border-muted'
-          ]"
-          @click="activeCategory = cat.key"
-        >
-          {{ cat.label }}
-          <span
-            :class="[
-              'rounded-full px-2 py-0.5 text-xs tabular-nums',
-              activeCategory === cat.key ? 'bg-white/20 text-white/90' : 'bg-muted text-muted'
-            ]"
-          >{{ counts[cat.key] ?? 0 }}</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Gallery -->
-    <section class="mx-auto max-w-7xl px-4 py-12 pb-24 sm:px-6 lg:px-8">
-      <!-- Skeleton -->
-      <div v-if="pending" class="saya-masonry">
+    <!-- Loading -->
+    <template v-if="pending">
+      <div class="saya-masonry mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div
           v-for="i in 9"
           :key="i"
@@ -51,9 +11,64 @@
           :style="`height: ${120 + (i % 4) * 80}px; animation: sayaPulse 1.6s ease-in-out infinite`"
         />
       </div>
+    </template>
 
-      <!-- Empty -->
-      <div v-else-if="sorted.length === 0" class="py-24 text-center">
+    <template v-else-if="location">
+      <!-- Sub-nav (Level 2) -->
+      <SayaSubNav 
+        :location-slug="slug" 
+        active="photos" 
+        :review-count="location?.review_count" 
+        :photo-count="location?.photo_count"
+      />
+
+      <!-- Compact Page header -->
+      <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
+        <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
+          ← Back to {{ location?.title }}
+        </NuxtLink>
+        
+        <div class="flex flex-col gap-2">
+          <h1 class="saya-display-md text-default">Inside <em class="saya-italic">the room</em></h1>
+          <p class="text-sm text-muted">
+            {{ photos.length }} photos · {{ location?.title }}
+          </p>
+        </div>
+      </header>
+
+
+    <!-- Category filter tabs -->
+    <div class="sticky top-0 z-40 border-b border-default bg-default">
+      <div class="mx-auto flex h-11 max-w-7xl items-center gap-6 overflow-x-auto px-4 sm:px-6 lg:px-8">
+        <button
+          v-for="cat in cats"
+          :key="cat.key"
+          :class="[
+            'relative flex h-full shrink-0 items-center text-[10px] font-bold uppercase tracking-widest transition-colors',
+            activeCategory === cat.key
+              ? 'text-default'
+              : 'text-muted hover:text-default'
+          ]"
+          @click="activeCategory = cat.key"
+        >
+          {{ cat.label }}
+          <span
+            class="ml-1.5 tabular-nums text-[10px] opacity-50"
+          >{{ counts[cat.key] ?? 0 }}</span>
+
+          <!-- Active indicator -->
+          <div 
+            v-if="activeCategory === cat.key"
+            class="absolute bottom-0 left-0 h-0.5 w-full bg-primary"
+          />
+        </button>
+      </div>
+    </div>
+
+      <!-- Gallery -->
+      <section class="mx-auto max-w-7xl px-4 py-12 pb-24 sm:px-6 lg:px-8">
+        <!-- Empty -->
+        <div v-if="sorted.length === 0" class="py-24 text-center">
         <div class="saya-display saya-italic text-3xl text-default">No photos yet.</div>
         <p class="mt-2 text-sm text-muted">Photos synced from Google Business will appear here.</p>
       </div>
@@ -137,7 +152,8 @@
           </div>
         </div>
       </template>
-    </UModal>
+      </UModal>
+    </template>
   </div>
 </template>
 
@@ -209,12 +225,6 @@ function onKeydown(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
-const breadcrumb = computed(() => [
-  { label: siteName.value, to: '/' },
-  { label: 'Locations', to: '/locations' },
-  { label: location.value?.title || slug.value, to: `/locations/${slug.value}` },
-  { label: 'Photos' }
-])
 
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl

@@ -1,26 +1,35 @@
 <template>
   <div class="min-h-screen bg-default text-default">
 
-    <nav class="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-      <UBreadcrumb :items="breadcrumb" />
-    </nav>
-
-    <!-- Page header -->
-    <header class="mx-auto max-w-7xl px-4 py-14 text-center sm:px-6 lg:px-8">
-      <p class="saya-kicker mb-6">{{ location?.title }}</p>
-      <h1 class="saya-display-lg text-default">
-        What guests are <em class="saya-italic">saying</em>
-      </h1>
-    </header>
-
-    <SayaSubNav :location-slug="slug" active="reviews" :review-count="aggregate?.review_count" />
-
     <!-- Loading -->
-    <div v-if="pending" class="mx-auto max-w-2xl px-4 py-20 text-center">
-      <USkeleton class="mx-auto h-24 w-48 rounded-lg" />
-    </div>
+    <template v-if="pending">
+      <div class="mx-auto max-w-2xl px-4 py-20 text-center">
+        <USkeleton class="mx-auto h-24 w-48 rounded-lg" />
+      </div>
+    </template>
 
     <template v-else>
+      <!-- Sub-nav (Level 2) -->
+      <SayaSubNav 
+        :location-slug="slug" 
+        active="reviews" 
+        :review-count="location?.review_count" 
+        :photo-count="location?.photo_count"
+      />
+
+      <!-- Compact Page header -->
+      <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
+        <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
+          ← Back to {{ location?.title }}
+        </NuxtLink>
+        
+        <div class="flex flex-col gap-2">
+          <h1 class="saya-display-md text-default">What guests are <em class="saya-italic">saying</em></h1>
+          <p class="text-sm text-muted">
+            Reviews · {{ location?.title }}
+          </p>
+        </div>
+      </header>
       <!-- Aggregate band -->
       <section class="border-b border-default border-t bg-elevated">
         <div class="mx-auto grid max-w-7xl items-center gap-20 px-4 py-14 sm:px-6 lg:grid-cols-[1fr_1.4fr] lg:px-8">
@@ -62,23 +71,23 @@
       </section>
 
       <!-- Filter chips -->
-      <div class="sticky top-16 z-30 border-b border-default bg-default">
-        <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-5 sm:px-6 lg:px-8">
-          <span class="saya-eyebrow text-muted">Filter</span>
+      <div class="sticky top-0 z-40 border-b border-default bg-default">
+        <div class="mx-auto flex h-11 max-w-7xl items-center gap-6 overflow-x-auto px-4 sm:px-6 lg:px-8">
+          <span class="text-[10px] font-bold uppercase tracking-widest text-muted/60">Filter</span>
           <button
             v-for="f in filters"
             :key="f.key"
             :class="[
-              'rounded-full border px-4 py-2 text-sm transition-colors',
+              'text-[10px] font-bold uppercase tracking-widest transition-colors',
               activeFilter === f.key
-                ? 'border-default bg-default text-inverted'
-                : 'border-default bg-default text-default hover:border-muted'
+                ? 'text-default underline underline-offset-8 decoration-2'
+                : 'text-muted hover:text-default'
             ]"
             @click="activeFilter = f.key"
           >
             {{ f.label }}
           </button>
-          <span class="ml-auto text-sm text-muted">{{ filtered.length }} of {{ reviews.length }}</span>
+          <span class="ml-auto text-[10px] tabular-nums text-muted/50">{{ filtered.length }} reviews</span>
         </div>
       </div>
 
@@ -270,12 +279,6 @@ function formatDate(ts: string | null) {
   return new Date(ts).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }
 
-const breadcrumb = computed(() => [
-  { label: siteName.value, to: '/' },
-  { label: 'Locations', to: '/locations' },
-  { label: location.value?.title || slug.value, to: `/locations/${slug.value}` },
-  { label: 'Reviews' }
-])
 
 useSeoMeta({
   title: () => `Reviews · ${location.value?.title || slug.value}`,

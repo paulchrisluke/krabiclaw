@@ -1,21 +1,25 @@
 <template>
   <div class="min-h-screen bg-default text-default">
 
-    <!-- Breadcrumb -->
-    <nav class="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-      <UBreadcrumb :items="breadcrumb" />
-    </nav>
-
     <!-- Loading skeleton -->
     <template v-if="pending">
-      <div class="relative mt-6 min-h-160 bg-muted">
+      <div class="relative min-h-160 bg-muted">
         <div class="absolute inset-0 animate-pulse bg-muted" style="animation: sayaPulse 1.6s ease-in-out infinite" />
       </div>
     </template>
 
     <template v-else-if="location">
+      <!-- Sub-nav (Level 2) -->
+      <SayaSubNav
+        :location-slug="slug"
+        active="overview"
+        :review-count="location.review_count"
+        :photo-count="location.photo_count"
+        :qa-count="location.qa_count"
+      />
+
       <!-- Full-bleed location hero -->
-      <section class="relative mt-6 min-h-160 overflow-hidden">
+      <section class="relative min-h-160 overflow-hidden">
         <div
           class="absolute inset-0 bg-cover bg-center"
           :style="heroBackgroundStyle"
@@ -24,6 +28,9 @@
         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
         <div class="relative flex min-h-160 items-end">
           <div class="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
+            <NuxtLink to="/locations" class="saya-kicker mb-8 inline-block text-white/60 no-underline hover:text-white">
+              ← All locations
+            </NuxtLink>
             <p class="saya-eyebrow mb-5 text-white/80">{{ location.city || location.neighborhood }}</p>
             <h1 class="saya-display-lg text-white">
               <em class="saya-italic">{{ siteName }}</em>
@@ -65,7 +72,7 @@
 
       <!-- Quick info strip -->
       <section class="border-b border-default">
-        <div class="mx-auto grid max-w-7xl gap-12 px-4 py-14 sm:px-6 sm:grid-cols-2 lg:grid-cols-4 lg:px-8">
+        <div class="mx-auto grid max-w-7xl gap-12 px-4 py-14 sm:px-6 sm:grid-cols-2 lg:grid-cols-3 lg:px-8">
           <div>
             <p class="saya-eyebrow mb-4 text-muted">Address</p>
             <p class="text-sm leading-relaxed text-default">{{ formattedAddress }}</p>
@@ -103,28 +110,8 @@
               {{ location.email }}
             </a>
           </div>
-          <div>
-            <p class="saya-eyebrow mb-4 text-muted">This location</p>
-            <div class="flex flex-col gap-2">
-              <NuxtLink :to="`/locations/${slug}/menu`" class="text-sm text-default no-underline hover:underline">Menu</NuxtLink>
-              <NuxtLink :to="`/locations/${slug}/reviews`" class="text-sm text-default no-underline hover:underline">
-                Reviews{{ location.review_count ? ` (${location.review_count})` : '' }}
-              </NuxtLink>
-              <NuxtLink :to="`/locations/${slug}/photos`" class="text-sm text-default no-underline hover:underline">Photos</NuxtLink>
-              <NuxtLink :to="`/locations/${slug}/contact`" class="text-sm text-default no-underline hover:underline">Parking & access</NuxtLink>
-            </div>
-          </div>
         </div>
       </section>
-
-      <!-- Sub-nav -->
-      <SayaSubNav
-        :location-slug="slug"
-        active="menu"
-        :review-count="location.review_count"
-        :photo-count="location.photo_count"
-        :qa-count="location.qa_count"
-      />
 
       <!-- Menu preview -->
       <section v-if="featuredItems.length" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
@@ -326,9 +313,27 @@ const isOpenNow = computed(() => {
 const mapEmbedSrc = computed(() => {
   const loc = location.value
   if (!loc) return null
+  
+  // 1. Exact coordinates (best)
   if (loc.latitude != null && loc.longitude != null) {
     return `https://maps.google.com/maps?q=${loc.latitude},${loc.longitude}&output=embed`
   }
+
+  // 2. CID from maps_url (specific GMB pin)
+  const mapsUrl = loc.maps_url
+  if (mapsUrl) {
+    try {
+      const url = new URL(mapsUrl)
+      const cid = url.searchParams.get('cid')
+      if (cid) {
+        return `https://maps.google.com/maps?cid=${cid}&output=embed`
+      }
+    } catch (e) {
+      // invalid URL, fallback to address
+    }
+  }
+
+  // 3. Address line (fallback)
   const addressLines = (loc.address as Record<string, unknown> | null)?.addressLines
   if (Array.isArray(addressLines) && addressLines[0]) {
     return `https://maps.google.com/maps?q=${encodeURIComponent(String(addressLines[0]))}&output=embed`
@@ -336,11 +341,6 @@ const mapEmbedSrc = computed(() => {
   return null
 })
 
-const breadcrumb = computed(() => [
-  { label: siteName.value, to: '/' },
-  { label: 'Locations', to: '/locations' },
-  { label: location.value?.title || slug.value }
-])
 
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl

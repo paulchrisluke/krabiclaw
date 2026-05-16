@@ -1,24 +1,35 @@
 <template>
   <div class="min-h-screen bg-default text-default">
 
-    <nav class="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-      <UBreadcrumb :items="breadcrumb" />
-    </nav>
-
-    <header class="mx-auto max-w-7xl px-4 py-14 text-center sm:px-6 lg:px-8">
-      <p class="saya-kicker mb-6">{{ location?.title }}</p>
-      <h1 class="saya-display-lg text-default">
-        <em class="saya-italic">Find</em> us
-      </h1>
-    </header>
-
-    <SayaSubNav :location-slug="slug" active="contact" :review-count="location?.review_count" />
-
-    <div v-if="pending" class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-      <USkeleton class="h-64 rounded-2xl" />
-    </div>
+    <!-- Loading skeleton -->
+    <template v-if="pending">
+      <div class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+        <USkeleton class="h-64 rounded-2xl" />
+      </div>
+    </template>
 
     <template v-else-if="location">
+      <!-- Sub-nav (Level 2) -->
+      <SayaSubNav 
+        :location-slug="slug" 
+        active="contact" 
+        :review-count="location?.review_count" 
+        :photo-count="location?.photo_count"
+      />
+
+      <!-- Compact Page header -->
+      <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
+        <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
+          ← Back to {{ location?.title }}
+        </NuxtLink>
+        
+        <div class="flex flex-col gap-2">
+          <h1 class="saya-display-md text-default"><em class="saya-italic">Find</em> us</h1>
+          <p class="text-sm text-muted">
+            Visit · {{ location?.title }}
+          </p>
+        </div>
+      </header>
       <!-- Map -->
       <div class="mx-auto max-w-7xl px-4 pt-12 sm:px-6 lg:px-8">
         <div class="aspect-21/9 overflow-hidden border border-default">
@@ -167,12 +178,6 @@ const mapEmbedSrc = computed(() => {
   return null
 })
 
-const breadcrumb = computed(() => [
-  { label: siteName.value, to: '/' },
-  { label: 'Locations', to: '/locations' },
-  { label: location.value?.title || slug.value, to: `/locations/${slug.value}` },
-  { label: 'Visit' }
-])
 
 useSeoMeta({
   title: () => `Visit · ${location.value?.title || slug.value}`,

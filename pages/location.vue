@@ -4,15 +4,21 @@
     <div class="max-w-6xl mx-auto px-4 py-12">
       <div class="mb-12">
         <h2 class="text-2xl md:text-3xl font-bold text-highlighted mb-6">Find Us</h2>
-        <div class="aspect-video overflow-hidden rounded-2xl bg-muted">
-          <div class="flex h-full w-full items-center justify-center">
-            <div class="px-8 text-center">
-              <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-default text-highlighted shadow-sm">
-                <UIcon name="i-simple-icons-googlemaps" class="size-7" />
-              </div>
-              <p class="text-base font-semibold text-highlighted">Google Maps will appear here</p>
-              <p class="mt-2 text-sm text-muted">Connect Google Business to sync verified directions.</p>
-            </div>
+        <div class="aspect-video overflow-hidden rounded-2xl border border-default">
+          <iframe
+            v-if="mapEmbedSrc"
+            :src="mapEmbedSrc"
+            title="Location map"
+            width="100%"
+            height="100%"
+            style="border:0"
+            allowfullscreen
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade"
+          />
+          <div v-else class="flex h-full w-full flex-col items-center justify-center bg-muted gap-3">
+            <UIcon name="i-simple-icons-googlemaps" class="size-8 text-muted" />
+            <span class="text-sm text-muted">Google Maps will appear once synced</span>
           </div>
         </div>
         <div class="mt-4 text-center">
@@ -78,7 +84,9 @@ definePageMeta({ layout: 'saya' })
 import { formatGoogleHours } from '~/utils/formatters'
 import { usePageContent } from '~/composables/usePageContent'
 import { useTenantSite } from '~/composables/useTenantSite'
-import DOMPurify from 'isomorphic-dompurify'
+// import DOMPurify from 'isomorphic-dompurify'
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: s => s }
+
 
 const { getField } = usePageContent('location')
 
@@ -104,6 +112,37 @@ const defaultHours = [
   { day: 'Saturday', hours: '5:00 PM - 11:00 PM' },
   { day: 'Sunday', hours: '5:00 PM - 10:00 PM' }
 ]
+
+const mapEmbedSrc = computed(() => {
+  const biz = googleBusiness.value?.business
+  if (!biz) return null
+
+  // 1. Coordinates
+  if (biz.latlng?.latitude != null && biz.latlng?.longitude != null) {
+    return `https://maps.google.com/maps?q=${biz.latlng.latitude},${biz.latlng.longitude}&output=embed`
+  }
+
+  // 2. CID from mapsUri
+  const mapsUri = biz.mapsUri
+  if (mapsUri) {
+    try {
+      const url = new URL(mapsUri)
+      const cid = url.searchParams.get('cid')
+      if (cid) {
+        return `https://maps.google.com/maps?cid=${cid}&output=embed`
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // 3. Address
+  const addr = biz.storefrontAddress?.addressLines?.[0]
+  if (addr) {
+    return `https://maps.google.com/maps?q=${encodeURIComponent(String(addr))}&output=embed`
+  }
+  return null
+})
 
 const parkingInfo = computed(() => {
   const raw = getField('parking.info', '')

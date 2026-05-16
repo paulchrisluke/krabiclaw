@@ -57,6 +57,28 @@
         <div class="flex items-center gap-2">
           <AiMenuImport :site-id="props.siteId" :menu-id="currentMenu?.id" @imported="handleAiImport" />
           <UButton
+            v-if="currentMenu?.status !== 'published'"
+            size="sm"
+            color="success"
+            variant="solid"
+            icon="i-heroicons-check-circle"
+            :loading="saving"
+            @click="handleToggleStatus('published')"
+          >
+            Publish
+          </UButton>
+          <UButton
+            v-else
+            size="sm"
+            color="neutral"
+            variant="soft"
+            icon="i-heroicons-archive-box"
+            :loading="saving"
+            @click="handleToggleStatus('draft')"
+          >
+            Unpublish
+          </UButton>
+          <UButton
             color="error"
             variant="ghost"
             size="sm"
@@ -278,8 +300,20 @@ const {
   updateMenuItem,
   deleteMenuItem,
   renameMenuSection,
-  deleteMenuSection
+  deleteMenuSection,
+  updateMenu
 } = useMenuEditor(props.siteId, props.locationId)
+
+const handleToggleStatus = async (status: 'published' | 'draft') => {
+  if (!currentMenu.value) return
+  try {
+    await updateMenu(currentMenu.value.id, { status })
+    toast.addToast(status === 'published' ? 'Menu published' : 'Menu unpublished', 'success')
+  } catch (err) {
+    console.error('handleToggleStatus failed:', err)
+    toast.addToast(`Failed to ${status === 'published' ? 'publish' : 'unpublish'} menu`, 'error')
+  }
+}
 
 const currencySymbols: Record<string, string> = {
   THB: '฿',

@@ -412,7 +412,9 @@ import { useTenantSite } from '~/composables/useTenantSite'
 import { usePublicMenu } from '~/composables/usePublicMenu'
 import { useAuth } from '~/composables/useAuth'
 import { useOrganizationSchema } from '~/composables/useSchemaOrg'
-import DOMPurify from 'isomorphic-dompurify'
+// import DOMPurify from 'isomorphic-dompurify'
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: s => s }
+
 
 definePageMeta({ layout: false })
 

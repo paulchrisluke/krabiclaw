@@ -20,6 +20,7 @@ interface LocationRow {
   rating: number | null
   review_count: number | null
   description: string | null
+  maps_url: string | null
   last_synced_at: string | null
 }
 
@@ -105,6 +106,7 @@ export default defineEventHandler(async (event) => {
       storefrontAddress: parseJson(location.address),
       phoneNumbers: location.phone ? [{ phoneNumber: location.phone }] : [],
       websiteUri: location.website_url,
+      mapsUri: location.maps_url,
       latlng: location.latitude && location.longitude ? { latitude: location.latitude, longitude: location.longitude } : null,
       categories: (parseJson(location.categories) as JsonValue[] | null) ?? [],
       profile: {

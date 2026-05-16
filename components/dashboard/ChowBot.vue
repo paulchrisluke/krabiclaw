@@ -220,6 +220,8 @@
 import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages } = useChowBot()
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
+
 const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
 
 function getErrorMessage(error: unknown, fallback: string): string {

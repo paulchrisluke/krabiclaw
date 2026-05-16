@@ -10,7 +10,7 @@
       — restaurant sites that run themselves
     </div>
 
-    <header class="sticky top-0 z-40 border-b border-default bg-default/80 backdrop-blur-md">
+    <header class="border-b border-default bg-default">
       <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <!-- Brand name -->
         <NuxtLink to="/" class="saya-display shrink-0 text-2xl text-default no-underline">
@@ -93,16 +93,9 @@
             <p class="px-4 text-xs font-medium uppercase tracking-widest text-muted">Locations</p>
           </div>
           <NuxtLink
-            to="/locations"
-            class="rounded-full px-4 py-3 text-sm text-muted hover:bg-muted"
-            @click="mobileMenuOpen = false"
-          >
-            All locations
-          </NuxtLink>
-          <NuxtLink
             v-for="loc in locations"
             :key="loc.id"
-            :to="`/locations/${loc.slug}/menu`"
+            :to="`/locations/${loc.slug}`"
             class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
@@ -205,14 +198,9 @@ const locations = computed(() => {
 })
 
 const locationDropdownItems = computed(() => [
-  [{
-    label: 'All locations',
-    to: '/locations',
-    class: 'text-xs uppercase tracking-widest text-muted'
-  }],
   locations.value.map((loc: { title: string; slug: string }) => ({
     label: loc.title,
-    to: `/locations/${loc.slug}/menu`,
+    to: `/locations/${loc.slug}`,
     icon: 'i-heroicons-map-pin'
   }))
 ].filter((group: ApiRecord[]) => group.length > 0))

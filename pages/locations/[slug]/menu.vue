@@ -1,22 +1,29 @@
 <template>
   <div class="min-h-screen bg-default text-default">
 
-    <!-- Breadcrumb -->
-    <nav class="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-      <UBreadcrumb :items="breadcrumb" />
-    </nav>
+    <template v-if="location">
+      <!-- Sub-nav (Level 2) -->
+      <SayaSubNav 
+        :location-slug="slug" 
+        active="menu" 
+        :review-count="location?.review_count" 
+        :photo-count="location?.photo_count"
+      />
 
-    <!-- Page header -->
-    <header class="mx-auto max-w-7xl px-4 py-16 text-center sm:px-6 lg:px-8">
-      <p class="saya-kicker mb-6">{{ location?.title }} · Menu</p>
-      <h1 class="saya-display-lg text-default"><em class="saya-italic">The full menu</em></h1>
-      <p class="mx-auto mt-6 max-w-md text-sm leading-relaxed text-muted">
-        Updated {{ menuUpdated }}. Some items vary by season — your server will know.
-      </p>
-    </header>
-
-    <!-- Sub-nav -->
-    <SayaSubNav :location-slug="slug" active="menu" :review-count="location?.review_count" />
+      <!-- Compact Page header -->
+      <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
+        <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
+          ← Back to {{ location?.title }}
+        </NuxtLink>
+        
+        <div class="flex flex-col gap-2">
+          <h1 class="saya-display-md text-default">{{ location?.title }}</h1>
+          <p class="text-sm text-muted">
+            Menu · Updated {{ menuUpdated }}
+          </p>
+        </div>
+      </header>
+    </template>
 
     <!-- Loading -->
     <div v-if="menuLoading" class="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6">
@@ -31,21 +38,26 @@
 
     <!-- Sticky category tab bar -->
     <div v-else>
-      <div class="sticky top-16 z-30 border-b border-default border-t bg-default/92 backdrop-blur-md">
-        <div class="mx-auto flex max-w-7xl gap-8 overflow-x-auto px-4 sm:px-6 lg:px-8">
+      <div class="sticky top-0 z-40 border-b border-default bg-default">
+        <div class="mx-auto flex h-12 max-w-7xl gap-8 overflow-x-auto px-4 sm:px-6 lg:px-8">
           <a
             v-for="cat in categories"
             :key="cat.id"
             :href="`#cat-${cat.id}`"
             :class="[
-              'shrink-0 border-b-2 py-4 text-xs font-medium uppercase tracking-widest transition-colors',
+              'relative flex shrink-0 items-center text-[10px] font-bold uppercase tracking-[0.2em] transition-colors',
               activeCategory === cat.id
-                ? 'border-primary text-default'
-                : 'border-transparent text-muted hover:text-default'
+                ? 'text-default'
+                : 'text-muted hover:text-default'
             ]"
             @click.prevent="scrollToCategory(cat.id)"
           >
             {{ cat.name }}
+            <!-- Active indicator -->
+            <div 
+              v-if="activeCategory === cat.id"
+              class="absolute bottom-0 left-0 h-0.5 w-full bg-primary"
+            />
           </a>
         </div>
       </div>
@@ -178,12 +190,6 @@ function getDietaryTags(item: ApiValue): string[] {
   return tags
 }
 
-const breadcrumb = computed(() => [
-  { label: siteName.value, to: '/' },
-  { label: 'Locations', to: '/locations' },
-  { label: location.value?.title || slug.value, to: `/locations/${slug.value}` },
-  { label: 'Menu' }
-])
 
 useSeoMeta({
   title: () => `Menu · ${location.value?.title || slug.value}`,
