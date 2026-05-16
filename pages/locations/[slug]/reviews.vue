@@ -24,7 +24,7 @@
         <div class="flex flex-col gap-2">
           <h1 class="saya-display-md text-default">What guests are <em class="saya-italic">saying</em></h1>
           <p class="text-sm text-muted">
-            Reviews · {{ location?.title }}
+            {{ location?.title }}
           </p>
         </div>
       </header>

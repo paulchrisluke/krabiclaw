@@ -11,7 +11,7 @@
         <div>
           <h2 class="text-2xl md:text-3xl font-bold text-default mb-6">Make a Reservation</h2>
           <UCard class="rounded-lg bg-muted">
-            <UForm :state="reservationForm" :validate="validateReservation" class="space-y-6" @submit="handleReservation">
+            <UForm v-if="!submitted" :state="reservationForm" :validate="validateReservation" class="space-y-6" @submit="handleReservation">
               <div class="grid gap-5 md:grid-cols-2">
                 <UFormField label="Name" name="name" required>
                   <UInput
@@ -45,7 +45,7 @@
                   />
                 </UFormField>
 
-                <UFormField label="Date" name="date" required>
+                <UFormField label="Date (Select Day)" name="date" required>
                   <UInput
                     id="res-date"
                     v-model="reservationForm.date"
@@ -94,10 +94,32 @@
                 />
               </UFormField>
 
-              <UButton type="submit" color="primary" variant="solid" size="xl" block :loading="submitting" :disabled="submitted">
-                {{ submitted ? 'Request received!' : 'Make Reservation' }}
+              <UButton type="submit" color="primary" variant="solid" size="xl" block :loading="submitting">
+                Make Reservation
               </UButton>
             </UForm>
+
+            <!-- Thank You State -->
+            <div v-else class="py-8 text-center">
+              <div class="mb-6 flex justify-center">
+                <div class="flex size-16 items-center justify-center rounded-full bg-green-500/10 text-green-500">
+                  <UIcon name="i-heroicons-check-circle" class="size-10" />
+                </div>
+              </div>
+              <h2 class="saya-display saya-italic text-3xl text-default">Thank you, {{ lastSubmission?.name }}!</h2>
+              <p class="mt-4 text-muted">We've received your request for <strong>{{ lastSubmission?.guests }} guests</strong> on <strong>{{ lastSubmission?.date }}</strong> at <strong>{{ lastSubmission?.time }}</strong>.</p>
+              <p class="mt-2 text-sm text-muted">Our team will confirm your reservation shortly via email or phone.</p>
+              
+              <div v-if="cancelUrl" class="mt-8 border-t border-default pt-8">
+                <p class="text-xs text-muted mb-3 uppercase tracking-widest font-bold">Manage Reservation</p>
+                <p class="text-xs text-muted mb-4 italic">Changed your mind? You can cancel your request below.</p>
+                <UButton :to="cancelUrl" color="error" variant="ghost" size="xs">Cancel Reservation</UButton>
+              </div>
+
+              <div class="mt-10">
+                <UButton color="primary" variant="soft" @click="submitted = false">Make another reservation</UButton>
+              </div>
+            </div>
           </UCard>
         </div>
 
@@ -120,7 +142,7 @@
           </UCard>
 
           <div class="space-y-4">
-            <UButton :to="`tel:${contactPhone.replace(/\s/g, '')}`" color="primary" variant="outline" class="w-full">
+            <UButton v-if="contactPhone" :to="`tel:${contactPhone.replace(/\s/g, '')}`" color="primary" variant="outline" class="w-full">
               Call {{ contactPhone }}
             </UButton>
             <UButton to="/contact" color="primary" variant="outline" class="w-full">
@@ -173,8 +195,9 @@ if (!process.client) {
 }
 
 // Defaults in computed to avoid parse errors from embedded HTML in template expressions
-const contactPhone = computed(() => getField('contact.phone', '+66 81 154 3606'))
-const contactEmail = computed(() => getField('contact.email', 'info@kikuzuki-thailand.com'))
+// Defaults to site config if available
+const contactPhone = computed(() => getField('contact.phone', site.value?.config?.phone || '+66 81 154 3606'))
+const contactEmail = computed(() => getField('contact.email', site.value?.config?.email || 'info@kikuzuki-thailand.com'))
 const reservationForm = ref({
   name: '',
   email: '',
@@ -208,24 +231,34 @@ const { site, siteId } = useTenantSite()
 const toast = useToast()
 const submitting = ref(false)
 const submitted = ref(false)
+const lastSubmission = ref(null)
 
 const handleReservation = async () => {
   if (submitting.value) return
   submitting.value = true
   try {
-    await $fetch(`/api/public/sites/${siteId}/reservations`, {
+    const res = await $fetch(`/api/public/sites/${siteId}/reservations`, {
       method: 'POST',
       body: reservationForm.value,
     })
+    lastSubmission.value = { 
+      ...reservationForm.value,
+      id: (res as any).id 
+    }
     submitted.value = true
     reservationForm.value = { name: '', email: '', phone: '', date: '', time: '', guests: '', requests: '' }
     toast.add({ description: 'Reservation request received! We\'ll confirm shortly.', color: 'success' })
-  } catch (err) {
+  } catch (err: any) {
     toast.add({ description: err?.data?.error ?? 'Failed to submit. Please try again.', color: 'error' })
   } finally {
     submitting.value = false
   }
 }
+
+const cancelUrl = computed(() => {
+  if (!lastSubmission.value?.id) return null
+  return `/reservations/cancel?id=${lastSubmission.value.id}&email=${encodeURIComponent(lastSubmission.value.email)}`
+})
 
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 

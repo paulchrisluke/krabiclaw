@@ -122,7 +122,7 @@
         <div class="flex items-center justify-between gap-6">
           <h2 id="reviews-heading" class="text-lg font-medium text-highlighted">Guest reviews</h2>
           <p v-if="reviewSummary" class="text-sm text-muted">
-            {{ reviewSummary.average }} out of 5 from {{ reviewSummary.count }} reviews
+            {{ reviewSummary.average }} out of 5
           </p>
         </div>
 

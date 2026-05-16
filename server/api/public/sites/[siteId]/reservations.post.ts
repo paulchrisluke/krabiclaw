@@ -69,6 +69,7 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({
     success: true,
+    id,
     message: 'Your reservation request has been received. We will confirm shortly.',
   }, { status: 201 })
 })

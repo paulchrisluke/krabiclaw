@@ -113,11 +113,11 @@
           </div>
           <div>
             <p class="saya-eyebrow mb-4 text-muted">Contact</p>
-            <a v-if="location.phone" :href="`tel:${location.phone}`" class="block text-sm text-default no-underline hover:underline">
-              {{ location.phone }}
+            <a v-if="displayPhone" :href="`tel:${displayPhone.replace(/\s/g, '')}`" class="block text-sm text-default no-underline hover:underline">
+              {{ displayPhone }}
             </a>
-            <a v-if="location.email" :href="`mailto:${location.email}`" class="mt-2 block text-sm text-muted no-underline hover:underline">
-              {{ location.email }}
+            <a v-if="displayEmail" :href="`mailto:${displayEmail}`" class="mt-2 block text-sm text-muted no-underline hover:underline break-all">
+              {{ displayEmail }}
             </a>
           </div>
         </div>
@@ -254,6 +254,18 @@ const { data, pending } = await useFetch(
   { key: () => `public-location-${siteId}-${slug.value}`, default: () => ({ location: null }) }
 )
 const location = computed(() => (data as ApiValue).value?.location ?? null)
+
+// Contact fallbacks to site config if location info is missing or placeholder-like
+const displayPhone = computed(() => {
+  const p = location.value?.phone
+  if (p && !p.includes('example.com')) return p
+  return (site as ApiValue).value?.config?.phone || null
+})
+const displayEmail = computed(() => {
+  const e = location.value?.email
+  if (e && !e.includes('example.com') && !e.includes('krabiclaw.com')) return e
+  return (site as ApiValue).value?.config?.email || null
+})
 
 // Fetch reviews preview (first 3)
 const { data: reviewsData } = await useFetch(

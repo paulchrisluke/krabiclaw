@@ -28,6 +28,7 @@ const brandTextColor = computed(() => getContrastColor(brandColor.value))
 const themeStyles = computed(() => {
   if (!brandColor.value) return {}
   return {
+    '--brand-color': brandColor.value,
     '--ui-primary': brandColor.value,
     '--color-primary': brandColor.value,
     '--brand-text-color': brandTextColor.value

@@ -189,10 +189,18 @@ const { data: locationsData, error: locationsError } = useFetch<PublicLocationsR
 
 const rawLocations = computed(() => locationsData.value?.locations ?? [])
 const locations = computed(() =>
-  rawLocations.value.map((loc: PublicLocation) => ({
-    ...loc,
-    hoursToday: loc.googleBusinessHours ? getTodayGoogleHours(loc.googleBusinessHours) : null
-  }))
+  rawLocations.value.map((loc: PublicLocation) => {
+    let phone = loc.phone
+    // Fallback if placeholder-like
+    if (!phone || phone.includes('example.com')) {
+      phone = site.value?.config?.phone || null
+    }
+    return {
+      ...loc,
+      phone,
+      hoursToday: loc.googleBusinessHours ? getTodayGoogleHours(loc.googleBusinessHours) : null
+    }
+  })
 )
 
 function formatLocAddress(loc: PublicLocation) {

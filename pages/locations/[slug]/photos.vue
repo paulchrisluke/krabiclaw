@@ -29,7 +29,7 @@
         <div class="flex flex-col gap-2">
           <h1 class="saya-display-md text-default">Inside <em class="saya-italic">the room</em></h1>
           <p class="text-sm text-muted">
-            {{ photos.length }} photos · {{ location?.title }}
+            {{ location?.title }}
           </p>
         </div>
       </header>
@@ -82,9 +82,9 @@
             class="block w-full transition-opacity duration-200 group-hover:opacity-80"
             loading="lazy"
           >
-          <div class="absolute inset-0 flex items-end bg-linear-to-t from-black/50 to-transparent p-4 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-            <span class="saya-eyebrow rounded-full bg-white/18 px-2.5 py-1 text-xs text-white backdrop-blur-sm">
-              {{ photo.category || '—' }}
+          <div class="absolute inset-0 flex items-end bg-linear-to-t from-black/60 to-transparent p-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+            <span class="saya-eyebrow rounded-full bg-white/25 px-4 py-1.5 text-[10px] font-bold tracking-widest text-white backdrop-blur-md border border-white/20">
+              {{ photo.category || 'Gallery' }}
             </span>
           </div>
         </button>
