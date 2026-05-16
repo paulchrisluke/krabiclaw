@@ -54,121 +54,129 @@ function sniffMimeType(data: Uint8Array): string {
 }
 
 export default defineEventHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
-
-  const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  const site = await db.prepare(
-    `SELECT organization_id FROM sites WHERE id = ? LIMIT 1`
-  ).bind(siteId).first<{ organization_id: string }>()
-  if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-
-  const membership = await db.prepare(`
-    SELECT m.userId
-    FROM member m
-    WHERE m.organizationId = ?
-      AND m.userId = ?
-      AND m.role IN ('owner', 'admin', 'editor')
-    LIMIT 1
-  `).bind(site.organization_id, session.user.id).first()
-  if (!membership) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
-
-  const formData = await readMultipartFormData(event)
-  if (!formData) return jsonResponse({ error: 'Multipart form data required' }, { status: 400 })
-
-  const filePart = formData.find(p => p.name === 'file')
-  if (!filePart?.data) return jsonResponse({ error: 'file field required' }, { status: 400 })
-
-  const detectedContentType = sniffMimeType(filePart.data)
-  const declaredContentType = typeof filePart.type === 'string'
-    ? filePart.type.split(';', 1)[0]?.toLowerCase().trim() || ''
-    : ''
-  const contentType = detectedContentType
-  const filename = sanitizeFilename(filePart.filename)
-  const fileSize = filePart.data.byteLength
-
-  if (!ALLOWED_MIME_TYPES.has(contentType)) {
-    return jsonResponse({ error: `Unsupported file type: ${contentType}` }, { status: 415 })
-  }
-  if (contentType === 'image/svg+xml') {
-    return jsonResponse({ error: 'SVG uploads are not supported for security reasons' }, { status: 415 })
-  }
-  if (declaredContentType && declaredContentType !== contentType) {
-    console.warn('media_upload_mime_mismatch', {
-      siteId,
-      userId: session.user.id,
-      declared: declaredContentType,
-      detected: contentType,
-      filename,
-    })
-    return jsonResponse({ error: 'File type mismatch' }, { status: 400 })
-  }
-  if (fileSize > MAX_BYTES) {
-    return jsonResponse({ error: 'File too large (max 50 MB)' }, { status: 413 })
-  }
-
-  const locationIdPart = formData.find(p => p.name === 'locationId')
-  let locationId: string | null = null
-  if (locationIdPart?.data) {
-    const candidate = Buffer.from(locationIdPart.data).toString().trim()
-    if (candidate) {
-      const location = await db.prepare(`
-        SELECT id
-        FROM business_locations
-        WHERE id = ? AND site_id = ? AND organization_id = ?
-        LIMIT 1
-      `).bind(candidate, siteId, site.organization_id).first()
-      if (!location) {
-        return jsonResponse({ error: 'Invalid locationId' }, { status: 400 })
-      }
-      locationId = candidate
-    }
-  }
-
-  const assetId = crypto.randomUUID()
-  const kind = VIDEO_MIME_TYPES.has(contentType) ? 'video' : 'file'
-  const r2Key = buildR2Key(siteId, assetId, filename)
-
-  const uploadData = new Uint8Array(filePart.data).buffer
-  const publicUrl = await uploadToR2(env, r2Key, uploadData, contentType)
-
   try {
-    await createMediaAsset(db, {
-      id: assetId,
-      organization_id: site.organization_id,
-      site_id: siteId,
-      location_id: locationId,
-      kind,
-      provider: 'cloudflare_r2',
-      source: 'uploaded',
-      r2_key: r2Key,
-      public_url: publicUrl,
-      mime_type: contentType,
-      file_name: filename,
-      file_size: fileSize,
-      status: 'active',
-      created_by_user_id: session.user.id,
-    })
-  } catch (error) {
-    try {
-      await deleteFromR2(env, r2Key)
-    } catch (cleanupError) {
-      const normalizedCleanupError = cleanupError instanceof Error ? cleanupError : new Error('Unknown error')
-      console.error('media_upload_cleanup_failed', {
-        siteId,
-        assetId,
-        r2Key,
-        error: normalizedCleanupError.message,
-      })
-    }
-    throw error
-  }
+    const siteId = getRouterParam(event, 'siteId')
+    if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
-  return jsonResponse({ id: assetId, publicUrl, kind, status: 'active' })
+    const env = cloudflareEnv(event)
+    const db = env.REVIEWS_DB
+    if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
+
+    const session = await getAuthSession(event, env)
+    if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+
+    const site = await db.prepare(
+      `SELECT organization_id FROM sites WHERE id = ? LIMIT 1`
+    ).bind(siteId).first<{ organization_id: string }>()
+    if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
+
+    const membership = await db.prepare(`
+      SELECT m.userId
+      FROM member m
+      WHERE m.organizationId = ?
+        AND m.userId = ?
+        AND m.role IN ('owner', 'admin', 'editor')
+      LIMIT 1
+    `).bind(site.organization_id, session.user.id).first()
+    if (!membership) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+
+    const formData = await readMultipartFormData(event)
+    if (!formData) return jsonResponse({ error: 'Multipart form data required' }, { status: 400 })
+
+    const filePart = formData.find(p => p.name === 'file')
+    if (!filePart?.data) return jsonResponse({ error: 'file field required' }, { status: 400 })
+
+    const detectedContentType = sniffMimeType(filePart.data)
+    const declaredContentType = typeof filePart.type === 'string'
+      ? filePart.type.split(';', 1)[0]?.toLowerCase().trim() || ''
+      : ''
+    const contentType = detectedContentType
+    const filename = sanitizeFilename(filePart.filename)
+    const fileSize = filePart.data.byteLength
+
+    if (!ALLOWED_MIME_TYPES.has(contentType)) {
+      return jsonResponse({ error: `Unsupported file type: ${contentType}` }, { status: 415 })
+    }
+    if (contentType === 'image/svg+xml') {
+      return jsonResponse({ error: 'SVG uploads are not supported for security reasons' }, { status: 415 })
+    }
+    if (declaredContentType && declaredContentType !== contentType) {
+      console.warn('media_upload_mime_mismatch', {
+        siteId,
+        userId: session.user.id,
+        declared: declaredContentType,
+        detected: contentType,
+        filename,
+      })
+      return jsonResponse({ error: 'File type mismatch' }, { status: 400 })
+    }
+    if (fileSize > MAX_BYTES) {
+      return jsonResponse({ error: 'File too large (max 50 MB)' }, { status: 413 })
+    }
+
+    const locationIdPart = formData.find(p => p.name === 'locationId')
+    let locationId: string | null = null
+    if (locationIdPart?.data) {
+      const candidate = Buffer.from(locationIdPart.data).toString().trim()
+      if (candidate) {
+        const location = await db.prepare(`
+          SELECT id
+          FROM business_locations
+          WHERE id = ? AND site_id = ? AND organization_id = ?
+          LIMIT 1
+        `).bind(candidate, siteId, site.organization_id).first()
+        if (!location) {
+          return jsonResponse({ error: 'Invalid locationId' }, { status: 400 })
+        }
+        locationId = candidate
+      }
+    }
+
+    const assetId = crypto.randomUUID()
+    const kind = VIDEO_MIME_TYPES.has(contentType) ? 'video' : 'file'
+    const r2Key = buildR2Key(siteId, assetId, filename)
+
+    const publicUrl = await uploadToR2(env, r2Key, filePart.data, contentType)
+
+    try {
+      await createMediaAsset(db, {
+        id: assetId,
+        organization_id: site.organization_id,
+        site_id: siteId,
+        location_id: locationId,
+        kind,
+        provider: 'cloudflare_r2',
+        source: 'uploaded',
+        r2_key: r2Key,
+        public_url: publicUrl,
+        mime_type: contentType,
+        file_name: filename,
+        file_size: fileSize,
+        status: 'active',
+        created_by_user_id: session.user.id,
+      })
+    } catch (dbError) {
+      try {
+        await deleteFromR2(env, r2Key)
+      } catch (cleanupError) {
+        const normalizedCleanupError = cleanupError instanceof Error ? cleanupError : new Error('Unknown error')
+        console.error('media_upload_cleanup_failed', {
+          siteId,
+          assetId,
+          r2Key,
+          error: normalizedCleanupError.message,
+        })
+      }
+      throw dbError
+    }
+
+    return jsonResponse({ id: assetId, publicUrl, kind, status: 'active' })
+  } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error('Unknown media upload error')
+    console.error('media_upload_failed', { error: normalizedError.message, stack: normalizedError.stack })
+    return jsonResponse({ 
+      error: 'Failed to upload media', 
+      message: normalizedError.message 
+    }, { status: 500 })
+  }
 })

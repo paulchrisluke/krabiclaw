@@ -25,7 +25,7 @@ function normalizeR2Key(key: string): string {
 export async function uploadToR2(
   env: ApiRecord,
   key: string,
-  body: ArrayBuffer | ReadableStream | Blob,
+  body: ArrayBuffer | ArrayBufferView | ReadableStream | Blob,
   contentType: string
 ): Promise<string> {
   const normalizedKey = normalizeR2Key(key)
