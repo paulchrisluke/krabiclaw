@@ -485,7 +485,7 @@ function renderMarkdown(text: string): string {
     .replace(/^(.+)$/, '<p>$1</p>')
   
   if (import.meta.server) return html
-  return html
+  return DOMPurify.sanitize(html)
 }
 </script>
 

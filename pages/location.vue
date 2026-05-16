@@ -131,7 +131,7 @@ const mapEmbedSrc = computed(() => {
       if (cid) {
         return `https://maps.google.com/maps?cid=${cid}&output=embed`
       }
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
   }

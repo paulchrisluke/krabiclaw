@@ -8,7 +8,7 @@
       </div>
     </template>
 
-    <template v-else>
+    <template v-else-if="location">
       <!-- Sub-nav (Level 2) -->
       <SayaSubNav 
         :location-slug="slug" 
