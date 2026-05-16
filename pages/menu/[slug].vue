@@ -406,7 +406,6 @@ const relatedItems = ref([]) // To be implemented with a related items API if ne
 
 const approvedReviews = ref<Review[]>([])
 const reviewsLoading = ref(true)
-const reviews = computed(() => approvedReviews.value)
 const reviewSubmitting = ref(false)
 const reviewMessage = ref('')
 const reviewError = ref(false)
