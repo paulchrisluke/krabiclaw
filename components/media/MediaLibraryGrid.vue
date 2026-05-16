@@ -27,6 +27,15 @@
       />
     </div>
 
+    <!-- Progress -->
+    <div v-if="uploading" class="flex flex-col gap-1.5">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-xs font-medium text-default">Uploading...</span>
+        <span class="text-xs text-muted">Please don't close this tab</span>
+      </div>
+      <UProgress animation="carousel" color="primary" size="xs" />
+    </div>
+
     <!-- Error -->
     <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-heroicons-exclamation-triangle" />
 
@@ -137,6 +146,7 @@ const toast = useToast()
 
 const assets = ref<MediaAsset[]>([])
 const loading = ref(false)
+const uploading = ref(false)
 const uploadError = ref<string | null>(null)
 const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -242,6 +252,7 @@ async function upload(file: File) {
 }
 
 async function uploadImage(file: File) {
+  uploading.value = true
   try {
     const { assetId, uploadUrl } = await $fetch<{ assetId: string; uploadUrl: string; imageId: string }>(
       `/api/editor/sites/${props.siteId}/media/request-upload`,
@@ -281,6 +292,8 @@ async function uploadImage(file: File) {
     emit('uploaded', asset)
   } catch (err) {
     uploadError.value = getErrorMessage(err, 'Upload failed.')
+  } finally {
+    uploading.value = false
   }
 }
 
@@ -289,6 +302,7 @@ async function uploadVideo(file: File) {
     uploadError.value = 'Videos must be under 50 MB.'
     return
   }
+  uploading.value = true
   try {
     const form = new FormData()
     form.append('file', file)
@@ -299,6 +313,8 @@ async function uploadVideo(file: File) {
     emit('uploaded', asset)
   } catch (err) {
     uploadError.value = getErrorMessage(err, 'Upload failed.')
+  } finally {
+    uploading.value = false
   }
 }
 
