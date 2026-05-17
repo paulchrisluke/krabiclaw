@@ -37,14 +37,24 @@ function slugify(name: string): string {
   return slug
 }
 
-function mapMenuItem(row: any): MenuItem {
-  if (!row) return row
+function parseStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string')
+  if (typeof value !== 'string' || !value) return []
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function mapMenuItem(row: Record<string, unknown>): MenuItem {
   return {
-    ...row,
+    ...(row as unknown as MenuItem),
     available: Boolean(row.available),
-    allergens: row.allergens ? JSON.parse(row.allergens) : [],
-    ingredients: row.ingredients ? JSON.parse(row.ingredients) : [],
-    dietary_notes: row.dietary_notes ? JSON.parse(row.dietary_notes) : [],
+    allergens: parseStringArray(row.allergens),
+    ingredients: parseStringArray(row.ingredients),
+    dietary_notes: parseStringArray(row.dietary_notes),
   }
 }
 

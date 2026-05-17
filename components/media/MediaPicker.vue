@@ -126,7 +126,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [assetId: string | null]
-  change: [asset: { id: string; publicUrl: string; thumbnailUrl: string } | null]
+  change: [asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null]
 }>()
 
 type Panel = 'library' | 'generate'

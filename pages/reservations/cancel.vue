@@ -82,13 +82,13 @@ const { siteId } = useTenantSite()
 const toast = useToast()
 
 const resId = computed(() => route.query.id as string)
-const email = computed(() => route.query.email as string)
+const token = computed(() => route.query.token as string)
 
 const { data: resData, pending } = await useFetch(
-  () => `/api/public/sites/${siteId}/reservations/${resId.value}?email=${encodeURIComponent(email.value || '')}`,
+  () => `/api/public/sites/${siteId}/reservations/${resId.value}?token=${encodeURIComponent(token.value || '')}`,
   {
     key: `cancel-res-${resId.value}`,
-    immediate: !!resId.value && !!email.value
+    immediate: !!resId.value && !!token.value
   }
 )
 
@@ -102,12 +102,15 @@ async function handleCancel() {
   try {
     await $fetch(`/api/public/sites/${siteId}/reservations/${resId.value}/cancel`, {
       method: 'POST',
-      body: { email: email.value }
+      headers: {
+        Authorization: `Bearer ${token.value}`
+      }
     })
     cancelled.value = true
     toast.add({ title: 'Reservation cancelled', color: 'success' })
-  } catch (err: any) {
-    toast.add({ title: 'Error', description: err.data?.error || 'Failed to cancel reservation', color: 'error' })
+  } catch (err) {
+    const message = (err as { data?: { error?: string } })?.data?.error
+    toast.add({ title: 'Error', description: message || 'Failed to cancel reservation', color: 'error' })
   } finally {
     loading.value = false
   }

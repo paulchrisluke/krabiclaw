@@ -1,5 +1,6 @@
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
+import { notifyReservationCreated } from '~/server/utils/notifications'
+import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 
 const hashIp = async (ip: string) => {
   if (!ip) return null
@@ -44,32 +45,61 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
   const site = await db.prepare(
-    'SELECT id, organization_id FROM sites WHERE id = ? AND status = ? LIMIT 1'
-  ).bind(siteId, 'active').first()
+    'SELECT id, organization_id, brand_name FROM sites WHERE id = ? AND status = ? LIMIT 1'
+  ).bind(siteId, 'active').first<{ id: string; organization_id: string; brand_name?: string | null }>()
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const id = crypto.randomUUID()
   const ipHash = await hashIp(getHeader(event, 'CF-Connecting-IP') ?? getHeader(event, 'x-forwarded-for') ?? '')
+  const cancellation = createReservationCancelToken()
+  const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
 
   await db.prepare(`
-    INSERT INTO reservation_submissions (id, organization_id, site_id, name, email, phone, date, time, guests, requests, ip_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, site.organization_id, siteId, name, email, phone, date, time, guests, requests || null, ipHash).run()
+    INSERT INTO reservation_submissions (
+      id, organization_id, site_id, name, email, phone, date, time, guests, requests, ip_hash,
+      cancellation_token_hash, cancellation_token_expires_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id,
+    site.organization_id,
+    siteId,
+    name,
+    email,
+    phone,
+    date,
+    time,
+    guests,
+    requests || null,
+    ipHash,
+    cancellationTokenHash,
+    cancellation.expiresAt
+  ).run()
 
-  getOrgWhatsAppPhone(db, site.organization_id as string, siteId).then((ownerPhone) => {
-    if (!ownerPhone) return
-    sendWhatsAppNotification(env, db, {
-      organizationId: site.organization_id as string,
+  notifyReservationCreated(env, db, {
+    organizationId: site.organization_id,
+    siteId,
+    siteName: site.brand_name,
+    reservationId: id,
+    guestName: name,
+    email,
+    phone,
+    date,
+    time,
+    guests
+  }).catch((error) => {
+    console.error('reservation_notification_failed', {
+      organizationId: site.organization_id,
       siteId,
-      toPhone: ownerPhone,
-      template: 'new_reservation',
-      vars: { guest_name: name, date, time, guests, phone },
-    }).catch(console.error)
-  }).catch(console.error)
+      reservationId: id,
+      error: error instanceof Error ? error.message : String(error)
+    })
+  })
 
   return jsonResponse({
     success: true,
     id,
+    cancellationToken: cancellation.token,
     message: 'Your reservation request has been received. We will confirm shortly.',
   }, { status: 201 })
 })

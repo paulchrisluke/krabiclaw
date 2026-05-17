@@ -71,11 +71,6 @@ const iframeLoading = ref(true)
 const previewReloadToken = ref(0)
 const previewToken = ref('')
 
-const platformHostname = computed(() => {
-  const domain = config.public.freeSiteDomain
-  return domain.replace(/^https?:\/\//, '')
-})
-
 const subdomain = ref('')
 
 const sitePreviewBaseUrl = computed(() => {

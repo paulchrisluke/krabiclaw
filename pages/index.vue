@@ -552,11 +552,6 @@ const { data: googleBusiness } = isPlatform
     })
 
 const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
-const locAddressLine = (loc) => {
-  const lines = loc?.address?.addressLines
-  return Array.isArray(lines) && lines[0] ? String(lines[0]) : ''
-}
-
 const businessTitle = computed(() => googleBusiness.value?.business?.title ?? null)
 const businessSubtitle = computed(() => googleBusiness.value?.business?.profile?.description ?? null)
 const businessPrimaryPhoto = computed(() => googleBusiness.value?.media?.[0])

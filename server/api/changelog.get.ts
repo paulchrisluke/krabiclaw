@@ -69,8 +69,8 @@ export default defineEventHandler(async (event) => {
 
         if (pullRequests.length < perPage) break
         page++
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
           console.error('GitHub API request timed out')
           return jsonResponse({ error: 'GitHub API request timed out' }, { status: 504 })
         }

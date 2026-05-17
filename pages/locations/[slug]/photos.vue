@@ -160,7 +160,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
 const { data: locData } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}`,
@@ -183,18 +183,6 @@ const cats = [
   { key: 'TEAM', label: 'Team' }
 ]
 const activeCategory = ref('ALL')
-
-const counts = computed(() => {
-  const m: Record<string, number> = { ALL: photos.value.length }
-  photos.value.forEach((p: ApiValue) => {
-    if (p.category && typeof p.category === 'string') {
-      const trimmed = p.category.trim()
-      if (!trimmed) return
-      m[trimmed] = (m[trimmed] ?? 0) + 1
-    }
-  })
-  return m
-})
 
 const sorted = computed(() => {
   const filtered = activeCategory.value === 'ALL' ? photos.value : photos.value.filter((p: ApiValue) => p.category === activeCategory.value)

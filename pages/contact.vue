@@ -135,7 +135,7 @@ definePageMeta({ layout: false })
 import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 import { usePageContent } from '~/composables/usePageContent'
 
-const { isPlatform, siteId } = useTenantSite()
+const { isPlatform, siteId, site } = useTenantSite()
 const { getField } = usePageContent('contact')
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
@@ -145,8 +145,8 @@ const toast = useToast()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // ── Tenant contact info ──────────────────────────────────
-const contactPhone = computed(() => getField('contact.phone', site.value?.config?.phone || ''))
-const contactEmail = computed(() => getField('contact.email', site.value?.config?.email || ''))
+const contactPhone = computed(() => getField('contact.phone', site?.config?.phone || ''))
+const contactEmail = computed(() => getField('contact.email', site?.config?.email || ''))
 const contactAddress = computed(() => getField('contact.address', ''))
 
 const tenantForm = ref({ name: '', email: '', message: '' })

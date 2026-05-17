@@ -19,7 +19,7 @@
       <section class="relative min-h-160 overflow-hidden">
         <video
           v-if="heroMedia.isVideo"
-          :src="heroMedia.url"
+          :src="heroMedia.url ?? undefined"
           autoplay
           muted
           loop
@@ -246,7 +246,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
 // Fetch location
 const { data, pending } = await useFetch(
@@ -259,12 +259,12 @@ const location = computed(() => (data as ApiValue).value?.location ?? null)
 const displayPhone = computed(() => {
   const p = location.value?.phone
   if (p && !p.includes('example.com')) return p
-  return (site as ApiValue).value?.config?.phone || null
+  return (site as ApiValue)?.config?.phone || null
 })
 const displayEmail = computed(() => {
   const e = location.value?.email
   if (e && !e.includes('example.com') && !e.includes('krabiclaw.com')) return e
-  return (site as ApiValue).value?.config?.email || null
+  return (site as ApiValue)?.config?.email || null
 })
 
 // Fetch reviews preview (first 3)

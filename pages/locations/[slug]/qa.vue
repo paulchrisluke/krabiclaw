@@ -157,12 +157,12 @@ definePageMeta({ layout: 'saya' })
 const route = useRoute()
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
-const plan = computed(() => (site as ApiValue)?.value?.plan || (site as ApiValue)?.plan)
+const plan = computed(() => (site as ApiValue)?.plan)
 const isFree = computed(() => !plan.value || plan.value === 'free')
 const { open: openUpgrade } = useUpgradeModal()
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
 const { data: locData } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}`,

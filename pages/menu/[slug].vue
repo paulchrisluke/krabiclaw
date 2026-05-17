@@ -40,7 +40,7 @@
             <UCard class="bg-default rounded-lg overflow-hidden border-0">
               <video
                 v-if="mainMedia.isVideo"
-                :src="mainMedia.url"
+                :src="mainMedia.url ?? undefined"
                 autoplay
                 muted
                 loop
@@ -251,8 +251,8 @@
           >
             <div class="aspect-square overflow-hidden rounded-md bg-elevated">
               <img
-                v-if="related.image && !related.image.includes('PLACEHOLDER')"
-                :src="related.image"
+                v-if="related.public_url && !related.public_url.includes('PLACEHOLDER')"
+                :src="related.public_url"
                 :alt="related.name"
                 class="h-full w-full object-cover transition-opacity group-hover:opacity-80"
                 loading="lazy"
@@ -295,7 +295,7 @@ const { resolveMedia } = useMedia()
 const route = useRoute()
 const { siteId } = useTenantSite()
 const config = useRuntimeConfig()
-const turnstileEnabled = computed(() => config.public.turnstileEnabled === true || config.public.turnstileEnabled === 'true')
+const turnstileEnabled = computed(() => config.public.turnstileEnabled === true)
 const turnstileSiteKey = computed(() => config.public.turnstileSiteKey)
 
 interface Review {
@@ -307,6 +307,24 @@ interface Review {
   date?: string
   createdAt?: string
   datetime?: string
+}
+
+interface TurnstileApi {
+  render: (
+    _container: HTMLElement,
+    _options: {
+      sitekey: string
+      callback: (_token: string) => void
+      'expired-callback': () => void
+    }
+  ) => string
+  reset: (_widgetId: string) => void
+}
+
+declare global {
+  interface Window {
+    turnstile?: TurnstileApi
+  }
 }
 
 interface MenuItemType {
@@ -332,15 +350,56 @@ interface ApiValue {
   item: MenuItemType | null
 }
 
-const { data: itemData } = await useFetch(
+interface ReviewsResponse {
+  reviews: Review[]
+}
+
+interface SubmitReviewResponse {
+  message?: string
+}
+
+interface ReviewSubmitError {
+  data?: {
+    error?: string
+  }
+}
+
+type MenuItemSchema = {
+  '@type': 'MenuItem'
+  name: string
+  description?: string
+  image?: string
+  offers: {
+    '@type': 'Offer'
+    price: string
+    priceCurrency?: string
+    availability: string
+  }
+  suitableForDiet: string[]
+  additionalProperty?: PropertyValue[]
+  aggregateRating?: {
+    '@type': 'AggregateRating'
+    ratingValue: string
+    reviewCount: number
+  }
+  review?: Array<Record<string, unknown>>
+}
+
+type PropertyValue = {
+  '@type': 'PropertyValue'
+  name: string
+  value: string
+}
+
+const { data: itemData } = await useFetch<ApiValue>(
   () => `/api/public/sites/${siteId}/menu-items/${route.params.slug}`,
   { key: `menu-item-${siteId}-${route.params.slug}` }
 )
 
-const item = computed(() => (itemData.value as ApiValue)?.item ?? null)
+const item = computed(() => itemData.value?.item ?? null)
 const category = computed(() => ({ name: item.value?.section }))
 
-const formatPrice = menuItem => menuItem?.price ? `฿${menuItem.price}` : 'TBD'
+const formatPrice = (menuItem: MenuItemType | null) => menuItem?.price ? `฿${menuItem.price}` : 'TBD'
 
 const formattedPrice = computed(() => formatPrice(item.value))
 
@@ -352,11 +411,6 @@ const mainMedia = computed(() => resolveMedia({
   public_url: item.value?.public_url,
   kind: item.value?.kind
 }))
-const visibleDietary = computed(() =>
-  item.value?.dietary_notes?.filter(note => !note.includes('PLACEHOLDER')) ?? []
-)
-
-
 const visibleAllergens = computed(() =>
   item.value?.allergens?.filter(allergen => !allergen.includes('PLACEHOLDER')) ?? []
 )
@@ -370,11 +424,11 @@ const detailSections = computed(() => {
   if (item.value?.ingredients?.length) {
     sections.push({ name: 'Ingredients', items: item.value.ingredients })
   }
-  if (item.value?.dietaryNotes?.length) {
-    sections.push({ name: 'Dietary notes', items: item.value.dietaryNotes })
+  if (item.value?.dietary_notes?.length) {
+    sections.push({ name: 'Dietary notes', items: item.value.dietary_notes })
   }
-  if (item.value?.servingNote) {
-    sections.push({ name: 'Serving note', items: [item.value.servingNote] })
+  if (item.value?.serving_note) {
+    sections.push({ name: 'Serving note', items: [item.value.serving_note] })
   }
   return sections
 })
@@ -402,7 +456,7 @@ const diningNotes = computed(() => [
   }
 ])
 
-const relatedItems = ref([]) // To be implemented with a related items API if needed
+const relatedItems = ref<MenuItemType[]>([]) // To be implemented with a related items API if needed
 
 const approvedReviews = ref<Review[]>([])
 const reviewsLoading = ref(true)
@@ -410,8 +464,8 @@ const reviewSubmitting = ref(false)
 const reviewMessage = ref('')
 const reviewError = ref(false)
 const turnstileToken = ref('')
-const turnstileContainer = ref(null)
-const turnstileWidgetId = ref(null)
+const turnstileContainer = ref<HTMLElement | null>(null)
+const turnstileWidgetId = ref<string | null>(null)
 const reviewForm = reactive({
   author: '',
   rating: 5,
@@ -433,9 +487,9 @@ const reviewSummary = computed(() => {
   }
 })
 
-const reviewDateTime = review => review.datetime ?? review.createdAt ?? ''
+const reviewDateTime = (review: Review) => review.datetime ?? review.createdAt ?? ''
 
-const reviewDateLabel = review => {
+const reviewDateLabel = (review: Review) => {
   if (review.date) return review.date
   if (!review.createdAt) return ''
   return new Intl.DateTimeFormat('en-US', {
@@ -453,7 +507,7 @@ const loadReviews = async () => {
   if (!item.value?.slug) return
   reviewsLoading.value = true
   try {
-    const response = await $fetch('/api/reviews', {
+    const response = await $fetch<ReviewsResponse>('/api/reviews', {
       query: { slug: item.value.slug }
     })
     approvedReviews.value = response.reviews ?? []
@@ -488,7 +542,7 @@ const submitReview = async () => {
   reviewError.value = false
 
   try {
-    const response = await $fetch('/api/reviews', {
+    const response = await $fetch<SubmitReviewResponse>('/api/reviews', {
       method: 'POST',
       body: {
         menuItemSlug: item.value.slug,
@@ -504,7 +558,7 @@ const submitReview = async () => {
     resetReviewForm()
   } catch (error) {
     reviewError.value = true
-    reviewMessage.value = error?.data?.error ?? 'We could not submit your review. Please try again.'
+    reviewMessage.value = (error as ReviewSubmitError)?.data?.error ?? 'We could not submit your review. Please try again.'
   } finally {
     reviewSubmitting.value = false
   }
@@ -516,7 +570,7 @@ const renderTurnstile = () => {
 
   turnstileWidgetId.value = window.turnstile.render(turnstileContainer.value, {
     sitekey: turnstileSiteKey.value,
-    callback: token => {
+    callback: (token: string) => {
       turnstileToken.value = token
     },
     'expired-callback': () => {
@@ -572,8 +626,8 @@ const schemaGraph = computed(() => {
     item.value.preparation
       ? { '@type': 'PropertyValue', name: 'Preparation', value: item.value.preparation }
       : null,
-    item.value.servingNote
-      ? { '@type': 'PropertyValue', name: 'Serving note', value: item.value.servingNote }
+    item.value.serving_note
+      ? { '@type': 'PropertyValue', name: 'Serving note', value: item.value.serving_note }
       : null,
     visibleAllergens.value.length > 0
       ? { '@type': 'PropertyValue', name: 'Allergens', value: visibleAllergens.value.join(', ') }
@@ -581,12 +635,12 @@ const schemaGraph = computed(() => {
     item.value.ingredients?.length
       ? { '@type': 'PropertyValue', name: 'Ingredients', value: item.value.ingredients.join(', ') }
       : null,
-    item.value.dietaryNotes?.length
-      ? { '@type': 'PropertyValue', name: 'Dietary notes', value: item.value.dietaryNotes.join(', ') }
+    item.value.dietary_notes?.length
+      ? { '@type': 'PropertyValue', name: 'Dietary notes', value: item.value.dietary_notes.join(', ') }
       : null
-  ].filter(Boolean)
+  ].filter((property): property is PropertyValue => property !== null)
 
-  const menuItemSchema = {
+  const menuItemSchema: MenuItemSchema = {
     '@type': 'MenuItem',
     name: item.value.name,
     description: item.value.description,

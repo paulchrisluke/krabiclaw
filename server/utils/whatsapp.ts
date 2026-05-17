@@ -42,6 +42,7 @@ export type WhatsAppTemplate =
   | 'low_credits'
   | 'new_contact_msg'
   | 'new_reservation'
+  | 'reservation_cancelled'
   | 'domain_update'
   | 'otp_code'
 
@@ -124,6 +125,20 @@ const TEMPLATES: Record<
   }),
   new_reservation: (v) => ({
     name: 'new_reservation',
+    language: 'en_US',
+    components: [{
+      type: 'body',
+      parameters: [
+        { type: 'text', text: v.guest_name ?? 'A guest' },
+        { type: 'text', text: v.date ?? '' },
+        { type: 'text', text: v.time ?? '' },
+        { type: 'text', text: v.guests ?? '?' },
+        { type: 'text', text: v.phone ?? '' },
+      ],
+    }],
+  }),
+  reservation_cancelled: (v) => ({
+    name: 'reservation_cancelled',
     language: 'en_US',
     components: [{
       type: 'body',

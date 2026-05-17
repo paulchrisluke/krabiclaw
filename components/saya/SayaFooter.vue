@@ -193,7 +193,7 @@ const locations = computed(() =>
     let phone = loc.phone
     // Fallback if placeholder-like
     if (!phone || phone.includes('example.com')) {
-      phone = site.value?.config?.phone || null
+      phone = site?.config?.phone || null
     }
     return {
       ...loc,

@@ -159,11 +159,14 @@
 </template>
 
 <script setup>
-definePageMeta({ layout: 'saya' })
 import { getFieldDef } from '~/config/content-registry'
 import { usePageContent } from '~/composables/usePageContent'
+import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
+
+definePageMeta({ layout: 'saya' })
 
 const { getField } = usePageContent('reservations')
+const { site, siteId } = useTenantSite()
 
 const timeSlots = ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00']
 const timeSelectOptions = timeSlots.map(time => ({ label: time, value: time }))
@@ -196,8 +199,8 @@ if (!process.client) {
 
 // Defaults in computed to avoid parse errors from embedded HTML in template expressions
 // Defaults to site config if available
-const contactPhone = computed(() => getField('contact.phone', site.value?.config?.phone || '+66 81 154 3606'))
-const contactEmail = computed(() => getField('contact.email', site.value?.config?.email || 'info@kikuzuki-thailand.com'))
+const contactPhone = computed(() => getField('contact.phone', site?.config?.phone || '+66 81 154 3606'))
+const contactEmail = computed(() => getField('contact.email', site?.config?.email || 'info@kikuzuki-thailand.com'))
 const reservationForm = ref({
   name: '',
   email: '',
@@ -226,7 +229,6 @@ const validateReservation = (state) => {
   return errors
 }
 
-const { site, siteId } = useTenantSite()
 const toast = useToast()
 const submitting = ref(false)
 const submitted = ref(false)
@@ -242,12 +244,13 @@ const handleReservation = async () => {
     })
     lastSubmission.value = { 
       ...reservationForm.value,
-      id: (res as any).id 
+      id: res?.id,
+      cancellationToken: res?.cancellationToken
     }
     submitted.value = true
     reservationForm.value = { name: '', email: '', phone: '', date: '', time: '', guests: '', requests: '' }
     toast.add({ description: 'Reservation request received! We\'ll confirm shortly.', color: 'success' })
-  } catch (err: any) {
+  } catch (err) {
     toast.add({ description: err?.data?.error ?? 'Failed to submit. Please try again.', color: 'error' })
   } finally {
     submitting.value = false
@@ -255,11 +258,9 @@ const handleReservation = async () => {
 }
 
 const cancelUrl = computed(() => {
-  if (!lastSubmission.value?.id) return null
-  return `/reservations/cancel?id=${lastSubmission.value.id}&email=${encodeURIComponent(lastSubmission.value.email)}`
+  if (!lastSubmission.value?.id || !lastSubmission.value?.cancellationToken) return null
+  return `/reservations/cancel?id=${lastSubmission.value.id}&token=${encodeURIComponent(lastSubmission.value.cancellationToken)}`
 })
-
-import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
 const config = useRuntimeConfig()
 const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '').replace(/\/$/, '') || 'krabiclaw.com'
