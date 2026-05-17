@@ -14,6 +14,13 @@ const hashIp = async (ip: string) => {
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
+const hashEmail = async (email: string) => {
+  if (!email) return null
+  const bytes = new TextEncoder().encode(email.toLowerCase().trim())
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 function escapeHtml(text: string): string {
   const map: Record<string, string> = {
     '&': '&amp;',
@@ -87,7 +94,8 @@ export default defineEventHandler(async (event) => {
   const db = cloudflareEnv(event).REVIEWS_DB
   const clientIp = getClientIp(event)
   const hourKey = `rate:ip:${clientIp}:${Math.floor(Date.now() / 3600000)}`
-  const dateKey = `rate:email:${email}:${new Date().toISOString().split('T')[0]}`
+  const emailHash = await hashEmail(email)
+  const dateKey = `rate:email:${emailHash}:${new Date().toISOString().split('T')[0]}`
 
   if (db) {
     let ipIncremented = true
