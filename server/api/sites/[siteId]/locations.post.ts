@@ -1,7 +1,7 @@
 // Create a business location for a site
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { updateSubscriptionQuantity } from '~/server/utils/billing'
+import { getOrganizationEntitlements, updateSubscriptionQuantity } from '~/server/utils/billing'
 
 type JsonPrimitive = string | number | boolean | null
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
@@ -167,6 +167,14 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Unable to verify active locations' }, { status: 500 })
     }
 
+    const entitlements = await getOrganizationEntitlements(env, db, site.organization_id)
+    const maxLocations = typeof entitlements.max_locations === 'number' ? entitlements.max_locations : 1
+    if (maxLocations > 0 && activeLocationCount >= maxLocations) {
+      return jsonResponse({
+        error: 'Location limit reached. Upgrade to Pro to add more locations.',
+        code: 'LOCATION_LIMIT_REACHED'
+      }, { status: 402 })
+    }
 
     // Validate hero_image_asset_id if present
     if (body.hero_image_asset_id) {

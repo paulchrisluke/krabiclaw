@@ -61,7 +61,7 @@
       <MediaLibraryGrid
         v-if="panel === 'library'"
         :site-id="siteId"
-        :selected-id="modelValue"
+        :selected-id="pendingAsset?.id ?? modelValue"
         :accept="accept"
         :location-id="locationId"
         @select="onSelect"

@@ -244,38 +244,6 @@
 
         <UCard>
           <template #header>
-            <div class="flex items-center justify-between">
-              <h2 class="font-semibold text-highlighted">Hero Media</h2>
-              <UButton v-if="heroSaved" size="xs" color="primary" variant="soft" icon="i-heroicons-check">Saved</UButton>
-            </div>
-          </template>
-
-          <div class="grid gap-4 sm:grid-cols-2">
-            <UFormField label="Hero Image">
-              <MediaPicker
-                v-model="heroImageAssetId"
-                :site-id="siteId"
-                :location-id="locationId"
-                accept="image"
-                title="Location hero image"
-                @change="debouncedSaveHeroMedia"
-              />
-            </UFormField>
-            <UFormField label="Hero Video">
-              <MediaPicker
-                v-model="heroVideoAssetId"
-                :site-id="siteId"
-                :location-id="locationId"
-                accept="video"
-                title="Location hero video"
-                @change="debouncedSaveHeroMedia"
-              />
-            </UFormField>
-          </div>
-        </UCard>
-
-        <UCard>
-          <template #header>
             <div class="flex items-center justify-between gap-3">
               <h2 class="font-semibold text-highlighted">Manual Reviews</h2>
               <UButton size="sm" icon="i-heroicons-plus" @click="startNewReview">Add review</UButton>
@@ -430,10 +398,6 @@ const workspaceActions = computed(() => [
   { label: 'Edit Brand Content', icon: 'i-heroicons-building-storefront', to: `/dashboard/sites/${siteId}/content` }
 ])
 
-const heroImageAssetId = ref<string | null>(null)
-const heroVideoAssetId = ref<string | null>(null)
-const heroSaved = ref(false)
-let heroSaveTimeout: ReturnType<typeof setTimeout> | null = null
 const detailsSaving = ref(false)
 const detailsSaved = ref(false)
 const reviewsLoading = ref(false)
@@ -487,11 +451,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 watch(location, (loc) => {
-  if (loc) {
-    heroImageAssetId.value = loc.hero_image_asset_id ?? null
-    heroVideoAssetId.value = loc.hero_video_asset_id ?? null
-    fillDetailsForm(loc)
-  }
+  if (loc) fillDetailsForm(loc)
 })
 
 function fillDetailsForm(loc: BusinessLocation) {
@@ -574,28 +534,6 @@ async function saveLocationDetails() {
   } finally {
     detailsSaving.value = false
   }
-}
-
-async function saveHeroMedia() {
-  try {
-    await $fetch(`/api/sites/${siteId}/locations/${locationId}`, {
-      method: 'PATCH',
-      body: { hero_image_asset_id: heroImageAssetId.value, hero_video_asset_id: heroVideoAssetId.value },
-    })
-    heroSaved.value = true
-    setTimeout(() => { heroSaved.value = false }, 2000)
-  } catch (err) {
-    toast.add({ description: getErrorMessage(err, 'Failed to save'), color: 'error' })
-  }
-}
-
-function debouncedSaveHeroMedia() {
-  if (heroSaveTimeout) {
-    clearTimeout(heroSaveTimeout)
-  }
-  heroSaveTimeout = setTimeout(() => {
-    saveHeroMedia()
-  }, 500)
 }
 
 const connectGoogleBusiness = async () => {

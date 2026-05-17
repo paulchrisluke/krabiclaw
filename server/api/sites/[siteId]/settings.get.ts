@@ -62,6 +62,13 @@ export default defineEventHandler(async (event) => {
 
     const siteConfig = await getConfig(db, site.organization_id as string, site.id as string)
 
+    const maxLocationsRow = await db.prepare(`
+      SELECT value FROM organization_entitlements
+      WHERE organization_id = ? AND key = 'max_locations'
+      LIMIT 1
+    `).bind(site.organization_id).first<{ value: string }>()
+    const max_locations = maxLocationsRow ? (parseInt(maxLocationsRow.value, 10) || 1) : 1
+
     const settings = {
       id: site.id,
       organization_id: site.organization_id,
@@ -79,6 +86,7 @@ export default defineEventHandler(async (event) => {
       brand_color: siteConfig.brand_color || '',
       default_currency: siteConfig.default_currency || 'THB',
       url_structure: siteSettings.url_structure || 'location_subdirectories',
+      max_locations,
       last_published_at: site.last_published_at,
       created_at: site.created_at,
       updated_at: site.updated_at
