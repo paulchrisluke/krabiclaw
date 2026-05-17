@@ -24,7 +24,7 @@
         <div class="flex flex-col gap-2">
           <h1 class="saya-display-md text-default">What guests are <em class="saya-italic">saying</em></h1>
           <p class="text-sm text-muted">
-            Reviews · {{ location?.title }}
+            {{ location?.title }}
           </p>
         </div>
       </header>
@@ -211,7 +211,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
 const { data: locData } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}`,

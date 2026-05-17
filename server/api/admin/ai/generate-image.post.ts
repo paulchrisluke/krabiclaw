@@ -96,9 +96,15 @@ export default defineEventHandler(async (event) => {
 
   const assetId = crypto.randomUUID()
   try {
-    // Platform owners may have organization/site IDs on their user object in this setup
-    const organizationId = (session.user as any).organization_id || (session.user as any).organizationId
-    const siteId = (session.user as any).site_id || (session.user as any).siteId
+    // Platform owners may have organization/site IDs on their user object in this setup.
+    const user = session.user as {
+      organization_id?: string
+      organizationId?: string
+      site_id?: string
+      siteId?: string
+    }
+    const organizationId = user.organization_id || user.organizationId
+    const siteId = user.site_id || user.siteId
 
     if (!organizationId || !siteId) {
       console.error('generate_image_missing_context', { userId: session.user.id, organizationId, siteId })

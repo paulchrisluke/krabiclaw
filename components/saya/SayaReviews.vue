@@ -64,9 +64,18 @@
       </UCard>
 
     </div>
+
+    <!-- Empty state -->
+    <div v-if="displayedReviews.length === 0" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default bg-muted/20 py-20 text-center">
+      <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
+        <UIcon name="i-heroicons-chat-bubble-bottom-center-text" class="size-7" />
+      </div>
+      <h3 class="mt-6 saya-display saya-italic text-3xl text-default">No reviews yet.</h3>
+      <p class="mt-2 max-w-sm text-sm text-muted">Be the first to share your experience with us.</p>
+    </div>
     
     <div v-if="showViewMore && reviews.length > 0" class="mt-12 text-center">
-      <UButton to="/reviews" color="neutral" variant="outline" size="xl">
+      <UButton to="/reviews" color="primary" variant="outline" size="xl">
         View All Reviews
       </UButton>
     </div>

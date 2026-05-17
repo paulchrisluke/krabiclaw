@@ -14,20 +14,34 @@
           <div>
             <h2 class="text-2xl font-bold text-default mb-6">Send a Message</h2>
             <UCard class="rounded-lg bg-muted">
-              <UForm :state="tenantForm" :validate="validateTenantContact" class="space-y-5" @submit="handleTenantContact">
-                <UFormField label="Name" name="name" required>
-                  <UInput v-model="tenantForm.name" size="lg" placeholder="Your name" class="w-full" />
-                </UFormField>
-                <UFormField label="Email" name="email" required>
-                  <UInput v-model="tenantForm.email" type="email" size="lg" placeholder="you@example.com" class="w-full" />
-                </UFormField>
-                <UFormField label="Message" name="message" required>
-                  <UTextarea v-model="tenantForm.message" size="lg" :rows="5" placeholder="How can we help?" class="w-full" />
-                </UFormField>
-                <UButton type="submit" color="neutral" variant="solid" size="xl" block :loading="tenantSubmitting" :disabled="tenantSubmitted">
-                  {{ tenantSubmitted ? 'Message sent!' : 'Send Message' }}
-                </UButton>
-              </UForm>
+            <UForm v-if="!tenantSubmitted" :state="tenantForm" :validate="validateTenantContact" class="space-y-5" @submit="handleTenantContact">
+              <UFormField label="Name" name="name" required>
+                <UInput v-model="tenantForm.name" size="lg" placeholder="Your name" class="w-full" />
+              </UFormField>
+              <UFormField label="Email" name="email" required>
+                <UInput v-model="tenantForm.email" type="email" size="lg" placeholder="you@example.com" class="w-full" />
+              </UFormField>
+              <UFormField label="Message" name="message" required>
+                <UTextarea v-model="tenantForm.message" size="lg" :rows="5" placeholder="How can we help?" class="w-full" />
+              </UFormField>
+              <UButton type="submit" color="primary" variant="solid" size="xl" block :loading="tenantSubmitting">
+                Send Message
+              </UButton>
+            </UForm>
+
+            <!-- Success State -->
+            <div v-else class="py-12 text-center">
+              <div class="mb-6 flex justify-center">
+                <div class="flex size-16 items-center justify-center rounded-full bg-green-500/10 text-green-500">
+                  <UIcon name="i-heroicons-check-circle" class="size-10" />
+                </div>
+              </div>
+              <h2 class="saya-display saya-italic text-3xl text-default">Thank you, {{ lastContact?.name }}!</h2>
+              <p class="mt-4 text-muted">We've received your message and will get back to you shortly.</p>
+              <div class="mt-10">
+                <UButton color="primary" variant="soft" @click="tenantSubmitted = false">Send another message</UButton>
+              </div>
+            </div>
             </UCard>
           </div>
 
@@ -51,13 +65,13 @@
               </div>
             </UCard>
             <div class="space-y-3">
-              <UButton v-if="contactPhone" :to="`tel:${contactPhone.replace(/\s/g, '')}`" color="neutral" variant="outline" class="w-full">
+              <UButton v-if="contactPhone" :to="`tel:${contactPhone.replace(/\s/g, '')}`" color="primary" variant="outline" class="w-full">
                 Call {{ contactPhone }}
               </UButton>
-              <UButton to="/reservations" color="neutral" variant="outline" class="w-full">
+              <UButton to="/reservations" color="primary" variant="outline" class="w-full">
                 Make a Reservation
               </UButton>
-              <UButton to="/menu" color="neutral" variant="outline" class="w-full">
+              <UButton to="/menu" color="primary" variant="outline" class="w-full">
                 View Menu
               </UButton>
             </div>
@@ -131,13 +145,14 @@ const toast = useToast()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // ── Tenant contact info ──────────────────────────────────
-const contactPhone = computed(() => getField('contact.phone', ''))
-const contactEmail = computed(() => getField('contact.email', ''))
-const contactAddress = computed(() => getField('contact.address', ''))
+const contactPhone = computed(() => getField('contact.phone'))
+const contactEmail = computed(() => getField('contact.email'))
+const contactAddress = computed(() => getField('contact.address'))
 
 const tenantForm = ref({ name: '', email: '', message: '' })
 const tenantSubmitting = ref(false)
 const tenantSubmitted = ref(false)
+const lastContact = ref(null)
 
 const validateTenantContact = (state) => {
   const errors = []
@@ -155,6 +170,7 @@ const handleTenantContact = async () => {
       method: 'POST',
       body: tenantForm.value
     })
+    lastContact.value = { ...tenantForm.value }
     tenantSubmitted.value = true
     tenantForm.value = { name: '', email: '', message: '' }
     toast.add({ description: 'Message sent! We\'ll be in touch soon.', color: 'success' })

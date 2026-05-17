@@ -107,7 +107,7 @@
               v-if="location.maps_url"
               :to="location.maps_url"
               target="_blank"
-              color="neutral"
+              color="primary"
               variant="outline"
               size="sm"
               class="rounded-full"
@@ -131,7 +131,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
 const { data, pending } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}`,

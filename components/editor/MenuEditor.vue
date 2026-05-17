@@ -317,6 +317,7 @@
 <script setup lang="ts">
 import { useMenuEditor } from '~/composables/useMenuEditor'
 import { useToast } from '~/composables/useToast'
+import type { MenuItem } from '~/server/types/menu'
 
 const props = defineProps<{
   siteId: string
@@ -445,7 +446,7 @@ const editForm = reactive({
   serving_note: ''
 })
 
-const openEditItem = (item: any) => {
+const openEditItem = (item: MenuItem) => {
   expandedItemId.value = item.id
   editForm.name = item.name ?? ''
   editForm.description = item.description ?? ''

@@ -148,6 +148,14 @@ App available at http://localhost:8788
 - Use the login/signup button to start Google OAuth
 - Or test directly: http://localhost:8788/api/auth/sign-in/social?provider=google
 
+## Automated Tests
+
+```bash
+yarn test
+```
+
+Runs the Playwright end-to-end suite against Nuxt dev on port 3000. The suite covers the platform home/blog pages, the `demo.localhost` tenant site and location pages, reservations/contact, and the dev-login dashboard smoke path. For local tenant coverage, keep local D1 current with `yarn schema:local` and `yarn seed:local`.
+
 ### Apply to production
 
 ```bash

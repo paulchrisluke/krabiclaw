@@ -637,6 +637,9 @@ CREATE TABLE IF NOT EXISTS reservation_submissions (
   requests TEXT,
   status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'confirmed', 'cancelled', 'completed')),
   ip_hash TEXT,
+  cancellation_token_hash TEXT,
+  cancellation_token_expires_at TEXT,
+  cancellation_token_used_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
@@ -644,6 +647,28 @@ CREATE TABLE IF NOT EXISTS reservation_submissions (
 
 CREATE INDEX IF NOT EXISTS idx_contact_submissions_site ON contact_submissions(site_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_reservation_submissions_site ON reservation_submissions(site_id, date, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reservation_submissions_cancel_token_hash
+  ON reservation_submissions(cancellation_token_hash)
+  WHERE cancellation_token_hash IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_reservation_submissions_cancel_token
+  ON reservation_submissions(site_id, id, cancellation_token_hash);
+
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key TEXT PRIMARY KEY,
+  count INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  expires_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limits_expires ON rate_limits(expires_at);
+
+-- Trigger to prune expired rate limits
+CREATE TRIGGER IF NOT EXISTS trg_prune_rate_limits
+AFTER INSERT ON rate_limits
+WHEN abs(random()) % 100 < 5
+BEGIN
+  DELETE FROM rate_limits WHERE expires_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
+END;
 
 --------------------------------------------------------------------------------
 -- Notifications

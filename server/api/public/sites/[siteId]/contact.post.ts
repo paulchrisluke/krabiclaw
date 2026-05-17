@@ -1,5 +1,5 @@
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
+import { notifyContactSubmitted } from '~/server/utils/notifications'
 
 const hashIp = async (ip: string) => {
   if (!ip) return null
@@ -32,8 +32,8 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Message must be at least 10 characters.' }, { status: 400 })
 
   const site = await db.prepare(
-    'SELECT id, organization_id FROM sites WHERE id = ? AND status = ? LIMIT 1'
-  ).bind(siteId, 'active').first()
+    'SELECT id, organization_id, brand_name FROM sites WHERE id = ? AND status = ? LIMIT 1'
+  ).bind(siteId, 'active').first<{ id: string; organization_id: string; brand_name?: string | null }>()
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const id = crypto.randomUUID()
@@ -44,16 +44,24 @@ export default defineEventHandler(async (event) => {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).bind(id, site.organization_id, siteId, name, email, message, ipHash).run()
 
-  getOrgWhatsAppPhone(db, site.organization_id as string, siteId).then((phone) => {
-    if (!phone) return
-    sendWhatsAppNotification(env, db, {
-      organizationId: site.organization_id as string,
+  try {
+    await notifyContactSubmitted(env, db, {
+      organizationId: site.organization_id,
       siteId,
-      toPhone: phone,
-      template: 'new_contact_msg',
-      vars: { guest_name: name, email, message_preview: message },
-    }).catch(console.error)
-  }).catch(console.error)
+      siteName: site.brand_name,
+      contactId: id,
+      guestName: name,
+      email,
+      message
+    })
+  } catch (error) {
+    console.error('contact_notification_failed', {
+      organizationId: site.organization_id,
+      siteId,
+      contactId: id,
+      error: error instanceof Error ? error.message : String(error)
+    })
+  }
 
   return jsonResponse({
     success: true,

@@ -24,19 +24,19 @@
           <!-- Featured Post -->
           <NuxtLink :to="`/blog/${posts[0].slug}`" class="block mb-12">
             <div class="bg-elevated rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
-              <div v-if="resolveMedia(posts[0]).url" class="h-64 overflow-hidden">
-                <video
-                  v-if="resolveMedia(posts[0]).isVideo"
-                  :src="resolveMedia(posts[0]).url"
+                  <div v-if="resolveMedia(posts[0]).url" class="h-64 overflow-hidden">
+                    <video
+                      v-if="resolveMedia(posts[0]).isVideo"
+                      :src="resolveMedia(posts[0]).url ?? undefined"
                   autoplay
                   muted
                   loop
                   playsinline
                   class="h-full w-full object-cover"
                 />
-                <img
-                  v-else
-                  :src="resolveMedia(posts[0]).url"
+                    <img
+                      v-else
+                      :src="resolveMedia(posts[0]).url ?? undefined"
                   :alt="posts[0].title"
                   class="h-full w-full object-cover"
                 />
@@ -72,7 +72,7 @@
                   <div v-if="resolveMedia(post).url" class="h-48 overflow-hidden">
                     <video
                       v-if="resolveMedia(post).isVideo"
-                      :src="resolveMedia(post).url"
+	                      :src="resolveMedia(post).url ?? undefined"
                       autoplay
                       muted
                       loop
@@ -81,7 +81,7 @@
                     />
                     <img
                       v-else
-                      :src="resolveMedia(post).url"
+	                      :src="resolveMedia(post).url ?? undefined"
                       :alt="post.title"
                       class="h-full w-full object-cover"
                     />
@@ -173,7 +173,7 @@ const apiUrl = computed(() =>
 
 const { data, pending } = useAsyncData(
   () => `blog-${activeCategory.value ?? 'all'}`,
-  () => $fetch(apiUrl.value),
+  () => $fetch<ApiValue>(apiUrl.value as string),
   { watch: [activeCategory] }
 )
 
@@ -213,8 +213,6 @@ async function handleNewsletterSubmit() {
     subscribing.value = false
   }
 }
-
-import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl

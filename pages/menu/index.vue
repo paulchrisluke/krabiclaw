@@ -19,7 +19,7 @@
         </NuxtLink>
       </div>
 
-      <UButton to="/locations" color="neutral" variant="solid" class="rounded-full">
+      <UButton to="/locations" color="primary" variant="solid" class="rounded-full">
         View all locations
       </UButton>
     </div>

@@ -1,19 +1,19 @@
 <template>
-  <nav aria-label="Breadcrumb" class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-    <ol class="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap">
-      <li v-for="(crumb, i) in crumbs" :key="crumb.to" class="flex items-center gap-1.5">
+  <nav aria-label="Breadcrumb" class="px-4 py-8 sm:px-6 lg:px-8">
+    <ol class="flex items-center gap-2 overflow-x-auto whitespace-nowrap no-scrollbar">
+      <li v-for="(crumb, i) in crumbs" :key="crumb.to" class="flex items-center gap-2">
         <NuxtLink
           v-if="i < crumbs.length - 1"
           :to="crumb.to"
-          class="inline-flex items-center rounded-full bg-elevated/50 px-3 py-1.5 text-xs font-medium text-muted backdrop-blur-sm transition-all hover:bg-elevated hover:text-highlighted"
+          class="inline-flex items-center rounded-full bg-elevated/80 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-muted backdrop-blur-md transition-all hover:bg-elevated hover:text-default"
         >
           {{ crumb.label }}
         </NuxtLink>
-        <span v-else class="inline-flex items-center rounded-full bg-elevated px-3 py-1.5 text-xs font-semibold text-highlighted shadow-sm" aria-current="page">
+        <span v-else class="inline-flex items-center rounded-full bg-primary px-4 py-2 text-[10px] font-bold uppercase tracking-widest shadow-sm" style="color: var(--brand-text-color, white)" aria-current="page">
           {{ crumb.label }}
         </span>
-        <span v-if="i < crumbs.length - 1" class="text-dimmed" aria-hidden="true">
-          <UIcon name="i-heroicons-chevron-right" class="size-3.5" />
+        <span v-if="i < crumbs.length - 1" class="text-muted/30" aria-hidden="true">
+          <UIcon name="i-heroicons-chevron-right" class="size-3" />
         </span>
       </li>
     </ol>

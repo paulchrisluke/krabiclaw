@@ -28,6 +28,7 @@ const brandTextColor = computed(() => getContrastColor(brandColor.value))
 const themeStyles = computed(() => {
   if (!brandColor.value) return {}
   return {
+    '--brand-color': brandColor.value,
     '--ui-primary': brandColor.value,
     '--color-primary': brandColor.value,
     '--brand-text-color': brandTextColor.value
@@ -36,7 +37,13 @@ const themeStyles = computed(() => {
 </script>
 
 <style>
-/* Tenant-specific base styles */
+/* Nuxt UI v3 uses these variables for the primary color palette */
+.saya-theme {
+  --ui-primary: var(--brand-color);
+  --color-primary: var(--brand-color);
+}
+
+/* Tenant-specific base styles for accessibility */
 .saya-theme .u-button-solid-primary,
 .saya-theme .u-button-solid-primary *,
 .saya-theme .u-button--solid.u-button--primary,

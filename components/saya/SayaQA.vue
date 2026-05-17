@@ -44,32 +44,17 @@
       </div>
 
       <!-- Placeholder Q&A cards when no items -->
-      <template v-if="qa.length === 0 && showEmptyState">
-        <div v-for="i in 3" :key="`placeholder-${i}`" class="bg-default border border-default rounded-3xl p-8 shadow-sm">
-          <div class="flex items-start gap-4 mb-6">
-            <div class="h-10 w-10 shrink-0 rounded-full bg-muted flex items-center justify-center text-muted font-bold text-sm">
-              Q
-            </div>
-            <div class="flex-1">
-              <div class="h-6 bg-muted rounded animate-pulse mb-2"></div>
-              <div class="h-4 bg-muted rounded animate-pulse w-32"></div>
-            </div>
-          </div>
-          <div class="flex items-start gap-4 bg-muted rounded-2xl p-6">
-            <div class="h-8 w-8 shrink-0 rounded-full bg-inverted animate-pulse flex items-center justify-center text-inverted font-bold text-xs">
-              A
-            </div>
-            <div class="flex-1 space-y-2">
-              <div class="h-3 bg-muted rounded animate-pulse"></div>
-              <div class="h-3 bg-muted rounded animate-pulse w-4/5"></div>
-            </div>
-          </div>
+      <div v-if="qa.length === 0 && showEmptyState" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default bg-muted/20 py-20 text-center">
+        <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
+          <UIcon name="i-heroicons-question-mark-circle" class="size-7" />
         </div>
-      </template>
+        <h3 class="mt-6 saya-display saya-italic text-3xl text-default">No questions yet.</h3>
+        <p class="mt-2 max-w-sm text-sm text-muted">Got a question? Ask us anything about our menu or service.</p>
+      </div>
     </div>
 
     <div v-if="showViewMore && limit && qa.length > limit" class="mt-12 text-center">
-      <UButton to="/qa" color="neutral" variant="outline" size="xl">
+      <UButton to="/qa" color="primary" variant="outline" size="xl">
         View All Q&A
       </UButton>
     </div>

@@ -29,7 +29,7 @@
         <div class="flex flex-col gap-2">
           <h1 class="saya-display-md text-default">Inside <em class="saya-italic">the room</em></h1>
           <p class="text-sm text-muted">
-            {{ photos.length }} photos · {{ location?.title }}
+            {{ location?.title }}
           </p>
         </div>
       </header>
@@ -50,9 +50,6 @@
           @click="activeCategory = cat.key"
         >
           {{ cat.label }}
-          <span
-            class="ml-1.5 tabular-nums text-[10px] opacity-50"
-          >{{ counts[cat.key] ?? 0 }}</span>
 
           <!-- Active indicator -->
           <div 
@@ -85,9 +82,9 @@
             class="block w-full transition-opacity duration-200 group-hover:opacity-80"
             loading="lazy"
           >
-          <div class="absolute inset-0 flex items-end bg-linear-to-t from-black/50 to-transparent p-4 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-            <span class="saya-eyebrow rounded-full bg-white/18 px-2.5 py-1 text-xs text-white backdrop-blur-sm">
-              {{ photo.category || '—' }}
+          <div class="absolute inset-0 flex items-end bg-linear-to-t from-black/60 to-transparent p-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+            <span class="saya-eyebrow rounded-full bg-white/25 px-4 py-1.5 text-[10px] font-bold tracking-widest text-white backdrop-blur-md border border-white/20">
+              {{ photo.category || 'Gallery' }}
             </span>
           </div>
         </button>
@@ -163,7 +160,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
 const { data: locData } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}`,
@@ -186,18 +183,6 @@ const cats = [
   { key: 'TEAM', label: 'Team' }
 ]
 const activeCategory = ref('ALL')
-
-const counts = computed(() => {
-  const m: Record<string, number> = { ALL: photos.value.length }
-  photos.value.forEach((p: ApiValue) => {
-    if (p.category && typeof p.category === 'string') {
-      const trimmed = p.category.trim()
-      if (!trimmed) return
-      m[trimmed] = (m[trimmed] ?? 0) + 1
-    }
-  })
-  return m
-})
 
 const sorted = computed(() => {
   const filtered = activeCategory.value === 'ALL' ? photos.value : photos.value.filter((p: ApiValue) => p.category === activeCategory.value)

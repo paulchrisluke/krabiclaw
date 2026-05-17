@@ -19,7 +19,7 @@
       <section class="relative min-h-160 overflow-hidden">
         <video
           v-if="heroMedia.isVideo"
-          :src="heroMedia.url"
+          :src="heroMedia.url ?? undefined"
           autoplay
           muted
           loop
@@ -64,7 +64,7 @@
               <UButton
                 to="/reservations"
                 size="lg"
-                color="neutral"
+                color="primary"
                 class="rounded-full bg-white! text-black! hover:bg-zinc-100!"
               >
                 Reserve a table
@@ -113,11 +113,11 @@
           </div>
           <div>
             <p class="saya-eyebrow mb-4 text-muted">Contact</p>
-            <a v-if="location.phone" :href="`tel:${location.phone}`" class="block text-sm text-default no-underline hover:underline">
-              {{ location.phone }}
+            <a v-if="displayPhone" :href="`tel:${displayPhone.replace(/\s/g, '')}`" class="block text-sm text-default no-underline hover:underline">
+              {{ displayPhone }}
             </a>
-            <a v-if="location.email" :href="`mailto:${location.email}`" class="mt-2 block text-sm text-muted no-underline hover:underline">
-              {{ location.email }}
+            <a v-if="displayEmail" :href="`mailto:${displayEmail}`" class="mt-2 block text-sm text-muted no-underline hover:underline break-all">
+              {{ displayEmail }}
             </a>
           </div>
         </div>
@@ -230,7 +230,7 @@
     <div v-else class="mx-auto max-w-xl px-4 py-24 text-center">
       <UIcon name="i-heroicons-map-pin" class="mx-auto mb-4 size-12 text-muted" />
       <h1 class="saya-display-sm text-default">Location Not Found</h1>
-      <UButton to="/locations" color="neutral" variant="solid" class="mt-8 rounded-full">View all locations</UButton>
+      <UButton to="/locations" color="primary" variant="solid" class="mt-8 rounded-full">View all locations</UButton>
     </div>
   </div>
 </template>
@@ -246,7 +246,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.value?.name || (site as ApiValue)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
 // Fetch location
 const { data, pending } = await useFetch(
@@ -254,6 +254,18 @@ const { data, pending } = await useFetch(
   { key: () => `public-location-${siteId}-${slug.value}`, default: () => ({ location: null }) }
 )
 const location = computed(() => (data as ApiValue).value?.location ?? null)
+
+// Contact fallbacks to site config if location info is missing or placeholder-like
+const displayPhone = computed(() => {
+  const p = location.value?.phone
+  if (p && !p.includes('example.com')) return p
+  return (site as ApiValue)?.config?.phone || null
+})
+const displayEmail = computed(() => {
+  const e = location.value?.email
+  if (e && !e.includes('example.com') && !e.includes('krabiclaw.com')) return e
+  return (site as ApiValue)?.config?.email || null
+})
 
 // Fetch reviews preview (first 3)
 const { data: reviewsData } = await useFetch(

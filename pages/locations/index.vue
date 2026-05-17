@@ -100,7 +100,7 @@
         <div v-if="isAuthenticated" class="mt-12 text-center">
           <UButton
             :to="`/dashboard/sites/${siteId}/launch`"
-            color="neutral"
+            color="primary"
             variant="solid"
             class="rounded-full"
           >
