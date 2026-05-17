@@ -6,6 +6,7 @@ interface NotificationEnv {
   RESEND_API_KEY?: string
   WHATSAPP_PHONE_NUMBER_ID?: string
   WHATSAPP_ACCESS_TOKEN?: string
+  EMAIL_FROM?: string
 }
 
 interface SiteContext {
@@ -79,13 +80,7 @@ async function getOwnerNotificationChannels(
 
   if (!row?.value) return hasWhatsAppPhone ? ['whatsapp'] : ['email']
 
-  let rawChannels: string[]
-  try {
-    const parsed = JSON.parse(row.value)
-    rawChannels = Array.isArray(parsed) ? parsed.map(String) : String(row.value).split(',')
-  } catch {
-    rawChannels = String(row.value).split(',')
-  }
+  const rawChannels = JSON.parse(row.value) as string[]
 
   const channels = rawChannels
     .map(channel => channel.trim().toLowerCase())
@@ -101,22 +96,33 @@ async function insertDashboardNotification(
     title: string
     payload: Record<string, string>
   }
-) {
+): Promise<void> {
+  const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  await db.prepare(`
-    INSERT INTO notifications
-    (id, organization_id, site_id, channel, template, title, payload, status, sent_at, created_at)
-    VALUES (?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
-  `).bind(
-    crypto.randomUUID(),
-    opts.organizationId,
-    opts.siteId,
-    opts.template,
-    opts.title,
-    JSON.stringify(opts.payload),
-    now,
-    now
-  ).run()
+  try {
+    await db.prepare(`
+      INSERT INTO notifications
+      (id, organization_id, site_id, channel, template, title, payload, status, sent_at, created_at)
+      VALUES (?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
+    `).bind(
+      id,
+      opts.organizationId,
+      opts.siteId,
+      opts.template,
+      opts.title,
+      JSON.stringify(opts.payload),
+      now,
+      now
+    ).run()
+  } catch (error) {
+    console.error('dashboard_notification_failed', {
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      template: opts.template,
+      notificationId: id,
+      error: error instanceof Error ? error.message : String(error)
+    })
+  }
 }
 
 async function sendEmailNotification(
@@ -149,10 +155,15 @@ async function sendEmailNotification(
 
   if (!env.RESEND_API_KEY) {
     await db.prepare(`UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`)
-      .bind('RESEND_API_KEY not configured', now, id)
+      .bind('RESEND_API_KEY not configured', new Date().toISOString(), id)
       .run()
     return
   }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10000)
+
+  const fromValue = env.EMAIL_FROM || (opts.siteName ? `${opts.siteName} <hello@krabiclaw.com>` : 'KrabiClaw <hello@krabiclaw.com>')
 
   let response: Response
   try {
@@ -163,32 +174,36 @@ async function sendEmailNotification(
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: 'KrabiClaw <hello@krabiclaw.com>',
+        from: fromValue,
         to: [opts.to],
         subject: opts.email.subject,
         html: opts.email.html,
         text: opts.email.text
-      })
+      }),
+      signal: controller.signal
     })
   } catch (error) {
+    clearTimeout(timeout)
     const message = error instanceof Error ? error.message : 'Email request failed'
     await db.prepare(`UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`)
-      .bind(message, now, id)
+      .bind(message, new Date().toISOString(), id)
       .run()
     return
   }
+  
+  clearTimeout(timeout)
 
   if (!response.ok) {
     const error = await response.text()
     await db.prepare(`UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`)
-      .bind(error, now, id)
+      .bind(error, new Date().toISOString(), id)
       .run()
     return
   }
 
   const data = await response.json().catch(() => ({})) as { id?: string }
   await db.prepare(`UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`)
-    .bind(data.id ?? null, now, id)
+    .bind(data.id ?? null, new Date().toISOString(), id)
     .run()
 }
 
@@ -265,7 +280,7 @@ export async function notifyReservationCreated(
     site_name: siteName(opts)
   }
 
-  await Promise.all([
+  const results = await Promise.allSettled([
     notifyOwner(env, db, {
       ...opts,
       template: 'new_reservation',
@@ -290,6 +305,16 @@ export async function notifyReservationCreated(
       email: reservationEmail(opts, 'Reservation request received', 'We received your reservation request. The restaurant will confirm shortly.')
     })
   ])
+
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      console.error('notifyReservationCreated_failed', {
+        task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
+        reservationId: opts.reservationId,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason)
+      })
+    }
+  })
 }
 
 export async function notifyReservationCancelled(
@@ -308,7 +333,7 @@ export async function notifyReservationCancelled(
     site_name: siteName(opts)
   }
 
-  await Promise.all([
+  const results = await Promise.allSettled([
     notifyOwner(env, db, {
       ...opts,
       template: 'reservation_cancelled',
@@ -333,6 +358,16 @@ export async function notifyReservationCancelled(
       email: reservationEmail(opts, 'Reservation cancelled', 'Your reservation has been cancelled.')
     })
   ])
+
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      console.error('notifyReservationCancelled_failed', {
+        task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
+        reservationId: opts.reservationId,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason)
+      })
+    }
+  })
 }
 
 export async function notifyContactSubmitted(
@@ -348,7 +383,7 @@ export async function notifyContactSubmitted(
     site_name: siteName(opts)
   }
 
-  await Promise.all([
+  const results = await Promise.allSettled([
     notifyOwner(env, db, {
       ...opts,
       template: 'new_contact_msg',
@@ -377,4 +412,14 @@ export async function notifyContactSubmitted(
       }
     })
   ])
+
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      console.error('notifyContactSubmitted_failed', {
+        task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
+        contactId: opts.contactId,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason)
+      })
+    }
+  })
 }

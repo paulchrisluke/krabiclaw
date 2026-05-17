@@ -259,7 +259,7 @@ const handleReservation = async () => {
 
 const cancelUrl = computed(() => {
   if (!lastSubmission.value?.id || !lastSubmission.value?.cancellationToken) return null
-  return `/reservations/cancel?id=${lastSubmission.value.id}&token=${encodeURIComponent(lastSubmission.value.cancellationToken)}`
+  return `/reservations/cancel?id=${lastSubmission.value.id}#${lastSubmission.value.cancellationToken}`
 })
 
 const config = useRuntimeConfig()

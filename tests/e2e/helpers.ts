@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 
-export const tenantBaseURL = process.env.PLAYWRIGHT_TENANT_BASE_URL || 'http://demo.localhost:3000'
+export const tenantBaseURL = process.env.PLAYWRIGHT_TENANT_BASE_URL!
 
 export function collectPageErrors(page: Page) {
   const errors: string[] = []

@@ -39,13 +39,15 @@ function getClientIp(event: ApiValue): string {
   return firstForwardedIp || event.node.req.socket.remoteAddress || 'unknown'
 }
 
-async function incrementRateLimit(db: D1Database, key: string, limit: number): Promise<boolean> {
+async function incrementRateLimit(db: D1Database, key: string, limit: number, expireMs: number): Promise<boolean> {
+  const now = new Date().toISOString()
+  const expiresAt = new Date(Date.now() + expireMs).toISOString()
   const result = await db.prepare(`
-    INSERT INTO rate_limits (key, count)
-    VALUES (?, 1)
-    ON CONFLICT(key) DO UPDATE SET count = count + 1
+    INSERT INTO rate_limits (key, count, updated_at, expires_at)
+    VALUES (?, 1, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at, expires_at = excluded.expires_at
     WHERE count < ?
-  `).bind(key, limit).run()
+  `).bind(key, now, expiresAt, limit).run()
 
   return Boolean(result?.success && result?.meta?.changes)
 }
@@ -92,14 +94,14 @@ export default defineEventHandler(async (event) => {
     let emailIncremented = true
 
     try {
-      ipIncremented = await incrementRateLimit(db, hourKey, IP_HOURLY_LIMIT)
+      ipIncremented = await incrementRateLimit(db, hourKey, IP_HOURLY_LIMIT, 3600000)
     } catch (err) {
       console.error('Rate limit increment failed (ip):', err)
       return jsonResponse({ error: 'Rate limit service unavailable' }, { status: 500 })
     }
 
     try {
-      emailIncremented = await incrementRateLimit(db, dateKey, EMAIL_DAILY_LIMIT)
+      emailIncremented = await incrementRateLimit(db, dateKey, EMAIL_DAILY_LIMIT, 86400000)
     } catch (err) {
       console.error('Rate limit increment failed (email):', err)
       return jsonResponse({ error: 'Rate limit service unavailable' }, { status: 500 })

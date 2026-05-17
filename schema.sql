@@ -656,8 +656,19 @@ CREATE INDEX IF NOT EXISTS idx_reservation_submissions_cancel_token
 CREATE TABLE IF NOT EXISTS rate_limits (
   key TEXT PRIMARY KEY,
   count INTEGER NOT NULL DEFAULT 0,
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  expires_at TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_rate_limits_expires ON rate_limits(expires_at);
+
+-- Trigger to prune expired rate limits
+CREATE TRIGGER IF NOT EXISTS trg_prune_rate_limits
+AFTER INSERT ON rate_limits
+WHEN abs(random()) % 100 < 5
+BEGIN
+  DELETE FROM rate_limits WHERE expires_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
+END;
 
 --------------------------------------------------------------------------------
 -- Notifications

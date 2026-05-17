@@ -1,7 +1,7 @@
 <template>
   <div class="sticky top-16 z-30 border-b border-default bg-default/80 backdrop-blur-md">
     <div class="relative mx-auto max-w-7xl">
-      <div class="flex h-12 items-center gap-8 overflow-x-auto px-4 sm:px-6 lg:px-8 no-scrollbar">
+      <div class="flex h-12 items-center gap-8 overflow-x-auto px-4 sm:px-6 lg:px-8 scrollbar-none">
         <NuxtLink
           v-for="item in items"
           :key="item.key"

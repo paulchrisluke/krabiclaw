@@ -1,10 +1,10 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
+import { hashReservationCancelToken, readBearerToken } from '~/server/utils/reservation-cancel-token'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const reservationId = getRouterParam(event, 'reservationId')
-  const token = String(getQuery(event).token || '')
+  const token = readBearerToken(getHeader(event, 'authorization'))
 
   if (!siteId || !reservationId || !token) {
     return jsonResponse({ error: 'Missing required parameters' }, { status: 400 })

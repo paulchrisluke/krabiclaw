@@ -44,22 +44,24 @@ export default defineEventHandler(async (event) => {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).bind(id, site.organization_id, siteId, name, email, message, ipHash).run()
 
-  notifyContactSubmitted(env, db, {
-    organizationId: site.organization_id,
-    siteId,
-    siteName: site.brand_name,
-    contactId: id,
-    guestName: name,
-    email,
-    message
-  }).catch((error) => {
+  try {
+    await notifyContactSubmitted(env, db, {
+      organizationId: site.organization_id,
+      siteId,
+      siteName: site.brand_name,
+      contactId: id,
+      guestName: name,
+      email,
+      message
+    })
+  } catch (error) {
     console.error('contact_notification_failed', {
       organizationId: site.organization_id,
       siteId,
       contactId: id,
       error: error instanceof Error ? error.message : String(error)
     })
-  })
+  }
 
   return jsonResponse({
     success: true,

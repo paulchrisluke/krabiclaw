@@ -82,11 +82,12 @@ const { siteId } = useTenantSite()
 const toast = useToast()
 
 const resId = computed(() => route.query.id as string)
-const token = computed(() => route.query.token as string)
+const token = computed(() => route.hash ? route.hash.substring(1) : '')
 
 const { data: resData, pending } = await useFetch(
-  () => `/api/public/sites/${siteId}/reservations/${resId.value}?token=${encodeURIComponent(token.value || '')}`,
+  () => `/api/public/sites/${siteId}/reservations/${resId.value}`,
   {
+    headers: { Authorization: `Bearer ${token.value}` },
     key: `cancel-res-${resId.value}`,
     immediate: !!resId.value && !!token.value
   }
