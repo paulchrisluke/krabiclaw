@@ -76,6 +76,20 @@ export default defineEventHandler(async (event) => {
       : undefined
 
     if (locationHeroImageId !== undefined || locationHeroVideoId !== undefined) {
+      // Validate that non-null asset IDs belong to this organization before writing
+      if (locationHeroImageId) {
+        const asset = await db.prepare(
+          `SELECT id FROM media_assets WHERE id = ? AND organization_id = ? AND status = 'active' LIMIT 1`
+        ).bind(locationHeroImageId, site.organization_id).first()
+        if (!asset) return jsonResponse({ error: 'Invalid or unauthorized hero image asset' }, { status: 400 })
+      }
+      if (locationHeroVideoId) {
+        const asset = await db.prepare(
+          `SELECT id FROM media_assets WHERE id = ? AND organization_id = ? AND status = 'active' LIMIT 1`
+        ).bind(locationHeroVideoId, site.organization_id).first()
+        if (!asset) return jsonResponse({ error: 'Invalid or unauthorized hero video asset' }, { status: 400 })
+      }
+
       const setClauses: string[] = []
       const bindParams: (string | null)[] = []
       const now = new Date().toISOString()

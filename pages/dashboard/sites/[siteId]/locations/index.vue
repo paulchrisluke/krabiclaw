@@ -270,7 +270,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 function openAddLocationForm() {
-  if (maxLocations.value > 0 && locations.value.length >= maxLocations.value) {
+  const activeCount = locations.value.filter((l: BusinessLocation) => l.status === 'active').length
+  if (maxLocations.value > 0 && activeCount >= maxLocations.value) {
     openUpgradeModal('add-location')
     return
   }

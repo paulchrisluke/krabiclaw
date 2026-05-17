@@ -67,7 +67,8 @@ export default defineEventHandler(async (event) => {
       WHERE organization_id = ? AND key = 'max_locations'
       LIMIT 1
     `).bind(site.organization_id).first<{ value: string }>()
-    const max_locations = maxLocationsRow ? (parseInt(maxLocationsRow.value, 10) || 1) : 1
+    const _parsed = parseInt(maxLocationsRow?.value ?? '', 10)
+    const max_locations = Number.isNaN(_parsed) ? 1 : _parsed
 
     const settings = {
       id: site.id,

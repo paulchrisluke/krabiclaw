@@ -559,7 +559,7 @@ const groupConfig: Record<string, Array<{ id: string; label: string; icon: strin
     { id: 'social',  label: 'Social Links', icon: 'i-heroicons-link',          fields: ['social.facebook', 'social.instagram', 'social.tiktok'] },
   ],
   location: [
-    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo',         fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
+    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo',         fields: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
     { id: 'content', label: 'Additional Info', icon: 'i-heroicons-document-text', fields: ['parking.info', 'extra.notes'] },
   ],
   menu: [
