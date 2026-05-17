@@ -112,24 +112,6 @@
                 <UFormField label="Description">
                   <UTextarea v-model="locationEditForm.description" :rows="3" />
                 </UFormField>
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <UFormField label="Hero Image">
-                    <MediaPicker
-                      v-model="locationEditForm.hero_image_asset_id"
-                      :site-id="siteId"
-                      accept="image"
-                      title="Location hero image"
-                    />
-                  </UFormField>
-                  <UFormField label="Hero Video">
-                    <MediaPicker
-                      v-model="locationEditForm.hero_video_asset_id"
-                      :site-id="siteId"
-                      accept="video"
-                      title="Location hero video"
-                    />
-                  </UFormField>
-                </div>
                 <div class="flex items-center gap-6">
                   <UCheckbox v-model="locationEditForm.is_primary" label="Primary location" />
                   <UCheckbox
@@ -257,8 +239,6 @@ interface BusinessLocation {
   google_place_id: string | null
   rating: number | null
   review_count: number | null
-  hero_image_asset_id: string | null
-  hero_video_asset_id: string | null
   is_primary: boolean
   status: string
 }
@@ -272,6 +252,8 @@ const error = ref<string | null>(null)
 const site = ref<ApiRecord | null>(null)
 const locations = ref<BusinessLocation[]>([])
 const locationSaving = ref(false)
+const maxLocations = ref(1)
+const { open: openUpgradeModal } = useUpgradeModal()
 const addressLabel = (location: BusinessLocation) => location.address?.addressLines?.join(', ') || ''
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -288,6 +270,11 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 function openAddLocationForm() {
+  const activeCount = locations.value.filter((l: BusinessLocation) => l.status === 'active').length
+  if (maxLocations.value > 0 && activeCount >= maxLocations.value) {
+    openUpgradeModal('add-location')
+    return
+  }
   showAddLocationForm.value = true
   if (locations.value.length === 0) {
     addLocationForm.is_primary = true
@@ -331,8 +318,6 @@ const locationEditForm = reactive({
   description: '',
   rating: '',
   review_count: '',
-  hero_image_asset_id: null as string | null,
-  hero_video_asset_id: null as string | null,
   is_primary: false,
   status: 'active'
 })
@@ -347,8 +332,6 @@ const openEditLocation = (location: BusinessLocation) => {
   locationEditForm.description = location.description ?? ''
   locationEditForm.rating = location.rating === null || location.rating === undefined ? '' : String(location.rating)
   locationEditForm.review_count = location.review_count === null || location.review_count === undefined ? '' : String(location.review_count)
-  locationEditForm.hero_image_asset_id = location.hero_image_asset_id ?? null
-  locationEditForm.hero_video_asset_id = location.hero_video_asset_id ?? null
   locationEditForm.is_primary = location.is_primary
   locationEditForm.status = location.status
 }
@@ -548,7 +531,13 @@ const handleCreateLocation = async () => {
     cancelAddLocation()
     toast.add({ description: 'Location added', color: 'success' })
   } catch (err) {
-    toast.add({ description: getErrorMessage(err, 'Failed to create location'), color: 'error' })
+    const errData = (err as Record<string, unknown>)?.data as Record<string, unknown> | undefined
+    if ((err as Record<string, unknown>)?.status === 402 || errData?.code === 'LOCATION_LIMIT_REACHED') {
+      cancelAddLocation()
+      openUpgradeModal('add-location')
+    } else {
+      toast.add({ description: getErrorMessage(err, 'Failed to create location'), color: 'error' })
+    }
   } finally {
     locationSaving.value = false
   }
@@ -565,6 +554,7 @@ const loadLocationsWorkspace = async () => {
     if (!settingsResponse.success) throw new Error('Failed to load site settings')
     if (!locationsResponse.success) throw new Error('Failed to load locations')
     site.value = settingsResponse.settings
+    maxLocations.value = typeof settingsResponse.settings.max_locations === 'number' ? settingsResponse.settings.max_locations : 1
     locations.value = locationsResponse.locations
     addLocationForm.is_primary = locations.value.length === 0
   } catch (err) {

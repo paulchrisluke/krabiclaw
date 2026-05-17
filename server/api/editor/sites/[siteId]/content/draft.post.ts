@@ -64,17 +64,58 @@ export default defineEventHandler(async (event) => {
       page
     ].join('::')
 
-    const heroFields = ['hero.title', 'hero.subtitle', 'hero.video']
+    // For the location page, hero image/video are stored directly on business_locations
+    // (the source of truth the public page reads). Write them there immediately and skip
+    // the draft/publish cycle for those two fields only.
+    const isLocationHeroPage = page === 'location' && !!locationId
+    const locationHeroImageId = isLocationHeroPage && 'hero.image' in changes
+      ? (changes['hero.image'] || null)
+      : undefined
+    const locationHeroVideoId = isLocationHeroPage && 'hero.video' in changes
+      ? (changes['hero.video'] || null)
+      : undefined
+
+    if (locationHeroImageId !== undefined || locationHeroVideoId !== undefined) {
+      // Validate that non-null asset IDs belong to this organization before writing
+      if (locationHeroImageId) {
+        const asset = await db.prepare(
+          `SELECT id FROM media_assets WHERE id = ? AND organization_id = ? AND status = 'active' LIMIT 1`
+        ).bind(locationHeroImageId, site.organization_id).first()
+        if (!asset) return jsonResponse({ error: 'Invalid or unauthorized hero image asset' }, { status: 400 })
+      }
+      if (locationHeroVideoId) {
+        const asset = await db.prepare(
+          `SELECT id FROM media_assets WHERE id = ? AND organization_id = ? AND status = 'active' LIMIT 1`
+        ).bind(locationHeroVideoId, site.organization_id).first()
+        if (!asset) return jsonResponse({ error: 'Invalid or unauthorized hero video asset' }, { status: 400 })
+      }
+
+      const setClauses: string[] = []
+      const bindParams: (string | null)[] = []
+      const now = new Date().toISOString()
+      if (locationHeroImageId !== undefined) { setClauses.push('hero_image_asset_id = ?'); bindParams.push(locationHeroImageId) }
+      if (locationHeroVideoId !== undefined) { setClauses.push('hero_video_asset_id = ?'); bindParams.push(locationHeroVideoId) }
+      setClauses.push('updated_at = ?')
+      bindParams.push(now, locationId!, siteId)
+      await db.prepare(
+        `UPDATE business_locations SET ${setClauses.join(', ')} WHERE id = ? AND site_id = ?`
+      ).bind(...bindParams).run()
+    }
+
+    const heroFields = ['hero.title', 'hero.subtitle']
     const heroChange: Record<string, string | undefined> = {}
     let hasHeroChange = false
 
     for (const [field, value] of Object.entries(changes)) {
-      if (heroFields.includes(field)) {
+      // hero.image / hero.video on a location page were already handled above
+      if (isLocationHeroPage && (field === 'hero.image' || field === 'hero.video')) continue
+
+      if (heroFields.includes(field) || field === 'hero.image' || field === 'hero.video') {
         hasHeroChange = true
-        if (field === 'hero.title')       heroChange.hero_title = value || undefined
-        if (field === 'hero.subtitle')    heroChange.hero_subtitle = value || undefined
-        if (field === 'hero.image')       heroChange.hero_image_asset_id = value || undefined
-        if (field === 'hero.video')       heroChange.hero_video_asset_id = value || undefined
+        if (field === 'hero.title')    heroChange.hero_title = value || undefined
+        if (field === 'hero.subtitle') heroChange.hero_subtitle = value || undefined
+        if (field === 'hero.image')    heroChange.hero_image_asset_id = value || undefined
+        if (field === 'hero.video')    heroChange.hero_video_asset_id = value || undefined
       } else {
         const fieldDef = getFieldDef(page, field)
         await upsertDraftContent(db, {
@@ -96,7 +137,7 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // Handle hero field changes
+    // Handle hero text field changes (title/subtitle only — image/video routed above for location pages)
     if (hasHeroChange) {
       await upsertDraftContent(db, {
         id: `${draftIdPrefix}::hero`,

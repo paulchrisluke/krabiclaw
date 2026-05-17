@@ -544,40 +544,32 @@ const openGroups = ref<string[]>(['hero'])
 
 const groupConfig: Record<string, Array<{ id: string; label: string; icon: string; fields: string[] }>> = {
   home: [
-    { id: 'hero',   label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
-    { id: 'cta',    label: 'Call to Action',  icon: 'i-heroicons-megaphone', fields: ['cta.title', 'cta.description'] },
-    { id: 'business', label: 'Business Info', icon: 'i-heroicons-building-storefront', fields: ['business.name', 'business.description', 'business.establishment_year'] },
-    { id: 'contact', label: 'Contact & Hours', icon: 'i-heroicons-clock', fields: ['business.address', 'business.phone', 'business.hours'] },
-    { id: 'media', label: 'Gallery & Media', icon: 'i-heroicons-photo', fields: ['business.photos'] }
+    { id: 'hero',  label: 'Hero Section',   icon: 'i-heroicons-photo',     fields: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
+    { id: 'story', label: 'Brand Story',    icon: 'i-heroicons-book-open', fields: ['story.headline', 'story.body'] },
+    { id: 'cta',   label: 'Call to Action', icon: 'i-heroicons-megaphone', fields: ['cta.title', 'cta.description'] },
   ],
   about: [
-    { id: 'hero',    label: 'Hero Section', icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
-    { id: 'story',   label: 'Story',        icon: 'i-heroicons-book-open', fields: ['story.intro', 'journey.title', 'journey.body', 'experience.body'] },
-    { id: 'cuisine', label: 'Cuisine',      icon: 'i-heroicons-sparkles', fields: ['grill.title', 'grill.description', 'sushi.title', 'sushi.description'] },
-    { id: 'business',  label: 'Business Info', icon: 'i-heroicons-building-storefront', fields: ['business.description', 'business.establishment_year'] }
+    { id: 'hero',    label: 'Hero Section', icon: 'i-heroicons-photo',      fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
+    { id: 'story',   label: 'Story',        icon: 'i-heroicons-book-open',  fields: ['story.intro', 'journey.title', 'journey.body', 'experience.body'] },
+    { id: 'cuisine', label: 'Cuisine',      icon: 'i-heroicons-sparkles',   fields: ['grill.title', 'grill.description', 'sushi.title', 'sushi.description'] },
   ],
   contact: [
-    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
-    { id: 'content', label: 'Page Content',    icon: 'i-heroicons-document-text', fields: ['intro.body'] },
-    { id: 'social',  label: 'Social Links',    icon: 'i-heroicons-link', fields: ['social.facebook', 'social.instagram', 'social.tiktok'] },
-    { id: 'business', label: 'Business Info', icon: 'i-heroicons-building-storefront', fields: ['business.name', 'business.establishment_year'] },
-    { id: 'contact-hours', label: 'Contact & Hours', icon: 'i-heroicons-clock', fields: ['business.address', 'business.phone', 'business.hours'] }
+    { id: 'hero',    label: 'Hero Section', icon: 'i-heroicons-photo',         fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
+    { id: 'content', label: 'Page Content', icon: 'i-heroicons-document-text', fields: ['intro.body'] },
+    { id: 'social',  label: 'Social Links', icon: 'i-heroicons-link',          fields: ['social.facebook', 'social.instagram', 'social.tiktok'] },
   ],
   location: [
-    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
+    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo',         fields: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
     { id: 'content', label: 'Additional Info', icon: 'i-heroicons-document-text', fields: ['parking.info', 'extra.notes'] },
-    { id: 'business', label: 'Business Info', icon: 'i-heroicons-building-storefront', fields: ['business.name', 'business.establishment_year'] },
-    { id: 'contact-hours', label: 'Contact & Hours', icon: 'i-heroicons-clock', fields: ['business.address', 'business.phone', 'business.hours'] }
   ],
   menu: [
-    { id: 'hero',    label: 'Hero Section',      icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
+    { id: 'hero',    label: 'Hero Section',      icon: 'i-heroicons-photo',         fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
     { id: 'content', label: 'Menu Introduction', icon: 'i-heroicons-document-text', fields: ['description'] },
-    { id: 'media',  label: 'Gallery & Media',   icon: 'i-heroicons-photo', fields: ['business.products'] }
   ],
   reservations: [
-    { id: 'hero',     label: 'Hero Section',    icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
-    { id: 'contact',  label: 'Contact Details', icon: 'i-heroicons-phone', fields: ['contact.phone', 'contact.email'] },
-    { id: 'policies', label: 'Policies',        icon: 'i-heroicons-clipboard-document-list', fields: ['policies.body'] }
+    { id: 'hero',     label: 'Hero Section',    icon: 'i-heroicons-photo',                      fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
+    { id: 'contact',  label: 'Contact Details', icon: 'i-heroicons-phone',                      fields: ['contact.phone', 'contact.email'] },
+    { id: 'policies', label: 'Policies',        icon: 'i-heroicons-clipboard-document-list',    fields: ['policies.body'] },
   ]
 }
 
