@@ -72,7 +72,7 @@ export interface PageDefinition {
 }
 
 /** Shared validator for social URLs to reject common placeholder patterns */
-const socialUrlValidator = (value: string) => {
+const _socialUrlValidator = (value: string) => {
   if (!value) return true
   const lowerValue = value.toLowerCase()
   if (lowerValue.includes('your-restaurant')) {

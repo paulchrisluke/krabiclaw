@@ -3,7 +3,11 @@
     <UPageHeader
       title="Site Settings"
       description="Manage your website configuration, brand, and appearance"
-    />
+    >
+      <template #links>
+        <DashboardSiteHeaderLinks :links="headerLinks" />
+      </template>
+    </UPageHeader>
 
     <UPageBody>
       <div v-if="loading" class="space-y-6">
@@ -331,6 +335,10 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const saving = ref(false)
 const settings = ref<ApiRecord | null>(null)
+const { buildHeaderLinks } = useDashboardSiteLinks(siteId, computed(() => {
+  const value = settings.value?.public_url
+  return typeof value === 'string' ? value : null
+}))
 const domains = ref<ApiRecord[]>([])
 const domainsLoading = ref(false)
 const addingDomain = ref(false)
@@ -393,6 +401,8 @@ const isDirty = computed(() => {
     form.social_tiktok !== (settings.value.social_tiktok || '')
   )
 })
+
+const headerLinks = computed(() => buildHeaderLinks())
 
 const loadSettings = async () => {
   loading.value = true

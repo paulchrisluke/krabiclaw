@@ -21,11 +21,7 @@
         </div>
       </template>
       <template #links>
-        <UButton
-          v-for="link in headerLinks"
-          :key="link.label"
-          v-bind="link"
-        />
+        <DashboardSiteHeaderLinks :links="headerLinks" />
       </template>
     </UPageHeader>
 
@@ -95,6 +91,8 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const locations = ref<BusinessLocation[]>([])
 const defaultCurrency = ref('THB')
+const sitePublicUrl = ref<string | null>(null)
+const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 
 const selectedLocation = computed(() => locations.value.find((location: BusinessLocation) => location.id === locationId.value) || null)
 
@@ -109,10 +107,9 @@ const handleLocationChange = (value: string) => {
   router.replace({ query: { locationId: value } })
 }
 
-const headerLinks = computed(() => [
-  { label: 'Locations', icon: 'i-heroicons-map-pin', to: `/dashboard/sites/${siteId}/locations`, color: 'neutral' as const, variant: 'soft' as const },
-  { label: 'Add Location', icon: 'i-heroicons-plus', to: `/dashboard/sites/${siteId}/settings?tab=locations`, color: 'neutral' as const, variant: 'soft' as const }
-])
+const headerLinks = computed(() => buildHeaderLinks([
+  { label: 'Locations', icon: 'i-heroicons-map-pin', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const }
+]))
 
 const loadMenuWorkspace = async () => {
   loading.value = true
@@ -120,12 +117,13 @@ const loadMenuWorkspace = async () => {
   try {
     const [locationsResponse, settingsResponse] = await Promise.all([
       $fetch<{ success: boolean; locations: BusinessLocation[] }>(`/api/sites/${siteId}/locations`),
-      $fetch<{ success: boolean; settings: { default_currency?: string } }>(`/api/sites/${siteId}/settings`)
+      $fetch<{ success: boolean; settings: { default_currency?: string; public_url?: string | null } }>(`/api/sites/${siteId}/settings`)
     ])
     if (!locationsResponse.success) throw new Error('Failed to load locations')
     if (!settingsResponse.success) throw new Error('Failed to load settings')
     locations.value = locationsResponse.locations
     defaultCurrency.value = settingsResponse.settings?.default_currency || 'THB'
+    sitePublicUrl.value = settingsResponse.settings?.public_url || null
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load menu workspace'
   } finally {

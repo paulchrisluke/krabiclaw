@@ -3,8 +3,11 @@
     <UPageHeader
       title="Locations"
       :description="site ? `Physical locations for ${site.brand_name || 'this website'}` : 'Physical locations for this website.'"
-      :links="headerLinks"
-    />
+    >
+      <template #links>
+        <DashboardSiteHeaderLinks :links="headerLinks" />
+      </template>
+    </UPageHeader>
 
     <UPageBody>
       <div v-if="loading">
@@ -45,7 +48,7 @@
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2">
                   <NuxtLink
-                    :to="`/dashboard/sites/${siteId}/locations/${location.id}`"
+                    :to="locationPath(location.id)"
                     class="font-medium text-highlighted hover:underline"
                   >
                     {{ location.title }}
@@ -62,7 +65,7 @@
               </div>
               <div class="flex shrink-0 items-center gap-2">
                 <UButton
-                  :to="`/dashboard/sites/${siteId}/locations/${location.id}`"
+                  :to="locationPath(location.id)"
                   color="neutral"
                   variant="outline"
                   size="xs"
@@ -254,6 +257,10 @@ const locations = ref<BusinessLocation[]>([])
 const locationSaving = ref(false)
 const maxLocations = ref(1)
 const { open: openUpgradeModal } = useUpgradeModal()
+const { buildHeaderLinks, locationPath, locationMenuPath, locationContentPath } = useDashboardSiteLinks(siteId, computed(() => {
+  const value = site.value?.public_url
+  return typeof value === 'string' ? value : null
+}))
 const addressLabel = (location: BusinessLocation) => location.address?.addressLines?.join(', ') || ''
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -281,9 +288,9 @@ function openAddLocationForm() {
   }
 }
 
-const headerLinks = computed(() => [
+const headerLinks = computed(() => buildHeaderLinks([
   { label: 'Add location', icon: 'i-heroicons-plus', color: 'primary' as const, onClick: openAddLocationForm }
-])
+]))
 
 const setLocationActive = (v: boolean | 'indeterminate') => {
   if (v === 'indeterminate') {
@@ -390,12 +397,12 @@ const locationActionItems = (location: BusinessLocation) => [[
   {
     label: 'Edit menu',
     icon: 'i-heroicons-list-bullet',
-    to: `/dashboard/sites/${siteId}/menu?locationId=${location.id}`,
+    to: locationMenuPath(location.id),
   },
   {
     label: 'Edit content',
     icon: 'i-heroicons-document-text',
-    to: `/dashboard/sites/${siteId}/content?locationId=${location.id}&page=location`,
+    to: locationContentPath(location.id),
   },
 ], [
   {

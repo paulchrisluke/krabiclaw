@@ -1,5 +1,5 @@
 <template>
-  <div class="sticky top-16 z-40 bg-default border-b border-default">
+  <div class="sticky top-0 z-40 bg-default border-b border-default">
     <div class="max-w-6xl mx-auto px-4">
       <UTabs :model-value="active" :items="tabItems" @update:model-value="handleTabChange" class="scrollbar-hide" />
     </div>

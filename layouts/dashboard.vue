@@ -339,11 +339,12 @@ const profileMenuItems = computed(() => [
 
 const siteNavigation = computed(() => [[
   { label: 'Overview', icon: 'i-heroicons-home', to: sitePath() },
-  { label: 'Content', icon: 'i-heroicons-document-text', to: sitePath('/content') },
+  { label: 'Setup', icon: 'i-heroicons-sparkles', to: sitePath('/setup') },
+  { label: 'Locations', icon: 'i-heroicons-map-pin', to: sitePath('/locations') },
   { label: 'Menu', icon: 'i-heroicons-list-bullet', to: sitePath('/menu') },
   { label: 'Posts', icon: 'i-heroicons-newspaper', to: sitePath('/posts') },
   { label: 'Media', icon: 'i-heroicons-photo', to: sitePath('/media') },
-  { label: 'Locations', icon: 'i-heroicons-map-pin', to: sitePath('/locations') },
+  { label: 'Content', icon: 'i-heroicons-document-text', to: sitePath('/content') },
   { label: 'Settings', icon: 'i-heroicons-cog-6-tooth', to: sitePath('/settings') }
 ], [
   { label: 'All Sites', icon: 'i-heroicons-squares-2x2', to: '/dashboard/sites' },

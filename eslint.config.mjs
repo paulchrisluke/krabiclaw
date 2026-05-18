@@ -3,6 +3,10 @@ import withNuxt from '@nuxt/eslint-config'
 export default withNuxt(
   {
     ignores: [
+      '.agents/**',
+      '**/.agents/**',
+      '.agents/skills/**',
+      '**/.agents/skills/**',
       '.data/**',
       '.nuxt/**',
       '.output/**',

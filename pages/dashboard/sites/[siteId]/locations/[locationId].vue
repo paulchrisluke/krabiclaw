@@ -3,8 +3,10 @@
     <UPageHeader
       :title="location?.title || 'Location'"
       :description="locationAddress || location?.city || 'Location workspace'"
-      :links="headerLinks"
     >
+      <template #links>
+        <DashboardSiteHeaderLinks :links="headerLinks" />
+      </template>
       <template #headline>
         <div class="flex flex-wrap items-center gap-2">
           <UBadge v-if="location?.is_primary" color="primary" variant="soft">Primary</UBadge>
@@ -384,6 +386,10 @@ const location = ref<BusinessLocation | null>(null)
 const menus = ref<ApiRecord[]>([])
 const gbConnection = ref<GbConnection | null>(null)
 const connectingGoogle = ref(false)
+const { paths, buildHeaderLinks, locationMenuPath, locationContentPath, locationPath } = useDashboardSiteLinks(siteId, computed(() => {
+  const value = site.value?.public_url
+  return typeof value === 'string' ? value : null
+}))
 
 const locationAddress = computed(() => location.value?.address?.addressLines?.join(', ') || '')
 const publicLocationUrl = computed(() => {
@@ -391,23 +397,23 @@ const publicLocationUrl = computed(() => {
   return `${site.value.public_url.replace(/\/$/, '')}/locations/${location.value.slug}`
 })
 
-const headerLinks = computed(() => [
-  { label: 'All Locations', icon: 'i-heroicons-arrow-left', to: `/dashboard/sites/${siteId}/locations`, color: 'neutral' as const, variant: 'soft' as const },
-  { label: 'View', icon: 'i-heroicons-arrow-top-right-on-square', to: publicLocationUrl.value, target: '_blank', color: 'neutral' as const, variant: 'outline' as const, disabled: !publicLocationUrl.value }
-])
+const headerLinks = computed(() => buildHeaderLinks([
+  { label: 'All Locations', icon: 'i-heroicons-arrow-left', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const },
+  { label: 'Preview', icon: 'i-heroicons-arrow-top-right-on-square', to: publicLocationUrl.value, target: '_blank', color: 'neutral' as const, variant: 'outline' as const, disabled: !publicLocationUrl.value }
+], { includePreview: false }))
 
 const locationTabs = computed(() => [
-  { label: 'Overview', icon: 'i-heroicons-home', active: true, to: `/dashboard/sites/${siteId}/locations/${locationId}` },
-  { label: 'Content', icon: 'i-heroicons-document-text', active: false, to: `/dashboard/sites/${siteId}/content?locationId=${locationId}&page=location` },
-  { label: 'Menu', icon: 'i-heroicons-list-bullet', active: false, to: `/dashboard/sites/${siteId}/menu?locationId=${locationId}` },
-  { label: 'Details', icon: 'i-heroicons-map-pin', active: false, to: `/dashboard/sites/${siteId}/settings?tab=locations&locationId=${locationId}` }
+  { label: 'Overview', icon: 'i-heroicons-home', active: true, to: locationPath(locationId) },
+  { label: 'Content', icon: 'i-heroicons-document-text', active: false, to: locationContentPath(locationId) },
+  { label: 'Menu', icon: 'i-heroicons-list-bullet', active: false, to: locationMenuPath(locationId) },
+  { label: 'Details', icon: 'i-heroicons-map-pin', active: false, to: `${paths.value.settings}?tab=locations&locationId=${locationId}` }
 ])
 
 const workspaceActions = computed(() => [
-  { label: 'Edit Local Content', icon: 'i-heroicons-document-text', to: `/dashboard/sites/${siteId}/content?locationId=${locationId}&page=location` },
-  { label: 'Edit Local Menu', icon: 'i-heroicons-list-bullet', to: `/dashboard/sites/${siteId}/menu?locationId=${locationId}` },
-  { label: 'Edit Location Details', icon: 'i-heroicons-cog-6-tooth', to: `/dashboard/sites/${siteId}/settings?tab=locations&locationId=${locationId}` },
-  { label: 'Edit Brand Content', icon: 'i-heroicons-building-storefront', to: `/dashboard/sites/${siteId}/content` }
+  { label: 'Edit Local Content', icon: 'i-heroicons-document-text', to: locationContentPath(locationId) },
+  { label: 'Edit Local Menu', icon: 'i-heroicons-list-bullet', to: locationMenuPath(locationId) },
+  { label: 'Edit Location Details', icon: 'i-heroicons-cog-6-tooth', to: `${paths.value.settings}?tab=locations&locationId=${locationId}` },
+  { label: 'Edit Brand Content', icon: 'i-heroicons-building-storefront', to: paths.value.content }
 ])
 
 const detailsSaving = ref(false)

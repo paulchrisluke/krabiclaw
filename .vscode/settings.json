@@ -2,6 +2,12 @@
   // Volar (Vue - Official) configuration for Nuxt 4 / Vue 3
   "volar.takeOverMode": true,
   "volar.useWorkspaceTsdk": true,
+  "typescript.tsdk": "node_modules/typescript/lib",
+
+  // Disable Vetur diagnostics in this Vue 3 + Nuxt 4 workspace
+  "vetur.validation.template": false,
+  "vetur.validation.script": false,
+  "vetur.validation.style": false,
 
   // Vue file formatting: use Prettier, disable format-on-save
   "[vue]": {

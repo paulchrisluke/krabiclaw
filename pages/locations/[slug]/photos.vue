@@ -36,7 +36,7 @@
 
 
     <!-- Category filter tabs -->
-    <div class="sticky top-16 z-40 border-b border-default bg-default">
+    <div class="sticky top-0 z-40 border-b border-default bg-default">
       <div class="mx-auto flex h-11 max-w-7xl items-center gap-6 overflow-x-auto px-4 sm:px-6 lg:px-8">
         <button
           v-for="cat in cats"
@@ -79,7 +79,7 @@
           <img
             :src="photo.thumbnail_url || photo.local_url || photo.google_url"
             :alt="photo.description || ''"
-            class="block w-full transition-opacity duration-200 group-hover:opacity-80"
+    <div class="sticky top-0 z-40 border-b border-default bg-default">
             loading="lazy"
           >
           <div class="absolute inset-0 flex items-end bg-linear-to-t from-black/60 to-transparent p-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100">

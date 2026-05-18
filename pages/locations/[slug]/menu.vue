@@ -36,7 +36,7 @@
 
     <!-- Sticky category tab bar -->
     <div v-else>
-      <div class="sticky top-16 z-40 border-b border-default bg-default">
+      <div class="sticky top-0 z-40 border-b border-default bg-default">
         <div class="mx-auto flex h-12 max-w-7xl gap-8 overflow-x-auto px-4 sm:px-6 lg:px-8">
           <a
             v-for="cat in categories"
