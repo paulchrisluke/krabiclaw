@@ -13,6 +13,8 @@
      bg-primary / text-primary / ring-primary utilities and all Nuxt UI
      components using color="primary" resolve to the tenant brand color. */
   --color-primary:      var(--saya-primary);
+  /* WCAG foreground: #8F1D21 has 8.75:1 contrast with white — white text is safe */
+  --primary-foreground: #ffffff;
   --saya-bg:            #FFFFFF;
   --saya-bg-alt:        #FAFAFA;
   --saya-bg-inverted:   #09090B;
@@ -46,6 +48,9 @@
 
   --saya-primary:       #D16063;
   --color-primary:      var(--saya-primary);
+  /* WCAG foreground: #D16063 has only ~3.7:1 contrast with white (fails AA).
+     Use near-black text instead — 11:1 contrast against #D16063. */
+  --primary-foreground: #18060a;
   --saya-bg:            #09090B;
   --saya-bg-alt:        #121216;
   --saya-bg-inverted:   #FAFAFA;
@@ -118,6 +123,11 @@
 }
 .saya-body    { font-size: 16px; line-height: 1.65; }
 .saya-body-lg { font-size: 18px; line-height: 1.6; }
+
+/* WCAG accessibility: any element that uses bg-primary as a background must
+   read --primary-foreground for its text colour so contrast is always ≥4.5:1.
+   Nuxt UI solid primary buttons generate a bg-primary class, so this covers them too. */
+.bg-primary { color: var(--primary-foreground, #fff); }
 
 /* Menu dotted leader line */
 .saya-dotted-leader {

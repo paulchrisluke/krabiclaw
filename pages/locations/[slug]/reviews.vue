@@ -28,8 +28,8 @@
           </p>
         </div>
       </header>
-      <!-- Aggregate band -->
-      <section class="border-b border-default border-t bg-elevated">
+      <!-- Aggregate band — only shown when there are actual reviews -->
+      <section v-if="reviews.length > 0" class="border-b border-default border-t bg-elevated">
         <div class="mx-auto grid max-w-7xl items-center gap-20 px-4 py-14 sm:px-6 lg:grid-cols-[1fr_1.4fr] lg:px-8">
           <!-- Big score -->
           <div>
@@ -68,8 +68,8 @@
         </div>
       </section>
 
-      <!-- Filter chips -->
-      <div class="sticky top-0 z-40 border-b border-default bg-default">
+      <!-- Filter chips — only shown when there are reviews to filter -->
+      <div v-if="reviews.length > 0" class="sticky top-16 z-40 border-b border-default bg-default">
         <div class="mx-auto flex h-11 max-w-7xl items-center gap-6 overflow-x-auto px-4 sm:px-6 lg:px-8">
           <span class="text-[10px] font-bold uppercase tracking-widest text-muted/60">Filter</span>
           <button
@@ -91,7 +91,17 @@
 
       <!-- Review list -->
       <section class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
-        <div v-if="filtered.length === 0" class="rounded-3xl border border-dashed border-default p-14 text-center">
+        <!-- True empty: no reviews at all -->
+        <div v-if="reviews.length === 0" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default py-20 text-center">
+          <div class="flex size-14 items-center justify-center rounded-full bg-elevated text-muted">
+            <UIcon name="i-heroicons-star" class="size-7" />
+          </div>
+          <div class="mt-6 saya-display saya-italic text-3xl text-default">No reviews yet.</div>
+          <p class="mt-2 max-w-sm text-sm text-muted">Be the first to share your experience with us on Google.</p>
+        </div>
+
+        <!-- Has reviews but active filter hides them -->
+        <div v-else-if="filtered.length === 0" class="rounded-3xl border border-dashed border-default p-14 text-center">
           <div class="saya-display saya-italic text-2xl text-default">No reviews match this filter.</div>
           <p class="mt-2 text-sm text-muted">Switch filter, or read all reviews.</p>
           <button

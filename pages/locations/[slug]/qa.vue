@@ -85,7 +85,7 @@
             :href="location?.gmb_qa_url || '#'"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex items-center rounded-full bg-primary px-6 py-2.5 text-xs font-semibold uppercase tracking-widest text-primary-content shadow-sm transition hover:opacity-90"
+            class="inline-flex items-center rounded-full bg-primary px-6 py-2.5 text-xs font-semibold uppercase tracking-widest text-(--primary-foreground,#fff) shadow-sm transition hover:opacity-90"
           >
             Ask a question →
           </a>
