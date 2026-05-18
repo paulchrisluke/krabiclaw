@@ -323,7 +323,7 @@
           <div v-else-if="activeFieldDef?.type === 'media'" class="space-y-2">
             <label class="block text-sm font-medium text-default">{{ activeFieldDef.label }}</label>
             <MediaPicker
-              :model-value="editingValue || null"
+              :model-value="(activeField === 'hero.image' || activeField === 'hero.video') ? editingValue || null : pendingMediaAssetId"
               :site-id="siteId"
               :accept="activeFieldDef?.mediaKind ?? 'any'"
               :title="activeFieldDef.label"
@@ -553,9 +553,10 @@ const groupConfig: Record<string, Array<{ id: string; label: string; icon: strin
     { id: 'cta',   label: 'Call to Action', icon: 'i-heroicons-megaphone', fields: ['cta.title', 'cta.description'] },
   ],
   about: [
-    { id: 'hero',    label: 'Hero Section', icon: 'i-heroicons-photo',      fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
-    { id: 'story',   label: 'Story',        icon: 'i-heroicons-book-open',  fields: ['story.intro', 'journey.title', 'journey.body', 'experience.body'] },
-    { id: 'cuisine', label: 'Cuisine',      icon: 'i-heroicons-sparkles',   fields: ['grill.title', 'grill.description', 'sushi.title', 'sushi.description'] },
+    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo',      fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'story',   label: 'Story',           icon: 'i-heroicons-book-open',  fields: ['story.image', 'story.title', 'story.body'] },
+    { id: 'journey', label: 'Journey',         icon: 'i-heroicons-map',        fields: ['journey.title', 'journey.body'] },
+    { id: 'cta',     label: 'Call to Action',  icon: 'i-heroicons-megaphone',  fields: ['cta.title'] },
   ],
   contact: [
     { id: 'hero',    label: 'Hero Section', icon: 'i-heroicons-photo',         fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
@@ -607,6 +608,7 @@ const fieldHasActiveGoogleSync = (fieldKey: string): boolean =>
 const selectField = (key: string) => {
   activeField.value = key
   editingValue.value = currentValues.value[key] || ''
+  pendingMediaAssetId.value = null
   
   // Find which group this field belongs to
   const group = currentPageGroups.value.find(g => g.fields.includes(key))
@@ -658,8 +660,18 @@ const onRichTextPaste = (e: ClipboardEvent) => {
   editingValue.value = DOMPurify.sanitize(target.innerHTML)
 }
 
+// Tracks the picked asset ID separately so MediaPicker can show the thumbnail
+// within the current editor session. On reload, non-hero media editingValue is
+// a public URL (not an ID), so the picker falls back to showing "Select media".
+const pendingMediaAssetId = ref<string | null>(null)
+
 function onMediaChange(asset: { id: string; publicUrl: string } | null) {
-  editingValue.value = asset?.id ?? ''
+  const isHeroMedia = activeField.value === 'hero.image' || activeField.value === 'hero.video'
+  // Hero media: backend stores asset ID in a dedicated column and resolves URL via JOIN.
+  // Other media fields: store the public URL in the content column so it's directly
+  // usable as an <img src> on public pages without an additional API round-trip.
+  editingValue.value = isHeroMedia ? (asset?.id ?? '') : (asset?.publicUrl ?? '')
+  pendingMediaAssetId.value = asset?.id ?? null
 }
 
 const richtextCommands = [

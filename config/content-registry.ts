@@ -254,92 +254,57 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Page Title',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'About Saya Kitchen'
+        defaultValue: 'About Us',
+        placeholder: 'e.g. About Us'
       },
       'hero.subtitle': {
         label: 'Page Subtitle',
         type: 'textarea',
         sources: ['manual'],
-        defaultValue: 'Japanese fire, Southern Thai hospitality'
+        defaultValue: 'Japanese fire, Southern Thai hospitality',
+        placeholder: 'A short tagline shown under the page title'
       },
-      'hero.image': {
-        label: 'Hero Image',
+      'story.image': {
+        label: 'Story Image',
         type: 'media',
         mediaKind: 'image',
         sources: ['manual'],
         defaultValue: ''
       },
-      'story.intro': {
-        label: 'Story Introduction',
-        type: 'richtext',
-        sources: ['manual'],
-        defaultValue: '<p class="text-xl font-medium text-default border-l-4 border-default pl-6 py-2">Saya Kitchen brings the warmth of Japanese robatayaki to Krabi, pairing open-flame cooking with pristine seafood, seasonal produce, and generous island hospitality.</p>'
-      },
-      'grill.title': {
-        label: 'Grill Section Title',
+      'story.title': {
+        label: 'Story Title',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'Mastery of the Grill'
+        defaultValue: 'Our Story',
+        placeholder: 'e.g. Finding Inspiration in Every Turn'
       },
-      'grill.description': {
-        label: 'Grill Description',
+      'story.body': {
+        label: 'Story Body',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: 'Our chefs work over glowing charcoal, turning seafood, vegetables, and skewers slowly so each dish carries smoke, texture, and quiet precision.'
-      },
-      'sushi.title': {
-        label: 'Sushi Section Title',
-        type: 'text',
-        sources: ['manual'],
-        defaultValue: 'Artistry in Sushi'
-      },
-      'sushi.description': {
-        label: 'Sushi Description',
-        type: 'richtext',
-        sources: ['manual'],
-        defaultValue: "Alongside the grill, Saya's sushi counter serves clean, balanced rolls and sashimi shaped by fresh ingredients and careful hands."
+        defaultValue: '',
+        placeholder: 'Tell your restaurant\'s story — how it started, what drives you, why it matters.'
       },
       'journey.title': {
-        label: 'Journey Section Title',
+        label: 'Journey Title',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'Our Journey'
+        defaultValue: 'Our Journey',
+        placeholder: 'e.g. Our Journey'
       },
       'journey.body': {
         label: 'Journey Body',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: '<p>Founded as a neighborhood dining room for travelers and locals, Saya Kitchen was created around one simple idea: honest Japanese cooking served with the ease of Krabi nights.</p>'
+        defaultValue: '',
+        placeholder: 'Describe the journey — founding story, milestones, what shaped the restaurant.'
       },
-      'experience.body': {
-        label: 'Experience Description',
-        type: 'richtext',
-        sources: ['manual'],
-        defaultValue: '<p>Settle in for grilled skewers, chilled sake, bright sushi, and a room that moves at the pace of a long dinner with friends.</p>'
-      },
-      'business.establishment_year': {
-        label: 'Establishment Year',
+      'cta.title': {
+        label: 'CTA Heading',
         type: 'text',
-        sources: ['manual', 'google'],
-        googlePath: 'establishmentYear',
-        googleLocked: true,
-        integrationConfig: {
-          type: 'google_business',
-          syncDirection: 'two_way',
-          conflictResolution: 'integration_wins'
-        }
-      },
-      'business.description': {
-        label: 'Google Business Description',
-        type: 'richtext',
-        sources: ['manual', 'google'],
-        googlePath: 'profile.description',
-        googleLocked: true,
-        integrationConfig: {
-          type: 'google_business',
-          syncDirection: 'two_way',
-          conflictResolution: 'integration_wins'
-        }
+        sources: ['manual'],
+        defaultValue: 'Come dine with us',
+        placeholder: 'e.g. Come dine with us'
       }
     }
   },

@@ -5,42 +5,60 @@
     <div v-if="!isPlatform">
       <SayaHero
         :title="getField('hero.title', 'About Us')"
-        :subtitle="getField('hero.subtitle', 'Our Story')"
+        :subtitle="getField('hero.subtitle', '')"
         size="page"
-        :establishment-year="establishmentYear"
       />
-      <SayaAbout
-        :title="getField('story-title', 'Finding Inspiration in Every Turn')"
-        :image="googleMedia[0]?.googleUrl"
-        :image-alt="googleMedia[0]?.altText || googleMedia[0]?.description || 'Restaurant image'"
-        bg="white"
-        padding="xl"
-      >
-        <!-- eslint-disable vue/no-v-html -->
-        <div class="space-y-12 text-default text-lg leading-relaxed max-w-none">
-          <div class="text-xl font-medium border-l-4 border-current pl-6 py-2 opacity-80" v-html="getField('story.intro', 'Welcome to our restaurant, where culinary tradition meets modern creativity.')" />
-          <div class="grid md:grid-cols-2 gap-12 pt-8">
-            <div>
-              <h3 class="text-2xl font-bold text-default mb-4">{{ getField('grill.title', 'Our Specialties') }}</h3>
-              <div class="text-muted prose prose-sm max-w-none" v-html="getField('grill.description', 'Our restaurant showcases mastery of culinary techniques, presenting a delectable array of dishes.')" />
-            </div>
-            <div>
-              <h3 class="text-2xl font-bold text-default mb-4">{{ getField('sushi.title', 'Our Craft') }}</h3>
-              <div class="text-muted prose prose-sm max-w-none" v-html="getField('sushi.description', 'Skilled chefs artfully craft a variety of dishes with care and precision.')" />
+
+      <!-- Story: image + title + body -->
+      <AppSection bg="white" padding="xl">
+        <div class="max-w-4xl mx-auto">
+          <div class="mb-12 overflow-hidden rounded-3xl h-96">
+            <img
+              v-if="getField('story.image')"
+              :src="getField('story.image')"
+              alt="Our story"
+              class="w-full h-full object-cover"
+            >
+            <div
+              v-else
+              class="w-full h-full bg-muted flex items-center justify-center border-2 border-dashed border-default"
+            >
+              <span class="text-muted italic text-sm">Add a story image</span>
             </div>
           </div>
-          <div class="bg-muted rounded-3xl p-10 md:p-16 my-16">
-            <h2 class="text-3xl font-bold text-default mb-8 italic">{{ getField('journey.title', 'Our Story') }}</h2>
-            <div class="text-muted prose prose-sm max-w-none" v-html="getField('journey.body', 'Our restaurant has a unique story to tell.')" />
-          </div>
-          <div class="text-muted prose prose-sm max-w-none" v-html="getField('experience.body', 'Our culinary team orchestrates amazing flavors and textures.')" />
-          <div v-if="businessDescription" class="mt-20 pt-20 border-t border-default">
-            <h4 class="text-sm font-bold uppercase tracking-widest text-dimmed mb-8">About</h4>
-            <div class="text-muted prose prose-sm max-w-none" v-html="businessDescription" />
+
+          <h2 class="font-black italic tracking-tighter text-4xl md:text-5xl text-default leading-none mb-8">
+            {{ getField('story.title', 'Our Story') }}
+          </h2>
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <div class="prose prose-lg max-w-none text-default" v-html="getField('story.body', '')" />
+        </div>
+      </AppSection>
+
+      <!-- Journey -->
+      <AppSection bg="alt" padding="xl">
+        <div class="max-w-4xl mx-auto">
+          <div class="bg-muted rounded-3xl p-10 md:p-16">
+            <h2 class="text-3xl font-bold text-default mb-8 italic">
+              {{ getField('journey.title', 'Our Journey') }}
+            </h2>
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div class="prose prose-lg max-w-none text-muted" v-html="getField('journey.body', '')" />
           </div>
         </div>
-        <!-- eslint-enable vue/no-v-html -->
-      </SayaAbout>
+      </AppSection>
+
+      <!-- CTA -->
+      <AppSection bg="black" padding="lg">
+        <div class="max-w-4xl mx-auto text-center py-8">
+          <h2 class="saya-display text-4xl md:text-5xl text-inverted mb-10">
+            {{ getField('cta.title', 'Come dine with us') }}
+          </h2>
+          <UButton to="/reservations" size="xl" color="neutral" variant="outline" class="rounded-full">
+            Reserve a Table
+          </UButton>
+        </div>
+      </AppSection>
     </div>
 
     <!-- ── PLATFORM: KrabiClaw about page ────────────────── -->
@@ -93,17 +111,6 @@ const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 const route = useRoute()
 const requestURL = useRequestURL()
-
-const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/google-business`, {
-  key: `about-google-business-${siteId}`,
-  default: () => ({ business: null, media: [] }),
-  enabled: () => !isPlatform && !!siteId
-})
-
-const establishmentYear = computed(() => googleBusiness.value?.business?.establishmentYear ?? null)
-const businessDescription = computed(() => googleBusiness.value?.business?.profile?.description ?? '')
-const googleMedia = computed(() => googleBusiness.value?.media ?? [])
-
 
 if (isPlatform) {
   useOrganizationSchema()
