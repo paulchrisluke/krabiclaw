@@ -6,8 +6,14 @@
       <div class="grid gap-16 border-b border-inverted/10 pb-14 lg:grid-cols-[1fr_1.4fr]">
         <!-- Brand column -->
         <div>
-          <NuxtLink to="/" class="saya-display block text-5xl text-inverted no-underline leading-none">
-            {{ restaurantName }}
+          <NuxtLink to="/" class="block no-underline leading-none">
+            <img
+              v-if="logoUrl"
+              :src="logoUrl"
+              :alt="restaurantName"
+              class="h-12 w-auto max-w-40 object-contain brightness-0 invert"
+            />
+            <span v-else class="saya-display text-5xl text-inverted">{{ restaurantName }}</span>
           </NuxtLink>
           <p class="mt-4 max-w-xs text-sm leading-relaxed text-inverted/60">
             {{ tagline }}
@@ -96,16 +102,19 @@
         </div>
       </div>
 
-      <!-- Delivery partners row -->
-      <div class="flex flex-wrap items-center gap-8 border-b border-inverted/10 py-10">
+      <!-- Delivery partners row — only rendered when at least one link is configured -->
+      <div v-if="orderLinks.length" class="flex flex-wrap items-center gap-8 border-b border-inverted/10 py-10">
         <span class="saya-eyebrow text-inverted/50">Order online</span>
-        <span
-          v-for="partner in deliveryPartners"
-          :key="partner"
-          class="saya-display text-lg saya-italic text-inverted/40"
+        <a
+          v-for="link in orderLinks"
+          :key="link.label"
+          :href="link.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="saya-display text-lg saya-italic text-inverted/60 transition hover:text-inverted"
         >
-          {{ partner }}
-        </span>
+          {{ link.label }}
+        </a>
       </div>
 
       <!-- Legal bar -->
@@ -128,7 +137,13 @@ import { DEFAULT_RESTAURANT_NAME } from '~/config/constants'
 import { getTodayGoogleHours } from '~/utils/formatters'
 
 const { isPlatform, siteId, site } = useTenantSite()
-const { getField } = usePageContent('contact')
+
+const { data: siteConfigData } = !isPlatform && siteId
+  ? useFetch(`/api/public/sites/${siteId}/config`, {
+      key: `footer-config-${siteId}`,
+      default: () => ({ config: {} })
+    })
+  : { data: ref({ config: {} }) }
 
 const year = new Date().getFullYear()
 const restaurantName = computed(() => {
@@ -137,13 +152,44 @@ const restaurantName = computed(() => {
   }
   return DEFAULT_RESTAURANT_NAME
 })
-const tagline = computed(() => getField('footer.tagline', 'Authentic dining, crafted with passion.'))
+const logoUrl = computed(() => {
+  if (site && typeof site === 'object' && 'logo_url' in site && typeof site.logo_url === 'string' && site.logo_url) {
+    return site.logo_url
+  }
+  return null
+})
+const siteConfig = computed(() => (siteConfigData.value as ApiValue)?.config ?? {})
+const tagline = computed(() => (siteConfig.value as ApiValue)?.footer_tagline || 'Authentic dining, crafted with passion.')
 
-const deliveryPartners = ['Uber Eats', 'GrabFood', 'FoodPanda']
+const primaryLocation = computed<PublicLocation | null>(() =>
+  rawLocations.value.find((l: PublicLocation) => l.is_primary) ?? rawLocations.value[0] ?? null
+)
 
-const facebookUrl = computed(() => getField('social.facebook', ''))
-const instagramUrl = computed(() => getField('social.instagram', ''))
-const tiktokUrl = computed(() => getField('social.tiktok', ''))
+interface OrderLink { label: string; url: string }
+const orderLinks = computed<OrderLink[]>(() => {
+  const loc = primaryLocation.value
+  if (!loc) return []
+  return [
+    { label: 'Grab', url: loc.grab_url ?? '' },
+    { label: 'Uber Eats', url: loc.uber_eats_url ?? '' },
+    { label: 'FoodPanda', url: loc.foodpanda_url ?? '' },
+  ].filter(o => o.url)
+})
+
+function safeHttpUrl(value: unknown): string | null {
+  if (!value || typeof value !== 'string') return null
+
+  try {
+    const url = new URL(value.trim())
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
+const facebookUrl = computed(() => safeHttpUrl((siteConfig.value as ApiValue)?.social_facebook) || '')
+const instagramUrl = computed(() => safeHttpUrl((siteConfig.value as ApiValue)?.social_instagram) || '')
+const tiktokUrl = computed(() => safeHttpUrl((siteConfig.value as ApiValue)?.social_tiktok) || '')
 
 interface SocialLink {
   name: string
@@ -162,6 +208,10 @@ interface PublicLocation {
   city?: string | null
   phone?: string | null
   googleBusinessHours?: ApiValue
+  is_primary?: boolean
+  grab_url?: string | null
+  uber_eats_url?: string | null
+  foodpanda_url?: string | null
 }
 
 interface PublicLocationsResponse {

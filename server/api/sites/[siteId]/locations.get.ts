@@ -51,6 +51,7 @@ export default defineEventHandler(async (event) => {
              bl.website_url, bl.maps_url, bl.latitude, bl.longitude,
              bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level,
              bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id,
+             bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
              bl.rating, bl.review_count, bl.is_primary, bl.status,
              bl.last_synced_at, bl.google_location_id, bl.google_connection_id,
              bl.hero_image_asset_id, bl.hero_video_asset_id, ma.public_url, ma.kind

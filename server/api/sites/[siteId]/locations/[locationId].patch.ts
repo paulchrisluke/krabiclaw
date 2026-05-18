@@ -22,6 +22,9 @@ interface UpdateLocationBody {
   facebook_url?: string
   instagram_url?: string
   tiktok_url?: string
+  grab_url?: string
+  uber_eats_url?: string
+  foodpanda_url?: string
   google_place_id?: string
   rating?: number | string | null
   review_count?: number | string | null
@@ -68,6 +71,32 @@ const slugify = (value: string) =>
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+
+function optionalHttpUrl(value: unknown, field: string): string | null {
+  if (value === undefined || value === null || value === '') return null
+
+  if (typeof value !== 'string') {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `${field} must be a URL string`
+    })
+  }
+
+  try {
+    const url = new URL(value.trim())
+
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error('Invalid protocol')
+    }
+
+    return url.toString()
+  } catch {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `${field} must be a valid http:// or https:// URL`
+    })
+  }
+}
 
 async function ensureUniqueLocationSlug(
   db: D1Database,
@@ -242,12 +271,26 @@ export default defineEventHandler(async (event) => {
 
     const simpleFields: Array<[keyof UpdateLocationBody, string?]> = [
       ['email'], ['description'], ['short_description'], ['price_level'],
-      ['facebook_url'], ['instagram_url'], ['tiktok_url'], ['google_place_id'],
+      ['facebook_url'], ['instagram_url'], ['tiktok_url'],
+      ['google_place_id'],
     ]
     for (const [field] of simpleFields) {
       if (body[field] !== undefined) {
         setParts.push(`${field} = ?`)
         params.push((body[field] as string) || null)
+      }
+    }
+
+    const urlFields: Array<keyof UpdateLocationBody> = ['grab_url', 'uber_eats_url', 'foodpanda_url']
+    for (const field of urlFields) {
+      if (body[field] !== undefined) {
+        try {
+          const validated = optionalHttpUrl(body[field], field)
+          setParts.push(`${field} = ?`)
+          params.push(validated)
+        } catch (err) {
+          return jsonResponse({ error: err instanceof Error ? err.message : `Invalid ${field}` }, { status: 400 })
+        }
       }
     }
     if (body.special_hours !== undefined) {
@@ -298,8 +341,8 @@ export default defineEventHandler(async (event) => {
     const location = await db.prepare(`
       SELECT id, slug, title, address, city, phone, hero_image_asset_id, hero_video_asset_id, website_url,
              maps_url, opening_hours, description, short_description, email, price_level,
-             facebook_url, instagram_url, tiktok_url, google_place_id, rating, review_count,
-             is_primary, status, created_at, updated_at
+             facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
+             google_place_id, rating, review_count, is_primary, status, created_at, updated_at
       FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1

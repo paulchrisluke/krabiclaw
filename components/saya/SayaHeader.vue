@@ -10,11 +10,17 @@
       — restaurant sites that run themselves
     </div>
 
-    <header class="sticky top-0 z-50 border-b border-default bg-default/80 backdrop-blur-md">
+    <header ref="headerRef" class="sticky top-0 z-50 border-b border-default bg-default/80 backdrop-blur-md">
       <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <!-- Brand name -->
-        <NuxtLink to="/" class="saya-display shrink-0 text-2xl text-default no-underline">
-          {{ restaurantName }}
+        <!-- Brand logo / name -->
+        <NuxtLink to="/" class="shrink-0 no-underline">
+          <img
+            v-if="logoUrl"
+            :src="logoUrl"
+            :alt="restaurantName"
+            class="h-10 w-auto max-w-35 object-contain"
+          />
+          <span v-else class="saya-display text-2xl text-default">{{ restaurantName }}</span>
         </NuxtLink>
 
         <!-- Desktop nav -->
@@ -59,15 +65,15 @@
           <!-- Dark mode toggle -->
           <UColorModeButton variant="ghost" color="neutral" size="sm" />
 
-          <!-- Reserve CTA -->
+          <!-- Primary CTA: Order Now if delivery links exist, otherwise Reserve -->
           <UButton
-            to="/reservations"
+            :to="hasOrderLinks ? '/order' : '/reservations'"
             color="primary"
             variant="solid"
             size="sm"
             class="rounded-full"
           >
-            Reserve
+            {{ hasOrderLinks ? 'Order Now' : 'Reserve' }}
           </UButton>
 
           <!-- Mobile menu toggle -->
@@ -110,6 +116,14 @@
             Story
           </NuxtLink>
           <NuxtLink
+            v-if="hasOrderLinks"
+            to="/order"
+            class="rounded-full px-4 py-3 text-sm font-semibold text-primary hover:bg-muted"
+            @click="mobileMenuOpen = false"
+          >
+            Order Now
+          </NuxtLink>
+          <NuxtLink
             to="/reservations"
             class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
@@ -131,7 +145,8 @@
 
 <script setup lang="ts">
 interface Site {
-  name?: string
+  brand_name?: string | null
+  logo_url?: string | null
   plan?: string
 }
 
@@ -144,6 +159,25 @@ interface I18nComposable {
 const { isPlatform, siteId, site } = useTenantSite()
 const i18n = useI18n() as ApiValue as I18nComposable
 const mobileMenuOpen = ref(false)
+const headerRef = ref<HTMLElement | null>(null)
+let headerResizeObserver: ResizeObserver | null = null
+
+function syncHeaderHeight() {
+  if (!headerRef.value) return
+  document.documentElement.style.setProperty('--saya-header-height', `${headerRef.value.getBoundingClientRect().height}px`)
+}
+
+onMounted(() => {
+  syncHeaderHeight()
+  headerResizeObserver = new ResizeObserver(syncHeaderHeight)
+  if (headerRef.value) headerResizeObserver.observe(headerRef.value)
+  window.addEventListener('resize', syncHeaderHeight)
+})
+
+onUnmounted(() => {
+  headerResizeObserver?.disconnect()
+  window.removeEventListener('resize', syncHeaderHeight)
+})
 
 const currentLocale = computed(() => i18n.locale.value)
 const availableLocales = computed(() =>
@@ -156,7 +190,8 @@ const getLocaleFlag = (code: string) =>
   ({ en: '🇺🇸', th: '🇹🇭', ja: '🇯🇵', ar: '🇸🇦' }[code] ?? '🌐')
 const getCurrentLocaleFlag = () => getLocaleFlag(currentLocale.value)
 
-const restaurantName = computed(() => (site as Site | null)?.name ?? 'Saya')
+const restaurantName = computed(() => (site as Site | null)?.brand_name || 'Saya')
+const logoUrl = computed(() => (site as Site | null)?.logo_url || null)
 const sitePlan = computed(() => (site as Site | null)?.plan ?? 'free')
 const showBrandingStrip = computed(() => !isPlatform && sitePlan.value === 'free')
 
@@ -196,6 +231,10 @@ const locations = computed(() => {
   if (!currentSiteId.value) return []
   return locationsData.value?.locations ?? []
 })
+
+const hasOrderLinks = computed(() =>
+  locations.value.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
+)
 
 const locationDropdownItems = computed(() => [
   locations.value.map((loc: { title: string; slug: string }) => ({

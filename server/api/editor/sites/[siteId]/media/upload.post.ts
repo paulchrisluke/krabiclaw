@@ -9,7 +9,10 @@ import { createMediaAsset } from '~/server/utils/media-asset-manager'
 const MAX_BYTES = 50 * 1024 * 1024
 
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'])
-const ALLOWED_MIME_TYPES = new Set([...VIDEO_MIME_TYPES, 'application/pdf', 'image/svg+xml'])
+const IMAGE_MIME_TYPES = new Set(['image/avif'])
+const ALLOWED_MIME_TYPES = new Set([...VIDEO_MIME_TYPES, ...IMAGE_MIME_TYPES, 'application/pdf', 'image/svg+xml'])
+const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other'])
+type MediaCategory = 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other'
 
 function sanitizeFilename(raw: string | undefined): string {
   const sanitized = (raw ?? '')
@@ -41,6 +44,7 @@ function sniffMimeType(data: Uint8Array): string {
   if (data.byteLength >= 12
     && data[4] === 0x66 && data[5] === 0x74 && data[6] === 0x79 && data[7] === 0x70) {
     const brand = String.fromCharCode(data[8] ?? 0, data[9] ?? 0, data[10] ?? 0, data[11] ?? 0).toLowerCase()
+    if (brand.startsWith('avif') || brand.startsWith('avis')) return 'image/avif'
     if (brand.startsWith('qt')) return 'video/quicktime'
     return 'video/mp4'
   }
@@ -132,8 +136,18 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    const categoryPart = formData.find(p => p.name === 'category')
+    let category: MediaCategory | null = null
+    if (categoryPart?.data) {
+      const candidate = Buffer.from(categoryPart.data).toString().trim()
+      if (candidate) {
+        if (!VALID_CATEGORIES.has(candidate)) return jsonResponse({ error: 'Invalid category' }, { status: 400 })
+        category = candidate as MediaCategory
+      }
+    }
+
     const assetId = crypto.randomUUID()
-    const kind = VIDEO_MIME_TYPES.has(contentType) ? 'video' : 'file'
+    const kind = VIDEO_MIME_TYPES.has(contentType) ? 'video' : IMAGE_MIME_TYPES.has(contentType) ? 'image' : 'file'
     const r2Key = buildR2Key(siteId, assetId, filename)
 
     const publicUrl = await uploadToR2(env, r2Key, filePart.data, contentType)
@@ -152,6 +166,7 @@ export default defineEventHandler(async (event) => {
         mime_type: contentType,
         file_name: filename,
         file_size: fileSize,
+        category,
         status: 'active',
         created_by_user_id: session.user.id,
       })

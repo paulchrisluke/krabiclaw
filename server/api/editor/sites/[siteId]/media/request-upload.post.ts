@@ -11,6 +11,9 @@ interface SiteRow {
   organization_id: string
 }
 
+const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other'])
+type MediaCategory = 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other'
+
 export default defineEventHandler(async (event) => {
   try {
     const siteId = getRouterParam(event, 'siteId')
@@ -62,7 +65,22 @@ export default defineEventHandler(async (event) => {
       if (!/^[A-Za-z0-9_-]+$/.test(trimmedLocationId)) {
         return jsonResponse({ error: 'Invalid locationId' }, { status: 400 })
       }
+      const location = await db.prepare(`
+        SELECT id
+        FROM business_locations
+        WHERE id = ? AND site_id = ? AND organization_id = ?
+        LIMIT 1
+      `).bind(trimmedLocationId, siteId, site.organization_id).first()
+      if (!location) return jsonResponse({ error: 'Invalid locationId' }, { status: 400 })
       locationId = trimmedLocationId
+    }
+
+    let category: MediaCategory | null = null
+    if (body?.category !== undefined && body?.category !== null && body?.category !== '') {
+      if (typeof body.category !== 'string') return jsonResponse({ error: 'Invalid category' }, { status: 400 })
+      const normalizedCategory = body.category.trim()
+      if (!VALID_CATEGORIES.has(normalizedCategory)) return jsonResponse({ error: 'Invalid category' }, { status: 400 })
+      category = normalizedCategory as MediaCategory
     }
 
     const assetId = crypto.randomUUID()
@@ -84,6 +102,7 @@ export default defineEventHandler(async (event) => {
         cloudflare_image_id: imageId,
         status: 'pending',
         file_name: filename,
+        category,
         created_by_user_id: session.user.id,
       })
     } catch (error) {

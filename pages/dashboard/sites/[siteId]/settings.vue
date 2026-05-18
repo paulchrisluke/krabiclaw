@@ -3,7 +3,11 @@
     <UPageHeader
       title="Site Settings"
       description="Manage your website configuration, brand, and appearance"
-    />
+    >
+      <template #links>
+        <DashboardSiteHeaderLinks :links="headerLinks" />
+      </template>
+    </UPageHeader>
 
     <UPageBody>
       <div v-if="loading" class="space-y-6">
@@ -62,6 +66,30 @@
               <UInput :model-value="settings.theme" readonly class="opacity-50" />
               <template #help>More themes coming soon.</template>
             </UFormField>
+          </div>
+        </div>
+
+        <!-- Social -->
+        <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
+          <div>
+            <h2 class="font-semibold text-highlighted">Social & Footer</h2>
+            <p class="mt-1 text-sm text-muted">Links that appear in your site footer. Leave blank to hide an icon.</p>
+          </div>
+          <div class="space-y-5">
+            <UFormField label="Footer Tagline" help="Short line shown in the footer under your restaurant name.">
+              <UInput v-model="form.footer_tagline" placeholder="Authentic dining, crafted with passion." />
+            </UFormField>
+            <div class="grid gap-5 sm:grid-cols-3">
+              <UFormField label="Facebook URL">
+                <UInput v-model="form.social_facebook" placeholder="https://facebook.com/yourpage" />
+              </UFormField>
+              <UFormField label="Instagram URL">
+                <UInput v-model="form.social_instagram" placeholder="https://instagram.com/yourhandle" />
+              </UFormField>
+              <UFormField label="TikTok URL">
+                <UInput v-model="form.social_tiktok" placeholder="https://tiktok.com/@yourhandle" />
+              </UFormField>
+            </div>
           </div>
         </div>
 
@@ -307,6 +335,10 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const saving = ref(false)
 const settings = ref<ApiRecord | null>(null)
+const { buildHeaderLinks } = useDashboardSiteLinks(siteId, computed(() => {
+  const value = settings.value?.public_url
+  return typeof value === 'string' ? value : null
+}))
 const domains = ref<ApiRecord[]>([])
 const domainsLoading = ref(false)
 const addingDomain = ref(false)
@@ -325,7 +357,11 @@ const form = reactive({
   brand_color: '',
   default_currency: DEFAULT_CURRENCY,
   primary_location_id: null as string | null,
-  url_structure: 'location_subdirectories'
+  url_structure: 'location_subdirectories',
+  footer_tagline: '',
+  social_facebook: '',
+  social_instagram: '',
+  social_tiktok: '',
 } as {
   brand_name: string
   brand_description: string
@@ -335,6 +371,10 @@ const form = reactive({
   default_currency: CurrencyCode
   primary_location_id: string | null
   url_structure: string
+  footer_tagline: string
+  social_facebook: string
+  social_instagram: string
+  social_tiktok: string
 })
 
 const toSubdomainSlug = (s: string) =>
@@ -345,6 +385,14 @@ const previewSubdomain = computed(() => {
   return slug || (settings.value?.subdomain ?? '')
 })
 
+const DEFAULT_URL_STRUCTURE = 'location_subdirectories'
+
+function normalizeUrlStructure(value: unknown): string {
+  return typeof value === 'string' && value.length > 0
+    ? value
+    : DEFAULT_URL_STRUCTURE
+}
+
 const isDirty = computed(() => {
   if (!settings.value) return false
   return (
@@ -354,9 +402,15 @@ const isDirty = computed(() => {
     form.contact_email !== settings.value.contact_email ||
     form.brand_color !== (settings.value.brand_color || '') ||
     form.default_currency !== (settings.value.default_currency || DEFAULT_CURRENCY) ||
-    form.url_structure !== settings.value.url_structure
+    form.url_structure !== normalizeUrlStructure(settings.value.url_structure) ||
+    form.footer_tagline !== (settings.value.footer_tagline || '') ||
+    form.social_facebook !== (settings.value.social_facebook || '') ||
+    form.social_instagram !== (settings.value.social_instagram || '') ||
+    form.social_tiktok !== (settings.value.social_tiktok || '')
   )
 })
+
+const headerLinks = computed(() => buildHeaderLinks())
 
 const loadSettings = async () => {
   loading.value = true
@@ -375,14 +429,36 @@ const loadSettings = async () => {
   }
 }
 
+function normalizeOptionalHttpUrl(value: unknown): string | null {
+  if (!value || typeof value !== 'string' || !value.trim()) return null
+
+  try {
+    const url = new URL(value.trim())
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error('URL must start with http:// or https://')
+    }
+
+    return url.toString()
+  } catch {
+    throw new Error('Enter a valid http:// or https:// URL.')
+  }
+}
+
 const saveSettings = async () => {
   saving.value = true
   error.value = null
 
   try {
+    const payload = {
+      ...form,
+      social_facebook: normalizeOptionalHttpUrl(form.social_facebook) || '',
+      social_instagram: normalizeOptionalHttpUrl(form.social_instagram) || '',
+      social_tiktok: normalizeOptionalHttpUrl(form.social_tiktok) || ''
+    }
+
     const response = await $fetch<ApiRecord>(`/api/sites/${siteId}/settings`, {
       method: 'PATCH',
-      body: { ...form }
+      body: payload
     })
 
     if (!response.success) throw new Error('Failed to save settings')
@@ -409,7 +485,11 @@ const resetForm = () => {
   const currency = (settings.value as ApiValue).default_currency
   form.default_currency = isCurrencyCode(currency) ? currency : DEFAULT_CURRENCY
   form.primary_location_id = settings.value.primary_location_id || null
-  form.url_structure = settings.value.url_structure || 'location_subdirectories'
+  form.url_structure = normalizeUrlStructure(settings.value.url_structure)
+  form.footer_tagline = (settings.value as ApiValue).footer_tagline || ''
+  form.social_facebook = (settings.value as ApiValue).social_facebook || ''
+  form.social_instagram = (settings.value as ApiValue).social_instagram || ''
+  form.social_tiktok = (settings.value as ApiValue).social_tiktok || ''
 }
 
 function handleLogoChange(_asset: { id: string; publicUrl: string; thumbnailUrl: string } | null) {

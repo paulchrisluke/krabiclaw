@@ -162,7 +162,8 @@
             </NuxtLink>
           </div>
           <div v-else class="mt-12 flex flex-wrap gap-4">
-            <UButton to="/reservations" color="neutral" variant="solid" size="xl" class="rounded-full bg-white! text-black! hover:bg-zinc-100!">Reserve a table</UButton>
+            <UButton v-if="hasOrderLinks" to="/order" color="neutral" variant="solid" size="xl" class="rounded-full bg-white! text-black! hover:bg-zinc-100!">Order Now</UButton>
+            <UButton :to="hasOrderLinks ? '/reservations' : '/reservations'" color="neutral" :variant="hasOrderLinks ? 'outline' : 'solid'" size="xl" class="rounded-full" :class="hasOrderLinks ? 'border-white/50 text-white hover:bg-white/10' : 'bg-white! text-black! hover:bg-zinc-100!'">Reserve a table</UButton>
           </div>
         </div>
       </section>
@@ -432,9 +433,10 @@
           />
           <!-- eslint-enable vue/no-v-html -->
         </div>
-        <UButton to="/reservations" color="primary" variant="solid" size="xl" class="rounded-full">
-          Reserve a table
-        </UButton>
+        <div class="flex flex-wrap gap-4">
+          <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">Order Now</UButton>
+          <UButton to="/reservations" color="primary" :variant="hasOrderLinks ? 'outline' : 'solid'" size="xl" class="rounded-full">Reserve a table</UButton>
+        </div>
       </section>
     </div>
   </NuxtLayout>
@@ -529,6 +531,9 @@ const { data: locationsData } = isPlatform
 
 const locations = computed(() => locationsData.value?.locations || [])
 const hasLocations = computed(() => locations.value.length > 0)
+const hasOrderLinks = computed(() =>
+  locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
+)
 
 // Get brand menu for preview
 const {

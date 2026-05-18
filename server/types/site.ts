@@ -39,6 +39,10 @@ export interface UpdateSiteSettingsRequest {
   primary_location_id?: string
   url_structure?: 'location_subdirectories' | 'brand_pages'
   last_published_at?: string
+  social_facebook?: string
+  social_instagram?: string
+  social_tiktok?: string
+  footer_tagline?: string
 }
 
 export interface LaunchReadiness {

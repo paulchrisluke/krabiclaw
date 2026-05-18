@@ -35,6 +35,9 @@ interface LocationRow {
   city: string | null
   public_url: string | null
   kind: string | null
+  grab_url: string | null
+  uber_eats_url: string | null
+  foodpanda_url: string | null
 }
 
 const parseJson = (raw: string | null): JsonValue => {
@@ -83,7 +86,8 @@ export default defineEventHandler(async (event) => {
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
              bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
              bl.is_primary, bl.status, bl.last_synced_at, bl.google_location_id,
-             bl.google_connection_id, bl.city, ma.public_url, ma.kind
+             bl.google_connection_id, bl.city, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
+             ma.public_url, ma.kind
       FROM business_locations bl
       LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
       WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
@@ -118,7 +122,10 @@ export default defineEventHandler(async (event) => {
       status: location.status,
       public_url: location.public_url,
       kind: location.kind || 'image',
-      city: location.city
+      city: location.city,
+      grab_url: location.grab_url || null,
+      uber_eats_url: location.uber_eats_url || null,
+      foodpanda_url: location.foodpanda_url || null
     }))
     
     return jsonResponse({

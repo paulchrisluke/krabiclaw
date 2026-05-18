@@ -43,12 +43,12 @@ export default defineEventHandler(async (event) => {
   try {
     // Verify user has admin/owner permissions for settings
     const site = await db.prepare(`
-      SELECT s.id, s.organization_id, s.settings FROM sites s
+      SELECT s.id, s.organization_id, s.subdomain, s.settings FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
+    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; subdomain: string | null; settings: string | null }>()
     
     if (!site) {
       return jsonResponse({ 
@@ -165,6 +165,29 @@ export default defineEventHandler(async (event) => {
       setParts.push('last_published_at = ?')
       params.push(body.last_published_at)
     }
+    const socialUrlKeys = new Set(['social_facebook', 'social_instagram', 'social_tiktok'])
+    for (const key of ['social_facebook', 'social_instagram', 'social_tiktok', 'footer_tagline'] as const) {
+      if (body[key] !== undefined) {
+        const value = body[key]
+        if (value) {
+          if (socialUrlKeys.has(key)) {
+            try {
+              const url = new URL(value)
+              if (!['http:', 'https:'].includes(url.protocol) || !url.hostname) {
+                await deleteConfig(db, site.organization_id as string, siteId, key)
+                continue
+              }
+            } catch {
+              await deleteConfig(db, site.organization_id as string, siteId, key)
+              continue
+            }
+          }
+          await setConfig(db, site.organization_id as string, siteId, key, value)
+        } else {
+          await deleteConfig(db, site.organization_id as string, siteId, key)
+        }
+      }
+    }
 
     setParts.push('updated_at = ?')
     setParts.push('updated_by = ?')
@@ -182,10 +205,13 @@ export default defineEventHandler(async (event) => {
       throw new Error('Failed to update site settings')
     }
 
-    // If brand_name changed, sync subdomain record and public_url via createSystemSubdomain
+    // Only re-register the subdomain when it actually changed to avoid hitting
+    // the CF Pages API on every save (which errors if the domain is already registered).
     if (body.brand_name !== undefined) {
       const slug = body.brand_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 30)
-      await createSystemSubdomain(env, db, siteId, site.organization_id as string, slug)
+      if (slug !== site.subdomain) {
+        await createSystemSubdomain(env, db, siteId, site.organization_id as string, slug)
+      }
     }
 
     // Get updated settings
@@ -224,6 +250,10 @@ export default defineEventHandler(async (event) => {
       brand_color: siteConfig.brand_color || '',
       default_currency: siteConfig?.default_currency || 'THB',
       url_structure: siteSettings.url_structure || 'location_subdirectories',
+      social_facebook: siteConfig.social_facebook || '',
+      social_instagram: siteConfig.social_instagram || '',
+      social_tiktok: siteConfig.social_tiktok || '',
+      footer_tagline: siteConfig.footer_tagline || '',
       last_published_at: updatedSite.last_published_at,
       created_at: updatedSite.created_at,
       updated_at: updatedSite.updated_at

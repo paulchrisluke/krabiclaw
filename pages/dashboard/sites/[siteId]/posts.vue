@@ -2,7 +2,7 @@
   <UPage>
     <UPageHeader title="Posts" description="Write, schedule, and publish content to your site and social channels.">
       <template #links>
-        <UButton icon="i-heroicons-plus" color="primary" @click="openCompose()">New post</UButton>
+        <DashboardSiteHeaderLinks :links="headerLinks" />
       </template>
     </UPageHeader>
 
@@ -146,6 +146,11 @@ definePageMeta({ layout: 'dashboard' })
 const route = useRoute()
 const siteId = route.params.siteId as string
 const toast = useToast()
+const sitePublicUrl = ref<string | null>(null)
+const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
+const headerLinks = computed(() => buildHeaderLinks([
+  { label: 'New post', icon: 'i-heroicons-plus', color: 'primary' as const, onClick: openCompose }
+]))
 
 // Posts list
 const posts = ref<ApiRecord[]>([])
@@ -161,7 +166,18 @@ const loadPosts = async () => {
   } catch { posts.value = [] } finally { loading.value = false }
 }
 
-onMounted(loadPosts)
+async function loadSitePublicUrl() {
+  try {
+    const response = await $fetch<{ success: boolean; settings: { public_url?: string | null } }>(`/api/sites/${siteId}/settings`)
+    sitePublicUrl.value = response.settings?.public_url || null
+  } catch {
+    sitePublicUrl.value = null
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([loadPosts(), loadSitePublicUrl()])
+})
 
 // Selection / compose
 const selectedPost = ref<ApiRecord | null>(null)

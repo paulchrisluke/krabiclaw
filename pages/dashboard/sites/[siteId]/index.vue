@@ -3,8 +3,11 @@
     <UPageHeader
       title="Overview"
       :description="site?.brand_name ?? ''"
-      :links="headerLinks"
-    />
+    >
+      <template #links>
+        <DashboardSiteHeaderLinks :links="headerLinks" />
+      </template>
+    </UPageHeader>
 
     <UPageBody>
       <div v-if="loading" class="space-y-4">
@@ -224,7 +227,7 @@
                 <p class="mt-1 text-sm text-muted">Choose a location to edit its menu and content.</p>
               </div>
               <UButton
-                :to="`/dashboard/sites/${siteId}/locations`"
+                :to="paths.locations"
                 icon="i-heroicons-arrow-right"
                 trailing
                 color="neutral"
@@ -239,7 +242,7 @@
             <NuxtLink
               v-for="location in locations"
               :key="location.id"
-              :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`"
+              :to="locationMenuPath(location.id)"
               class="group relative rounded-lg border border-default p-4 transition hover:bg-elevated"
             >
               <div class="flex items-start justify-between gap-3">
@@ -255,11 +258,11 @@
                 <UIcon name="i-heroicons-arrow-right" class="size-4 shrink-0 text-muted transition group-hover:text-primary" />
               </div>
               <div class="mt-3 flex items-center gap-2">
-                <UButton :to="`/dashboard/sites/${siteId}/menu?locationId=${location.id}`" size="xs" block>
+                <UButton :to="locationMenuPath(location.id)" size="xs" block>
                   Edit Menu
                 </UButton>
                 <UButton
-                  :to="`/dashboard/sites/${siteId}/locations`"
+                  :to="paths.locations"
                   size="xs"
                   color="neutral"
                   variant="ghost"
@@ -281,11 +284,11 @@
               </p>
             </div>
             <div class="flex flex-col gap-2">
-              <UButton :to="`/dashboard/sites/${siteId}/locations`" icon="i-heroicons-plus" color="primary" size="lg" block>
+              <UButton :to="paths.locations" icon="i-heroicons-plus" color="primary" size="lg" block>
                 Add Location
               </UButton>
               <UButton
-                :to="`/dashboard/sites/${siteId}/content`"
+                :to="paths.content"
                 icon="i-heroicons-document-text"
                 color="neutral"
                 variant="soft"
@@ -373,6 +376,10 @@ const reviewCount = ref(0)
 const progress = ref<SetupProgress | null>(null)
 const publishing = ref(false)
 const showRecommended = ref(false)
+const { paths, buildHeaderLinks, locationMenuPath } = useDashboardSiteLinks(siteId, computed(() => {
+  const value = site.value?.public_url
+  return typeof value === 'string' ? value : null
+}))
 
 // ─── Derived ─────────────────────────────────────────────────────────────────
 const platformHostname = computed(() => {
@@ -381,6 +388,8 @@ const platformHostname = computed(() => {
 })
 
 const publicUrl = computed(() => {
+  const fromApi = site.value?.public_url
+  if (typeof fromApi === 'string' && fromApi) return fromApi
   if (!site.value?.subdomain) return ''
   return `https://${site.value.subdomain}.${platformHostname.value}`
 })
@@ -402,17 +411,30 @@ const requiredProgress = computed(() => {
   return Math.round((progress.value.required_complete / progress.value.required_total) * 100)
 })
 
-const headerLinks = computed(() => [
-  {
-    label: 'View Site',
-    icon: 'i-heroicons-arrow-top-right-on-square',
-    to: publicUrl.value,
-    target: '_blank',
-    color: 'neutral' as const,
-    variant: 'outline' as const,
-    disabled: !publicUrl.value
+const headerLinks = computed(() => {
+  const links = [
+    {
+      label: 'Edit Content',
+      icon: 'i-heroicons-document-text',
+      to: paths.value.content,
+      color: 'neutral' as const,
+      variant: 'soft' as const
+    }
+  ]
+
+  const primaryLocation = locations.value.find((location: BusinessLocation) => location.is_primary) || locations.value[0]
+  if (primaryLocation) {
+    links.push({
+      label: 'Edit Menu',
+      icon: 'i-heroicons-list-bullet',
+      to: locationMenuPath(primaryLocation.id),
+      color: 'neutral' as const,
+      variant: 'soft' as const
+    })
   }
-])
+
+  return buildHeaderLinks(links, { includeOverview: false })
+})
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const addressLabel = (location: BusinessLocation) =>

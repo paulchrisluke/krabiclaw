@@ -2,9 +2,7 @@
   <UPage>
     <UPageHeader title="Media" description="Images and videos for this site.">
       <template #links>
-        <UButton icon="i-heroicons-arrow-up-tray" color="primary" :loading="uploadLoading" :disabled="uploadLoading" @click="openUploadPicker">
-          Upload
-        </UButton>
+        <DashboardSiteHeaderLinks :links="headerLinks" />
         <input ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploadLoading" @change="onFileSelect" />
       </template>
     </UPageHeader>
@@ -143,6 +141,17 @@ const route = useRoute()
 const siteId = route.params.siteId as string
 const siteApiBase = `/api/editor/sites/${encodeURIComponent(siteId)}`
 const toast = useToast()
+const sitePublicUrl = ref<string | null>(null)
+const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
+const headerLinks = computed(() => buildHeaderLinks([
+  {
+    label: 'Upload',
+    icon: 'i-heroicons-arrow-up-tray',
+    color: 'primary' as const,
+    disabled: uploadLoading.value,
+    onClick: openUploadPicker
+  }
+]))
 
 interface MediaAsset {
   id: string
@@ -448,5 +457,19 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-onMounted(load)
+async function loadSitePublicUrl() {
+  try {
+    const response = await $fetch<{ success: boolean; settings: { public_url?: string | null } }>(`/api/sites/${siteId}/settings`)
+    sitePublicUrl.value = response.settings?.public_url || null
+  } catch (e) {
+    if (import.meta.dev) {
+      console.error(`[media] Failed to load public URL for site ${siteId}`, e)
+    }
+    sitePublicUrl.value = null
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([load(), loadSitePublicUrl()])
+})
 </script>

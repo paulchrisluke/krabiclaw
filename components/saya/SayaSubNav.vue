@@ -25,8 +25,8 @@
       </div>
 
       <!-- Fade indicators for mobile scroll -->
-      <div class="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-default to-transparent lg:hidden" />
-      <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-default to-transparent lg:hidden" />
+      <div class="pointer-events-none absolute inset-y-0 left-0 w-8 bg-linear-to-r from-default to-transparent lg:hidden" />
+      <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-linear-to-l from-default to-transparent lg:hidden" />
     </div>
   </div>
 </template>

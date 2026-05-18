@@ -5,40 +5,65 @@
     <div v-if="!isPlatform">
       <SayaHero
         :title="getField('hero.title', 'About Us')"
-        :subtitle="getField('hero.subtitle', 'Our Story')"
+        :subtitle="getField('hero.subtitle', '')"
         size="page"
-        :establishment-year="establishmentYear"
       />
-      <SayaAbout
-        :title="getField('story-title', 'Finding Inspiration in Every Turn')"
-        :image="googleMedia[0]?.googleUrl"
-        :image-alt="googleMedia[0]?.altText || googleMedia[0]?.description || 'Restaurant image'"
-        bg="white"
-        padding="xl"
-      >
-        <div class="space-y-12 text-default text-lg leading-relaxed max-w-none">
-          <p class="text-xl font-medium border-l-4 border-current pl-6 py-2 opacity-80">{{ storyIntro }}</p>
-          <div class="grid md:grid-cols-2 gap-12 pt-8">
-            <div>
-              <h3 class="text-2xl font-bold text-default mb-4">{{ getField('grill.title', 'Our Specialties') }}</h3>
-              <p class="text-muted">{{ getField('grill.description', 'Our restaurant showcases mastery of culinary techniques, presenting a delectable array of dishes.') }}</p>
-            </div>
-            <div>
-              <h3 class="text-2xl font-bold text-default mb-4">{{ getField('sushi.title', 'Our Craft') }}</h3>
-              <p class="text-muted">{{ getField('sushi.description', 'Skilled chefs artfully craft a variety of dishes with care and precision.') }}</p>
+
+      <!-- Story: image + title + body -->
+      <AppSection bg="white" padding="xl">
+        <div class="max-w-4xl mx-auto">
+          <div class="mb-12 overflow-hidden rounded-3xl h-96">
+            <img
+              v-if="getField('story.image')"
+              :src="getField('story.image')"
+              alt="Our story"
+              class="w-full h-full object-cover"
+            >
+            <div
+              v-else
+              class="w-full h-full bg-muted flex items-center justify-center border-2 border-dashed border-default"
+            >
+              <span class="text-muted italic text-sm">Add a story image</span>
             </div>
           </div>
-          <div class="bg-muted rounded-3xl p-10 md:p-16 my-16">
-            <h2 class="text-3xl font-bold text-default mb-8 italic">{{ getField('journey.title', 'Our Story') }}</h2>
-            <p class="text-muted whitespace-pre-line">{{ journeyBody }}</p>
-          </div>
-          <p class="text-muted whitespace-pre-line">{{ experienceBody }}</p>
-          <div v-if="businessDescription" class="mt-20 pt-20 border-t border-default">
-            <h4 class="text-sm font-bold uppercase tracking-widest text-dimmed mb-8">About</h4>
-            <p class="text-muted">{{ businessDescription }}</p>
+
+          <h2 class="font-black italic tracking-tighter text-4xl md:text-5xl text-default leading-none mb-8">
+            {{ getField('story.title', 'Our Story') }}
+          </h2>
+          <ClientOnly>
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div class="prose prose-lg max-w-none text-default" v-html="storyBody" />
+          </ClientOnly>
+        </div>
+      </AppSection>
+
+      <!-- Journey -->
+      <AppSection bg="alt" padding="xl">
+        <div class="max-w-4xl mx-auto">
+          <div class="bg-muted rounded-3xl p-10 md:p-16">
+            <h2 class="text-3xl font-bold text-default mb-8 italic">
+              {{ getField('journey.title', 'Our Journey') }}
+            </h2>
+            <ClientOnly>
+              <!-- eslint-disable-next-line vue/no-v-html -->
+              <div class="prose prose-lg max-w-none text-muted" v-html="journeyBody" />
+            </ClientOnly>
           </div>
         </div>
-      </SayaAbout>
+      </AppSection>
+
+      <!-- CTA -->
+      <AppSection bg="black" padding="lg">
+        <div class="max-w-4xl mx-auto text-center py-8">
+          <h2 class="saya-display text-4xl md:text-5xl text-inverted mb-10">
+            {{ getField('cta.title', 'Come dine with us') }}
+          </h2>
+          <div class="flex flex-wrap justify-center gap-4">
+            <UButton v-if="hasOrderLinks" to="/order" size="xl" color="neutral" variant="solid" class="rounded-full">Order Now</UButton>
+            <UButton to="/reservations" size="xl" color="neutral" :variant="hasOrderLinks ? 'ghost' : 'outline'" class="rounded-full">Reserve a Table</UButton>
+          </div>
+        </div>
+      </AppSection>
     </div>
 
     <!-- ── PLATFORM: KrabiClaw about page ────────────────── -->
@@ -80,6 +105,8 @@
 </template>
 
 <script setup>
+import { ref, computed, onMounted } from 'vue'
+import { sanitizeHtml } from '~/utils/sanitize'
 definePageMeta({ layout: false })
 
 import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
@@ -87,32 +114,28 @@ import { usePageContent } from '~/composables/usePageContent'
 
 const { isPlatform, siteId } = useTenantSite()
 const { getField } = usePageContent('about')
+
+const storyBody = ref('')
+const journeyBody = ref('')
+
+onMounted(async () => {
+  storyBody.value = await sanitizeHtml(getField('story.body', ''))
+  journeyBody.value = await sanitizeHtml(getField('journey.body', ''))
+})
+
+const { data: aboutLocsData } = isPlatform || !siteId
+  ? { data: ref({ locations: [] }) }
+  : await useFetch(`/api/public/sites/${siteId}/locations`, {
+      key: `order-locs-${siteId}`,
+      default: () => ({ locations: [] })
+    })
+const hasOrderLinks = computed(() =>
+  (aboutLocsData.value?.locations ?? []).some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
+)
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 const route = useRoute()
 const requestURL = useRequestURL()
-
-const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/google-business`, {
-  key: `about-google-business-${siteId}`,
-  default: () => ({ business: null, media: [] }),
-  enabled: () => !isPlatform && !!siteId
-})
-
-const establishmentYear = computed(() => googleBusiness.value?.business?.establishmentYear ?? null)
-const businessDescription = computed(() => googleBusiness.value?.business?.profile?.description ?? '')
-const googleMedia = computed(() => googleBusiness.value?.media ?? [])
-
-function sanitizeFieldText(value) {
-  return String(value || '').replace(/<[^>]+>/g, '').trim()
-}
-
-const journeyBody = computed(() => sanitizeFieldText(getField('journey.body',
-  'Our restaurant has a unique story to tell. From our humble beginnings to where we are today, every step has been guided by passion and dedication.\n\nThe restaurant, a symphony of warm ambiance and subtle lighting, immerses diners in an unforgettable experience.'
-)))
-const storyIntro = computed(() => sanitizeFieldText(getField('story.intro', 'Welcome to our restaurant, where culinary tradition meets modern creativity.')))
-const experienceBody = computed(() => sanitizeFieldText(getField('experience.body',
-  'Our culinary team orchestrates amazing flavors and textures. Committed to the freshest ingredients, our chefs weave magic into every dish.\n\nWe bring together tradition and innovation in a focused, warm dining experience.'
-)))
 
 if (isPlatform) {
   useOrganizationSchema()

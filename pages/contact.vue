@@ -4,8 +4,8 @@
     <!-- ── TENANT: Restaurant contact page ───────────────── -->
     <div v-if="!isPlatform">
       <SayaHero
-        :title="getField('contact.hero.title', 'Contact Us')"
-        :subtitle="getField('contact.hero.subtitle', 'We\'d love to hear from you')"
+        :title="getField('hero.title', 'Contact Us')"
+        :subtitle="getField('hero.subtitle', 'We\'d love to hear from you')"
         size="page"
       />
       <div class="max-w-6xl mx-auto px-4 py-12">

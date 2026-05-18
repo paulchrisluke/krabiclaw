@@ -3,8 +3,11 @@
     <UPageHeader
       title="Locations"
       :description="site ? `Physical locations for ${site.brand_name || 'this website'}` : 'Physical locations for this website.'"
-      :links="headerLinks"
-    />
+    >
+      <template #links>
+        <DashboardSiteHeaderLinks :links="headerLinks" />
+      </template>
+    </UPageHeader>
 
     <UPageBody>
       <div v-if="loading">
@@ -37,15 +40,11 @@
         <!-- Location list -->
         <div v-else-if="locations.length > 0" class="overflow-hidden rounded-lg border border-default">
           <template v-for="location in locations" :key="location.id">
-            <!-- Row: collapsed -->
-            <div
-              v-if="expandedLocationId !== location.id"
-              class="flex items-center gap-4 border-b border-default px-4 py-3.5 last:border-0"
-            >
+            <div class="flex items-center gap-4 border-b border-default px-4 py-3.5 last:border-0">
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2">
                   <NuxtLink
-                    :to="`/dashboard/sites/${siteId}/locations/${location.id}`"
+                    :to="locationPath(location.id)"
                     class="font-medium text-highlighted hover:underline"
                   >
                     {{ location.title }}
@@ -62,12 +61,20 @@
               </div>
               <div class="flex shrink-0 items-center gap-2">
                 <UButton
-                  :to="`/dashboard/sites/${siteId}/locations/${location.id}`"
+                  :to="locationPath(location.id)"
+                  color="primary"
+                  variant="soft"
+                  size="xs"
+                >
+                  Manage
+                </UButton>
+                <UButton
+                  :to="locationMenuPath(location.id)"
                   color="neutral"
                   variant="outline"
                   size="xs"
                 >
-                  Manage
+                  Menu
                 </UButton>
                 <UDropdownMenu :items="locationActionItems(location)" :content="{ align: 'end' }">
                   <UButton
@@ -78,59 +85,6 @@
                     aria-label="Location actions"
                   />
                 </UDropdownMenu>
-              </div>
-            </div>
-
-            <!-- Row: expanded inline edit -->
-            <div v-else class="border-b border-default bg-elevated px-4 py-4 last:border-0">
-              <div class="space-y-4">
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <UFormField label="Name">
-                    <UInput v-model="locationEditForm.title" placeholder="Kikuzuki Thonglor" autofocus />
-                  </UFormField>
-                  <UFormField label="City">
-                    <UInput v-model="locationEditForm.city" placeholder="Bangkok" />
-                  </UFormField>
-                </div>
-                <UFormField label="Phone">
-                  <UInput v-model="locationEditForm.phone" type="tel" placeholder="+66 2 123 4567" />
-                </UFormField>
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <UFormField label="Rating">
-                    <UInput v-model="locationEditForm.rating" type="number" min="0" max="5" step="0.1" placeholder="4.8" />
-                  </UFormField>
-                  <UFormField label="Review Count">
-                    <UInput v-model="locationEditForm.review_count" type="number" min="0" step="1" placeholder="124" />
-                  </UFormField>
-                </div>
-                <UFormField label="Google Maps URL">
-                  <UInput v-model="locationEditForm.maps_url" type="url" placeholder="https://maps.google.com/..." />
-                </UFormField>
-                <UFormField label="Google Place ID">
-                  <UInput v-model="locationEditForm.google_place_id" />
-                </UFormField>
-                <UFormField label="Description">
-                  <UTextarea v-model="locationEditForm.description" :rows="3" />
-                </UFormField>
-                <div class="flex items-center gap-6">
-                  <UCheckbox v-model="locationEditForm.is_primary" label="Primary location" />
-                  <UCheckbox
-                    :model-value="locationEditForm.status === 'active'"
-                    label="Active"
-                    @update:model-value="setLocationActive"
-                  />
-                </div>
-                <div class="flex items-center justify-between gap-2">
-                  <UButton
-                    color="neutral" variant="ghost" size="sm" icon="i-heroicons-trash"
-                    :loading="locationSaving"
-                    @click="confirmDeleteLocation(location)"
-                  >Delete</UButton>
-                  <div class="flex gap-2">
-                    <UButton color="neutral" variant="ghost" size="sm" @click="expandedLocationId = null">Cancel</UButton>
-                    <UButton size="sm" :loading="locationSaving" @click="handleSaveLocation(location.id)">Save</UButton>
-                  </div>
-                </div>
               </div>
             </div>
           </template>
@@ -254,6 +208,10 @@ const locations = ref<BusinessLocation[]>([])
 const locationSaving = ref(false)
 const maxLocations = ref(1)
 const { open: openUpgradeModal } = useUpgradeModal()
+const { buildHeaderLinks, locationPath, locationMenuPath, locationContentPath } = useDashboardSiteLinks(siteId, computed(() => {
+  const value = site.value?.public_url
+  return typeof value === 'string' ? value : null
+}))
 const addressLabel = (location: BusinessLocation) => location.address?.addressLines?.join(', ') || ''
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -281,17 +239,9 @@ function openAddLocationForm() {
   }
 }
 
-const headerLinks = computed(() => [
+const headerLinks = computed(() => buildHeaderLinks([
   { label: 'Add location', icon: 'i-heroicons-plus', color: 'primary' as const, onClick: openAddLocationForm }
-])
-
-const setLocationActive = (v: boolean | 'indeterminate') => {
-  if (v === 'indeterminate') {
-    // indeterminate means no change — leave status unchanged
-    return
-  }
-  locationEditForm.status = v ? 'active' : 'inactive'
-}
+]))
 
 const optionalNumber = (value: string) => {
   const trimmed = value.trim()
@@ -307,67 +257,11 @@ const optionalInteger = (value: string) => {
   return Number.isInteger(parsed) ? parsed : null
 }
 
-// Inline edit state
-const expandedLocationId = ref<string | null>(null)
-const locationEditForm = reactive({
-  title: '',
-  city: '',
-  phone: '',
-  maps_url: '',
-  google_place_id: '',
-  description: '',
-  rating: '',
-  review_count: '',
-  is_primary: false,
-  status: 'active'
-})
-
-const openEditLocation = (location: BusinessLocation) => {
-  expandedLocationId.value = location.id
-  locationEditForm.title = location.title
-  locationEditForm.city = location.city ?? ''
-  locationEditForm.phone = location.phone ?? ''
-  locationEditForm.maps_url = location.maps_url ?? ''
-  locationEditForm.google_place_id = location.google_place_id ?? ''
-  locationEditForm.description = location.description ?? ''
-  locationEditForm.rating = location.rating === null || location.rating === undefined ? '' : String(location.rating)
-  locationEditForm.review_count = location.review_count === null || location.review_count === undefined ? '' : String(location.review_count)
-  locationEditForm.is_primary = location.is_primary
-  locationEditForm.status = location.status
-}
-
-const handleSaveLocation = async (id: string) => {
-  locationSaving.value = true
-  try {
-    const response = await $fetch<{ success: boolean; location: BusinessLocation }>(
-      `/api/sites/${siteId}/locations/${id}`,
-      {
-        method: 'PATCH',
-        body: {
-          ...locationEditForm,
-          rating: optionalNumber(locationEditForm.rating),
-          review_count: optionalInteger(locationEditForm.review_count)
-        }
-      }
-    )
-    if (!response.success) throw new Error('Failed to save location')
-    const idx = locations.value.findIndex((l: BusinessLocation) => l.id === id)
-    if (idx !== -1) locations.value[idx] = response.location
-    expandedLocationId.value = null
-    toast.add({ description: 'Location saved', color: 'success' })
-  } catch (err) {
-    toast.add({ description: getErrorMessage(err instanceof Error ? err : new Error(String(err)), 'Failed to save location'), color: 'error' })
-  } finally {
-    locationSaving.value = false
-  }
-}
-
 const handleDeleteLocation = async (id: string) => {
   locationSaving.value = true
   try {
     await $fetch(`/api/sites/${siteId}/locations/${id}`, { method: 'DELETE' })
     locations.value = locations.value.filter((l: BusinessLocation) => l.id !== id)
-    expandedLocationId.value = null
     toast.add({ description: 'Location deleted', color: 'neutral' })
   } catch (err) {
     toast.add({ description: getErrorMessage(err, 'Failed to delete location'), color: 'error' })
@@ -383,19 +277,19 @@ const confirmDeleteLocation = async (location: BusinessLocation) => {
 
 const locationActionItems = (location: BusinessLocation) => [[
   {
-    label: 'Edit details',
-    icon: 'i-heroicons-pencil-square',
-    onSelect: () => openEditLocation(location),
+    label: 'Open workspace',
+    icon: 'i-heroicons-arrow-top-right-on-square',
+    to: locationPath(location.id),
   },
   {
     label: 'Edit menu',
     icon: 'i-heroicons-list-bullet',
-    to: `/dashboard/sites/${siteId}/menu?locationId=${location.id}`,
+    to: locationMenuPath(location.id),
   },
   {
     label: 'Edit content',
     icon: 'i-heroicons-document-text',
-    to: `/dashboard/sites/${siteId}/content?locationId=${location.id}&page=location`,
+    to: locationContentPath(location.id),
   },
 ], [
   {

@@ -72,7 +72,7 @@ export interface PageDefinition {
 }
 
 /** Shared validator for social URLs to reject common placeholder patterns */
-const socialUrlValidator = (value: string) => {
+const _socialUrlValidator = (value: string) => {
   if (!value) return true
   const lowerValue = value.toLowerCase()
   if (lowerValue.includes('your-restaurant')) {
@@ -254,92 +254,57 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Page Title',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'About Saya Kitchen'
+        defaultValue: 'About Us',
+        placeholder: 'e.g. About Us'
       },
       'hero.subtitle': {
         label: 'Page Subtitle',
         type: 'textarea',
         sources: ['manual'],
-        defaultValue: 'Japanese fire, Southern Thai hospitality'
+        defaultValue: 'Japanese fire, Southern Thai hospitality',
+        placeholder: 'A short tagline shown under the page title'
       },
-      'hero.image': {
-        label: 'Hero Image',
+      'story.image': {
+        label: 'Story Image',
         type: 'media',
         mediaKind: 'image',
         sources: ['manual'],
         defaultValue: ''
       },
-      'story.intro': {
-        label: 'Story Introduction',
-        type: 'richtext',
-        sources: ['manual'],
-        defaultValue: '<p class="text-xl font-medium text-default border-l-4 border-default pl-6 py-2">Saya Kitchen brings the warmth of Japanese robatayaki to Krabi, pairing open-flame cooking with pristine seafood, seasonal produce, and generous island hospitality.</p>'
-      },
-      'grill.title': {
-        label: 'Grill Section Title',
+      'story.title': {
+        label: 'Story Title',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'Mastery of the Grill'
+        defaultValue: 'Our Story',
+        placeholder: 'e.g. Finding Inspiration in Every Turn'
       },
-      'grill.description': {
-        label: 'Grill Description',
+      'story.body': {
+        label: 'Story Body',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: 'Our chefs work over glowing charcoal, turning seafood, vegetables, and skewers slowly so each dish carries smoke, texture, and quiet precision.'
-      },
-      'sushi.title': {
-        label: 'Sushi Section Title',
-        type: 'text',
-        sources: ['manual'],
-        defaultValue: 'Artistry in Sushi'
-      },
-      'sushi.description': {
-        label: 'Sushi Description',
-        type: 'richtext',
-        sources: ['manual'],
-        defaultValue: "Alongside the grill, Saya's sushi counter serves clean, balanced rolls and sashimi shaped by fresh ingredients and careful hands."
+        defaultValue: '',
+        placeholder: 'Tell your restaurant\'s story — how it started, what drives you, why it matters.'
       },
       'journey.title': {
-        label: 'Journey Section Title',
+        label: 'Journey Title',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'Our Journey'
+        defaultValue: 'Our Journey',
+        placeholder: 'e.g. Our Journey'
       },
       'journey.body': {
         label: 'Journey Body',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: '<p>Founded as a neighborhood dining room for travelers and locals, Saya Kitchen was created around one simple idea: honest Japanese cooking served with the ease of Krabi nights.</p>'
+        defaultValue: '',
+        placeholder: 'Describe the journey — founding story, milestones, what shaped the restaurant.'
       },
-      'experience.body': {
-        label: 'Experience Description',
-        type: 'richtext',
-        sources: ['manual'],
-        defaultValue: '<p>Settle in for grilled skewers, chilled sake, bright sushi, and a room that moves at the pace of a long dinner with friends.</p>'
-      },
-      'business.establishment_year': {
-        label: 'Establishment Year',
+      'cta.title': {
+        label: 'CTA Heading',
         type: 'text',
-        sources: ['manual', 'google'],
-        googlePath: 'establishmentYear',
-        googleLocked: true,
-        integrationConfig: {
-          type: 'google_business',
-          syncDirection: 'two_way',
-          conflictResolution: 'integration_wins'
-        }
-      },
-      'business.description': {
-        label: 'Google Business Description',
-        type: 'richtext',
-        sources: ['manual', 'google'],
-        googlePath: 'profile.description',
-        googleLocked: true,
-        integrationConfig: {
-          type: 'google_business',
-          syncDirection: 'two_way',
-          conflictResolution: 'integration_wins'
-        }
+        sources: ['manual'],
+        defaultValue: 'Come dine with us',
+        placeholder: 'e.g. Come dine with us'
       }
     }
   },
@@ -352,118 +317,15 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Page Title',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'Contact Saya Kitchen'
+        defaultValue: 'Contact Us',
+        placeholder: 'e.g. Contact Us'
       },
       'hero.subtitle': {
         label: 'Page Subtitle',
         type: 'textarea',
         sources: ['manual'],
-        defaultValue: 'Book a table or ask us anything'
-      },
-      'hero.image': {
-        label: 'Hero Image',
-        type: 'media',
-        mediaKind: 'image',
-        sources: ['manual'],
-        defaultValue: ''
-      },
-      'intro.body': {
-        label: 'Introduction Text',
-        type: 'richtext',
-        sources: ['manual'],
-        defaultValue: '<p>Whether you are planning dinner, a celebration, or a quiet seat at the counter, the Saya team is here to help.</p>'
-      },
-      'footer.tagline': {
-        label: 'Footer Tagline',
-        type: 'text',
-        sources: ['manual'],
-        defaultValue: '',
-        placeholder: 'e.g. Authentic dining, crafted with passion.'
-      },
-      'social.facebook': {
-        label: 'Facebook URL',
-        type: 'text',
-        sources: ['manual'],
-        defaultValue: '',
-        placeholder: 'https://www.facebook.com/your-restaurant',
-        validate: socialUrlValidator
-      },
-      'social.instagram': {
-        label: 'Instagram URL',
-        type: 'text',
-        sources: ['manual'],
-        defaultValue: '',
-        placeholder: 'https://www.instagram.com/your-restaurant',
-        validate: socialUrlValidator
-      },
-      'social.tiktok': {
-        label: 'TikTok URL',
-        type: 'text',
-        sources: ['manual'],
-        defaultValue: '',
-        placeholder: 'https://www.tiktok.com/@your-restaurant',
-        validate: socialUrlValidator
-      },
-
-      'business.name': { 
-        label: 'Business Name', 
-        type: 'text', 
-        sources: ['manual', 'google'], 
-        googlePath: 'title',
-        googleLocked: true,
-        integrationConfig: {
-          type: 'google_business',
-          syncDirection: 'two_way',
-          conflictResolution: 'integration_wins'
-        }
-      },
-      'business.establishment_year': { 
-        label: 'Establishment Year', 
-        type: 'text', 
-        sources: ['manual', 'google'], 
-        googlePath: 'establishmentYear',
-        googleLocked: true,
-        integrationConfig: {
-          type: 'google_business',
-          syncDirection: 'two_way',
-          conflictResolution: 'integration_wins'
-        }
-      },
-      'business.address': { 
-        label: 'Address', 
-        type: 'text', 
-        sources: ['manual', 'google'], 
-        googlePath: 'storefrontAddress',
-        googleLocked: true,
-        integrationConfig: {
-          type: 'google_business',
-          syncDirection: 'two_way',
-          conflictResolution: 'integration_wins'
-        }
-      },
-      'business.phone': { 
-        label: 'Phone', 
-        type: 'text', 
-        sources: ['manual', 'google'], 
-        googlePath: 'phoneNumbers.0.phoneNumber',
-        googleLocked: true,
-        integrationConfig: {
-          type: 'google_business',
-          syncDirection: 'two_way',
-          conflictResolution: 'integration_wins'
-        }
-      },
-      'business.hours': { 
-        label: 'Hours', 
-        type: 'business_hours', 
-        sources: ['manual', 'google'], 
-        googlePath: 'regularHours',
-        googleLocked: true,
-        integrationConfig: {
-          type: 'google_business',
-          syncDirection: 'two_way',
-          conflictResolution: 'integration_wins'
-        }
+        defaultValue: "We'd love to hear from you",
+        placeholder: 'A short line shown under the page title'
       }
     }
   },
@@ -479,6 +341,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Hero Image',
         type: 'media',
         mediaKind: 'image',
+        sources: ['manual'],
+        defaultValue: ''
+      },
+      'hero.video': {
+        label: 'Hero Background Video',
+        type: 'media',
+        mediaKind: 'video',
         sources: ['manual'],
         defaultValue: ''
       },
@@ -562,27 +431,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
     path: '/menu',
     locationScoped: true,
     groups: [
-      { id: 'hero',    label: 'Hero Section',      icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
-      { id: 'content', label: 'Menu Introduction', icon: 'i-heroicons-document-text', fields: ['description'] },
-      { id: 'items',   label: 'Menu Items',        icon: 'i-heroicons-list-bullet', fields: ['menu_items'] },
-      { id: 'google',  label: 'Google Products',   icon: 'i-heroicons-circle-stack', fields: ['business.products'] }
+      { id: 'hero',   label: 'Hero Section',  icon: 'i-heroicons-photo',        fields: ['hero.title', 'hero.subtitle'] },
+      { id: 'items',  label: 'Menu Items',    icon: 'i-heroicons-list-bullet',   fields: ['menu_items'] },
+      { id: 'google', label: 'Google Products', icon: 'i-heroicons-circle-stack', fields: ['business.products'] }
     ],
     fields: {
-      'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Saya Menu' },
+      'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Our Menu' },
       'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Robatayaki, sushi, and seasonal plates' },
-      'hero.image': {
-        label: 'Hero Image',
-        type: 'media',
-        mediaKind: 'image',
-        sources: ['manual'],
-        defaultValue: ''
-      },
-      'description': {
-        label: 'Menu Introduction',
-        type: 'richtext',
-        sources: ['manual'],
-        placeholder: 'Add a menu introduction or description...'
-      },
       'menu_items': {
         label: 'Menu Items',
         type: 'menu_items',
@@ -603,19 +458,34 @@ export const contentRegistry: Record<string, PageDefinition> = {
     }
   },
 
+  order: {
+    label: 'Order Online',
+    path: '/order',
+    locationScoped: true,
+    fields: {
+      'hero.title': {
+        label: 'Page Title',
+        type: 'text',
+        sources: ['manual'],
+        defaultValue: 'Order Online',
+        placeholder: 'e.g. Order Online'
+      },
+      'hero.subtitle': {
+        label: 'Page Subtitle',
+        type: 'textarea',
+        sources: ['manual'],
+        defaultValue: 'Get our food delivered to your door',
+        placeholder: 'A short line shown under the title'
+      }
+    }
+  },
+
   reservations: {
     label: 'Reservations',
     path: '/reservations',
     fields: {
-      'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Reserve a Table at Saya Kitchen' },
+      'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Reserve a Table' },
       'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Plan your evening around the grill' },
-      'hero.image': {
-        label: 'Hero Image',
-        type: 'media',
-        mediaKind: 'image',
-        sources: ['manual'],
-        defaultValue: ''
-      },
       'policies.body': {
         label: 'Reservation Policies',
         type: 'richtext',

@@ -285,6 +285,9 @@ CREATE TABLE IF NOT EXISTS business_locations (
   facebook_url TEXT,
   instagram_url TEXT,
   tiktok_url TEXT,
+  grab_url TEXT,
+  uber_eats_url TEXT,
+  foodpanda_url TEXT,
   google_place_id TEXT,
   hero_image_asset_id TEXT,
   hero_video_asset_id TEXT,
@@ -417,6 +420,7 @@ CREATE TABLE IF NOT EXISTS media_assets (
   height INTEGER,
   duration INTEGER,
   alt_text TEXT,
+  category TEXT CHECK (category IN ('exterior', 'interior', 'food', 'menu', 'team', 'other')),
 
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('pending', 'active', 'deleted', 'failed')),
   created_by_user_id TEXT,
@@ -1013,3 +1017,45 @@ CREATE TABLE IF NOT EXISTS platform_analytics (
   date TEXT NOT NULL,
   UNIQUE(metric, date)
 );
+
+--------------------------------------------------------------------------------
+-- Site Analytics
+--------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS site_pageview_events (
+  id TEXT PRIMARY KEY,
+  site_id TEXT NOT NULL,
+  location_id TEXT,
+  page_path TEXT NOT NULL,
+  referrer TEXT,
+  user_agent TEXT,
+  ip_hash TEXT,
+  session_id TEXT,
+  duration_seconds INTEGER,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pageview_events_site_date
+  ON site_pageview_events(site_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_pageview_events_session
+  ON site_pageview_events(site_id, session_id);
+
+CREATE TABLE IF NOT EXISTS site_analytics_daily (
+  id TEXT PRIMARY KEY,
+  site_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  page_views INTEGER DEFAULT 0,
+  unique_sessions INTEGER DEFAULT 0,
+  avg_session_duration INTEGER DEFAULT 0,
+  top_pages TEXT,
+  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  UNIQUE(site_id, date),
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_daily_site
+  ON site_analytics_daily(site_id, date DESC);

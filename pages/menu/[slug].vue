@@ -101,16 +101,6 @@
             </div>
           </div>
 
-          <section class="mt-10" aria-labelledby="dining-notes-heading">
-            <h3 id="dining-notes-heading" class="sr-only">Dining notes</h3>
-            <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <UCard v-for="note in diningNotes" :key="note.name" class="border border-default bg-muted p-5">
-                <dt class="text-sm font-medium text-highlighted">{{ note.name }}</dt>
-                <dd class="mt-1 text-sm text-muted">{{ note.description }}</dd>
-              </UCard>
-            </dl>
-          </section>
-
           <div class="mt-8">
             <UButton to="/menu" color="neutral" variant="outline">
               Back to Menu
@@ -442,28 +432,6 @@ const detailSections = computed(() => {
   return sections
 })
 
-const diningNotes = computed(() => [
-  {
-    name: item.value?.available ? 'Available today' : 'Availability varies',
-    description: item.value?.available
-      ? 'This item is currently listed as available on the menu.'
-      : 'Please ask the team for today\'s availability before ordering.'
-  },
-  {
-    name: visibleAllergens.value.length > 0 ? 'Allergens listed' : 'Allergen guidance',
-    description: visibleAllergens.value.length > 0
-      ? visibleAllergens.value.join(', ')
-      : 'Tell us about dietary needs and our team can guide you before ordering.'
-  },
-  {
-    name: isRobatayaki.value ? 'Robatayaki style' : 'Menu category',
-    description: item.value?.preparation
-      ? item.value.preparation
-      : isRobatayaki.value
-      ? 'Prepared in the spirit of Japanese fireside grilling.'
-      : `Part of our ${category.value?.name ?? 'seasonal'} selection.`
-  }
-])
 
 const relatedItems = ref<MenuItemType[]>([]) // To be implemented with a related items API if needed
 

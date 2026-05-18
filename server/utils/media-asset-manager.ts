@@ -24,6 +24,7 @@ export interface MediaAsset {
   height: number | null
   duration: number | null
   alt_text: string | null
+  category: 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | null
   status: 'pending' | 'active' | 'deleted' | 'failed'
   created_by_user_id: string | null
   created_at: string
@@ -40,8 +41,8 @@ export async function createMediaAsset(db: D1Database, data: CreateInput): Promi
       id, organization_id, site_id, location_id, kind, provider, source,
       cloudflare_image_id, r2_key, google_media_name,
       public_url, thumbnail_url, mime_type, file_name, file_size,
-      width, height, duration, alt_text, status, created_by_user_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     data.id, data.organization_id, data.site_id, data.location_id ?? null,
     data.kind, data.provider, data.source,
@@ -49,7 +50,7 @@ export async function createMediaAsset(db: D1Database, data: CreateInput): Promi
     data.public_url ?? null, data.thumbnail_url ?? null,
     data.mime_type ?? null, data.file_name ?? null, data.file_size ?? null,
     data.width ?? null, data.height ?? null, data.duration ?? null,
-    data.alt_text ?? null, data.status ?? 'active',
+    data.alt_text ?? null, data.category ?? null, data.status ?? 'active',
     data.created_by_user_id ?? null, now, now
   ).run()
 }
@@ -75,7 +76,7 @@ export async function listMediaAssets(
     `SELECT id, organization_id, site_id, location_id, kind, provider, source,
             cloudflare_image_id, r2_key, google_media_name,
             public_url, thumbnail_url, mime_type, file_name, file_size,
-            width, height, duration, alt_text, status, created_by_user_id, created_at, updated_at
+            width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
      FROM media_assets WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC LIMIT ? OFFSET ?`
   ).bind(...params).all()
   return (results ?? []) as unknown as MediaAsset[]
@@ -102,6 +103,35 @@ export async function updateMediaAssetAlt(db: D1Database, id: string, siteId: st
   const result = await db.prepare(
     `UPDATE media_assets SET alt_text = ?, updated_at = ? WHERE id = ? AND site_id = ?`
   ).bind(altText, new Date().toISOString(), id, siteId).run()
+  return Number(result?.meta?.changes ?? 0) > 0
+}
+
+export async function updateMediaAssetMetadata(
+  db: D1Database,
+  id: string,
+  siteId: string,
+  updates: { alt_text?: string | null; location_id?: string | null; category?: MediaAsset['category'] }
+): Promise<boolean> {
+  const sets: string[] = ['updated_at = ?']
+  const params: SqlBindValue[] = [new Date().toISOString()]
+  if (updates.alt_text !== undefined) {
+    sets.push('alt_text = ?')
+    params.push(updates.alt_text)
+  }
+  if (updates.location_id !== undefined) {
+    sets.push('location_id = ?')
+    params.push(updates.location_id)
+  }
+  if (updates.category !== undefined) {
+    sets.push('category = ?')
+    params.push(updates.category)
+  }
+  if (sets.length === 1) return false
+
+  params.push(id, siteId)
+  const result = await db.prepare(
+    `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`
+  ).bind(...params).run()
   return Number(result?.meta?.changes ?? 0) > 0
 }
 

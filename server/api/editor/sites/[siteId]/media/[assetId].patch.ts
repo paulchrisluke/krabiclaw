@@ -2,12 +2,15 @@
 // Update mutable metadata: alt_text only. URLs are managed by Cloudflare.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { updateMediaAssetAlt } from '~/server/utils/media-asset-manager'
+import { updateMediaAssetMetadata, type MediaAsset } from '~/server/utils/media-asset-manager'
 
 interface MediaAssetSiteRow {
   id: string
   site_id: string
+  organization_id: string
 }
+
+const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other'])
 
 async function verifySiteAccess(db: D1Database, userId: string, siteId: string): Promise<boolean> {
   const site = await db.prepare(`
@@ -39,21 +42,52 @@ export default defineEventHandler(async (event) => {
 
   try {
     const asset = await db.prepare(
-      `SELECT id, site_id FROM media_assets WHERE id = ? LIMIT 1`
+      `SELECT id, site_id, organization_id FROM media_assets WHERE id = ? LIMIT 1`
     ).bind(assetId).first<MediaAssetSiteRow>()
     if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
     if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
     const body = await readBody(event)
-    if ('alt_text' in (body || {})) {
-      if (typeof body?.alt_text !== 'string') {
-        return jsonResponse({ error: 'alt_text must be a string' }, { status: 400 })
-      }
-
-      const altText = body.alt_text.trim().slice(0, 500)
-      const updated = await updateMediaAssetAlt(db, assetId, siteId, altText)
-      if (!updated) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+      return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
     }
+    const updates: { alt_text?: string | null; location_id?: string | null; category?: MediaAsset['category'] } = {}
+    if ('alt_text' in body) {
+      if (body.alt_text !== null && typeof body?.alt_text !== 'string') {
+        return jsonResponse({ error: 'alt_text must be a string or null' }, { status: 400 })
+      }
+      updates.alt_text = body.alt_text === null ? null : body.alt_text.trim().slice(0, 500)
+    }
+
+    if ('location_id' in body) {
+      if (body.location_id !== null && body.location_id !== '' && typeof body.location_id !== 'string') {
+        return jsonResponse({ error: 'location_id must be a string or null' }, { status: 400 })
+      }
+      const locationId = typeof body.location_id === 'string' ? body.location_id.trim() : ''
+      if (locationId) {
+        const location = await db.prepare(`
+          SELECT id FROM business_locations
+          WHERE id = ? AND site_id = ? AND organization_id = ?
+          LIMIT 1
+        `).bind(locationId, siteId, asset.organization_id).first()
+        if (!location) return jsonResponse({ error: 'Invalid location_id' }, { status: 400 })
+      }
+      updates.location_id = locationId || null
+    }
+
+    if ('category' in body) {
+      if (body.category !== null && body.category !== '' && typeof body.category !== 'string') {
+        return jsonResponse({ error: 'category must be a string or null' }, { status: 400 })
+      }
+      const category = typeof body.category === 'string' ? body.category.trim() : ''
+      if (category && !VALID_CATEGORIES.has(category)) {
+        return jsonResponse({ error: 'Invalid category' }, { status: 400 })
+      }
+      updates.category = (category || null) as MediaAsset['category']
+    }
+
+    const updated = await updateMediaAssetMetadata(db, assetId, siteId, updates)
+    if (!updated) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
 
     return jsonResponse({ updated: true })
   } catch (error) {

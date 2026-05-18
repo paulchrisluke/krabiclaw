@@ -102,6 +102,40 @@ function toSqlText(value: ApiValue): string | null | undefined {
   return null
 }
 
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+
+
+function normalizeOrderingUrl(value: unknown, field: string): string | null {
+  if (value === undefined || value === null || value === '') return null
+
+  if (typeof value !== 'string') {
+    throw new Error(`${field} must be a URL string`)
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  try {
+    const url = new URL(trimmed)
+
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error('Invalid protocol')
+    }
+
+    return url.toString()
+  } catch {
+    throw new Error(`${field} must be a valid http:// or https:// URL`)
+  }
+}
+
 function menuItemKey(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 }
@@ -476,7 +510,7 @@ const TOOLS: AiTool[] = [
   },
   {
     name: 'update_menu_item',
-    description: 'Update a menu item — name, price, description, image, or availability.',
+    description: 'Update a menu item — name, price, description, image, availability, allergens, ingredients, dietary tags, preparation, or serving note.',
     input_schema: {
       type: 'object',
       properties: {
@@ -556,6 +590,9 @@ const TOOLS: AiTool[] = [
         facebook_url: { type: 'string' },
         instagram_url: { type: 'string' },
         tiktok_url: { type: 'string' },
+        grab_url: { type: 'string', description: 'Grab Food ordering link for this location.' },
+        uber_eats_url: { type: 'string', description: 'Uber Eats ordering link for this location.' },
+        foodpanda_url: { type: 'string', description: 'FoodPanda ordering link for this location.' },
         hero_image_asset_id: { type: 'string', description: 'Media asset ID for hero image.' },
         hero_video_asset_id: { type: 'string', description: 'Media asset ID for hero video.' },
         is_primary: { type: 'boolean' },
@@ -587,6 +624,9 @@ const TOOLS: AiTool[] = [
         facebook_url: { type: 'string' },
         instagram_url: { type: 'string' },
         tiktok_url: { type: 'string' },
+        grab_url: { type: 'string', description: 'Grab Food ordering link for this location.' },
+        uber_eats_url: { type: 'string', description: 'Uber Eats ordering link for this location.' },
+        foodpanda_url: { type: 'string', description: 'FoodPanda ordering link for this location.' },
         hero_image_asset_id: { type: 'string', description: 'Media asset ID for hero image.' },
         hero_video_asset_id: { type: 'string', description: 'Media asset ID for hero video.' },
         is_primary: { type: 'boolean' },
@@ -957,6 +997,19 @@ const TOOLS: AiTool[] = [
         description: { type: 'string', description: 'One-line brand description.' },
       },
       required: ['description'],
+    },
+  },
+  {
+    name: 'update_site_social',
+    description: 'Set site-wide social media links and footer tagline. Pass only the fields to change; omit the rest.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        facebook_url:  { type: 'string', description: 'Full Facebook page URL. Empty string to clear.' },
+        instagram_url: { type: 'string', description: 'Full Instagram profile URL. Empty string to clear.' },
+        tiktok_url:    { type: 'string', description: 'Full TikTok profile URL. Empty string to clear.' },
+        footer_tagline: { type: 'string', description: 'Short tagline shown in the site footer. Empty string to clear.' },
+      },
     },
   },
 ]
@@ -1353,9 +1406,10 @@ async function executeTool(
               id, organization_id, site_id, title, slug, city, phone, email, website_url, maps_url,
               google_place_id, description, short_description, address, opening_hours, rating,
               review_count, price_level, facebook_url, instagram_url, tiktok_url,
+              grab_url, uber_eats_url, foodpanda_url,
               hero_image_asset_id, hero_video_asset_id, is_primary, status, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`
           ).bind(
             id,
             orgId,
@@ -1383,6 +1437,9 @@ async function executeTool(
             toSqlText(input.facebook_url) ?? null,
             toSqlText(input.instagram_url) ?? null,
             toSqlText(input.tiktok_url) ?? null,
+            normalizeOrderingUrl(input.grab_url, 'grab_url'),
+            normalizeOrderingUrl(input.uber_eats_url, 'uber_eats_url'),
+            normalizeOrderingUrl(input.foodpanda_url, 'foodpanda_url'),
             toSqlText(input.hero_image_asset_id) ?? null,
             toSqlText(input.hero_video_asset_id) ?? null,
             isPrimary ? 1 : 0,
@@ -1429,16 +1486,22 @@ async function executeTool(
         slugParamIndex = params.length - 1
       }
       const simpleFields = ['city', 'phone', 'email', 'description', 'short_description', 'price_level',
-        'facebook_url', 'instagram_url', 'tiktok_url', 'website_url', 'maps_url', 'google_place_id',
+        'facebook_url', 'instagram_url', 'tiktok_url',
+        'grab_url', 'uber_eats_url', 'foodpanda_url',
+        'website_url', 'maps_url', 'google_place_id',
         'hero_image_asset_id', 'hero_video_asset_id', 'status'] as const
+      const orderingUrlFields = new Set(['grab_url', 'uber_eats_url', 'foodpanda_url'])
       for (const field of simpleFields) {
-        const normalizedValue = toSqlText(input[field])
-        if (normalizedValue !== undefined) {
-          if (field === 'status' && normalizedValue && !['active', 'inactive', 'sync_error'].includes(normalizedValue)) {
+        if (input[field] !== undefined) {
+          const rawValue = input[field]
+          if (field === 'status' && rawValue && !['active', 'inactive', 'sync_error'].includes(String(rawValue))) {
             return { error: 'Invalid location status.' }
           }
+          const val = orderingUrlFields.has(field)
+            ? normalizeOrderingUrl(rawValue, field)
+            : (toSqlText(rawValue as ApiValue) ?? null)
           sets.push(`${field} = ?`)
-          params.push(normalizedValue)
+          params.push(val)
         }
       }
       if (input.address !== undefined) {
@@ -2209,6 +2272,34 @@ async function executeTool(
       return { default_currency: currency, updated: true }
     }
 
+    case 'update_site_social': {
+      const map: Array<['social_facebook' | 'social_instagram' | 'social_tiktok' | 'footer_tagline', string | undefined]> = [
+        ['social_facebook',  toSqlText(input.facebook_url)   ?? undefined],
+        ['social_instagram', toSqlText(input.instagram_url)  ?? undefined],
+        ['social_tiktok',    toSqlText(input.tiktok_url)     ?? undefined],
+        ['footer_tagline',   toSqlText(input.footer_tagline) ?? undefined],
+      ]
+      const updated: Record<string, string> = {}
+      const invalidFields: string[] = []
+      const normalizedEntries: Array<['social_facebook' | 'social_instagram' | 'social_tiktok' | 'footer_tagline', string]> = []
+      for (const [key, value] of map) {
+        if (value === undefined) continue
+        const trimmed = value.trim()
+        if (key !== 'footer_tagline' && trimmed && !isValidHttpUrl(trimmed)) {
+          invalidFields.push(key)
+          continue
+        }
+        normalizedEntries.push([key, trimmed])
+      }
+      if (invalidFields.length) return { error: `Invalid URL scheme for: ${invalidFields.join(', ')}. Only http/https are allowed.` }
+      for (const [key, value] of normalizedEntries) {
+        await setConfig(db, orgId, siteId, key, value)
+        updated[key] = value
+      }
+      if (Object.keys(updated).length === 0) return { error: 'No fields provided.' }
+      return { updated }
+    }
+
     default:
       return { error: `Unknown tool: ${name}` }
   }
@@ -2291,7 +2382,7 @@ Guidelines:
 - Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
 - When creating menus, omit location_id — the server links it to the current location automatically
 - Use get_reservation_policies, save_reservation_policies, and delete_reservation_policies when the user asks about reservation rules, hold times, cancellation windows, deposits, or dietary accommodations
-- Use get_site_content_page, save_site_content_field, publish_site_content_page, discard_site_content_page, and delete_site_content_field for tenant page content such as home, about, contact, location notes, menu intro, and reservations
+- Use get_site_content_page, save_site_content_field, publish_site_content_page, discard_site_content_page, and delete_site_content_field for tenant page content such as home, about, contact, location notes, and reservations
 - Use get_platform_content_page, save_platform_content_page, and delete_platform_content_page for platform admin pages about, contact, and help
 - Before publish_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_review, delete_media_asset, delete_qa — confirm first
 - Menus are DRAFT by default — publish_menu makes them live

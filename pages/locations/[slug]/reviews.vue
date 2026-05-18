@@ -69,7 +69,7 @@
       </section>
 
       <!-- Filter chips — only shown when there are reviews to filter -->
-      <div v-if="reviews.length > 0" class="sticky top-16 z-40 border-b border-default bg-default">
+      <div v-if="reviews.length > 0" class="sticky top-0 z-40 border-b border-default bg-default">
         <div class="mx-auto flex h-11 max-w-7xl items-center gap-6 overflow-x-auto px-4 sm:px-6 lg:px-8">
           <span class="text-[10px] font-bold uppercase tracking-widest text-muted/60">Filter</span>
           <button

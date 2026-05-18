@@ -17,12 +17,13 @@ Return a JSON object with a single key "items" containing an array. Each item mu
 If you cannot read the menu clearly, return {"items": [], "warning": "reason"}.
 Return ONLY valid JSON. No markdown, no explanation.`
 
-const IMAGE_TYPES: Record<string, 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'> = {
+const IMAGE_TYPES: Record<string, 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' | 'image/avif'> = {
   'image/jpeg': 'image/jpeg',
   'image/jpg': 'image/jpeg',
   'image/png': 'image/png',
   'image/gif': 'image/gif',
   'image/webp': 'image/webp',
+  'image/avif': 'image/avif',
 }
 
 function extensionForMime(mimeType: string): string {
@@ -31,6 +32,7 @@ function extensionForMime(mimeType: string): string {
   if (mimeType === 'image/png') return 'png'
   if (mimeType === 'image/gif') return 'gif'
   if (mimeType === 'image/webp') return 'webp'
+  if (mimeType === 'image/avif') return 'avif'
   throw new Error(`Unsupported media type: ${mimeType}`)
 }
 

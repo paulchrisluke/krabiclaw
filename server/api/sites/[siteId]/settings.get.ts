@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
     const site = await db.prepare(`
       SELECT s.id, s.organization_id, s.subdomain, s.theme, s.status,
              s.primary_location_id, s.public_url, s.custom_domain_status,
-             s.brand_name, s.brand_description, s.logo_url, s.contact_email,
+             s.brand_name, s.brand_description, s.logo_url, s.logo_asset_id, s.contact_email,
              s.settings, s.last_published_at, s.created_at, s.updated_at,
              o.name as organization_name
       FROM sites s
@@ -83,9 +83,14 @@ export default defineEventHandler(async (event) => {
       brand_name: site.brand_name,
       brand_description: site.brand_description,
       logo_url: site.logo_url,
+      logo_asset_id: site.logo_asset_id,
       contact_email: site.contact_email,
       brand_color: siteConfig.brand_color || '',
       default_currency: siteConfig.default_currency || 'THB',
+      social_facebook: siteConfig.social_facebook || '',
+      social_instagram: siteConfig.social_instagram || '',
+      social_tiktok: siteConfig.social_tiktok || '',
+      footer_tagline: siteConfig.footer_tagline || '',
       url_structure: siteSettings.url_structure || 'location_subdirectories',
       max_locations,
       last_published_at: site.last_published_at,

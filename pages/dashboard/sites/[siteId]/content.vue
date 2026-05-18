@@ -37,7 +37,6 @@
           value-key="id"
           label-key="label"
           class="w-44"
-          @update:model-value="onPageChange"
         />
       </div>
 
@@ -129,7 +128,6 @@
               :items="pages"
               value-key="id"
               label-key="label"
-              @update:model-value="onPageChange"
             />
           </div>
         </div>
@@ -315,6 +313,7 @@
               :data-placeholder="activeFieldDef?.placeholder || 'Start typing...'"
               v-html="DOMPurify.sanitize(editingValue || '')"
               @blur="onRichTextBlur"
+              @paste.prevent="onRichTextPaste"
             />
             <!-- eslint-enable vue/no-v-html -->
           </div>
@@ -322,7 +321,7 @@
           <div v-else-if="activeFieldDef?.type === 'media'" class="space-y-2">
             <label class="block text-sm font-medium text-default">{{ activeFieldDef.label }}</label>
             <MediaPicker
-              :model-value="editingValue || null"
+              :model-value="(activeField === 'hero.image' || activeField === 'hero.video') ? editingValue || null : pendingMediaAssetId"
               :site-id="siteId"
               :accept="activeFieldDef?.mediaKind ?? 'any'"
               :title="activeFieldDef.label"
@@ -382,7 +381,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 // import DOMPurify from 'isomorphic-dompurify'
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string, _options?: unknown) => s }
 
 import { contentRegistry, editablePages, getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
@@ -465,14 +464,6 @@ const endpointWithContentScope = (path: string) =>
 
 const selectLocation = (id: string) => {
   selectedLocationId.value = id
-  activeField.value = null
-}
-
-const onLocationChange = () => {
-  iframeLoading.value = true
-  activeField.value = null
-  if (requiresLocationSelection.value) return
-  loadPageContent()
 }
 
 // ─── Pages ────────────────────────────────────────────────────────────
@@ -518,8 +509,10 @@ const iframeSrc = computed(() => {
   return url.toString()
 })
 
-const onPageChange = () => {
+const onPageChange = async (oldPageId?: string) => {
+  const previousValues = { ...currentValues.value }
   activeField.value = null
+  openGroups.value = ['hero']
   // When switching to a location-scoped page, auto-select the primary/first location
   if (currentPageIsLocationScoped.value && !selectedLocationId.value && siteLocations.value.length > 0) {
     const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]!
@@ -529,14 +522,34 @@ const onPageChange = () => {
   if (!currentPageIsLocationScoped.value) {
     selectedLocationId.value = null
   }
+  try {
+    await loadPageContent()
+  } catch (_) {
+    if (oldPageId) selectedPageId.value = oldPageId
+    currentValues.value = previousValues
+  }
 }
 
-watch(selectedPageId, () => {
-  onPageChange()
+watch(selectedPageId, (newVal, oldVal) => {
+  if (newVal !== oldVal) {
+    onPageChange(oldVal)
+  }
 })
 
-watch(selectedLocationId, () => {
-  onLocationChange()
+watch(selectedLocationId, async (newVal, oldVal) => {
+  if (newVal !== oldVal) {
+    iframeLoading.value = true
+    activeField.value = null
+    const previousValues = { ...currentValues.value }
+
+    if (requiresLocationSelection.value) return
+    try {
+      await loadPageContent()
+    } catch (_) {
+      if (oldVal !== undefined) selectedLocationId.value = oldVal
+      currentValues.value = previousValues
+    }
+  }
 })
 
 // ─── Groups ───────────────────────────────────────────────────────────
@@ -549,27 +562,30 @@ const groupConfig: Record<string, Array<{ id: string; label: string; icon: strin
     { id: 'cta',   label: 'Call to Action', icon: 'i-heroicons-megaphone', fields: ['cta.title', 'cta.description'] },
   ],
   about: [
-    { id: 'hero',    label: 'Hero Section', icon: 'i-heroicons-photo',      fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
-    { id: 'story',   label: 'Story',        icon: 'i-heroicons-book-open',  fields: ['story.intro', 'journey.title', 'journey.body', 'experience.body'] },
-    { id: 'cuisine', label: 'Cuisine',      icon: 'i-heroicons-sparkles',   fields: ['grill.title', 'grill.description', 'sushi.title', 'sushi.description'] },
+    { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo',      fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'story',   label: 'Story',           icon: 'i-heroicons-book-open',  fields: ['story.image', 'story.title', 'story.body'] },
+    { id: 'journey', label: 'Journey',         icon: 'i-heroicons-map',        fields: ['journey.title', 'journey.body'] },
+    { id: 'cta',     label: 'Call to Action',  icon: 'i-heroicons-megaphone',  fields: ['cta.title'] },
   ],
   contact: [
-    { id: 'hero',    label: 'Hero Section', icon: 'i-heroicons-photo',         fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
-    { id: 'content', label: 'Page Content', icon: 'i-heroicons-document-text', fields: ['intro.body'] },
-    { id: 'social',  label: 'Social Links', icon: 'i-heroicons-link',          fields: ['social.facebook', 'social.instagram', 'social.tiktok'] },
+    { id: 'hero', label: 'Hero Section', icon: 'i-heroicons-photo', fields: ['hero.title', 'hero.subtitle'] },
   ],
   location: [
     { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo',         fields: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
     { id: 'content', label: 'Additional Info', icon: 'i-heroicons-document-text', fields: ['parking.info', 'extra.notes'] },
   ],
   menu: [
-    { id: 'hero',    label: 'Hero Section',      icon: 'i-heroicons-photo',         fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
-    { id: 'content', label: 'Menu Introduction', icon: 'i-heroicons-document-text', fields: ['description'] },
+    { id: 'hero',   label: 'Hero Section',   icon: 'i-heroicons-photo',          fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'items',  label: 'Menu Items',     icon: 'i-heroicons-list-bullet',    fields: ['menu_items'] },
+    { id: 'google', label: 'Google Products', icon: 'i-heroicons-circle-stack', fields: ['business.products'] },
+  ],
+  order: [
+    { id: 'hero', label: 'Hero Section', icon: 'i-heroicons-shopping-bag', fields: ['hero.title', 'hero.subtitle'] },
   ],
   reservations: [
-    { id: 'hero',     label: 'Hero Section',    icon: 'i-heroicons-photo',                      fields: ['hero.title', 'hero.subtitle', 'hero.image'] },
-    { id: 'contact',  label: 'Contact Details', icon: 'i-heroicons-phone',                      fields: ['contact.phone', 'contact.email'] },
-    { id: 'policies', label: 'Policies',        icon: 'i-heroicons-clipboard-document-list',    fields: ['policies.body'] },
+    { id: 'hero',     label: 'Hero Section',    icon: 'i-heroicons-photo',                   fields: ['hero.title', 'hero.subtitle'] },
+    { id: 'contact',  label: 'Contact Details', icon: 'i-heroicons-phone',                   fields: ['contact.phone', 'contact.email'] },
+    { id: 'policies', label: 'Policies',        icon: 'i-heroicons-clipboard-document-list', fields: ['policies.body'] },
   ]
 }
 
@@ -603,6 +619,7 @@ const fieldHasActiveGoogleSync = (fieldKey: string): boolean =>
 const selectField = (key: string) => {
   activeField.value = key
   editingValue.value = currentValues.value[key] || ''
+  pendingMediaAssetId.value = null
   
   // Find which group this field belongs to
   const group = currentPageGroups.value.find(g => g.fields.includes(key))
@@ -634,8 +651,48 @@ const onRichTextBlur = (e: FocusEvent) => {
   editingValue.value = DOMPurify.sanitize((e.target as HTMLElement).innerHTML)
 }
 
+const onRichTextPaste = (e: ClipboardEvent) => {
+  const html = e.clipboardData?.getData('text/html')
+  const text = e.clipboardData?.getData('text/plain') || ''
+  const allowedPasteTags = ['p', 'br', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'a']
+  const escapeHtml = (value: string) => value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+  let cleaned: string
+  if (html) {
+    // Strip inline style/class/color attrs so pasted content inherits editor theme
+    cleaned = DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: allowedPasteTags,
+      ALLOWED_ATTR: ['href'],
+    })
+  } else {
+    cleaned = text.split('\n').map(line => `<p>${line ? escapeHtml(line) : '<br>'}</p>`).join('')
+  }
+
+  const sanitized = DOMPurify.sanitize(cleaned, {
+    ALLOWED_TAGS: allowedPasteTags,
+    ALLOWED_ATTR: ['href'],
+  })
+
+  document.execCommand('insertHTML', false, sanitized)
+  const target = e.target as HTMLElement
+  editingValue.value = DOMPurify.sanitize(target.innerHTML)
+}
+
+// Tracks the picked asset ID separately so MediaPicker can show the thumbnail
+// within the current editor session. On reload, non-hero media editingValue is
+// a public URL (not an ID), so the picker falls back to showing "Select media".
+const pendingMediaAssetId = ref<string | null>(null)
+
 function onMediaChange(asset: { id: string; publicUrl: string } | null) {
-  editingValue.value = asset?.id ?? ''
+  const isHeroMedia = activeField.value === 'hero.image' || activeField.value === 'hero.video'
+  // Hero media: backend stores asset ID in a dedicated column and resolves URL via JOIN.
+  // Other media fields: store the public URL in the content column so it's directly
+  // usable as an <img src> on public pages without an additional API round-trip.
+  editingValue.value = isHeroMedia ? (asset?.id ?? '') : (asset?.publicUrl ?? '')
+  pendingMediaAssetId.value = asset?.id ?? null
 }
 
 const richtextCommands = [
@@ -723,6 +780,7 @@ const loadPageContent = async () => {
   } catch (error) {
     console.error('Failed to load page content:', error)
     toast.add({ description: 'Failed to load content', color: 'error' })
+    throw error
   }
 }
 

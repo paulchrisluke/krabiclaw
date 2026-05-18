@@ -339,11 +339,19 @@ const profileMenuItems = computed(() => [
 
 const siteNavigation = computed(() => [[
   { label: 'Overview', icon: 'i-heroicons-home', to: sitePath() },
-  { label: 'Content', icon: 'i-heroicons-document-text', to: sitePath('/content') },
+  { label: 'Setup', icon: 'i-heroicons-sparkles', to: sitePath('/setup') },
+  { label: 'Pages', icon: 'i-heroicons-rectangle-stack', to: sitePath('/pages') },
+  { label: 'Locations', icon: 'i-heroicons-map-pin', to: sitePath('/locations') },
   { label: 'Menu', icon: 'i-heroicons-list-bullet', to: sitePath('/menu') },
   { label: 'Posts', icon: 'i-heroicons-newspaper', to: sitePath('/posts') },
+  { label: 'Reviews', icon: 'i-heroicons-star', to: sitePath('/reviews') },
+  { label: 'Photos', icon: 'i-heroicons-photo', to: sitePath('/photos') },
+  { label: 'Q&A', icon: 'i-heroicons-question-mark-circle', to: sitePath('/qa') },
+  { label: 'Inbox', icon: 'i-heroicons-inbox', to: sitePath('/inbox') },
+  { label: 'Reservations', icon: 'i-heroicons-calendar-days', to: sitePath('/reservations') },
+  { label: 'Order', icon: 'i-heroicons-shopping-bag', to: sitePath('/order') },
+  { label: 'Integrations', icon: 'i-heroicons-circle-stack', to: sitePath('/integrations') },
   { label: 'Media', icon: 'i-heroicons-photo', to: sitePath('/media') },
-  { label: 'Locations', icon: 'i-heroicons-map-pin', to: sitePath('/locations') },
   { label: 'Settings', icon: 'i-heroicons-cog-6-tooth', to: sitePath('/settings') }
 ], [
   { label: 'All Sites', icon: 'i-heroicons-squares-2x2', to: '/dashboard/sites' },

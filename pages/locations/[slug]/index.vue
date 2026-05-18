@@ -123,6 +123,22 @@
         </div>
       </section>
 
+      <!-- Parking & additional notes -->
+      <section v-if="sanitizedParkingInfo || sanitizedExtraNotes" class="border-b border-default">
+        <div class="mx-auto grid max-w-7xl gap-12 px-4 py-14 sm:px-6 lg:grid-cols-2 lg:px-8">
+          <!-- eslint-disable vue/no-v-html -->
+          <div v-if="sanitizedParkingInfo">
+            <p class="saya-eyebrow mb-4 text-muted">Parking</p>
+            <div class="prose prose-sm max-w-none text-default" v-html="sanitizedParkingInfo" />
+          </div>
+          <div v-if="sanitizedExtraNotes">
+            <p class="saya-eyebrow mb-4 text-muted">Additional Notes</p>
+            <div class="prose prose-sm max-w-none text-default" v-html="sanitizedExtraNotes" />
+          </div>
+          <!-- eslint-enable vue/no-v-html -->
+        </div>
+      </section>
+
       <!-- Menu preview -->
       <section v-if="featuredItems.length" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
         <div class="mb-16 max-w-2xl">
@@ -237,6 +253,8 @@
 
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours } from '~/utils/formatters'
+import { usePageContent } from '~/composables/usePageContent'
+import DOMPurify from 'isomorphic-dompurify'
 
 const { resolveMedia } = useMedia()
 definePageMeta({ layout: 'saya' })
@@ -244,6 +262,10 @@ definePageMeta({ layout: 'saya' })
 const route = useRoute()
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
+
+// Location-scoped page content (parking info, additional notes)
+// usePageContent scopes to the location via route.params.slug automatically
+const { getField: getContentField } = usePageContent('location')
 
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
@@ -318,6 +340,11 @@ const heroMedia = computed(() => resolveMedia({
   public_url: location.value?.public_url,
   kind: location.value?.kind
 }))
+
+const parkingInfo = computed(() => getContentField('parking.info', '') ?? '')
+const extraNotes = computed(() => getContentField('extra.notes', '') ?? '')
+const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value))
+const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
 // Derived location data
 const formattedAddress = computed(() => {

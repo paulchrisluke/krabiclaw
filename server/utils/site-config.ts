@@ -8,6 +8,10 @@ export interface SiteConfig {
   gbp_account_id?: string
   brand_color?: string
   default_currency?: CurrencyCode
+  social_facebook?: string
+  social_instagram?: string
+  social_tiktok?: string
+  footer_tagline?: string
 }
 
 export const getConfig = async (

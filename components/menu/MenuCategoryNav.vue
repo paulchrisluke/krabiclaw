@@ -1,5 +1,5 @@
 <template>
-  <div class="sticky top-16 z-40 bg-default border-b border-default">
+  <div ref="navRef" class="sticky top-0 z-40 bg-default border-b border-default">
     <div class="max-w-6xl mx-auto px-4">
       <UTabs :model-value="active" :items="tabItems" @update:model-value="handleTabChange" class="scrollbar-hide" />
     </div>
@@ -13,6 +13,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['select'])
+const navRef = ref(null)
 
 const tabItems = computed(() => 
   props.categories.map(category => ({
@@ -27,8 +28,7 @@ const handleTabChange = (value) => {
   // Scroll to the section
   const element = document.getElementById(value)
   if (element) {
-    // Account for fixed header height (64px)
-    const headerOffset = 64
+    const headerOffset = navRef.value?.getBoundingClientRect().bottom ?? 0
     const elementPosition = element.getBoundingClientRect().top
     const offsetPosition = elementPosition + window.pageYOffset - headerOffset
 

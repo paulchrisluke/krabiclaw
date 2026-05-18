@@ -157,6 +157,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const ALL_MEDIA_KIND = 'all'
 
 const assets = ref<MediaAsset[]>([])
 const loading = ref(false)
@@ -179,7 +180,7 @@ const computedAccept = computed(() => {
 const kindOptions = [
   { label: 'Images', value: 'image' },
   { label: 'Videos', value: 'video' },
-  { label: 'All', value: '' },
+  { label: 'All', value: ALL_MEDIA_KIND },
 ]
 
 function isAbortError(error: unknown): boolean {
@@ -208,7 +209,7 @@ async function loadAssets() {
 
   try {
     const params = new URLSearchParams()
-    if (kindFilter.value) params.set('kind', kindFilter.value)
+    if (kindFilter.value && kindFilter.value !== ALL_MEDIA_KIND) params.set('kind', kindFilter.value)
     if (props.locationId) params.set('locationId', props.locationId)
     const res = await $fetch<{ media: MediaAsset[] }>(`/api/editor/sites/${props.siteId}/media?${params}`, {
       signal: controller.signal,

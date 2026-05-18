@@ -11,7 +11,7 @@ export interface AiContentBlock {
   text?: string
   source?: {
     type: 'base64'
-    media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+    media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' | 'image/avif'
     data: string
   }
 }
@@ -114,7 +114,7 @@ export async function callAiGateway(
 /** Build a vision content block from a base64-encoded image */
 export function imageBlock(
   base64Data: string,
-  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' = 'image/jpeg'
+  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' | 'image/avif' = 'image/jpeg'
 ): AiContentBlock {
   return {
     type: 'image',

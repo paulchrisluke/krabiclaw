@@ -36,7 +36,7 @@
 
     <!-- Sticky category tab bar -->
     <div v-else>
-      <div class="sticky top-16 z-40 border-b border-default bg-default">
+      <div ref="categoryNavRef" class="sticky top-[var(--saya-header-height,4rem)] z-40 border-b border-default bg-default">
         <div class="mx-auto flex h-12 max-w-7xl gap-8 overflow-x-auto px-4 sm:px-6 lg:px-8">
           <a
             v-for="cat in categories"
@@ -80,14 +80,47 @@
               :key="item.id"
               class="flex items-start gap-5"
             >
+              <!-- Thumbnail left (images only) -->
+              <NuxtLink
+                v-if="item.public_url && item.kind === 'image' && item.available"
+                :to="`/menu/${itemSlug(item)}`"
+                :class="['shrink-0', !item.available && 'opacity-50 grayscale']"
+              >
+                <img
+                  :src="item.public_url"
+                  :alt="item.name"
+                  class="size-24 rounded-xl object-cover bg-muted"
+                  loading="lazy"
+                />
+              </NuxtLink>
+              <div
+                v-else-if="item.public_url && item.kind === 'image'"
+                class="shrink-0 opacity-50 grayscale"
+              >
+                <img
+                  :src="item.public_url"
+                  :alt="item.name"
+                  class="size-24 rounded-xl object-cover bg-muted"
+                  loading="lazy"
+                />
+              </div>
+
               <!-- Text -->
               <div class="min-w-0 flex-1">
                 <div class="flex items-baseline gap-2">
                   <div class="flex items-baseline gap-2 text-base font-medium text-default">
                     <NuxtLink
+                      v-if="item.available"
                       :to="`/menu/${itemSlug(item)}`"
-                      class="text-default no-underline hover:underline underline-offset-2"
+                      :class="['text-default no-underline hover:underline underline-offset-2', !item.available && 'opacity-50']"
                     >{{ item.name }}</NuxtLink>
+                    <span v-else class="text-default opacity-50">{{ item.name }}</span>
+                    <UBadge
+                      v-if="!item.available"
+                      variant="outline"
+                      size="xs"
+                      class="shrink-0 font-medium"
+                    >Unavailable</UBadge>
                     <UBadge
                       v-for="tag in getDietaryTags(item)"
                       :key="tag"
@@ -103,20 +136,6 @@
                   {{ item.description }}
                 </p>
               </div>
-
-              <!-- Thumbnail (images only) -->
-              <NuxtLink
-                v-if="item.public_url && item.kind === 'image'"
-                :to="`/menu/${itemSlug(item)}`"
-                class="shrink-0"
-              >
-                <img
-                  :src="item.public_url"
-                  :alt="item.name"
-                  class="size-24 rounded-xl object-cover bg-muted"
-                  loading="lazy"
-                />
-              </NuxtLink>
             </article>
           </div>
         </section>
@@ -186,13 +205,19 @@ const categories = computed(() => {
 })
 
 const activeCategory = ref('')
+const categoryNavRef = ref<HTMLElement | null>(null)
 watch(categories, (cats: { id: string; name: string }[]) => {
   if (cats.length && !activeCategory.value) activeCategory.value = cats[0]?.id ?? ''
 }, { immediate: true })
 
 function scrollToCategory(id: string) {
   activeCategory.value = id
-  document.getElementById(`cat-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const element = document.getElementById(`cat-${id}`)
+  if (!element) return
+
+  const headerOffset = categoryNavRef.value?.getBoundingClientRect().bottom ?? 0
+  const elementPosition = element.getBoundingClientRect().top + window.pageYOffset
+  window.scrollTo({ top: elementPosition - headerOffset, behavior: 'smooth' })
 }
 
 function itemSlug(item: ApiValue): string {

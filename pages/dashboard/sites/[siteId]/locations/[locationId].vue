@@ -3,8 +3,10 @@
     <UPageHeader
       :title="location?.title || 'Location'"
       :description="locationAddress || location?.city || 'Location workspace'"
-      :links="headerLinks"
     >
+      <template #links>
+        <DashboardSiteHeaderLinks :links="headerLinks" />
+      </template>
       <template #headline>
         <div class="flex flex-wrap items-center gap-2">
           <UBadge v-if="location?.is_primary" color="primary" variant="soft">Primary</UBadge>
@@ -146,97 +148,137 @@
 
         <UCard>
           <template #header>
-            <h2 class="font-semibold text-highlighted">Details</h2>
-          </template>
-
-          <dl class="grid gap-4 md:grid-cols-2">
-            <div>
-              <dt class="text-sm text-muted">Slug</dt>
-              <dd class="mt-1 font-medium text-highlighted">/{{ location.slug }}</dd>
-            </div>
-            <div>
-              <dt class="text-sm text-muted">Address</dt>
-              <dd class="mt-1 font-medium text-highlighted">{{ locationAddress || 'Not set' }}</dd>
-            </div>
-          </dl>
-        </UCard>
-
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between gap-3">
-              <h2 class="font-semibold text-highlighted">Location Fields</h2>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 class="font-semibold text-highlighted">Location Details</h2>
+                <p class="mt-1 text-sm text-muted">Manage location-specific profile and operational fields.</p>
+              </div>
               <UButton v-if="detailsSaved" size="xs" color="primary" variant="soft" icon="i-heroicons-check">Saved</UButton>
             </div>
           </template>
 
-          <div class="space-y-5">
-            <div class="grid gap-4 md:grid-cols-2">
-              <UFormField label="Name">
-                <UInput v-model="detailsForm.title" />
-              </UFormField>
-              <UFormField label="Slug">
-                <UInput v-model="detailsForm.slug" />
-              </UFormField>
-              <UFormField label="City">
-                <UInput v-model="detailsForm.city" />
-              </UFormField>
-              <UFormField label="Phone">
-                <UInput v-model="detailsForm.phone" type="tel" />
-              </UFormField>
-              <UFormField label="Email">
-                <UInput v-model="detailsForm.email" type="email" />
-              </UFormField>
-              <UFormField label="Website URL">
-                <UInput v-model="detailsForm.website_url" type="url" />
-              </UFormField>
-              <UFormField label="Maps URL">
-                <UInput v-model="detailsForm.maps_url" type="url" />
-              </UFormField>
-              <UFormField label="Google Place ID">
-                <UInput v-model="detailsForm.google_place_id" />
-              </UFormField>
-              <UFormField label="Rating">
-                <UInput v-model="detailsForm.rating" type="number" min="0" max="5" step="0.1" />
-              </UFormField>
-              <UFormField label="Review Count">
-                <UInput v-model="detailsForm.review_count" type="number" min="0" step="1" />
-              </UFormField>
-              <UFormField label="Price Level">
-                <UInput v-model="detailsForm.price_level" />
-              </UFormField>
-              <UFormField label="Facebook URL">
-                <UInput v-model="detailsForm.facebook_url" type="url" />
-              </UFormField>
-              <UFormField label="Instagram URL">
-                <UInput v-model="detailsForm.instagram_url" type="url" />
-              </UFormField>
-              <UFormField label="TikTok URL">
-                <UInput v-model="detailsForm.tiktok_url" type="url" />
-              </UFormField>
-            </div>
-
-            <UFormField label="Address">
-              <UTextarea v-model="detailsForm.address" :rows="2" />
-            </UFormField>
-            <UFormField label="Short Description">
-              <UInput v-model="detailsForm.short_description" />
-            </UFormField>
-            <UFormField label="Description">
-              <UTextarea v-model="detailsForm.description" :rows="4" />
-            </UFormField>
-            <UFormField label="Opening Hours">
-              <UTextarea v-model="detailsForm.opening_hours" :rows="7" />
-            </UFormField>
-
-            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-default pt-5">
-              <div class="flex items-center gap-6">
-                <UCheckbox v-model="detailsForm.is_primary" label="Primary location" />
-                <UCheckbox
-                  :model-value="detailsForm.status === 'active'"
-                  label="Active"
-                  @update:model-value="setDetailsActive"
-                />
+          <div class="space-y-0 divide-y divide-default rounded-lg border border-default">
+            <section class="grid gap-6 p-6 md:grid-cols-[1fr_2fr]">
+              <div>
+                <h3 class="font-semibold text-highlighted">Core Profile</h3>
+                <p class="mt-1 text-sm text-muted">Basic location identity and contact details shown across the site.</p>
               </div>
+              <div class="space-y-5">
+                <div class="flex items-center gap-6">
+                  <UCheckbox v-model="detailsForm.is_primary" label="Primary location" />
+                  <UCheckbox
+                    :model-value="detailsForm.status === 'active'"
+                    label="Active"
+                    @update:model-value="setDetailsActive"
+                  />
+                </div>
+                <div class="grid gap-5 sm:grid-cols-2">
+                  <UFormField label="Name">
+                    <UInput v-model="detailsForm.title" />
+                  </UFormField>
+                  <UFormField label="Slug">
+                    <UInput v-model="detailsForm.slug" />
+                  </UFormField>
+                  <UFormField label="City">
+                    <UInput v-model="detailsForm.city" />
+                  </UFormField>
+                  <UFormField label="Phone">
+                    <UInput v-model="detailsForm.phone" type="tel" />
+                  </UFormField>
+                  <UFormField label="Email">
+                    <UInput v-model="detailsForm.email" type="email" />
+                  </UFormField>
+                  <UFormField label="Website URL">
+                    <UInput v-model="detailsForm.website_url" type="url" />
+                  </UFormField>
+                </div>
+                <UFormField label="Address">
+                  <UTextarea v-model="detailsForm.address" :rows="2" />
+                </UFormField>
+              </div>
+            </section>
+
+            <section class="grid gap-6 p-6 md:grid-cols-[1fr_2fr]">
+              <div>
+                <h3 class="font-semibold text-highlighted">Discovery</h3>
+                <p class="mt-1 text-sm text-muted">Location-specific mapping and place metadata.</p>
+              </div>
+              <div class="grid gap-5 sm:grid-cols-2">
+                <UFormField label="Maps URL">
+                  <UInput v-model="detailsForm.maps_url" type="url" />
+                </UFormField>
+                <UFormField label="Google Place ID">
+                  <UInput v-model="detailsForm.google_place_id" />
+                </UFormField>
+              </div>
+            </section>
+
+            <section class="grid gap-6 p-6 md:grid-cols-[1fr_2fr]">
+              <div>
+                <h3 class="font-semibold text-highlighted">Content and Metadata</h3>
+                <p class="mt-1 text-sm text-muted">Descriptions, hours, and rating data for this specific location.</p>
+              </div>
+              <div class="space-y-5">
+                <div class="grid gap-5 sm:grid-cols-2">
+                  <UFormField label="Rating">
+                    <UInput v-model="detailsForm.rating" type="number" min="0" max="5" step="0.1" />
+                  </UFormField>
+                  <UFormField label="Review Count">
+                    <UInput v-model="detailsForm.review_count" type="number" min="0" step="1" />
+                  </UFormField>
+                  <UFormField label="Price Level">
+                    <UInput v-model="detailsForm.price_level" />
+                  </UFormField>
+                  <UFormField label="Short Description">
+                    <UInput v-model="detailsForm.short_description" />
+                  </UFormField>
+                </div>
+
+                <UFormField label="Description">
+                  <UTextarea v-model="detailsForm.description" :rows="4" />
+                </UFormField>
+
+                <UFormField label="Opening Hours">
+                  <div class="space-y-2 rounded-lg border border-default bg-elevated/30 p-3">
+                    <div
+                      v-for="day in openingHours"
+                      :key="day.day"
+                      class="grid gap-2 rounded-md border border-default bg-default p-3 sm:grid-cols-[9rem_1fr]"
+                    >
+                      <div class="flex items-center justify-between sm:block">
+                        <p class="text-sm font-medium text-highlighted">{{ day.day }}</p>
+                        <UCheckbox
+                          :model-value="!day.isOpen"
+                          label="Closed"
+                          @update:model-value="setDayClosed(day.day, $event)"
+                        />
+                      </div>
+
+                      <div class="grid gap-2 sm:grid-cols-2">
+                        <UFormField label="Open" size="sm">
+                          <UInput
+                            :model-value="day.openTime"
+                            type="time"
+                            :disabled="!day.isOpen"
+                            @update:model-value="updateDayTime(day.day, 'openTime', $event)"
+                          />
+                        </UFormField>
+                        <UFormField label="Close" size="sm">
+                          <UInput
+                            :model-value="day.closeTime"
+                            type="time"
+                            :disabled="!day.isOpen"
+                            @update:model-value="updateDayTime(day.day, 'closeTime', $event)"
+                          />
+                        </UFormField>
+                      </div>
+                    </div>
+                  </div>
+                </UFormField>
+              </div>
+            </section>
+
+            <div class="flex justify-end p-6">
               <UButton :loading="detailsSaving" icon="i-heroicons-check" @click="saveLocationDetails">Save fields</UButton>
             </div>
           </div>
@@ -323,9 +365,6 @@ interface BusinessLocation {
   description: string | null
   short_description: string | null
   price_level: string | null
-  facebook_url: string | null
-  instagram_url: string | null
-  tiktok_url: string | null
   google_place_id: string | null
   opening_hours: { weekdayDescriptions?: string[] } | null
   rating: number | null
@@ -359,6 +398,13 @@ interface GbConnection {
   updated_at: string
 }
 
+interface DayHours {
+  day: string
+  isOpen: boolean
+  openTime: string
+  closeTime: string
+}
+
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
@@ -372,6 +418,10 @@ const location = ref<BusinessLocation | null>(null)
 const menus = ref<ApiRecord[]>([])
 const gbConnection = ref<GbConnection | null>(null)
 const connectingGoogle = ref(false)
+const { paths, buildHeaderLinks, locationMenuPath, locationContentPath, locationPath } = useDashboardSiteLinks(siteId, computed(() => {
+  const value = site.value?.public_url
+  return typeof value === 'string' ? value : null
+}))
 
 const locationAddress = computed(() => location.value?.address?.addressLines?.join(', ') || '')
 const publicLocationUrl = computed(() => {
@@ -379,23 +429,23 @@ const publicLocationUrl = computed(() => {
   return `${site.value.public_url.replace(/\/$/, '')}/locations/${location.value.slug}`
 })
 
-const headerLinks = computed(() => [
-  { label: 'All Locations', icon: 'i-heroicons-arrow-left', to: `/dashboard/sites/${siteId}/locations`, color: 'neutral' as const, variant: 'soft' as const },
-  { label: 'View', icon: 'i-heroicons-arrow-top-right-on-square', to: publicLocationUrl.value, target: '_blank', color: 'neutral' as const, variant: 'outline' as const, disabled: !publicLocationUrl.value }
-])
+const headerLinks = computed(() => buildHeaderLinks([
+  { label: 'All Locations', icon: 'i-heroicons-arrow-left', to: paths.value.locations, color: 'neutral' as const, variant: 'soft' as const },
+  { label: 'Preview', icon: 'i-heroicons-arrow-top-right-on-square', to: publicLocationUrl.value, target: '_blank', color: 'neutral' as const, variant: 'outline' as const, disabled: !publicLocationUrl.value }
+], { includePreview: false }))
 
 const locationTabs = computed(() => [
-  { label: 'Overview', icon: 'i-heroicons-home', active: true, to: `/dashboard/sites/${siteId}/locations/${locationId}` },
-  { label: 'Content', icon: 'i-heroicons-document-text', active: false, to: `/dashboard/sites/${siteId}/content?locationId=${locationId}&page=location` },
-  { label: 'Menu', icon: 'i-heroicons-list-bullet', active: false, to: `/dashboard/sites/${siteId}/menu?locationId=${locationId}` },
-  { label: 'Details', icon: 'i-heroicons-map-pin', active: false, to: `/dashboard/sites/${siteId}/settings?tab=locations&locationId=${locationId}` }
+  { label: 'Overview', icon: 'i-heroicons-home', active: true, to: locationPath(locationId) },
+  { label: 'Content', icon: 'i-heroicons-document-text', active: false, to: locationContentPath(locationId) },
+  { label: 'Menu', icon: 'i-heroicons-list-bullet', active: false, to: locationMenuPath(locationId) },
+  { label: 'Details', icon: 'i-heroicons-map-pin', active: false, to: `${paths.value.settings}?tab=locations&locationId=${locationId}` }
 ])
 
 const workspaceActions = computed(() => [
-  { label: 'Edit Local Content', icon: 'i-heroicons-document-text', to: `/dashboard/sites/${siteId}/content?locationId=${locationId}&page=location` },
-  { label: 'Edit Local Menu', icon: 'i-heroicons-list-bullet', to: `/dashboard/sites/${siteId}/menu?locationId=${locationId}` },
-  { label: 'Edit Location Details', icon: 'i-heroicons-cog-6-tooth', to: `/dashboard/sites/${siteId}/settings?tab=locations&locationId=${locationId}` },
-  { label: 'Edit Brand Content', icon: 'i-heroicons-building-storefront', to: `/dashboard/sites/${siteId}/content` }
+  { label: 'Edit Local Content', icon: 'i-heroicons-document-text', to: locationContentPath(locationId) },
+  { label: 'Edit Local Menu', icon: 'i-heroicons-list-bullet', to: locationMenuPath(locationId) },
+  { label: 'Edit Location Details', icon: 'i-heroicons-cog-6-tooth', to: `${paths.value.settings}?tab=locations&locationId=${locationId}` },
+  { label: 'Edit Brand Content', icon: 'i-heroicons-building-storefront', to: paths.value.content }
 ])
 
 const detailsSaving = ref(false)
@@ -418,16 +468,21 @@ const detailsForm = reactive({
   rating: '',
   review_count: '',
   price_level: '',
-  facebook_url: '',
-  instagram_url: '',
-  tiktok_url: '',
   address: '',
   short_description: '',
   description: '',
-  opening_hours: '',
   is_primary: false,
   status: 'active'
 })
+
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
+
+const openingHours = ref<DayHours[]>(WEEKDAYS.map(day => ({
+  day,
+  isOpen: true,
+  openTime: '09:00',
+  closeTime: '22:00'
+})))
 
 const reviewForm = reactive({
   author_name: '',
@@ -466,15 +521,108 @@ function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.rating = loc.rating === null || loc.rating === undefined ? '' : String(loc.rating)
   detailsForm.review_count = loc.review_count === null || loc.review_count === undefined ? '' : String(loc.review_count)
   detailsForm.price_level = loc.price_level ?? ''
-  detailsForm.facebook_url = loc.facebook_url ?? ''
-  detailsForm.instagram_url = loc.instagram_url ?? ''
-  detailsForm.tiktok_url = loc.tiktok_url ?? ''
   detailsForm.address = loc.address?.addressLines?.join('\n') ?? ''
   detailsForm.short_description = loc.short_description ?? ''
   detailsForm.description = loc.description ?? ''
-  detailsForm.opening_hours = loc.opening_hours?.weekdayDescriptions?.join('\n') ?? ''
+  openingHours.value = parseOpeningHours(loc.opening_hours?.weekdayDescriptions)
   detailsForm.is_primary = loc.is_primary
   detailsForm.status = loc.status
+}
+
+const twelveHourToTwentyFourHour = (value: string): string | null => {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i)
+  if (!match) return null
+  const rawHour = Number(match[1])
+  const minute = match[2]
+  const period = match[3]!.toUpperCase()
+  if (rawHour < 1 || rawHour > 12) return null
+  let hour = rawHour % 12
+  if (period === 'PM') hour += 12
+  return `${String(hour).padStart(2, '0')}:${minute}`
+}
+
+const twentyFourHourToTwelveHour = (value: string): string => {
+  const match = value.match(/^(\d{2}):(\d{2})$/)
+  if (!match) return '9:00 AM'
+  const hour24 = Number(match[1])
+  const minute = match[2]
+  const period = hour24 >= 12 ? 'PM' : 'AM'
+  const hour12 = hour24 % 12 || 12
+  return `${hour12}:${minute} ${period}`
+}
+
+const parseOpeningHours = (weekdayDescriptions?: string[]): DayHours[] => {
+  const defaults = WEEKDAYS.map(day => ({
+    day,
+    isOpen: true,
+    openTime: '09:00',
+    closeTime: '22:00'
+  }))
+
+  if (!weekdayDescriptions?.length) return defaults
+
+  const byDay = new Map(defaults.map(item => [item.day, { ...item }]))
+
+  for (const line of weekdayDescriptions) {
+    const [rawDay, rawValue] = String(line).split(':', 2)
+    const day = rawDay?.trim() as typeof WEEKDAYS[number] | undefined
+    const value = rawValue?.trim() ?? ''
+    if (!day || !byDay.has(day)) continue
+
+    const current = byDay.get(day)
+    if (!current) continue
+
+    if (/^closed$/i.test(value)) {
+      current.isOpen = false
+      continue
+    }
+
+    if (/^open\s*24\s*hours$/i.test(value)) {
+      current.isOpen = true
+      current.openTime = '00:00'
+      current.closeTime = '23:59'
+      continue
+    }
+
+    const rangeMatch = value.match(/^(\d{1,2}:\d{2}\s*[AP]M)\s*[\-–]\s*(\d{1,2}:\d{2}\s*[AP]M)$/i)
+    if (!rangeMatch) continue
+
+    const openTime = twelveHourToTwentyFourHour(rangeMatch[1]!)
+    const closeTime = twelveHourToTwentyFourHour(rangeMatch[2]!)
+    if (!openTime || !closeTime) continue
+
+    current.isOpen = true
+    current.openTime = openTime
+    current.closeTime = closeTime
+  }
+
+  return WEEKDAYS.map(day => byDay.get(day) || {
+    day,
+    isOpen: true,
+    openTime: '09:00',
+    closeTime: '22:00'
+  })
+}
+
+const buildWeekdayDescriptions = (hours: DayHours[]): string[] => {
+  return hours.map((day) => {
+    if (!day.isOpen) return `${day.day}: Closed`
+    if (day.openTime === '00:00' && day.closeTime === '23:59') return `${day.day}: Open 24 hours`
+    return `${day.day}: ${twentyFourHourToTwelveHour(day.openTime)} - ${twentyFourHourToTwelveHour(day.closeTime)}`
+  })
+}
+
+const setDayClosed = (dayName: string, value: boolean | 'indeterminate') => {
+  if (value === 'indeterminate') return
+  const day = openingHours.value.find(item => item.day === dayName)
+  if (!day) return
+  day.isOpen = !value
+}
+
+const updateDayTime = (dayName: string, field: 'openTime' | 'closeTime', value: string | number) => {
+  const day = openingHours.value.find(item => item.day === dayName)
+  if (!day) return
+  day[field] = typeof value === 'string' ? value : String(value)
 }
 
 const setDetailsActive = (v: boolean | 'indeterminate') => {
@@ -513,13 +661,10 @@ async function saveLocationDetails() {
         rating: optionalNumber(detailsForm.rating),
         review_count: optionalInteger(detailsForm.review_count),
         price_level: detailsForm.price_level || null,
-        facebook_url: detailsForm.facebook_url || null,
-        instagram_url: detailsForm.instagram_url || null,
-        tiktok_url: detailsForm.tiktok_url || null,
         address: detailsForm.address ? { addressLines: detailsForm.address.split('\n').map(line => line.trim()).filter(Boolean) } : null,
         short_description: detailsForm.short_description || null,
         description: detailsForm.description || null,
-        opening_hours: detailsForm.opening_hours ? { weekdayDescriptions: detailsForm.opening_hours.split('\n').map(line => line.trim()).filter(Boolean) } : null,
+        opening_hours: { weekdayDescriptions: buildWeekdayDescriptions(openingHours.value) },
         is_primary: detailsForm.is_primary,
         status: detailsForm.status
       }
