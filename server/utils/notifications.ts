@@ -23,6 +23,9 @@ interface ReservationNotificationInput extends SiteContext {
   date: string
   time: string
   guests: string
+  cancelUrl?: string | null
+  contactPhone?: string | null
+  contactEmail?: string | null
 }
 
 interface ContactNotificationInput extends SiteContext {
@@ -244,24 +247,47 @@ async function notifyOwner(
 
 function reservationEmail(opts: ReservationNotificationInput, title: string, intro: string): EmailTemplate {
   const restaurant = siteName(opts)
+
+  const contactBlock = (opts.contactPhone || opts.contactEmail)
+    ? `<p style="margin-top:16px"><strong>Questions? Contact us:</strong><br>
+       ${opts.contactPhone ? `📞 ${escapeHtml(opts.contactPhone)}<br>` : ''}
+       ${opts.contactEmail ? `✉️ ${escapeHtml(opts.contactEmail)}` : ''}</p>`
+    : ''
+
+  const cancelBlock = opts.cancelUrl
+    ? `<p style="margin-top:16px;font-size:12px;color:#71717a">Need to cancel? <a href="${escapeHtml(opts.cancelUrl)}" style="color:#8F1D21">Cancel your reservation here</a> (link valid for 30 days).</p>`
+    : ''
+
   const html = `
     <p>Hi ${escapeHtml(opts.guestName)},</p>
     <p>${escapeHtml(intro)}</p>
-    <p><strong>Restaurant:</strong> ${escapeHtml(restaurant)}</p>
-    <p><strong>Date:</strong> ${escapeHtml(opts.date)}<br>
-    <strong>Time:</strong> ${escapeHtml(opts.time)}<br>
-    <strong>Guests:</strong> ${escapeHtml(opts.guests)}</p>
+    <div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px;margin:16px 0">
+      <p style="margin:0"><strong>Restaurant:</strong> ${escapeHtml(restaurant)}</p>
+      <p style="margin:8px 0 0"><strong>Date:</strong> ${escapeHtml(opts.date)}</p>
+      <p style="margin:4px 0 0"><strong>Time:</strong> ${escapeHtml(opts.time)}</p>
+      <p style="margin:4px 0 0"><strong>Guests:</strong> ${escapeHtml(opts.guests)}</p>
+    </div>
+    ${contactBlock}
+    ${cancelBlock}
+    <p>We look forward to welcoming you!</p>
+    <p style="color:#71717a;font-size:12px">The team at ${escapeHtml(restaurant)}</p>
   `
-  const text = [
+
+  const textParts = [
     `Hi ${opts.guestName},`,
     intro,
+    '',
     `Restaurant: ${restaurant}`,
     `Date: ${opts.date}`,
     `Time: ${opts.time}`,
-    `Guests: ${opts.guests}`
-  ].join('\n')
+    `Guests: ${opts.guests}`,
+  ]
+  if (opts.contactPhone) textParts.push(`Phone: ${opts.contactPhone}`)
+  if (opts.contactEmail) textParts.push(`Email: ${opts.contactEmail}`)
+  if (opts.cancelUrl)    textParts.push(`\nCancel reservation: ${opts.cancelUrl}`)
+  textParts.push('', `The team at ${restaurant}`)
 
-  return { subject: title, html, text }
+  return { subject: title, html, text: textParts.join('\n') }
 }
 
 export async function notifyReservationCreated(

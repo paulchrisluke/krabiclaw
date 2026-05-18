@@ -45,8 +45,8 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
   const site = await db.prepare(
-    'SELECT id, organization_id, brand_name FROM sites WHERE id = ? AND status = ? LIMIT 1'
-  ).bind(siteId, 'active').first<{ id: string; organization_id: string; brand_name?: string | null }>()
+    'SELECT id, organization_id, brand_name, public_url, subdomain FROM sites WHERE id = ? AND status = ? LIMIT 1'
+  ).bind(siteId, 'active').first<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null; subdomain?: string | null }>()
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const id = crypto.randomUUID()
@@ -76,6 +76,18 @@ export default defineEventHandler(async (event) => {
     cancellation.expiresAt
   ).run()
 
+  // Build absolute cancel URL for the confirmation email
+  const siteBaseUrl = site.public_url?.replace(/\/$/, '') || (site.subdomain ? `https://${site.subdomain}.krabiclaw.com` : null)
+  const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/reservations/cancel?id=${id}#${cancellation.token}` : null
+
+  // Fetch contact info from published site content (best-effort — non-fatal if missing)
+  const contactRows = await db.prepare(`
+    SELECT field, content FROM site_content
+    WHERE site_id = ? AND field IN ('contact.phone', 'contact.email') AND location_id IS NULL
+    LIMIT 2
+  `).bind(siteId).all<{ field: string; content: string | null }>()
+  const contactMap = Object.fromEntries((contactRows.results ?? []).map(r => [r.field, r.content]))
+
   notifyReservationCreated(env, db, {
     organizationId: site.organization_id,
     siteId,
@@ -86,7 +98,10 @@ export default defineEventHandler(async (event) => {
     phone,
     date,
     time,
-    guests
+    guests,
+    cancelUrl,
+    contactPhone: contactMap['contact.phone'] ?? null,
+    contactEmail: contactMap['contact.email'] ?? null,
   }).catch((error) => {
     console.error('reservation_notification_failed', {
       organizationId: site.organization_id,
