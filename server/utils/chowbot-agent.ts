@@ -476,7 +476,7 @@ const TOOLS: AiTool[] = [
   },
   {
     name: 'update_menu_item',
-    description: 'Update a menu item — name, price, description, image, or availability.',
+    description: 'Update a menu item — name, price, description, image, availability, allergens, ingredients, dietary tags, preparation, or serving note.',
     input_schema: {
       type: 'object',
       properties: {
