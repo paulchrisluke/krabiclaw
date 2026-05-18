@@ -570,6 +570,9 @@ const groupConfig: Record<string, Array<{ id: string; label: string; icon: strin
     { id: 'items',  label: 'Menu Items',     icon: 'i-heroicons-list-bullet',    fields: ['menu_items'] },
     { id: 'google', label: 'Google Products', icon: 'i-heroicons-circle-stack', fields: ['business.products'] },
   ],
+  order: [
+    { id: 'hero', label: 'Hero Section', icon: 'i-heroicons-shopping-bag', fields: ['hero.title', 'hero.subtitle'] },
+  ],
   reservations: [
     { id: 'hero',     label: 'Hero Section',    icon: 'i-heroicons-photo',                   fields: ['hero.title', 'hero.subtitle'] },
     { id: 'contact',  label: 'Contact Details', icon: 'i-heroicons-phone',                   fields: ['contact.phone', 'contact.email'] },

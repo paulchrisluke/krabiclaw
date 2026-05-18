@@ -54,9 +54,10 @@
           <h2 class="saya-display text-4xl md:text-5xl text-inverted mb-10">
             {{ getField('cta.title', 'Come dine with us') }}
           </h2>
-          <UButton to="/reservations" size="xl" color="neutral" variant="outline" class="rounded-full">
-            Reserve a Table
-          </UButton>
+          <div class="flex flex-wrap justify-center gap-4">
+            <UButton v-if="hasOrderLinks" to="/order" size="xl" color="neutral" variant="solid" class="rounded-full">Order Now</UButton>
+            <UButton to="/reservations" size="xl" color="neutral" :variant="hasOrderLinks ? 'ghost' : 'outline'" class="rounded-full">Reserve a Table</UButton>
+          </div>
         </div>
       </AppSection>
     </div>
@@ -107,6 +108,16 @@ import { usePageContent } from '~/composables/usePageContent'
 
 const { isPlatform, siteId } = useTenantSite()
 const { getField } = usePageContent('about')
+
+const { data: aboutLocsData } = isPlatform || !siteId
+  ? { data: ref({ locations: [] }) }
+  : await useFetch(`/api/public/sites/${siteId}/locations`, {
+      key: `order-locs-${siteId}`,
+      default: () => ({ locations: [] })
+    })
+const hasOrderLinks = computed(() =>
+  (aboutLocsData.value?.locations ?? []).some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
+)
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 const route = useRoute()

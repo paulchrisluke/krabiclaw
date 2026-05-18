@@ -451,6 +451,27 @@ export const contentRegistry: Record<string, PageDefinition> = {
     }
   },
 
+  order: {
+    label: 'Order Online',
+    path: '/order',
+    fields: {
+      'hero.title': {
+        label: 'Page Title',
+        type: 'text',
+        sources: ['manual'],
+        defaultValue: 'Order Online',
+        placeholder: 'e.g. Order Online'
+      },
+      'hero.subtitle': {
+        label: 'Page Subtitle',
+        type: 'textarea',
+        sources: ['manual'],
+        defaultValue: 'Get our food delivered to your door',
+        placeholder: 'A short line shown under the title'
+      }
+    }
+  },
+
   reservations: {
     label: 'Reservations',
     path: '/reservations',

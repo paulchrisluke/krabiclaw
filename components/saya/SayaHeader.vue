@@ -65,15 +65,15 @@
           <!-- Dark mode toggle -->
           <UColorModeButton variant="ghost" color="neutral" size="sm" />
 
-          <!-- Reserve CTA -->
+          <!-- Primary CTA: Order Now if delivery links exist, otherwise Reserve -->
           <UButton
-            to="/reservations"
+            :to="hasOrderLinks ? '/order' : '/reservations'"
             color="primary"
             variant="solid"
             size="sm"
             class="rounded-full"
           >
-            Reserve
+            {{ hasOrderLinks ? 'Order Now' : 'Reserve' }}
           </UButton>
 
           <!-- Mobile menu toggle -->
@@ -114,6 +114,14 @@
             @click="mobileMenuOpen = false"
           >
             Story
+          </NuxtLink>
+          <NuxtLink
+            v-if="hasOrderLinks"
+            to="/order"
+            class="rounded-full px-4 py-3 text-sm font-semibold text-primary hover:bg-muted"
+            @click="mobileMenuOpen = false"
+          >
+            Order Now
           </NuxtLink>
           <NuxtLink
             to="/reservations"
@@ -204,6 +212,10 @@ const locations = computed(() => {
   if (!currentSiteId.value) return []
   return locationsData.value?.locations ?? []
 })
+
+const hasOrderLinks = computed(() =>
+  locations.value.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
+)
 
 const locationDropdownItems = computed(() => [
   locations.value.map((loc: { title: string; slug: string }) => ({
