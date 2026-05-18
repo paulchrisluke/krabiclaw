@@ -75,27 +75,48 @@
 
           <!-- Items -->
           <div class="flex flex-col gap-7">
-            <article v-for="item in menuItemsBySection[cat.name]" :key="item.id">
-              <div class="flex items-baseline gap-2">
-                <div class="flex items-baseline gap-2 text-base font-medium text-default">
-                  <NuxtLink
-                    :to="`/menu/${itemSlug(item)}`"
-                    class="text-default no-underline hover:underline underline-offset-2"
-                  >{{ item.name }}</NuxtLink>
-                  <UBadge
-                    v-for="tag in getDietaryTags(item)"
-                    :key="tag"
-                    variant="outline"
-                    size="xs"
-                    class="shrink-0 font-medium"
-                  >{{ tag }}</UBadge>
+            <article
+              v-for="item in menuItemsBySection[cat.name]"
+              :key="item.id"
+              class="flex items-start gap-5"
+            >
+              <!-- Text -->
+              <div class="min-w-0 flex-1">
+                <div class="flex items-baseline gap-2">
+                  <div class="flex items-baseline gap-2 text-base font-medium text-default">
+                    <NuxtLink
+                      :to="`/menu/${itemSlug(item)}`"
+                      class="text-default no-underline hover:underline underline-offset-2"
+                    >{{ item.name }}</NuxtLink>
+                    <UBadge
+                      v-for="tag in getDietaryTags(item)"
+                      :key="tag"
+                      variant="outline"
+                      size="xs"
+                      class="shrink-0 font-medium"
+                    >{{ tag }}</UBadge>
+                  </div>
+                  <div class="saya-dotted-leader" />
+                  <div class="shrink-0 tabular-nums text-base text-default">{{ item.price || '—' }}</div>
                 </div>
-                <div class="saya-dotted-leader" />
-                <div class="shrink-0 tabular-nums text-base text-default">{{ item.price || '—' }}</div>
+                <p v-if="item.description" class="mt-1.5 max-w-xl text-sm leading-relaxed text-muted">
+                  {{ item.description }}
+                </p>
               </div>
-              <p v-if="item.description" class="mt-1.5 max-w-xl text-sm leading-relaxed text-muted">
-                {{ item.description }}
-              </p>
+
+              <!-- Thumbnail (images only) -->
+              <NuxtLink
+                v-if="item.public_url && item.kind === 'image'"
+                :to="`/menu/${itemSlug(item)}`"
+                class="shrink-0"
+              >
+                <img
+                  :src="item.public_url"
+                  :alt="item.name"
+                  class="size-24 rounded-xl object-cover bg-muted"
+                  loading="lazy"
+                />
+              </NuxtLink>
             </article>
           </div>
         </section>
