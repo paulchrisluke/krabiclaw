@@ -32,7 +32,7 @@ export interface MediaAsset {
   updated_at: string
 }
 
-type CreateInput = Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source'> &
+export type CreateInput = Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source'> &
   Partial<Omit<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source' | 'created_at' | 'updated_at'>>
 
 export async function createMediaAsset(db: D1Database, data: CreateInput): Promise<void> {
@@ -48,7 +48,7 @@ export async function createMediaAsset(db: D1Database, data: CreateInput): Promi
     data.id, data.organization_id, data.site_id, data.location_id ?? null,
     data.kind, data.provider, data.source,
     data.cloudflare_image_id ?? null, data.r2_key ?? null, data.google_media_name ?? null,
-    (data as MediaAsset & { stream_uid?: string | null }).stream_uid ?? null,
+    data.stream_uid ?? null,
     data.public_url ?? null, data.thumbnail_url ?? null,
     data.mime_type ?? null, data.file_name ?? null, data.file_size ?? null,
     data.width ?? null, data.height ?? null, data.duration ?? null,

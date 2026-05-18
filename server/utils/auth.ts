@@ -4,7 +4,7 @@ import { D1Dialect } from '@atinux/kysely-d1'
 import { Kysely } from 'kysely'
 import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
-import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
+import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
 
 export interface CloudflareEnv {
   REVIEWS_DB: D1Database
@@ -22,6 +22,8 @@ export interface CloudflareEnv {
   CLOUDFLARE_API_TOKEN?: string
   CLOUDFLARE_IMAGES_ACCOUNT_ID?: string
   CLOUDFLARE_IMAGES_API_TOKEN?: string
+  CF_STREAM_API_TOKEN?: string
+  CF_STREAM_CUSTOMER_SUBDOMAIN?: string
   CF_AIG_TOKEN?: string
   CF_ZONE_ID?: string
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
@@ -92,6 +94,21 @@ export function createAuth(env: CloudflareEnv) {
         },
         otpLength: 6,
         expiresIn: 300,
+        phoneNumberValidator: async (phone) => {
+          try {
+            normalizePhone(phone)
+            return true
+          } catch {
+            return false
+          }
+        },
+        signUpOnVerification: {
+          getTempEmail: (phone) => {
+            const digits = normalizePhone(phone).replace(/\D/g, '')
+            return `phone-${digits}@phone.krabiclaw.local`
+          },
+          getTempName: (phone) => `WhatsApp ${normalizePhone(phone)}`,
+        },
       }),
     ],
     socialProviders: {

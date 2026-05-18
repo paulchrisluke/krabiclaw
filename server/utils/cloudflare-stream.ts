@@ -1,13 +1,8 @@
 // Cloudflare Stream video upload and delivery utilities.
 // Upload flow: client calls request-video-upload → gets TUS URL → uploads directly to Stream.
 // Playback: public_url stores the direct MP4 download URL for <video> tag compat.
-// HLS manifest is available at: https://customer-{subdomain}.cloudflarestream.com/{uid}/manifest/video.m3u8
-
-interface StreamEnv {
-  CF_ACCOUNT_ID?: string
-  CF_STREAM_API_TOKEN?: string
-  CF_STREAM_CUSTOMER_SUBDOMAIN?: string
-}
+// HLS manifest available at: https://customer-{subdomain}.cloudflarestream.com/{uid}/manifest/video.m3u8
+import type { CloudflareEnv } from './auth'
 
 interface StreamDirectUploadResponse {
   result?: {
@@ -24,35 +19,36 @@ interface StreamVideoResponse {
     status?: { state?: string }
     duration?: number
     input?: { width?: number; height?: number }
-    thumbnail?: string
   }
   success?: boolean
 }
 
-function apiBase(env: StreamEnv): string {
-  if (!env.CF_ACCOUNT_ID) throw new Error('CF_ACCOUNT_ID not configured')
-  return `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/stream`
+function apiBase(env: CloudflareEnv): string {
+  const accountId = env.CF_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID
+  if (!accountId) throw new Error('CF_ACCOUNT_ID not configured')
+  return `https://api.cloudflare.com/client/v4/accounts/${accountId}/stream`
 }
 
-function authHeader(env: StreamEnv): Record<string, string> {
-  if (!env.CF_STREAM_API_TOKEN) throw new Error('CF_STREAM_API_TOKEN not configured')
-  return { Authorization: `Bearer ${env.CF_STREAM_API_TOKEN}` }
+function authHeader(env: CloudflareEnv): Record<string, string> {
+  const token = env.CF_STREAM_API_TOKEN
+  if (!token) throw new Error('CF_STREAM_API_TOKEN not configured')
+  return { Authorization: `Bearer ${token}` }
 }
 
 /** Build the direct MP4 download URL for a Stream video (works in <video> tags). */
-export function buildStreamDownloadUrl(env: StreamEnv, uid: string): string {
+export function buildStreamDownloadUrl(env: CloudflareEnv, uid: string): string {
   if (!env.CF_STREAM_CUSTOMER_SUBDOMAIN) throw new Error('CF_STREAM_CUSTOMER_SUBDOMAIN not configured')
   return `https://customer-${env.CF_STREAM_CUSTOMER_SUBDOMAIN}.cloudflarestream.com/${uid}/downloads/default.mp4`
 }
 
 /** Build the HLS manifest URL (for future HLS.js support). */
-export function buildStreamHlsUrl(env: StreamEnv, uid: string): string {
+export function buildStreamHlsUrl(env: CloudflareEnv, uid: string): string {
   if (!env.CF_STREAM_CUSTOMER_SUBDOMAIN) throw new Error('CF_STREAM_CUSTOMER_SUBDOMAIN not configured')
   return `https://customer-${env.CF_STREAM_CUSTOMER_SUBDOMAIN}.cloudflarestream.com/${uid}/manifest/video.m3u8`
 }
 
 /** Build the thumbnail URL for a Stream video. */
-export function buildStreamThumbnailUrl(env: StreamEnv, uid: string, time = '0s'): string {
+export function buildStreamThumbnailUrl(env: CloudflareEnv, uid: string, time = '0s'): string {
   if (!env.CF_STREAM_CUSTOMER_SUBDOMAIN) throw new Error('CF_STREAM_CUSTOMER_SUBDOMAIN not configured')
   return `https://customer-${env.CF_STREAM_CUSTOMER_SUBDOMAIN}.cloudflarestream.com/${uid}/thumbnails/thumbnail.jpg?time=${time}`
 }
@@ -62,7 +58,7 @@ export function buildStreamThumbnailUrl(env: StreamEnv, uid: string, time = '0s'
  * using the TUS protocol — no server buffering, no 50 MB limit.
  */
 export async function requestStreamUpload(
-  env: StreamEnv,
+  env: CloudflareEnv,
   options: {
     maxDurationSeconds?: number
     filename?: string
@@ -92,12 +88,10 @@ export async function requestStreamUpload(
 
 /** Fetch metadata for a Stream video (used to confirm upload completion). */
 export async function getStreamVideo(
-  env: StreamEnv,
+  env: CloudflareEnv,
   uid: string
 ): Promise<{ uid: string; state: string; duration: number | null; width: number | null; height: number | null }> {
-  const res = await fetch(`${apiBase(env)}/${uid}`, {
-    headers: authHeader(env),
-  })
+  const res = await fetch(`${apiBase(env)}/${uid}`, { headers: authHeader(env) })
   if (!res.ok) throw new Error(`Stream video fetch error ${res.status}: ${await res.text()}`)
   const data = await res.json() as StreamVideoResponse
   return {
@@ -110,7 +104,7 @@ export async function getStreamVideo(
 }
 
 /** Delete a Stream video by UID. */
-export async function deleteStreamVideo(env: StreamEnv, uid: string): Promise<void> {
+export async function deleteStreamVideo(env: CloudflareEnv, uid: string): Promise<void> {
   const res = await fetch(`${apiBase(env)}/${uid}`, {
     method: 'DELETE',
     headers: authHeader(env),
@@ -121,6 +115,10 @@ export async function deleteStreamVideo(env: StreamEnv, uid: string): Promise<vo
 }
 
 /** Returns true if Stream credentials are fully configured in the environment. */
-export function isStreamConfigured(env: StreamEnv): boolean {
-  return !!(env.CF_ACCOUNT_ID && env.CF_STREAM_API_TOKEN && env.CF_STREAM_CUSTOMER_SUBDOMAIN)
+export function isStreamConfigured(env: CloudflareEnv): boolean {
+  return !!(
+    (env.CF_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID) &&
+    env.CF_STREAM_API_TOKEN &&
+    env.CF_STREAM_CUSTOMER_SUBDOMAIN
+  )
 }
