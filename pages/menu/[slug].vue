@@ -3,6 +3,7 @@
     <AppBreadcrumb v-if="item" :crumbs="[
       { to: '/', label: 'Home' },
       { to: '/menu', label: 'Menu' },
+      ...(category?.name ? [{ to: '/menu', label: category.name }] : []),
       { to: `/menu/${item?.slug}`, label: item?.name }
     ]" />
 
@@ -105,6 +106,7 @@
             <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               <UCard v-for="note in diningNotes" :key="note.name" class="border border-default bg-muted p-5">
                 <dt class="text-sm font-medium text-highlighted">{{ note.name }}</dt>
+                <dd class="mt-1 text-sm text-muted">{{ note.description }}</dd>
               </UCard>
             </dl>
           </section>
@@ -399,7 +401,14 @@ const { data: itemData } = await useFetch<ApiValue>(
 const item = computed(() => itemData.value?.item ?? null)
 const category = computed(() => ({ name: item.value?.section }))
 
-const formatPrice = (menuItem: MenuItemType | null) => menuItem?.price ? `฿${menuItem.price}` : 'TBD'
+const formatPrice = (menuItem: MenuItemType | null) => {
+  if (!menuItem?.price) return 'TBD'
+  const price = String(menuItem.price).trim()
+  if (!price) return 'TBD'
+  // Return as-is if the stored value already begins with a currency symbol
+  if (/^[฿$€£¥₩₹]/.test(price)) return price
+  return `฿${price}`
+}
 
 const formattedPrice = computed(() => formatPrice(item.value))
 
@@ -688,7 +697,11 @@ const schemaGraph = computed(() => {
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'Home', item: '/' },
         { '@type': 'ListItem', position: 2, name: 'Menu', item: '/menu' },
-        { '@type': 'ListItem', position: 3, name: item.value.name, item: `/menu/${item.value.slug}` }
+        ...(category.value?.name
+          ? [{ '@type': 'ListItem', position: 3, name: category.value.name, item: '/menu' }]
+          : []
+        ),
+        { '@type': 'ListItem', position: category.value?.name ? 4 : 3, name: item.value.name, item: `/menu/${item.value.slug}` }
       ]
     }
   ]
