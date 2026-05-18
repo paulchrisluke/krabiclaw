@@ -10,11 +10,12 @@ export interface MediaAsset {
   site_id: string
   location_id: string | null
   kind: 'image' | 'video' | 'file'
-  provider: 'cloudflare_images' | 'cloudflare_r2' | 'google_business' | 'external_url' | 'chowbot'
+  provider: 'cloudflare_images' | 'cloudflare_r2' | 'google_business' | 'external_url' | 'chowbot' | 'cloudflare_stream'
   source: 'uploaded' | 'google_sync' | 'generated' | 'external'
   cloudflare_image_id: string | null
   r2_key: string | null
   google_media_name: string | null
+  stream_uid: string | null
   public_url: string | null
   thumbnail_url: string | null
   mime_type: string | null
@@ -39,14 +40,15 @@ export async function createMediaAsset(db: D1Database, data: CreateInput): Promi
   await db.prepare(`
     INSERT INTO media_assets (
       id, organization_id, site_id, location_id, kind, provider, source,
-      cloudflare_image_id, r2_key, google_media_name,
+      cloudflare_image_id, r2_key, google_media_name, stream_uid,
       public_url, thumbnail_url, mime_type, file_name, file_size,
       width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     data.id, data.organization_id, data.site_id, data.location_id ?? null,
     data.kind, data.provider, data.source,
     data.cloudflare_image_id ?? null, data.r2_key ?? null, data.google_media_name ?? null,
+    (data as MediaAsset & { stream_uid?: string | null }).stream_uid ?? null,
     data.public_url ?? null, data.thumbnail_url ?? null,
     data.mime_type ?? null, data.file_name ?? null, data.file_size ?? null,
     data.width ?? null, data.height ?? null, data.duration ?? null,

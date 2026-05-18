@@ -5,6 +5,11 @@ pages_build_output_dir = "dist"
 
 [vars]
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+# Cloudflare Stream — set CF_STREAM_API_TOKEN and CF_STREAM_CUSTOMER_SUBDOMAIN as secrets:
+#   npx wrangler pages secret put CF_STREAM_API_TOKEN
+#   npx wrangler pages secret put CF_STREAM_CUSTOMER_SUBDOMAIN
+# CF_STREAM_CUSTOMER_SUBDOMAIN is the hash in your Stream delivery domain:
+#   customer-{hash}.cloudflarestream.com  (find it in Stream dashboard → Overview)
 
 [[d1_databases]]
 binding = "REVIEWS_DB"

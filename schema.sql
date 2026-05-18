@@ -400,13 +400,14 @@ CREATE TABLE IF NOT EXISTS media_assets (
   site_id TEXT NOT NULL,
   location_id TEXT,
   kind TEXT NOT NULL CHECK (kind IN ('image', 'video', 'file')),
-  provider TEXT NOT NULL CHECK (provider IN ('cloudflare_images', 'cloudflare_r2', 'google_business', 'external_url', 'chowbot')),
+  provider TEXT NOT NULL CHECK (provider IN ('cloudflare_images', 'cloudflare_r2', 'google_business', 'external_url', 'chowbot', 'cloudflare_stream')),
   source TEXT NOT NULL CHECK (source IN ('uploaded', 'google_sync', 'generated', 'external')),
 
   -- Provider-specific identifiers
   cloudflare_image_id TEXT,
   r2_key TEXT,
   google_media_name TEXT,
+  stream_uid TEXT,
 
   -- URLs
   public_url TEXT,
