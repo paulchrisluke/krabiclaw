@@ -16,28 +16,30 @@
         bg="white"
         padding="xl"
       >
+        <!-- eslint-disable vue/no-v-html -->
         <div class="space-y-12 text-default text-lg leading-relaxed max-w-none">
-          <p class="text-xl font-medium border-l-4 border-current pl-6 py-2 opacity-80">{{ storyIntro }}</p>
+          <div class="text-xl font-medium border-l-4 border-current pl-6 py-2 opacity-80" v-html="getField('story.intro', 'Welcome to our restaurant, where culinary tradition meets modern creativity.')" />
           <div class="grid md:grid-cols-2 gap-12 pt-8">
             <div>
               <h3 class="text-2xl font-bold text-default mb-4">{{ getField('grill.title', 'Our Specialties') }}</h3>
-              <p class="text-muted">{{ getField('grill.description', 'Our restaurant showcases mastery of culinary techniques, presenting a delectable array of dishes.') }}</p>
+              <div class="text-muted prose prose-sm max-w-none" v-html="getField('grill.description', 'Our restaurant showcases mastery of culinary techniques, presenting a delectable array of dishes.')" />
             </div>
             <div>
               <h3 class="text-2xl font-bold text-default mb-4">{{ getField('sushi.title', 'Our Craft') }}</h3>
-              <p class="text-muted">{{ getField('sushi.description', 'Skilled chefs artfully craft a variety of dishes with care and precision.') }}</p>
+              <div class="text-muted prose prose-sm max-w-none" v-html="getField('sushi.description', 'Skilled chefs artfully craft a variety of dishes with care and precision.')" />
             </div>
           </div>
           <div class="bg-muted rounded-3xl p-10 md:p-16 my-16">
             <h2 class="text-3xl font-bold text-default mb-8 italic">{{ getField('journey.title', 'Our Story') }}</h2>
-            <p class="text-muted whitespace-pre-line">{{ journeyBody }}</p>
+            <div class="text-muted prose prose-sm max-w-none" v-html="getField('journey.body', 'Our restaurant has a unique story to tell.')" />
           </div>
-          <p class="text-muted whitespace-pre-line">{{ experienceBody }}</p>
+          <div class="text-muted prose prose-sm max-w-none" v-html="getField('experience.body', 'Our culinary team orchestrates amazing flavors and textures.')" />
           <div v-if="businessDescription" class="mt-20 pt-20 border-t border-default">
             <h4 class="text-sm font-bold uppercase tracking-widest text-dimmed mb-8">About</h4>
-            <p class="text-muted">{{ businessDescription }}</p>
+            <div class="text-muted prose prose-sm max-w-none" v-html="businessDescription" />
           </div>
         </div>
+        <!-- eslint-enable vue/no-v-html -->
       </SayaAbout>
     </div>
 
@@ -102,17 +104,6 @@ const establishmentYear = computed(() => googleBusiness.value?.business?.establi
 const businessDescription = computed(() => googleBusiness.value?.business?.profile?.description ?? '')
 const googleMedia = computed(() => googleBusiness.value?.media ?? [])
 
-function sanitizeFieldText(value) {
-  return String(value || '').replace(/<[^>]+>/g, '').trim()
-}
-
-const journeyBody = computed(() => sanitizeFieldText(getField('journey.body',
-  'Our restaurant has a unique story to tell. From our humble beginnings to where we are today, every step has been guided by passion and dedication.\n\nThe restaurant, a symphony of warm ambiance and subtle lighting, immerses diners in an unforgettable experience.'
-)))
-const storyIntro = computed(() => sanitizeFieldText(getField('story.intro', 'Welcome to our restaurant, where culinary tradition meets modern creativity.')))
-const experienceBody = computed(() => sanitizeFieldText(getField('experience.body',
-  'Our culinary team orchestrates amazing flavors and textures. Committed to the freshest ingredients, our chefs weave magic into every dish.\n\nWe bring together tradition and innovation in a focused, warm dining experience.'
-)))
 
 if (isPlatform) {
   useOrganizationSchema()

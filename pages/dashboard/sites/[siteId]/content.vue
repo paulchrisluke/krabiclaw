@@ -315,6 +315,7 @@
               :data-placeholder="activeFieldDef?.placeholder || 'Start typing...'"
               v-html="DOMPurify.sanitize(editingValue || '')"
               @blur="onRichTextBlur"
+              @paste.prevent="onRichTextPaste"
             />
             <!-- eslint-enable vue/no-v-html -->
           </div>
@@ -520,6 +521,8 @@ const iframeSrc = computed(() => {
 
 const onPageChange = () => {
   activeField.value = null
+  currentValues.value = {}
+  openGroups.value = ['hero']
   // When switching to a location-scoped page, auto-select the primary/first location
   if (currentPageIsLocationScoped.value && !selectedLocationId.value && siteLocations.value.length > 0) {
     const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]!
@@ -529,6 +532,7 @@ const onPageChange = () => {
   if (!currentPageIsLocationScoped.value) {
     selectedLocationId.value = null
   }
+  loadPageContent()
 }
 
 watch(selectedPageId, () => {
@@ -632,6 +636,26 @@ watch(editingValue, () => {
 
 const onRichTextBlur = (e: FocusEvent) => {
   editingValue.value = DOMPurify.sanitize((e.target as HTMLElement).innerHTML)
+}
+
+const onRichTextPaste = (e: ClipboardEvent) => {
+  const html = e.clipboardData?.getData('text/html')
+  const text = e.clipboardData?.getData('text/plain') || ''
+
+  let cleaned: string
+  if (html) {
+    // Strip inline style/class/color attrs so pasted content inherits editor theme
+    cleaned = DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: ['p', 'br', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'a'],
+      ALLOWED_ATTR: ['href'],
+    })
+  } else {
+    cleaned = text.split('\n').map(line => `<p>${line || '<br>'}</p>`).join('')
+  }
+
+  document.execCommand('insertHTML', false, cleaned)
+  const target = e.target as HTMLElement
+  editingValue.value = DOMPurify.sanitize(target.innerHTML)
 }
 
 function onMediaChange(asset: { id: string; publicUrl: string } | null) {
