@@ -36,7 +36,7 @@
 
 
     <!-- Category filter tabs -->
-    <div class="sticky top-0 z-40 border-b border-default bg-default">
+    <div class="sticky top-16 z-40 border-b border-default bg-default">
       <div class="mx-auto flex h-11 max-w-7xl items-center gap-6 overflow-x-auto px-4 sm:px-6 lg:px-8">
         <button
           v-for="cat in cats"

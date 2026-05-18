@@ -71,6 +71,9 @@
      the platform and dashboard — same technique as .saya-theme. */
   --color-primary:        var(--kc-coral-600);
   --ui-primary:           var(--kc-coral-600);
+  /* WCAG foreground: coral (#E87F67) has only ~2.75:1 contrast with white (fails AA).
+     Navy text gives 7.64:1 against coral — use it for all bg-primary surfaces. */
+  --primary-foreground:   var(--kc-navy);
   --ui-bg:                var(--kc-cream);
   --ui-bg-elevated:       var(--kc-cream-elev);
   --ui-bg-muted:          #F2EFEA;
@@ -106,7 +109,9 @@
 */
 .dark .platform-theme {
   --color-primary:        #FB7461;   /* full coral — pops against dark bg */
-  --ui-primary:           #FB7461;            /* coral — slightly brighter on dark */
+  --ui-primary:           #FB7461;
+  /* WCAG foreground: #FB7461 has ~3.2:1 with white (fails AA), but 6.6:1 with cream */
+  --primary-foreground:   var(--kc-cream-elev);
   --ui-bg:                #0F1225;
   --ui-bg-elevated:       #1F2547;            /* card surface = kc-navy value */
   --ui-bg-muted:          #141836;
