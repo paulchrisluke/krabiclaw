@@ -1,0 +1,57 @@
+import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
+import { createExperience } from '~/server/utils/experiences'
+
+const optionalInteger = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && Number.isInteger(parsed) ? parsed : null
+}
+
+export default defineEventHandler(async (event) => {
+  const siteId = getRouterParam(event, 'siteId')
+  if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
+
+  const env = cloudflareEnv(event)
+  const db = env.REVIEWS_DB
+  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
+
+  const session = await getAuthSession(event, env)
+  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+
+  const site = await db
+    .prepare(
+      `SELECT s.id, s.organization_id FROM sites s
+       JOIN member m ON m.organizationId = s.organization_id
+       WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') LIMIT 1`,
+    )
+    .bind(siteId, session.user.id)
+    .first<{ id: string; organization_id: string }>()
+
+  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+
+  let body: Record<string, ApiValue>
+  try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
+
+  const title = String(body.title ?? '').trim()
+  if (!title) return jsonResponse({ error: 'title is required' }, { status: 400 })
+
+  const experience = await createExperience(db, site.organization_id, siteId, {
+    title,
+    tagline: body.tagline ? String(body.tagline).trim() : null,
+    body: body.body ? String(body.body).trim() : null,
+    image_asset_id: body.image_asset_id ? String(body.image_asset_id) : null,
+    price: body.price ? String(body.price).trim() : null,
+    duration_minutes: optionalInteger(body.duration_minutes),
+    max_capacity: optionalInteger(body.max_capacity),
+    time_slots: Array.isArray(body.time_slots) ? body.time_slots.map(String) : null,
+    available_note: body.available_note ? String(body.available_note).trim() : null,
+    status: (['active', 'inactive', 'sold_out'].includes(String(body.status)) ? String(body.status) : 'active') as 'active' | 'inactive' | 'sold_out',
+    sort_order: optionalInteger(body.sort_order) ?? 0,
+    location_id: body.location_id ? String(body.location_id) : null,
+    seo_title: body.seo_title ? String(body.seo_title).trim() : null,
+    seo_description: body.seo_description ? String(body.seo_description).trim() : null,
+  }, session.user.id)
+
+  return jsonResponse({ experience }, { status: 201 })
+})

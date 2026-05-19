@@ -133,6 +133,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
         defaultValue: '',
         placeholder: 'Two or three sentences about your restaurant — what you cook, how you cook it, why it matters.'
       },
+      'story.image': {
+        label: 'Story Image',
+        type: 'media',
+        mediaKind: 'image',
+        sources: ['manual'],
+        defaultValue: ''
+      },
       'hero.image': {
         label: 'Hero Background Image',
         type: 'media',

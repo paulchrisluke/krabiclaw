@@ -24,6 +24,16 @@ export interface SiteContent {
   updated_at: string
 }
 
+interface SiteContentTranslationRow {
+  field: string
+  content: string | null
+  value: string | null
+  type: string | null
+  hero_title: string | null
+  hero_subtitle: string | null
+  updated_at: string
+}
+
 export interface StaffProfile {
   id: string
   name: string
@@ -94,6 +104,78 @@ export const getPageContent = async (db: D1Database, organizationId: string, sit
 
   const { results } = await db.prepare(query).bind(...params).all<SiteContent>()
   return results ?? []
+}
+
+export const getPublishedPageContentForLocale = async (
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  page: string,
+  opts: {
+    locale?: string
+    sourceLocale?: string
+    fallbackEnabled?: boolean
+    locationId?: string
+  } = {},
+): Promise<SiteContent[]> => {
+  const sourceContent = await getPageContent(db, organizationId, siteId, page, opts.locationId)
+  if (!opts.locale || opts.locale === opts.sourceLocale) return sourceContent
+
+  let query = `
+    SELECT field, content, value, type, hero_title, hero_subtitle, updated_at
+    FROM site_content_translations
+    WHERE organization_id = ? AND site_id = ? AND page = ? AND locale = ? AND status = 'published'
+  `
+  const params = [organizationId, siteId, page, opts.locale]
+
+  if (opts.locationId) {
+    query += ` AND location_id = ?`
+    params.push(opts.locationId)
+  } else {
+    query += ` AND location_id IS NULL`
+  }
+
+  const { results } = await db.prepare(query).bind(...params).all<SiteContentTranslationRow>()
+  const translations = results ?? []
+  if (!translations.length) return opts.fallbackEnabled === false ? [] : sourceContent
+
+  const sourceByField = new Map(sourceContent.map(row => [row.field, row]))
+  const translatedFields = new Set<string>()
+
+  for (const translation of translations) {
+    const base = sourceByField.get(translation.field)
+    const translated: SiteContent = {
+      ...(base ?? {
+        id: `translation::${organizationId}::${siteId}::${opts.locationId ?? 'site'}::${opts.locale}::${page}::${translation.field}`,
+        organization_id: organizationId,
+        site_id: siteId,
+        location_id: opts.locationId,
+        page,
+        field: translation.field,
+        source: 'manual',
+        hero_image_asset_id: undefined,
+        hero_video_asset_id: undefined,
+      }),
+      field: translation.field,
+      value: translation.value ?? translation.content ?? base?.value,
+      content: translation.content ?? translation.value ?? base?.content,
+      type: translation.type ?? base?.type ?? 'text',
+      hero_title: translation.hero_title ?? base?.hero_title,
+      hero_subtitle: translation.hero_subtitle ?? base?.hero_subtitle,
+      updated_at: translation.updated_at,
+    }
+    sourceByField.set(translation.field, translated)
+    translatedFields.add(translation.field)
+  }
+
+  if (opts.fallbackEnabled === false) {
+    return Array.from(translatedFields)
+      .map(field => sourceByField.get(field))
+      .filter((row): row is SiteContent => Boolean(row))
+      .sort((a, b) => a.field.localeCompare(b.field))
+  }
+
+  return Array.from(sourceByField.values()).sort((a, b) => a.field.localeCompare(b.field))
 }
 
 export const getSiteContentField = async (db: D1Database, organizationId: string, siteId: string, locationId: string | null, page: string, field: string): Promise<SiteContent | null> => {

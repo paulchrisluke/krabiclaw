@@ -3,7 +3,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, requireBillingAccess } from '~/server/utils/billing'
-import Stripe from 'stripe'
+import type Stripe from 'stripe'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)

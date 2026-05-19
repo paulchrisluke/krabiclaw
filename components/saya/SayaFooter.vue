@@ -11,7 +11,7 @@
               v-if="logoUrl"
               :src="logoUrl"
               :alt="restaurantName"
-              class="h-12 w-auto max-w-40 object-contain brightness-0 invert"
+              class="h-12 w-auto max-w-40 object-contain"
             />
             <span v-else class="saya-display text-5xl text-inverted">{{ restaurantName }}</span>
           </NuxtLink>

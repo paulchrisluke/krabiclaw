@@ -83,9 +83,45 @@ export default defineNuxtConfig({
         dir: 'ltr'
       },
       {
+        code: 'fr',
+        name: 'Français',
+        language: 'fr-FR',
+        dir: 'ltr'
+      },
+      {
         code: 'ja',
         name: '日本語',
         language: 'ja-JP',
+        dir: 'ltr'
+      },
+      {
+        code: 'zh-CN',
+        name: '简体中文',
+        language: 'zh-CN',
+        dir: 'ltr'
+      },
+      {
+        code: 'ko',
+        name: '한국어',
+        language: 'ko-KR',
+        dir: 'ltr'
+      },
+      {
+        code: 'es',
+        name: 'Español',
+        language: 'es-ES',
+        dir: 'ltr'
+      },
+      {
+        code: 'de',
+        name: 'Deutsch',
+        language: 'de-DE',
+        dir: 'ltr'
+      },
+      {
+        code: 'it',
+        name: 'Italiano',
+        language: 'it-IT',
         dir: 'ltr'
       },
       {
@@ -166,6 +202,7 @@ export default defineNuxtConfig({
       tasks: true
     },
     scheduledTasks: {
+      '*/5 * * * *': ['translation-jobs-process'],
       '*/10 * * * *': ['domain-reconciliation'],
       '0 3 * * *': ['domain-reconciliation-daily']
     },

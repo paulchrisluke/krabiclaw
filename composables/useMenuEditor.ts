@@ -199,6 +199,9 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
         currentMenu.value.items = currentMenu.value.items.map(item =>
           item.section === oldSection ? { ...item, section: response.new_section } : item
         )
+        currentMenu.value.section_order = (currentMenu.value.section_order ?? []).map(section =>
+          section === oldSection ? response.new_section : section
+        )
         return response
       }
       throw new Error('Failed to rename menu section')
@@ -222,6 +225,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
       )
       if (response.success) {
         currentMenu.value.items = currentMenu.value.items.filter(item => item.section !== response.section)
+        currentMenu.value.section_order = (currentMenu.value.section_order ?? []).filter(section => section !== response.section)
         return response
       }
       throw new Error('Failed to delete menu section')
@@ -265,6 +269,9 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
       if (!grouped[section]) grouped[section] = []
       grouped[section].push(item)
     })
+    for (const section of currentMenu.value.section_order ?? []) {
+      if (!grouped[section]) grouped[section] = []
+    }
     return grouped
   })
 

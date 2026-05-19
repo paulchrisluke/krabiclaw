@@ -36,29 +36,10 @@
 
 
     <!-- Category filter tabs -->
-    <div class="sticky top-0 z-40 border-b border-default bg-default">
-      <div class="mx-auto flex h-11 max-w-7xl items-center gap-6 overflow-x-auto px-4 sm:px-6 lg:px-8">
-        <button
-          v-for="cat in cats"
-          :key="cat.key"
-          :class="[
-            'relative flex h-full shrink-0 items-center text-[10px] font-bold uppercase tracking-widest transition-colors',
-            activeCategory === cat.key
-              ? 'text-default'
-              : 'text-muted hover:text-default'
-          ]"
-          @click="activeCategory = cat.key"
-        >
-          {{ cat.label }}
-
-          <!-- Active indicator -->
-          <div 
-            v-if="activeCategory === cat.key"
-            class="absolute bottom-0 left-0 h-0.5 w-full bg-primary"
-          />
-        </button>
-      </div>
-    </div>
+    <SayaFilterTabs
+      v-model="activeCategory"
+      :tabs="cats"
+    />
 
       <!-- Gallery -->
       <section class="mx-auto max-w-7xl px-4 py-12 pb-24 sm:px-6 lg:px-8">
@@ -77,7 +58,7 @@
           @click="openLightbox(i)"
         >
           <img
-            :src="photo.thumbnail_url || photo.local_url || photo.google_url"
+            :src="photo.local_url || photo.google_url || photo.thumbnail_url"
             :alt="photo.description || ''"
             loading="lazy"
             class="block w-full transition-opacity duration-200 group-hover:opacity-80"
@@ -129,7 +110,7 @@
           <!-- Image -->
           <img
             v-if="sorted[lightboxIdx]"
-            :src="sorted[lightboxIdx].thumbnail_url || sorted[lightboxIdx].local_url || sorted[lightboxIdx].google_url"
+            :src="sorted[lightboxIdx].local_url || sorted[lightboxIdx].google_url || sorted[lightboxIdx].thumbnail_url"
             alt=""
             class="max-h-[85vh] max-w-[90vw] object-contain"
             @click.stop
@@ -187,7 +168,11 @@ const cats = [
 const activeCategory = ref('ALL')
 
 const sorted = computed(() => {
-  const filtered = activeCategory.value === 'ALL' ? photos.value : photos.value.filter((p: ApiValue) => p.category === activeCategory.value)
+  const filtered = activeCategory.value === 'ALL'
+    ? photos.value
+    : activeCategory.value === 'FOOD'
+      ? photos.value.filter((p: ApiValue) => p.category === 'FOOD' || p.category === 'MENU')
+      : photos.value.filter((p: ApiValue) => p.category === activeCategory.value)
   return [...filtered].sort((a: ApiValue, b: ApiValue) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
 })
 

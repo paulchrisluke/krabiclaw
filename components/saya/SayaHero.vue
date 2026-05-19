@@ -8,13 +8,13 @@
         muted
         loop
         playsinline
-        class="w-full h-full object-cover opacity-50"
+        class="w-full h-full object-cover"
       />
     </div>
 
     <!-- Background image slot (only rendered if no video) -->
     <div v-else-if="image" class="absolute inset-0">
-      <img :src="image" :alt="title" class="w-full h-full object-cover opacity-50" />
+      <img :src="image" :alt="title" class="w-full h-full object-cover" />
     </div>
 
     <!-- Content -->

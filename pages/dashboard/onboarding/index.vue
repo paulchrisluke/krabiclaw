@@ -136,7 +136,8 @@ async function handleContinue() {
       method: 'POST',
       body: { restaurantName: restaurantName.value.trim(), subdomain: subdomain.value }
     })
-    await navigateTo(`/dashboard/sites/${res.siteId}/setup`)
+    const { paths } = useDashboardSiteLinks(res.siteId)
+    await navigateTo(paths.value.setup)
   } catch (err) {
     const msg = err && typeof err === 'object' && 'data' in err
       ? (err as { data?: { message?: string } }).data?.message

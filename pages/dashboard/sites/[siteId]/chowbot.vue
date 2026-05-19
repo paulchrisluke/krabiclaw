@@ -20,10 +20,11 @@ definePageMeta({ layout: 'dashboard' })
 const route = useRoute()
 const siteId = route.params.siteId as string
 const prompt = typeof route.query.prompt === 'string' ? decodeURIComponent(route.query.prompt) : ''
+const { paths } = useDashboardSiteLinks(siteId)
 
 onMounted(async () => {
   // Navigate to the overview first so the sidebar context is correct
-  await navigateTo(`/dashboard/sites/${siteId}`, { replace: true })
+  await navigateTo(paths.value.base, { replace: true })
 
   // Then open ChowBot with the pre-seeded prompt
   if (prompt) {

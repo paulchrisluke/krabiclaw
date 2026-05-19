@@ -5,13 +5,8 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, requireBillingAccess } from '~/server/utils/billing'
+import { BUNDLE_AMOUNTS, VALID_BUNDLES } from '~/shared/creditBundles'
 import type Stripe from 'stripe'
-
-const BUNDLE_AMOUNTS: Record<number, number> = {
-  500: 900,   // $9.00
-  2500: 2900, // $29.00
-  5000: 4900, // $49.00
-}
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -37,6 +32,8 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const bundle = Number(body?.bundle)
   const txId = body?.txId as string | undefined
+  const enableAutoTopup = body?.enableAutoTopup === true
+  const autoTopupBundle = body?.autoTopupBundle !== undefined ? Number(body.autoTopupBundle) : bundle
   const amount = BUNDLE_AMOUNTS[bundle]
   if (!amount) return jsonResponse({ error: 'Invalid bundle. Choose 500, 2500, or 5000.' }, { status: 400 })
 
@@ -94,6 +91,19 @@ export default defineEventHandler(async (event) => {
        last_topped_up_at = excluded.last_topped_up_at,
        updated_at = excluded.updated_at`
   ).bind(orgId, bundle, now, now).run()
+
+  // Persist auto top-up preference if the user toggled it during purchase
+  if (enableAutoTopup) {
+    const validBundle = (VALID_BUNDLES as readonly number[]).includes(autoTopupBundle) ? autoTopupBundle : bundle
+    await db.prepare(
+      `INSERT INTO organization_billing (id, organization_id, auto_topup_enabled, auto_topup_bundle, updated_at)
+       VALUES (?, ?, 1, ?, ?)
+       ON CONFLICT(organization_id) DO UPDATE SET
+         auto_topup_enabled = 1,
+         auto_topup_bundle = excluded.auto_topup_bundle,
+         updated_at = excluded.updated_at`
+    ).bind(`ob-${orgId}`, orgId, validBundle, now).run()
+  }
 
   const updated = await db.prepare(
     'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1'

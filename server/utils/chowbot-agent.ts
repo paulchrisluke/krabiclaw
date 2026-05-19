@@ -4,6 +4,9 @@ import { listPosts, createPost, publishPost } from '~/server/utils/post-manageme
 import { getMenus, getMenuWithItems, createMenu, updateMenu, createMenuItem, updateMenuItem, deleteMenuItem, deleteMenu, renameMenuSection, deleteMenuSection } from '~/server/utils/menu-management'
 import { deleteDraftContentField, deleteSiteContentField, discardDrafts, getDraftContent, getPageContent, getSiteContentField, publishDrafts, upsertDraftContent, upsertSiteContent } from '~/server/utils/content-management'
 import { setConfig } from '~/server/utils/site-config'
+import { deleteSiteLocale, listSiteLocales, upsertSiteLocale } from '~/server/utils/site-locales'
+import { buildTranslationInventory, createTranslationJob, publishTranslationDrafts } from '~/server/utils/translation-inventory'
+import { processTranslationJobBatch } from '~/server/utils/translation-processor'
 import { getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
 import { extractMenuFromMediaAsset } from '~/server/utils/chowbot-media'
 import { upsertChannelState } from '~/server/utils/chowbot-conversations'
@@ -18,13 +21,10 @@ const RESERVATIONS_PAGE = 'reservations'
 const RESERVATION_POLICIES_FIELD = 'policies.body'
 const HERO_FIELDS = new Set(['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'])
 const PLATFORM_PAGES = ['about', 'contact', 'help'] as const
+const TRANSLATION_SCOPES = new Set(['site', 'content', 'menus', 'locations', 'posts'])
 
 type SqlBindValue = string | number | boolean | null
 export type JsonSerializable = string | number | boolean | null | JsonSerializable[] | { [key: string]: JsonSerializable }
-
-interface AiImagePayload {
-  image?: string
-}
 
 export interface ChowBotIncomingMessage {
   role: 'user' | 'assistant'
@@ -333,7 +333,7 @@ const TOOLS: AiTool[] = [
       properties: {
         title: { type: 'string', description: 'Short headline (max 80 chars). Optional.' },
         body: { type: 'string', description: 'Post body (max 400 chars). Friendly, warm tone.' },
-        image_asset_id: { type: 'string', description: 'Optional media asset ID from generate_image or get_location_media.' },
+        image_asset_id: { type: 'string', description: 'Optional media asset ID from generate_image, get_location_media, or pending WhatsApp media.' },
         location_id: { type: 'string', description: 'Pin this post to a specific location. Omit for site-wide.' },
         post_type: { type: 'string', enum: ['standard', 'offer', 'event', 'update'], description: 'Post type. Default: standard.' },
         cta_type: { type: 'string', enum: ['BOOK', 'ORDER', 'SHOP', 'LEARN_MORE', 'SIGN_UP', 'CALL'], description: 'Call-to-action button type.' },
@@ -437,7 +437,7 @@ const TOOLS: AiTool[] = [
               name: { type: 'string', description: 'Dish name.' },
               description: { type: 'string', description: 'Short description. Optional.' },
               price: { type: 'string', description: 'Price string, e.g. "฿120". Optional.' },
-              image_asset_id: { type: 'string', description: 'Media asset ID from generate_image. Optional.' },
+              image_asset_id: { type: 'string', description: 'Media asset ID from generate_image or pending WhatsApp media. Optional.' },
               allergens: { type: 'array', items: { type: 'string' }, description: 'List of allergens, e.g. ["dairy", "nuts"].' },
               ingredients: { type: 'array', items: { type: 'string' }, description: 'Key ingredients.' },
               dietary_notes: { type: 'array', items: { type: 'string' }, description: 'Dietary tags, e.g. ["V", "VG", "GF", "vegetarian", "vegan", "gluten-free"].' },
@@ -498,7 +498,7 @@ const TOOLS: AiTool[] = [
         name: { type: 'string', description: 'Dish name.' },
         description: { type: 'string', description: 'Short description. Optional.' },
         price: { type: 'string', description: 'Price string. Optional.' },
-        image_asset_id: { type: 'string', description: 'Media asset ID from generate_image. Optional.' },
+        image_asset_id: { type: 'string', description: 'Media asset ID from generate_image or pending WhatsApp media. Optional.' },
         allergens: { type: 'array', items: { type: 'string' } },
         ingredients: { type: 'array', items: { type: 'string' } },
         dietary_notes: { type: 'array', items: { type: 'string' } },
@@ -510,7 +510,7 @@ const TOOLS: AiTool[] = [
   },
   {
     name: 'update_menu_item',
-    description: 'Update a menu item — name, price, description, image, availability, allergens, ingredients, dietary tags, preparation, or serving note.',
+    description: 'Update a menu item — name, price, description, image, availability, featured status, allergens, ingredients, dietary tags, preparation, or serving note.',
     input_schema: {
       type: 'object',
       properties: {
@@ -519,8 +519,10 @@ const TOOLS: AiTool[] = [
         name: { type: 'string' },
         description: { type: 'string' },
         price: { type: 'string' },
-        image_asset_id: { type: 'string', description: 'New media asset ID from generate_image.' },
+        image_asset_id: { type: 'string', description: 'New media asset ID from generate_image or pending WhatsApp media.' },
         available: { type: 'boolean' },
+        featured: { type: 'boolean', description: 'Whether this item appears in the featured highlights on the home page.' },
+        featured_sort_order: { type: 'integer', description: 'Order among featured items (lower = shown first). Only relevant when featured is true.' },
         allergens: { type: 'array', items: { type: 'string' } },
         ingredients: { type: 'array', items: { type: 'string' } },
         dietary_notes: { type: 'array', items: { type: 'string' } },
@@ -593,8 +595,8 @@ const TOOLS: AiTool[] = [
         grab_url: { type: 'string', description: 'Grab Food ordering link for this location.' },
         uber_eats_url: { type: 'string', description: 'Uber Eats ordering link for this location.' },
         foodpanda_url: { type: 'string', description: 'FoodPanda ordering link for this location.' },
-        hero_image_asset_id: { type: 'string', description: 'Media asset ID for hero image.' },
-        hero_video_asset_id: { type: 'string', description: 'Media asset ID for hero video.' },
+        hero_image_asset_id: { type: 'string', description: 'Media asset ID for hero image — from generate_image, get_location_media, or pending WhatsApp media.' },
+        hero_video_asset_id: { type: 'string', description: 'Media asset ID for hero video — from get_location_media or pending WhatsApp media.' },
         is_primary: { type: 'boolean' },
       },
       required: ['title'],
@@ -609,6 +611,7 @@ const TOOLS: AiTool[] = [
         location_id: { type: 'string', description: 'ID from get_locations.' },
         title: { type: 'string', description: 'New name — also updates URL slug.' },
         city: { type: 'string' },
+        neighborhood: { type: 'string', description: 'Short neighbourhood tag shown on location hero and cards, e.g. "Beachside · 2 min from Centre Point".' },
         phone: { type: 'string' },
         address: { type: 'string' },
         email: { type: 'string' },
@@ -627,8 +630,8 @@ const TOOLS: AiTool[] = [
         grab_url: { type: 'string', description: 'Grab Food ordering link for this location.' },
         uber_eats_url: { type: 'string', description: 'Uber Eats ordering link for this location.' },
         foodpanda_url: { type: 'string', description: 'FoodPanda ordering link for this location.' },
-        hero_image_asset_id: { type: 'string', description: 'Media asset ID for hero image.' },
-        hero_video_asset_id: { type: 'string', description: 'Media asset ID for hero video.' },
+        hero_image_asset_id: { type: 'string', description: 'Media asset ID for hero image — from generate_image, get_location_media, or pending WhatsApp media.' },
+        hero_video_asset_id: { type: 'string', description: 'Media asset ID for hero video — from get_location_media or pending WhatsApp media.' },
         is_primary: { type: 'boolean' },
         status: { type: 'string', enum: ['active', 'inactive', 'sync_error'] },
       },
@@ -766,7 +769,7 @@ const TOOLS: AiTool[] = [
   },
   {
     name: 'resolve_pending_media',
-    description: 'Resolve the currently pending WhatsApp media without importing it. Use when the user wants to save the already-uploaded media as-is or cancel the pending media task.',
+    description: 'Clear the pending WhatsApp media state. Call with action=save_media after assigning the asset to any tool (menu item, hero, post, etc.) or when the user just wants it saved to the library. Call with action=cancel to discard.',
     input_schema: {
       type: 'object',
       properties: {
@@ -777,7 +780,7 @@ const TOOLS: AiTool[] = [
   },
   {
     name: 'generate_image',
-    description: 'Generate an AI image from a text prompt using Flux. The image is automatically saved to the media library. Use for menu item photos, hero images, or social posts.',
+    description: 'Generate an AI image from a text prompt using the configured OpenAI image model. The image is automatically saved to the media library. Use for menu item photos, hero images, or social posts.',
     input_schema: {
       type: 'object',
       properties: {
@@ -1001,20 +1004,209 @@ const TOOLS: AiTool[] = [
   },
   {
     name: 'update_site_social',
-    description: 'Set site-wide social media links and footer tagline. Pass only the fields to change; omit the rest.',
+    description: 'Set site-wide social media links, footer tagline, and brand contact emails. Pass only the fields to change; omit the rest.',
     input_schema: {
       type: 'object',
       properties: {
-        facebook_url:  { type: 'string', description: 'Full Facebook page URL. Empty string to clear.' },
-        instagram_url: { type: 'string', description: 'Full Instagram profile URL. Empty string to clear.' },
-        tiktok_url:    { type: 'string', description: 'Full TikTok profile URL. Empty string to clear.' },
-        footer_tagline: { type: 'string', description: 'Short tagline shown in the site footer. Empty string to clear.' },
+        facebook_url:        { type: 'string', description: 'Full Facebook page URL. Empty string to clear.' },
+        instagram_url:       { type: 'string', description: 'Full Instagram profile URL. Empty string to clear.' },
+        tiktok_url:          { type: 'string', description: 'Full TikTok profile URL. Empty string to clear.' },
+        footer_tagline:      { type: 'string', description: 'Short tagline shown in the site footer. Empty string to clear.' },
+        press_email:         { type: 'string', description: 'Email for press inquiries. Shown on brand contact page. Empty string to clear.' },
+        partnerships_email:  { type: 'string', description: 'Email for partnership inquiries. Empty string to clear.' },
+        catering_email:      { type: 'string', description: 'Email for catering and events inquiries. Empty string to clear.' },
+        careers_email:       { type: 'string', description: 'Email for careers/job inquiries. Empty string to clear.' },
       },
+    },
+  },
+  {
+    name: 'list_site_languages',
+    description: 'List the source language and enabled translation languages for this site.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'save_site_language',
+    description: 'Create or update a site language. Use this for source language, draft/published/disabled status, display label, and source fallback.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        locale: { type: 'string', description: 'BCP-47 locale code, such as en, th, fr, ja, or zh-CN.' },
+        label: { type: 'string', description: 'Optional display label shown in dashboard controls.' },
+        status: { type: 'string', enum: ['draft', 'published', 'disabled'], description: 'Public availability for this locale.' },
+        fallback_enabled: { type: 'boolean', description: 'Whether missing translated content falls back to the source language.' },
+        is_source: { type: 'boolean', description: 'Set true to make this locale the source language.' },
+      },
+      required: ['locale'],
+    },
+  },
+  {
+    name: 'delete_site_language',
+    description: 'Remove a non-source site language. Confirm with the user first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        locale: { type: 'string', description: 'Locale code to remove.' },
+      },
+      required: ['locale'],
+    },
+  },
+  {
+    name: 'estimate_site_translation',
+    description: 'Estimate translation scope and AI credits before translating a site language. Use before starting translation work.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        locale: { type: 'string', description: 'Target locale code, such as th or fr.' },
+        scope: { type: 'string', enum: ['site', 'content', 'menus', 'locations', 'posts'], description: 'Which part of the site to estimate.' },
+        include_published: { type: 'boolean', description: 'Include already published translations in the estimate.' },
+      },
+      required: ['locale'],
+    },
+  },
+  {
+    name: 'start_site_translation_job',
+    description: 'Create a queued translation job after the user approves the estimate. This queues work but does not translate immediately.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        locale: { type: 'string', description: 'Target locale code, such as th or fr.' },
+        scope: { type: 'string', enum: ['site', 'content', 'menus', 'locations', 'posts'], description: 'Which part of the site to translate.' },
+        include_published: { type: 'boolean', description: 'Include already published translations.' },
+      },
+      required: ['locale'],
+    },
+  },
+  {
+    name: 'list_translation_jobs',
+    description: 'List recent translation jobs for this site.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_translation_job',
+    description: 'Inspect a translation job and its queued items.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string' },
+      },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'run_translation_job_batch',
+    description: 'Run one batch of an approved queued translation job. This calls AI, charges credits, and saves draft translations. Confirm before using.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string' },
+      },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'publish_site_translations',
+    description: 'Publish matching draft translations for a locale and scope so they become visible on the public site. Confirm before using.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        locale: { type: 'string', description: 'Target locale code, such as th or fr.' },
+        scope: { type: 'string', enum: ['site', 'content', 'menus', 'locations', 'posts'], description: 'Which translated drafts to publish.' },
+      },
+      required: ['locale'],
+    },
+  },
+  // ── Experiences ───────────────────────────────────────────────────────────
+  {
+    name: 'list_experiences',
+    description: 'List all experiences for this site.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'create_experience',
+    description: 'Create a new bookable dining experience for this site.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Experience name, e.g. "Teppanyaki Night".' },
+        tagline: { type: 'string', description: 'One-line hook shown on the listing card.' },
+        body: { type: 'string', description: 'Rich HTML body — full description, what\'s included, atmosphere, etc.' },
+        price: { type: 'string', description: 'Price string, e.g. "THB 1,500 / person".' },
+        duration_minutes: { type: 'number', description: 'Duration in minutes, e.g. 90.' },
+        max_capacity: { type: 'number', description: 'Maximum guests per booking.' },
+        time_slots: { type: 'array', items: { type: 'string' }, description: 'Available time slots, e.g. ["17:00","19:00","21:00"].' },
+        available_note: { type: 'string', description: 'Human-readable availability, e.g. "Every Friday & Saturday".' },
+        image_asset_id: { type: 'string', description: 'Media asset ID for hero image.' },
+        location_id: { type: 'string', description: 'Pin to a specific location ID. Omit for site-wide.' },
+        status: { type: 'string', enum: ['active', 'inactive', 'sold_out'], description: 'Default: active.' },
+        seo_title: { type: 'string', description: 'SEO page title override.' },
+        seo_description: { type: 'string', description: 'SEO meta description (150–160 chars).' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'update_experience',
+    description: 'Update an existing experience — any combination of fields.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        experience_id: { type: 'string', description: 'ID of the experience to update.' },
+        title: { type: 'string' },
+        tagline: { type: 'string' },
+        body: { type: 'string' },
+        price: { type: 'string' },
+        duration_minutes: { type: 'number' },
+        max_capacity: { type: 'number' },
+        time_slots: { type: 'array', items: { type: 'string' } },
+        available_note: { type: 'string' },
+        image_asset_id: { type: 'string' },
+        location_id: { type: 'string' },
+        status: { type: 'string', enum: ['active', 'inactive', 'sold_out'] },
+        sort_order: { type: 'number' },
+        seo_title: { type: 'string' },
+        seo_description: { type: 'string' },
+      },
+      required: ['experience_id'],
+    },
+  },
+  {
+    name: 'delete_experience',
+    description: 'Permanently delete an experience and all its bookings. Confirm with user first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        experience_id: { type: 'string', description: 'ID of the experience to delete.' },
+      },
+      required: ['experience_id'],
+    },
+  },
+  {
+    name: 'list_experience_bookings',
+    description: 'List booking requests for an experience.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        experience_id: { type: 'string', description: 'Experience ID.' },
+      },
+      required: ['experience_id'],
+    },
+  },
+  {
+    name: 'update_experience_booking_status',
+    description: 'Confirm or cancel a guest booking for an experience.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        experience_id: { type: 'string' },
+        booking_id: { type: 'string' },
+        status: { type: 'string', enum: ['confirmed', 'cancelled'] },
+      },
+      required: ['experience_id', 'booking_id', 'status'],
     },
   },
 ]
 
-const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu', 'delete_menu_item', 'delete_menu_section', 'delete_location', 'delete_review', 'delete_media_asset', 'delete_qa', 'delete_reservation_policies', 'delete_site_content_field', 'delete_platform_content_page'])
+const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu', 'delete_menu_item', 'delete_menu_section', 'delete_location', 'delete_review', 'delete_media_asset', 'delete_qa', 'delete_reservation_policies', 'delete_site_content_field', 'delete_platform_content_page', 'delete_site_language', 'start_site_translation_job', 'run_translation_job_batch', 'publish_site_translations', 'delete_experience'])
 
 function isAllowedGoogleMapsHost(hostname: string): boolean {
   const host = hostname.toLowerCase()
@@ -1326,12 +1518,12 @@ async function executeTool(
     }
 
     case 'update_menu_item': {
-      const updates: Record<string, string | boolean | null> = {}
-      for (const f of ['section', 'name', 'description', 'price', 'image_asset_id', 'available']) {
+      const updates: Record<string, string | boolean | number | null> = {}
+      for (const f of ['section', 'name', 'description', 'price', 'image_asset_id', 'available', 'featured', 'featured_sort_order']) {
         if (input[f] !== undefined) updates[f] = input[f]
       }
       const item = await updateMenuItem(db, input.item_id, updates, userId)
-      return { id: item.id, name: item.name, price: item.price, available: item.available }
+      return { id: item.id, name: item.name, price: item.price, available: item.available, featured: item.featured, featured_sort_order: item.featured_sort_order }
     }
 
     case 'delete_menu_item': {
@@ -1366,7 +1558,7 @@ async function executeTool(
 
     case 'get_locations': {
       const rows = await db.prepare(
-        `SELECT id, slug, title, city, phone, email, website_url, maps_url, google_place_id,
+        `SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
                 rating, review_count, description, short_description, price_level,
                 instagram_url, facebook_url, tiktok_url, hero_image_asset_id, hero_video_asset_id,
                 status, is_primary
@@ -1485,7 +1677,7 @@ async function executeTool(
         params.push(normalizedTitle, slugBase)
         slugParamIndex = params.length - 1
       }
-      const simpleFields = ['city', 'phone', 'email', 'description', 'short_description', 'price_level',
+      const simpleFields = ['city', 'neighborhood', 'phone', 'email', 'description', 'short_description', 'price_level',
         'facebook_url', 'instagram_url', 'tiktok_url',
         'grab_url', 'uber_eats_url', 'foodpanda_url',
         'website_url', 'maps_url', 'google_place_id',
@@ -1587,7 +1779,7 @@ async function executeTool(
       }
 
       const updated = await db.prepare(
-        `SELECT id, slug, title, city, phone, email, website_url, maps_url, google_place_id,
+        `SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
                 rating, review_count, description, short_description, status, is_primary
          FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
       ).bind(locationId, orgId, siteId).first()
@@ -2260,19 +2452,25 @@ async function executeTool(
     }
 
     case 'update_site_social': {
-      const map: Array<['social_facebook' | 'social_instagram' | 'social_tiktok' | 'footer_tagline', string | undefined]> = [
-        ['social_facebook',  toSqlText(input.facebook_url)   ?? undefined],
-        ['social_instagram', toSqlText(input.instagram_url)  ?? undefined],
-        ['social_tiktok',    toSqlText(input.tiktok_url)     ?? undefined],
-        ['footer_tagline',   toSqlText(input.footer_tagline) ?? undefined],
+      type SocialKey = 'social_facebook' | 'social_instagram' | 'social_tiktok' | 'footer_tagline' | 'press_email' | 'partnerships_email' | 'catering_email' | 'careers_email'
+      const urlKeys = new Set<SocialKey>(['social_facebook', 'social_instagram', 'social_tiktok'])
+      const map: Array<[SocialKey, string | undefined]> = [
+        ['social_facebook',   toSqlText(input.facebook_url)       ?? undefined],
+        ['social_instagram',  toSqlText(input.instagram_url)      ?? undefined],
+        ['social_tiktok',     toSqlText(input.tiktok_url)         ?? undefined],
+        ['footer_tagline',    toSqlText(input.footer_tagline)     ?? undefined],
+        ['press_email',       toSqlText(input.press_email)        ?? undefined],
+        ['partnerships_email',toSqlText(input.partnerships_email) ?? undefined],
+        ['catering_email',    toSqlText(input.catering_email)     ?? undefined],
+        ['careers_email',     toSqlText(input.careers_email)      ?? undefined],
       ]
       const updated: Record<string, string> = {}
       const invalidFields: string[] = []
-      const normalizedEntries: Array<['social_facebook' | 'social_instagram' | 'social_tiktok' | 'footer_tagline', string]> = []
+      const normalizedEntries: Array<[SocialKey, string]> = []
       for (const [key, value] of map) {
         if (value === undefined) continue
         const trimmed = value.trim()
-        if (key !== 'footer_tagline' && trimmed && !isValidHttpUrl(trimmed)) {
+        if (urlKeys.has(key) && trimmed && !isValidHttpUrl(trimmed)) {
           invalidFields.push(key)
           continue
         }
@@ -2285,6 +2483,199 @@ async function executeTool(
       }
       if (Object.keys(updated).length === 0) return { error: 'No fields provided.' }
       return { updated }
+    }
+
+    case 'list_site_languages': {
+      return await listSiteLocales(db, orgId, siteId)
+    }
+
+    case 'save_site_language': {
+      const locale = toSqlText(input.locale)?.trim()
+      if (!locale) return { error: 'locale is required.' }
+      const saved = await upsertSiteLocale(db, orgId, siteId, {
+        locale,
+        label: toSqlText(input.label) ?? undefined,
+        status: input.status === 'published' || input.status === 'disabled' || input.status === 'draft'
+          ? input.status
+          : undefined,
+        fallback_enabled: typeof input.fallback_enabled === 'boolean' ? input.fallback_enabled : undefined,
+        is_source: typeof input.is_source === 'boolean' ? input.is_source : undefined,
+      })
+      return { locale: saved, updated: true }
+    }
+
+    case 'delete_site_language': {
+      const locale = toSqlText(input.locale)?.trim()
+      if (!locale) return { error: 'locale is required.' }
+      return await deleteSiteLocale(db, orgId, siteId, locale)
+    }
+
+    case 'estimate_site_translation': {
+      const locale = toSqlText(input.locale)?.trim()
+      if (!locale) return { error: 'locale is required.' }
+      const scopeInput = toSqlText(input.scope)?.trim()
+      const scope = scopeInput && TRANSLATION_SCOPES.has(scopeInput) ? scopeInput as 'site' | 'content' | 'menus' | 'locations' | 'posts' : 'site'
+      const inventory = await buildTranslationInventory(db, orgId, siteId, {
+        targetLocale: locale,
+        scope,
+        includePublished: input.include_published === true,
+      })
+      return {
+        estimate: inventory.estimate,
+        sample: inventory.items.slice(0, 12).map(item => ({
+          entity_type: item.entity_type,
+          label: item.label,
+          chars: item.source_chars,
+          status: item.translation_status,
+        })),
+      }
+    }
+
+    case 'start_site_translation_job': {
+      const locale = toSqlText(input.locale)?.trim()
+      if (!locale) return { error: 'locale is required.' }
+      const scopeInput = toSqlText(input.scope)?.trim()
+      const scope = scopeInput && TRANSLATION_SCOPES.has(scopeInput) ? scopeInput as 'site' | 'content' | 'menus' | 'locations' | 'posts' : 'site'
+      return await createTranslationJob(db, orgId, siteId, userId, {
+        targetLocale: locale,
+        scope,
+        includePublished: input.include_published === true,
+      })
+    }
+
+    case 'list_translation_jobs': {
+      const { results } = await db.prepare(`
+        SELECT id, source_locale, target_locale, scope, status, total_items, total_chars,
+               estimated_credits, actual_credits, processed_items, failed_items, created_at, updated_at
+        FROM translation_jobs
+        WHERE organization_id = ? AND site_id = ?
+        ORDER BY created_at DESC
+        LIMIT 10
+      `).bind(orgId, siteId).all()
+      return results ?? []
+    }
+
+    case 'get_translation_job': {
+      const jobId = toSqlText(input.job_id)?.trim()
+      if (!jobId) return { error: 'job_id is required.' }
+      const job = await db.prepare(`
+        SELECT *
+        FROM translation_jobs
+        WHERE id = ? AND organization_id = ? AND site_id = ?
+        LIMIT 1
+      `).bind(jobId, orgId, siteId).first()
+      if (!job) return { error: 'Translation job not found.' }
+      const { results } = await db.prepare(`
+        SELECT entity_type, entity_id, location_id, page, field, source_chars, status, error
+        FROM translation_job_items
+        WHERE job_id = ? AND organization_id = ? AND site_id = ?
+        ORDER BY entity_type, page, field
+        LIMIT 100
+      `).bind(jobId, orgId, siteId).all()
+      return { job, items: results ?? [] }
+    }
+
+    case 'run_translation_job_batch': {
+      const jobId = toSqlText(input.job_id)?.trim()
+      if (!jobId) return { error: 'job_id is required.' }
+      return await processTranslationJobBatch(db, env, orgId, siteId, jobId)
+    }
+
+    case 'publish_site_translations': {
+      const locale = toSqlText(input.locale)?.trim()
+      if (!locale) return { error: 'locale is required.' }
+      const scopeInput = toSqlText(input.scope)?.trim()
+      const scope = scopeInput && TRANSLATION_SCOPES.has(scopeInput) ? scopeInput as 'site' | 'content' | 'menus' | 'locations' | 'posts' : 'site'
+      const result = await publishTranslationDrafts(db, orgId, siteId, locale, scope, userId)
+      await upsertSiteLocale(db, orgId, siteId, {
+        locale: result.target_locale,
+        status: 'published',
+        fallback_enabled: true,
+      })
+      return result
+    }
+
+    // ── Experiences ────────────────────────────────────────────────────────
+    case 'list_experiences': {
+      const { listExperiences } = await import('~/server/utils/experiences')
+      const experiences = await listExperiences(db, siteId)
+      return { experiences }
+    }
+
+    case 'create_experience': {
+      const { createExperience } = await import('~/server/utils/experiences')
+      const title = toSqlText(input.title)
+      if (!title) return { error: 'title is required' }
+      const slots = Array.isArray(input.time_slots) ? input.time_slots.map(String) : null
+      const experience = await createExperience(db, orgId, siteId, {
+        title,
+        tagline: toSqlText(input.tagline) ?? null,
+        body: toSqlText(input.body) ?? null,
+        price: toSqlText(input.price) ?? null,
+        duration_minutes: typeof input.duration_minutes === 'number' ? Math.round(input.duration_minutes) : null,
+        max_capacity: typeof input.max_capacity === 'number' ? Math.round(input.max_capacity) : null,
+        time_slots: slots,
+        available_note: toSqlText(input.available_note) ?? null,
+        image_asset_id: toSqlText(input.image_asset_id) ?? null,
+        location_id: toSqlText(input.location_id) ?? null,
+        status: (['active', 'inactive', 'sold_out'].includes(String(input.status ?? '')) ? String(input.status) : 'active') as 'active' | 'inactive' | 'sold_out',
+        seo_title: toSqlText(input.seo_title) ?? null,
+        seo_description: toSqlText(input.seo_description) ?? null,
+      }, userId)
+      return { experience_id: experience.id, slug: experience.slug, title: experience.title }
+    }
+
+    case 'update_experience': {
+      const { updateExperience } = await import('~/server/utils/experiences')
+      const id = toSqlText(input.experience_id)
+      if (!id) return { error: 'experience_id is required' }
+      const updates: Record<string, ApiValue> = {}
+      if (input.title !== undefined) updates.title = toSqlText(input.title)
+      if (input.tagline !== undefined) updates.tagline = toSqlText(input.tagline) ?? null
+      if (input.body !== undefined) updates.body = toSqlText(input.body) ?? null
+      if (input.price !== undefined) updates.price = toSqlText(input.price) ?? null
+      if (input.duration_minutes !== undefined) updates.duration_minutes = typeof input.duration_minutes === 'number' ? Math.round(input.duration_minutes) : null
+      if (input.max_capacity !== undefined) updates.max_capacity = typeof input.max_capacity === 'number' ? Math.round(input.max_capacity) : null
+      if (input.time_slots !== undefined) updates.time_slots = Array.isArray(input.time_slots) ? input.time_slots.map(String) : null
+      if (input.available_note !== undefined) updates.available_note = toSqlText(input.available_note) ?? null
+      if (input.image_asset_id !== undefined) updates.image_asset_id = toSqlText(input.image_asset_id) ?? null
+      if (input.location_id !== undefined) updates.location_id = toSqlText(input.location_id) ?? null
+      if (input.status !== undefined && ['active', 'inactive', 'sold_out'].includes(String(input.status))) updates.status = String(input.status)
+      if (input.sort_order !== undefined) updates.sort_order = Number(input.sort_order)
+      if (input.seo_title !== undefined) updates.seo_title = toSqlText(input.seo_title) ?? null
+      if (input.seo_description !== undefined) updates.seo_description = toSqlText(input.seo_description) ?? null
+      const updated = await updateExperience(db, siteId, id, updates as ApiValue)
+      if (!updated) return { error: 'Experience not found' }
+      return { updated: true, experience_id: updated.id, slug: updated.slug }
+    }
+
+    case 'delete_experience': {
+      const { deleteExperience } = await import('~/server/utils/experiences')
+      const id = toSqlText(input.experience_id)
+      if (!id) return { error: 'experience_id is required' }
+      const deleted = await deleteExperience(db, siteId, id)
+      if (!deleted) return { error: 'Experience not found' }
+      return { deleted: true }
+    }
+
+    case 'list_experience_bookings': {
+      const { listExperienceBookings } = await import('~/server/utils/experiences')
+      const id = toSqlText(input.experience_id)
+      if (!id) return { error: 'experience_id is required' }
+      const bookings = await listExperienceBookings(db, siteId, id)
+      return { bookings }
+    }
+
+    case 'update_experience_booking_status': {
+      const { updateBookingStatus } = await import('~/server/utils/experiences')
+      const expId = toSqlText(input.experience_id)
+      const bookingId = toSqlText(input.booking_id)
+      const status = toSqlText(input.status)
+      if (!expId || !bookingId || !status) return { error: 'experience_id, booking_id, and status are required' }
+      if (!['confirmed', 'cancelled'].includes(status)) return { error: 'status must be confirmed or cancelled' }
+      const ok = await updateBookingStatus(db, siteId, expId, bookingId, status as 'confirmed' | 'cancelled')
+      if (!ok) return { error: 'Booking not found' }
+      return { updated: true }
     }
 
     default:
@@ -2345,17 +2736,19 @@ ${ONBOARDING_PREAMBLE}
 Site: ${siteName}
 Default menu currency: ${opts.defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ''}
-${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. If the user wants to import, extract, or read menu items from it, call import_menu_from_pending_media. If the user wants to save it as-is or cancel, call resolve_pending_media. If their intent is unclear, ask a short clarifying question.` : ''}
+${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Use this asset_id directly in any tool that accepts image/media — update_menu_item (image_asset_id), add_menu_item (image_asset_id), add_menu_items_batch (image_asset_id), update_location or create_location (hero_image_asset_id / hero_video_asset_id), create_post (image_asset_id). If the user wants to import/extract menu items from it, call import_menu_from_pending_media. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call, also call resolve_pending_media with action=save_media to clear the pending state. If the user's intent is unclear, ask one short clarifying question.` : ''}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create (standard/offer/event/update with CTA), publish — optionally location-scoped
 - Menus: create, rename, view, rename/delete sections/categories, add brand-new items, reconcile/update item lists, update/delete individual items, publish, delete
 - Locations: list, create, update, delete (title syncs slug, plus manual address, hours, maps URL, Place ID, rating, review count, description, email, website, socials, price level, hero media), lookup from Google Maps URL
 - Reviews: get, create manual reviews, update manual reviews, reply as owner, delete reviews
-- Media: list per location, delete, generate AI images with Flux (auto-saved, returns asset_id)
+- Media: list per location, delete, generate AI images with the configured OpenAI image model (auto-saved, returns asset_id)
 - Q&A: list, add, delete per location
+- Experiences: list, create (title, tagline, rich body, price, duration, capacity, time slots, image, SEO), update, delete, view/confirm/cancel guest bookings
 - Contact & reservation submissions: read
-- Site: rename (updates subdomain), set default menu currency, manage reservation policies, read/write site page content
+- Site: rename (updates subdomain), set default menu currency, manage languages, manage reservation policies, read/write site page content
+- Translations: estimate site translation cost, queue translation jobs, inspect translation jobs, run translation batches, publish reviewed drafts
 - Platform admin pages: read/write/delete about, contact, help content
 - Stats: posts, menus, locations, reviews
 
@@ -2369,9 +2762,13 @@ Guidelines:
 - Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
 - When creating menus, omit location_id — the server links it to the current location automatically
 - Use get_reservation_policies, save_reservation_policies, and delete_reservation_policies when the user asks about reservation rules, hold times, cancellation windows, deposits, or dietary accommodations
+- Use list_site_languages, save_site_language, and delete_site_language when the user asks to add, publish, disable, delete, or change the source language for translated site versions
+- Use estimate_site_translation before start_site_translation_job; tell the owner item count and estimated credits, then get confirmation before queuing the job
+- Use run_translation_job_batch only after a job exists and the owner confirms spending credits; it processes one batch and saves translations as drafts
+- Use publish_site_translations after the owner confirms drafted translations should go live; published languages become visible on the public site
 - Use get_site_content_page, save_site_content_field, publish_site_content_page, discard_site_content_page, and delete_site_content_field for tenant page content such as home, about, contact, location notes, and reservations
 - Use get_platform_content_page, save_platform_content_page, and delete_platform_content_page for platform admin pages about, contact, and help
-- Before publish_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_review, delete_media_asset, delete_qa — confirm first
+- Before publish_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_review, delete_media_asset, delete_qa, delete_site_language, start_site_translation_job, run_translation_job_batch, publish_site_translations — confirm first
 - Menus are DRAFT by default — publish_menu makes them live
 - Keep responses short — this is a chat panel`
 

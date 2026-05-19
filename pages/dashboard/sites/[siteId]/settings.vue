@@ -93,6 +93,28 @@
           </div>
         </div>
 
+        <!-- Brand Contact -->
+        <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
+          <div>
+            <h2 class="font-semibold text-highlighted">Brand Contact</h2>
+            <p class="mt-1 text-sm text-muted">Shown on the Contact page for press, catering and partnership enquiries. Leave blank to hide.</p>
+          </div>
+          <div class="grid gap-5 sm:grid-cols-2">
+            <UFormField label="Press Email">
+              <UInput v-model="form.press_email" type="email" placeholder="press@yourrestaurant.com" />
+            </UFormField>
+            <UFormField label="Partnerships Email">
+              <UInput v-model="form.partnerships_email" type="email" placeholder="partners@yourrestaurant.com" />
+            </UFormField>
+            <UFormField label="Catering & Events Email">
+              <UInput v-model="form.catering_email" type="email" placeholder="events@yourrestaurant.com" />
+            </UFormField>
+            <UFormField label="Careers Email">
+              <UInput v-model="form.careers_email" type="email" placeholder="careers@yourrestaurant.com" />
+            </UFormField>
+          </div>
+        </div>
+
         <!-- General -->
         <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
           <div>
@@ -127,6 +149,300 @@
                 <UButton icon="i-heroicons-clipboard-document" variant="outline" color="neutral" aria-label="Copy URL" @click="copyToClipboard(settings.public_url)" />
               </div>
             </UFormField>
+          </div>
+        </div>
+
+        <!-- Languages -->
+        <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
+          <div>
+            <h2 class="font-semibold text-highlighted">Languages</h2>
+            <p class="mt-1 text-sm text-muted">Choose the source language and control which translated versions are visible on the public site.</p>
+          </div>
+          <div class="space-y-5">
+            <div v-if="hasAvailableLocales" class="grid gap-5 sm:grid-cols-[1fr_auto]">
+              <UFormField label="Add Language">
+                <USelect
+                  v-model="localeForm.locale"
+                  :items="availableLocaleOptions"
+                  value-key="value"
+                  label-key="label"
+                  :disabled="localesSaving"
+                />
+              </UFormField>
+              <div class="flex items-end">
+                <UButton
+                  icon="i-heroicons-plus"
+                  :loading="localesSaving"
+                  :disabled="!localeForm.locale"
+                  @click="addLocale"
+                >
+                  Add
+                </UButton>
+              </div>
+            </div>
+            <p v-else class="text-sm text-muted">No more locales available to add.</p>
+
+            <UAlert
+              v-if="localesError"
+              color="error"
+              variant="soft"
+              icon="i-heroicons-exclamation-triangle"
+              :description="localesError"
+            />
+
+            <div v-if="localesLoading" class="space-y-3">
+              <USkeleton class="h-20 w-full" />
+              <USkeleton class="h-20 w-full" />
+            </div>
+
+            <div v-else class="divide-y divide-default rounded-lg border border-default">
+              <div
+                v-for="locale in locales"
+                :key="locale.locale"
+                class="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_14rem_auto]"
+              >
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p class="font-medium text-highlighted">{{ localeLabel(locale.locale, locale.label) }}</p>
+                    <UBadge v-if="locale.is_source" color="primary" variant="soft">Source</UBadge>
+                    <UBadge :color="locale.status === 'published' ? 'success' : locale.status === 'disabled' ? 'neutral' : 'warning'" variant="soft">
+                      {{ locale.status }}
+                    </UBadge>
+                  </div>
+                  <p class="mt-1 text-sm text-muted">
+                    {{ locale.locale }}
+                    <span v-if="!locale.is_source"> · {{ locale.fallback_enabled ? 'Falls back to source content' : 'No source fallback' }}</span>
+                  </p>
+                </div>
+
+                <div class="space-y-2">
+                  <UInput
+                    :model-value="locale.label || ''"
+                    placeholder="Display label"
+                    size="sm"
+                    :disabled="localesSaving"
+                    @change="onLocaleLabelChange(locale.locale, $event)"
+                  />
+                  <UCheckbox
+                    v-if="!locale.is_source"
+                    :model-value="locale.fallback_enabled"
+                    label="Fallback"
+                    :disabled="localesSaving"
+                    @update:model-value="updateLocale(locale.locale, { fallback_enabled: Boolean($event) })"
+                  />
+                </div>
+
+                <div class="flex flex-wrap items-start justify-end gap-2">
+                  <UButton
+                    v-if="!locale.is_source"
+                    size="sm"
+                    color="neutral"
+                    variant="soft"
+                    icon="i-heroicons-star"
+                    :loading="localesSaving"
+                    @click="updateLocale(locale.locale, { is_source: true })"
+                  >
+                    Source
+                  </UButton>
+                  <UButton
+                    v-if="!locale.is_source && locale.status !== 'published'"
+                    size="sm"
+                    color="primary"
+                    variant="soft"
+                    :loading="localesSaving"
+                    @click="updateLocale(locale.locale, { status: 'published' })"
+                  >
+                    Publish
+                  </UButton>
+                  <UButton
+                    v-if="!locale.is_source && locale.status !== 'disabled'"
+                    size="sm"
+                    color="neutral"
+                    variant="ghost"
+                    :loading="localesSaving"
+                    @click="updateLocale(locale.locale, { status: 'disabled' })"
+                  >
+                    Disable
+                  </UButton>
+                  <UButton
+                    v-if="!locale.is_source"
+                    size="sm"
+                    color="error"
+                    variant="ghost"
+                    icon="i-heroicons-trash"
+                    :loading="localesSaving"
+                    @click="deleteLocale(locale.locale)"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <p class="text-xs text-muted">ChowBot uses the same language list when it prepares translation jobs.</p>
+
+            <div class="rounded-lg border border-default p-4">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 class="font-medium text-highlighted">Translation jobs</h3>
+                  <p class="mt-1 text-sm text-muted">Estimate AI credits, translate in batches, then publish reviewed drafts.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <UButton
+                    size="sm"
+                    color="neutral"
+                    variant="soft"
+                    icon="i-heroicons-language"
+                    :to="`/dashboard/sites/${siteId}/translations?locale=${encodeURIComponent(translationForm.locale || 'th')}`"
+                  >
+                    Review
+                  </UButton>
+                  <UButton
+                    size="sm"
+                    color="neutral"
+                    variant="ghost"
+                    icon="i-heroicons-arrow-path"
+                    :loading="translationJobsLoading"
+                    @click="loadTranslationJobs"
+                  >
+                    Refresh
+                  </UButton>
+                </div>
+              </div>
+
+              <div class="mt-4 grid gap-3 lg:grid-cols-[1fr_12rem_auto_auto]">
+                <UFormField label="Target">
+                  <USelect
+                    v-model="translationForm.locale"
+                    :items="translationLocaleOptions"
+                    value-key="value"
+                    label-key="label"
+                    :disabled="translationBusy"
+                  />
+                </UFormField>
+                <UFormField label="Scope">
+                  <USelect
+                    v-model="translationForm.scope"
+                    :items="translationScopeOptions"
+                    value-key="value"
+                    label-key="label"
+                    :disabled="translationBusy"
+                  />
+                </UFormField>
+                <div class="flex items-end">
+                  <UButton
+                    color="neutral"
+                    variant="soft"
+                    icon="i-heroicons-calculator"
+                    :loading="translationEstimateLoading"
+                    :disabled="!translationForm.locale"
+                    @click="estimateTranslation"
+                  >
+                    Estimate
+                  </UButton>
+                </div>
+                <div class="flex items-end">
+                  <UButton
+                    icon="i-heroicons-sparkles"
+                    :loading="translationJobCreating"
+                    :disabled="!translationForm.locale || !translationEstimate || translationEstimate.total_items === 0"
+                    @click="startTranslationJob"
+                  >
+                    Queue
+                  </UButton>
+                </div>
+              </div>
+
+              <UCheckbox
+                v-model="translationForm.includePublished"
+                class="mt-3"
+                label="Re-translate already published content"
+                :disabled="translationBusy"
+              />
+
+              <UAlert
+                v-if="translationError"
+                class="mt-4"
+                color="error"
+                variant="soft"
+                icon="i-heroicons-exclamation-triangle"
+                :description="translationError"
+              />
+
+              <div v-if="translationEstimate" class="mt-4 grid gap-3 sm:grid-cols-4">
+                <div class="rounded-md border border-default p-3">
+                  <p class="text-xs font-medium uppercase text-muted">Items</p>
+                  <p class="mt-1 text-lg font-semibold text-highlighted">{{ formatNumber(translationEstimate.total_items) }}</p>
+                </div>
+                <div class="rounded-md border border-default p-3">
+                  <p class="text-xs font-medium uppercase text-muted">Characters</p>
+                  <p class="mt-1 text-lg font-semibold text-highlighted">{{ formatNumber(translationEstimate.total_chars) }}</p>
+                </div>
+                <div class="rounded-md border border-default p-3">
+                  <p class="text-xs font-medium uppercase text-muted">Credits</p>
+                  <p class="mt-1 text-lg font-semibold text-highlighted">{{ formatNumber(translationEstimate.estimated_credits) }}</p>
+                </div>
+                <div class="rounded-md border border-default p-3">
+                  <p class="text-xs font-medium uppercase text-muted">Scope</p>
+                  <p class="mt-1 text-lg font-semibold text-highlighted">{{ scopeLabel(translationEstimate.scope) }}</p>
+                </div>
+              </div>
+
+              <div class="mt-4 flex flex-wrap gap-2">
+                <UButton
+                  size="sm"
+                  color="primary"
+                  variant="soft"
+                  icon="i-heroicons-arrow-up-on-square"
+                  :loading="translationPublishing"
+                  :disabled="!translationForm.locale"
+                  @click="publishTranslationDrafts"
+                >
+                  Publish drafts
+                </UButton>
+              </div>
+
+              <div v-if="translationJobsLoading" class="mt-4 space-y-3">
+                <USkeleton class="h-16 w-full" />
+                <USkeleton class="h-16 w-full" />
+              </div>
+              <div v-else-if="translationJobs.length === 0" class="mt-4 rounded-md border border-dashed border-default p-4 text-sm text-muted">
+                No translation jobs yet.
+              </div>
+              <div v-else class="mt-4 divide-y divide-default rounded-md border border-default">
+                <div
+                  v-for="job in translationJobs"
+                  :key="job.id"
+                  class="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_9rem_auto]"
+                >
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <p class="font-medium text-highlighted">{{ localeLabel(job.target_locale) }} · {{ scopeLabel(job.scope) }}</p>
+                      <UBadge :color="translationStatusColor(job.status)" variant="soft">{{ job.status }}</UBadge>
+                    </div>
+                    <p class="mt-1 text-sm text-muted">
+                      {{ translationProgress(job) }} · {{ translationCreditText(job) }} · {{ formatDateTime(job.created_at) }}
+                    </p>
+                    <p v-if="job.error" class="mt-1 text-xs text-error">{{ job.error }}</p>
+                  </div>
+                  <div class="text-sm text-muted lg:text-right">
+                    <p>{{ formatNumber(job.total_items) }} items</p>
+                    <p>{{ formatNumber(job.failed_items) }} failed</p>
+                  </div>
+                  <div class="flex items-start justify-end gap-2">
+                    <UButton
+                      v-if="job.status === 'queued' || job.status === 'running'"
+                      size="sm"
+                      color="neutral"
+                      variant="soft"
+                      icon="i-heroicons-play"
+                      :loading="translationRunningJobId === job.id"
+                      @click="runTranslationJob(job.id)"
+                    >
+                      Run batch
+                    </UButton>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -267,6 +583,68 @@
           @save="saveSettings"
           @reset="resetForm"
         />
+
+        <!-- Transfer site -->
+        <div v-if="hasTransferAccess" class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
+          <div>
+            <h2 class="font-semibold text-highlighted">Transfer site</h2>
+            <p class="mt-1 text-sm text-muted">Transfer ownership to your client. They'll receive a link to accept and the site will move to their account. Billing is not included — they manage their own subscription.</p>
+          </div>
+          <div class="space-y-4">
+            <UAlert
+              v-if="pendingTransfer"
+              color="warning"
+              variant="soft"
+              icon="i-heroicons-clock"
+              title="Transfer pending"
+              :description="`Waiting for ${pendingTransfer.to_email} to accept. Expires ${formatDateTime(pendingTransfer.expires_at)}.`"
+            />
+
+            <div v-if="!pendingTransfer" class="flex gap-3">
+              <UInput
+                v-model="transferEmail"
+                placeholder="client@email.com"
+                icon="i-heroicons-envelope"
+                class="flex-1"
+                :disabled="initiatingTransfer"
+              />
+              <UButton
+                color="primary"
+                variant="soft"
+                :loading="initiatingTransfer"
+                :disabled="!transferEmail.trim()"
+                @click="initiateTransfer"
+              >
+                Send transfer
+              </UButton>
+            </div>
+
+            <div v-if="pendingTransfer" class="flex gap-2 flex-wrap">
+              <UButton
+                size="sm"
+                variant="soft"
+                icon="i-heroicons-clipboard-document"
+                @click="copyTransferLink"
+              >
+                Copy link
+              </UButton>
+              <UButton
+                size="sm"
+                color="error"
+                variant="soft"
+                icon="i-heroicons-x-circle"
+                :loading="cancellingTransfer"
+                @click="cancelTransfer"
+              >
+                Cancel transfer
+              </UButton>
+            </div>
+
+            <UAlert v-if="transferError" color="error" variant="soft" :description="transferError" />
+            <UAlert v-if="transferSuccess" color="success" variant="soft" :description="transferSuccess" />
+          </div>
+        </div>
+
       </div>
     </UPageBody>
 
@@ -330,6 +708,52 @@ const urlStructureOptions = [
 ]
 
 const currencyOptions = CURRENCY_OPTIONS.map(option => ({ ...option }))
+const localeOptions = [
+  { label: 'English', value: 'en' },
+  { label: 'Thai', value: 'th' },
+  { label: 'French', value: 'fr' },
+  { label: 'Japanese', value: 'ja' },
+  { label: 'Arabic', value: 'ar' },
+  { label: 'Chinese (Simplified)', value: 'zh-CN' },
+  { label: 'Korean', value: 'ko' },
+  { label: 'Spanish', value: 'es' },
+  { label: 'German', value: 'de' },
+  { label: 'Italian', value: 'it' },
+]
+
+interface SiteLocaleRow {
+  locale: string
+  label: string | null
+  is_source: boolean
+  status: 'draft' | 'published' | 'disabled'
+  fallback_enabled: boolean
+}
+
+type TranslationScope = 'site' | 'content' | 'menus' | 'locations' | 'posts'
+
+interface TranslationEstimate {
+  source_locale: string
+  target_locale: string
+  scope: TranslationScope
+  total_items: number
+  total_chars: number
+  estimated_credits: number
+}
+
+interface TranslationJobRow {
+  id: string
+  source_locale: string
+  target_locale: string
+  scope: TranslationScope
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled'
+  total_items: number
+  estimated_credits: number
+  actual_credits: number
+  processed_items: number
+  failed_items: number
+  error: string | null
+  created_at: string
+}
 
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -348,6 +772,55 @@ const showAddDomainModal = ref(false)
 const domainForm = reactive({
   domain: ''
 })
+const locales = ref<SiteLocaleRow[]>([])
+const sourceLocale = ref('en')
+const localesLoading = ref(false)
+const localesSaving = ref(false)
+const localesError = ref('')
+const localeForm = reactive({
+  locale: 'th'
+})
+const translationForm = reactive({
+  locale: 'th',
+  scope: 'site' as TranslationScope,
+  includePublished: false,
+})
+const translationEstimate = ref<TranslationEstimate | null>(null)
+const translationJobs = ref<TranslationJobRow[]>([])
+const translationError = ref('')
+const translationEstimateLoading = ref(false)
+const translationJobCreating = ref(false)
+const translationJobsLoading = ref(false)
+const translationRunningJobId = ref<string | null>(null)
+const translationPublishing = ref(false)
+
+const availableLocaleOptions = computed(() => {
+  const existing = new Set(locales.value.map(locale => locale.locale))
+  return localeOptions.filter(option => !existing.has(option.value))
+})
+
+const hasAvailableLocales = computed(() => availableLocaleOptions.value.length > 0)
+
+const translationScopeOptions = [
+  { label: 'Entire site', value: 'site' },
+  { label: 'Pages', value: 'content' },
+  { label: 'Menus', value: 'menus' },
+  { label: 'Locations', value: 'locations' },
+  { label: 'Posts', value: 'posts' },
+]
+
+const translationLocaleOptions = computed(() => {
+  const options = locales.value
+    .filter(locale => !locale.is_source)
+    .map(locale => ({ label: localeLabel(locale.locale, locale.label), value: locale.locale }))
+
+  if (options.length) return options
+  return localeOptions.filter(option => option.value !== sourceLocale.value)
+})
+
+const translationBusy = computed(() =>
+  translationEstimateLoading.value || translationJobCreating.value || translationPublishing.value || Boolean(translationRunningJobId.value)
+)
 
 const form = reactive({
   brand_name: '',
@@ -362,6 +835,10 @@ const form = reactive({
   social_facebook: '',
   social_instagram: '',
   social_tiktok: '',
+  press_email: '',
+  partnerships_email: '',
+  catering_email: '',
+  careers_email: '',
 } as {
   brand_name: string
   brand_description: string
@@ -375,6 +852,10 @@ const form = reactive({
   social_facebook: string
   social_instagram: string
   social_tiktok: string
+  press_email: string
+  partnerships_email: string
+  catering_email: string
+  careers_email: string
 })
 
 const toSubdomainSlug = (s: string) =>
@@ -406,7 +887,11 @@ const isDirty = computed(() => {
     form.footer_tagline !== (settings.value.footer_tagline || '') ||
     form.social_facebook !== (settings.value.social_facebook || '') ||
     form.social_instagram !== (settings.value.social_instagram || '') ||
-    form.social_tiktok !== (settings.value.social_tiktok || '')
+    form.social_tiktok !== (settings.value.social_tiktok || '') ||
+    form.press_email !== ((settings.value as ApiValue).press_email || '') ||
+    form.partnerships_email !== ((settings.value as ApiValue).partnerships_email || '') ||
+    form.catering_email !== ((settings.value as ApiValue).catering_email || '') ||
+    form.careers_email !== ((settings.value as ApiValue).careers_email || '')
   )
 })
 
@@ -421,13 +906,220 @@ const loadSettings = async () => {
     if (!response.success) throw new Error('Failed to load settings')
     settings.value = response.settings
     resetForm()
-    await loadDomains()
+    await Promise.all([loadDomains(), loadLocales(), loadTranslationJobs()])
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load settings'
   } finally {
     loading.value = false
   }
 }
+
+const loadLocales = async () => {
+  localesLoading.value = true
+  localesError.value = ''
+  try {
+    const response = await $fetch<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>(
+      `/api/editor/sites/${siteId}/locales`
+    )
+    sourceLocale.value = response.source_locale || 'en'
+    locales.value = response.locales || []
+    const existing = new Set(locales.value.map(locale => locale.locale))
+    localeForm.locale = localeOptions.find(option => !existing.has(option.value))?.value || ''
+    translationForm.locale = translationLocaleOptions.value.find(option => option.value === translationForm.locale)?.value
+      || translationLocaleOptions.value[0]?.value
+      || ''
+  } catch (err) {
+    localesError.value = err instanceof Error ? err.message : 'Failed to load languages'
+  } finally {
+    localesLoading.value = false
+  }
+}
+
+const localeLabel = (locale: string, label?: string | null) =>
+  label || localeOptions.find(option => option.value === locale)?.label || locale
+
+const addLocale = async () => {
+  if (!localeForm.locale) return
+  localesSaving.value = true
+  localesError.value = ''
+  try {
+    await $fetch(`/api/editor/sites/${siteId}/locales`, {
+      method: 'POST',
+      body: {
+        locale: localeForm.locale,
+        label: localeLabel(localeForm.locale),
+        status: localeForm.locale === sourceLocale.value ? 'published' : 'draft',
+        is_source: locales.value.length === 0,
+        fallback_enabled: true,
+      }
+    })
+    await loadLocales()
+    toast.add({ description: 'Language added', color: 'success' })
+  } catch (err) {
+    localesError.value = err instanceof Error ? err.message : 'Failed to add language'
+  } finally {
+    localesSaving.value = false
+  }
+}
+
+const updateLocale = async (
+  locale: string,
+  updates: Partial<Pick<SiteLocaleRow, 'label' | 'status' | 'fallback_enabled' | 'is_source'>>
+) => {
+  localesSaving.value = true
+  localesError.value = ''
+  try {
+    await $fetch(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}`, {
+      method: 'PATCH',
+      body: updates
+    })
+    await loadLocales()
+    toast.add({ description: 'Language updated', color: 'success' })
+  } catch (err) {
+    localesError.value = err instanceof Error ? err.message : 'Failed to update language'
+  } finally {
+    localesSaving.value = false
+  }
+}
+
+const onLocaleLabelChange = (locale: string, event: Event) => {
+  const target = event.target as HTMLInputElement | null
+  updateLocale(locale, { label: target?.value ?? '' })
+}
+
+const deleteLocale = async (locale: string) => {
+  localesSaving.value = true
+  localesError.value = ''
+  try {
+    await $fetch(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}`, { method: 'DELETE' })
+    await loadLocales()
+    toast.add({ description: 'Language deleted', color: 'success' })
+  } catch (err) {
+    localesError.value = err instanceof Error ? err.message : 'Failed to delete language'
+  } finally {
+    localesSaving.value = false
+  }
+}
+
+const loadTranslationJobs = async () => {
+  translationJobsLoading.value = true
+  translationError.value = ''
+  try {
+    const response = await $fetch<{ success: boolean; jobs: TranslationJobRow[] }>(
+      `/api/editor/sites/${siteId}/translations/jobs`
+    )
+    translationJobs.value = response.jobs || []
+  } catch (err) {
+    translationError.value = err instanceof Error ? err.message : 'Failed to load translation jobs'
+  } finally {
+    translationJobsLoading.value = false
+  }
+}
+
+const estimateTranslation = async () => {
+  if (!translationForm.locale) return
+  translationEstimateLoading.value = true
+  translationError.value = ''
+  try {
+    const response = await $fetch<{ success: boolean; estimate: TranslationEstimate }>(
+      `/api/editor/sites/${siteId}/translations/inventory`,
+      {
+        query: {
+          locale: translationForm.locale,
+          scope: translationForm.scope,
+          includePublished: translationForm.includePublished ? 'true' : 'false',
+        }
+      }
+    )
+    translationEstimate.value = response.estimate
+  } catch (err) {
+    translationEstimate.value = null
+    translationError.value = err instanceof Error ? err.message : 'Failed to estimate translation'
+  } finally {
+    translationEstimateLoading.value = false
+  }
+}
+
+const startTranslationJob = async () => {
+  if (!translationForm.locale) return
+  translationJobCreating.value = true
+  translationError.value = ''
+  try {
+    await $fetch(`/api/editor/sites/${siteId}/translations/jobs`, {
+      method: 'POST',
+      body: {
+        locale: translationForm.locale,
+        scope: translationForm.scope,
+        includePublished: translationForm.includePublished,
+      }
+    })
+    toast.add({ description: 'Translation job queued', color: 'success' })
+    await loadTranslationJobs()
+  } catch (err) {
+    translationError.value = err instanceof Error ? err.message : 'Failed to queue translation job'
+  } finally {
+    translationJobCreating.value = false
+  }
+}
+
+const runTranslationJob = async (jobId: string) => {
+  translationRunningJobId.value = jobId
+  translationError.value = ''
+  try {
+    await $fetch(`/api/editor/sites/${siteId}/translations/jobs/${jobId}/run`, { method: 'POST' })
+    toast.add({ description: 'Translation batch complete', color: 'success' })
+    await Promise.all([loadTranslationJobs(), estimateTranslation()])
+  } catch (err) {
+    translationError.value = err instanceof Error ? err.message : 'Failed to run translation batch'
+  } finally {
+    translationRunningJobId.value = null
+  }
+}
+
+const publishTranslationDrafts = async () => {
+  if (!translationForm.locale) return
+  translationPublishing.value = true
+  translationError.value = ''
+  try {
+    const response = await $fetch<{ success: boolean; result: { published_items: number } }>(
+      `/api/editor/sites/${siteId}/translations/publish`,
+      {
+        method: 'POST',
+        body: {
+          locale: translationForm.locale,
+          scope: translationForm.scope,
+        }
+      }
+    )
+    toast.add({ description: `${response.result.published_items} translation drafts published`, color: 'success' })
+    await Promise.all([loadLocales(), loadTranslationJobs(), estimateTranslation()])
+  } catch (err) {
+    translationError.value = err instanceof Error ? err.message : 'Failed to publish translations'
+  } finally {
+    translationPublishing.value = false
+  }
+}
+
+const scopeLabel = (scope: string) =>
+  translationScopeOptions.find(option => option.value === scope)?.label || scope
+
+const translationStatusColor = (status: TranslationJobRow['status']) => {
+  if (status === 'succeeded') return 'success'
+  if (status === 'failed' || status === 'canceled') return 'error'
+  if (status === 'running') return 'primary'
+  return 'warning'
+}
+
+const translationProgress = (job: TranslationJobRow) =>
+  `${formatNumber(job.processed_items)} of ${formatNumber(job.total_items)} processed`
+
+const translationCreditText = (job: TranslationJobRow) =>
+  job.actual_credits > 0
+    ? `${formatNumber(job.actual_credits)} credits used (${formatNumber(job.estimated_credits)} est.)`
+    : `${formatNumber(job.estimated_credits)} credits est.`
+
+const formatNumber = (value: number | null | undefined) =>
+  new Intl.NumberFormat().format(Number(value || 0))
 
 function normalizeOptionalHttpUrl(value: unknown): string | null {
   if (!value || typeof value !== 'string' || !value.trim()) return null
@@ -490,6 +1182,10 @@ const resetForm = () => {
   form.social_facebook = (settings.value as ApiValue).social_facebook || ''
   form.social_instagram = (settings.value as ApiValue).social_instagram || ''
   form.social_tiktok = (settings.value as ApiValue).social_tiktok || ''
+  form.press_email = (settings.value as ApiValue).press_email || ''
+  form.partnerships_email = (settings.value as ApiValue).partnerships_email || ''
+  form.catering_email = (settings.value as ApiValue).catering_email || ''
+  form.careers_email = (settings.value as ApiValue).careers_email || ''
 }
 
 function handleLogoChange(_asset: { id: string; publicUrl: string; thumbnailUrl: string } | null) {
@@ -644,9 +1340,106 @@ const saveWhatsappPhone = async () => {
   }
 }
 
+// Site transfer
+interface PendingTransfer {
+  id: string
+  to_email: string
+  status: string
+  created_at: string
+  expires_at: string
+}
+
+const transferEmail = ref('')
+const pendingTransfer = ref<PendingTransfer | null>(null)
+const initiatingTransfer = ref(false)
+const cancellingTransfer = ref(false)
+const transferError = ref<string | null>(null)
+const transferSuccess = ref<string | null>(null)
+const hasTransferAccess = ref(false)
+
+const loadPendingTransfer = async () => {
+  try {
+    const res = await $fetch<{ pending: PendingTransfer | null }>(`/api/admin/sites/${siteId}/transfer`)
+    pendingTransfer.value = res.pending
+    hasTransferAccess.value = true
+  } catch {
+    hasTransferAccess.value = false
+    // Not an admin — transfer section won't be usable but that's fine
+  }
+}
+
+const initiateTransfer = async () => {
+  transferError.value = null
+  transferSuccess.value = null
+  initiatingTransfer.value = true
+  try {
+    const res = await $fetch<{ transfer_url: string; to_email: string }>(`/api/admin/sites/${siteId}/transfer`, {
+      method: 'POST',
+      body: { email: transferEmail.value.trim() },
+    })
+    await loadPendingTransfer()
+    await navigator.clipboard.writeText(res.transfer_url)
+    transferSuccess.value = `Transfer link sent to ${res.to_email} and copied to clipboard.`
+    transferEmail.value = ''
+  } catch (err: unknown) {
+    const msg = err != null && typeof err === 'object' && 'data' in err
+      && err.data != null && typeof err.data === 'object' && 'error' in err.data
+      && typeof (err.data as Record<string, unknown>).error === 'string'
+      ? (err.data as Record<string, string>).error
+      : null
+    transferError.value = msg ?? 'Failed to initiate transfer.'
+  } finally {
+    initiatingTransfer.value = false
+  }
+}
+
+const cancelTransfer = async () => {
+  cancellingTransfer.value = true
+  transferError.value = null
+  transferSuccess.value = null
+  try {
+    await $fetch(`/api/admin/sites/${siteId}/transfer`, { method: 'DELETE' })
+    pendingTransfer.value = null
+    transferSuccess.value = 'Transfer cancelled.'
+  } catch (err: unknown) {
+    const msg = err != null && typeof err === 'object' && 'data' in err
+      && err.data != null && typeof err.data === 'object' && 'error' in err.data
+      && typeof (err.data as Record<string, unknown>).error === 'string'
+      ? (err.data as Record<string, string>).error
+      : null
+    transferError.value = msg ?? 'Failed to cancel transfer.'
+  } finally {
+    cancellingTransfer.value = false
+  }
+}
+
+const copyTransferLink = async () => {
+  if (!pendingTransfer.value) return
+  // Re-fetch to get the URL (or reconstruct from token — we don't store token in this state)
+  // Instead, initiate a fresh one (which replaces the old pending)
+  transferError.value = null
+  try {
+    const res = await $fetch<{ transfer_url: string; to_email: string }>(`/api/admin/sites/${siteId}/transfer`, {
+      method: 'POST',
+      body: { email: pendingTransfer.value.to_email },
+    })
+    await loadPendingTransfer()
+    await navigator.clipboard.writeText(res.transfer_url)
+    transferSuccess.value = 'New link copied to clipboard.'
+  } catch (err: unknown) {
+    const msg = err != null && typeof err === 'object' && 'data' in err
+      && err.data != null && typeof err.data === 'object' && 'error' in err.data
+      && typeof (err.data as Record<string, unknown>).error === 'string'
+      ? (err.data as Record<string, string>).error
+      : null
+    transferError.value = msg ?? 'Failed to copy link.'
+  }
+}
+
 onMounted(() => {
   loadSettings()
   loadWhatsappPhone()
+  loadPendingTransfer()
 })
 
 useSeoMeta({ title: 'Site Settings | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

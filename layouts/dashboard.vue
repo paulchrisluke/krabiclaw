@@ -152,18 +152,19 @@
               }"
               color="neutral"
               variant="ghost"
-              class="w-full"
+              class="w-full min-w-0"
+              :ui="{ base: 'min-w-0 justify-start', leadingAvatar: 'shrink-0' }"
               :block="collapsed"
             >
               <template v-if="!collapsed" #default>
-                <span class="truncate flex-1 text-left">{{ sessionData?.user?.name }}</span>
+                <span class="min-w-0 flex-1 truncate text-left">{{ sessionData?.user?.name }}</span>
                 <UBadge
                   v-if="currentPlan"
                   :label="currentPlan"
                   :color="currentPlan === 'free' ? 'neutral' : 'success'"
                   variant="soft"
                   size="xs"
-                  class="capitalize shrink-0"
+                  class="shrink-0 capitalize"
                 />
               </template>
             </UButton>
@@ -277,8 +278,9 @@ const sitePath = (path = '', query?: Record<string, string>) => {
   if (!activeSiteId.value) {
     throw new Error('sitePath requires an active site ID')
   }
+  const { paths } = useDashboardSiteLinks(activeSiteId.value)
   return {
-    path: `/dashboard/sites/${activeSiteId.value}${path}`,
+    path: `${paths.value.base}${path}`,
     query
   }
 }
@@ -395,6 +397,7 @@ const siteNavigation = computed(() => [
       children: [
         { label: 'Menu', to: sitePath('/menu') },
         { label: 'Posts', to: sitePath('/posts') },
+        { label: 'Translations', to: sitePath('/translations') },
         { label: 'Photos', to: sitePath('/photos') },
         { label: 'Media', to: sitePath('/media') },
         { label: 'Q&A', to: sitePath('/qa') }
@@ -432,7 +435,7 @@ const siteNavigation = computed(() => [
 
 const siteUtilityNavigation = computed(() => [
   [
-    { label: 'All Sites', icon: 'i-lucide-squares-2x2', to: '/dashboard/sites' },
+    { label: 'All Sites', icon: 'i-heroicons-squares-2x2', to: '/dashboard/sites' },
     { label: 'Billing', icon: 'i-lucide-credit-card', to: '/dashboard/billing' }
   ]
 ])

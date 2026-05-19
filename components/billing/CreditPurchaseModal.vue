@@ -21,6 +21,15 @@
           </div>
           <UBadge label="Default" color="neutral" variant="soft" size="xs" />
         </div>
+
+        <!-- Auto top-up opt-in -->
+        <div class="flex items-center justify-between rounded-lg border border-default px-4 py-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium text-highlighted">Never run out of credits</p>
+            <p class="text-xs text-muted">Auto top-up this amount when balance drops below 100</p>
+          </div>
+          <UToggle v-model="wantsAutoTopup" class="ml-4 shrink-0" />
+        </div>
       </div>
     </template>
 
@@ -34,5 +43,5 @@
 </template>
 
 <script setup lang="ts">
-const { isOpen, savedCard, paying, bundleLabel, bundlePrice, confirm, cancel } = useCreditPurchase()
+const { isOpen, savedCard, paying, wantsAutoTopup, bundleLabel, bundlePrice, confirm, cancel } = useCreditPurchase()
 </script>

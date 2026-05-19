@@ -12,6 +12,11 @@ export interface SiteConfig {
   social_instagram?: string
   social_tiktok?: string
   footer_tagline?: string
+  press_email?: string
+  partnerships_email?: string
+  catering_email?: string
+  careers_email?: string
+  source_locale?: string
 }
 
 export const getConfig = async (

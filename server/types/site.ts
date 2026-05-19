@@ -43,6 +43,10 @@ export interface UpdateSiteSettingsRequest {
   social_instagram?: string
   social_tiktok?: string
   footer_tagline?: string
+  press_email?: string
+  partnerships_email?: string
+  catering_email?: string
+  careers_email?: string
 }
 
 export interface LaunchReadiness {

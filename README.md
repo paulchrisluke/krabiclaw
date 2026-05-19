@@ -35,6 +35,7 @@ Copy `.env.example` to `.env` and fill in values. Required for local dev:
 ```env
 BETTER_AUTH_SECRET=        # openssl rand -base64 32
 BETTER_AUTH_URL=http://localhost:3000
+CRON_SECRET=               # openssl rand -base64 32
 GOOGLE_CLIENT_ID=          # Google Cloud Console — OAuth client
 GOOGLE_CLIENT_SECRET=
 ```
@@ -71,6 +72,15 @@ yarn deploy
 Builds, patches the Nitro/Cloudflare process shim, and deploys. **Never run `wrangler pages deploy` directly** — the shim patch will be skipped.
 
 Production secrets live in Cloudflare Pages → Settings → Environment variables.
+
+Set protected internal job secrets with Wrangler:
+
+```bash
+openssl rand -base64 32
+yarn wrangler pages secret put CRON_SECRET
+```
+
+`CRON_SECRET` protects internal endpoints such as `/api/internal/translation-jobs/process`. Local `yarn dev` reads it from `.env`; `wrangler pages dev` reads it from `.dev.vars`.
 
 ---
 

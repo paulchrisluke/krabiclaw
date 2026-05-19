@@ -113,8 +113,16 @@ export default defineEventHandler(async (event) => {
       params.push(body.logo_url)
     }
     if (body.contact_email !== undefined) {
+      if (body.contact_email !== null && body.contact_email !== '') {
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailPattern.test(String(body.contact_email).trim())) {
+          return jsonResponse({
+            error: 'Invalid email address for contact email'
+          }, { status: 400 })
+        }
+      }
       setParts.push('contact_email = ?')
-      params.push(body.contact_email)
+      params.push(body.contact_email ? String(body.contact_email).trim().toLowerCase() : null)
     }
     if (body.brand_color !== undefined) {
       if (body.brand_color) {
@@ -172,8 +180,22 @@ export default defineEventHandler(async (event) => {
       setParts.push('last_published_at = ?')
       params.push(body.last_published_at)
     }
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    for (const key of ['press_email', 'partnerships_email', 'catering_email', 'careers_email'] as const) {
+      if (body[key] !== undefined && body[key] !== null) {
+        const emailVal = String(body[key]).trim()
+        if (emailVal !== '') {
+          if (!emailPattern.test(emailVal)) {
+            return jsonResponse({
+              error: `Invalid email address for ${key.replace('_', ' ')}`
+            }, { status: 400 })
+          }
+        }
+      }
+    }
+
     const socialUrlKeys = new Set(['social_facebook', 'social_instagram', 'social_tiktok'])
-    for (const key of ['social_facebook', 'social_instagram', 'social_tiktok', 'footer_tagline'] as const) {
+    for (const key of ['social_facebook', 'social_instagram', 'social_tiktok', 'footer_tagline', 'press_email', 'partnerships_email', 'catering_email', 'careers_email'] as const) {
       if (body[key] !== undefined) {
         const value = body[key]
         if (value) {
@@ -261,6 +283,10 @@ export default defineEventHandler(async (event) => {
       social_instagram: siteConfig.social_instagram || '',
       social_tiktok: siteConfig.social_tiktok || '',
       footer_tagline: siteConfig.footer_tagline || '',
+      press_email: siteConfig.press_email || '',
+      partnerships_email: siteConfig.partnerships_email || '',
+      catering_email: siteConfig.catering_email || '',
+      careers_email: siteConfig.careers_email || '',
       last_published_at: updatedSite.last_published_at,
       created_at: updatedSite.created_at,
       updated_at: updatedSite.updated_at

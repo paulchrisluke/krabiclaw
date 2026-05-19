@@ -1,5 +1,5 @@
 // POST /api/ai/[siteId]/enhance-prompt
-// Rewrites a rough image prompt into a vivid DALL-E 3 food photography prompt using Claude Haiku.
+// Rewrites a rough image prompt into a vivid OpenAI image-generation food photography prompt using Claude Haiku.
 // body: { prompt: string, context?: string }
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'

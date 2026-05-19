@@ -38,6 +38,21 @@ UPDATE sites SET
   primary_location_id = 'loc-demo'
 WHERE id = 'site-demo';
 
+-- ── Demo languages ───────────────────────────────────────────────────────────
+INSERT OR IGNORE INTO site_config (organization_id, site_id, key, value)
+VALUES ('org-demo', 'site-demo', 'source_locale', 'en');
+
+INSERT OR IGNORE INTO site_locales
+  (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
+VALUES
+  ('locale::org-demo::site-demo::en', 'org-demo', 'site-demo', 'en', 'English', 1, 'published', 1),
+  ('locale::org-demo::site-demo::th', 'org-demo', 'site-demo', 'th', 'ไทย', 0, 'published', 1);
+
+UPDATE site_locales SET is_source = 1, status = 'published', fallback_enabled = 1, label = 'English'
+  WHERE organization_id = 'org-demo' AND site_id = 'site-demo' AND locale = 'en';
+UPDATE site_locales SET is_source = 0, status = 'published', fallback_enabled = 1, label = 'ไทย'
+  WHERE organization_id = 'org-demo' AND site_id = 'site-demo' AND locale = 'th';
+
 -- ── Site domains ─────────────────────────────────────────────────────────────
 -- domain-demo-local: kept secondary so the .localhost dev path is unaffected
 -- domain-demo-prod:  canonical — production canonical redirect target
@@ -495,6 +510,105 @@ UPDATE site_content SET
 The shop is still built around that first promise: fresh bread, honest portions, and no shortcuts hiding behind the counter.',
   type = 'richtext'
   WHERE id = 'sc-demo-story-body';
+
+-- ── Thai demo translations ───────────────────────────────────────────────────
+INSERT OR IGNORE INTO site_content_translations
+  (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, reviewed_at)
+VALUES
+  ('sct-demo-th-home-hero', 'org-demo', 'site-demo', NULL, 'th', 'home', 'hero',
+   NULL, 'มาด้วยความหิว', 'ขนมปังอบสดใหม่ ซอสโฮมเมด ร้านเดียว ไม่มีทางลัด', 'มาด้วยความหิว', 'text', 'published',
+   '1f2815106918b55c78d62fb2d2c6523de31631bb6e80fb0f0622054e501a147a', '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
+  ('sct-demo-th-cta', 'org-demo', 'site-demo', NULL, 'th', 'home', 'cta.title',
+   'มาด้วยความหิว', NULL, NULL, 'มาด้วยความหิว', 'text', 'published',
+   'c5735ea650613ba043f846c8772fe205126dcef124fc91c56454b5de05cab9aa', '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
+  ('sct-demo-th-story-title', 'org-demo', 'site-demo', NULL, 'th', 'about', 'story.title',
+   'ร้านเดียว ครัวเดียว', NULL, NULL, 'ร้านเดียว ครัวเดียว', 'text', 'published',
+   'fdf7557fd79e25d71a404ca05caa024d6959e6f5a5d2f91193c2c1383afa26d5', '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
+  ('sct-demo-th-story-body', 'org-demo', 'site-demo', NULL, 'th', 'about', 'story.body',
+   'Hoff''s Hogies เริ่มจากโต๊ะพับในโรงรถใกล้ถนน Main Street Hoff อบขนมปังก่อนพระอาทิตย์ขึ้น เรียงเนื้อด้วยมือ และขายหมดก่อนมื้อกลางวันให้เพื่อนบ้านที่กลับมาพร้อมเพื่อนๆ เสมอ\n\nร้านนี้ยังยึดสัญญาแรกเหมือนเดิม: ขนมปังสด ปริมาณจริงใจ และไม่มีทางลัดหลังเคาน์เตอร์',
+   NULL, NULL,
+   'Hoff''s Hogies เริ่มจากโต๊ะพับในโรงรถใกล้ถนน Main Street Hoff อบขนมปังก่อนพระอาทิตย์ขึ้น เรียงเนื้อด้วยมือ และขายหมดก่อนมื้อกลางวันให้เพื่อนบ้านที่กลับมาพร้อมเพื่อนๆ เสมอ',
+   'richtext', 'published', 'a44beb08682e9686bbda01fafc360ef8bb8079a2368450d591ee6361f1ca2905',
+   '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z');
+
+UPDATE site_content_translations SET
+  hero_title = 'มาด้วยความหิว',
+  hero_subtitle = 'ขนมปังอบสดใหม่ ซอสโฮมเมด ร้านเดียว ไม่มีทางลัด',
+  value = 'มาด้วยความหิว',
+  status = 'published',
+  source_hash = '1f2815106918b55c78d62fb2d2c6523de31631bb6e80fb0f0622054e501a147a'
+  WHERE id = 'sct-demo-th-home-hero';
+UPDATE site_content_translations SET content = 'มาด้วยความหิว', value = 'มาด้วยความหิว', status = 'published', source_hash = 'c5735ea650613ba043f846c8772fe205126dcef124fc91c56454b5de05cab9aa'
+  WHERE id = 'sct-demo-th-cta';
+UPDATE site_content_translations SET content = 'ร้านเดียว ครัวเดียว', value = 'ร้านเดียว ครัวเดียว', status = 'published', source_hash = 'fdf7557fd79e25d71a404ca05caa024d6959e6f5a5d2f91193c2c1383afa26d5'
+  WHERE id = 'sct-demo-th-story-title';
+UPDATE site_content_translations SET source_hash = 'a44beb08682e9686bbda01fafc360ef8bb8079a2368450d591ee6361f1ca2905'
+  WHERE id = 'sct-demo-th-story-body';
+
+INSERT OR IGNORE INTO business_location_translations
+  (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, reviewed_at)
+VALUES
+  ('blt-demo-th-loc', 'org-demo', 'site-demo', 'loc-demo', 'th',
+   'เดอะ โฮกี สต็อป', '2285 Main St', 'บัฟฟาโล',
+   'โฮกีสไตล์บัฟฟาโลบนขนมปังอบสดใหม่ พร้อมซอสโฮมเมด ร้านเดียว ครัวเดียว ไม่มีทางลัด',
+   'ขนมปังอบสด ซอสโฮมเมด โฮกีที่ดีที่สุดของบัฟฟาโล',
+   'published', 'fafbbb67b1e43c67c5bb2b20a41551bceec5461168805a54ce21668c1a019d1b',
+   '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z');
+
+UPDATE business_location_translations SET
+  title = 'เดอะ โฮกี สต็อป',
+  city = 'บัฟฟาโล',
+  description = 'โฮกีสไตล์บัฟฟาโลบนขนมปังอบสดใหม่ พร้อมซอสโฮมเมด ร้านเดียว ครัวเดียว ไม่มีทางลัด',
+  short_description = 'ขนมปังอบสด ซอสโฮมเมด โฮกีที่ดีที่สุดของบัฟฟาโล',
+  status = 'published',
+  source_hash = 'fafbbb67b1e43c67c5bb2b20a41551bceec5461168805a54ce21668c1a019d1b'
+  WHERE id = 'blt-demo-th-loc';
+
+INSERT OR IGNORE INTO menu_translations
+  (id, organization_id, site_id, menu_id, locale, name, description, section_order, status, source_hash, translated_at, reviewed_at)
+VALUES
+  ('mt-demo-th-menu', 'org-demo', 'site-demo', 'menu-demo', 'th', 'เมนู', NULL,
+   '["โฮกีเย็น","โฮกีร้อน","เครื่องเคียง","เครื่องดื่ม"]',
+   'published', '4d2c1756e5aee6658678d954b65d2bb832e12d943c33e909218244bf4f9d2ca8',
+   '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z');
+
+UPDATE menu_translations SET name = 'เมนู', section_order = '["โฮกีเย็น","โฮกีร้อน","เครื่องเคียง","เครื่องดื่ม"]', status = 'published', source_hash = '4d2c1756e5aee6658678d954b65d2bb832e12d943c33e909218244bf4f9d2ca8'
+  WHERE id = 'mt-demo-th-menu';
+
+INSERT OR IGNORE INTO menu_item_translations
+  (id, organization_id, site_id, menu_item_id, locale, section, name, description, allergens, dietary_notes, status, source_hash, translated_at, reviewed_at)
+VALUES
+  ('mit-demo-th-mi-1', 'org-demo', 'site-demo', 'mi-1', 'th', 'โฮกีเย็น', 'อิตาเลียนคอมโบ',
+   'ซาลามีเจนัว คาปิโคลา โพรโวโลน ผักกาดหั่น มะเขือเทศ หัวหอม น้ำมันและน้ำส้มสายชู บนขนมปังอบสด',
+   'กลูเตน, นม', NULL, 'published', '8aadc4f437c3caaf5596291357b298e611c48e5f9b68854796823b283374e1da',
+   '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
+  ('mit-demo-th-mi-4', 'org-demo', 'site-demo', 'mi-4', 'th', 'โฮกีร้อน', 'โรสต์บีฟ',
+   'เนื้อวัวย่างช้า โพรโวโลนละลาย มายองเนสมะรุม เสิร์ฟพร้อมออจู',
+   'กลูเตน, นม', NULL, 'published', '9ffff766e2a659708cb470b67529eeb2112ef6b7fe1a583129d757f0421ee981',
+   '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
+  ('mit-demo-th-mi-6', 'org-demo', 'site-demo', 'mi-6', 'th', 'โฮกีร้อน', 'ไก่บัฟฟาโล',
+   'ไก่ทอดกรอบ ซอส Frank''s RedHot บลูชีส เซเลอรี และหัวหอมดอง',
+   'กลูเตน, นม, ไข่', NULL, 'published', 'b2477ca02986acc1536e8df6c44691d237f9808dd3a67d7fbde734dede08184e',
+   '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
+  ('mit-demo-th-mi-7', 'org-demo', 'site-demo', 'mi-7', 'th', 'เครื่องเคียง', 'มันฝรั่งทอดโฮมเมด',
+   'ทอดกรอบเป็นชุดเล็กๆ โรยเกลือทะเล',
+   NULL, 'วีแกน, ปลอดกลูเตน', 'published', '4f79f5e4ac4df84396b41cfa79b264c0a59dc169197f540f63f58fac2ffd874a',
+   '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
+  ('mit-demo-th-mi-9', 'org-demo', 'site-demo', 'mi-9', 'th', 'เครื่องดื่ม', 'น้ำอัดลมกด',
+   'Pepsi, Diet Pepsi, Mountain Dew หรือน้ำเลมอน',
+   NULL, 'วีแกน', 'published', '8ea2a88fc4418ef4ae5661f45f0711c1a1ee0eb1be3c1d8200012ea7be34d204',
+   '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z');
+
+UPDATE menu_item_translations SET status = 'published',
+  source_hash = CASE menu_item_id
+    WHEN 'mi-1' THEN '8aadc4f437c3caaf5596291357b298e611c48e5f9b68854796823b283374e1da'
+    WHEN 'mi-4' THEN '9ffff766e2a659708cb470b67529eeb2112ef6b7fe1a583129d757f0421ee981'
+    WHEN 'mi-6' THEN 'b2477ca02986acc1536e8df6c44691d237f9808dd3a67d7fbde734dede08184e'
+    WHEN 'mi-7' THEN '4f79f5e4ac4df84396b41cfa79b264c0a59dc169197f540f63f58fac2ffd874a'
+    WHEN 'mi-9' THEN '8ea2a88fc4418ef4ae5661f45f0711c1a1ee0eb1be3c1d8200012ea7be34d204'
+    ELSE source_hash
+  END
+  WHERE organization_id = 'org-demo' AND site_id = 'site-demo' AND locale = 'th';
 
 -- ── AI credits (realistic balance for a demo account) ─────────────────────────
 INSERT OR IGNORE INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at)

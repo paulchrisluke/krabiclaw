@@ -1,3 +1,6 @@
+import { triggerAutoTopupIfNeeded } from '~/server/utils/auto-topup'
+import type { BillingEnv } from '~/server/utils/billing'
+
 // Credit system: 1 credit = 1,000 tokens (input + output combined).
 // Free orgs get FREE_SIGNUP_CREDITS on first check. Paid orgs get higher limits.
 
@@ -46,6 +49,7 @@ export async function hasCredits(db: D1Database, organizationId: string): Promis
  * Must be called after a successful AI Gateway response.
  * Atomically checks and deducts credits to prevent TOCTOU race conditions.
  * Throws if insufficient credits remain.
+ * Pass billingEnv to enable automatic top-up when balance drops below threshold.
  */
 export async function chargeCredits(
   db: D1Database,
@@ -57,7 +61,8 @@ export async function chargeCredits(
     inputTokens: number
     outputTokens: number
     cfGatewayLogId?: string | null
-  }
+  },
+  billingEnv?: BillingEnv
 ): Promise<{ creditsCharged: number; newBalance: number }> {
   const creditsCharged = tokensToCredits(opts.inputTokens, opts.outputTokens)
   const now = new Date().toISOString()
@@ -121,5 +126,11 @@ export async function chargeCredits(
     .bind(organizationId)
     .first<{ balance: number }>()
 
-  return { creditsCharged, newBalance: updated?.balance ?? 0 }
+  const newBalance = updated?.balance ?? 0
+
+  if (billingEnv) {
+    triggerAutoTopupIfNeeded(db, billingEnv, organizationId, newBalance).catch(() => {})
+  }
+
+  return { creditsCharged, newBalance }
 }

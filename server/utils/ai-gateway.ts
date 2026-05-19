@@ -135,8 +135,10 @@ export function documentBlock(base64Data: string): ApiValue {
   }
 }
 
-export const IMAGE_MODEL = 'gpt-image-1'
-const IMAGE_GENERATION_TIMEOUT_MS = 90_000
+export const IMAGE_MODEL = 'dall-e-3'
+export const IMAGE_SIZE = '1024x1024'
+export const IMAGE_QUALITY = 'standard'
+const IMAGE_GENERATION_TIMEOUT_MS = 240_000
 
 export interface AiImageGenerationResult {
   imageBuffer: ArrayBuffer
@@ -146,8 +148,8 @@ export interface AiImageGenerationResult {
 }
 
 /**
- * Generates an image via DALL-E 3 through the Cloudflare AI Gateway.
- * The OpenAI provider key is stored in the gateway — no OPENAI_API_KEY needed in env.
+ * Generates an image via the configured OpenAI image model through the Cloudflare AI Gateway.
+ * The OpenAI provider key is stored in the gateway, so no OPENAI_API_KEY is needed in env.
  * Returns the image as an ArrayBuffer ready for upload.
  */
 export async function generateImageViaGateway(
@@ -183,8 +185,9 @@ export async function generateImageViaGateway(
         model: IMAGE_MODEL,
         prompt: `${prompt}. No text, no words, no labels, no typography, no writing of any kind in the image.`,
         n: 1,
-        size: '1024x1024',
-        quality: 'medium',
+        size: IMAGE_SIZE,
+        quality: IMAGE_QUALITY,
+        response_format: 'b64_json',
       }),
     }),
     timeoutPromise,
@@ -199,7 +202,7 @@ export async function generateImageViaGateway(
     throw new Error(`AI Gateway image error ${genResponse.status}: ${errorText}`)
   }
 
-  // gpt-image-1 returns b64_json by default — no response_format param needed
+  // Parse the base64-encoded image data from the JSON response.
   const data = await genResponse.json() as {
     data?: Array<{ b64_json?: string }>
     usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number }

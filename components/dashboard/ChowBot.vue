@@ -221,13 +221,7 @@ import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages } = useChowBot()
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
-
 const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return error.message
-  return fallback
-}
 
 watch(isOpen, (open: boolean) => { if (open && siteId.value) fetchCredits() })
 
@@ -387,7 +381,10 @@ const processFile = async (file: File, caption = '') => {
       : `No items found in that file.${res.warning ? ` ${res.warning}` : ''} Try a higher-resolution photo.`
 
     messages.value = [...messages.value, { role: 'assistant', content: msg }]
-    if (count > 0) await navigateTo(`/dashboard/sites/${siteId.value}/menu`)
+    if (count > 0) {
+      const { paths } = useDashboardSiteLinks(siteId.value)
+      await navigateTo(paths.value.menu)
+    }
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err))
     console.error('[ChowBot] processFile failed:', error.message)

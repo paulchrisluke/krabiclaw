@@ -182,6 +182,9 @@
                   <UFormField label="City">
                     <UInput v-model="detailsForm.city" />
                   </UFormField>
+                  <UFormField label="Neighbourhood" help="Short tag shown on the location hero, e.g. &quot;Beachside · 2 min from Centre Point&quot;">
+                    <UInput v-model="detailsForm.neighborhood" />
+                  </UFormField>
                   <UFormField label="Phone">
                     <UInput v-model="detailsForm.phone" type="tel" />
                   </UFormField>
@@ -358,6 +361,7 @@ interface BusinessLocation {
   title: string
   address: { addressLines?: string[] } | null
   city: string | null
+  neighborhood: string | null
   phone: string | null
   email: string | null
   website_url: string | null
@@ -460,6 +464,7 @@ const detailsForm = reactive({
   title: '',
   slug: '',
   city: '',
+  neighborhood: '',
   phone: '',
   email: '',
   website_url: '',
@@ -513,6 +518,7 @@ function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.title = loc.title
   detailsForm.slug = loc.slug
   detailsForm.city = loc.city ?? ''
+  detailsForm.neighborhood = loc.neighborhood ?? ''
   detailsForm.phone = loc.phone ?? ''
   detailsForm.email = loc.email ?? ''
   detailsForm.website_url = loc.website_url ?? ''
@@ -653,6 +659,7 @@ async function saveLocationDetails() {
         title: detailsForm.title,
         slug: detailsForm.slug,
         city: detailsForm.city || null,
+        neighborhood: detailsForm.neighborhood || null,
         phone: detailsForm.phone || null,
         email: detailsForm.email || null,
         website_url: detailsForm.website_url || null,

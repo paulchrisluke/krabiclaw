@@ -67,7 +67,10 @@
             <template #header>
               <p class="text-sm font-medium text-highlighted">Status</p>
             </template>
-            <UCheckbox v-model="form.available" label="Available for ordering" />
+            <div class="space-y-3">
+              <UCheckbox v-model="form.available" label="Available for ordering" />
+              <UCheckbox v-model="form.featured" label="Feature on homepage" />
+            </div>
           </UCard>
 
           <UCard>
@@ -166,6 +169,7 @@ const form = reactive({
   description: '',
   price: '',
   available: true,
+  featured: false,
   image_asset_id: null as string | null,
   allergens: '',
   ingredients: '',
@@ -180,10 +184,8 @@ const siteId = computed(() => props.siteId)
 const itemId = computed(() => props.itemId || null)
 const locationId = computed(() => props.locationId || null)
 
-const backPath = computed(() => ({
-  path: `/dashboard/sites/${props.siteId}/menu`,
-  query: props.locationId ? { locationId: props.locationId } : {}
-}))
+const { menuPath } = useDashboardSiteLinks(props.siteId)
+const backPath = computed(() => menuPath(props.locationId))
 
 const sectionOptions = computed(() => {
   const sections = new Set((menu.value?.items || []).map((item: MenuItem) => item.section).filter(Boolean))
@@ -255,6 +257,7 @@ const loadMenu = async () => {
       form.description = item.description || ''
       form.price = item.price || ''
       form.available = item.available
+      form.featured = item.featured
       form.image_asset_id = item.image_asset_id || null
       form.allergens = (item.allergens || []).join(', ')
       form.ingredients = (item.ingredients || []).join(', ')
@@ -278,6 +281,7 @@ const payload = computed<CreateMenuItemRequest & UpdateMenuItemRequest>(() => ({
   description: form.description.trim() || undefined,
   price: form.price.trim() || undefined,
   available: form.available,
+  featured: form.featured,
   image_asset_id: form.image_asset_id,
   allergens: splitList(form.allergens),
   ingredients: splitList(form.ingredients),

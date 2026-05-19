@@ -86,9 +86,9 @@ export const formatGoogleHours = (regularHours: GoogleRegularHours | GoogleRegul
   })
 }
 
-export const getTodayGoogleHours = (regularHours: GoogleRegularHours | GoogleRegularPeriod[] | null | undefined) => {
+export const getTodayGoogleHours = (regularHours: GoogleRegularHours | GoogleRegularPeriod[] | null | undefined, todayOverride?: string) => {
   const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
-  const today = days[new Date().getDay()]
+  const today = todayOverride ? todayOverride.toUpperCase() : days[new Date().getDay()]
   const descriptions = !Array.isArray(regularHours)
     ? (regularHours as GoogleRegularHours)?.weekdayDescriptions ?? []
     : []

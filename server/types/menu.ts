@@ -8,6 +8,7 @@ export interface Menu {
   name: string
   description: string | null
   status: 'draft' | 'published'
+  section_order: string[] | null
   created_at: string
   updated_at: string
   created_by: string
@@ -26,6 +27,8 @@ export interface MenuItem {
   public_url?: string | null  // from media_assets join
   kind?: string | null
   available: boolean
+  featured: boolean
+  featured_sort_order: number
   sort_order: number
   allergens?: string[] | null
   ingredients?: string[] | null
@@ -52,6 +55,7 @@ export interface UpdateMenuRequest {
   name?: string
   description?: string
   status?: 'draft' | 'published'
+  section_order?: string[]
 }
 
 export interface CreateMenuItemRequest {
@@ -62,6 +66,8 @@ export interface CreateMenuItemRequest {
   price?: string
   image_asset_id?: string | null
   available?: boolean
+  featured?: boolean
+  featured_sort_order?: number
   sort_order?: number
   allergens?: string[]
   ingredients?: string[]
@@ -78,6 +84,8 @@ export interface UpdateMenuItemRequest {
   price?: string
   image_asset_id?: string | null
   available?: boolean
+  featured?: boolean
+  featured_sort_order?: number
   sort_order?: number
   allergens?: string[]
   ingredients?: string[]

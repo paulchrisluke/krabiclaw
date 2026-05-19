@@ -40,13 +40,14 @@ const section = computed(() => typeof route.query.section === 'string' ? route.q
 const defaultCurrency = ref('THB')
 
 if (!siteId) {
-  throw createError({ statusCode: 400, statusMessage: 'Invalid site ID' })
+  throw createError({
+    statusCode: 400,
+    statusMessage: 'Invalid site ID'
+  })
 }
 
-const backPath = computed(() => ({
-  path: `/dashboard/sites/${siteId}/menu`,
-  query: locationId.value ? { locationId: locationId.value } : {}
-}))
+const { menuPath } = useDashboardSiteLinks(siteId)
+const backPath = computed(() => menuPath(locationId.value))
 
 const pageError = computed(() => menuId.value ? null : 'Menu ID is required to create an item')
 

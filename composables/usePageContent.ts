@@ -26,6 +26,7 @@ export const usePageContent = (pageName?: string) => {
   })
 
   const { isPlatform, siteId } = useTenantSite()
+  const { locale } = useI18n()
   const isPreview = computed(() => route.query.preview === 'true')
   const previewToken = computed(() => typeof route.query.token === 'string' ? route.query.token : '')
   const reloadToken = computed(() => typeof route.query.t === 'string' ? route.query.t : '')
@@ -43,10 +44,11 @@ export const usePageContent = (pageName?: string) => {
         if (route.query.preview === 'true') params.set('preview', 'true')
         if (previewToken.value) params.set('token', previewToken.value)
         if (locationSlug.value) params.set('location', locationSlug.value)
+        if (locale.value) params.set('locale', locale.value)
         const query = params.toString()
         return query ? `${url}?${query}` : url
       }, {
-        key: computed(() => `content-${siteId}-${page.value}-${locationSlug.value || 'site'}-${isPreview.value ? 'preview' : 'published'}-${previewToken.value}-${reloadToken.value}`),
+        key: computed(() => `content-${siteId}-${page.value}-${locationSlug.value || 'site'}-${locale.value || 'source'}-${isPreview.value ? 'preview' : 'published'}-${previewToken.value}-${reloadToken.value}`),
         server: true,
         immediate: true
       })

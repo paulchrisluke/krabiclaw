@@ -1,6 +1,6 @@
 // POST /api/ai/[siteId]/generate-image
-// Generates an image via DALL-E 3 through CF AI Gateway, uploads to Cloudflare Images,
-// creates a media_asset record, and charges 50 AI credits.
+// Generates an image via the configured OpenAI image model through CF AI Gateway, uploads to Cloudflare Images,
+// creates a media_asset record, and charges credits from returned token usage.
 // body: { prompt, locationId? }
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'

@@ -1,7 +1,6 @@
 <template>
   <div class="min-h-screen bg-default text-default">
 
-    <!-- Loading skeleton -->
     <template v-if="pending">
       <div class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
         <USkeleton class="h-64 rounded-2xl" />
@@ -9,120 +8,170 @@
     </template>
 
     <template v-else-if="location">
-      <!-- Sub-nav (Level 2) -->
-      <SayaSubNav 
-        :location-slug="slug" 
-        active="contact" 
-      />
+      <SayaSubNav :location-slug="slug" active="contact" />
 
-      <!-- Compact Page header -->
-      <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
+      <!-- Page header -->
+      <header class="mx-auto max-w-7xl px-4 pt-14 pb-10 sm:px-6 lg:px-8">
         <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
-          ← Back to {{ location?.title }}
+          ← Back to {{ location.title }}
         </NuxtLink>
-        
-        <div class="flex flex-col gap-2">
-          <h1 class="saya-display-md text-default"><em class="saya-italic">Find</em> us</h1>
-          <p class="text-sm text-muted">
-            Visit · {{ location?.title }}
-          </p>
-        </div>
+        <h1 class="saya-display-md text-default mt-6">
+          <em class="saya-italic">Plan</em> a visit
+        </h1>
+        <p v-if="location.short_description" class="mt-4 text-sm text-muted">{{ location.short_description }}</p>
       </header>
-      <!-- Map -->
-      <div class="mx-auto max-w-7xl px-4 pt-12 sm:px-6 lg:px-8">
-        <div class="aspect-21/9 overflow-hidden border border-default">
-          <iframe
-            v-if="mapEmbedSrc"
-            :src="mapEmbedSrc"
-            :title="location?.title ? `Map for ${location.title}` : 'Location map'"
-            width="100%"
-            height="100%"
-            style="border:0"
-            allowfullscreen
-            loading="lazy"
-            referrerpolicy="no-referrer-when-downgrade"
-          />
-          <div v-else class="flex h-full w-full flex-col items-center justify-center bg-muted gap-3">
-            <UIcon name="i-simple-icons-googlemaps" class="size-8 text-muted" />
-            <span class="text-sm text-muted">Map synced from Google Business</span>
+
+      <!-- Two-column cards: Hours | Address + Map -->
+      <div class="mx-auto grid max-w-7xl gap-6 px-4 pb-6 sm:px-6 lg:grid-cols-2 lg:px-8">
+
+        <!-- HOURS CARD -->
+        <section class="border border-default bg-default p-9">
+          <p class="saya-eyebrow mb-4 text-muted">Hours</p>
+          <h2 class="saya-display saya-italic flex flex-wrap items-center gap-3 text-3xl text-default leading-none">
+            <span :class="isOpenNow === true ? 'size-2.5 rounded-full bg-green-400' : 'size-2.5 rounded-full bg-zinc-400'" />
+            {{ isOpenNow === true ? 'Open now' : isOpenNow === false ? 'Closed' : 'Hours' }}
+            <span v-if="todayHours" class="text-base font-normal not-italic tracking-normal text-muted">· {{ todayHours }}</span>
+          </h2>
+
+          <table class="mt-8 w-full border-collapse">
+            <tbody>
+              <tr
+                v-for="day in weekHours"
+                :key="day.day"
+                :class="day.today ? 'font-semibold' : ''"
+              >
+                <td class="border-b border-default py-3 text-sm" :class="day.today ? 'text-default' : 'text-muted'">
+                  <span class="flex items-center gap-2">
+                    {{ day.day }}
+                    <span v-if="day.today" class="rounded-full bg-default-inverted px-2 py-0.5 text-[9px] uppercase tracking-widest text-inverted">today</span>
+                  </span>
+                </td>
+                <td class="border-b border-default py-3 text-right text-sm tabular-nums" :class="day.today ? 'text-default' : 'text-muted'">{{ day.hours }}</td>
+              </tr>
+              <tr v-if="!weekHours.length">
+                <td colspan="2" class="py-4 text-sm text-muted">
+                  Contact us for current hours.
+                  <a v-if="location.phone" :href="`tel:${location.phone}`" class="ml-2 text-default underline-offset-2 hover:underline">{{ location.phone }}</a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- ADDRESS + MAP CARD -->
+        <section class="border border-default bg-default p-9">
+          <p class="saya-eyebrow mb-4 text-muted">Find us</p>
+          <h2 class="saya-display saya-italic text-3xl text-default leading-none">{{ location.neighborhood || location.city || location.title }}</h2>
+
+          <!-- Map embed (16/10) -->
+          <div class="mt-7 aspect-[16/10] overflow-hidden border border-default bg-muted">
+            <iframe
+              v-if="mapEmbedSrc"
+              :src="mapEmbedSrc"
+              :title="location.title ? `Map for ${location.title}` : 'Location map'"
+              width="100%"
+              height="100%"
+              style="border:0;filter:grayscale(0.12)"
+              allowfullscreen
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+            />
+            <div v-else class="flex h-full w-full flex-col items-center justify-center gap-3">
+              <UIcon name="i-simple-icons-googlemaps" class="size-8 text-muted" />
+              <span class="text-sm text-muted">Map synced from Google Business</span>
+            </div>
           </div>
-        </div>
+
+          <!-- Address -->
+          <p class="mt-6 text-sm leading-relaxed text-default">{{ formattedAddress }}</p>
+
+          <!-- Directions buttons -->
+          <div class="mt-4 flex flex-wrap gap-2">
+            <a
+              v-if="location.maps_url"
+              :href="location.maps_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 rounded-full bg-default-inverted px-4 py-2 text-[11px] font-medium uppercase tracking-widest text-inverted no-underline transition hover:opacity-80"
+            >
+              <UIcon name="i-heroicons-map-pin" class="size-3.5" />
+              Get directions
+            </a>
+            <a
+              v-if="location.maps_url"
+              :href="`https://maps.apple.com/?q=${encodeURIComponent(formattedAddress)}`"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center rounded-full border border-default px-4 py-2 text-[11px] font-medium uppercase tracking-widest text-default no-underline transition hover:bg-muted"
+            >
+              Apple Maps
+            </a>
+          </div>
+
+          <!-- Phone + email -->
+          <div v-if="location.phone || location.email" class="mt-7 grid grid-cols-2 gap-6 border-t border-default pt-7">
+            <div v-if="location.phone">
+              <p class="saya-eyebrow mb-2 text-muted">Phone</p>
+              <a :href="`tel:${location.phone}`" class="border-b border-default pb-0.5 text-sm text-default no-underline hover:opacity-70">{{ location.phone }}</a>
+            </div>
+            <div v-if="location.email">
+              <p class="saya-eyebrow mb-2 text-muted">Email</p>
+              <a :href="`mailto:${location.email}`" class="border-b border-default pb-0.5 text-sm text-default no-underline hover:opacity-70 break-all">{{ location.email }}</a>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <!-- Info grid -->
-      <section class="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 sm:grid-cols-2 lg:grid-cols-3 lg:px-8">
-        <!-- Address -->
-        <div>
-          <p class="saya-eyebrow mb-4 text-muted">Address</p>
-          <p class="text-sm leading-relaxed text-default">{{ formattedAddress || 'Contact us for address' }}</p>
-          <a
-            v-if="location.maps_url"
-            :href="location.maps_url"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="mt-3 inline-block text-xs uppercase tracking-widest text-primary no-underline transition hover:opacity-70"
-          >
-            Open in Google Maps →
-          </a>
-        </div>
-
-        <!-- Hours -->
-        <div>
-          <p class="saya-eyebrow mb-4 text-muted">Opening hours</p>
-          <div v-if="weekHours.length" class="space-y-1.5">
-            <div
-              v-for="day in weekHours"
-              :key="day.day"
-              class="flex justify-between gap-4 text-sm"
-              :class="day.today ? 'font-semibold text-default' : 'text-muted'"
-            >
-              <span>{{ day.day }}</span>
-              <span>{{ day.hours }}</span>
-            </div>
+      <!-- Good to know (parking.info + extra.notes from CMS) -->
+      <section v-if="sanitizedParkingInfo || sanitizedExtraNotes" class="mt-16 bg-elevated">
+        <div class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+          <div class="mb-12 max-w-2xl">
+            <p class="saya-kicker mb-6">Good to know</p>
+            <h2 class="saya-display-md text-default">Before you come.</h2>
           </div>
-          <p v-else class="text-sm text-muted">Contact us for current hours.</p>
-        </div>
-
-        <!-- Contact -->
-        <div>
-          <p class="saya-eyebrow mb-4 text-muted">Contact</p>
-          <div class="space-y-3 text-sm">
-            <div v-if="location.phone" class="flex items-start gap-3">
-              <UIcon name="i-heroicons-phone" class="mt-0.5 size-4 shrink-0 text-muted" />
-              <a :href="`tel:${location.phone}`" class="text-default no-underline hover:underline">{{ location.phone }}</a>
+          <div class="grid gap-6 sm:grid-cols-2">
+            <!-- eslint-disable vue/no-v-html -->
+            <div v-if="sanitizedParkingInfo" class="border border-default bg-default p-8">
+              <p class="saya-eyebrow mb-4 text-muted">Parking</p>
+              <div class="prose prose-sm max-w-none text-default" v-html="sanitizedParkingInfo" />
             </div>
-            <div v-if="location.email" class="flex items-start gap-3">
-              <UIcon name="i-heroicons-envelope" class="mt-0.5 size-4 shrink-0 text-muted" />
-              <a :href="`mailto:${location.email}`" class="text-default no-underline hover:underline">{{ location.email }}</a>
+            <div v-if="sanitizedExtraNotes" class="border border-default bg-default p-8">
+              <p class="saya-eyebrow mb-4 text-muted">Additional Notes</p>
+              <div class="prose prose-sm max-w-none text-default" v-html="sanitizedExtraNotes" />
             </div>
-            <div v-if="location.website_url" class="flex items-start gap-3">
-              <UIcon name="i-heroicons-globe-alt" class="mt-0.5 size-4 shrink-0 text-muted" />
-              <a :href="location.website_url" target="_blank" rel="noopener noreferrer" class="text-default no-underline hover:underline">Website</a>
-            </div>
-          </div>
-
-          <div class="mt-8 flex flex-wrap gap-3">
-            <UButton to="/reservations" color="primary" variant="solid" size="sm" class="rounded-full">Reserve a table</UButton>
-            <UButton
-              v-if="location.maps_url"
-              :to="location.maps_url"
-              target="_blank"
-              color="primary"
-              variant="outline"
-              size="sm"
-              class="rounded-full"
-            >
-              Directions
-            </UButton>
+            <!-- eslint-enable vue/no-v-html -->
           </div>
         </div>
       </section>
+
+      <!-- CTA strip -->
+      <section class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-24 sm:px-6 lg:px-8">
+        <h3 class="saya-display-md saya-italic text-default">See you soon.</h3>
+        <div class="flex flex-wrap gap-3">
+          <UButton to="/reservations" color="primary" variant="solid" size="xl" class="rounded-full">Reserve a table</UButton>
+          <a
+            v-if="location.phone"
+            :href="`tel:${location.phone}`"
+            class="inline-flex items-center rounded-full border border-default px-6 py-2.5 text-xs font-medium uppercase tracking-widest text-default no-underline transition hover:bg-muted"
+          >
+            Call us
+          </a>
+        </div>
+      </section>
     </template>
+
+    <div v-else class="mx-auto max-w-xl px-4 py-24 text-center">
+      <UIcon name="i-heroicons-map-pin" class="mx-auto mb-4 size-12 text-muted" />
+      <h1 class="saya-display-sm text-default">Location Not Found</h1>
+      <UButton to="/locations" color="primary" variant="solid" class="mt-8 rounded-full">View all locations</UButton>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { formatGoogleHours } from '~/utils/formatters'
+import { formatGoogleHours, getTodayGoogleHours } from '~/utils/formatters'
+import { usePageContent } from '~/composables/usePageContent'
+import DOMPurify from 'isomorphic-dompurify'
 
 definePageMeta({ layout: 'saya' })
 
@@ -131,7 +180,8 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
+
+const { getField: getContentField } = usePageContent('location')
 
 const { data, pending } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}`,
@@ -155,23 +205,44 @@ const weekHours = computed(() => {
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
   const timezone = location.value?.time_zone || location.value?.timezone || null
   let today = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][new Date().getDay()]
-
   if (timezone) {
     try {
       today = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: timezone }).format(new Date()).toUpperCase()
-    } catch {
-      // Fallback to local weekday when the location timezone is missing or invalid.
-    }
+    } catch { /* fallback to local */ }
   }
+  return formatGoogleHours(hours).map((h: ApiValue, i: number) => ({ ...h, today: days[i] === today }))
+})
 
-  return formatGoogleHours(hours).map((h, i) => ({ ...h, today: days[i] === today }))
+const todayHours = computed(() => {
+  const timezone = location.value?.time_zone || location.value?.timezone || null
+  let today = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][new Date().getDay()]
+  if (timezone) {
+    try {
+      today = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: timezone }).format(new Date()).toUpperCase()
+    } catch { /* fallback to local */ }
+  }
+  return getTodayGoogleHours(location.value?.opening_hours, today)
+})
+const isOpenNow = computed(() => {
+  const h = todayHours.value
+  if (!h) return undefined
+  const lower = h.toLowerCase()
+  if (lower.includes('open today') && !lower.includes('closed today')) return true
+  if (lower.includes('closed today')) return false
+  return undefined
 })
 
 const mapEmbedSrc = computed(() => (location.value as ApiValue)?.map_embed_url || null)
 
+const parkingInfo = computed(() => getContentField('parking.info', '') ?? '')
+const extraNotes = computed(() => getContentField('extra.notes', '') ?? '')
+const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value))
+const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
+
+const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
 useSeoMeta({
-  title: () => `Visit · ${location.value?.title || slug.value}`,
+  title: () => `Plan a visit · ${location.value?.title || slug.value}`,
   description: () => `Hours, address and directions for ${location.value?.title}.`,
   ogUrl: () => `/locations/${slug.value}/contact`
 })
@@ -188,12 +259,7 @@ useSchemaOrg([
       const opens = parts[0]?.trim()
       const closes = parts[1]?.trim()
       if (!opens || !closes) return null
-      return {
-        '@type': 'OpeningHoursSpecification',
-        dayOfWeek: `https://schema.org/${h.day}`,
-        opens,
-        closes
-      }
+      return { '@type': 'OpeningHoursSpecification', dayOfWeek: `https://schema.org/${h.day}`, opens, closes }
     }).filter((h: ApiValue) => h && h.opens)
     return {
       '@type': ['LocalBusiness', 'Restaurant'],

@@ -11,6 +11,9 @@ interface BillingRow {
   status: string | null
   current_period_end: string | null
   cancel_at_period_end: boolean | null
+  auto_topup_enabled: number | null
+  auto_topup_bundle: number | null
+  auto_topup_threshold: number | null
 }
 
 interface EntitlementRow {
@@ -61,6 +64,9 @@ export interface BillingStatus {
   subscriptionStatus?: string
   currentPeriodEnd?: string
   cancelAtPeriodEnd?: boolean
+  autoTopupEnabled: boolean
+  autoTopupBundle: number
+  autoTopupThreshold: number
   entitlements: EntitlementsMap
 }
 
@@ -85,11 +91,12 @@ export async function getOrganizationBillingStatus(
   // Get billing metadata from organization_billing table
   const billing = await db.prepare(`
     SELECT stripe_customer_id, stripe_subscription_id, plan, status,
-           current_period_end, cancel_at_period_end
-    FROM organization_billing 
+           current_period_end, cancel_at_period_end,
+           auto_topup_enabled, auto_topup_bundle, auto_topup_threshold
+    FROM organization_billing
     WHERE organization_id = ?
   `).bind(organizationId).first<BillingRow>()
-  
+
   return {
     plan: billing?.plan ?? String(entitlements.plan ?? 'free'),
     stripeCustomerId: billing?.stripe_customer_id ?? undefined,
@@ -97,6 +104,9 @@ export async function getOrganizationBillingStatus(
     subscriptionStatus: billing?.status ?? undefined,
     currentPeriodEnd: billing?.current_period_end ?? undefined,
     cancelAtPeriodEnd: billing?.cancel_at_period_end ?? undefined,
+    autoTopupEnabled: Boolean(billing?.auto_topup_enabled),
+    autoTopupBundle: billing?.auto_topup_bundle ?? 500,
+    autoTopupThreshold: billing?.auto_topup_threshold ?? 100,
     entitlements
   }
 }

@@ -370,7 +370,8 @@ async function impersonateUser(userId) {
     try {
       const { sites } = await $fetch('/api/sites')
       if (sites?.length > 0) {
-        await navigateTo(`/dashboard/sites/${sites[0].id}`)
+        const { paths } = useDashboardSiteLinks(sites[0].id)
+        await navigateTo(paths.value.base)
       } else {
         await navigateTo('/dashboard')
       }

@@ -45,7 +45,7 @@
           <UIcon name="i-heroicons-map-pin" class="mx-auto size-10 text-muted" />
           <h2 class="mt-4 text-xl font-semibold text-highlighted">Add a location first</h2>
           <p class="mt-2 text-sm text-muted">Menus are managed per physical location.</p>
-          <UButton class="mt-6" :to="`/dashboard/sites/${siteId}/locations`" icon="i-heroicons-plus" color="primary">
+          <UButton class="mt-6" :to="paths.locations" icon="i-heroicons-plus" color="primary">
             Add Location
           </UButton>
         </div>

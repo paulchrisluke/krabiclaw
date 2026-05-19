@@ -1,26 +1,20 @@
 <template>
-  <div class="border-b border-default bg-default/80 backdrop-blur-md">
+  <div class="border-b border-default bg-default">
     <div class="relative mx-auto max-w-7xl">
-      <div class="flex h-12 items-center gap-8 overflow-x-auto px-4 sm:px-6 lg:px-8 scrollbar-none">
+      <div class="flex h-14 items-center gap-2 overflow-x-auto px-4 sm:px-6 lg:px-8 scrollbar-none">
         <NuxtLink
           v-for="item in items"
           :key="item.key"
           :to="item.href"
           :aria-current="active === item.key ? 'page' : undefined"
           :class="[
-            'relative flex h-full shrink-0 items-center text-[11px] font-bold uppercase tracking-[0.2em] transition-all',
+            'shrink-0 rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-[0.2em] transition-all',
             active === item.key
-              ? 'text-default'
-              : 'text-muted hover:text-default'
+              ? 'bg-default-inverted text-inverted'
+              : 'text-muted hover:bg-muted hover:text-default'
           ]"
         >
           {{ item.label }}
-          
-          <!-- Active indicator -->
-          <div 
-            v-if="active === item.key"
-            class="absolute bottom-0 left-0 h-0.5 w-full bg-primary"
-          />
         </NuxtLink>
       </div>
 

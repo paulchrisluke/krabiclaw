@@ -89,13 +89,13 @@
           </p>
           <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
             <UButton
-              :to="`/dashboard/sites/${siteId}/locations`"
+              :to="paths.locations"
               icon="i-heroicons-plus"
             >
               Add Location
             </UButton>
             <UButton
-              :to="`/dashboard/sites/${siteId}/content?page=home`"
+              :to="contentPath('home')"
               color="neutral"
               variant="soft"
               icon="i-heroicons-document-text"
@@ -148,7 +148,12 @@
         </UAlert>
 
         <div class="min-h-0 flex-1 overflow-y-auto py-2">
-          <div v-for="group in currentPageGroups" :key="group.id" class="border-b border-muted py-1 last:border-b-0 ">
+          <div v-if="contentLoading" class="space-y-2 px-4 py-3">
+            <USkeleton class="h-8 w-full rounded" />
+            <USkeleton class="h-8 w-full rounded" />
+            <USkeleton class="h-8 w-4/5 rounded" />
+          </div>
+          <div v-else v-for="group in currentPageGroups" :key="group.id" class="border-b border-muted py-1 last:border-b-0 ">
             <UButton
               @click="toggleGroup(group.id)"
               variant="ghost"
@@ -307,6 +312,7 @@
             </div>
             <!-- eslint-disable vue/no-v-html -->
             <div
+              :key="activeField"
               :id="`field-${activeField}`"
               contenteditable="true"
               class="prose prose-sm min-h-40 w-full max-w-none rounded-md border border-default bg-default px-3 py-2 text-sm text-highlighted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
@@ -393,10 +399,8 @@ const router = useRouter()
 const siteId = route.params.siteId as string
 const toast = useToast()
 const config = useRuntimeConfig()
-
-const handleBack = () => {
-  router.back()
-}
+const { paths, contentPath } = useDashboardSiteLinks(siteId)
+const { handleBack } = useEditorNavigation(siteId)
 
 const platformHostname = computed(() => {
   const domain = config.public.freeSiteDomain
@@ -532,6 +536,7 @@ const onPageChange = async (oldPageId?: string) => {
 
 watch(selectedPageId, (newVal, oldVal) => {
   if (newVal !== oldVal) {
+    router.replace({ query: { ...route.query, page: newVal } })
     onPageChange(oldVal)
   }
 })
@@ -557,8 +562,8 @@ const openGroups = ref<string[]>(['hero'])
 
 const groupConfig: Record<string, Array<{ id: string; label: string; icon: string; fields: string[] }>> = {
   home: [
-    { id: 'hero',  label: 'Hero Section',   icon: 'i-heroicons-photo',     fields: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
-    { id: 'story', label: 'Brand Story',    icon: 'i-heroicons-book-open', fields: ['story.headline', 'story.body'] },
+    { id: 'hero',  label: 'Hero Section',   icon: 'i-heroicons-photo',     fields: ['hero.eyebrow', 'hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
+    { id: 'story', label: 'Brand Story',    icon: 'i-heroicons-book-open', fields: ['story.headline', 'story.body', 'story.image'] },
     { id: 'cta',   label: 'Call to Action', icon: 'i-heroicons-megaphone', fields: ['cta.title', 'cta.description'] },
   ],
   about: [
@@ -617,6 +622,7 @@ const fieldHasActiveGoogleSync = (fieldKey: string): boolean =>
   hasGoogleBusinessEntitlement.value && fieldSupportsGoogle(fieldKey)
 
 const selectField = (key: string) => {
+  if (contentLoading.value) return
   activeField.value = key
   editingValue.value = currentValues.value[key] || ''
   pendingMediaAssetId.value = null
@@ -735,6 +741,7 @@ const serverHasDrafts = ref(false)
 const saving = ref(false)
 const publishing = ref(false)
 const discardPending = ref(false)
+const contentLoading = ref(false)
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {
@@ -757,6 +764,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 const loadPageContent = async () => {
   if (requiresLocationSelection.value) return
 
+  contentLoading.value = true
   try {
     const res = await $fetch<{ content: ApiRecord[]; hasDrafts: boolean }>(
       endpointWithContentScope(`/api/editor/sites/${siteId}/content/${selectedPageId.value}`)
@@ -781,6 +789,8 @@ const loadPageContent = async () => {
     console.error('Failed to load page content:', error)
     toast.add({ description: 'Failed to load content', color: 'error' })
     throw error
+  } finally {
+    contentLoading.value = false
   }
 }
 

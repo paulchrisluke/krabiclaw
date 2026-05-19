@@ -85,6 +85,61 @@
         </div>
       </div>
 
+      <UCard v-if="featuredItems.length > 0" :ui="{ body: 'p-0' }">
+        <template #header>
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <h2 class="text-sm font-semibold text-highlighted">Homepage featured dishes</h2>
+              <p class="mt-1 text-xs text-muted">Shown first in the Saya homepage highlights.</p>
+            </div>
+            <UBadge color="neutral" variant="soft" size="xs">{{ featuredItems.length }}</UBadge>
+          </div>
+        </template>
+
+        <div
+          v-for="(item, index) in featuredItems"
+          :key="item.id"
+          class="grid gap-3 border-b border-default px-4 py-3 last:border-0 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
+        >
+          <div class="flex size-8 items-center justify-center rounded-md bg-elevated text-xs font-semibold tabular-nums text-muted">
+            {{ index + 1 }}
+          </div>
+          <div class="min-w-0">
+            <p class="truncate text-sm font-medium text-highlighted">{{ item.name }}</p>
+            <p class="truncate text-xs text-muted">{{ item.section }}</p>
+          </div>
+          <div class="flex justify-end gap-1">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              icon="i-heroicons-arrow-up"
+              aria-label="Move featured item up"
+              :disabled="saving || index === 0"
+              @click="moveFeaturedItem(item, -1)"
+            />
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              icon="i-heroicons-arrow-down"
+              aria-label="Move featured item down"
+              :disabled="saving || index === featuredItems.length - 1"
+              @click="moveFeaturedItem(item, 1)"
+            />
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              icon="i-heroicons-x-mark"
+              aria-label="Remove from featured"
+              :disabled="saving"
+              @click="handleFeaturedToggle(item, false)"
+            />
+          </div>
+        </div>
+      </UCard>
+
       <UModal v-model:open="confirmDeleteOpen" :ui="{ content: 'max-w-sm' }">
         <template #content>
           <div class="p-6">
@@ -134,6 +189,24 @@
                   size="xs"
                   color="neutral"
                   variant="ghost"
+                  icon="i-heroicons-arrow-up"
+                  aria-label="Move section up"
+                  :disabled="saving || allSections.indexOf(section) === 0"
+                  @click="moveSection(section, -1)"
+                />
+                <UButton
+                  size="xs"
+                  color="neutral"
+                  variant="ghost"
+                  icon="i-heroicons-arrow-down"
+                  aria-label="Move section down"
+                  :disabled="saving || allSections.indexOf(section) === allSections.length - 1"
+                  @click="moveSection(section, 1)"
+                />
+                <UButton
+                  size="xs"
+                  color="neutral"
+                  variant="ghost"
                   icon="i-heroicons-pencil-square"
                   aria-label="Rename section"
                   @click="openRenameSection(section)"
@@ -156,7 +229,7 @@
           <div
             v-for="item in menuItemsBySection[section]"
             :key="item.id"
-            class="grid gap-3 border-b border-default px-4 py-3 last:border-0 hover:bg-elevated sm:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] sm:items-center"
+            class="grid gap-3 border-b border-default px-4 py-3 last:border-0 hover:bg-elevated sm:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto_auto] sm:items-center"
           >
             <MediaPicker
               :model-value="item.image_asset_id"
@@ -199,6 +272,12 @@
               :model-value="item.available"
               label="Available"
               @update:model-value="handleQuickUpdateItem(item, { available: Boolean($event) })"
+            />
+
+            <UCheckbox
+              :model-value="item.featured"
+              label="Featured"
+              @update:model-value="handleFeaturedToggle(item, Boolean($event))"
             />
 
             <div class="flex justify-end">
@@ -354,8 +433,10 @@ const menuRouteQuery = computed(() => ({
   locationId: props.locationId || undefined
 }))
 
+const { paths } = useDashboardSiteLinks(props.siteId)
+
 const itemCreatePath = (section: string) => ({
-  path: `/dashboard/sites/${props.siteId}/menu/items/new`,
+  path: `${paths.value.menu}/items/new`,
   query: {
     ...menuRouteQuery.value,
     section
@@ -363,7 +444,7 @@ const itemCreatePath = (section: string) => ({
 })
 
 const itemEditPath = (item: MenuItem) => ({
-  path: `/dashboard/sites/${props.siteId}/menu/items/${item.id}`,
+  path: `${paths.value.menu}/items/${item.id}`,
   query: menuRouteQuery.value
 })
 
@@ -384,6 +465,71 @@ const handlePriceChange = (item: MenuItem, event: Event) => {
   handleQuickUpdateItem(item, { price: value })
 }
 
+const featuredItems = computed(() => {
+  const items = currentMenu.value?.items ?? []
+  return items
+    .filter((item: MenuItem) => item.featured)
+    .sort((a: MenuItem, b: MenuItem) => {
+      if ((a.featured_sort_order ?? 0) !== (b.featured_sort_order ?? 0)) {
+        return (a.featured_sort_order ?? 0) - (b.featured_sort_order ?? 0)
+      }
+      if ((a.sort_order ?? 0) !== (b.sort_order ?? 0)) return (a.sort_order ?? 0) - (b.sort_order ?? 0)
+      return a.name.localeCompare(b.name)
+    })
+})
+
+const handleFeaturedToggle = async (item: MenuItem, featured: boolean) => {
+  const maxFeaturedOrder = featuredItems.value.reduce(
+    (max: number, featuredItem: MenuItem) => Math.max(max, featuredItem.featured_sort_order ?? 0),
+    -1
+  )
+  await handleQuickUpdateItem(item, {
+    featured,
+    featured_sort_order: featured ? (item.featured ? item.featured_sort_order : maxFeaturedOrder + 1) : 0
+  })
+}
+
+const saveFeaturedOrder = async (items: MenuItem[]) => {
+  await Promise.all(items.map((item: MenuItem, index: number) =>
+    updateMenuItem(item.id, { featured_sort_order: index })
+  ))
+}
+
+const moveFeaturedItem = async (item: MenuItem, direction: -1 | 1) => {
+  const from = featuredItems.value.findIndex((featuredItem: MenuItem) => featuredItem.id === item.id)
+  const to = from + direction
+  if (from < 0 || to < 0 || to >= featuredItems.value.length) return
+
+  const prevOrder = featuredItems.value.map((featuredItem: MenuItem) => ({
+    id: featuredItem.id,
+    featured_sort_order: featuredItem.featured_sort_order
+  }))
+
+  const next = [...featuredItems.value]
+  const [moved] = next.splice(from, 1)
+  if (!moved) return
+  next.splice(to, 0, moved)
+
+  try {
+    await saveFeaturedOrder(next)
+    if (currentMenu.value) await loadMenu(currentMenu.value.id)
+    toast.addToast('Featured order updated', 'success')
+  } catch (err) {
+    console.error('moveFeaturedItem failed:', err)
+    try {
+      await Promise.all(
+        prevOrder.map((featuredItem: { id: string; featured_sort_order: number | null }) =>
+          updateMenuItem(featuredItem.id, { featured_sort_order: featuredItem.featured_sort_order ?? 0 })
+        )
+      )
+    } catch (rollbackErr) {
+      console.error('moveFeaturedItem rollback failed:', rollbackErr)
+    }
+    if (currentMenu.value) await loadMenu(currentMenu.value.id)
+    toast.addToast('Failed to reorder featured dishes', 'error')
+  }
+}
+
 const openDeleteSection = (section: string) => {
   editingSection.value = null
   sectionDeleteTarget.value = section
@@ -395,10 +541,16 @@ const handleDeleteSection = async () => {
   const section = sectionDeleteTarget.value
 
   if (pendingSections.value.includes(section) && !menuItemsBySection.value[section]?.length) {
-    pendingSections.value = pendingSections.value.filter((pending: string) => pending !== section)
-    sectionDeleteTarget.value = null
-    confirmDeleteSectionOpen.value = false
-    toast.addToast('Section deleted', 'success')
+    try {
+      await saveSectionOrder(allSections.value.filter((item: string) => item !== section))
+      pendingSections.value = pendingSections.value.filter((pending: string) => pending !== section)
+      sectionDeleteTarget.value = null
+      confirmDeleteSectionOpen.value = false
+      toast.addToast('Section deleted', 'success')
+    } catch (err) {
+      console.error('handleDeleteSection failed:', err)
+      toast.addToast('Failed to delete section', 'error')
+    }
     return
   }
 
@@ -422,15 +574,56 @@ const sectionEditName = ref('')
 
 const allSections = computed(() => {
   const existing = Object.keys(menuItemsBySection.value)
-  const pending = pendingSections.value.filter((s: string) => !existing.includes(s))
-  return [...existing, ...pending]
+  const ordered = currentMenu.value?.section_order?.filter((section: string) => existing.includes(section)) ?? []
+  const unordered = existing
+    .filter((section: string) => !ordered.includes(section))
+    .sort((a: string, b: string) => a.localeCompare(b))
+  const pending = pendingSections.value.filter((section: string) => !ordered.includes(section) && !unordered.includes(section))
+  return [...ordered, ...unordered, ...pending]
 })
 
-const handleAddSection = () => {
+const saveSectionOrder = async (sections: string[]) => {
+  if (!currentMenu.value) return
+  const normalized = sections
+    .map((section: string) => section.trim())
+    .filter((section: string, index: number, source: string[]) => section && source.indexOf(section) === index)
+  await updateMenu(currentMenu.value.id, { section_order: normalized })
+  pendingSections.value = pendingSections.value.filter((section: string) => normalized.includes(section))
+}
+
+const moveSection = async (section: string, direction: -1 | 1) => {
+  const from = allSections.value.indexOf(section)
+  const to = from + direction
+  if (from < 0 || to < 0 || to >= allSections.value.length) return
+
+  const next = [...allSections.value]
+  const [moved] = next.splice(from, 1)
+  if (!moved) return
+  next.splice(to, 0, moved)
+
+  try {
+    await saveSectionOrder(next)
+    toast.addToast('Section order updated', 'success')
+  } catch (err) {
+    console.error('moveSection failed:', err)
+    toast.addToast('Failed to reorder sections', 'error')
+  }
+}
+
+const handleAddSection = async () => {
   const name = newSectionName.value.trim()
   if (!name) return
-  if (!pendingSections.value.includes(name) && !Object.keys(menuItemsBySection.value).includes(name)) {
+  if (!allSections.value.includes(name)) {
     pendingSections.value.push(name)
+    try {
+      await saveSectionOrder([...allSections.value])
+      toast.addToast('Section created', 'success')
+    } catch (err) {
+      console.error('handleAddSection failed:', err)
+      pendingSections.value = pendingSections.value.filter((section: string) => section !== name)
+      toast.addToast('Failed to create section', 'error')
+      return
+    }
   }
   newSectionName.value = ''
   showAddSectionForm.value = false
@@ -460,6 +653,7 @@ const handleRenameSection = async (section: string) => {
   }
   if (pendingSections.value.includes(section) && !menuItemsBySection.value[section]?.length) {
     pendingSections.value = pendingSections.value.map((pending: string) => pending === section ? name : pending)
+    await saveSectionOrder(allSections.value.map((item: string) => item === section ? name : item))
     editingSection.value = null
     sectionEditName.value = ''
     return

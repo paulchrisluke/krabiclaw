@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import type { MenuWithItems } from '~/server/types/menu'
 
 export const usePublicMenu = (siteId: string, locationId?: string | null) => {
+  const { locale } = useI18n()
   const menu = ref<MenuWithItems | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -15,6 +16,9 @@ export const usePublicMenu = (siteId: string, locationId?: string | null) => {
       const queryParams = new URLSearchParams()
       if (locationId) {
         queryParams.set('locationId', locationId)
+      }
+      if (locale.value) {
+        queryParams.set('locale', locale.value)
       }
 
       const response = await $fetch<{
@@ -55,7 +59,7 @@ export const usePublicMenu = (siteId: string, locationId?: string | null) => {
   const hasMenu = computed(() => !!menu.value && menu.value.items.length > 0)
 
   // Auto-load when parameters change
-  watch(() => [siteId, locationId], () => {
+  watch(() => [siteId, locationId, locale.value], () => {
     if (siteId) {
       loadMenu()
     }

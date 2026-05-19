@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS sites (
   logo_url TEXT,
   logo_asset_id TEXT,
   contact_email TEXT,
+  source_locale TEXT NOT NULL DEFAULT 'en',
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),
   plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'paid', 'starter', 'pro', 'business')),
   onboarding_status TEXT DEFAULT 'pending' CHECK (onboarding_status IN ('pending', 'active', 'failed')),
@@ -264,6 +265,7 @@ CREATE TABLE IF NOT EXISTS business_locations (
   title TEXT NOT NULL,
   address TEXT,
   city TEXT,
+  neighborhood TEXT,
   phone TEXT,
   website_url TEXT,
   maps_url TEXT,
@@ -412,6 +414,202 @@ CREATE TABLE IF NOT EXISTS site_config (
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS site_locales (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  locale TEXT NOT NULL,
+  label TEXT,
+  is_source BOOLEAN NOT NULL DEFAULT false,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'disabled')),
+  fallback_enabled BOOLEAN NOT NULL DEFAULT true,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  UNIQUE(organization_id, site_id, locale)
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_locales_site
+  ON site_locales(site_id, status, locale);
+
+CREATE TABLE IF NOT EXISTS site_content_translations (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  location_id TEXT,
+  locale TEXT NOT NULL,
+  page TEXT NOT NULL,
+  field TEXT NOT NULL,
+  content TEXT,
+  hero_title TEXT,
+  hero_subtitle TEXT,
+  value TEXT,
+  type TEXT NOT NULL DEFAULT 'text',
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'stale')),
+  source_hash TEXT,
+  translated_at TEXT,
+  reviewed_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_by TEXT,
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE,
+  UNIQUE(organization_id, site_id, location_id, locale, page, field)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_site_content_translations_site_level_unique
+  ON site_content_translations(organization_id, site_id, locale, page, field)
+  WHERE location_id IS NULL;
+
+CREATE TABLE IF NOT EXISTS menu_translations (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  menu_id TEXT NOT NULL,
+  locale TEXT NOT NULL,
+  name TEXT,
+  description TEXT,
+  section_order TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'stale')),
+  source_hash TEXT,
+  translated_at TEXT,
+  reviewed_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_by TEXT,
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (menu_id) REFERENCES menus(id) ON DELETE CASCADE,
+  UNIQUE(organization_id, site_id, menu_id, locale)
+);
+
+CREATE TABLE IF NOT EXISTS menu_item_translations (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  menu_item_id TEXT NOT NULL,
+  locale TEXT NOT NULL,
+  section TEXT,
+  name TEXT,
+  description TEXT,
+  allergens TEXT,
+  ingredients TEXT,
+  dietary_notes TEXT,
+  preparation TEXT,
+  serving_note TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'stale')),
+  source_hash TEXT,
+  translated_at TEXT,
+  reviewed_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_by TEXT,
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (menu_item_id) REFERENCES menu_items(id) ON DELETE CASCADE,
+  UNIQUE(organization_id, site_id, menu_item_id, locale)
+);
+
+CREATE TABLE IF NOT EXISTS business_location_translations (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  location_id TEXT NOT NULL,
+  locale TEXT NOT NULL,
+  title TEXT,
+  address TEXT,
+  city TEXT,
+  description TEXT,
+  short_description TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'stale')),
+  source_hash TEXT,
+  translated_at TEXT,
+  reviewed_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_by TEXT,
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE,
+  UNIQUE(organization_id, site_id, location_id, locale)
+);
+
+CREATE TABLE IF NOT EXISTS post_translations (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  post_id TEXT NOT NULL,
+  locale TEXT NOT NULL,
+  title TEXT,
+  body TEXT,
+  event_title TEXT,
+  offer_terms TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'stale')),
+  source_hash TEXT,
+  translated_at TEXT,
+  reviewed_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_by TEXT,
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+  UNIQUE(organization_id, site_id, post_id, locale)
+);
+
+CREATE TABLE IF NOT EXISTS translation_jobs (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  source_locale TEXT NOT NULL,
+  target_locale TEXT NOT NULL,
+  scope TEXT NOT NULL DEFAULT 'site' CHECK (scope IN ('site', 'content', 'menus', 'locations', 'posts')),
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'canceled')),
+  total_items INTEGER NOT NULL DEFAULT 0,
+  total_chars INTEGER NOT NULL DEFAULT 0,
+  estimated_input_tokens INTEGER NOT NULL DEFAULT 0,
+  estimated_output_tokens INTEGER NOT NULL DEFAULT 0,
+  estimated_credits INTEGER NOT NULL DEFAULT 0,
+  actual_input_tokens INTEGER NOT NULL DEFAULT 0,
+  actual_output_tokens INTEGER NOT NULL DEFAULT 0,
+  actual_credits INTEGER NOT NULL DEFAULT 0,
+  processed_items INTEGER NOT NULL DEFAULT 0,
+  failed_items INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  created_by TEXT,
+  started_at TEXT,
+  finished_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_translation_jobs_site
+  ON translation_jobs(site_id, target_locale, status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS translation_job_items (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  target_locale TEXT NOT NULL,
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('site_content', 'menu', 'menu_item', 'business_location', 'post')),
+  entity_id TEXT NOT NULL,
+  location_id TEXT,
+  page TEXT,
+  field TEXT NOT NULL,
+  source_hash TEXT NOT NULL,
+  source_chars INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'skipped')),
+  error TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (job_id) REFERENCES translation_jobs(id) ON DELETE CASCADE,
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_translation_job_items_job
+  ON translation_job_items(job_id, status, entity_type);
+
 
 --------------------------------------------------------------------------------
 -- Media Assets
@@ -476,6 +674,7 @@ CREATE TABLE IF NOT EXISTS menus (
   name TEXT NOT NULL,
   description TEXT,
   status TEXT NOT NULL DEFAULT 'draft',
+  section_order TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   created_by TEXT,
@@ -495,6 +694,8 @@ CREATE TABLE IF NOT EXISTS menu_items (
   price TEXT,
   image_asset_id TEXT,
   available BOOLEAN NOT NULL DEFAULT true,
+  featured BOOLEAN NOT NULL DEFAULT false,
+  featured_sort_order INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 0,
   allergens TEXT,
   ingredients TEXT,
@@ -556,6 +757,9 @@ CREATE TABLE IF NOT EXISTS organization_billing (
   plan TEXT NOT NULL DEFAULT 'free',
   current_period_end TEXT,
   cancel_at_period_end BOOLEAN DEFAULT false,
+  auto_topup_enabled INTEGER NOT NULL DEFAULT 0,
+  auto_topup_bundle INTEGER NOT NULL DEFAULT 500,
+  auto_topup_threshold INTEGER NOT NULL DEFAULT 100,
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE
 );
@@ -1083,3 +1287,99 @@ CREATE TABLE IF NOT EXISTS site_analytics_daily (
 
 CREATE INDEX IF NOT EXISTS idx_analytics_daily_site
   ON site_analytics_daily(site_id, date DESC);
+
+--------------------------------------------------------------------------------
+-- Site Transfer Requests
+--------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS site_transfer_requests (
+  id TEXT PRIMARY KEY,
+  site_id TEXT NOT NULL,
+  from_organization_id TEXT NOT NULL,
+  to_email TEXT NOT NULL,
+  token TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'cancelled', 'expired')),
+  initiated_by_user_id TEXT NOT NULL,
+  accepted_by_user_id TEXT,
+  message TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  expires_at TEXT NOT NULL,
+  completed_at TEXT,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (initiated_by_user_id) REFERENCES user(id),
+  FOREIGN KEY (accepted_by_user_id) REFERENCES user(id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_site_transfer_token
+  ON site_transfer_requests(token);
+
+CREATE INDEX IF NOT EXISTS idx_site_transfer_site
+  ON site_transfer_requests(site_id, status);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_site_transfer_pending
+  ON site_transfer_requests(site_id) WHERE status = 'pending';
+
+--------------------------------------------------------------------------------
+-- Experiences
+--------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS experiences (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  location_id TEXT,
+  title TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  tagline TEXT,
+  body TEXT,
+  image_asset_id TEXT,
+  price TEXT,
+  duration_minutes INTEGER,
+  max_capacity INTEGER,
+  time_slots TEXT,
+  available_note TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'sold_out')),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  seo_title TEXT,
+  seo_description TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  created_by TEXT,
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE SET NULL,
+  FOREIGN KEY (image_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_experiences_site_slug
+  ON experiences(site_id, slug);
+
+CREATE INDEX IF NOT EXISTS idx_experiences_site
+  ON experiences(site_id, status, sort_order);
+
+CREATE TABLE IF NOT EXISTS experience_bookings (
+  id TEXT PRIMARY KEY,
+  experience_id TEXT NOT NULL,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  guest_name TEXT NOT NULL,
+  guest_email TEXT NOT NULL,
+  guest_phone TEXT,
+  party_size INTEGER NOT NULL DEFAULT 1,
+  booking_date TEXT NOT NULL,
+  time_slot TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled')),
+  notes TEXT,
+  ip_hash TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (experience_id) REFERENCES experiences(id) ON DELETE CASCADE,
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_experience_bookings_experience
+  ON experience_bookings(experience_id, booking_date, time_slot);
+
+CREATE INDEX IF NOT EXISTS idx_experience_bookings_site
+  ON experience_bookings(site_id, status, created_at DESC);

@@ -45,10 +45,8 @@ if (!siteId || !itemId) {
   throw createError({ statusCode: 400, statusMessage: 'Invalid menu item route' })
 }
 
-const backPath = computed(() => ({
-  path: `/dashboard/sites/${siteId}/menu`,
-  query: locationId.value ? { locationId: locationId.value } : {}
-}))
+const { menuPath } = useDashboardSiteLinks(siteId)
+const backPath = computed(() => menuPath(locationId.value))
 
 const pageError = computed(() => menuId.value ? null : 'Menu ID is required to edit an item')
 

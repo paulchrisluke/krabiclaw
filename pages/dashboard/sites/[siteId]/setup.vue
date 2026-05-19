@@ -93,11 +93,13 @@ const iframeSrc = computed(() => {
 
 const siteName = ref('')
 
+const { paths } = useDashboardSiteLinks(siteId)
+
 const headerLinks = computed(() => {
   if (progress.value?.can_publish) {
-    return [{ label: 'Go Live', to: `/dashboard/sites/${siteId}`, color: 'success' as const, icon: 'i-heroicons-rocket-launch' }]
+    return [{ label: 'Go Live', to: paths.value.base, color: 'success' as const, icon: 'i-heroicons-rocket-launch' }]
   }
-  return [{ label: 'Skip for now', to: `/dashboard/sites/${siteId}`, color: 'neutral' as const, variant: 'soft' as const }]
+  return [{ label: 'Skip for now', to: paths.value.base, color: 'neutral' as const, variant: 'soft' as const }]
 })
 
 async function loadEditorContext() {

@@ -69,25 +69,15 @@
       </section>
 
       <!-- Filter chips — only shown when there are reviews to filter -->
-      <div v-if="reviews.length > 0" class="sticky top-0 z-40 border-b border-default bg-default">
-        <div class="mx-auto flex h-11 max-w-7xl items-center gap-6 overflow-x-auto px-4 sm:px-6 lg:px-8">
-          <span class="text-[10px] font-bold uppercase tracking-widest text-muted/60">Filter</span>
-          <button
-            v-for="f in filters"
-            :key="f.key"
-            :class="[
-              'text-[10px] font-bold uppercase tracking-widest transition-colors',
-              activeFilter === f.key
-                ? 'text-default underline underline-offset-8 decoration-2'
-                : 'text-muted hover:text-default'
-            ]"
-            @click="activeFilter = f.key"
-          >
-            {{ f.label }}
-          </button>
+      <SayaFilterTabs
+        v-if="reviews.length > 0"
+        v-model="activeFilter"
+        :tabs="filters"
+      >
+        <template #extra>
           <span class="ml-auto text-[10px] tabular-nums text-muted/50">{{ filtered.length }} reviews</span>
-        </div>
-      </div>
+        </template>
+      </SayaFilterTabs>
 
       <!-- Review list -->
       <section class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">

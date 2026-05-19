@@ -24,6 +24,22 @@
           :description="errorMessage"
         />
 
+        <!-- Auto top-up warning banner -->
+        <UAlert
+          v-if="savedCard && !autoTopupEnabled"
+          color="warning"
+          variant="soft"
+          icon="i-heroicons-bolt"
+          title="Auto top-up is off"
+          description="When your credits run out, AI features will stop working. Enable auto top-up to keep things running."
+        >
+          <template #actions>
+            <UButton size="xs" color="warning" variant="soft" @click="autoTopupModalOpen = true">
+              Set up auto top-up
+            </UButton>
+          </template>
+        </UAlert>
+
 
 
         <UCard v-if="billing">
@@ -89,6 +105,7 @@
         <!-- AI Credits -->
         <UCard>
           <template #header>
+            <div class="space-y-3">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <UIcon name="i-lucide-bot" class="size-4 text-primary" />
@@ -107,6 +124,21 @@
                   Upgrade for more
                 </UButton>
               </div>
+            </div>
+
+            <!-- Auto top-up row -->
+            <div v-if="savedCard" class="flex items-center justify-between rounded-lg border border-default px-4 py-3">
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-highlighted">Auto top-up</p>
+                <p class="text-xs text-muted">
+                  <span v-if="autoTopupEnabled">Enabled — top up {{ autoTopupBundleLabel }} when balance drops below {{ autoTopupThreshold }} credits</span>
+                  <span v-else>Off — credits won't auto-refill when you run out</span>
+                </p>
+              </div>
+              <UButton size="xs" color="neutral" variant="ghost" class="ml-4 shrink-0" @click="autoTopupModalOpen = true">
+                {{ autoTopupEnabled ? 'Settings' : 'Set up' }}
+              </UButton>
+            </div>
             </div>
           </template>
 
@@ -246,28 +278,53 @@
       </div>
     </UPageBody>
   </UPage>
+
+  <BillingAutoTopupSettingsModal
+    v-model:open="autoTopupModalOpen"
+    :initial-enabled="autoTopupEnabled"
+    :initial-bundle="autoTopupBundle"
+    :initial-threshold="autoTopupThreshold"
+    @saved="onAutoTopupSaved"
+  />
 </template>
 
 <script setup lang="ts">
 
 import { useToast } from '~/composables/useToast'
+import { CREDIT_BUNDLES, type CreditBundleSize } from '~/shared/creditBundles'
 const { addToast } = useToast()
 
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
+const router = useRouter()
 const loading = ref(true)
 const billing = ref<ApiRecord | null>(null)
 const credits = ref<ApiRecord | null>(null)
 const creditsLoading = ref(true)
 const upgrading = ref<string | null>(null)
 const portalLoading = ref(false)
-const successMessage = ref('')
 const errorMessage = ref('')
 const annual = ref(false)
 
 interface SavedCard { brand: string; last4: string; exp_month: number; exp_year: number }
 const savedCard = ref<SavedCard | null>(null)
+
+const autoTopupEnabled = ref(false)
+const autoTopupBundle = ref<CreditBundleSize>(500)
+const autoTopupThreshold = ref(100)
+const autoTopupModalOpen = ref(false)
+
+const autoTopupBundleLabel = computed(() => {
+  const b = CREDIT_BUNDLES.find(x => x.credits === autoTopupBundle.value)
+  return b ? `${b.credits.toLocaleString()} credits (${b.price})` : '500 credits ($9)'
+})
+
+function onAutoTopupSaved(settings: { enabled: boolean; bundle: CreditBundleSize; threshold: number }) {
+  autoTopupEnabled.value = settings.enabled
+  autoTopupBundle.value = settings.bundle
+  autoTopupThreshold.value = settings.threshold
+}
 
 async function loadPaymentMethod() {
   try {
@@ -336,6 +393,10 @@ const loadBillingData = async () => {
   try {
     const response = await $fetch<ApiRecord>('/api/billing/status')
     billing.value = response.billing
+    autoTopupEnabled.value = Boolean(response.billing?.autoTopupEnabled)
+    const bundleVal = Number(response.billing?.autoTopupBundle)
+    autoTopupBundle.value = (bundleVal === 2500 || bundleVal === 5000) ? bundleVal : 500
+    autoTopupThreshold.value = Number(response.billing?.autoTopupThreshold) || 100
   } catch (err) {
     console.error('Failed to load billing data:', err)
     billing.value = null
@@ -400,30 +461,26 @@ const formatDate = (dateString: string) => {
 }
 
 onMounted(async () => {
-  if (route.query.success === 'true') {
+  const { success, plan, canceled, ...restQuery } = route.query
+
+  if (success === 'true') {
     addToast('Payment successful. Your plan has been updated.', 'success')
-    // Remove the query param from the URL
-    if (window && window.history && window.location) {
-      const url = new URL(window.location.href)
-      url.searchParams.delete('success')
-      window.history.replaceState({}, '', url.pathname + url.search)
-    }
   }
-  if (route.query.canceled === 'true') errorMessage.value = 'Payment was canceled. Your plan was not changed.'
-  
+  if (canceled === 'true') {
+    errorMessage.value = 'Payment was canceled. Your plan was not changed.'
+  }
+
+  // Consolidate parameter cleanup in a single replace call
+  if (success || plan || canceled) {
+    router.replace({ query: restQuery })
+  }
+
   // Auto-start checkout if plan query param exists
   const { isAuthenticated } = useAuth()
   await Promise.all([loadBillingData(), loadCredits(), loadPaymentMethod()])
-  
-  if (isAuthenticated.value && route.query.plan) {
-    const raw = route.query.plan
-    const planId = Array.isArray(raw) ? raw[0] : String(raw)
-    // Remove the plan query param from URL
-    if (window && window.history && window.location) {
-      const url = new URL(window.location.href)
-      url.searchParams.delete('plan')
-      window.history.replaceState({}, '', url.pathname + url.search)
-    }
+
+  if (isAuthenticated.value && plan) {
+    const planId = Array.isArray(plan) ? plan[0] : String(plan)
     if (planId) await upgradeToPlan(planId)
   }
 })
