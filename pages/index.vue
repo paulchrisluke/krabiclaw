@@ -407,7 +407,7 @@
             :class="[
               'rounded-full border px-4 py-2 text-xs font-medium uppercase tracking-widest transition',
               reviewFilter === 'all'
-                ? 'border-default-inverted bg-default-inverted text-inverted'
+                ? 'border-inverted bg-inverted text-inverted'
                 : 'border-default bg-default text-muted hover:border-muted hover:text-default'
             ]"
             @click="reviewFilter = 'all'"

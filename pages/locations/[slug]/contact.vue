@@ -43,7 +43,7 @@
                 <td class="border-b border-default py-3 text-sm" :class="day.today ? 'text-default' : 'text-muted'">
                   <span class="flex items-center gap-2">
                     {{ day.day }}
-                    <span v-if="day.today" class="rounded-full bg-default-inverted px-2 py-0.5 text-[9px] uppercase tracking-widest text-inverted">today</span>
+                    <span v-if="day.today" class="rounded-full bg-inverted px-2 py-0.5 text-[9px] uppercase tracking-widest text-inverted">today</span>
                   </span>
                 </td>
                 <td class="border-b border-default py-3 text-right text-sm tabular-nums" :class="day.today ? 'text-default' : 'text-muted'">{{ day.hours }}</td>
@@ -92,7 +92,7 @@
               :href="location.maps_url"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex items-center gap-2 rounded-full bg-default-inverted px-4 py-2 text-[11px] font-medium uppercase tracking-widest text-inverted no-underline transition hover:opacity-80"
+              class="inline-flex items-center gap-2 rounded-full bg-inverted px-4 py-2 text-[11px] font-medium uppercase tracking-widest text-inverted no-underline transition hover:opacity-80"
             >
               <UIcon name="i-heroicons-map-pin" class="size-3.5" />
               Get directions

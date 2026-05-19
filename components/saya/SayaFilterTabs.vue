@@ -8,7 +8,7 @@
         :class="[
           'shrink-0 rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all',
           modelValue === tab.key
-            ? 'bg-default-inverted text-inverted'
+            ? 'bg-inverted text-inverted'
             : 'text-muted hover:bg-muted hover:text-default'
         ]"
         @click="handleClick(tab.key)"

@@ -3,67 +3,66 @@
 
     <!-- ── TENANT: Restaurant about page ─────────────────── -->
     <div v-if="!isPlatform">
-      <SayaHero
-        :title="getField('hero.title', 'About Us')"
-        :subtitle="getField('hero.subtitle', '')"
-        size="page"
-      />
 
-      <!-- Story: image + title + body -->
-      <AppSection bg="white" padding="xl">
-        <div class="max-w-4xl mx-auto">
-          <div class="mb-12 overflow-hidden rounded-3xl h-96">
+      <!-- Page header -->
+      <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
+        <p class="saya-kicker mb-6">Our story</p>
+        <h1 class="saya-display-lg text-default">
+          <em class="saya-italic">{{ getField('hero.title', 'About us') }}</em>
+        </h1>
+        <p v-if="getField('hero.subtitle')" class="mt-6 max-w-2xl text-base leading-relaxed text-muted">
+          {{ getField('hero.subtitle') }}
+        </p>
+      </header>
+
+      <!-- Story: image + body -->
+      <section class="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
+        <div :class="getField('story.image') ? 'grid gap-16 lg:grid-cols-2 lg:items-start' : 'max-w-3xl'">
+          <!-- Story image -->
+          <div v-if="getField('story.image')" class="overflow-hidden">
             <img
-              v-if="getField('story.image')"
               :src="getField('story.image')"
-              alt="Our story"
-              class="w-full h-full object-cover"
+              alt=""
+              aria-hidden="true"
+              class="w-full object-cover aspect-4/3"
             >
-            <div
-              v-else
-              class="w-full h-full bg-muted flex items-center justify-center border-2 border-dashed border-default"
-            >
-              <span class="text-muted italic text-sm">Add a story image</span>
-            </div>
           </div>
 
-          <h2 class="font-black italic tracking-tighter text-4xl md:text-5xl text-default leading-none mb-8">
-            {{ getField('story.title', 'Our Story') }}
-          </h2>
-          <ClientOnly>
+          <!-- Story text -->
+          <div>
+            <h2 class="saya-display-md text-default">
+              {{ getField('story.title', 'Our Story') }}
+            </h2>
             <!-- eslint-disable-next-line vue/no-v-html -->
-            <div class="prose prose-lg max-w-none text-default" v-html="storyBody" />
-          </ClientOnly>
+            <div class="prose prose-lg mt-8 max-w-none text-muted" v-html="storyBody" />
+          </div>
         </div>
-      </AppSection>
+      </section>
 
-      <!-- Journey -->
-      <AppSection bg="alt" padding="xl">
-        <div class="max-w-4xl mx-auto">
-          <div class="bg-muted rounded-3xl p-10 md:p-16">
-            <h2 class="text-3xl font-bold text-default mb-8 italic">
+      <!-- Journey section -->
+      <section v-if="getField('journey.title') || getField('journey.body')" class="bg-elevated">
+        <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+          <div class="max-w-3xl">
+            <p class="saya-kicker mb-6">The journey</p>
+            <h2 class="saya-display-md text-default">
               {{ getField('journey.title', 'Our Journey') }}
             </h2>
-            <ClientOnly>
-              <!-- eslint-disable-next-line vue/no-v-html -->
-              <div class="prose prose-lg max-w-none text-muted" v-html="journeyBody" />
-            </ClientOnly>
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div class="prose prose-lg mt-8 max-w-none text-default" v-html="journeyBody" />
           </div>
         </div>
-      </AppSection>
+      </section>
 
-      <!-- CTA -->
-      <AppSection bg="black" padding="lg">
-        <div class="max-w-4xl mx-auto text-center py-8">
-          <h2 class="saya-display text-4xl md:text-5xl text-inverted mb-10">
-            {{ getField('cta.title', 'Come dine with us') }}
-          </h2>
-          <div class="flex flex-wrap justify-center gap-4">
-            <UButton v-if="hasOrderLinks" to="/order" size="xl" color="neutral" variant="solid" class="rounded-full">Order Now</UButton>
-            <UButton to="/reservations" size="xl" color="neutral" :variant="hasOrderLinks ? 'ghost' : 'outline'" class="rounded-full">Reserve a Table</UButton>
-          </div>
+      <!-- CTA strip -->
+      <section class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-24 sm:px-6 lg:px-8">
+        <h3 class="saya-display-md saya-italic text-default">
+          {{ getField('cta.title', 'Come dine with us.') }}
+        </h3>
+        <div class="flex flex-wrap gap-3">
+          <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">Order Now</UButton>
+          <UButton to="/reservations" color="primary" :variant="hasOrderLinks ? 'outline' : 'solid'" size="xl" class="rounded-full">Reserve a table</UButton>
         </div>
-      </AppSection>
+      </section>
     </div>
 
     <!-- ── PLATFORM: KrabiClaw about page ────────────────── -->
@@ -105,7 +104,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { sanitizeHtml } from '~/utils/sanitize'
 definePageMeta({ layout: false })
 
@@ -115,23 +114,27 @@ import { usePageContent } from '~/composables/usePageContent'
 const { isPlatform, siteId } = useTenantSite()
 const { getField } = usePageContent('about')
 
-const storyBody = ref('')
-const journeyBody = ref('')
+const storyBody = ref(await sanitizeHtml(getField('story.body', '') || ''))
+const journeyBody = ref(await sanitizeHtml(getField('journey.body', '') || ''))
 
-onMounted(async () => {
-  storyBody.value = await sanitizeHtml(getField('story.body', ''))
-  journeyBody.value = await sanitizeHtml(getField('journey.body', ''))
+watch(() => getField('story.body', ''), async (val) => {
+  storyBody.value = await sanitizeHtml(val || '')
+})
+watch(() => getField('journey.body', ''), async (val) => {
+  journeyBody.value = await sanitizeHtml(val || '')
 })
 
 const { data: aboutLocsData } = isPlatform || !siteId
   ? { data: ref({ locations: [] }) }
   : await useFetch(`/api/public/sites/${siteId}/locations`, {
-      key: `order-locs-${siteId}`,
+      key: `about-locs-${siteId}`,
       default: () => ({ locations: [] })
     })
+
 const hasOrderLinks = computed(() =>
   (aboutLocsData.value?.locations ?? []).some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
+
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 const route = useRoute()

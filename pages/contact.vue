@@ -74,7 +74,7 @@
                     :class="[
                       'rounded-full border px-4 py-2 text-xs font-medium uppercase tracking-widest transition',
                       tenantForm.subject === opt.key
-                        ? 'border-default-inverted bg-default-inverted text-inverted'
+                        ? 'border-inverted bg-inverted text-inverted'
                         : 'border-default bg-default text-muted hover:border-muted hover:text-default'
                     ]"
                     @click="tenantForm.subject = opt.key"
@@ -95,7 +95,7 @@
           </section>
 
           <!-- DARK ASIDE: brand contact + social -->
-          <aside class="bg-default-inverted p-10 text-inverted lg:p-11">
+          <aside class="bg-inverted p-10 text-inverted lg:p-11">
             <p class="saya-eyebrow mb-4 text-inverted/60">Brand inquiries</p>
             <h2 class="saya-display saya-italic text-3xl text-inverted">Or reach us direct.</h2>
 
@@ -204,7 +204,7 @@
                   <div class="flex flex-wrap items-center gap-3">
                     <NuxtLink
                       :to="`/locations/${loc.slug}/contact`"
-                      class="inline-flex items-center rounded-full bg-default-inverted px-5 py-2.5 text-[11px] font-medium uppercase tracking-widest text-inverted no-underline transition hover:opacity-80"
+                      class="inline-flex items-center rounded-full bg-inverted px-5 py-2.5 text-[11px] font-medium uppercase tracking-widest text-inverted no-underline transition hover:opacity-80"
                     >
                       Plan a visit →
                     </NuxtLink>
