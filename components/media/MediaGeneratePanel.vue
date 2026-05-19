@@ -5,7 +5,6 @@
       class="relative mx-auto w-full max-w-sm overflow-hidden rounded-xl border border-default"
       style="aspect-ratio: 4/3"
     >
-      <!-- Generating shimmer -->
       <div
         v-if="generating"
         class="absolute inset-0 animate-pulse rounded-xl"
@@ -14,7 +13,6 @@
         <div class="absolute bottom-3 left-3 text-xs font-medium text-purple-400">{{ prompt }}</div>
       </div>
 
-      <!-- Result -->
       <img
         v-else-if="result"
         :src="result.publicUrl"
@@ -22,47 +20,68 @@
         class="h-full w-full object-cover"
       />
 
-      <!-- Empty state -->
       <div v-else class="flex h-full items-center justify-center bg-elevated">
         <UIcon name="i-heroicons-sparkles" class="size-8 text-muted" />
       </div>
     </div>
 
-    <!-- Error -->
-    <UAlert v-if="error" color="error" variant="soft" :description="error" icon="i-heroicons-exclamation-triangle" />
+    <!-- Out of credits -->
+    <div v-if="outOfCredits" class="rounded-lg border border-error-200 bg-error-50 dark:border-error-800 dark:bg-error-950 px-4 py-3 flex flex-col gap-3">
+      <div class="flex items-center gap-2 text-sm text-error-600 dark:text-error-400">
+        <UIcon name="i-heroicons-exclamation-triangle" class="size-4 shrink-0" />
+        <span class="font-medium">No AI credits remaining</span>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <UButton size="sm" color="error" variant="solid" :loading="buyingCredits === 500" :disabled="!!buyingCredits" @click="purchaseCredits(500)">500 — $9</UButton>
+        <UButton size="sm" color="error" variant="soft" :loading="buyingCredits === 2500" :disabled="!!buyingCredits" @click="purchaseCredits(2500)">2,500 — $29</UButton>
+        <UButton size="sm" color="error" variant="soft" :loading="buyingCredits === 5000" :disabled="!!buyingCredits" @click="purchaseCredits(5000)">5,000 — $49</UButton>
+      </div>
+    </div>
 
-    <!-- Prompt input -->
-    <div class="relative">
-      <UInput
-        v-model="prompt"
-        :placeholder="result ? 'Ask a follow up…' : 'Describe your image…'"
-        :disabled="generating"
-        size="md"
-        class="pr-10"
-        @keydown.enter.prevent="generate"
+    <UAlert v-else-if="error" color="error" variant="soft" :description="error" icon="i-heroicons-exclamation-triangle" />
+
+    <!-- Prompt textarea -->
+    <UTextarea
+      v-model="prompt"
+      :placeholder="result ? 'Ask a follow up…' : 'Describe the dish, plating style, lighting…'"
+      :disabled="generating || enhancing"
+      :rows="3"
+      autoresize
+    />
+
+    <!-- Actions row -->
+    <div class="flex items-center justify-between gap-2">
+      <UButton
+        icon="i-heroicons-sparkles"
+        size="sm"
+        color="neutral"
+        variant="soft"
+        :loading="enhancing"
+        :disabled="!prompt.trim() || generating"
+        @click="enhance"
       >
-        <template #trailing>
-          <UButton
-            v-if="generating"
-            icon="i-heroicons-stop-circle"
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            aria-label="Stop"
-            @click="stopGeneration"
-          />
-          <UButton
-            v-else
-            icon="i-heroicons-arrow-up"
-            size="xs"
-            color="primary"
-            variant="ghost"
-            :disabled="!prompt.trim()"
-            aria-label="Generate"
-            @click="generate"
-          />
-        </template>
-      </UInput>
+        Enhance prompt
+      </UButton>
+
+      <UButton
+        v-if="generating"
+        icon="i-heroicons-stop-circle"
+        size="sm"
+        color="neutral"
+        variant="outline"
+        @click="stopGeneration"
+      >
+        Stop
+      </UButton>
+      <UButton
+        v-else
+        icon="i-heroicons-arrow-up"
+        size="sm"
+        :disabled="!prompt.trim()"
+        @click="generate"
+      >
+        Generate
+      </UButton>
     </div>
 
     <!-- Previous results strip -->
@@ -86,6 +105,8 @@
 const props = defineProps<{
   siteId: string
   locationId?: string | null
+  initialPrompt?: string
+  context?: string
 }>()
 
 const emit = defineEmits<{
@@ -94,19 +115,37 @@ const emit = defineEmits<{
 }>()
 
 type GeneratedAsset = { id: string; publicUrl: string; thumbnailUrl: string }
-type GeneratedHistoryItem = GeneratedAsset & { prompt?: string; description?: string }
+type GeneratedHistoryItem = GeneratedAsset & { prompt?: string }
 const MAX_HISTORY = 50
 
 const prompt = ref('')
 const generating = ref(false)
+const enhancing = ref(false)
 const error = ref<string | null>(null)
+const outOfCredits = ref(false)
+const buyingCredits = ref<number | null>(null)
 const result = ref<GeneratedHistoryItem | null>(null)
 const history = ref<GeneratedHistoryItem[]>([])
 const activeIdx = ref(0)
 const abortController = ref<AbortController | null>(null)
 
+const { purchase: purchaseCreditsFn } = useCreditPurchase()
+
+async function purchaseCredits(bundle: 500 | 2500 | 5000) {
+  buyingCredits.value = bundle
+  try {
+    await purchaseCreditsFn(bundle, () => { outOfCredits.value = false })
+  } finally {
+    buyingCredits.value = null
+  }
+}
+
+onMounted(() => {
+  if (props.initialPrompt) prompt.value = props.initialPrompt
+})
+
 function historyAriaLabel(item: GeneratedHistoryItem, i: number): string {
-  return item.prompt || item.description || `Generated image ${i + 1}`
+  return item.prompt || `Generated image ${i + 1}`
 }
 
 function isAbortError(error: unknown): boolean {
@@ -132,6 +171,23 @@ function stopGeneration() {
   generating.value = false
 }
 
+async function enhance() {
+  if (!prompt.value.trim() || enhancing.value) return
+  enhancing.value = true
+  error.value = null
+  try {
+    const res = await $fetch<{ enhanced: string }>(`/api/ai/${props.siteId}/enhance-prompt`, {
+      method: 'POST',
+      body: { prompt: prompt.value.trim(), context: props.context ?? '' },
+    })
+    if (res.enhanced) prompt.value = res.enhanced
+  } catch (err) {
+    error.value = getErrorMessage(err, 'Failed to enhance prompt')
+  } finally {
+    enhancing.value = false
+  }
+}
+
 async function generate() {
   if (!prompt.value.trim() || generating.value) return
 
@@ -142,6 +198,7 @@ async function generate() {
 
   generating.value = true
   error.value = null
+  outOfCredits.value = false
 
   try {
     const asset = await $fetch<GeneratedAsset>(`/api/ai/${props.siteId}/generate-image`, {
@@ -162,11 +219,14 @@ async function generate() {
     prompt.value = ''
   } catch (err) {
     if (controller.signal.aborted || isAbortError(err)) return
+    const statusCode = (err as { statusCode?: number }).statusCode
+    if (statusCode === 402) {
+      outOfCredits.value = true
+      return
+    }
     error.value = getErrorMessage(err, 'Generation failed. Try a different prompt.')
   } finally {
-    if (abortController.value === controller) {
-      abortController.value = null
-    }
+    if (abortController.value === controller) abortController.value = null
     generating.value = false
   }
 }

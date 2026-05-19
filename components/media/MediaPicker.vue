@@ -74,6 +74,8 @@
         ref="generatePanel"
         :site-id="siteId"
         :location-id="locationId"
+        :initial-prompt="initialPrompt"
+        :context="context"
         @keep="onGenerated"
         @back="panel = 'library'"
       />
@@ -122,6 +124,8 @@ const props = defineProps<{
   accept?: 'image' | 'video' | 'any'
   locationId?: string | null
   title?: string
+  initialPrompt?: string
+  context?: string
 }>()
 
 const emit = defineEmits<{

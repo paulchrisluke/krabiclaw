@@ -1910,24 +1910,10 @@ async function executeTool(
     case 'generate_image': {
       const { uploadImageBuffer } = await import('~/server/utils/cloudflare-images')
       const { createMediaAsset } = await import('~/server/utils/media-asset-manager')
-      const ai = env.AI
-      if (!ai) return { error: 'AI binding not available.' }
-      const result = await ai.run('@cf/black-forest-labs/flux-1-schnell', {
-        prompt: input.prompt,
-        num_steps: 4,
-      })
-      const aiResult = result as AiImagePayload | null
-      const imageBase64 = typeof aiResult?.image === 'string'
-        ? aiResult.image.trim()
-        : ''
-      if (!imageBase64) {
-        throw new Error('AI image generation returned an invalid response payload')
-      }
-
-      const buffer = Buffer.from(imageBase64, 'base64')
-      const imageData = new Uint8Array(buffer).buffer
+      const { generateImageViaGateway, IMAGE_MODEL } = await import('~/server/utils/ai-gateway')
+      const generated = await generateImageViaGateway(env, input.prompt)
       const { imageId, publicUrl, thumbnailUrl } = await uploadImageBuffer(
-        env, imageData, `chowbot-${Date.now()}.png`
+        env, generated.imageBuffer, `chowbot-${Date.now()}.png`
       )
       const assetId = crypto.randomUUID()
       await createMediaAsset(db, {
@@ -1946,8 +1932,9 @@ async function executeTool(
         created_by_user_id: userId,
       })
       await chargeCredits(db, orgId, {
-        siteId, action: 'generate_image', model: '@cf/black-forest-labs/flux-1-schnell',
-        inputTokens: 0, outputTokens: 4000,
+        siteId, action: 'generate_image', model: IMAGE_MODEL,
+        inputTokens: generated.inputTokens, outputTokens: generated.outputTokens,
+        cfGatewayLogId: generated.cfLogId,
       })
       return { asset_id: assetId, publicUrl, thumbnailUrl }
     }

@@ -425,7 +425,7 @@ const { paths, buildHeaderLinks, locationMenuPath, locationContentPath, location
 
 const locationAddress = computed(() => location.value?.address?.addressLines?.join(', ') || '')
 const publicLocationUrl = computed(() => {
-  if (!site.value?.public_url || !location.value?.slug) return ''
+  if (!location.value?.slug || !site.value?.public_url) return ''
   return `${site.value.public_url.replace(/\/$/, '')}/locations/${location.value.slug}`
 })
 

@@ -232,42 +232,12 @@ function getErrorMessage(error: unknown, fallback: string): string {
 watch(isOpen, (open: boolean) => { if (open && siteId.value) fetchCredits() })
 
 const buyingCredits = ref<number | null>(null)
+const { purchase: purchaseCreditsFn } = useCreditPurchase()
 
 async function purchaseCredits(bundle: 500 | 2500 | 5000) {
   buyingCredits.value = bundle
   try {
-    const res = await $fetch<{ checkoutUrl?: string; balance?: number }>('/api/billing/credits/add', {
-      method: 'POST',
-      body: { bundle }
-    })
-    if (res.checkoutUrl) {
-      try {
-        const url = new URL(res.checkoutUrl)
-        if (url.protocol !== 'https:') {
-          throw new Error('Invalid URL protocol')
-        }
-        const allowedHosts = ['checkout.stripe.com', 'pay.stripe.com']
-        if (!allowedHosts.includes(url.hostname)) {
-          throw new Error('Untrusted hostname')
-        }
-        await navigateTo(res.checkoutUrl, { external: true })
-      } catch (e) {
-        console.error('[ChowBot] Invalid checkout URL:', res.checkoutUrl, e)
-        messages.value = [...messages.value, {
-          role: 'assistant',
-          content: 'Invalid checkout URL. Please contact support.',
-          error: true,
-        }]
-      }
-    }
-    if (res.balance !== undefined) await fetchCredits()
-  } catch (err) {
-    console.error('[ChowBot] purchaseCredits failed:', err)
-    messages.value = [...messages.value, {
-      role: 'assistant',
-      content: getErrorMessage(err, 'Credit purchase failed. Please try again.'),
-      error: true,
-    }]
+    await purchaseCreditsFn(bundle, async () => { await fetchCredits() })
   } finally {
     buyingCredits.value = null
   }
@@ -501,10 +471,17 @@ function renderMarkdown(text: string): string {
 
 .chowbot-panel-enter-active,
 .chowbot-panel-leave-active {
-  transition: transform 0.25s ease;
+  overflow: hidden;
+  transition: width 0.25s ease, transform 0.25s ease, opacity 0.2s ease;
+}
+.chowbot-panel-enter-to,
+.chowbot-panel-leave-from {
+  width: 24rem;
 }
 .chowbot-panel-enter-from,
 .chowbot-panel-leave-to {
+  width: 0;
+  opacity: 0;
   transform: translateX(100%);
 }
 

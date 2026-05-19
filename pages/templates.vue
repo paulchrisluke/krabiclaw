@@ -46,54 +46,47 @@
       </div>
     </Teleport>
 
-    <!-- ── Theme preview hero ──────────────────────────────────────────── -->
-    <section class="relative min-h-[560px] overflow-hidden bg-zinc-950 sm:min-h-[520px]">
-      <!-- Iframe preview of the live demo site -->
-      <div class="absolute inset-0 pointer-events-none overflow-hidden">
-        <iframe
-          :src="demoUrl"
-          class="w-full border-0 origin-top-left"
-          style="height: 900px; transform: scale(0.578); transform-origin: top left; width: 172.8%;"
-          loading="lazy"
-          sandbox="allow-scripts allow-same-origin"
-          title="Saya theme live preview"
-        />
-        <div class="absolute inset-0 bg-linear-to-b from-transparent via-transparent to-zinc-950" />
-      </div>
-      <button
-        type="button"
-        class="absolute inset-x-0 top-0 bottom-[137px] z-10 cursor-pointer sm:bottom-[79px]"
-        aria-label="Open Saya demo preview"
-        @click="openDemoPreview"
-      />
+    <!-- ── Theme preview card ─────────────────────────────────────────────── -->
+    <section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <div class="relative overflow-hidden rounded-2xl border border-default bg-elevated">
+        <!-- Iframe preview of the live demo site -->
+        <div class="relative aspect-[16/10] overflow-hidden bg-zinc-950">
+          <iframe
+            :src="demoUrl"
+            class="absolute inset-0 w-full h-full border-0"
+            loading="lazy"
+            sandbox="allow-scripts allow-same-origin"
+            title="Saya theme live preview"
+          />
+        </div>
 
-      <!-- Action bar overlaid at bottom -->
-      <div class="absolute inset-x-0 bottom-0 z-20 border-t border-white/10 bg-zinc-950/85 backdrop-blur-sm">
-        <div class="mx-auto grid max-w-6xl gap-4 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6">
-          <div class="flex min-w-0 items-center gap-3 sm:gap-4">
-            <SayaLogoMark />
-            <div class="min-w-0">
-              <p class="text-sm font-semibold text-white">Saya</p>
-              <p class="truncate text-xs text-white/50">by KrabiClaw · Included free</p>
+        <!-- Action bar -->
+        <div class="border-t border-default bg-elevated px-6 py-4">
+          <div class="flex items-center justify-between gap-4">
+            <!-- Left: Theme name and Free stacked -->
+            <div>
+              <p class="text-sm font-semibold text-default">Saya</p>
+              <p class="text-xs text-muted">Free</p>
             </div>
-          </div>
-          <div class="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3">
-            <button
-              type="button"
-              class="inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-white/20 px-4 text-[13px] font-medium text-white no-underline transition hover:bg-white/10 sm:px-5 sm:text-sm"
-              @click="openDemoPreview"
-            >
-              <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4" />
-              View demo
-            </button>
-            <NuxtLink
-              to="/signup"
-              class="inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-white px-4 text-[13px] font-semibold text-zinc-950 no-underline transition hover:bg-zinc-100 sm:px-5 sm:text-sm"
-            >
-              <span class="sm:hidden">Start free</span>
-              <span class="hidden sm:inline">Get started free</span>
-              <UIcon name="i-heroicons-arrow-right" class="size-4" />
-            </NuxtLink>
+
+            <!-- Right: Open demo and Try buttons -->
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                class="inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-default px-4 text-sm font-medium text-default no-underline transition hover:bg-elevated"
+                @click="openDemoPreview"
+              >
+                <UIcon name="i-lucide-arrow-up-right" class="size-4" />
+                Open demo
+              </button>
+              <NuxtLink
+                to="/signup"
+                class="inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-primary px-4 text-sm font-semibold text-white no-underline transition hover:opacity-90"
+              >
+                Try
+                <UIcon name="i-lucide-arrow-right" class="size-4" />
+              </NuxtLink>
+            </div>
           </div>
         </div>
       </div>

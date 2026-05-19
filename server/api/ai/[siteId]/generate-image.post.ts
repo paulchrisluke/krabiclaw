@@ -1,24 +1,13 @@
 // POST /api/ai/[siteId]/generate-image
-// Generates an image via Flux (Cloudflare Workers AI), uploads to Cloudflare Images,
-// creates a media_asset record, and charges 20 AI credits.
+// Generates an image via DALL-E 3 through CF AI Gateway, uploads to Cloudflare Images,
+// creates a media_asset record, and charges 50 AI credits.
 // body: { prompt, locationId? }
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { deleteImage, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
-
-const MODEL = '@cf/black-forest-labs/flux-1-schnell'
-const IMAGE_GENERATION_OUTPUT_TOKENS = 4000 // yields ~20 credits
-const IMAGE_GENERATION_TIMEOUT_MS = 20_000
-
-interface AiImageResult {
-  image?: string
-}
-
-interface TimedError extends Error {
-  code?: string
-}
+import { generateImageViaGateway, IMAGE_MODEL } from '~/server/utils/ai-gateway'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -47,12 +36,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
-  const prompt = typeof body?.prompt === 'string' ? body.prompt.trim().slice(0, 500) : ''
+  const prompt = typeof body?.prompt === 'string' ? body.prompt.trim().slice(0, 1000) : ''
   const locationId = typeof body?.locationId === 'string' ? body.locationId : null
   if (!prompt) return jsonResponse({ error: 'prompt required' }, { status: 400 })
-
-  const ai = env.AI
-  if (!ai) return jsonResponse({ error: 'AI binding not configured' }, { status: 503 })
 
   if (!env.CLOUDFLARE_IMAGES_API_TOKEN) {
     return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
@@ -61,32 +47,15 @@ export default defineEventHandler(async (event) => {
   let imageId = ''
   let publicUrl = ''
   let thumbnailUrl = ''
+  let cfLogId: string | null = null
+  let generatedImage = { inputTokens: 0, outputTokens: 0 }
+
   try {
-    let timeoutHandle: ReturnType<typeof setTimeout> | null = null
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutHandle = setTimeout(() => {
-        const timeoutError: TimedError = new Error(`Image generation timed out after ${IMAGE_GENERATION_TIMEOUT_MS}ms`)
-        timeoutError.code = 'AI_TIMEOUT'
-        reject(timeoutError)
-      }, IMAGE_GENERATION_TIMEOUT_MS)
-    })
+    const result = await generateImageViaGateway(env, prompt)
+    cfLogId = result.cfLogId
+    generatedImage = { inputTokens: result.inputTokens, outputTokens: result.outputTokens }
 
-    const result = await Promise.race([
-      ai.run(MODEL, { prompt, num_steps: 4 }),
-      timeoutPromise
-    ]).finally(() => {
-      if (timeoutHandle) clearTimeout(timeoutHandle)
-    })
-
-    const aiResult = result as AiImageResult | null
-    const imageBase64 = typeof aiResult?.image === 'string' ? aiResult.image.trim() : ''
-    if (!imageBase64) {
-      throw new Error('AI image generation returned an invalid response payload')
-    }
-
-    const buffer = Buffer.from(imageBase64, 'base64')
-    const imageData = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
-    const uploadResult = await uploadImageBuffer(env, imageData, `generated-${Date.now()}.png`)
+    const uploadResult = await uploadImageBuffer(env, result.imageBuffer, `generated-${Date.now()}.png`)
     if (!uploadResult?.imageId || !uploadResult?.publicUrl || !uploadResult?.thumbnailUrl) {
       throw new Error('Image upload returned incomplete asset URLs')
     }
@@ -96,19 +65,19 @@ export default defineEventHandler(async (event) => {
     thumbnailUrl = uploadResult.thumbnailUrl
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
-    const timedError = normalizedError as TimedError
+    const code = (normalizedError as { code?: string }).code
     console.error('generate_image_failed', {
-      siteId,
-      userId: session.user.id,
-      model: MODEL,
-      timeoutMs: IMAGE_GENERATION_TIMEOUT_MS,
-      error: normalizedError.message,
-      stack: normalizedError.stack || null
+      siteId, userId: session.user.id, model: IMAGE_MODEL,
+      error: normalizedError.message, stack: normalizedError.stack ?? null
     })
-    if (timedError.code === 'AI_TIMEOUT') {
-      return jsonResponse({ error: 'Image generation timed out' }, { status: 504 })
+    if (code === 'AI_TIMEOUT') {
+      return jsonResponse({ error: 'Image generation timed out. Please try again.' }, { status: 504 })
     }
-    return jsonResponse({ error: 'Failed to generate image' }, { status: 500 })
+    if (normalizedError.message.includes('billing_hard_limit_reached') || normalizedError.message.includes('billing_limit')) {
+      return jsonResponse({ error: 'Image generation is temporarily unavailable. Please try again later.' }, { status: 503 })
+    }
+    const message = isDev ? `Failed to generate image: ${normalizedError.message}` : 'Failed to generate image'
+    return jsonResponse({ error: message }, { status: 500 })
   }
 
   const assetId = crypto.randomUUID()
@@ -132,36 +101,24 @@ export default defineEventHandler(async (event) => {
     try {
       if (imageId) await deleteImage(env, imageId)
     } catch (cleanupError) {
-      const normalizedCleanupError = cleanupError instanceof Error ? cleanupError : new Error('Unknown cleanup error')
-      console.error('generate_image_cleanup_failed', {
-        assetId,
-        imageId,
-        error: normalizedCleanupError.message
-      })
+      const e = cleanupError instanceof Error ? cleanupError : new Error('Unknown cleanup error')
+      console.error('generate_image_cleanup_failed', { assetId, imageId, error: e.message })
     }
-
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
-    console.error('generate_image_create_media_asset_failed', {
-      assetId,
-      imageId,
-      error: normalizedError.message
-    })
+    console.error('generate_image_create_media_asset_failed', { assetId, imageId, error: normalizedError.message })
     return jsonResponse({ error: 'Failed to save generated image' }, { status: 500 })
   }
 
   if (!isDev) {
     const cfCtx = event.context.cloudflare?.context
     const charge = chargeCredits(db, orgId, {
-      siteId, action: 'generate_image', model: MODEL,
-      inputTokens: 0, outputTokens: IMAGE_GENERATION_OUTPUT_TOKENS,
+      siteId, action: 'generate_image', model: IMAGE_MODEL,
+      inputTokens: generatedImage.inputTokens,
+      outputTokens: generatedImage.outputTokens,
+      cfGatewayLogId: cfLogId,
     }).catch((error) => {
       const normalizedError = error instanceof Error ? error : new Error('Unknown error')
-      console.error('chargeCredits_failed', {
-        siteId,
-        model: MODEL,
-        outputTokens: IMAGE_GENERATION_OUTPUT_TOKENS,
-        error: normalizedError.message
-      })
+      console.error('chargeCredits_failed', { siteId, model: IMAGE_MODEL, error: normalizedError.message })
     })
     if (cfCtx?.waitUntil) {
       cfCtx.waitUntil(charge)

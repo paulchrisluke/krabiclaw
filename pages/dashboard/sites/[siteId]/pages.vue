@@ -71,7 +71,6 @@ const previewAction = (path: string) => ({
   to: publicPath(path),
   target: '_blank' as const,
   external: true,
-  disabled: !publicPath(path),
   color: 'neutral' as const,
   variant: 'ghost' as const
 })

@@ -134,3 +134,82 @@ export function documentBlock(base64Data: string): ApiValue {
     source: { type: 'base64', media_type: 'application/pdf', data: base64Data },
   }
 }
+
+export const IMAGE_MODEL = 'gpt-image-1'
+const IMAGE_GENERATION_TIMEOUT_MS = 90_000
+
+export interface AiImageGenerationResult {
+  imageBuffer: ArrayBuffer
+  cfLogId: string | null
+  inputTokens: number
+  outputTokens: number
+}
+
+/**
+ * Generates an image via DALL-E 3 through the Cloudflare AI Gateway.
+ * The OpenAI provider key is stored in the gateway — no OPENAI_API_KEY needed in env.
+ * Returns the image as an ArrayBuffer ready for upload.
+ */
+export async function generateImageViaGateway(
+  env: ApiRecord,
+  prompt: string
+): Promise<AiImageGenerationResult> {
+  const accountId = env.CF_ACCOUNT_ID
+  const gatewayName = env.CF_GATEWAY_NAME
+  const aigToken = env.CF_AIG_TOKEN
+
+  if (!accountId || !gatewayName || !aigToken) {
+    throw new Error('CF AI Gateway env vars not configured (CF_ACCOUNT_ID, CF_GATEWAY_NAME, CF_AIG_TOKEN)')
+  }
+
+  const url = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayName}/openai/v1/images/generations`
+
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      const err = Object.assign(new Error(`Image generation timed out after ${IMAGE_GENERATION_TIMEOUT_MS}ms`), { code: 'AI_TIMEOUT' })
+      reject(err)
+    }, IMAGE_GENERATION_TIMEOUT_MS)
+  })
+
+  const genResponse = await Promise.race([
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'cf-aig-authorization': `Bearer ${aigToken}`,
+      },
+      body: JSON.stringify({
+        model: IMAGE_MODEL,
+        prompt: `${prompt}. No text, no words, no labels, no typography, no writing of any kind in the image.`,
+        n: 1,
+        size: '1024x1024',
+        quality: 'medium',
+      }),
+    }),
+    timeoutPromise,
+  ]).finally(() => {
+    if (timeoutHandle) clearTimeout(timeoutHandle)
+  })
+
+  const cfLogId = genResponse.headers.get('cf-aig-log-id')
+
+  if (!genResponse.ok) {
+    const errorText = await genResponse.text()
+    throw new Error(`AI Gateway image error ${genResponse.status}: ${errorText}`)
+  }
+
+  // gpt-image-1 returns b64_json by default — no response_format param needed
+  const data = await genResponse.json() as {
+    data?: Array<{ b64_json?: string }>
+    usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number }
+  }
+  const b64Json = data?.data?.[0]?.b64_json ?? ''
+  if (!b64Json) throw new Error('AI image generation returned no image data')
+
+  const inputTokens = data.usage?.input_tokens ?? 0
+  const outputTokens = data.usage?.output_tokens ?? 0
+
+  const bytes = Uint8Array.from(atob(b64Json), c => c.charCodeAt(0))
+  return { imageBuffer: bytes.buffer, cfLogId, inputTokens, outputTokens }
+}

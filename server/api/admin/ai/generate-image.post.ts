@@ -1,25 +1,16 @@
 // POST /api/admin/ai/generate-image
-// Generates an image via Flux (Cloudflare Workers AI), uploads to Cloudflare Images,
-// creates a media_asset record for platform use (no site_id).
+// Generates an image via DALL-E 3 through CF AI Gateway, uploads to Cloudflare Images,
+// creates a media_asset record for platform use (no site_id, no credit charge).
 // body: { prompt }
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
 import { deleteImage, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
+import { generateImageViaGateway, IMAGE_MODEL } from '~/server/utils/ai-gateway'
 
-const MODEL = '@cf/black-forest-labs/flux-1-schnell'
-const IMAGE_GENERATION_TIMEOUT_MS = 20_000
 const PLATFORM_MEDIA_ORG_ID = 'platform'
 const PLATFORM_MEDIA_SITE_ID = 'platform'
-
-interface AiImageResult {
-  image?: string
-}
-
-interface TimedError extends Error {
-  code?: string
-}
 
 async function ensurePlatformMediaScope(db: D1Database): Promise<void> {
   const now = new Date().toISOString()
@@ -48,11 +39,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
-  const prompt = typeof body?.prompt === 'string' ? body.prompt.trim().slice(0, 500) : ''
+  const prompt = typeof body?.prompt === 'string' ? body.prompt.trim().slice(0, 1000) : ''
   if (!prompt) return jsonResponse({ error: 'prompt required' }, { status: 400 })
-
-  const ai = env.AI
-  if (!ai) return jsonResponse({ error: 'AI binding not configured' }, { status: 503 })
 
   if (!env.CLOUDFLARE_IMAGES_API_TOKEN) {
     return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
@@ -61,32 +49,11 @@ export default defineEventHandler(async (event) => {
   let imageId = ''
   let publicUrl = ''
   let thumbnailUrl = ''
+
   try {
-    let timeoutHandle: ReturnType<typeof setTimeout> | null = null
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutHandle = setTimeout(() => {
-        const timeoutError: TimedError = new Error(`Image generation timed out after ${IMAGE_GENERATION_TIMEOUT_MS}ms`)
-        timeoutError.code = 'AI_TIMEOUT'
-        reject(timeoutError)
-      }, IMAGE_GENERATION_TIMEOUT_MS)
-    })
+    const result = await generateImageViaGateway(env, prompt)
 
-    const result = await Promise.race([
-      ai.run(MODEL, { prompt, num_steps: 4 }),
-      timeoutPromise
-    ]).finally(() => {
-      if (timeoutHandle) clearTimeout(timeoutHandle)
-    })
-
-    const aiResult = result as AiImageResult | null
-    const imageBase64 = typeof aiResult?.image === 'string' ? aiResult.image.trim() : ''
-    if (!imageBase64) {
-      throw new Error('AI image generation returned an invalid response payload')
-    }
-
-    const buffer = Buffer.from(imageBase64, 'base64')
-    const imageData = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
-    const uploadResult = await uploadImageBuffer(env, imageData, `platform-generated-${Date.now()}.png`)
+    const uploadResult = await uploadImageBuffer(env, result.imageBuffer, `platform-generated-${Date.now()}.png`)
     if (!uploadResult?.imageId || !uploadResult?.publicUrl || !uploadResult?.thumbnailUrl) {
       throw new Error('Image upload returned incomplete asset URLs')
     }
@@ -96,15 +63,12 @@ export default defineEventHandler(async (event) => {
     thumbnailUrl = uploadResult.thumbnailUrl
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
-    const timedError = normalizedError as TimedError
+    const code = (normalizedError as { code?: string }).code
     console.error('platform_generate_image_failed', {
-      userId: session.user.id,
-      model: MODEL,
-      timeoutMs: IMAGE_GENERATION_TIMEOUT_MS,
-      error: normalizedError.message,
-      stack: normalizedError.stack || null
+      userId: session.user.id, model: IMAGE_MODEL,
+      error: normalizedError.message, stack: normalizedError.stack ?? null
     })
-    if (timedError.code === 'AI_TIMEOUT') {
+    if (code === 'AI_TIMEOUT') {
       return jsonResponse({ error: 'Image generation timed out' }, { status: 504 })
     }
     return jsonResponse({ error: 'Failed to generate image' }, { status: 500 })
@@ -132,20 +96,11 @@ export default defineEventHandler(async (event) => {
     try {
       if (imageId) await deleteImage(env, imageId)
     } catch (cleanupError) {
-      const normalizedCleanupError = cleanupError instanceof Error ? cleanupError : new Error('Unknown cleanup error')
-      console.error('platform_generate_image_cleanup_failed', {
-        assetId,
-        imageId,
-        error: normalizedCleanupError.message
-      })
+      const e = cleanupError instanceof Error ? cleanupError : new Error('Unknown cleanup error')
+      console.error('platform_generate_image_cleanup_failed', { assetId, imageId, error: e.message })
     }
-
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
-    console.error('platform_generate_image_create_media_asset_failed', {
-      assetId,
-      imageId,
-      error: normalizedError.message
-    })
+    console.error('platform_generate_image_create_media_asset_failed', { assetId, imageId, error: normalizedError.message })
     return jsonResponse({ error: 'Failed to save generated image' }, { status: 500 })
   }
 

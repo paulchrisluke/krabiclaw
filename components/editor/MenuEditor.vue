@@ -1,9 +1,9 @@
 <template>
   <div class="space-y-4">
-    <!-- Loading state -->
     <template v-if="loading">
       <UCard :ui="{ body: 'p-0' }">
         <div v-for="i in 5" :key="i" class="flex items-center gap-4 border-b border-default px-4 py-3.5 last:border-0">
+          <USkeleton class="size-14 rounded-md" />
           <USkeleton class="h-4 w-40" />
           <USkeleton class="ml-auto h-4 w-16" />
           <USkeleton class="h-5 w-20 rounded-full" />
@@ -11,7 +11,6 @@
       </UCard>
     </template>
 
-    <!-- Error state -->
     <UAlert
       v-else-if="error"
       color="error"
@@ -20,7 +19,6 @@
       :description="error"
     />
 
-    <!-- No menus — empty state -->
     <UCard v-else-if="!hasMenus">
       <div class="py-10 text-center">
         <UIcon name="i-heroicons-list-bullet" class="mx-auto size-10 text-muted" />
@@ -44,9 +42,7 @@
       </div>
     </UCard>
 
-    <!-- Menu content -->
     <template v-else>
-      <!-- Toolbar -->
       <div class="flex items-center justify-between gap-4">
         <div class="flex items-center gap-2">
           <span class="text-sm font-medium text-highlighted">{{ currentMenu?.name }}</span>
@@ -89,12 +85,11 @@
         </div>
       </div>
 
-      <!-- Delete confirmation modal -->
       <UModal v-model:open="confirmDeleteOpen" :ui="{ content: 'max-w-sm' }">
         <template #content>
           <div class="p-6">
-            <h3 class="text-base font-semibold text-default mb-1">Delete menu?</h3>
-            <p class="text-sm text-muted mb-6">
+            <h3 class="mb-1 text-base font-semibold text-default">Delete menu?</h3>
+            <p class="mb-6 text-sm text-muted">
               This will permanently delete <strong>{{ currentMenu?.name }}</strong> and all its items. This cannot be undone.
             </p>
             <div class="flex justify-end gap-2">
@@ -108,8 +103,8 @@
       <UModal v-model:open="confirmDeleteSectionOpen" :ui="{ content: 'max-w-sm' }">
         <template #content>
           <div class="p-6">
-            <h3 class="text-base font-semibold text-default mb-1">Delete section?</h3>
-            <p class="text-sm text-muted mb-6">
+            <h3 class="mb-1 text-base font-semibold text-default">Delete section?</h3>
+            <p class="mb-6 text-sm text-muted">
               This will permanently delete <strong>{{ sectionDeleteTarget }}</strong> and every item inside it.
             </p>
             <div class="flex justify-end gap-2">
@@ -120,10 +115,8 @@
         </template>
       </UModal>
 
-      <!-- Single bordered list: sections + items -->
       <div class="overflow-hidden rounded-lg border border-default">
         <template v-for="section in allSections" :key="section">
-          <!-- Section header row -->
           <div class="border-b border-default bg-elevated px-4 py-2.5">
             <div v-if="editingSection === section" class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <UInput v-model="sectionEditName" size="sm" class="sm:max-w-xs" autofocus />
@@ -153,146 +146,79 @@
                   aria-label="Delete section"
                   @click="openDeleteSection(section)"
                 />
-                <UButton size="sm" color="primary" variant="soft" icon="i-heroicons-plus" @click="openAddItem(section)">
+                <UButton size="sm" color="primary" variant="soft" icon="i-heroicons-plus" :to="itemCreatePath(section)">
                   Add item
                 </UButton>
               </div>
             </div>
           </div>
 
-          <!-- Items -->
-          <template v-for="item in menuItemsBySection[section]" :key="item.id">
-            <!-- Collapsed item row -->
-            <div
-              v-if="expandedItemId !== item.id"
-              class="flex cursor-pointer items-center gap-4 border-b border-default px-4 py-3.5 last:border-0 hover:bg-elevated"
-              @click="openEditItem(item)"
-            >
-              <div class="min-w-0 flex-1">
-                <span class="text-sm font-medium text-highlighted">{{ item.name }}</span>
-                <span v-if="item.description" class="ml-2 truncate text-sm text-muted">{{ item.description }}</span>
-              </div>
-              <span v-if="item.price" class="shrink-0 text-sm font-medium text-default">{{ item.price }}</span>
-              <UBadge :color="item.available ? 'success' : 'neutral'" variant="soft" size="xs">
-                {{ item.available ? 'Available' : 'Unavailable' }}
-              </UBadge>
-              <UIcon name="i-heroicons-pencil-square" class="size-4 shrink-0 text-muted" />
-            </div>
-
-            <!-- Expanded inline edit -->
-            <div v-else class="border-b border-default bg-elevated px-4 py-4 last:border-0">
-              <div class="space-y-3">
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <UFormField label="Name">
-                    <UInput v-model="editForm.name" placeholder="Item name" autofocus />
-                  </UFormField>
-                  <UFormField label="Price">
-                    <UInput v-model="editForm.price" :placeholder="pricePlaceholder" />
-                  </UFormField>
-                </div>
-                <UFormField label="Description">
-                  <UTextarea v-model="editForm.description" :rows="2" placeholder="Short description..." />
-                </UFormField>
-                <UFormField label="Image">
-                    <MediaPicker
-                      v-model="editForm.image_asset_id"
-                      :site-id="props.siteId"
-                      accept="any"
-                      title="Item image or video"
-                      @change="editForm.kind = $event?.kind ?? 'image'"
-                    />
-                </UFormField>
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <UFormField label="Allergens (comma-separated)">
-                    <UInput v-model="editForm.allergens" placeholder="Dairy, Nuts, Soy..." />
-                  </UFormField>
-                  <UFormField label="Dietary Tags (comma-separated)">
-                    <UInput v-model="editForm.dietary_notes" placeholder="V, VG, GF, Vegan..." />
-                  </UFormField>
-                </div>
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <UFormField label="Preparation">
-                    <UInput v-model="editForm.preparation" placeholder="Grilled, Steamed, Spicy..." />
-                  </UFormField>
-                  <UFormField label="Serving Note">
-                    <UInput v-model="editForm.serving_note" placeholder="Served with rice..." />
-                  </UFormField>
-                </div>
-                <UFormField label="Ingredients (comma-separated)">
-                  <UInput v-model="editForm.ingredients" placeholder="Chicken, Garlic, Ginger..." />
-                </UFormField>
-                <UCheckbox v-model="editForm.available" label="Available for ordering" />
-                <div class="flex items-center justify-between gap-2">
-                  <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-trash" @click="handleDeleteItem(item.id)">Delete</UButton>
-                  <div class="flex gap-2">
-                    <UButton color="neutral" variant="ghost" size="sm" @click="closeEdit">Cancel</UButton>
-                    <UButton size="sm" :loading="saving" @click="handleSaveItem(item.id)">Save</UButton>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-
-          <!-- Empty section row -->
           <div
-            v-if="!menuItemsBySection[section]?.length && addingItemSection !== section"
-            class="border-b border-default px-4 py-3 text-sm text-muted last:border-0"
+            v-for="item in menuItemsBySection[section]"
+            :key="item.id"
+            class="grid gap-3 border-b border-default px-4 py-3 last:border-0 hover:bg-elevated sm:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] sm:items-center"
           >
-            No items yet. Click <button class="underline" @click="openAddItem(section)">Add item</button> to get started.
+            <MediaPicker
+              :model-value="item.image_asset_id"
+              :site-id="props.siteId"
+              :location-id="props.locationId"
+              accept="any"
+              title="Item image or video"
+              @update:model-value="handleQuickUpdateItem(item, { image_asset_id: $event })"
+            >
+              <div class="group relative size-14 overflow-hidden rounded-md border border-default bg-muted">
+                <img
+                  v-if="item.public_url && item.kind !== 'video'"
+                  :src="item.public_url"
+                  :alt="item.name"
+                  class="size-full object-cover"
+                />
+                <div v-else class="flex size-full items-center justify-center">
+                  <UIcon :name="item.kind === 'video' ? 'i-heroicons-film' : 'i-heroicons-photo'" class="size-5 text-muted" />
+                </div>
+                <div class="absolute inset-0 flex items-center justify-center bg-default/70 opacity-0 transition-opacity group-hover:opacity-100">
+                  <UIcon name="i-heroicons-photo" class="size-4 text-highlighted" />
+                </div>
+              </div>
+            </MediaPicker>
+
+            <NuxtLink :to="itemEditPath(item)" class="min-w-0">
+              <span class="block truncate text-sm font-medium text-highlighted">{{ item.name }}</span>
+              <span class="block truncate text-sm text-muted">{{ item.description || 'No description' }}</span>
+            </NuxtLink>
+
+            <UInput
+              :model-value="item.price || ''"
+              size="sm"
+              :placeholder="pricePlaceholder"
+              class="sm:w-28"
+              @change="handlePriceChange(item, $event)"
+            />
+
+            <UCheckbox
+              :model-value="item.available"
+              label="Available"
+              @update:model-value="handleQuickUpdateItem(item, { available: Boolean($event) })"
+            />
+
+            <div class="flex justify-end">
+              <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-pencil-square" :to="itemEditPath(item)">
+                Details
+              </UButton>
+            </div>
           </div>
 
-          <!-- Add item inline form -->
-          <div v-if="addingItemSection === section" class="border-b border-default bg-elevated px-4 py-4 last:border-0">
-            <div class="space-y-3">
-              <div class="grid gap-3 sm:grid-cols-2">
-                <UFormField label="Name">
-                  <UInput v-model="addItemForm.name" placeholder="Item name" autofocus />
-                  </UFormField>
-                  <UFormField label="Price">
-                    <UInput v-model="addItemForm.price" :placeholder="pricePlaceholder" />
-                  </UFormField>
-                </div>
-              <UFormField label="Description">
-                <UTextarea v-model="addItemForm.description" :rows="2" placeholder="Short description..." />
-              </UFormField>
-              <UFormField label="Image">
-                <MediaPicker
-                  v-model="addItemForm.image_asset_id"
-                  :site-id="props.siteId"
-                  accept="any"
-                  title="Item image or video"
-                  @change="addItemForm.kind = $event?.kind ?? 'image'"
-                />
-              </UFormField>
-              <div class="grid gap-3 sm:grid-cols-2">
-                <UFormField label="Allergens (comma-separated)">
-                  <UInput v-model="addItemForm.allergens" placeholder="Dairy, Nuts, Soy..." />
-                </UFormField>
-                <UFormField label="Dietary Tags (comma-separated)">
-                  <UInput v-model="addItemForm.dietary_notes" placeholder="V, VG, GF, Vegan..." />
-                </UFormField>
-              </div>
-              <div class="grid gap-3 sm:grid-cols-2">
-                <UFormField label="Preparation">
-                  <UInput v-model="addItemForm.preparation" placeholder="Grilled, Steamed, Spicy..." />
-                </UFormField>
-                <UFormField label="Serving Note">
-                  <UInput v-model="addItemForm.serving_note" placeholder="Served with rice..." />
-                </UFormField>
-              </div>
-              <UFormField label="Ingredients (comma-separated)">
-                <UInput v-model="addItemForm.ingredients" placeholder="Chicken, Garlic, Ginger..." />
-              </UFormField>
-              <UCheckbox v-model="addItemForm.available" label="Available for ordering" />
-              <div class="flex justify-end gap-2">
-                <UButton color="neutral" variant="ghost" size="sm" @click="cancelAddItem(section)">Cancel</UButton>
-                <UButton size="sm" :loading="saving" :disabled="!addItemForm.name.trim()" @click="handleAddItem(section)">Add item</UButton>
-              </div>
-            </div>
+          <div
+            v-if="!menuItemsBySection[section]?.length"
+            class="flex items-center justify-between gap-3 border-b border-default px-4 py-3 text-sm text-muted last:border-0"
+          >
+            <span>No items yet.</span>
+            <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-plus" :to="itemCreatePath(section)">
+              Add item
+            </UButton>
           </div>
         </template>
 
-        <!-- Add section row (always last inside the list) -->
         <div v-if="!showAddSectionForm" class="flex justify-center px-4 py-3">
           <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-plus" @click="showAddSectionForm = true">
             Add section
@@ -317,7 +243,7 @@
 <script setup lang="ts">
 import { useMenuEditor } from '~/composables/useMenuEditor'
 import { useToast } from '~/composables/useToast'
-import type { MenuItem } from '~/server/types/menu'
+import type { MenuItem, UpdateMenuItemRequest } from '~/server/types/menu'
 
 const props = defineProps<{
   siteId: string
@@ -337,9 +263,7 @@ const {
   loadMenu,
   createMenu,
   deleteMenu,
-  createMenuItem,
   updateMenuItem,
-  deleteMenuItem,
   renameMenuSection,
   deleteMenuSection,
   updateMenu
@@ -383,8 +307,6 @@ const pricePlaceholder = computed(() => {
 
 const handleAiImport = async (menuId: string) => {
   await loadMenu(menuId)
-  expandedItemId.value = null
-  addingItemSection.value = null
   editingSection.value = null
   pendingSections.value = []
   newSectionName.value = ''
@@ -400,8 +322,6 @@ const handleDeleteMenu = async () => {
   try {
     await deleteMenu(currentMenu.value.id)
     confirmDeleteOpen.value = false
-    expandedItemId.value = null
-    addingItemSection.value = null
     editingSection.value = null
     pendingSections.value = []
     newSectionName.value = ''
@@ -413,7 +333,6 @@ const handleDeleteMenu = async () => {
   }
 }
 
-// Create menu inline form
 const showCreateMenuForm = ref(false)
 const createMenuForm = reactive({ name: '', description: '' })
 
@@ -430,77 +349,42 @@ const handleCreateMenu = async () => {
   }
 }
 
-// Inline item editing
-const expandedItemId = ref<string | null>(null)
-const editForm = reactive({ 
-  name: '', 
-  description: '', 
-  price: '', 
-  available: true, 
-  image_asset_id: null as string | null, 
-  kind: 'image',
-  allergens: '',
-  ingredients: '',
-  dietary_notes: '',
-  preparation: '',
-  serving_note: ''
+const menuRouteQuery = computed(() => ({
+  menuId: currentMenu.value?.id,
+  locationId: props.locationId || undefined
+}))
+
+const itemCreatePath = (section: string) => ({
+  path: `/dashboard/sites/${props.siteId}/menu/items/new`,
+  query: {
+    ...menuRouteQuery.value,
+    section
+  }
 })
 
-const openEditItem = (item: MenuItem) => {
-  expandedItemId.value = item.id
-  editForm.name = item.name ?? ''
-  editForm.description = item.description ?? ''
-  editForm.price = item.price ?? ''
-  editForm.available = item.available ?? true
-  editForm.image_asset_id = item.image_asset_id ?? null
-  editForm.kind = item.kind ?? 'image'
-  editForm.allergens = (item.allergens || []).join(', ')
-  editForm.ingredients = (item.ingredients || []).join(', ')
-  editForm.dietary_notes = (item.dietary_notes || []).join(', ')
-  editForm.preparation = item.preparation ?? ''
-  editForm.serving_note = item.serving_note ?? ''
-}
+const itemEditPath = (item: MenuItem) => ({
+  path: `/dashboard/sites/${props.siteId}/menu/items/${item.id}`,
+  query: menuRouteQuery.value
+})
 
-const closeEdit = () => {
-  expandedItemId.value = null
-}
-
-const handleSaveItem = async (itemId: string) => {
+const handleQuickUpdateItem = async (item: MenuItem, updates: UpdateMenuItemRequest) => {
   try {
-    await updateMenuItem(itemId, {
-      name: editForm.name.trim(),
-      description: editForm.description.trim() || undefined,
-      price: editForm.price.trim() || undefined,
-      available: editForm.available,
-      image_asset_id: editForm.image_asset_id ?? undefined,
-      allergens: editForm.allergens.split(',').map(s => s.trim()).filter(Boolean),
-      ingredients: editForm.ingredients.split(',').map(s => s.trim()).filter(Boolean),
-      dietary_notes: editForm.dietary_notes.split(',').map(s => s.trim()).filter(Boolean),
-      preparation: editForm.preparation.trim() || undefined,
-      serving_note: editForm.serving_note.trim() || undefined
-    })
-    expandedItemId.value = null
-    toast.addToast('Item saved', 'success')
+    await updateMenuItem(item.id, updates)
+    if (currentMenu.value) await loadMenu(currentMenu.value.id)
   } catch (err) {
-    console.error('handleSaveItem failed:', err)
-    toast.addToast('Failed to save item', 'error')
+    console.error('handleQuickUpdateItem failed:', err)
+    toast.addToast('Failed to update item', 'error')
   }
 }
 
-const handleDeleteItem = async (itemId: string) => {
-  try {
-    await deleteMenuItem(itemId)
-    expandedItemId.value = null
-    toast.addToast('Item deleted', 'success')
-  } catch (err) {
-    console.error('handleDeleteItem failed:', err)
-    toast.addToast('Failed to delete item', 'error')
-  }
+const handlePriceChange = (item: MenuItem, event: Event) => {
+  const target = event.target as HTMLInputElement | null
+  const value = target?.value.trim() || undefined
+  if ((item.price || undefined) === value) return
+  handleQuickUpdateItem(item, { price: value })
 }
 
 const openDeleteSection = (section: string) => {
-  expandedItemId.value = null
-  addingItemSection.value = null
   editingSection.value = null
   sectionDeleteTarget.value = section
   confirmDeleteSectionOpen.value = true
@@ -530,72 +414,6 @@ const handleDeleteSection = async () => {
   }
 }
 
-// Add item inline form
-const addingItemSection = ref<string | null>(null)
-const addItemForm = reactive({ 
-  name: '', 
-  description: '', 
-  price: '', 
-  available: true, 
-  image_asset_id: null as string | null, 
-  kind: 'image',
-  allergens: '',
-  ingredients: '',
-  dietary_notes: '',
-  preparation: '',
-  serving_note: ''
-})
-
-const openAddItem = (section: string) => {
-  expandedItemId.value = null
-  editingSection.value = null
-  addItemForm.name = ''
-  addItemForm.description = ''
-  addItemForm.price = ''
-  addItemForm.available = true
-  addItemForm.image_asset_id = null
-  addItemForm.allergens = ''
-  addItemForm.ingredients = ''
-  addItemForm.dietary_notes = ''
-  addItemForm.preparation = ''
-  addItemForm.serving_note = ''
-  addingItemSection.value = section
-}
-
-const cancelAddItem = (section: string) => {
-  addingItemSection.value = null
-  // Remove pending section if it still has no items
-  if (pendingSections.value.includes(section) && !menuItemsBySection.value[section]?.length) {
-    pendingSections.value = pendingSections.value.filter((s: string) => s !== section)
-  }
-}
-
-const handleAddItem = async (section: string) => {
-  if (!addItemForm.name.trim()) return
-  try {
-    await createMenuItem({
-      name: addItemForm.name.trim(),
-      description: addItemForm.description.trim() || undefined,
-      price: addItemForm.price.trim() || undefined,
-      available: addItemForm.available,
-      image_asset_id: addItemForm.image_asset_id ?? undefined,
-      section,
-      allergens: addItemForm.allergens.split(',').map(s => s.trim()).filter(Boolean),
-      ingredients: addItemForm.ingredients.split(',').map(s => s.trim()).filter(Boolean),
-      dietary_notes: addItemForm.dietary_notes.split(',').map(s => s.trim()).filter(Boolean),
-      preparation: addItemForm.preparation.trim() || undefined,
-      serving_note: addItemForm.serving_note.trim() || undefined
-    })
-    pendingSections.value = pendingSections.value.filter((s: string) => s !== section)
-    addingItemSection.value = null
-    toast.addToast('Item added', 'success')
-  } catch (err) {
-    console.error('handleAddItem failed:', err)
-    toast.addToast('Failed to add item', 'error')
-  }
-}
-
-// Add section inline form
 const pendingSections = ref<string[]>([])
 const showAddSectionForm = ref(false)
 const newSectionName = ref('')
@@ -614,7 +432,6 @@ const handleAddSection = () => {
   if (!pendingSections.value.includes(name) && !Object.keys(menuItemsBySection.value).includes(name)) {
     pendingSections.value.push(name)
   }
-  addingItemSection.value = name
   newSectionName.value = ''
   showAddSectionForm.value = false
 }
@@ -625,8 +442,6 @@ const cancelAddSection = () => {
 }
 
 const openRenameSection = (section: string) => {
-  expandedItemId.value = null
-  addingItemSection.value = null
   showAddSectionForm.value = false
   editingSection.value = section
   sectionEditName.value = section
@@ -645,7 +460,6 @@ const handleRenameSection = async (section: string) => {
   }
   if (pendingSections.value.includes(section) && !menuItemsBySection.value[section]?.length) {
     pendingSections.value = pendingSections.value.map((pending: string) => pending === section ? name : pending)
-    if (addingItemSection.value === section) addingItemSection.value = name
     editingSection.value = null
     sectionEditName.value = ''
     return

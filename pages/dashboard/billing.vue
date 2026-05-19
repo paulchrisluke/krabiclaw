@@ -52,6 +52,40 @@
           </div>
         </UCard>
 
+        <!-- Payment method -->
+        <UCard v-if="billing?.plan !== 'free' || savedCard">
+          <template #header>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <UIcon name="i-heroicons-credit-card" class="size-4 text-primary" />
+                <h2 class="font-semibold">Payment method</h2>
+              </div>
+              <UButton
+                v-if="billing?.plan !== 'free'"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                :loading="portalLoading"
+                @click="openBillingPortal"
+              >
+                Manage
+              </UButton>
+            </div>
+          </template>
+
+          <div v-if="savedCard" class="flex items-center gap-4">
+            <div class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-default bg-elevated text-xs font-bold uppercase tracking-wide text-muted">
+              {{ savedCard.brand.slice(0, 4) }}
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-highlighted">•••• •••• •••• {{ savedCard.last4 }}</p>
+              <p class="text-xs text-muted">Expires {{ savedCard.exp_month }}/{{ savedCard.exp_year }}</p>
+            </div>
+            <UBadge label="Default" color="success" variant="soft" size="xs" />
+          </div>
+          <p v-else class="text-sm text-muted">No payment method saved. Add one by purchasing credits or upgrading your plan.</p>
+        </UCard>
+
         <!-- AI Credits -->
         <UCard>
           <template #header>
@@ -64,11 +98,14 @@
                 <span v-if="credits" class="text-sm text-muted">
                   {{ credits.lifetime_used.toLocaleString() }} used · {{ credits.balance.toLocaleString() }} remaining
                 </span>
-                <UDropdownMenu :items="creditBundles" :content="{ align: 'end' }">
+                <UDropdownMenu v-if="savedCard" :items="creditBundles" :content="{ align: 'end' }">
                   <UButton size="xs" color="primary" variant="soft" icon="i-heroicons-credit-card" trailing-icon="i-heroicons-chevron-down" :loading="buyingCredits !== null">
                     Buy credits
                   </UButton>
                 </UDropdownMenu>
+                <UButton v-else size="xs" color="primary" variant="soft" icon="i-lucide-zap" :loading="upgrading === 'pro'" @click="upgradeToPlan('pro')">
+                  Upgrade for more
+                </UButton>
               </div>
             </div>
           </template>
@@ -228,39 +265,43 @@ const portalLoading = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
 const annual = ref(false)
+
+interface SavedCard { brand: string; last4: string; exp_month: number; exp_year: number }
+const savedCard = ref<SavedCard | null>(null)
+
+async function loadPaymentMethod() {
+  try {
+    const res = await $fetch<{ card: SavedCard | null }>('/api/billing/payment-method')
+    savedCard.value = res.card
+  } catch { savedCard.value = null }
+}
 const buyingCredits = ref<number | null>(null)
+const { purchase: purchaseCreditsFn } = useCreditPurchase()
 
 async function purchaseCredits(bundle: 500 | 2500 | 5000) {
-  buyingCredits.value = bundle
-  errorMessage.value = ''
-  try {
-    const res = await $fetch<{ checkoutUrl?: string; balance?: number; error?: string }>('/api/billing/credits/add', {
-      method: 'POST',
-      body: { bundle }
-    })
-    if (res.checkoutUrl) {
-      await navigateTo(res.checkoutUrl, { external: true })
-    } else if (res.balance !== undefined) {
-      // dev mode direct top-up response
-      successMessage.value = `Added ${bundle} credits. New balance: ${res.balance}`
-      addToast(successMessage.value, 'success')
-      await loadCredits()
-    } else {
-      errorMessage.value = res.error ?? 'Failed to start checkout'
+  if (process.env.NODE_ENV === 'development') {
+    buyingCredits.value = bundle
+    try {
+      const res = await $fetch<{ balance?: number; error?: string }>('/api/billing/credits/add', {
+        method: 'POST', body: { bundle }
+      })
+      if (res.balance !== undefined) {
+        addToast(`Added ${bundle} credits. New balance: ${res.balance}`, 'success')
+        await loadCredits()
+      }
+    } catch { /* non-critical */ } finally {
+      buyingCredits.value = null
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : (err && typeof err === 'object' && 'data' in err && typeof err.data === 'object' && err.data && 'error' in err.data && typeof err.data.error === 'string') ? err.data.error : 'Failed to start checkout'
-    errorMessage.value = message
-  } finally {
-    buyingCredits.value = null
+    return
   }
+  await purchaseCreditsFn(bundle, async () => { await loadCredits() })
 }
 
 const creditBundles = [
   [
-    { label: '500 credits — $9', icon: 'i-heroicons-bolt', onSelect: () => { purchaseCredits(500) } },
-    { label: '2,500 credits — $29', icon: 'i-heroicons-bolt', onSelect: () => { purchaseCredits(2500) } },
-    { label: '5,000 credits — $49', icon: 'i-heroicons-bolt', onSelect: () => { purchaseCredits(5000) } },
+    { label: '500 credits — $9', icon: 'i-heroicons-bolt', onSelect: () => purchaseCredits(500) },
+    { label: '2,500 credits — $29', icon: 'i-heroicons-bolt', onSelect: () => purchaseCredits(2500) },
+    { label: '5,000 credits — $49', icon: 'i-heroicons-bolt', onSelect: () => purchaseCredits(5000) },
   ]
 ]
 
@@ -372,7 +413,7 @@ onMounted(async () => {
   
   // Auto-start checkout if plan query param exists
   const { isAuthenticated } = useAuth()
-  await Promise.all([loadBillingData(), loadCredits()])
+  await Promise.all([loadBillingData(), loadCredits(), loadPaymentMethod()])
   
   if (isAuthenticated.value && route.query.plan) {
     const raw = route.query.plan

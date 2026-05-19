@@ -83,6 +83,10 @@ export default defineEventHandler(async (event) => {
     payment_method_types: ['card'],
     mode: 'payment',
     line_items: [{ price: priceId, quantity: 1 }],
+    // Save the card so future purchases are one-click
+    payment_intent_data: {
+      setup_future_usage: 'off_session',
+    },
     success_url: `${origin}/dashboard/billing?credits_success=true`,
     cancel_url: `${origin}/dashboard/billing`,
     metadata: {

@@ -4,6 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import { createSystemSubdomain } from '~/server/utils/domains'
 import { isCurrencyCode } from '~/shared/currencies'
+import { isDemoOrg } from '~/server/utils/demo'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 
 export default defineEventHandler(async (event) => {
@@ -51,9 +52,15 @@ export default defineEventHandler(async (event) => {
     `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; subdomain: string | null; settings: string | null }>()
     
     if (!site) {
-      return jsonResponse({ 
-        error: 'Site not found or access denied' 
+      return jsonResponse({
+        error: 'Site not found or access denied'
       }, { status: 404 })
+    }
+
+    // Demo org is read-only for everyone except platform admins
+    const isPlatformAdmin = (session.user as { role?: string }).role === 'admin'
+    if (isDemoOrg(site.organization_id) && !isPlatformAdmin) {
+      return jsonResponse({ error: 'Demo site is read-only' }, { status: 403 })
     }
 
     // Build dynamic update query

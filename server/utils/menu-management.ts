@@ -395,11 +395,13 @@ export async function createMenuItem(
   }
 
   const createdItem = await db.prepare(`
-    SELECT id, menu_id, section, name, slug, description, price, image_asset_id, available, sort_order,
-           allergens, ingredients, dietary_notes, preparation, serving_note,
-           created_at, updated_at, created_by, updated_by
-    FROM menu_items 
-    WHERE id = ?
+    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price,
+           mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.sort_order,
+           mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
+           mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
+    FROM menu_items mi
+    LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
+    WHERE mi.id = ?
     LIMIT 1
   `).bind(id).first()
 
@@ -503,11 +505,13 @@ export async function updateMenuItem(
   }
 
   const updatedItem = await db.prepare(`
-    SELECT id, menu_id, section, name, slug, description, price, image_asset_id, available, sort_order,
-           allergens, ingredients, dietary_notes, preparation, serving_note,
-           created_at, updated_at, created_by, updated_by
-    FROM menu_items 
-    WHERE id = ?
+    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price,
+           mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.sort_order,
+           mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
+           mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
+    FROM menu_items mi
+    LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
+    WHERE mi.id = ?
     LIMIT 1
   `).bind(menuItemId).first()
 

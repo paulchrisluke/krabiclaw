@@ -41,7 +41,27 @@
                 <span class="text-sm font-bold text-white">K</span>
               </div>
             </div>
-            <div v-else class="space-y-1">
+            <div v-else class="px-2">
+              <span class="font-semibold text-sm">KrabiClaw</span>
+            </div>
+          </template>
+          
+          <!-- Site level — show site selector with back button -->
+          <template v-else-if="inSiteWorkspace">
+            <div v-if="collapsed" class="flex items-center justify-center">
+              <div class="flex size-8 items-center justify-center rounded-lg bg-primary">
+                <span class="text-sm font-bold text-white">K</span>
+              </div>
+            </div>
+            <div v-else class="flex items-center gap-2 px-2 min-w-0 overflow-hidden">
+              <UButton
+                to="/dashboard/sites"
+                icon="i-heroicons-arrow-left"
+                variant="ghost"
+                color="neutral"
+                size="xs"
+                class="shrink-0"
+              />
               <UDropdownMenu
                 :items="siteMenuItems"
                 :content="{ align: 'start', collisionPadding: 12 }"
@@ -59,38 +79,28 @@
               </UDropdownMenu>
             </div>
           </template>
-          
-          <!-- Site level — show site name with back button -->
-          <template v-else-if="inSiteWorkspace">
-            <div v-if="collapsed" class="flex items-center justify-center">
-              <div class="flex size-8 items-center justify-center rounded-lg bg-primary">
-                <span class="text-sm font-bold text-white">K</span>
-              </div>
-            </div>
-            <div v-else class="flex items-center gap-2 px-2 min-w-0 overflow-hidden">
-              <UButton
-                to="/dashboard/sites"
-                icon="i-heroicons-arrow-left"
-                variant="ghost"
-                color="neutral"
-                size="xs"
-                class="shrink-0"
-              />
-              <span class="font-semibold text-sm truncate min-w-0">{{ siteContext?.brand_name }}</span>
-            </div>
-          </template>
         </template>
 
         <template #default="{ collapsed }">
+          <!-- Platform/Admin navigation - use flat UNavigationMenu -->
           <UNavigationMenu
+            v-if="!inSiteWorkspace || inAdminWorkspace"
             :collapsed="collapsed"
             :items="navigationItems"
             orientation="vertical"
           />
 
-          <ClientOnly>
-            <template v-if="inSiteWorkspace && !collapsed">
-              <div class="mt-2 border-t border-default pt-2 px-2">
+          <!-- Site navigation - use UNavigationMenu with nested children -->
+          <template v-else>
+            <UNavigationMenu
+              :collapsed="collapsed"
+              :items="siteNavigation"
+              orientation="vertical"
+            />
+
+            <!-- ChowBot section -->
+            <ClientOnly>
+              <div v-if="!collapsed" class="mt-4 border-t border-default pt-4 px-2">
                 <div class="flex items-center justify-between px-1 py-1 mb-1">
                   <span class="text-xs font-medium text-muted">ChowBot</span>
                   <UTooltip text="New conversation">
@@ -119,11 +129,20 @@
                   No conversations yet
                 </p>
               </div>
-            </template>
-          </ClientOnly>
+            </ClientOnly>
+          </template>
         </template>
 
         <template #footer="{ collapsed }">
+          <!-- Utility navigation for site workspace -->
+          <UNavigationMenu
+            v-if="inSiteWorkspace && !inAdminWorkspace && !collapsed"
+            :items="siteUtilityNavigation"
+            orientation="vertical"
+            class="mb-2"
+          />
+
+          <!-- User menu -->
           <UDropdownMenu :items="profileMenuItems" :content="{ align: 'start', collisionPadding: 12, side: 'top' }">
             <UButton
               :avatar="{
@@ -187,6 +206,7 @@
 
       <ChowBot />
     </UDashboardGroup>
+    <BillingCreditPurchaseModal />
   </div>
 </template>
 
@@ -337,26 +357,85 @@ const profileMenuItems = computed(() => [
   ]
 ])
 
-const siteNavigation = computed(() => [[
-  { label: 'Overview', icon: 'i-heroicons-home', to: sitePath() },
-  { label: 'Setup', icon: 'i-heroicons-sparkles', to: sitePath('/setup') },
-  { label: 'Pages', icon: 'i-heroicons-rectangle-stack', to: sitePath('/pages') },
-  { label: 'Locations', icon: 'i-heroicons-map-pin', to: sitePath('/locations') },
-  { label: 'Menu', icon: 'i-heroicons-list-bullet', to: sitePath('/menu') },
-  { label: 'Posts', icon: 'i-heroicons-newspaper', to: sitePath('/posts') },
-  { label: 'Reviews', icon: 'i-heroicons-star', to: sitePath('/reviews') },
-  { label: 'Photos', icon: 'i-heroicons-photo', to: sitePath('/photos') },
-  { label: 'Q&A', icon: 'i-heroicons-question-mark-circle', to: sitePath('/qa') },
-  { label: 'Inbox', icon: 'i-heroicons-inbox', to: sitePath('/inbox') },
-  { label: 'Reservations', icon: 'i-heroicons-calendar-days', to: sitePath('/reservations') },
-  { label: 'Order', icon: 'i-heroicons-shopping-bag', to: sitePath('/order') },
-  { label: 'Integrations', icon: 'i-heroicons-circle-stack', to: sitePath('/integrations') },
-  { label: 'Media', icon: 'i-heroicons-photo', to: sitePath('/media') },
-  { label: 'Settings', icon: 'i-heroicons-cog-6-tooth', to: sitePath('/settings') }
-], [
-  { label: 'All Sites', icon: 'i-heroicons-squares-2x2', to: '/dashboard/sites' },
-  { label: 'Billing', icon: 'i-heroicons-credit-card', to: '/dashboard/billing' }
-]])
+const siteNavigation = computed(() => [
+  // Overview - top-level item
+  [
+    {
+      label: 'Overview',
+      icon: 'i-lucide-layout-dashboard',
+      to: activeSiteId.value ? sitePath() : undefined
+    }
+  ],
+  // Main navigation groups
+  [
+    {
+      label: 'Setup',
+      icon: 'i-lucide-wand-sparkles',
+      defaultOpen: false,
+      children: [
+        { label: 'Business profile', to: sitePath('/setup') },
+        { label: 'Branding', to: sitePath('/setup/branding') },
+        { label: 'Hours', to: sitePath('/setup/hours') }
+      ]
+    },
+    {
+      label: 'Site',
+      icon: 'i-lucide-globe',
+      defaultOpen: false,
+      children: [
+        { label: 'Pages', to: sitePath('/pages') },
+        { label: 'Locations', to: sitePath('/locations') },
+        { label: 'Preview', to: sitePath('/preview') }
+      ]
+    },
+    {
+      label: 'Content',
+      icon: 'i-lucide-files',
+      defaultOpen: true,
+      children: [
+        { label: 'Menu', to: sitePath('/menu') },
+        { label: 'Posts', to: sitePath('/posts') },
+        { label: 'Photos', to: sitePath('/photos') },
+        { label: 'Media', to: sitePath('/media') },
+        { label: 'Q&A', to: sitePath('/qa') }
+      ]
+    },
+    {
+      label: 'Customers',
+      icon: 'i-lucide-users',
+      defaultOpen: false,
+      children: [
+        { label: 'Reviews', to: sitePath('/reviews') },
+        { label: 'Inbox', to: sitePath('/inbox') },
+        { label: 'Reservations', to: sitePath('/reservations') }
+      ]
+    },
+    {
+      label: 'Commerce',
+      icon: 'i-lucide-shopping-bag',
+      defaultOpen: false,
+      children: [
+        { label: 'Orders', to: sitePath('/order') }
+      ]
+    },
+    {
+      label: 'Admin',
+      icon: 'i-lucide-settings',
+      defaultOpen: false,
+      children: [
+        { label: 'Integrations', to: sitePath('/integrations') },
+        { label: 'Settings', to: sitePath('/settings') }
+      ]
+    }
+  ]
+])
+
+const siteUtilityNavigation = computed(() => [
+  [
+    { label: 'All Sites', icon: 'i-lucide-squares-2x2', to: '/dashboard/sites' },
+    { label: 'Billing', icon: 'i-lucide-credit-card', to: '/dashboard/billing' }
+  ]
+])
 
 const navigationItems = computed(() => {
   if (inAdminWorkspace.value) return adminNavigation.value

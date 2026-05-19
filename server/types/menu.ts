@@ -60,7 +60,7 @@ export interface CreateMenuItemRequest {
   // slug is generated server-side from name
   description?: string
   price?: string
-  image_asset_id?: string
+  image_asset_id?: string | null
   available?: boolean
   sort_order?: number
   allergens?: string[]
@@ -76,7 +76,7 @@ export interface UpdateMenuItemRequest {
   // slug is intentionally not editable via the standard update path
   description?: string
   price?: string
-  image_asset_id?: string
+  image_asset_id?: string | null
   available?: boolean
   sort_order?: number
   allergens?: string[]
