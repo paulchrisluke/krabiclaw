@@ -291,6 +291,7 @@
 <script setup lang="ts">
 
 import { useToast } from '~/composables/useToast'
+import { CREDIT_BUNDLES } from '~/shared/creditBundles'
 const { addToast } = useToast()
 
 definePageMeta({ layout: 'dashboard' })
@@ -314,12 +315,10 @@ const autoTopupBundle = ref(500)
 const autoTopupThreshold = ref(100)
 const autoTopupModalOpen = ref(false)
 
-const BUNDLE_LABELS: Record<number, string> = {
-  500: '500 credits ($9)',
-  2500: '2,500 credits ($29)',
-  5000: '5,000 credits ($49)',
-}
-const autoTopupBundleLabel = computed(() => BUNDLE_LABELS[autoTopupBundle.value] ?? '500 credits')
+const autoTopupBundleLabel = computed(() => {
+  const b = CREDIT_BUNDLES.find(x => x.credits === autoTopupBundle.value)
+  return b ? `${b.credits.toLocaleString()} credits (${b.price})` : '500 credits ($9)'
+})
 
 function onAutoTopupSaved(settings: { enabled: boolean; bundle: number; threshold: number }) {
   autoTopupEnabled.value = settings.enabled

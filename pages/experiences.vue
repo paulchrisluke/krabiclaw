@@ -88,7 +88,8 @@
 <script setup lang="ts">
 import type { Experience } from '~/server/utils/experiences'
 
-const { isPlatform, siteId } = useTenantSite()
+const { isPlatform, siteId, site } = useTenantSite()
+const siteName = computed(() => (site as ApiValue)?.name || 'KrabiClaw')
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
@@ -114,8 +115,8 @@ useBreadcrumbSchema([
 ])
 
 useSeoMeta({
-  title: 'Experiences | Kikuzuki Krabi',
-  description: 'Book exclusive dining experiences at Kikuzuki — teppanyaki nights, chef\'s table events, and more. Reserve your spot today.',
+  title: computed(() => `Experiences | ${siteName.value}`),
+  description: computed(() => `Book exclusive dining experiences at ${siteName.value} — chef's table events, tasting menus, and more. Reserve your spot today.`),
   ogUrl: `${siteUrl}/experiences`,
   ogType: 'website',
   ogImage: experiences.value[0]?.image_url ?? '/og-image.jpg',

@@ -5,13 +5,8 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, requireBillingAccess } from '~/server/utils/billing'
+import { BUNDLE_AMOUNTS } from '~/shared/creditBundles'
 import type Stripe from 'stripe'
-
-const BUNDLE_AMOUNTS: Record<number, number> = {
-  500: 900,   // $9.00
-  2500: 2900, // $29.00
-  5000: 4900, // $49.00
-}
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)

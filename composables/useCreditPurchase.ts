@@ -1,3 +1,5 @@
+import { CREDIT_BUNDLES } from '~/shared/creditBundles'
+
 export type CreditBundle = 500 | 2500 | 5000
 
 export interface SavedCard {
@@ -7,17 +9,8 @@ export interface SavedCard {
   exp_year: number
 }
 
-const BUNDLE_LABELS: Record<CreditBundle, string> = {
-  500: '500 credits — $9',
-  2500: '2,500 credits — $29',
-  5000: '5,000 credits — $49',
-}
-
-const BUNDLE_PRICES: Record<CreditBundle, string> = {
-  500: '$9.00',
-  2500: '$29.00',
-  5000: '$49.00',
-}
+const BUNDLE_LABELS = Object.fromEntries(CREDIT_BUNDLES.map(b => [b.credits, b.label])) as Record<CreditBundle, string>
+const BUNDLE_PRICES = Object.fromEntries(CREDIT_BUNDLES.map(b => [b.credits, b.price])) as Record<CreditBundle, string>
 
 // Per-flow callback — keyed by a unique transaction ID so concurrent callers don't clobber each other
 const _successHandlers = new Map<string, (balance: number) => void>()

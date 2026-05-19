@@ -29,6 +29,8 @@ const SITE_SCOPED_TABLES = [
   'chowbot_conversations',
   'chowbot_messages',
   'location_qa',
+  'experiences',
+  'experience_bookings',
 ] as const
 
 export async function executeSiteTransfer(

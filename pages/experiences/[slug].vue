@@ -176,11 +176,13 @@
 </template>
 
 <script setup lang="ts">
+import DOMPurify from 'isomorphic-dompurify'
 import type { Experience } from '~/server/utils/experiences'
 
 const route = useRoute()
 const slug = route.params.slug as string
-const { isPlatform, siteId } = useTenantSite()
+const { isPlatform, siteId, site } = useTenantSite()
+const siteName = computed(() => (site as ApiValue)?.name || 'KrabiClaw')
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
@@ -193,11 +195,10 @@ const { data } = isPlatform || !siteId
 
 const experience = computed<Experience | null>(() => (data.value as ApiValue)?.experience ?? null)
 
-// Sanitize body HTML client-side
 const sanitizedBody = computed(() => {
-  if (!experience.value?.body || !import.meta.client) return experience.value?.body ?? ''
-  // Basic sanitization — DOMPurify would be ideal but keeping it lightweight
-  return experience.value.body
+  const raw = experience.value?.body
+  if (!raw) return ''
+  return DOMPurify.sanitize(raw)
 })
 
 function formatDuration(minutes: number): string {
@@ -308,12 +309,12 @@ if (exp) {
           eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
           location: {
             '@type': 'Place',
-            name: 'Kikuzuki Krabi',
+            name: siteName.value,
             url: siteUrl,
           },
           organizer: {
             '@type': 'Restaurant',
-            name: 'Kikuzuki Krabi',
+            name: siteName.value,
             url: siteUrl,
           },
           offers: exp.price

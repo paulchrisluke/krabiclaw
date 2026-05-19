@@ -28,14 +28,16 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
-  const enabled = Boolean(body?.enabled)
-  const bundle = body?.bundle !== undefined ? Number(body.bundle) : 500
-  const threshold = body?.threshold !== undefined ? Number(body.threshold) : 100
+  const enabled = body?.enabled === true || body?.enabled === 'true'
+  const rawBundle = Number(body?.bundle)
+  const bundle = Number.isFinite(rawBundle) && Number.isInteger(rawBundle) ? rawBundle : 500
+  const rawThreshold = Number(body?.threshold)
+  const threshold = Number.isFinite(rawThreshold) && Number.isInteger(rawThreshold) ? rawThreshold : 100
 
   if (!VALID_BUNDLES.has(bundle)) {
     return jsonResponse({ error: 'Invalid bundle. Choose 500, 2500, or 5000.' }, { status: 400 })
   }
-  if (threshold < 1 || threshold > 10000 || !Number.isInteger(threshold)) {
+  if (threshold < 1 || threshold > 10000) {
     return jsonResponse({ error: 'Invalid threshold.' }, { status: 400 })
   }
 

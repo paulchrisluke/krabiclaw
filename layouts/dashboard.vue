@@ -278,8 +278,9 @@ const sitePath = (path = '', query?: Record<string, string>) => {
   if (!activeSiteId.value) {
     throw new Error('sitePath requires an active site ID')
   }
+  const { paths } = useDashboardSiteLinks(activeSiteId.value)
   return {
-    path: `/dashboard/sites/${activeSiteId.value}${path}`,
+    path: `${paths.value.base}${path}`,
     query
   }
 }

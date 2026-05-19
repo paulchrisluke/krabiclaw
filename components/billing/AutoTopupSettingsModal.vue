@@ -45,11 +45,7 @@
 </template>
 
 <script setup lang="ts">
-const BUNDLE_PRICES: Record<number, string> = {
-  500: '$9',
-  2500: '$29',
-  5000: '$49',
-}
+import { CREDIT_BUNDLES } from '~/shared/creditBundles'
 
 const thresholdOptions = [
   { label: '50 credits', value: 50 },
@@ -58,11 +54,8 @@ const thresholdOptions = [
   { label: '500 credits', value: 500 },
 ]
 
-const bundleOptions = [
-  { label: '500 credits — $9', value: 500 },
-  { label: '2,500 credits — $29', value: 2500 },
-  { label: '5,000 credits — $49', value: 5000 },
-]
+const bundleOptions = CREDIT_BUNDLES.map(b => ({ label: b.label, value: b.credits }))
+const bundlePriceMap = Object.fromEntries(CREDIT_BUNDLES.map(b => [b.credits, b.price]))
 
 const props = defineProps<{
   initialEnabled: boolean
@@ -87,7 +80,7 @@ watch(() => props.initialEnabled, v => { form.enabled = v })
 watch(() => props.initialBundle, v => { form.bundle = v })
 watch(() => props.initialThreshold, v => { form.threshold = v })
 
-const bundlePrice = computed(() => BUNDLE_PRICES[form.bundle] ?? '$9')
+const bundlePrice = computed(() => bundlePriceMap[form.bundle] ?? '$9')
 
 const toast = useToast()
 

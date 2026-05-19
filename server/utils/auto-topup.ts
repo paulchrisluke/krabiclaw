@@ -1,18 +1,20 @@
 import Stripe from 'stripe'
 import { getStripe } from '~/server/utils/billing'
 import type { BillingEnv } from '~/server/utils/billing'
+import { BUNDLE_AMOUNTS } from '~/shared/creditBundles'
 
-const BUNDLE_AMOUNTS: Record<number, number> = {
-  500: 900,
-  2500: 2900,
-  5000: 4900,
-}
+// Minimum gap between auto top-ups for the same org to prevent concurrent charges.
+const AUTO_TOPUP_COOLDOWN_MS = 5 * 60 * 1000 // 5 minutes
 
 interface AutoTopupRow {
   auto_topup_enabled: number
   auto_topup_bundle: number
   auto_topup_threshold: number
   stripe_customer_id: string | null
+}
+
+interface CreditsRow {
+  last_topped_up_at: string | null
 }
 
 /**
@@ -42,6 +44,16 @@ export async function triggerAutoTopupIfNeeded(
     const amount = BUNDLE_AMOUNTS[bundle]
     if (!amount) return
 
+    // Cooldown check — prevents concurrent/duplicate charges using last_topped_up_at.
+    const credits = await db.prepare(
+      'SELECT last_topped_up_at FROM ai_credits WHERE organization_id = ? LIMIT 1'
+    ).bind(organizationId).first<CreditsRow>()
+
+    if (credits?.last_topped_up_at) {
+      const lastCharged = new Date(credits.last_topped_up_at).getTime()
+      if (!Number.isNaN(lastCharged) && Date.now() - lastCharged < AUTO_TOPUP_COOLDOWN_MS) return
+    }
+
     const stripe = getStripe(env)
     const customer = await stripe.customers.retrieve(billing.stripe_customer_id, {
       expand: ['invoice_settings.default_payment_method'],
@@ -51,6 +63,10 @@ export async function triggerAutoTopupIfNeeded(
     const pmId = typeof pm === 'string' ? pm : pm?.id
     if (!pmId) return
 
+    // Idempotency key scoped to org + UTC date — Stripe deduplicates within 24 h.
+    const dateKey = new Date().toISOString().slice(0, 10)
+    const idempotencyKey = `auto_topup:${organizationId}:${dateKey}`
+
     const intent = await stripe.paymentIntents.create({
       amount,
       currency: 'usd',
@@ -59,7 +75,7 @@ export async function triggerAutoTopupIfNeeded(
       confirm: true,
       off_session: true,
       metadata: { organization_id: organizationId, type: 'auto_topup', credits: String(bundle) },
-    })
+    }, { idempotencyKey })
 
     if (intent.status !== 'succeeded') return
 

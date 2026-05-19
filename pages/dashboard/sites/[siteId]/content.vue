@@ -400,10 +400,7 @@ const siteId = route.params.siteId as string
 const toast = useToast()
 const config = useRuntimeConfig()
 const { editorBackPath, paths, contentPath } = useDashboardSiteLinks(siteId)
-
-const handleBack = () => {
-  router.push(editorBackPath.value)
-}
+const { handleBack } = useEditorNavigation(siteId)
 
 const platformHostname = computed(() => {
   const domain = config.public.freeSiteDomain

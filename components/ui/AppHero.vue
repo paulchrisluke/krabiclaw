@@ -3,6 +3,7 @@
     <!-- Background image slot -->
     <div v-if="image" class="absolute inset-0">
       <img :src="image" :alt="title" class="w-full h-full object-cover" />
+      <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10" />
     </div>
 
     <!-- Background video slot -->
@@ -15,6 +16,7 @@
         playsinline
         class="w-full h-full object-cover"
       />
+      <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10" />
     </div>
 
     <!-- Content -->

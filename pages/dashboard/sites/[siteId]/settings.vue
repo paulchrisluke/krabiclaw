@@ -1378,8 +1378,13 @@ const initiateTransfer = async () => {
     await navigator.clipboard.writeText(res.transfer_url)
     transferSuccess.value = `Transfer link sent to ${res.to_email} and copied to clipboard.`
     transferEmail.value = ''
-  } catch (err: ApiValue) {
-    transferError.value = err?.data?.error ?? 'Failed to initiate transfer.'
+  } catch (err: unknown) {
+    const msg = err != null && typeof err === 'object' && 'data' in err
+      && err.data != null && typeof err.data === 'object' && 'error' in err.data
+      && typeof (err.data as Record<string, unknown>).error === 'string'
+      ? (err.data as Record<string, string>).error
+      : null
+    transferError.value = msg ?? 'Failed to initiate transfer.'
   } finally {
     initiatingTransfer.value = false
   }
@@ -1393,8 +1398,13 @@ const cancelTransfer = async () => {
     await $fetch(`/api/admin/sites/${siteId}/transfer`, { method: 'DELETE' })
     pendingTransfer.value = null
     transferSuccess.value = 'Transfer cancelled.'
-  } catch (err: ApiValue) {
-    transferError.value = err?.data?.error ?? 'Failed to cancel transfer.'
+  } catch (err: unknown) {
+    const msg = err != null && typeof err === 'object' && 'data' in err
+      && err.data != null && typeof err.data === 'object' && 'error' in err.data
+      && typeof (err.data as Record<string, unknown>).error === 'string'
+      ? (err.data as Record<string, string>).error
+      : null
+    transferError.value = msg ?? 'Failed to cancel transfer.'
   } finally {
     cancellingTransfer.value = false
   }
@@ -1413,8 +1423,13 @@ const copyTransferLink = async () => {
     await loadPendingTransfer()
     await navigator.clipboard.writeText(res.transfer_url)
     transferSuccess.value = 'New link copied to clipboard.'
-  } catch (err: ApiValue) {
-    transferError.value = err?.data?.error ?? 'Failed to copy link.'
+  } catch (err: unknown) {
+    const msg = err != null && typeof err === 'object' && 'data' in err
+      && err.data != null && typeof err.data === 'object' && 'error' in err.data
+      && typeof (err.data as Record<string, unknown>).error === 'string'
+      ? (err.data as Record<string, string>).error
+      : null
+    transferError.value = msg ?? 'Failed to copy link.'
   }
 }
 
