@@ -92,7 +92,7 @@ When an internal API returns errors, nulls, or malformed data, fix the API contr
 ## Local Testing
 
 - Dev login (bypasses OAuth): `http://localhost:3000/api/dev/login` — only works in `import.meta.dev`, creates session for first local D1 user
-- To test `/admin` locally, promote a user: `npx wrangler d1 execute REVIEWS_DB --local --command "UPDATE user SET role = 'admin' WHERE lower(email) = 'your@email.com';"`
+- To test `/admin` locally, promote a user: `yarn wrangler d1 execute REVIEWS_DB --local --command "UPDATE user SET role = 'admin' WHERE lower(email) = 'your@email.com';"`
 - Stripe webhooks: run `yarn stripe:listen` in a second terminal; use the CLI-output signing secret as `STRIPE_WEBHOOK_SECRET` in `.env` during local dev only
 
 ---

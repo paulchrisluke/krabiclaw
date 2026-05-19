@@ -22,12 +22,16 @@ export default defineEventHandler(async (event) => {
   if (!siteId) return jsonResponse({ error: 'siteId is required' }, { status: 400 })
   if (!message?.trim()) return jsonResponse({ error: 'message is required' }, { status: 400 })
 
-  const site = await db.prepare(`
-    SELECT s.id, s.organization_id FROM sites s
-    JOIN member om ON s.organization_id = om.organizationId
-    WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
-    LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+  const isPlatformAdmin = (session.user as { role?: string }).role === 'admin'
+  const site = isPlatformAdmin
+    ? await db.prepare(`SELECT id, organization_id FROM sites WHERE id = ? LIMIT 1`)
+        .bind(siteId).first<{ id: string; organization_id: string }>()
+    : await db.prepare(`
+        SELECT s.id, s.organization_id FROM sites s
+        JOIN member om ON s.organization_id = om.organizationId
+        WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner','admin')
+        LIMIT 1
+      `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 

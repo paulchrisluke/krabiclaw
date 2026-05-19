@@ -112,8 +112,8 @@
                 <p class="mt-1 text-sm text-muted">Sync page info and posts from your Facebook Page, and publish content to Facebook and Instagram.</p>
               </div>
               <UBadge
-                :label="facebookConnection?.connected ? (facebookConnection.facebook_page_name || 'Connected') : 'Not connected'"
-                :color="facebookConnection?.connected ? 'success' : 'neutral'"
+                :label="facebookConnectionError ? 'Error' : facebookConnection?.connected ? (facebookConnection.facebook_page_name || 'Connected') : 'Not connected'"
+                :color="facebookConnectionError ? 'error' : facebookConnection?.connected ? 'success' : 'neutral'"
                 variant="soft"
               />
             </div>
@@ -121,6 +121,10 @@
 
           <div v-if="loading" class="space-y-3">
             <USkeleton class="h-16 rounded-lg" />
+          </div>
+          <div v-else-if="facebookConnectionError" class="flex items-center gap-2 text-sm text-error">
+            <UIcon name="i-heroicons-exclamation-triangle" class="size-4 shrink-0" />
+            Failed to load Facebook connection status. Check your connection and refresh.
           </div>
           <div v-else-if="facebookConnection?.connected" class="space-y-4">
             <div class="flex items-center justify-between rounded-lg border border-default p-4">
@@ -183,6 +187,7 @@ const locations = ref<LocationRow[]>([])
 const googleConnections = ref<Record<string, GoogleConnection | null>>({})
 const whatsappPhone = ref<string | null>(null)
 const facebookConnection = ref<FacebookConnectionStatus | null>(null)
+const facebookConnectionError = ref(false)
 const loading = ref(true)
 const connectingLocationId = ref<string | null>(null)
 const connectingFacebook = ref(false)
@@ -205,7 +210,11 @@ async function loadIntegrations() {
       $fetch<{ settings: { public_url: string | null } }>(`/api/sites/${siteId}/settings`),
       $fetch<{ locations: LocationRow[] }>(`/api/sites/${siteId}/locations`),
       $fetch<{ notifications: { whatsapp_phone: string | null } }>(`/api/editor/sites/${siteId}/notifications`),
-      $fetch<FacebookConnectionStatus>(`/api/integrations/facebook-pages/connection?siteId=${siteId}`).catch(() => ({ connected: false } as FacebookConnectionStatus))
+      $fetch<FacebookConnectionStatus>(`/api/integrations/facebook-pages/connection?siteId=${siteId}`).catch((err) => {
+        console.error('[integrations] fb_connection_load_failed', err)
+        facebookConnectionError.value = true
+        return null
+      })
     ])
     sitePublicUrl.value = settingsRes.settings.public_url
     locations.value = locationsRes.locations ?? []
@@ -288,6 +297,8 @@ onMounted(() => {
     toast.add({ title: 'Facebook connection failed', description: 'Something went wrong. Please try again.', color: 'error' })
   } else if (fbStatus === 'denied') {
     toast.add({ title: 'Facebook access denied', description: 'You declined the Facebook authorization.', color: 'warning' })
+  } else if (fbStatus === 'no_pages') {
+    toast.add({ title: 'No Facebook Pages found', description: 'Your account has no Pages. Create a Facebook Page for your business and try again.', color: 'warning' })
   }
 })
 useSeoMeta({ title: 'Integrations | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

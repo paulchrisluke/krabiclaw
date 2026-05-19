@@ -166,7 +166,7 @@ const logoUrl = computed(() => {
 })
 const siteConfig = computed(() => (siteConfigData.value as ApiValue)?.config ?? {})
 const tagline = computed(() => (siteConfig.value as ApiValue)?.footer_tagline || 'Authentic dining, crafted with passion.')
-const sitePlan = computed(() => (site as { plan?: string | null } | null)?.plan ?? 'free')
+const sitePlan = computed(() => (site as { plan?: string | null } | null)?.plan)
 const showBrandingCredit = computed(() => !isPlatform && sitePlan.value === 'free')
 
 const primaryLocation = computed<PublicLocation | null>(() =>

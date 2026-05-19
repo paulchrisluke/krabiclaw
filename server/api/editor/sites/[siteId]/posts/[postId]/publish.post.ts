@@ -47,14 +47,27 @@ export default defineEventHandler(async (event) => {
       connection = await getFacebookPagesConnection(env, site.organization_id, siteId)
     } catch (err) {
       console.error('[publish] getFacebookPagesConnection failed:', err)
-      if (wantsFacebook) socialErrors.facebook = 'Facebook connection error'
-      if (wantsInstagram) socialErrors.instagram = 'Facebook connection error'
+      const connErr = 'Facebook connection error'
+      if (wantsFacebook) {
+        socialErrors.facebook = connErr
+        await db.prepare(`UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'facebook'`).bind(connErr, postId).run()
+      }
+      if (wantsInstagram) {
+        socialErrors.instagram = connErr
+        await db.prepare(`UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind(connErr, postId).run()
+      }
     }
 
     if (!socialErrors.facebook && !socialErrors.instagram) {
       if (!connection?.facebook_page_id || !connection.encrypted_page_token) {
-        if (wantsFacebook) socialErrors.facebook = 'No Facebook Page connected'
-        if (wantsInstagram) socialErrors.instagram = 'No Facebook connection (required for Instagram)'
+        if (wantsFacebook) {
+          socialErrors.facebook = 'No Facebook Page connected'
+          await db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'facebook'`).bind('No Facebook Page connected', postId).run()
+        }
+        if (wantsInstagram) {
+          socialErrors.instagram = 'No Facebook connection (required for Instagram)'
+          await db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind('No Facebook connection (required for Instagram)', postId).run()
+        }
       } else {
         const pageToken = connection.encrypted_page_token
         const pageId = connection.facebook_page_id

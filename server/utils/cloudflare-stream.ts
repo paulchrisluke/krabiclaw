@@ -35,6 +35,22 @@ function authHeader(env: CloudflareEnv): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
 }
 
+const STREAM_TIMEOUT_MS = 10_000
+
+function streamFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), STREAM_TIMEOUT_MS)
+  return fetch(url, { ...init, signal: controller.signal })
+    .then(res => { clearTimeout(timer); return res })
+    .catch(err => {
+      clearTimeout(timer)
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error(`Stream API request timed out after ${STREAM_TIMEOUT_MS}ms`)
+      }
+      throw err
+    })
+}
+
 /** Build the direct MP4 download URL for a Stream video (works in <video> tags). */
 export function buildStreamDownloadUrl(env: CloudflareEnv, uid: string): string {
   if (!env.CF_STREAM_CUSTOMER_SUBDOMAIN) throw new Error('CF_STREAM_CUSTOMER_SUBDOMAIN not configured')
@@ -65,7 +81,7 @@ export async function requestStreamUpload(
     meta?: Record<string, string>
   } = {}
 ): Promise<{ uid: string; uploadUrl: string }> {
-  const res = await fetch(`${apiBase(env)}/direct_upload`, {
+  const res = await streamFetch(`${apiBase(env)}/direct_upload`, {
     method: 'POST',
     headers: { ...authHeader(env), 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -91,12 +107,15 @@ export async function getStreamVideo(
   env: CloudflareEnv,
   uid: string
 ): Promise<{ uid: string; state: string; duration: number | null; width: number | null; height: number | null }> {
-  const res = await fetch(`${apiBase(env)}/${uid}`, { headers: authHeader(env) })
+  const res = await streamFetch(`${apiBase(env)}/${uid}`, { headers: authHeader(env) })
   if (!res.ok) throw new Error(`Stream video fetch error ${res.status}: ${await res.text()}`)
   const data = await res.json() as StreamVideoResponse
+  if (!data.success || !data.result) {
+    throw new Error(`Stream video API error: ${JSON.stringify(data)}`)
+  }
   return {
     uid,
-    state: data.result?.status?.state ?? 'unknown',
+    state: data.result.status?.state ?? 'unknown',
     duration: data.result?.duration ?? null,
     width: data.result?.input?.width ?? null,
     height: data.result?.input?.height ?? null,
@@ -105,7 +124,7 @@ export async function getStreamVideo(
 
 /** Delete a Stream video by UID. */
 export async function deleteStreamVideo(env: CloudflareEnv, uid: string): Promise<void> {
-  const res = await fetch(`${apiBase(env)}/${uid}`, {
+  const res = await streamFetch(`${apiBase(env)}/${uid}`, {
     method: 'DELETE',
     headers: authHeader(env),
   })

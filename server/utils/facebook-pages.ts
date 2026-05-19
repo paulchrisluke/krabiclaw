@@ -70,8 +70,22 @@ export interface FacebookPost {
   permalink_url?: string
 }
 
+const GRAPH_TIMEOUT_MS = 10_000
+
 async function graphFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), GRAPH_TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetch(url, { ...init, signal: controller.signal })
+  } catch (err) {
+    clearTimeout(timer)
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`Facebook API request timed out after ${GRAPH_TIMEOUT_MS}ms`)
+    }
+    throw err
+  }
+  clearTimeout(timer)
   if (!response.ok) {
     const text = await response.text()
     throw new Error(`Facebook API error: ${text.slice(0, 300)}`)
@@ -228,12 +242,23 @@ export const storeFacebookPagesConnection = async (
     : null
 
   await env.REVIEWS_DB.prepare(`
-    INSERT OR REPLACE INTO facebook_pages_connections
+    INSERT INTO facebook_pages_connections
     (id, organization_id, site_id, connected_by_user_id,
      facebook_user_id, facebook_page_id, facebook_page_name,
      encrypted_user_token, encrypted_page_token,
      user_token_expires_at, scopes, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(organization_id, site_id) DO UPDATE SET
+      connected_by_user_id = excluded.connected_by_user_id,
+      facebook_user_id = excluded.facebook_user_id,
+      facebook_page_id = excluded.facebook_page_id,
+      facebook_page_name = excluded.facebook_page_name,
+      encrypted_user_token = excluded.encrypted_user_token,
+      encrypted_page_token = excluded.encrypted_page_token,
+      user_token_expires_at = excluded.user_token_expires_at,
+      scopes = excluded.scopes,
+      status = excluded.status,
+      updated_at = excluded.updated_at
   `).bind(
     connectionId,
     connection.organization_id,

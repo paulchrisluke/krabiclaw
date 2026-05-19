@@ -85,6 +85,6 @@ export default defineEventHandler(async (event) => {
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error'
     console.error('confirm_video_upload_failed', { error: msg })
-    return jsonResponse({ error: 'Failed to confirm video upload', message: msg }, { status: 500 })
+    return jsonResponse({ error: 'Failed to confirm video upload' }, { status: 500 })
   }
 })

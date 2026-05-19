@@ -51,7 +51,10 @@ export default defineEventHandler(async (event) => {
     const userInfo = await getFacebookUserInfo(systemUserToken)
     const pages = await getFacebookPages(systemUserToken)
 
-    // Pick the first page as the default; user can switch via /pages + /sync
+    if (pages.length === 0) {
+      return new Response(null, { status: 302, headers: { Location: `/dashboard/sites/${siteId}?fb=no_pages` } })
+    }
+
     const firstPage = pages[0]
 
     await storeFacebookPagesConnection(env, {

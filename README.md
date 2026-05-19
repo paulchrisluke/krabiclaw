@@ -32,7 +32,7 @@ yarn install
 
 Copy `.env.example` to `.env` and fill in values. Required for local dev:
 
-```
+```env
 BETTER_AUTH_SECRET=        # openssl rand -base64 32
 BETTER_AUTH_URL=http://localhost:3000
 GOOGLE_CLIENT_ID=          # Google Cloud Console — OAuth client
