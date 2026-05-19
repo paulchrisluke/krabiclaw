@@ -114,21 +114,15 @@ import { usePageContent } from '~/composables/usePageContent'
 const { isPlatform, siteId } = useTenantSite()
 const { getField } = usePageContent('about')
 
-const storyBody = ref('')
-const journeyBody = ref('')
+const storyBody = ref(await sanitizeHtml(getField('story.body', '') || ''))
+const journeyBody = ref(await sanitizeHtml(getField('journey.body', '') || ''))
 
-// Sanitize on server too so content isn't blank on first render
-if (import.meta.server) {
-  storyBody.value = await sanitizeHtml(getField('story.body', '') || '')
-  journeyBody.value = await sanitizeHtml(getField('journey.body', '') || '')
-}
-
-if (import.meta.client) {
-  watchEffect(async () => {
-    storyBody.value = await sanitizeHtml(getField('story.body', '') || '')
-    journeyBody.value = await sanitizeHtml(getField('journey.body', '') || '')
-  })
-}
+watch(() => getField('story.body', ''), async (val) => {
+  storyBody.value = await sanitizeHtml(val || '')
+})
+watch(() => getField('journey.body', ''), async (val) => {
+  journeyBody.value = await sanitizeHtml(val || '')
+})
 
 const { data: aboutLocsData } = isPlatform || !siteId
   ? { data: ref({ locations: [] }) }
