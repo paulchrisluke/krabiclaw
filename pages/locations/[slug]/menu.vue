@@ -36,7 +36,7 @@
 
     <!-- Sticky category tab bar -->
     <div v-else>
-      <div ref="categoryNavRef" class="sticky top-[var(--saya-header-height,4rem)] z-40 border-b border-default bg-default">
+      <div ref="categoryNavRef" class="sticky top-0 z-40 border-b border-default bg-default">
         <div class="mx-auto flex h-12 max-w-7xl gap-8 overflow-x-auto px-4 sm:px-6 lg:px-8">
           <a
             v-for="cat in categories"
@@ -67,6 +67,7 @@
           :id="`cat-${cat.id}`"
           :key="cat.id"
           class="mb-24"
+          :style="{ scrollMarginTop: `${categoryNavHeight}px` }"
         >
           <!-- Category header -->
           <div class="mb-8 border-b border-default pb-6">
@@ -206,18 +207,31 @@ const categories = computed(() => {
 
 const activeCategory = ref('')
 const categoryNavRef = ref<HTMLElement | null>(null)
+const categoryNavHeight = ref(48)
 watch(categories, (cats: { id: string; name: string }[]) => {
   if (cats.length && !activeCategory.value) activeCategory.value = cats[0]?.id ?? ''
 }, { immediate: true })
+
+function syncCategoryNavHeight() {
+  categoryNavHeight.value = Math.ceil(categoryNavRef.value?.getBoundingClientRect().height ?? 48)
+}
+
+onMounted(() => {
+  syncCategoryNavHeight()
+  window.addEventListener('resize', syncCategoryNavHeight)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', syncCategoryNavHeight)
+})
 
 function scrollToCategory(id: string) {
   activeCategory.value = id
   const element = document.getElementById(`cat-${id}`)
   if (!element) return
 
-  const headerOffset = categoryNavRef.value?.getBoundingClientRect().bottom ?? 0
   const elementPosition = element.getBoundingClientRect().top + window.pageYOffset
-  window.scrollTo({ top: elementPosition - headerOffset, behavior: 'smooth' })
+  window.scrollTo({ top: elementPosition - categoryNavHeight.value, behavior: 'smooth' })
 }
 
 function itemSlug(item: ApiValue): string {

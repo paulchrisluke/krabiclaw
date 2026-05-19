@@ -13,9 +13,10 @@
           </template>
 
           <div class="flex items-center gap-4">
-            <UAvatar
+            <AppAvatar
               :src="sessionData?.user?.image ?? undefined"
-              :alt="sessionData?.user?.name || 'User avatar'"
+              :name="sessionData?.user?.name || sessionData?.user?.email"
+              alt="User avatar"
               size="lg"
             />
             <div class="min-w-0">

@@ -83,6 +83,11 @@ const router = useRouter()
 const loading = ref(false)
 const error = ref(null)
 
+onMounted(async () => {
+  const session = await authClient.getSession()
+  if (session?.data?.user) router.replace('/dashboard')
+})
+
 const handleGoogleSignIn = async () => {
   loading.value = true
   error.value = null
@@ -115,7 +120,7 @@ const handleSendOtp = async () => {
   try {
     await authClient.phoneNumber.sendOtp({ phoneNumber: phone.value.trim() })
     otpStep.value = 'code'
-  } catch {
+  } catch (err) {
     error.value = err?.message ?? 'Failed to send code. Check your number and try again.'
   } finally {
     loading.value = false
@@ -127,13 +132,13 @@ const handleVerifyOtp = async () => {
   loading.value = true
   error.value = null
   try {
-    await authClient.phoneNumber.signIn({
+    await authClient.phoneNumber.verify({
       phoneNumber: phone.value.trim(),
       code: code.value.trim(),
       callbackURL: '/dashboard',
     })
     router.push('/dashboard')
-  } catch {
+  } catch (err) {
     error.value = err?.message ?? 'Invalid or expired code. Please try again.'
     code.value = ''
   } finally {

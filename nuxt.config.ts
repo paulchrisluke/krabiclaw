@@ -107,7 +107,8 @@ export default defineNuxtConfig({
   // Robots.txt configuration
   robots: {
     allow: ['/'],
-    disallow: ['/dashboard', '/api'],
+    disallow: ['/dashboard', '/api/**'],
+    sitemap: '/sitemap.xml',
   },
 
   // Sitemap configuration
@@ -165,8 +166,8 @@ export default defineNuxtConfig({
       tasks: true
     },
     scheduledTasks: {
-      '*/10 * * * *': ['~/server/tasks/domain-reconciliation'],
-      '0 3 * * *': ['~/server/tasks/domain-reconciliation-daily']
+      '*/10 * * * *': ['domain-reconciliation'],
+      '0 3 * * *': ['domain-reconciliation-daily']
     },
     cloudflare: {
       deployConfig: true

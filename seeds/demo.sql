@@ -171,13 +171,6 @@ VALUES
    'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&q=70',
    'image/jpeg', 'food-5.jpg', 'House chips and hoagie', 'food', 'active'),
 
-  -- ─ Site-level: about/story hero (no location_id — used in site_content) ─
-  ('media-demo-story', 'org-demo', 'site-demo', NULL,
-   'image', 'external_url', 'external',
-   'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1400&q=85',
-   'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=700&q=75',
-   'image/jpeg', 'story-hero.jpg', 'The original sandwich counter — where it all started', 'interior', 'active'),
-
   -- ─ Post images ─
   ('media-demo-post1', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
@@ -197,7 +190,7 @@ VALUES
 
 -- Backfill category on any rows that were inserted without it
 UPDATE media_assets SET category = 'interior'
-  WHERE id IN ('media-demo-hero','media-demo-int-1','media-demo-int-2','media-demo-int-3','media-demo-post1','media-demo-post2','media-demo-story')
+  WHERE id IN ('media-demo-hero','media-demo-int-1','media-demo-int-2','media-demo-int-3','media-demo-post1','media-demo-post2')
     AND category IS NULL;
 UPDATE media_assets SET category = 'exterior'
   WHERE id IN ('media-demo-ext-1','media-demo-ext-2','media-demo-post3')
@@ -432,13 +425,25 @@ VALUES
    'text', 'manual'),
 
   -- About: story/origin section with hero image
-  ('sc-demo-story-intro', 'org-demo', 'site-demo', NULL,
-   'about', 'story.intro',
-   'One location. One kitchen. No shortcuts.',
+  ('sc-demo-story-image', 'org-demo', 'site-demo', NULL,
+   'about', 'story.image',
+   'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1400&q=85',
+   NULL, NULL, NULL,
+   'media', 'manual'),
+
+  ('sc-demo-story-title', 'org-demo', 'site-demo', NULL,
+   'about', 'story.title',
    'One location. One kitchen.',
-   'No shortcuts.',
-   'media-demo-story',
+   NULL, NULL, NULL,
    'text', 'manual'),
+
+  ('sc-demo-story-body', 'org-demo', 'site-demo', NULL,
+   'about', 'story.body',
+   'Hoff''s Hogies started as a folding table in a garage off Main Street. Hoff baked rolls before sunrise, stacked cold cuts by hand, and sold out before lunch to neighbours who kept coming back with friends.
+
+The shop is still built around that first promise: fresh bread, honest portions, and no shortcuts hiding behind the counter.',
+   NULL, NULL, NULL,
+   'richtext', 'manual'),
 
   -- About: Hoff's journey
   ('sc-demo-journey', 'org-demo', 'site-demo', NULL,
@@ -459,6 +464,15 @@ If it is on the board, it is good. If it is not on the board, we do not make it.
    'textarea', 'manual');
 
 -- Backfill hero fields on re-runs
+DELETE FROM site_content
+WHERE site_id = 'site-demo'
+  AND page = 'about'
+  AND field = 'story.intro';
+
+DELETE FROM media_assets
+WHERE id = 'media-demo-story'
+  AND site_id = 'site-demo';
+
 UPDATE site_content SET
   hero_title         = 'Come hungry.',
   hero_subtitle      = 'Fresh-baked rolls. House-made spreads. One location, zero shortcuts.',
@@ -466,10 +480,21 @@ UPDATE site_content SET
   WHERE id = 'sc-demo-home-hero';
 
 UPDATE site_content SET
-  hero_title         = 'One location. One kitchen.',
-  hero_subtitle      = 'No shortcuts.',
-  hero_image_asset_id = 'media-demo-story'
-  WHERE id = 'sc-demo-story-intro';
+  content = 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1400&q=85',
+  type = 'media'
+  WHERE id = 'sc-demo-story-image';
+
+UPDATE site_content SET
+  content = 'One location. One kitchen.',
+  type = 'text'
+  WHERE id = 'sc-demo-story-title';
+
+UPDATE site_content SET
+  content = 'Hoff''s Hogies started as a folding table in a garage off Main Street. Hoff baked rolls before sunrise, stacked cold cuts by hand, and sold out before lunch to neighbours who kept coming back with friends.
+
+The shop is still built around that first promise: fresh bread, honest portions, and no shortcuts hiding behind the counter.',
+  type = 'richtext'
+  WHERE id = 'sc-demo-story-body';
 
 -- ── AI credits (realistic balance for a demo account) ─────────────────────────
 INSERT OR IGNORE INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at)

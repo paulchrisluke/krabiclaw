@@ -1,7 +1,53 @@
 <template>
   <div>
+    <Teleport to="body">
+      <div
+        v-if="isDemoPreviewOpen"
+        class="fixed inset-0 z-[100] bg-zinc-950"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Saya theme demo preview"
+      >
+        <div class="fixed inset-x-0 top-0 z-[101] border-b border-white/10 bg-zinc-950/95 backdrop-blur-md">
+          <div class="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
+            <button
+              type="button"
+              class="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/20 text-white transition hover:bg-white/10"
+              aria-label="Close demo preview"
+              @click="closeDemoPreview"
+            >
+              <UIcon name="i-heroicons-x-mark" class="size-5" />
+            </button>
+            <div class="flex min-w-0 items-center gap-3">
+              <SayaLogoMark />
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-white">Saya</p>
+                <p class="truncate text-xs text-white/50">by KrabiClaw · Included free</p>
+              </div>
+            </div>
+            <div class="ml-auto">
+              <NuxtLink
+                to="/signup"
+                class="inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-white px-4 text-[13px] font-semibold text-zinc-950 no-underline transition hover:bg-zinc-100 sm:px-5 sm:text-sm"
+              >
+                <span class="sm:hidden">Start free</span>
+                <span class="hidden sm:inline">Get started free</span>
+                <UIcon name="i-heroicons-arrow-right" class="size-4" />
+              </NuxtLink>
+            </div>
+          </div>
+        </div>
+        <iframe
+          :src="demoUrl"
+          class="absolute inset-x-0 top-[113px] h-[calc(100dvh-113px)] w-full border-0 sm:top-[65px] sm:h-[calc(100dvh-65px)]"
+          title="Saya theme live demo"
+          sandbox="allow-scripts allow-same-origin"
+        />
+      </div>
+    </Teleport>
+
     <!-- ── Theme preview hero ──────────────────────────────────────────── -->
-    <section class="relative bg-zinc-950 overflow-hidden" style="height: 520px">
+    <section class="relative min-h-[560px] overflow-hidden bg-zinc-950 sm:min-h-[520px]">
       <!-- Iframe preview of the live demo site -->
       <div class="absolute inset-0 pointer-events-none overflow-hidden">
         <iframe
@@ -14,34 +60,38 @@
         />
         <div class="absolute inset-0 bg-linear-to-b from-transparent via-transparent to-zinc-950" />
       </div>
+      <button
+        type="button"
+        class="absolute inset-x-0 top-0 bottom-[137px] z-10 cursor-pointer sm:bottom-[79px]"
+        aria-label="Open Saya demo preview"
+        @click="openDemoPreview"
+      />
 
       <!-- Action bar overlaid at bottom -->
-      <div class="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-zinc-950/80 backdrop-blur-sm">
-        <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div class="flex items-center gap-4">
-            <div class="flex size-9 items-center justify-center rounded-lg bg-white text-zinc-950">
-              <span class="text-sm font-bold">S</span>
-            </div>
-            <div>
+      <div class="absolute inset-x-0 bottom-0 z-20 border-t border-white/10 bg-zinc-950/85 backdrop-blur-sm">
+        <div class="mx-auto grid max-w-6xl gap-4 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6">
+          <div class="flex min-w-0 items-center gap-3 sm:gap-4">
+            <SayaLogoMark />
+            <div class="min-w-0">
               <p class="text-sm font-semibold text-white">Saya</p>
-              <p class="text-xs text-white/50">by KrabiClaw · Included free</p>
+              <p class="truncate text-xs text-white/50">by KrabiClaw · Included free</p>
             </div>
           </div>
-          <div class="flex items-center gap-3">
-            <a
-              :href="demoUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-2 text-sm font-medium text-white no-underline transition hover:bg-white/10"
+          <div class="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3">
+            <button
+              type="button"
+              class="inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-white/20 px-4 text-[13px] font-medium text-white no-underline transition hover:bg-white/10 sm:px-5 sm:text-sm"
+              @click="openDemoPreview"
             >
               <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4" />
               View demo
-            </a>
+            </button>
             <NuxtLink
               to="/signup"
-              class="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-950 no-underline transition hover:bg-zinc-100"
+              class="inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-white px-4 text-[13px] font-semibold text-zinc-950 no-underline transition hover:bg-zinc-100 sm:px-5 sm:text-sm"
             >
-              Get started free
+              <span class="sm:hidden">Start free</span>
+              <span class="hidden sm:inline">Get started free</span>
               <UIcon name="i-heroicons-arrow-right" class="size-4" />
             </NuxtLink>
           </div>
@@ -93,9 +143,10 @@
         <!-- Right: sticky sidebar -->
         <div class="lg:sticky lg:top-8 lg:self-start">
           <div class="rounded-2xl border border-default bg-elevated p-6">
-            <div class="flex size-12 items-center justify-center rounded-xl bg-inverted text-inverted mb-4">
-              <span class="text-lg font-bold">S</span>
-            </div>
+            <SayaLogoMark
+              container-class="mb-4 size-12 rounded-lg text-inverted"
+              fallback-class="flex h-full w-full items-center justify-center rounded-xl bg-inverted text-lg font-bold"
+            />
             <h3 class="text-xl font-bold text-default">Saya</h3>
             <p class="mt-1 text-sm text-muted">Elegant &amp; Minimal Restaurant Theme</p>
 
@@ -112,15 +163,14 @@
                 Get started free
                 <UIcon name="i-heroicons-arrow-right" class="size-4" />
               </NuxtLink>
-              <a
-                :href="demoUrl"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
                 class="flex w-full items-center justify-center gap-2 rounded-full border border-default px-5 py-3 text-sm font-medium text-default no-underline transition hover:bg-elevated"
+                @click="openDemoPreview"
               >
                 <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4" />
                 View live demo
-              </a>
+              </button>
             </div>
 
             <div class="mt-6 border-t border-default pt-6 space-y-2">
@@ -141,6 +191,7 @@ definePageMeta({ layout: 'platform' })
 
 const config = useRuntimeConfig()
 const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
+const isDemoPreviewOpen = ref(false)
 
 // The live demo site — matches seeds/demo.sql subdomain
 const demoUrl = computed(() =>
@@ -148,6 +199,32 @@ const demoUrl = computed(() =>
     ? 'http://demo.localhost:3000'
     : `https://demo.${platformHostname}`
 )
+
+function openDemoPreview() {
+  isDemoPreviewOpen.value = true
+}
+
+function closeDemoPreview() {
+  isDemoPreviewOpen.value = false
+}
+
+function handlePreviewKeydown(event) {
+  if (event.key === 'Escape') closeDemoPreview()
+}
+
+watch(isDemoPreviewOpen, (isOpen) => {
+  if (!import.meta.client) return
+  document.documentElement.classList.toggle('overflow-hidden', isOpen)
+})
+
+onMounted(() => {
+  window.addEventListener('keydown', handlePreviewKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handlePreviewKeydown)
+  if (import.meta.client) document.documentElement.classList.remove('overflow-hidden')
+})
 
 const featureScreenshots = [
   {

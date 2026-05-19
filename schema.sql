@@ -283,6 +283,8 @@ CREATE TABLE IF NOT EXISTS business_locations (
   attributes TEXT,
   email TEXT,
   facebook_url TEXT,
+  facebook_page_id TEXT,
+  facebook_connection_id TEXT REFERENCES facebook_pages_connections(id) ON DELETE SET NULL,
   instagram_url TEXT,
   tiktok_url TEXT,
   grab_url TEXT,
@@ -314,6 +316,27 @@ CREATE TABLE IF NOT EXISTS google_business_events (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS facebook_pages_connections (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  connected_by_user_id TEXT,
+  facebook_user_id TEXT NOT NULL,
+  facebook_page_id TEXT,
+  facebook_page_name TEXT,
+  encrypted_user_token TEXT NOT NULL,
+  encrypted_page_token TEXT,
+  user_token_expires_at TEXT,
+  scopes TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled', 'error')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (connected_by_user_id) REFERENCES user(id) ON DELETE SET NULL,
+  UNIQUE(organization_id, site_id)
 );
 
 --------------------------------------------------------------------------------

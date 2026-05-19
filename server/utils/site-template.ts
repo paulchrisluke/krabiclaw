@@ -16,6 +16,7 @@ export async function seedNewSite(
 
   const locationId = uid('loc')
   const heroMediaId = uid('media')
+  const storyMediaId = uid('media')
   const menuId = uid('menu')
 
   const statements: D1PreparedStatement[] = []
@@ -47,6 +48,17 @@ export async function seedNewSite(
     SET hero_image_asset_id = ?
     WHERE id = ?
   `).bind(heroMediaId, locationId))
+
+  // ── Story image ───────────────────────────────────────────────────────────
+  statements.push(db.prepare(`
+    INSERT OR IGNORE INTO media_assets
+      (id, organization_id, site_id, location_id, kind, provider, source,
+       public_url, thumbnail_url, mime_type, file_name, alt_text, status)
+    VALUES (?, ?, ?, ?, 'image', 'external_url', 'template',
+      'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=1400&q=85',
+      'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=600&q=70',
+      'image/jpeg', 'story.jpg', ?, 'active')
+  `).bind(storyMediaId, organizationId, siteId, locationId, `${restaurantName} story image`))
 
   // ── Sample menu ───────────────────────────────────────────────────────────
   statements.push(db.prepare(`
@@ -124,16 +136,23 @@ export async function seedNewSite(
   // ── Homepage CTA + about page content ────────────────────────────────────
   const siteContent = [
     ['home', 'cta.title', 'Come hungry.'],
-    ['about', 'story.intro', `Welcome to ${restaurantName}.`],
-    ['about', 'journey.body', `${restaurantName} is a neighbourhood restaurant focused on doing a small number of things exceptionally well.\n\nUpdate this with your real story — where you started, what drives you, and what guests can expect when they walk through the door.`],
+    ['about', 'hero.title', 'About Us'],
+    ['about', 'hero.subtitle', `${restaurantName} is built around generous food, warm service, and a room that feels easy to return to.`],
+    ['about', 'story.image', storyMediaId, 'media'],
+    ['about', 'story.title', 'Our Story'],
+    ['about', 'story.body', `${restaurantName} started with a simple idea: make the food we love, serve it with care, and keep the welcome honest.\n\nToday, that same idea guides every part of the restaurant, from the first prep list of the morning to the last table of the night.`],
+    ['about', 'journey.title', 'Our Journey'],
+    ['about', 'journey.body', `${restaurantName} is a neighbourhood restaurant focused on doing a small number of things exceptionally well.\n\nAdd the milestones that shaped your restaurant: where you started, what changed along the way, and what guests can expect when they walk through the door.`],
+    ['about', 'cta.title', 'Come dine with us'],
   ]
 
-  for (const [page, field, content] of siteContent) {
+  for (const [page, field, content, type] of siteContent) {
+    const contentType = type ?? 'text'
     statements.push(db.prepare(`
       INSERT OR IGNORE INTO site_content
         (id, organization_id, site_id, location_id, page, field, content, type, source)
-      VALUES (?, ?, ?, NULL, ?, ?, ?, 'text', 'template')
-    `).bind(uid('sc'), organizationId, siteId, page, field, content))
+      VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 'template')
+    `).bind(uid('sc'), organizationId, siteId, page, field, content, contentType))
   }
 
   await db.batch(statements)

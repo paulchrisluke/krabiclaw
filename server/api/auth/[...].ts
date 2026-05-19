@@ -1,7 +1,38 @@
 
 import { createAuth } from '~/server/utils/auth'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { normalizePhone } from '~/server/utils/whatsapp'
 import type { CloudflareEnv } from '~/server/utils/auth'
+import type { H3Event } from 'h3'
+
+async function normalizedAuthRequest(event: H3Event): Promise<Request> {
+  const request = toWebRequest(event)
+  if (request.method !== 'POST') return request
+
+  const pathname = new URL(request.url).pathname
+  const shouldNormalizePhone = [
+    '/api/auth/phone-number/send-otp',
+    '/api/auth/phone-number/verify',
+    '/api/auth/sign-in/phone-number',
+  ].includes(pathname)
+  if (!shouldNormalizePhone) return request
+
+  const body = await request.clone().json().catch(() => null) as { phoneNumber?: unknown } | null
+  if (!body || typeof body.phoneNumber !== 'string') return request
+
+  const headers = new Headers(request.headers)
+  headers.set('content-type', 'application/json')
+  headers.delete('content-length')
+
+  return new Request(request.url, {
+    method: request.method,
+    headers,
+    body: JSON.stringify({
+      ...body,
+      phoneNumber: normalizePhone(body.phoneNumber),
+    }),
+  })
+}
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event) as CloudflareEnv
@@ -10,7 +41,7 @@ export default defineEventHandler(async (event) => {
   const auth = createAuth(env)
   
   try {
-    const request = toWebRequest(event)
+    const request = await normalizedAuthRequest(event)
     const response = await auth.handler(request)
     
     // Check for error responses

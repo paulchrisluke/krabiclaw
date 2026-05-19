@@ -120,16 +120,11 @@
           >
             <!-- Reviewer header -->
             <div class="mb-5 flex items-start gap-4">
-              <UAvatar
+              <AppAvatar
                 :src="review.reviewer_photo_url"
-                :alt="review.author_name"
-                :ui="{ fallback: 'bg-primary text-white text-sm font-semibold' }"
+                :name="review.author_name"
                 size="md"
-              >
-                <template v-if="!review.reviewer_photo_url" #fallback>
-                  {{ initials(review.author_name) }}
-                </template>
-              </UAvatar>
+              />
               <div class="flex-1 min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="font-medium text-default">{{ review.author_name }}</span>
@@ -278,10 +273,6 @@ function handleReviewImageError(reviewId: string | number, index: string | numbe
   failedPhotoIndices.value[`${String(reviewId)}-${String(index)}`] = true
 }
 
-function initials(name: ApiValue) {
-  if (typeof name !== 'string' || !name.trim()) return ''
-  return name.trim().split(/\s+/).filter(Boolean).map(s => s[0]).slice(0, 2).join('').toUpperCase()
-}
 function formatDate(ts: string | null) {
   if (!ts) return ''
   return new Date(ts).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })

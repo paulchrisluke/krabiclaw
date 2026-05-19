@@ -123,8 +123,14 @@
         <div class="flex gap-6">
           <NuxtLink to="/privacy" class="transition hover:text-inverted/70">Privacy</NuxtLink>
           <NuxtLink to="/terms" class="transition hover:text-inverted/70">Terms</NuxtLink>
-          <a href="https://krabiclaw.com" target="_blank" rel="noopener noreferrer" class="transition hover:text-inverted/70">
-            Powered by krabiclaw.com
+          <a
+            v-if="showBrandingCredit"
+            href="https://krabiclaw.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="transition hover:text-inverted/70"
+          >
+            Powered by krabiclaw.com, restaurant sites that run themselves
           </a>
         </div>
       </div>
@@ -160,6 +166,8 @@ const logoUrl = computed(() => {
 })
 const siteConfig = computed(() => (siteConfigData.value as ApiValue)?.config ?? {})
 const tagline = computed(() => (siteConfig.value as ApiValue)?.footer_tagline || 'Authentic dining, crafted with passion.')
+const sitePlan = computed(() => (site as { plan?: string | null } | null)?.plan ?? 'free')
+const showBrandingCredit = computed(() => !isPlatform && sitePlan.value === 'free')
 
 const primaryLocation = computed<PublicLocation | null>(() =>
   rawLocations.value.find((l: PublicLocation) => l.is_primary) ?? rawLocations.value[0] ?? null

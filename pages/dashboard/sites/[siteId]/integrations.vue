@@ -48,6 +48,46 @@
           <template #header>
             <div class="flex items-center justify-between gap-3">
               <div>
+                <h2 class="font-semibold text-highlighted">Google Places</h2>
+                <p class="mt-1 text-sm text-muted">Sync hours, address, rating, and up to 5 reviews from Google Maps. No API approval needed — requires a Place ID on each location.</p>
+              </div>
+              <UBadge :label="locationsWithPlaceId.length ? `${locationsWithPlaceId.length} ready` : 'No Place IDs set'" :color="locationsWithPlaceId.length ? 'success' : 'neutral'" variant="soft" />
+            </div>
+          </template>
+
+          <div v-if="loading" class="space-y-3">
+            <USkeleton v-for="i in 3" :key="i" class="h-16 rounded-lg" />
+          </div>
+          <div v-else class="divide-y divide-default rounded-lg border border-default">
+            <div v-for="location in locations" :key="location.id" class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p class="font-medium text-highlighted">{{ location.title }}</p>
+                <p class="text-sm text-muted">
+                  {{ location.google_place_id ? `Place ID: ${location.google_place_id}` : 'No Place ID — add one in Location Settings' }}
+                </p>
+                <p v-if="placeSyncResults[location.id]" class="mt-1 text-xs text-success">
+                  {{ placeSyncResults[location.id] }}
+                </p>
+              </div>
+              <UButton
+                size="sm"
+                color="neutral"
+                variant="soft"
+                icon="i-simple-icons-googlemaps"
+                :disabled="!location.google_place_id"
+                :loading="syncingPlaceLocationId === location.id"
+                @click="syncGooglePlace(location)"
+              >
+                Sync now
+              </UButton>
+            </div>
+          </div>
+        </UCard>
+
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <div>
                 <h2 class="font-semibold text-highlighted">WhatsApp Notifications</h2>
                 <p class="mt-1 text-sm text-muted">Receive alerts for reviews, reservations, contact messages, and ChowBot actions.</p>
               </div>
@@ -66,10 +106,46 @@
 
         <UCard>
           <template #header>
-            <h2 class="font-semibold text-highlighted">Social Publishing</h2>
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h2 class="font-semibold text-highlighted">Facebook & Instagram</h2>
+                <p class="mt-1 text-sm text-muted">Sync page info and posts from your Facebook Page, and publish content to Facebook and Instagram.</p>
+              </div>
+              <UBadge
+                :label="facebookConnection?.connected ? (facebookConnection.facebook_page_name || 'Connected') : 'Not connected'"
+                :color="facebookConnection?.connected ? 'success' : 'neutral'"
+                variant="soft"
+              />
+            </div>
           </template>
-          <p class="text-sm text-muted">Instagram and Facebook channel adapters are represented by post channel jobs. OAuth and publish adapters can plug in here when those integrations are ready.</p>
-          <UButton class="mt-4" :to="paths.posts" icon="i-heroicons-newspaper" color="neutral" variant="soft">Open posts</UButton>
+
+          <div v-if="loading" class="space-y-3">
+            <USkeleton class="h-16 rounded-lg" />
+          </div>
+          <div v-else-if="facebookConnection?.connected" class="space-y-4">
+            <div class="flex items-center justify-between rounded-lg border border-default p-4">
+              <div>
+                <p class="font-medium text-highlighted">{{ facebookConnection.facebook_page_name }}</p>
+                <p class="text-sm text-muted">Page ID: {{ facebookConnection.facebook_page_id }}</p>
+              </div>
+              <div class="flex gap-2">
+                <UButton size="sm" color="neutral" variant="soft" icon="i-simple-icons-facebook" :loading="connectingFacebook" @click="startFacebookConnect">
+                  Reconnect
+                </UButton>
+              </div>
+            </div>
+            <p class="text-xs text-muted">
+              Instagram publishing is available when your Facebook Page has a linked Instagram Business account.
+            </p>
+          </div>
+          <div v-else class="flex flex-col gap-3">
+            <p class="text-sm text-muted">Connect your Facebook Page to sync business info and publish posts directly from the dashboard.</p>
+            <div>
+              <UButton icon="i-simple-icons-facebook" :loading="connectingFacebook" @click="startFacebookConnect">
+                Connect Facebook
+              </UButton>
+            </div>
+          </div>
         </UCard>
       </div>
     </UPageBody>
@@ -82,12 +158,21 @@ definePageMeta({ layout: 'dashboard' })
 interface LocationRow {
   id: string
   title: string
+  google_place_id?: string | null
 }
 
 interface GoogleConnection {
   id: string
   provider_account_email: string
   status: string
+}
+
+interface FacebookConnectionStatus {
+  connected: boolean
+  facebook_user_id?: string
+  facebook_page_id?: string
+  facebook_page_name?: string
+  status?: string
 }
 
 const route = useRoute()
@@ -97,8 +182,14 @@ const sitePublicUrl = ref<string | null>(null)
 const locations = ref<LocationRow[]>([])
 const googleConnections = ref<Record<string, GoogleConnection | null>>({})
 const whatsappPhone = ref<string | null>(null)
+const facebookConnection = ref<FacebookConnectionStatus | null>(null)
 const loading = ref(true)
 const connectingLocationId = ref<string | null>(null)
+const connectingFacebook = ref(false)
+const syncingPlaceLocationId = ref<string | null>(null)
+const placeSyncResults = ref<Record<string, string>>({})
+
+const locationsWithPlaceId = computed(() => locations.value.filter(l => l.google_place_id))
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 
 const headerLinks = computed(() => buildHeaderLinks([
@@ -110,14 +201,16 @@ const connectedGoogleCount = computed(() => Object.values(googleConnections.valu
 async function loadIntegrations() {
   loading.value = true
   try {
-    const [settingsRes, locationsRes, notificationsRes] = await Promise.all([
+    const [settingsRes, locationsRes, notificationsRes, fbRes] = await Promise.all([
       $fetch<{ settings: { public_url: string | null } }>(`/api/sites/${siteId}/settings`),
       $fetch<{ locations: LocationRow[] }>(`/api/sites/${siteId}/locations`),
-      $fetch<{ notifications: { whatsapp_phone: string | null } }>(`/api/editor/sites/${siteId}/notifications`)
+      $fetch<{ notifications: { whatsapp_phone: string | null } }>(`/api/editor/sites/${siteId}/notifications`),
+      $fetch<FacebookConnectionStatus>(`/api/integrations/facebook-pages/connection?siteId=${siteId}`).catch(() => ({ connected: false } as FacebookConnectionStatus))
     ])
     sitePublicUrl.value = settingsRes.settings.public_url
     locations.value = locationsRes.locations ?? []
     whatsappPhone.value = notificationsRes.notifications.whatsapp_phone
+    facebookConnection.value = fbRes
 
     const results = await Promise.allSettled(locations.value.map(async (location) => {
       const res = await $fetch<{ connection: GoogleConnection | null }>(`/api/sites/${siteId}/locations/${location.id}/integrations/google-business`)
@@ -152,6 +245,50 @@ async function startGoogleConnect(location: LocationRow) {
   }
 }
 
-onMounted(loadIntegrations)
+async function syncGooglePlace(location: LocationRow) {
+  syncingPlaceLocationId.value = location.id
+  try {
+    const res = await $fetch<{ success: boolean; reviewsUpserted: number; place: { rating: number | null; ratingCount: number | null } }>(
+      '/api/integrations/google-places/sync',
+      { method: 'POST', body: { siteId, locationId: location.id } }
+    )
+    const parts = [`Synced hours, address, rating`]
+    if (res.reviewsUpserted > 0) parts.push(`${res.reviewsUpserted} new review${res.reviewsUpserted > 1 ? 's' : ''}`)
+    if (res.place.rating) parts.push(`${res.place.rating}★ (${res.place.ratingCount?.toLocaleString()} reviews)`)
+    placeSyncResults.value[location.id] = parts.join(' · ')
+    toast.add({ title: 'Synced', description: parts.join(' · '), color: 'success' })
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Sync failed', color: 'error' })
+  } finally {
+    syncingPlaceLocationId.value = null
+  }
+}
+
+async function startFacebookConnect() {
+  connectingFacebook.value = true
+  try {
+    const res = await $fetch<{ success: boolean; authUrl?: string; error?: string }>(
+      '/api/integrations/facebook-pages/auth',
+      { method: 'POST', body: { siteId } }
+    )
+    if (!res.authUrl) throw new Error(res.error || 'No authorization URL returned')
+    window.location.href = res.authUrl
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to start Facebook connection', color: 'error' })
+    connectingFacebook.value = false
+  }
+}
+
+onMounted(() => {
+  loadIntegrations()
+  const fbStatus = route.query.fb as string | undefined
+  if (fbStatus === 'connected') {
+    toast.add({ title: 'Facebook connected', description: 'Your Facebook Page has been linked successfully.', color: 'success' })
+  } else if (fbStatus === 'error') {
+    toast.add({ title: 'Facebook connection failed', description: 'Something went wrong. Please try again.', color: 'error' })
+  } else if (fbStatus === 'denied') {
+    toast.add({ title: 'Facebook access denied', description: 'You declined the Facebook authorization.', color: 'warning' })
+  }
+})
 useSeoMeta({ title: 'Integrations | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

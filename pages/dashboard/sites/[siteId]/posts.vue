@@ -175,8 +175,17 @@ async function loadSitePublicUrl() {
   }
 }
 
+async function loadFacebookConnection() {
+  try {
+    const res = await $fetch<{ connected: boolean }>(`/api/integrations/facebook-pages/connection?siteId=${siteId}`)
+    facebookConnected.value = res.connected
+  } catch {
+    facebookConnected.value = false
+  }
+}
+
 onMounted(async () => {
-  await Promise.all([loadPosts(), loadSitePublicUrl()])
+  await Promise.all([loadPosts(), loadSitePublicUrl(), loadFacebookConnection()])
 })
 
 // Selection / compose
@@ -185,12 +194,14 @@ const composing = ref(false)
 const editForm = reactive({ title: '', body: '', image_asset_id: '' as string | null, imagePreviewUrl: '' as string | null, imageKind: 'image' as string | null })
 const selectedChannels = ref<string[]>(['site'])
 
-const channelOptions = [
+const facebookConnected = ref(false)
+
+const channelOptions = computed(() => [
   { value: 'site', label: 'This website', disabled: false },
   { value: 'gmb', label: 'Google Business Profile', disabled: true },
-  { value: 'instagram', label: 'Instagram', disabled: true },
-  { value: 'facebook', label: 'Facebook', disabled: true },
-]
+  { value: 'facebook', label: 'Facebook Page', disabled: !facebookConnected.value, hint: facebookConnected.value ? undefined : 'Connect in Integrations' },
+  { value: 'instagram', label: 'Instagram', disabled: !facebookConnected.value, hint: facebookConnected.value ? 'Requires image' : 'Connect in Integrations' },
+])
 
 const openCompose = () => {
   selectedPost.value = null
@@ -269,7 +280,13 @@ const handlePublish = async () => {
     })
     selectedPost.value = res.post
     composing.value = false
-    toast.add({ description: 'Published!', color: 'success' })
+    if (res.socialErrors && Object.keys(res.socialErrors).length > 0) {
+      const errLines = Object.entries(res.socialErrors as Record<string, string>)
+        .map(([ch, msg]) => `${ch}: ${msg}`).join(' · ')
+      toast.add({ title: 'Published to site', description: `Social channels had issues — ${errLines}`, color: 'warning' })
+    } else {
+      toast.add({ description: 'Published!', color: 'success' })
+    }
     await loadPosts()
   } catch { toast.add({ description: 'Failed to publish', color: 'error' }) }
   finally { publishing.value = false }

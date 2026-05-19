@@ -10,6 +10,8 @@ import { createMediaAsset } from '~/server/utils/media-asset-manager'
 
 const MODEL = '@cf/black-forest-labs/flux-1-schnell'
 const IMAGE_GENERATION_TIMEOUT_MS = 20_000
+const PLATFORM_MEDIA_ORG_ID = 'platform'
+const PLATFORM_MEDIA_SITE_ID = 'platform'
 
 interface AiImageResult {
   image?: string
@@ -17,6 +19,20 @@ interface AiImageResult {
 
 interface TimedError extends Error {
   code?: string
+}
+
+async function ensurePlatformMediaScope(db: D1Database): Promise<void> {
+  const now = new Date().toISOString()
+  await db.batch([
+    db.prepare(`
+      INSERT OR IGNORE INTO organization (id, name, slug, createdAt)
+      VALUES (?, ?, ?, ?)
+    `).bind(PLATFORM_MEDIA_ORG_ID, 'KrabiClaw Platform', PLATFORM_MEDIA_ORG_ID, now),
+    db.prepare(`
+      INSERT OR IGNORE INTO sites (id, organization_id, theme_id, theme, slug, status, onboarding_status, created_at, updated_at)
+      VALUES (?, ?, 'saya-theme-v1', 'saya', ?, 'active', 'active', ?, ?)
+    `).bind(PLATFORM_MEDIA_SITE_ID, PLATFORM_MEDIA_ORG_ID, PLATFORM_MEDIA_SITE_ID, now, now),
+  ])
 }
 
 export default defineEventHandler(async (event) => {
@@ -96,25 +112,11 @@ export default defineEventHandler(async (event) => {
 
   const assetId = crypto.randomUUID()
   try {
-    // Platform owners may have organization/site IDs on their user object in this setup.
-    const user = session.user as {
-      organization_id?: string
-      organizationId?: string
-      site_id?: string
-      siteId?: string
-    }
-    const organizationId = user.organization_id || user.organizationId
-    const siteId = user.site_id || user.siteId
-
-    if (!organizationId || !siteId) {
-      console.error('generate_image_missing_context', { userId: session.user.id, organizationId, siteId })
-      return jsonResponse({ error: 'User must have an active organization and site to generate assets' }, { status: 400 })
-    }
-
+    await ensurePlatformMediaScope(db)
     await createMediaAsset(db, {
       id: assetId,
-      organization_id: organizationId,
-      site_id: siteId,
+      organization_id: PLATFORM_MEDIA_ORG_ID,
+      site_id: PLATFORM_MEDIA_SITE_ID,
       location_id: null,
       kind: 'image',
       provider: 'chowbot',

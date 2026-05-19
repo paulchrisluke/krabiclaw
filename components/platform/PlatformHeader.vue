@@ -11,7 +11,7 @@
       </NuxtLink>
 
       <!-- Pill nav (desktop) -->
-      <nav class="hidden md:flex items-center gap-1 bg-elevated/50 border border-muted rounded-full px-1 py-1">
+      <nav class="hidden lg:flex items-center gap-1 bg-elevated/50 border border-muted rounded-full px-1 py-1">
         <NuxtLink
           v-for="item in navItems"
           :key="item.label"
@@ -52,7 +52,7 @@
           variant="ghost"
           color="neutral"
           size="sm"
-          class="md:hidden"
+          class="lg:hidden"
           aria-label="Toggle menu"
           :aria-expanded="isMobileMenuOpen"
           aria-controls="mobile-menu"
@@ -62,7 +62,7 @@
     </div>
 
     <!-- Mobile menu -->
-    <div id="mobile-menu" v-if="isMobileMenuOpen" class="md:hidden border-t border-default bg-default">
+    <div id="mobile-menu" v-if="isMobileMenuOpen" class="lg:hidden border-t border-default bg-default">
       <nav class="px-4 py-4 space-y-2">
         <NuxtLink
           v-for="item in navItems"

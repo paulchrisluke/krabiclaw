@@ -34,6 +34,10 @@ export interface CloudflareEnv {
   WHATSAPP_PHONE_NUMBER_ID?: string
   WHATSAPP_VERIFY_TOKEN?: string
   WHATSAPP_BUSINESS_ACCOUNT_ID?: string
+  FACEBOOK_APP_ID?: string
+  FACEBOOK_APP_SECRET?: string
+  FACEBOOK_REDIRECT_URI?: string
+  FACEBOOK_CONFIG_ID?: string
   [key: string]: ApiValue
 }
 
@@ -104,10 +108,20 @@ export function createAuth(env: CloudflareEnv) {
         },
         signUpOnVerification: {
           getTempEmail: (phone) => {
-            const digits = normalizePhone(phone).replace(/\D/g, '')
-            return `phone-${digits}@phone.krabiclaw.local`
+            try {
+              const digits = normalizePhone(phone).replace(/\D/g, '')
+              return `phone-${digits}@phone.krabiclaw.local`
+            } catch {
+              return 'phone-unknown@phone.krabiclaw.local'
+            }
           },
-          getTempName: (phone) => `WhatsApp ${normalizePhone(phone)}`,
+          getTempName: (phone) => {
+            try {
+              return `WhatsApp ${normalizePhone(phone)}`
+            } catch {
+              return 'WhatsApp Unknown'
+            }
+          },
         },
       }),
     ],

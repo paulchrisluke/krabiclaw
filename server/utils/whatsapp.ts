@@ -64,11 +64,11 @@ type TemplateComponent = TemplateBodyComponent | TemplateButtonComponent
 // Meta template names must match exactly what was approved in Business Manager.
 const TEMPLATES: Record<
   WhatsAppTemplate,
-  (_vars: Record<string, string>) => { name: string; language: string; components: TemplateComponent[] }
+  (_vars: Record<string, string>) => { name: string; language: { code: string }; components: TemplateComponent[] }
 > = {
   draft_published: (v) => ({
     name: 'draft_published',
-    language: 'en_US',
+    language: { code: 'en_US' },
     components: [{
       type: 'body',
       parameters: [
@@ -79,7 +79,7 @@ const TEMPLATES: Record<
   }),
   new_review: (v) => ({
     name: 'new_review',
-    language: 'en_US',
+    language: { code: 'en_US' },
     components: [{
       type: 'body',
       parameters: [
@@ -91,7 +91,7 @@ const TEMPLATES: Record<
   }),
   ai_action_complete: (v) => ({
     name: 'ai_action_complete',
-    language: 'en_US',
+    language: { code: 'en_US' },
     components: [{
       type: 'body',
       parameters: [
@@ -102,7 +102,7 @@ const TEMPLATES: Record<
   }),
   low_credits: (v) => ({
     name: 'low_credits',
-    language: 'en_US',
+    language: { code: 'en_US' },
     components: [{
       type: 'body',
       parameters: [
@@ -113,7 +113,7 @@ const TEMPLATES: Record<
   }),
   new_contact_msg: (v) => ({
     name: 'new_contact_msg',
-    language: 'en_US',
+    language: { code: 'en_US' },
     components: [{
       type: 'body',
       parameters: [
@@ -125,7 +125,7 @@ const TEMPLATES: Record<
   }),
   new_reservation: (v) => ({
     name: 'new_reservation',
-    language: 'en_US',
+    language: { code: 'en_US' },
     components: [{
       type: 'body',
       parameters: [
@@ -139,7 +139,7 @@ const TEMPLATES: Record<
   }),
   reservation_cancelled: (v) => ({
     name: 'reservation_cancelled',
-    language: 'en_US',
+    language: { code: 'en_US' },
     components: [{
       type: 'body',
       parameters: [
@@ -153,7 +153,7 @@ const TEMPLATES: Record<
   }),
   domain_update: (v) => ({
     name: 'domain_update',
-    language: 'en_US',
+    language: { code: 'en_US' },
     components: [{
       type: 'body',
       parameters: [
@@ -165,7 +165,7 @@ const TEMPLATES: Record<
   }),
   otp_code: (v) => ({
     name: 'otp_code',
-    language: 'en_US',
+    language: { code: 'en_US' },
     components: [
       {
         type: 'body',

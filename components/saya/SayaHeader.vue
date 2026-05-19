@@ -1,15 +1,5 @@
 <template>
   <div>
-    <!-- Branding strip for free-tier tenants -->
-    <div
-      v-if="!isPlatform && showBrandingStrip"
-      class="border-b border-default bg-muted px-4 py-2 text-center text-xs tracking-wide text-muted"
-    >
-      Powered by
-      <a href="https://krabiclaw.com" target="_blank" rel="noopener noreferrer" class="font-semibold text-default hover:underline">krabiclaw.com</a>
-      — restaurant sites that run themselves
-    </div>
-
     <header ref="headerRef" class="sticky top-0 z-50 border-b border-default bg-default/80 backdrop-blur-md">
       <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <!-- Brand logo / name -->
@@ -156,7 +146,7 @@ interface I18nComposable {
   setLocale: (_code: string) => void
 }
 
-const { isPlatform, siteId, site } = useTenantSite()
+const { siteId, site } = useTenantSite()
 const i18n = useI18n() as ApiValue as I18nComposable
 const mobileMenuOpen = ref(false)
 const headerRef = ref<HTMLElement | null>(null)
@@ -192,8 +182,6 @@ const getCurrentLocaleFlag = () => getLocaleFlag(currentLocale.value)
 
 const restaurantName = computed(() => (site as Site | null)?.brand_name || 'Saya')
 const logoUrl = computed(() => (site as Site | null)?.logo_url || null)
-const sitePlan = computed(() => (site as Site | null)?.plan ?? 'free')
-const showBrandingStrip = computed(() => !isPlatform && sitePlan.value === 'free')
 
 useUpgradeModal()
 

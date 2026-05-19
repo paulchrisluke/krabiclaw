@@ -1,5 +1,6 @@
 // Google Places API (New, v1) — server-side only. Key stored as GOOGLE_PLACES_API_KEY CF secret.
 // Never import this in client-side code.
+import type { D1Database } from '@cloudflare/workers-types'
 
 const PLACES_BASE = 'https://places.googleapis.com/v1/places'
 
@@ -32,6 +33,7 @@ const DETAIL_FIELD_MASK = [
   'rating',
   'userRatingCount',
   'regularOpeningHours',
+  'reviews',
 ].join(',')
 
 export interface PlaceSearchResult {
@@ -44,6 +46,15 @@ export interface PlaceSearchResult {
   phone: string | null
   rating: number | null
   ratingCount: number | null
+}
+
+export interface PlaceReview {
+  reviewId: string
+  authorName: string
+  authorPhotoUrl: string | null
+  rating: number
+  text: string | null
+  publishedAt: string | null
 }
 
 export interface PlaceDetails {
@@ -59,6 +70,15 @@ export interface PlaceDetails {
   rating: number | null
   ratingCount: number | null
   openingHours: string[] | null
+  reviews: PlaceReview[]
+}
+
+interface RawReview {
+  name?: string
+  rating?: number
+  text?: { text?: string }
+  authorAttribution?: { displayName?: string; photoUri?: string }
+  publishTime?: string
 }
 
 interface RawPlace {
@@ -74,6 +94,7 @@ interface RawPlace {
   userRatingCount?: number
   regularOpeningHours?: { weekdayDescriptions?: string[] }
   addressComponents?: Array<{ longText?: string; types?: string[] }>
+  reviews?: RawReview[]
 }
 
 function extractCity(components?: RawPlace['addressComponents']): string | null {
@@ -114,7 +135,86 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
     rating: place.rating ?? null,
     ratingCount: place.userRatingCount ?? null,
     openingHours: place.regularOpeningHours?.weekdayDescriptions ?? null,
+    reviews: (place.reviews ?? []).map(r => ({
+      reviewId: r.name ?? '',
+      authorName: r.authorAttribution?.displayName ?? 'Anonymous',
+      authorPhotoUrl: r.authorAttribution?.photoUri ?? null,
+      rating: Math.round(r.rating ?? 0),
+      text: r.text?.text ?? null,
+      publishedAt: r.publishTime ?? null,
+    })),
   }
+}
+
+export async function syncPlaceToLocation(
+  db: D1Database,
+  apiKey: string,
+  organizationId: string,
+  siteId: string,
+  locationId: string,
+  placeId: string
+): Promise<{ place: PlaceDetails; reviewsUpserted: number }> {
+  const place = await getPlaceDetails(apiKey, placeId)
+  const now = new Date().toISOString()
+
+  await db.prepare(`
+    UPDATE business_locations SET
+      phone = COALESCE(?, phone),
+      website_url = COALESCE(?, website_url),
+      city = COALESCE(?, city),
+      latitude = COALESCE(?, latitude),
+      longitude = COALESCE(?, longitude),
+      maps_url = COALESCE(?, maps_url),
+      opening_hours = COALESCE(?, opening_hours),
+      rating = COALESCE(?, rating),
+      review_count = COALESCE(?, review_count),
+      last_synced_at = ?,
+      updated_at = ?
+    WHERE id = ? AND organization_id = ? AND site_id = ?
+  `).bind(
+    place.phone,
+    place.websiteUrl,
+    place.city,
+    place.lat,
+    place.lng,
+    place.mapsUrl,
+    place.openingHours ? JSON.stringify(place.openingHours) : null,
+    place.rating,
+    place.ratingCount,
+    now,
+    now,
+    locationId,
+    organizationId,
+    siteId
+  ).run()
+
+  // Upsert reviews — skip any already imported (deduped by google_review_id)
+  let reviewsUpserted = 0
+  for (const review of place.reviews) {
+    if (!review.reviewId || !review.rating) continue
+    const result = await db.prepare(`
+      INSERT OR IGNORE INTO reviews
+        (id, organization_id, site_id, location_id, google_review_id,
+         author_name, reviewer_photo_url, rating, content,
+         status, source, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_places', ?, ?)
+    `).bind(
+      `gplaces-${review.reviewId.replace(/\//g, '-')}`,
+      organizationId,
+      siteId,
+      locationId,
+      review.reviewId,
+      review.authorName,
+      review.authorPhotoUrl,
+      review.rating,
+      review.text,
+      review.publishedAt ?? now,
+      now
+    ).run()
+    if (result.meta.changes > 0) reviewsUpserted++
+  }
+
+  return { place, reviewsUpserted }
 }
 
 export async function searchPlaces(apiKey: string, query: string): Promise<PlaceSearchResult[]> {
