@@ -237,13 +237,8 @@ export async function processTranslationJobBatch(
 
   const rows = queued.results ?? []
   if (!rows.length) {
-    await db.prepare(`
-      UPDATE translation_jobs
-      SET status = CASE WHEN failed_items > 0 THEN 'failed' ELSE 'succeeded' END,
-          finished_at = ?, updated_at = ?
-      WHERE id = ?
-    `).bind(new Date().toISOString(), new Date().toISOString(), jobId).run()
-    return { job_id: jobId, status: 'succeeded', processed: 0 }
+    const status = await updateJobProgress(db, jobId)
+    return { job_id: jobId, status, processed: 0 }
   }
 
   await db.prepare(`

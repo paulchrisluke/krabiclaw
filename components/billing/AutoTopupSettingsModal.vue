@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { CREDIT_BUNDLES } from '~/shared/creditBundles'
+import { CREDIT_BUNDLES, type CreditBundleSize } from '~/shared/creditBundles'
 
 const thresholdOptions = [
   { label: '50 credits', value: 50 },
@@ -59,12 +59,12 @@ const bundlePriceMap = Object.fromEntries(CREDIT_BUNDLES.map(b => [b.credits, b.
 
 const props = defineProps<{
   initialEnabled: boolean
-  initialBundle: number
+  initialBundle: CreditBundleSize
   initialThreshold: number
 }>()
 
 const emit = defineEmits<{
-  saved: [{ enabled: boolean; bundle: number; threshold: number }]
+  saved: [{ enabled: boolean; bundle: CreditBundleSize; threshold: number }]
 }>()
 
 const isOpen = defineModel<boolean>('open', { default: false })
@@ -79,6 +79,14 @@ const form = reactive({
 watch(() => props.initialEnabled, v => { form.enabled = v })
 watch(() => props.initialBundle, v => { form.bundle = v })
 watch(() => props.initialThreshold, v => { form.threshold = v })
+
+watch(isOpen, (newVal) => {
+  if (newVal) {
+    form.enabled = props.initialEnabled
+    form.bundle = props.initialBundle
+    form.threshold = props.initialThreshold
+  }
+})
 
 const bundlePrice = computed(() => bundlePriceMap[form.bundle] ?? '$9')
 

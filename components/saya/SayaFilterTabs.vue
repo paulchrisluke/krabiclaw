@@ -1,7 +1,8 @@
 <template>
-  <div class="sticky top-0 z-40 border-b border-default bg-default">
+  <div ref="tabsRef" class="sticky top-0 z-40 border-b border-default bg-default">
     <div class="mx-auto flex h-11 max-w-7xl items-center justify-center gap-6 overflow-x-auto px-4 sm:px-6 lg:px-8 scrollbar-none">
       <button
+        type="button"
         v-for="tab in tabs"
         :key="tab.key"
         :class="[
@@ -34,9 +35,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
+  'height': [value: number]
 }>()
 
+const tabsRef = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
+let timeoutId: ReturnType<typeof setTimeout> | null = null
 
 function handleClick(key: string) {
   emit('update:modelValue', key)
@@ -44,14 +48,21 @@ function handleClick(key: string) {
   if (tab?.sectionId) {
     const element = document.getElementById(tab.sectionId)
     if (element) {
-      const navHeight = 44
+      const navHeight = tabsRef.value?.getBoundingClientRect().height ?? 44
       const elementPosition = element.getBoundingClientRect().top + window.pageYOffset
       window.scrollTo({ top: elementPosition - navHeight, behavior: 'smooth' })
     }
   }
 }
 
-onMounted(() => {
+function setupObserver() {
+  observer?.disconnect()
+  observer = null
+  if (timeoutId) {
+    clearTimeout(timeoutId)
+    timeoutId = null
+  }
+
   if (!props.enableScrollDetection) return
 
   const sections = props.tabs
@@ -59,26 +70,79 @@ onMounted(() => {
     .filter(Boolean) as HTMLElement[]
 
   if (sections.length > 0) {
+    const targetRatios = new Map<string, number>()
+
     observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const tab = props.tabs.find(t => t.sectionId === entry.target.id)
-            if (tab) emit('update:modelValue', tab.key)
-          }
+          targetRatios.set(entry.target.id, entry.isIntersecting ? entry.intersectionRatio : 0)
         })
+
+        if (timeoutId) clearTimeout(timeoutId)
+        timeoutId = setTimeout(() => {
+          let highestId: string | null = null
+          let highestRatio = -1
+
+          for (const [id, ratio] of targetRatios.entries()) {
+            if (ratio > highestRatio && ratio > 0) {
+              highestRatio = ratio
+              highestId = id
+            }
+          }
+
+          if (highestId) {
+            const tab = props.tabs.find(t => t.sectionId === highestId)
+            if (tab && tab.key !== props.modelValue) {
+              emit('update:modelValue', tab.key)
+            }
+          }
+        }, 100)
       },
       {
         rootMargin: '-44px 0px -60% 0px',
-        threshold: 0
+        threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
       }
     )
 
     sections.forEach((section) => observer?.observe(section))
   }
+}
+
+watch(
+  () => props.tabs,
+  () => {
+    nextTick(() => {
+      setupObserver()
+      updateHeight()
+    })
+  },
+  { deep: true }
+)
+
+function updateHeight() {
+  if (tabsRef.value) {
+    emit('height', tabsRef.value.getBoundingClientRect().height)
+  }
+}
+
+let resizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+  setupObserver()
+  updateHeight()
+  if (tabsRef.value) {
+    resizeObserver = new ResizeObserver(() => {
+      updateHeight()
+    })
+    resizeObserver.observe(tabsRef.value)
+  }
+  window.addEventListener('resize', updateHeight)
 })
 
 onUnmounted(() => {
   observer?.disconnect()
+  resizeObserver?.disconnect()
+  window.removeEventListener('resize', updateHeight)
+  if (timeoutId) clearTimeout(timeoutId)
 })
 </script>

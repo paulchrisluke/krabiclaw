@@ -1,4 +1,3 @@
-import { setConfig } from '~/server/utils/site-config'
 import { getConfiguredSourceLocale, normalizeLocale } from '~/server/utils/site-i18n'
 
 export type SiteLocaleStatus = 'draft' | 'published' | 'disabled'
@@ -94,37 +93,52 @@ export async function upsertSiteLocale(
   const now = new Date().toISOString()
   const id = `locale::${organizationId}::${siteId}::${locale}`
 
+  const batch = []
+
   if (input.is_source) {
-    await setConfig(db, organizationId, siteId, 'source_locale', locale)
-    await db.prepare(`
-      UPDATE site_locales
-      SET is_source = 0, updated_at = ?
-      WHERE organization_id = ? AND site_id = ? AND locale != ?
-    `).bind(now, organizationId, siteId, locale).run()
+    batch.push(
+      db.prepare(`
+        INSERT INTO site_config (organization_id, site_id, key, value)
+        VALUES (?, ?, 'source_locale', ?)
+        ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value,
+        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      `).bind(organizationId, siteId, locale)
+    )
+    batch.push(
+      db.prepare(`
+        UPDATE site_locales
+        SET is_source = 0, updated_at = ?
+        WHERE organization_id = ? AND site_id = ? AND locale != ?
+      `).bind(now, organizationId, siteId, locale)
+    )
   }
 
-  await db.prepare(`
-    INSERT INTO site_locales
-      (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(organization_id, site_id, locale) DO UPDATE SET
-      label = excluded.label,
-      is_source = excluded.is_source,
-      status = excluded.status,
-      fallback_enabled = excluded.fallback_enabled,
-      updated_at = excluded.updated_at
-  `).bind(
-    id,
-    organizationId,
-    siteId,
-    locale,
-    label,
-    input.is_source ? 1 : 0,
-    status,
-    fallbackEnabled ? 1 : 0,
-    now,
-    now,
-  ).run()
+  batch.push(
+    db.prepare(`
+      INSERT INTO site_locales
+        (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(organization_id, site_id, locale) DO UPDATE SET
+        label = excluded.label,
+        is_source = excluded.is_source,
+        status = excluded.status,
+        fallback_enabled = excluded.fallback_enabled,
+        updated_at = excluded.updated_at
+    `).bind(
+      id,
+      organizationId,
+      siteId,
+      locale,
+      label,
+      input.is_source ? 1 : 0,
+      status,
+      fallbackEnabled ? 1 : 0,
+      now,
+      now,
+    )
+  )
+
+  await db.batch(batch)
 
   const row = await db.prepare(`
     SELECT id, organization_id, site_id, locale, label, is_source, status, fallback_enabled, created_at, updated_at

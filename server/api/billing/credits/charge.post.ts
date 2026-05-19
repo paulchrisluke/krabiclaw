@@ -5,7 +5,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, requireBillingAccess } from '~/server/utils/billing'
-import { BUNDLE_AMOUNTS } from '~/shared/creditBundles'
+import { BUNDLE_AMOUNTS, VALID_BUNDLES } from '~/shared/creditBundles'
 import type Stripe from 'stripe'
 
 export default defineEventHandler(async (event) => {
@@ -94,7 +94,7 @@ export default defineEventHandler(async (event) => {
 
   // Persist auto top-up preference if the user toggled it during purchase
   if (enableAutoTopup) {
-    const validBundle = [500, 2500, 5000].includes(autoTopupBundle) ? autoTopupBundle : bundle
+    const validBundle = (VALID_BUNDLES as readonly number[]).includes(autoTopupBundle) ? autoTopupBundle : bundle
     await db.prepare(
       `INSERT INTO organization_billing (id, organization_id, auto_topup_enabled, auto_topup_bundle, updated_at)
        VALUES (?, ?, 1, ?, ?)

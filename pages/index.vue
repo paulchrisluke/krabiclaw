@@ -565,10 +565,6 @@ const hasOrderLinks = computed(() =>
   locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
 
-// Single-location tenants: redirect "/" to the location home
-if (!isPlatform && locationsData.value?.locations?.length === 1) {
-  await navigateTo(`/locations/${locationsData.value.locations[0].slug}`, { replace: true, redirectCode: 301 })
-}
 
 // Get brand menu for preview
 const {

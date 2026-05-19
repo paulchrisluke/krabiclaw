@@ -159,7 +159,7 @@ export async function createExperience(
   const now = new Date().toISOString()
   const slotsJson = input.time_slots?.length ? JSON.stringify(input.time_slots) : null
 
-  await db
+  const result = await db
     .prepare(
       `INSERT INTO experiences
        (id, organization_id, site_id, location_id, title, slug, tagline, body,
@@ -188,7 +188,15 @@ export async function createExperience(
     )
     .run()
 
-  return (await getExperienceById(db, siteId, id))!
+  if (!result || !result.success) {
+    throw new Error('Failed to create experience in the database.')
+  }
+
+  const created = await getExperienceById(db, siteId, id)
+  if (!created) {
+    throw new Error(`Failed to retrieve newly created experience with ID: ${id}`)
+  }
+  return created
 }
 
 export type UpdateExperienceInput = Partial<CreateExperienceInput> & { slug?: string }
@@ -280,7 +288,7 @@ export async function createExperienceBooking(
 ): Promise<ExperienceBooking> {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  await db
+  const result = await db
     .prepare(
       `INSERT INTO experience_bookings
        (id, experience_id, organization_id, site_id, guest_name, guest_email, guest_phone,
@@ -295,6 +303,11 @@ export async function createExperienceBooking(
       now, now,
     )
     .run()
+
+  if (!result || !result.success) {
+    throw new Error('Failed to insert experience booking into the database.')
+  }
+
   return { ...input, id, status: (input.status ?? 'pending') as ExperienceBooking['status'], created_at: now, updated_at: now }
 }
 

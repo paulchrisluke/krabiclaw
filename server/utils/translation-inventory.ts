@@ -460,8 +460,9 @@ export async function publishTranslationDrafts(
   const drafts = inventory.items.filter(item => item.translation_status === 'draft')
   const now = new Date().toISOString()
 
+  let publishedCount = 0
   if (drafts.length) {
-    await db.batch(drafts.map((item) => {
+    const batchResults = await db.batch(drafts.map((item) => {
       if (item.entity_type === 'site_content') {
         if (!item.location_id) {
           return db.prepare(`
@@ -514,13 +515,14 @@ export async function publishTranslationDrafts(
           AND source_hash = ? AND status = 'draft'
       `).bind(now, now, userId ?? null, organizationId, siteId, item.entity_id, inventory.target_locale, item.source_hash)
     }))
+    publishedCount = (batchResults || []).reduce((sum, res) => sum + (res.meta?.changes ?? 0), 0)
   }
 
   return {
     source_locale: inventory.source_locale,
     target_locale: inventory.target_locale,
     scope: inventory.scope,
-    published_items: drafts.length,
-    skipped_items: inventory.items.length - drafts.length,
+    published_items: publishedCount,
+    skipped_items: inventory.items.length - publishedCount,
   }
 }

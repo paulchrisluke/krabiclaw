@@ -24,10 +24,13 @@ async function incrementRateLimit(db: D1Database, key: string, limit: number, ex
   const result = await db
     .prepare(
       `INSERT INTO rate_limits (key, count, updated_at, expires_at) VALUES (?, 1, ?, ?)
-       ON CONFLICT(key) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at, expires_at = excluded.expires_at
-       WHERE count < ?`,
+       ON CONFLICT(key) DO UPDATE SET
+         count = CASE WHEN rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END,
+         expires_at = CASE WHEN rate_limits.expires_at <= ? THEN ? ELSE rate_limits.expires_at END,
+         updated_at = ?
+       WHERE (CASE WHEN rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END) <= ?`,
     )
-    .bind(key, now, expiresAt, limit)
+    .bind(key, now, expiresAt, now, now, expiresAt, now, now, limit)
     .run()
   return Boolean(result?.success && result?.meta?.changes)
 }

@@ -9,3 +9,5 @@ export type CreditBundleSize = typeof CREDIT_BUNDLES[number]['credits']
 export const BUNDLE_AMOUNTS: Record<number, number> = Object.fromEntries(
   CREDIT_BUNDLES.map(b => [b.credits, b.amountCents])
 )
+
+export const VALID_BUNDLES = CREDIT_BUNDLES.map(b => b.credits)

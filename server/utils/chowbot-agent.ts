@@ -1779,7 +1779,7 @@ async function executeTool(
       }
 
       const updated = await db.prepare(
-        `SELECT id, slug, title, city, phone, email, website_url, maps_url, google_place_id,
+        `SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
                 rating, review_count, description, short_description, status, is_primary
          FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
       ).bind(locationId, orgId, siteId).first()

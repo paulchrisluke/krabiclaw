@@ -512,6 +512,7 @@ const moveFeaturedItem = async (item: MenuItem, direction: -1 | 1) => {
 
   try {
     await saveFeaturedOrder(next)
+    if (currentMenu.value) await loadMenu(currentMenu.value.id)
     toast.addToast('Featured order updated', 'success')
   } catch (err) {
     console.error('moveFeaturedItem failed:', err)

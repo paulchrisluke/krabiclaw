@@ -179,30 +179,57 @@ async function getMenuSectionOrder(db: D1Database, menuId: string): Promise<stri
   return normalizeSectionOrder(row?.section_order)
 }
 
-async function saveMenuSectionOrder(db: D1Database, menuId: string, sectionOrder: string[], updatedBy?: string): Promise<void> {
+async function getMenuSectionOrderWithVersion(db: D1Database, menuId: string): Promise<{ sectionOrder: string[], updatedAt: string }> {
+  const row = await db.prepare('SELECT section_order, updated_at FROM menus WHERE id = ? LIMIT 1').bind(menuId).first<{ section_order: string | null; updated_at: string }>()
+  return {
+    sectionOrder: normalizeSectionOrder(row?.section_order),
+    updatedAt: row?.updated_at ?? '',
+  }
+}
+
+async function saveMenuSectionOrder(
+  db: D1Database,
+  menuId: string,
+  sectionOrder: string[],
+  updatedBy?: string,
+  expectedUpdatedAt?: string
+): Promise<boolean> {
   const normalized = normalizeSectionOrder(sectionOrder)
   const now = new Date().toISOString()
-  const result = updatedBy
-    ? await db.prepare(`
-        UPDATE menus
-        SET section_order = ?, updated_at = ?, updated_by = ?
-        WHERE id = ?
-      `).bind(JSON.stringify(normalized), now, updatedBy, menuId).run()
-    : await db.prepare(`
-        UPDATE menus
-        SET section_order = ?, updated_at = ?
-        WHERE id = ?
-      `).bind(JSON.stringify(normalized), now, menuId).run()
 
+  let query = 'UPDATE menus SET section_order = ?, updated_at = ?'
+  const params: (string | number | null)[] = [JSON.stringify(normalized), now]
+
+  if (updatedBy) {
+    query += ', updated_by = ?'
+    params.push(updatedBy)
+  }
+
+  query += ' WHERE id = ?'
+  params.push(menuId)
+
+  if (expectedUpdatedAt) {
+    query += ' AND updated_at = ?'
+    params.push(expectedUpdatedAt)
+  }
+
+  const result = await db.prepare(query).bind(...params).run()
   if (!result.success) throw new Error('Failed to update menu section order')
+  return result.meta.changes > 0
 }
 
 async function ensureMenuSectionInOrder(db: D1Database, menuId: string, section: string, updatedBy?: string): Promise<void> {
   const normalizedSection = section.trim()
   if (!normalizedSection) return
-  const sectionOrder = await getMenuSectionOrder(db, menuId)
-  if (sectionOrder.includes(normalizedSection)) return
-  await saveMenuSectionOrder(db, menuId, [...sectionOrder, normalizedSection], updatedBy)
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { sectionOrder, updatedAt } = await getMenuSectionOrderWithVersion(db, menuId)
+    if (sectionOrder.includes(normalizedSection)) return
+
+    const success = await saveMenuSectionOrder(db, menuId, [...sectionOrder, normalizedSection], updatedBy, updatedAt)
+    if (success) return
+  }
+  throw new Error('Failed to ensure menu section order due to concurrent modifications')
 }
 
 async function uniqueSlug(db: D1Database, menuId: string, base: string, excludeId?: string): Promise<string> {
@@ -583,6 +610,14 @@ export async function updateMenuItem(
 ): Promise<MenuItem> {
   const now = new Date().toISOString()
 
+  const existing = await db.prepare(
+    `SELECT menu_id, section FROM menu_items WHERE id = ? LIMIT 1`
+  ).bind(menuItemId).first<{ menu_id: string; section: string | null }>()
+
+  if (!existing) {
+    throw new Error(`Menu item not found: ${menuItemId}`)
+  }
+
   // Build dynamic update query
   const setParts: string[] = []
   const params: SqlBindValue[] = []
@@ -594,17 +629,9 @@ export async function updateMenuItem(
   if (updates.name !== undefined) {
     setParts.push('name = ?')
     params.push(updates.name)
-    // Fetch menu_id to scope the slug uniqueness check
-    const existing = await db.prepare(
-      `SELECT menu_id FROM menu_items WHERE id = ? LIMIT 1`
-    ).bind(menuItemId).first() as { menu_id: string | null } | null
-    if (existing?.menu_id) {
-      const newSlug = await uniqueSlug(db, existing.menu_id, updates.name, menuItemId)
-      setParts.push('slug = ?')
-      params.push(newSlug)
-    } else {
-      throw new Error(`Missing menu_id for menu item ${menuItemId}`)
-    }
+    const newSlug = await uniqueSlug(db, existing.menu_id, updates.name, menuItemId)
+    setParts.push('slug = ?')
+    params.push(newSlug)
   }
   if (updates.description !== undefined) {
     setParts.push('description = ?')
@@ -691,7 +718,21 @@ export async function updateMenuItem(
 
   if (updates.section !== undefined) {
     const menuId = typeof updatedItem.menu_id === 'string' ? updatedItem.menu_id : ''
-    if (menuId) await ensureMenuSectionInOrder(db, menuId, updates.section, updatedBy)
+    if (menuId) {
+      await ensureMenuSectionInOrder(db, menuId, updates.section, updatedBy)
+
+      // Prune old section from section_order if it has become empty
+      if (existing.section && existing.section !== updates.section) {
+        const remaining = await db.prepare(
+          `SELECT COUNT(*) as count FROM menu_items WHERE menu_id = ? AND section = ?`
+        ).bind(menuId, existing.section).first<{ count: number }>()
+
+        if (remaining && remaining.count === 0) {
+          const sectionOrder = await getMenuSectionOrder(db, menuId)
+          await saveMenuSectionOrder(db, menuId, sectionOrder.filter(s => s !== existing.section), updatedBy)
+        }
+      }
+    }
   }
 
   return mapMenuItem(updatedItem)

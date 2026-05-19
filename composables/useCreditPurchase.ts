@@ -13,7 +13,7 @@ const BUNDLE_LABELS = Object.fromEntries(CREDIT_BUNDLES.map(b => [b.credits, b.l
 const BUNDLE_PRICES = Object.fromEntries(CREDIT_BUNDLES.map(b => [b.credits, b.price])) as Record<CreditBundle, string>
 
 // Per-flow callback — keyed by a unique transaction ID so concurrent callers don't clobber each other
-const _successHandlers = new Map<string, (balance: number) => void>()
+const _successHandlers = new Map<string, (_balance: number) => void>()
 
 async function _redirectToCheckout(bundle: CreditBundle) {
   const res = await $fetch<{ checkoutUrl?: string }>('/api/billing/credits/add', {
@@ -43,7 +43,7 @@ export const useCreditPurchase = () => {
     pendingBundle.value ? BUNDLE_PRICES[pendingBundle.value] : ''
   )
 
-  async function purchase(bundle: CreditBundle, onSuccess?: (balance: number) => void) {
+  async function purchase(bundle: CreditBundle, onSuccess?: (_balance: number) => void) {
     try {
       const res = await $fetch<{ card: SavedCard | null }>('/api/billing/payment-method')
       if (res.card) {
@@ -90,6 +90,7 @@ export const useCreditPurchase = () => {
       isOpen.value = false
       pendingBundle.value = null
       pendingTxId.value = null
+      wantsAutoTopup.value = false
       if (txId) _successHandlers.delete(txId)
       if (data?.requiresCheckout) {
         try {

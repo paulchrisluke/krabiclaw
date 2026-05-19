@@ -1,14 +1,9 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isDemoOrg } from '~/server/utils/demo'
-import { createTranslationJob, type TranslationScope } from '~/server/utils/translation-inventory'
+import { createTranslationJob } from '~/server/utils/translation-inventory'
 import { processTranslationJobBatch } from '~/server/utils/translation-processor'
-
-function parseScope(value: unknown): TranslationScope {
-  return value === 'content' || value === 'menus' || value === 'locations' || value === 'posts' || value === 'site'
-    ? value
-    : 'site'
-}
+import { parseScope } from '~/server/utils/translation-helpers'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')

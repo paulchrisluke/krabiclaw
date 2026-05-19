@@ -1316,6 +1316,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_site_transfer_token
 CREATE INDEX IF NOT EXISTS idx_site_transfer_site
   ON site_transfer_requests(site_id, status);
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_site_transfer_pending
+  ON site_transfer_requests(site_id) WHERE status = 'pending';
+
 --------------------------------------------------------------------------------
 -- Experiences
 --------------------------------------------------------------------------------

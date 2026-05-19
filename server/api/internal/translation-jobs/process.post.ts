@@ -16,7 +16,19 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'CRON_SECRET is required' }, { status: 500 })
   }
 
-  const body = await readBody(event).catch(() => ({})) as { limit?: number; batches_per_job?: number }
+  let body: { limit?: number; batches_per_job?: number } = {}
+  try {
+    const rawBody = await readBody(event)
+    if (rawBody && typeof rawBody === 'object') {
+      body = rawBody
+    }
+  } catch (error) {
+    return jsonResponse({
+      error: 'Invalid JSON request body',
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 400 })
+  }
+
   const result = await processQueuedTranslationJobs(db, env, {
     limit: body.limit,
     batchesPerJob: body.batches_per_job,

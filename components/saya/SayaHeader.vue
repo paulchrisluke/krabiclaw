@@ -239,10 +239,22 @@ const { data: locationsData, error: locationsError, execute: loadLocations } = u
   }
 )
 
+const { data: experiencesData, execute: loadExperiences } = useFetch<{ experiences: ApiRecord[] }>(
+  () => `/api/public/sites/${currentSiteId.value}/experiences`,
+  {
+    key: () => `header-xp-${currentSiteId.value || 'none'}`,
+    default: () => ({ experiences: [] }),
+    server: false,
+    immediate: false,
+    watch: false
+  }
+)
+
 watch(currentSiteId, (id: string) => {
   if (id) {
     loadLocations()
     loadLocales()
+    loadExperiences()
   }
 }, { immediate: true })
 
@@ -258,13 +270,6 @@ const locations = computed(() => {
 const hasOrderLinks = computed(() =>
   locations.value.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
-
-const { data: experiencesData } = currentSiteId.value
-  ? useFetch<{ experiences: ApiRecord[] }>(
-      () => `/api/public/sites/${currentSiteId.value}/experiences`,
-      { key: () => `header-xp-${currentSiteId.value}`, default: () => ({ experiences: [] }), server: false },
-    )
-  : { data: ref({ experiences: [] }) }
 
 const hasExperiences = computed(() => (experiencesData.value?.experiences?.length ?? 0) > 0)
 

@@ -213,7 +213,16 @@ const weekHours = computed(() => {
   return formatGoogleHours(hours).map((h: ApiValue, i: number) => ({ ...h, today: days[i] === today }))
 })
 
-const todayHours = computed(() => getTodayGoogleHours(location.value?.opening_hours))
+const todayHours = computed(() => {
+  const timezone = location.value?.time_zone || location.value?.timezone || null
+  let today = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][new Date().getDay()]
+  if (timezone) {
+    try {
+      today = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: timezone }).format(new Date()).toUpperCase()
+    } catch { /* fallback to local */ }
+  }
+  return getTodayGoogleHours(location.value?.opening_hours, today)
+})
 const isOpenNow = computed(() => {
   const h = todayHours.value
   if (!h) return undefined

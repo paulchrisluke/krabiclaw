@@ -40,6 +40,7 @@
         v-model="activeCategory"
         :tabs="categoryTabs"
         :enable-scroll-detection="true"
+        @height="categoryNavHeight = $event"
       />
 
       <!-- Menu body -->

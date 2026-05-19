@@ -585,7 +585,7 @@
         />
 
         <!-- Transfer site -->
-        <div class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
+        <div v-if="hasTransferAccess" class="grid gap-8 p-6 md:grid-cols-[1fr_2fr]">
           <div>
             <h2 class="font-semibold text-highlighted">Transfer site</h2>
             <p class="mt-1 text-sm text-muted">Transfer ownership to your client. They'll receive a link to accept and the site will move to their account. Billing is not included — they manage their own subscription.</p>
@@ -1355,12 +1355,15 @@ const initiatingTransfer = ref(false)
 const cancellingTransfer = ref(false)
 const transferError = ref<string | null>(null)
 const transferSuccess = ref<string | null>(null)
+const hasTransferAccess = ref(false)
 
 const loadPendingTransfer = async () => {
   try {
     const res = await $fetch<{ pending: PendingTransfer | null }>(`/api/admin/sites/${siteId}/transfer`)
     pendingTransfer.value = res.pending
+    hasTransferAccess.value = true
   } catch {
+    hasTransferAccess.value = false
     // Not an admin — transfer section won't be usable but that's fine
   }
 }

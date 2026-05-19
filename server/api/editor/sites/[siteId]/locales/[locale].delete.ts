@@ -1,12 +1,14 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { normalizeLocale } from '~/server/utils/site-i18n'
 import { deleteSiteLocale } from '~/server/utils/site-locales'
 import { isDemoOrg } from '~/server/utils/demo'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
-  const locale = getRouterParam(event, 'locale')
-  if (!siteId || !locale) return jsonResponse({ error: 'Site ID and locale are required' }, { status: 400 })
+  const localeParam = getRouterParam(event, 'locale')
+  const locale = normalizeLocale(localeParam)
+  if (!siteId || !locale) return jsonResponse({ error: 'Site ID and a valid locale are required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.REVIEWS_DB

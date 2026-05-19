@@ -47,43 +47,67 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const toEmail = (body.email ?? '').trim().toLowerCase()
-  if (!toEmail || !toEmail.includes('@')) {
+  const toEmailRaw = body.email ?? ''
+  if (typeof toEmailRaw !== 'string' || toEmailRaw !== toEmailRaw.trim() || toEmailRaw.trim() === '') {
+    return jsonResponse({ error: 'A valid recipient email is required (no surrounding whitespace allowed)' }, { status: 400 })
+  }
+  const toEmail = toEmailRaw.trim().toLowerCase()
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailPattern.test(toEmail)) {
     return jsonResponse({ error: 'A valid recipient email is required' }, { status: 400 })
   }
 
-  // Cancel any existing pending transfer for this site before creating a new one
-  await db
+  // First, check if there is an identical pending request already to avoid double-submission
+  const existingPending = await db
     .prepare(
-      `UPDATE site_transfer_requests SET status = 'cancelled'
-       WHERE site_id = ? AND status = 'pending'`,
+      `SELECT id FROM site_transfer_requests
+       WHERE site_id = ? AND to_email = ? AND status = 'pending' LIMIT 1`,
     )
-    .bind(siteId)
-    .run()
+    .bind(siteId, toEmail)
+    .first<{ id: string }>()
+
+  if (existingPending) {
+    return jsonResponse({ error: 'A pending transfer request to this email already exists.' }, { status: 409 })
+  }
 
   const id = crypto.randomUUID()
   const token = generateToken()
   const now = new Date()
   const expiresAt = new Date(now.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString()
 
-  await db
-    .prepare(
-      `INSERT INTO site_transfer_requests
-       (id, site_id, from_organization_id, to_email, token, status, initiated_by_user_id, message, created_at, expires_at)
-       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
-    )
-    .bind(
-      id,
-      siteId,
-      site.organization_id,
-      toEmail,
-      token,
-      userId,
-      body.message?.trim() ?? null,
-      now.toISOString(),
-      expiresAt,
-    )
-    .run()
+  const cancelStmt = db.prepare(
+    `UPDATE site_transfer_requests SET status = 'cancelled'
+     WHERE site_id = ? AND status = 'pending'`,
+  ).bind(siteId)
+
+  const insertStmt = db.prepare(
+    `INSERT INTO site_transfer_requests
+     (id, site_id, from_organization_id, to_email, token, status, initiated_by_user_id, message, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`
+  ).bind(
+    id,
+    siteId,
+    site.organization_id,
+    toEmail,
+    token,
+    userId,
+    body.message?.trim() ?? null,
+    now.toISOString(),
+    expiresAt,
+  )
+
+  try {
+    await db.batch([cancelStmt, insertStmt])
+  } catch (err) {
+    const dbErr = err as Record<string, unknown>
+    const msg = typeof dbErr.message === 'string' ? dbErr.message : ''
+    const code = typeof dbErr.code === 'string' ? dbErr.code : ''
+    if (msg.includes('UNIQUE') || msg.includes('constraint') || code === 'SQLITE_CONSTRAINT') {
+      return jsonResponse({ error: 'A pending transfer request already exists for this site.' }, { status: 409 })
+    }
+    console.error('Site transfer transaction failed:', err)
+    return jsonResponse({ error: 'Failed to initiate site transfer due to a database error.' }, { status: 500 })
+  }
 
   const platformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'krabiclaw.com'
   const transferUrl = `https://${platformDomain}/transfer/${token}`

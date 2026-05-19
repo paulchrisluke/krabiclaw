@@ -1,14 +1,9 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isDemoOrg } from '~/server/utils/demo'
-import type { TranslationEntityType, TranslationScope } from '~/server/utils/translation-inventory'
+import type { TranslationEntityType } from '~/server/utils/translation-inventory'
 import { saveTranslationReviewItem } from '~/server/utils/translation-review'
-
-function parseScope(value: unknown): TranslationScope {
-  return value === 'content' || value === 'menus' || value === 'locations' || value === 'posts' || value === 'site'
-    ? value
-    : 'site'
-}
+import { parseScope } from '~/server/utils/translation-helpers'
 
 function parseEntityType(value: unknown): TranslationEntityType | null {
   return value === 'site_content' || value === 'menu' || value === 'menu_item' || value === 'business_location' || value === 'post'

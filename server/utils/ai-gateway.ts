@@ -202,7 +202,7 @@ export async function generateImageViaGateway(
     throw new Error(`AI Gateway image error ${genResponse.status}: ${errorText}`)
   }
 
-  // GPT Image models return b64_json by default — no response_format param needed.
+  // Parse the base64-encoded image data from the JSON response.
   const data = await genResponse.json() as {
     data?: Array<{ b64_json?: string }>
     usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number }

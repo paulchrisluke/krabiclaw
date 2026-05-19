@@ -1,4 +1,4 @@
-import Stripe from 'stripe'
+import type Stripe from 'stripe'
 import { getStripe } from '~/server/utils/billing'
 import type { BillingEnv } from '~/server/utils/billing'
 import { BUNDLE_AMOUNTS } from '~/shared/creditBundles'

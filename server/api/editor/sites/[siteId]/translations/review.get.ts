@@ -1,13 +1,8 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import type { TranslationInventoryStatus, TranslationScope } from '~/server/utils/translation-inventory'
+import type { TranslationInventoryStatus } from '~/server/utils/translation-inventory'
 import { listTranslationReviewItems } from '~/server/utils/translation-review'
-
-function parseScope(value: unknown): TranslationScope {
-  return value === 'content' || value === 'menus' || value === 'locations' || value === 'posts' || value === 'site'
-    ? value
-    : 'site'
-}
+import { parseScope } from '~/server/utils/translation-helpers'
 
 function parseStatus(value: unknown): TranslationInventoryStatus | 'all' {
   return value === 'missing' || value === 'draft' || value === 'published' || value === 'stale' || value === 'all'

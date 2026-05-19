@@ -305,7 +305,7 @@ const { data: locationsData } = !isPlatform && siteId
   : { data: ref({ locations: [] }) }
 
 const locations = computed(() => locationsData.value?.locations ?? [])
-const isSingleLocation = computed(() => locations.value.length <= 1)
+const isSingleLocation = computed(() => locations.value.length === 1)
 
 function formatLocAddress(loc) {
   if (!loc.address) return loc.city || ''

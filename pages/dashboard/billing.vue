@@ -291,7 +291,7 @@
 <script setup lang="ts">
 
 import { useToast } from '~/composables/useToast'
-import { CREDIT_BUNDLES } from '~/shared/creditBundles'
+import { CREDIT_BUNDLES, type CreditBundleSize } from '~/shared/creditBundles'
 const { addToast } = useToast()
 
 definePageMeta({ layout: 'dashboard' })
@@ -311,7 +311,7 @@ interface SavedCard { brand: string; last4: string; exp_month: number; exp_year:
 const savedCard = ref<SavedCard | null>(null)
 
 const autoTopupEnabled = ref(false)
-const autoTopupBundle = ref(500)
+const autoTopupBundle = ref<CreditBundleSize>(500)
 const autoTopupThreshold = ref(100)
 const autoTopupModalOpen = ref(false)
 
@@ -320,7 +320,7 @@ const autoTopupBundleLabel = computed(() => {
   return b ? `${b.credits.toLocaleString()} credits (${b.price})` : '500 credits ($9)'
 })
 
-function onAutoTopupSaved(settings: { enabled: boolean; bundle: number; threshold: number }) {
+function onAutoTopupSaved(settings: { enabled: boolean; bundle: CreditBundleSize; threshold: number }) {
   autoTopupEnabled.value = settings.enabled
   autoTopupBundle.value = settings.bundle
   autoTopupThreshold.value = settings.threshold
@@ -394,7 +394,8 @@ const loadBillingData = async () => {
     const response = await $fetch<ApiRecord>('/api/billing/status')
     billing.value = response.billing
     autoTopupEnabled.value = Boolean(response.billing?.autoTopupEnabled)
-    autoTopupBundle.value = Number(response.billing?.autoTopupBundle) || 500
+    const bundleVal = Number(response.billing?.autoTopupBundle)
+    autoTopupBundle.value = (bundleVal === 2500 || bundleVal === 5000) ? bundleVal : 500
     autoTopupThreshold.value = Number(response.billing?.autoTopupThreshold) || 100
   } catch (err) {
     console.error('Failed to load billing data:', err)
@@ -460,24 +461,26 @@ const formatDate = (dateString: string) => {
 }
 
 onMounted(async () => {
-  if (route.query.success === 'true') {
+  const { success, plan, canceled, ...restQuery } = route.query
+
+  if (success === 'true') {
     addToast('Payment successful. Your plan has been updated.', 'success')
-    // Remove the query param from the URL
-    const { success: _success, ...restQuery } = route.query
+  }
+  if (canceled === 'true') {
+    errorMessage.value = 'Payment was canceled. Your plan was not changed.'
+  }
+
+  // Consolidate parameter cleanup in a single replace call
+  if (success || plan || canceled) {
     router.replace({ query: restQuery })
   }
-  if (route.query.canceled === 'true') errorMessage.value = 'Payment was canceled. Your plan was not changed.'
-  
+
   // Auto-start checkout if plan query param exists
   const { isAuthenticated } = useAuth()
   await Promise.all([loadBillingData(), loadCredits(), loadPaymentMethod()])
-  
-  if (isAuthenticated.value && route.query.plan) {
-    const raw = route.query.plan
-    const planId = Array.isArray(raw) ? raw[0] : String(raw)
-    // Remove the plan query param from URL
-    const { plan: _plan, ...restQuery } = route.query
-    router.replace({ query: restQuery })
+
+  if (isAuthenticated.value && plan) {
+    const planId = Array.isArray(plan) ? plan[0] : String(plan)
     if (planId) await upgradeToPlan(planId)
   }
 })

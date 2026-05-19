@@ -45,7 +45,10 @@
             <h1 class="saya-display-lg text-white">
               <em class="saya-italic">{{ heroTitle || location.title }}</em>
             </h1>
-            <p v-if="!heroTitle" class="saya-display mt-5 text-2xl text-white/70">
+            <p v-if="heroSubtitle" class="saya-display mt-5 text-2xl text-white/70">
+              <em class="saya-italic">{{ heroSubtitle }}</em>
+            </p>
+            <p v-else-if="!heroTitle" class="saya-display mt-5 text-2xl text-white/70">
               <em class="saya-italic">{{ siteName }}</em>
             </p>
             <div v-if="isOpenNow === true" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
@@ -440,7 +443,6 @@ const isOpenNow = computed(() => {
   return undefined
 })
 
-const mapEmbedSrc = computed(() => (location.value as ApiValue)?.map_embed_url || null)
 
 
 const config = useRuntimeConfig()

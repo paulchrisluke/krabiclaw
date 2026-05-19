@@ -1,8 +1,8 @@
 export function useEditorNavigation(siteId: string) {
   const { editorBackPath } = useDashboardSiteLinks(siteId)
+  const router = useRouter()
 
   const handleBack = () => {
-    const router = useRouter()
     router.push(editorBackPath.value)
   }
 

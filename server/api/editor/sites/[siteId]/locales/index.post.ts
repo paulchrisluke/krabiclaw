@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { normalizeLocale } from '~/server/utils/site-i18n'
 import { upsertSiteLocale, type SiteLocaleInput } from '~/server/utils/site-locales'
 import { isDemoOrg } from '~/server/utils/demo'
 
@@ -8,7 +9,9 @@ export default defineEventHandler(async (event) => {
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
   const body = await readBody(event) as SiteLocaleInput
-  if (!body?.locale) return jsonResponse({ error: 'locale is required' }, { status: 400 })
+  const locale = normalizeLocale(body?.locale)
+  if (!locale) return jsonResponse({ error: 'A valid locale is required' }, { status: 400 })
+  body.locale = locale
 
   const env = cloudflareEnv(event)
   const db = env.REVIEWS_DB
@@ -32,8 +35,8 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const locale = await upsertSiteLocale(db, site.organization_id, siteId, body)
-    return jsonResponse({ success: true, locale })
+    const savedLocale = await upsertSiteLocale(db, site.organization_id, siteId, body)
+    return jsonResponse({ success: true, savedLocale })
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Failed to save locale' }, { status: 400 })
   }

@@ -168,8 +168,10 @@ onMounted(async () => {
   try {
     const data = await $fetch<TransferInfo>(`/api/site-transfer/${token}`)
     transfer.value = data
-  } catch (err: ApiValue) {
-    const msg = err?.data?.error ?? err?.message ?? 'This transfer link is invalid or has expired.'
+  } catch (err: unknown) {
+    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
+    const errorMessage = err && typeof err === 'object' && 'message' in err ? (err as Record<string, string>).message : null
+    const msg = errorData?.error ?? errorMessage ?? 'This transfer link is invalid or has expired.'
     loadError.value = msg
   } finally {
     loading.value = false
@@ -182,8 +184,9 @@ async function acceptTransfer() {
   try {
     await $fetch(`/api/site-transfer/${token}/accept`, { method: 'POST' })
     accepted.value = true
-  } catch (err: ApiValue) {
-    acceptError.value = err?.data?.error ?? 'Failed to accept the transfer. Please try again.'
+  } catch (err: unknown) {
+    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
+    acceptError.value = errorData?.error ?? 'Failed to accept the transfer. Please try again.'
   } finally {
     accepting.value = false
   }

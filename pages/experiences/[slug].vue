@@ -231,6 +231,12 @@ const form = reactive({
   notes: '',
 })
 
+watch(experience, (newExp) => {
+  if (newExp?.time_slots?.length && !form.time_slot) {
+    form.time_slot = newExp.time_slots[0] || ''
+  }
+}, { immediate: true })
+
 const submitting = ref(false)
 const bookingSuccess = ref(false)
 const bookingError = ref<string | null>(null)
@@ -265,8 +271,9 @@ async function submitBooking() {
     )
     bookingMessage.value = res.message
     bookingSuccess.value = true
-  } catch (err: ApiValue) {
-    bookingError.value = err?.data?.error ?? 'Something went wrong. Please try again.'
+  } catch (err: unknown) {
+    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
+    bookingError.value = typeof errorData?.error === 'string' ? errorData.error : 'Something went wrong. Please try again.'
   } finally {
     submitting.value = false
   }

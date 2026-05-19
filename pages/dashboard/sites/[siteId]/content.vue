@@ -399,7 +399,7 @@ const router = useRouter()
 const siteId = route.params.siteId as string
 const toast = useToast()
 const config = useRuntimeConfig()
-const { editorBackPath, paths, contentPath } = useDashboardSiteLinks(siteId)
+const { paths, contentPath } = useDashboardSiteLinks(siteId)
 const { handleBack } = useEditorNavigation(siteId)
 
 const platformHostname = computed(() => {
