@@ -1,8 +1,10 @@
-import DOMPurify from 'isomorphic-dompurify'
-
 let hooksConfigured = false
 
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin(async () => {
+  if (import.meta.server) return
+
+  const DOMPurify = (await import('isomorphic-dompurify')).default
+
   if (hooksConfigured) return
   hooksConfigured = true
 

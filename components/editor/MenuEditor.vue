@@ -261,7 +261,7 @@
             </NuxtLink>
 
             <UInput
-              :model-value="item.price || ''"
+              :model-value="item.price_amount === null || item.price_amount === undefined ? '' : String(item.price_amount)"
               size="sm"
               :placeholder="pricePlaceholder"
               class="sm:w-28"
@@ -359,30 +359,7 @@ const handleToggleStatus = async (status: 'published' | 'draft') => {
   }
 }
 
-const currencySymbols: Record<string, string> = {
-  THB: '฿',
-  USD: '$',
-  EUR: '€',
-  GBP: '£',
-  JPY: '¥',
-  AUD: 'A$',
-  CAD: 'C$',
-  SGD: 'S$',
-  HKD: 'HK$',
-  MYR: 'RM',
-  IDR: 'Rp',
-  PHP: '₱',
-  VND: '₫',
-  INR: '₹',
-}
-
-const pricePlaceholder = computed(() => {
-  const currency = props.defaultCurrency?.trim()
-    ? props.defaultCurrency.trim().toUpperCase()
-    : 'USD'
-  const symbol = currencySymbols[currency] || currency
-  return `${symbol}250`
-})
+const pricePlaceholder = computed(() => '250')
 
 const handleAiImport = async (menuId: string) => {
   await loadMenu(menuId)
@@ -461,8 +438,8 @@ const handleQuickUpdateItem = async (item: MenuItem, updates: UpdateMenuItemRequ
 const handlePriceChange = (item: MenuItem, event: Event) => {
   const target = event.target as HTMLInputElement | null
   const value = target?.value.trim() || undefined
-  if ((item.price || undefined) === value) return
-  handleQuickUpdateItem(item, { price: value })
+  if ((item.price_amount ?? undefined) === value) return
+  handleQuickUpdateItem(item, { price_amount: value })
 }
 
 const featuredItems = computed(() => {

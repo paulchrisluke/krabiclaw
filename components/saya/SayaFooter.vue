@@ -11,7 +11,7 @@
               v-if="logoUrl"
               :src="logoUrl"
               :alt="restaurantName"
-              class="h-12 w-auto max-w-40 object-contain"
+              class="h-12 w-auto max-w-48 object-contain"
             />
             <span v-else class="saya-display text-5xl text-inverted">{{ restaurantName }}</span>
           </NuxtLink>
@@ -142,35 +142,25 @@
 import { DEFAULT_RESTAURANT_NAME } from '~/config/constants'
 import { getTodayGoogleHours } from '~/utils/formatters'
 
-const { isPlatform, siteId, site } = useTenantSite()
+const { isPlatform, site } = useTenantSite()
 
-const { data: siteConfigData } = !isPlatform && siteId
-  ? useFetch(`/api/public/sites/${siteId}/config`, {
-      key: `footer-config-${siteId}`,
-      default: () => ({ config: {} })
-    })
-  : { data: ref({ config: {} }) }
-
+// Shared bootstrap — same key as the page → zero extra SSR requests
+const { locations: bootstrapLocations, error: bootstrapError, config: siteConfig } = useBootstrap()
+const locationsError = computed(() => bootstrapError.value)
 const year = new Date().getFullYear()
+const logoUrl = computed(() => (site as { logo_url?: string | null } | null)?.logo_url || null)
 const restaurantName = computed(() => {
   if (site && typeof site === 'object' && 'brand_name' in site && typeof site.brand_name === 'string' && site.brand_name.trim()) {
     return site.brand_name
   }
   return DEFAULT_RESTAURANT_NAME
 })
-const logoUrl = computed(() => {
-  if (site && typeof site === 'object' && 'logo_url' in site && typeof site.logo_url === 'string' && site.logo_url) {
-    return site.logo_url
-  }
-  return null
-})
-const siteConfig = computed(() => (siteConfigData.value as ApiValue)?.config ?? {})
-const tagline = computed(() => (siteConfig.value as ApiValue)?.footer_tagline || 'Authentic dining, crafted with passion.')
+const tagline = computed(() => siteConfig.value?.footer_tagline || '')
 const sitePlan = computed(() => (site as { plan?: string | null } | null)?.plan)
 const showBrandingCredit = computed(() => !isPlatform && sitePlan.value === 'free')
 
 const primaryLocation = computed<PublicLocation | null>(() =>
-  rawLocations.value.find((l: PublicLocation) => l.is_primary) ?? rawLocations.value[0] ?? null
+  bootstrapLocations.value.find((l: PublicLocation) => l.is_primary) ?? bootstrapLocations.value[0] ?? null
 )
 
 interface OrderLink { label: string; url: string }
@@ -195,9 +185,9 @@ function safeHttpUrl(value: unknown): string | null {
   }
 }
 
-const facebookUrl = computed(() => safeHttpUrl((siteConfig.value as ApiValue)?.social_facebook) || '')
-const instagramUrl = computed(() => safeHttpUrl((siteConfig.value as ApiValue)?.social_instagram) || '')
-const tiktokUrl = computed(() => safeHttpUrl((siteConfig.value as ApiValue)?.social_tiktok) || '')
+const facebookUrl = computed(() => safeHttpUrl(siteConfig.value?.social_facebook) || '')
+const instagramUrl = computed(() => safeHttpUrl(siteConfig.value?.social_instagram) || '')
+const tiktokUrl = computed(() => safeHttpUrl(siteConfig.value?.social_tiktok) || '')
 
 interface SocialLink {
   name: string
@@ -222,10 +212,6 @@ interface PublicLocation {
   foodpanda_url?: string | null
 }
 
-interface PublicLocationsResponse {
-  locations: PublicLocation[]
-}
-
 const allSocials = computed<SocialLink[]>(() => [
   { name: 'Facebook', url: facebookUrl.value },
   { name: 'Instagram', url: instagramUrl.value },
@@ -235,17 +221,7 @@ const activeSocials = computed(() =>
   allSocials.value.filter((s: SocialLink): s is { name: string; url: string } => typeof s.url === 'string' && s.url.length > 0)
 )
 const inactiveSocials = computed(() => allSocials.value.filter((s: SocialLink) => !s.url))
-
-const { data: locationsData, error: locationsError } = useFetch<PublicLocationsResponse>(
-  () => `/api/public/sites/${siteId}/locations`,
-  {
-    key: () => `footer-locs-${siteId}`,
-    default: () => ({ locations: [] }),
-    immediate: !isPlatform && !!siteId
-  }
-)
-
-const rawLocations = computed(() => locationsData.value?.locations ?? [])
+const rawLocations = computed(() => bootstrapLocations.value)
 const locations = computed(() =>
   rawLocations.value.map((loc: PublicLocation) => {
     let phone = loc.phone

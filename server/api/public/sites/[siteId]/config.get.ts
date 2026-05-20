@@ -18,17 +18,20 @@ export default defineEventHandler(async (event) => {
 
   try {
     const site = await db.prepare(`
-      SELECT id, organization_id
+      SELECT id, organization_id, default_currency
       FROM sites
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `).bind(siteId).first() as { id: string; organization_id: string } | null
+    `).bind(siteId).first() as { id: string; organization_id: string; default_currency: string | null } | null
 
     if (!site) {
       return jsonResponse({ error: 'Site not found' }, { status: 404 })
     }
 
-    const config = await getConfig(db, site.organization_id, site.id)
+    const config = {
+      ...await getConfig(db, site.organization_id, site.id),
+      default_currency: site.default_currency || 'THB',
+    }
     return jsonResponse({
       success: true,
       config

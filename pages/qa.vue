@@ -1,71 +1,30 @@
 <template>
-  <div class="min-h-screen bg-default">
-    <SayaHero
-      title="Questions & Answers"
-      subtitle="Customer Inquiries About Our Restaurant"
-      size="page"
-    />
-
-    <SayaQA
-      :qa="googleQA"
-      bg="white"
-      padding="default"
-      :show-title="false"
-    />
+  <div class="min-h-screen bg-default text-default">
+    <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
+      <p class="saya-kicker mb-6">Q&A</p>
+      <h1 class="saya-display-md text-default"><em class="saya-italic">Frequently</em> asked</h1>
+      <p class="mt-5 max-w-xl text-sm leading-relaxed text-muted">Questions asked by guests on Google. Owner-answered questions are pinned to the top.</p>
+    </header>
+    <SayaQA :qa="googleQA" :show-title="false" />
   </div>
 </template>
 
 <script setup>
 definePageMeta({ layout: 'saya' })
-import { useTenantSite } from '~/composables/useTenantSite'
 
-const { siteId } = await useTenantSite()
+const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/google-business`, {
-  key: `qa-google-business-${siteId}`,
-  default: () => ({
-    business: null,
-    reviews: [],
-    media: [],
-    posts: [],
-    errors: [],
-    syncedAt: null
-  })
-})
-
+const { googleBusiness } = useBootstrap()
 const googleQA = computed(() => googleBusiness.value?.qa || [])
+const restaurantName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Restaurant')
 
-// SEO Meta
+const sharedOgImage = useSharedOgImage()
+const currentPageUrl = useSeoUrl('/qa')
 useSeoMeta({
-  title: 'Q&A | Your Restaurant | Customer Questions',
-  description: 'Find answers to frequently asked questions about Your Restaurant in your city. Browse customer inquiries and our responses about authentic dining.',
-  ogTitle: 'Q&A | Your Restaurant',
-  ogDescription: 'Customer questions and answers about our authentic restaurant in your city.',
-  ogImage: '/og-image.jpg',
-  ogUrl: 'https://www.kikuzuki-thailand.com/qa',
-  ogType: 'website',
-  twitterCard: 'summary_large_image',
-  twitterTitle: 'Q&A - Your Restaurant',
-  twitterDescription: 'Customer questions and answers about our Japanese restaurant in your city.',
-  twitterImage: '/og-image.jpg'
+  title: computed(() => `Q&A | ${restaurantName.value}`),
+  description: computed(() => `Frequently asked questions about ${restaurantName.value}.`),
+  ogImage: sharedOgImage,
+  ogUrl: currentPageUrl
 })
-
-useSchemaOrg([
-  computed(() => ({
-    '@type': 'Restaurant',
-    name: 'Your Restaurant',
-    mainEntity: {
-      '@type': 'FAQPage',
-      mainEntity: {
-        '@type': 'Question',
-        name: 'Customer Questions About Our Restaurant',
-        acceptedAnswer: {
-          '@type': 'Answer',
-          text: 'Find answers to common questions about our authentic restaurant, menu, and services.'
-        }
-      }
-    }
-  }))
-])
 </script>

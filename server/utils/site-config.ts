@@ -1,5 +1,4 @@
 import type { D1Database } from '@cloudflare/workers-types'
-import type { CurrencyCode } from '~/server/types/site'
 
 export interface SiteConfig {
   ga4_property_id?: string
@@ -7,7 +6,6 @@ export interface SiteConfig {
   gbp_location_id?: string
   gbp_account_id?: string
   brand_color?: string
-  default_currency?: CurrencyCode
   social_facebook?: string
   social_instagram?: string
   social_tiktok?: string

@@ -7,6 +7,7 @@ export interface ChowBotSiteAccess {
   id: string
   organization_id: string
   brand_name: string | null
+  default_currency: string
   role: string
 }
 
@@ -85,7 +86,7 @@ export async function getSiteForMember(
 ): Promise<ChowBotSiteAccess | null> {
   const placeholders = roles.map(() => '?').join(', ')
   return await db.prepare(`
-    SELECT s.id, s.organization_id, s.brand_name, m.role
+    SELECT s.id, s.organization_id, s.brand_name, s.default_currency, m.role
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN (${placeholders}) AND s.status = 'active'
@@ -100,7 +101,7 @@ export async function listSitesForMember(
 ): Promise<ChowBotSiteAccess[]> {
   const placeholders = roles.map(() => '?').join(', ')
   const { results } = await db.prepare(`
-    SELECT s.id, s.organization_id, s.brand_name, m.role
+    SELECT s.id, s.organization_id, s.brand_name, s.default_currency, m.role
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
     WHERE m.userId = ? AND m.role IN (${placeholders}) AND s.status = 'active'

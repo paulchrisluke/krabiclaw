@@ -135,7 +135,7 @@
                 />
               </UFormField>
             </div>
-            <UFormField label="Menu Currency">
+            <UFormField label="Menu Currency" help="Used to display menu item amounts and menu SEO structured data.">
               <USelect
                 v-model="form.default_currency"
                 :items="currencyOptions"

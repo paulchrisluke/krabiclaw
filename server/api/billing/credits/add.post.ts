@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event).catch(() => ({}))
 
   // Dev-only direct top-up — accepts either { amount } or { bundle }
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.dev) {
     const raw = body.amount ?? body.bundle
     if (raw === undefined || raw === null) {
       return jsonResponse({ error: 'amount or bundle is required' }, { status: 400 })
@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
     const member = await db.prepare(
       'SELECT organizationId FROM member WHERE userId = ? LIMIT 1'
     ).bind(session.user.id).first()
-    if (!member) return jsonResponse({ error: 'No organisation found' }, { status: 404 })
+    if (!member) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
     const orgId = member.organizationId as string
     const now = new Date().toISOString()
@@ -67,7 +67,7 @@ export default defineEventHandler(async (event) => {
   const member = await db.prepare(
     'SELECT organizationId FROM member WHERE userId = ? LIMIT 1'
   ).bind(session.user.id).first() as { organizationId: string } | null
-  if (!member) return jsonResponse({ error: 'No organisation found' }, { status: 404 })
+  if (!member) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
   const orgId = member.organizationId
 

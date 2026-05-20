@@ -1,75 +1,66 @@
--- Demo seed for local development — Saya theme showcase
+-- Demo seed for local development - Saya theme showcase
 -- Preview at: http://demo.localhost:3000
 -- Production at: https://demo.krabiclaw.com
--- Idempotent: safe to re-run with yarn seed:local or yarn seed:remote --confirm-production
+-- Destructive for demo-owned rows: safe to re-run with yarn seed:local or yarn seed:remote --confirm-production
 
--- ── Theme ────────────────────────────────────────────────────────────────────
+PRAGMA foreign_keys = ON;
+
+-- Theme is shared platform data, not demo-owned data.
 INSERT OR IGNORE INTO themes (id, name, slug, version, description, status)
 VALUES ('saya-theme-v1', 'Saya', 'saya', '1.0.0', 'Restaurant website theme', 'active');
 
--- ── User ─────────────────────────────────────────────────────────────────────
-INSERT OR IGNORE INTO user (id, name, email, emailVerified, createdAt, updatedAt)
+-- Cleanly replace the protected demo tenant. Cascades remove demo site content,
+-- locations, media, menus, reviews, posts, translations, bookings, billing,
+-- credits, ChowBot state, domains, and other demo-owned child rows.
+DELETE FROM organization WHERE id IN ('org-demo', 'org_demo');
+DELETE FROM user WHERE id IN ('user-demo', 'user_demo');
+
+-- Guard against legacy demo scripts that may have claimed the demo domains.
+DELETE FROM site_domains WHERE domain IN ('demo.localhost', 'demo.krabiclaw.com');
+
+-- User
+INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt)
 VALUES ('user-demo', 'Demo Owner', 'demo@krabiclaw.com', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- ── Organization ─────────────────────────────────────────────────────────────
-INSERT OR IGNORE INTO organization (id, name, slug, createdAt)
-VALUES ('org-demo', "Hoff's Hogies", 'hoffs-hogies-demo', CURRENT_TIMESTAMP);
+-- Organization
+INSERT INTO organization (id, name, slug, createdAt)
+VALUES ('org-demo', 'Ember & Slice', 'ember-slice-demo', CURRENT_TIMESTAMP);
 
-INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt)
+INSERT INTO member (id, organizationId, userId, role, createdAt)
 VALUES ('member-demo', 'org-demo', 'user-demo', 'owner', CURRENT_TIMESTAMP);
 
--- ── Site ─────────────────────────────────────────────────────────────────────
-INSERT OR IGNORE INTO sites (
+-- Site
+INSERT INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
-  status, plan, onboarding_status, url_structure
+  status, plan, onboarding_status, url_structure, primary_location_id,
+  contact_email, default_currency
 ) VALUES (
-  'site-demo', 'org-demo', 'saya-theme-v1', 'saya', 'hoffs-hogies-demo', 'demo',
-  "Hoff's Hogies",
-  'Classic Buffalo hoagies built on fresh-baked bread with house-made spreads.',
-  'active', 'free', 'active', 'location_subdirectories'
+  'site-demo', 'org-demo', 'saya-theme-v1', 'saya', 'ember-slice-demo', 'demo',
+  'Ember & Slice',
+  'A Brooklyn wood-fired trattoria serving blistered pies, seasonal antipasti, and easy neighborhood hospitality.',
+  'active', 'free', 'active', 'location_subdirectories', NULL,
+  'hello@emberandslice.example', 'USD'
 );
 
--- Backfill brand fields and link primary location on re-runs
-UPDATE sites SET
-  brand_name        = "Hoff's Hogies",
-  brand_description = 'Classic Buffalo hoagies built on fresh-baked bread with house-made spreads.',
-  theme             = 'saya',
-  primary_location_id = 'loc-demo'
-WHERE id = 'site-demo';
-
--- ── Demo languages ───────────────────────────────────────────────────────────
-INSERT OR IGNORE INTO site_config (organization_id, site_id, key, value)
+-- Demo languages
+INSERT INTO site_config (organization_id, site_id, key, value)
 VALUES ('org-demo', 'site-demo', 'source_locale', 'en');
 
-INSERT OR IGNORE INTO site_locales
+INSERT INTO site_locales
   (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
 VALUES
   ('locale::org-demo::site-demo::en', 'org-demo', 'site-demo', 'en', 'English', 1, 'published', 1),
   ('locale::org-demo::site-demo::th', 'org-demo', 'site-demo', 'th', 'ไทย', 0, 'published', 1);
 
-UPDATE site_locales SET is_source = 1, status = 'published', fallback_enabled = 1, label = 'English'
-  WHERE organization_id = 'org-demo' AND site_id = 'site-demo' AND locale = 'en';
-UPDATE site_locales SET is_source = 0, status = 'published', fallback_enabled = 1, label = 'ไทย'
-  WHERE organization_id = 'org-demo' AND site_id = 'site-demo' AND locale = 'th';
-
--- ── Site domains ─────────────────────────────────────────────────────────────
--- domain-demo-local: kept secondary so the .localhost dev path is unaffected
--- domain-demo-prod:  canonical — production canonical redirect target
-INSERT OR IGNORE INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status)
+-- Site domains
+INSERT INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status)
 VALUES
-  ('domain-demo-local', 'org-demo', 'site-demo', 'demo.localhost',      'subdomain', 'secondary', 'active', 'valid'),
-  ('domain-demo-prod',  'org-demo', 'site-demo', 'demo.krabiclaw.com',  'subdomain', 'canonical', 'active', 'valid');
+  ('domain-demo-local', 'org-demo', 'site-demo', 'demo.localhost', 'subdomain', 'secondary', 'active', 'valid'),
+  ('domain-demo-prod', 'org-demo', 'site-demo', 'demo.krabiclaw.com', 'subdomain', 'canonical', 'active', 'valid');
 
--- Ensure role/status are correct on re-runs regardless of which row was inserted first
-UPDATE site_domains SET dns_status = 'valid', status = 'active'
-  WHERE domain = 'demo.localhost' AND site_id = 'site-demo';
-UPDATE site_domains SET role = 'canonical', dns_status = 'valid', status = 'active'
-  WHERE domain = 'demo.krabiclaw.com' AND site_id = 'site-demo';
-
--- ── Location ─────────────────────────────────────────────────────────────────
--- hero_image_asset_id set below after media insert
-INSERT OR IGNORE INTO business_locations (
+-- Location
+INSERT INTO business_locations (
   id, organization_id, site_id, slug, title, city,
   address, phone, email, maps_url,
   latitude, longitude,
@@ -80,540 +71,464 @@ INSERT OR IGNORE INTO business_locations (
   instagram_url, facebook_url,
   is_primary, status
 ) VALUES (
-  'loc-demo', 'org-demo', 'site-demo', 'buffalo', 'The Hoagie Stop', 'Buffalo',
-  '{"addressLines":["2285 Main St"],"locality":"Buffalo","administrativeArea":"NY","postalCode":"14214","country":"US"}',
-  '(716) 555-0190',
-  'hello@hoffshoagies.com',
-  'https://maps.app.goo.gl/buffalo-hoagie-stop',
-  42.9317, -78.8714,
-  'Classic Buffalo hoagies built on fresh-baked bread with house-made spreads. One location, one kitchen, no shortcuts.',
-  'Fresh-baked rolls. House-made spreads. Buffalo''s best hoagie.',
-  '[{"openDay":"MONDAY","openTime":"10:00","closeTime":"20:00"},{"openDay":"TUESDAY","openTime":"10:00","closeTime":"20:00"},{"openDay":"WEDNESDAY","openTime":"10:00","closeTime":"20:00"},{"openDay":"THURSDAY","openTime":"10:00","closeTime":"20:00"},{"openDay":"FRIDAY","openTime":"10:00","closeTime":"21:00"},{"openDay":"SATURDAY","openTime":"10:00","closeTime":"21:00"},{"openDay":"SUNDAY","openTime":"11:00","closeTime":"18:00"}]',
-  4.7, 142,
+  'loc-demo', 'org-demo', 'site-demo', 'brooklyn', 'Ember & Slice Brooklyn', 'Brooklyn',
+  '{"addressLines":["184 Wythe Ave"],"locality":"Brooklyn","administrativeArea":"NY","postalCode":"11249","country":"US"}',
+  '(718) 555-0148',
+  'hello@emberandslice.example',
+  'https://maps.app.goo.gl/ember-slice-brooklyn',
+  40.7193, -73.9618,
+  'A Brooklyn wood-fired trattoria built around blistered sourdough pies, bright antipasti, and an open oven that runs from lunch through late dinner.',
+  'Wood-fired pizza, seasonal antipasti, and warm neighborhood hospitality in Brooklyn.',
+  '[{"openDay":"MONDAY","openTime":"12:00","closeTime":"22:00"},{"openDay":"TUESDAY","openTime":"12:00","closeTime":"22:00"},{"openDay":"WEDNESDAY","openTime":"12:00","closeTime":"22:00"},{"openDay":"THURSDAY","openTime":"12:00","closeTime":"22:00"},{"openDay":"FRIDAY","openTime":"12:00","closeTime":"23:00"},{"openDay":"SATURDAY","openTime":"11:00","closeTime":"23:00"},{"openDay":"SUNDAY","openTime":"11:00","closeTime":"21:00"}]',
+  4.8, 188,
   '$$',
-  '["Sandwich Shop","Hoagie","Deli"]',
-  'https://instagram.com/hoffshoagies',
-  'https://facebook.com/hoffshoagies',
+  '["Pizza","Italian Restaurant","Wood-fired Trattoria"]',
+  'https://instagram.com/emberandslice',
+  'https://facebook.com/emberandslice',
   1, 'active'
+), (
+  'loc-demo-2', 'org-demo', 'site-demo', 'west-village', 'Ember & Slice West Village', 'New York',
+  '{"addressLines":["100 7th Ave S"],"locality":"New York","administrativeArea":"NY","postalCode":"10014","country":"US"}',
+  '(212) 555-0199',
+  'hello@emberandslice.example',
+  'https://maps.app.goo.gl/ember-slice-west-village',
+  40.7335, -74.0027,
+  'Our signature wood-fired pies and warm hospitality, brought to the heart of the West Village.',
+  'Wood-fired pizza, seasonal antipasti, and neighborhood hospitality in the West Village.',
+  '[{"openDay":"MONDAY","openTime":"16:00","closeTime":"23:00"},{"openDay":"TUESDAY","openTime":"16:00","closeTime":"23:00"},{"openDay":"WEDNESDAY","openTime":"16:00","closeTime":"23:00"},{"openDay":"THURSDAY","openTime":"16:00","closeTime":"23:00"},{"openDay":"FRIDAY","openTime":"15:00","closeTime":"23:59"},{"openDay":"SATURDAY","openTime":"15:00","closeTime":"23:59"},{"openDay":"SUNDAY","openTime":"15:00","closeTime":"23:00"}]',
+  4.9, 112,
+  '$$',
+  '["Pizza","Italian Restaurant","Trattoria"]',
+  'https://instagram.com/emberandslice',
+  'https://facebook.com/emberandslice',
+  0, 'active'
 );
 
--- Backfill new fields on re-runs
-UPDATE business_locations SET
-  email             = 'hello@hoffshoagies.com',
-  short_description = 'Fresh-baked rolls. House-made spreads. Buffalo''s best hoagie.',
-  price_level       = '$$',
-  categories        = '["Sandwich Shop","Hoagie","Deli"]',
-  instagram_url     = 'https://instagram.com/hoffshoagies',
-  facebook_url      = 'https://facebook.com/hoffshoagies'
-WHERE id = 'loc-demo';
+-- Set primary location after business_locations row exists
+UPDATE sites SET primary_location_id = 'loc-demo' WHERE id = 'site-demo';
 
--- ── Media assets ─────────────────────────────────────────────────────────────
-INSERT OR IGNORE INTO media_assets
+-- Media assets
+INSERT INTO media_assets
   (id, organization_id, site_id, location_id,
    kind, provider, source,
    public_url, thumbnail_url,
    mime_type, file_name, alt_text, category, status)
 VALUES
-  -- ─ Hero / location card (interior — counter) ─
   ('media-demo-hero', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
-   'https://images.unsplash.com/photo-1509722747041-616f39b57569?w=1200&q=80',
-   'https://images.unsplash.com/photo-1509722747041-616f39b57569?w=600&q=70',
-   'image/jpeg', 'hero.jpg', 'The Hoagie Stop counter', 'interior', 'active'),
+   'https://images.unsplash.com/photo-1579751626657-72bc17010498?w=1200&q=80',
+   'https://images.unsplash.com/photo-1579751626657-72bc17010498?w=600&q=70',
+   'image/jpeg', 'wood-fired-pizza-hero.jpg', 'Wood-fired pizza with blistered crust', 'food', 'active'),
 
-  -- ─ Gallery: exterior ─
+  ('media-demo-hero-video', 'org-demo', 'site-demo', 'loc-demo',
+   'video', 'external_url', 'external',
+   '/videos/krabiclaw-demo-hero-video.mp4', NULL,
+   'video/mp4', 'krabiclaw-demo-hero-video.mp4', 'Hero background video of the restaurant', 'interior', 'active'),
+
+  ('media-demo-margherita-video', 'org-demo', 'site-demo', 'loc-demo',
+   'video', 'external_url', 'external',
+   '/videos/krabiclaw-demo-pizza-cutting.mp4', NULL,
+   'video/mp4', 'krabiclaw-demo-pizza-cutting.mp4', 'Fresh Margherita pizza being cut', 'food', 'active'),
+  
+  ('media-demo-pizza-prep-video', 'org-demo', 'site-demo', 'loc-demo',
+   'video', 'external_url', 'external',
+   '/videos/krabiclaw-demo-pizza-prep.mp4', NULL,
+   'video/mp4', 'krabiclaw-demo-pizza-prep.mp4', 'Pizza dough being prepared and wood-fired', 'interior', 'active'),
+
   ('media-demo-ext-1', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
    'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1200&q=80',
    'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=70',
-   'image/jpeg', 'exterior-1.jpg', 'Restaurant storefront', 'exterior', 'active'),
+   'image/jpeg', 'brooklyn-storefront.jpg', 'Neighborhood restaurant storefront', 'exterior', 'active'),
   ('media-demo-ext-2', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
-   'https://images.unsplash.com/photo-1537047902294-62a40c20a6ae?w=1200&q=80',
-   'https://images.unsplash.com/photo-1537047902294-62a40c20a6ae?w=600&q=70',
-   'image/jpeg', 'exterior-2.jpg', 'Street-facing entrance', 'exterior', 'active'),
+   'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=1200&q=80',
+   'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&q=70',
+   'image/jpeg', 'evening-entrance.jpg', 'Warm trattoria entrance at night', 'exterior', 'active'),
 
-  -- ─ Gallery: interior ─
   ('media-demo-int-1', 'org-demo', 'site-demo', 'loc-demo',
-   'image', 'external_url', 'external',
-   'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&q=80',
-   'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=70',
-   'image/jpeg', 'interior-dining.jpg', 'Dining room', 'interior', 'active'),
-  ('media-demo-int-2', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80',
    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=70',
-   'image/jpeg', 'interior-ambiance.jpg', 'Restaurant ambiance', 'interior', 'active'),
+   'image/jpeg', 'dining-room.jpg', 'Cozy Brooklyn dining room', 'interior', 'active'),
+  ('media-demo-int-2', 'org-demo', 'site-demo', 'loc-demo',
+   'image', 'external_url', 'external',
+   'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=1200&q=80',
+   'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=600&q=70',
+   'image/jpeg', 'oven-counter.jpg', 'Open kitchen counter near the oven', 'interior', 'active'),
   ('media-demo-int-3', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
-   'https://images.unsplash.com/photo-1424847651672-bf20a4b0982b?w=1200&q=80',
-   'https://images.unsplash.com/photo-1424847651672-bf20a4b0982b?w=600&q=70',
-   'image/jpeg', 'interior-bar.jpg', 'Counter and service area', 'interior', 'active'),
+   'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&q=80',
+   'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=70',
+   'image/jpeg', 'table-service.jpg', 'Table set for trattoria service', 'interior', 'active'),
 
-  -- ─ Gallery: team ─
   ('media-demo-team-1', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
    'https://images.unsplash.com/photo-1581299894007-aaa50297cf16?w=1200&q=80',
    'https://images.unsplash.com/photo-1581299894007-aaa50297cf16?w=600&q=70',
-   'image/jpeg', 'team.jpg', 'The Hoagie Stop kitchen team', 'team', 'active'),
+   'image/jpeg', 'pizza-team.jpg', 'Ember & Slice kitchen team', 'team', 'active'),
 
-  -- ─ Menu item images ─
-  ('media-demo-italian', 'org-demo', 'site-demo', 'loc-demo',
+  ('media-demo-margherita', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
-   'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=80',
-   'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=70',
-   'image/jpeg', 'italian-combo.jpg', 'Italian combo hoagie', 'food', 'active'),
-  ('media-demo-roastbeef', 'org-demo', 'site-demo', 'loc-demo',
+   'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=900&q=80',
+   'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=450&q=70',
+   'image/jpeg', 'margherita.jpg', 'Margherita pizza with basil', 'food', 'active'),
+  ('media-demo-pepperoni', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
-   'https://images.unsplash.com/photo-1550547660-d9450f859349?w=800&q=80',
-   'https://images.unsplash.com/photo-1550547660-d9450f859349?w=400&q=70',
-   'image/jpeg', 'roast-beef.jpg', 'Roast beef hoagie', 'food', 'active'),
-  ('media-demo-buffalo', 'org-demo', 'site-demo', 'loc-demo',
+   'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=900&q=80',
+   'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=450&q=70',
+   'image/jpeg', 'pepperoni-calabrese.jpg', 'Pepperoni Calabrese pizza', 'food', 'active'),
+  ('media-demo-funghi', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
-   'https://images.unsplash.com/photo-1606755962773-d324e0a13086?w=800&q=80',
-   'https://images.unsplash.com/photo-1606755962773-d324e0a13086?w=400&q=70',
-   'image/jpeg', 'buffalo-chicken.jpg', 'Buffalo chicken hoagie', 'food', 'active'),
+   'https://images.unsplash.com/photo-1594007654729-407eedc4be65?w=900&q=80',
+   'https://images.unsplash.com/photo-1594007654729-407eedc4be65?w=450&q=70',
+   'image/jpeg', 'funghi-bianco.jpg', 'Mushroom white pizza', 'food', 'active'),
+  ('media-demo-burrata', 'org-demo', 'site-demo', 'loc-demo',
+   'image', 'external_url', 'external',
+   'https://images.unsplash.com/photo-1608897013039-887f21d8c804?w=900&q=80',
+   'https://images.unsplash.com/photo-1608897013039-887f21d8c804?w=450&q=70',
+   'image/jpeg', 'burrata.jpg', 'Burrata with tomatoes and herbs', 'food', 'active'),
+  ('media-demo-knots', 'org-demo', 'site-demo', 'loc-demo',
+   'image', 'external_url', 'external',
+   'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?w=900&q=80',
+   'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?w=450&q=70',
+   'image/jpeg', 'garlic-knots.jpg', 'Garlic knots with marinara', 'food', 'active'),
 
-  -- ─ Additional food gallery shots ─
-  ('media-demo-food-4', 'org-demo', 'site-demo', 'loc-demo',
-   'image', 'external_url', 'external',
-   'https://images.unsplash.com/photo-1565299507177-b0ac66763828?w=800&q=80',
-   'https://images.unsplash.com/photo-1565299507177-b0ac66763828?w=400&q=70',
-   'image/jpeg', 'food-4.jpg', 'Fresh hoagie close-up', 'food', 'active'),
-  ('media-demo-food-5', 'org-demo', 'site-demo', 'loc-demo',
-   'image', 'external_url', 'external',
-   'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=800&q=80',
-   'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&q=70',
-   'image/jpeg', 'food-5.jpg', 'House chips and hoagie', 'food', 'active'),
-
-  -- ─ Post images ─
   ('media-demo-post1', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
-   'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&q=80',
-   'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=70',
-   'image/jpeg', 'post-1.jpg', 'Restaurant dining room', 'interior', 'active'),
+   'https://images.unsplash.com/photo-1579751626657-72bc17010498?w=1200&q=80',
+   'https://images.unsplash.com/photo-1579751626657-72bc17010498?w=600&q=70',
+   'image/jpeg', 'post-oven.jpg', 'Pizza coming out of the oven', 'food', 'active'),
   ('media-demo-post2', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80',
    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=70',
-   'image/jpeg', 'post-2.jpg', 'Restaurant ambiance', 'interior', 'active'),
+   'image/jpeg', 'post-dining-room.jpg', 'Dining room during dinner service', 'interior', 'active'),
   ('media-demo-post3', 'org-demo', 'site-demo', 'loc-demo',
    'image', 'external_url', 'external',
-   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1200&q=80',
-   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=70',
-   'image/jpeg', 'post-3.jpg', 'Restaurant exterior', 'exterior', 'active');
+   'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=1200&q=80',
+   'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=600&q=70',
+   'image/jpeg', 'post-margherita.jpg', 'Margherita pizza special', 'food', 'active'),
+   
+  ('media-demo2-hero', 'org-demo', 'site-demo', 'loc-demo-2',
+   'image', 'external_url', 'external',
+   'https://images.unsplash.com/photo-1544148103-0773bf10d330?w=1200&q=80',
+   'https://images.unsplash.com/photo-1544148103-0773bf10d330?w=600&q=70',
+   'image/jpeg', 'west-village-hero.jpg', 'West Village restaurant storefront', 'exterior', 'active'),
 
--- Backfill category on any rows that were inserted without it
-UPDATE media_assets SET category = 'interior'
-  WHERE id IN ('media-demo-hero','media-demo-int-1','media-demo-int-2','media-demo-int-3','media-demo-post1','media-demo-post2')
-    AND category IS NULL;
-UPDATE media_assets SET category = 'exterior'
-  WHERE id IN ('media-demo-ext-1','media-demo-ext-2','media-demo-post3')
-    AND category IS NULL;
-UPDATE media_assets SET category = 'food'
-  WHERE id IN ('media-demo-italian','media-demo-roastbeef','media-demo-buffalo','media-demo-food-4','media-demo-food-5')
-    AND category IS NULL;
-UPDATE media_assets SET category = 'team'
-  WHERE id = 'media-demo-team-1' AND category IS NULL;
+  ('media-demo2-int-1', 'org-demo', 'site-demo', 'loc-demo-2',
+   'image', 'external_url', 'external',
+   'https://images.unsplash.com/photo-1559339352-11d035aa65de?w=1200&q=80',
+   'https://images.unsplash.com/photo-1559339352-11d035aa65de?w=600&q=70',
+   'image/jpeg', 'west-village-interior.jpg', 'Cozy West Village dining room', 'interior', 'active');
 
--- ── Wire hero image to location ───────────────────────────────────────────────
-UPDATE business_locations SET hero_image_asset_id = 'media-demo-hero' WHERE id = 'loc-demo';
+UPDATE business_locations SET hero_image_asset_id = 'media-demo-hero', hero_video_asset_id = 'media-demo-pizza-prep-video' WHERE id = 'loc-demo';
+UPDATE business_locations SET hero_image_asset_id = 'media-demo2-hero' WHERE id = 'loc-demo-2';
 
--- ── Reviews ───────────────────────────────────────────────────────────────────
--- 6 reviews with mixed ratings, reviewer avatars, and 3 owner replies
-INSERT OR IGNORE INTO reviews
+-- Reviews
+INSERT INTO reviews
   (id, organization_id, site_id, location_id,
    author_name, reviewer_photo_url, rating, content,
    owner_reply, owner_reply_at,
    status, source)
 VALUES
   ('rev-demo-1', 'org-demo', 'site-demo', 'loc-demo',
-   'Marcus T.',
-   'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=96&q=80',
-   5,
-   'Best hoagie in Buffalo, no contest. The bread is baked fresh every morning and it shows. Get the Italian combo — it is everything.',
-   NULL, NULL,
-   'approved', 'google'),
-
-  ('rev-demo-2', 'org-demo', 'site-demo', 'loc-demo',
-   'Sara K.',
+   'Maya R.',
    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=96&q=80',
    5,
-   'Came in for lunch on a weekday and it was absolutely packed. That tells you everything. Massive portions, fair prices, genuinely friendly staff.',
-   'Thank you Sara — weekday lunches are our busiest and it means a lot to hear that. See you next time!',
+   'The Margherita had that perfect leopard-spotted crust and the basil hit the table smelling fresh. Exactly what I want from a neighborhood pizza night.',
+   NULL, NULL,
+   'approved', 'google'),
+  ('rev-demo-2', 'org-demo', 'site-demo', 'loc-demo',
+   'Julian P.',
+   'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=96&q=80',
+   5,
+   'Sat at the counter and watched the oven all night. Pepperoni Calabrese, burrata, and a spritz made this feel like a tiny vacation.',
+   'Thank you Julian. The counter seats are our favorite too - come back for the Funghi Bianco next time.',
    '2026-04-22T09:15:00.000Z',
    'approved', 'google'),
-
   ('rev-demo-3', 'org-demo', 'site-demo', 'loc-demo',
-   'Derek M.',
-   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=96&q=80',
+   'Priya S.',
+   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=96&q=80',
    4,
-   'Solid neighbourhood spot. The roast beef is the move. Lines move fast even when it is busy. Only reason it is not 5 stars is the parking situation.',
-   'Thanks Derek — parking on Main St is tough, we know. Street parking on Hertel one block up is usually the move. Hope to see you back!',
+   'Great crust, warm service, and the garlic knots vanished before the pizza landed. It gets loud at peak dinner but in a good way.',
+   'Thanks Priya. Dinner definitely has energy, and we are glad the knots did their job.',
    '2026-04-15T11:30:00.000Z',
    'approved', 'google'),
-
   ('rev-demo-4', 'org-demo', 'site-demo', 'loc-demo',
-   'Jenna L.',
-   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=96&q=80',
+   'Noah L.',
+   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=96&q=80',
    5,
-   'I drove 40 minutes specifically for the meatball parm. Zero regrets. This place is the real deal.',
+   'The hot honey soppressata is ridiculous. Sweet, spicy, smoky, and somehow still balanced. Best pie I have had in Williamsburg this year.',
    NULL, NULL,
    'approved', 'google'),
-
   ('rev-demo-5', 'org-demo', 'site-demo', 'loc-demo',
+   'Elena C.',
+   'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=96&q=80',
+   4,
+   'Lovely date-night spot without feeling precious. Caesar was sharp and cold, pizza was blistered, staff knew the menu well.',
+   NULL, NULL,
+   'approved', 'google'),
+  ('rev-demo-6', 'org-demo', 'site-demo', 'loc-demo',
    'Chris B.',
    'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=96&q=80',
-   4,
-   'Great hoagies, generous with the toppings. Turkey club is my go-to. Service is fast and the people working there clearly enjoy what they do.',
-   NULL, NULL,
-   'approved', 'google'),
-
-  ('rev-demo-6', 'org-demo', 'site-demo', 'loc-demo',
-   'Amy W.',
-   'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=96&q=80',
    3,
-   'Decent food but it was very busy when I went and wait time was longer than expected. The hoagie itself was good though — will come back on a quieter day.',
-   'Hi Amy — sorry your visit landed on a hectic one. Come before 11am or after 2pm and you will breeze right through. Hope to see you again soon!',
+   'Food was strong but our table was about 15 minutes late on a busy Friday. I would come earlier next time.',
+   'Hi Chris - sorry for the Friday wait. We tightened our turn times and would love to host you again on a smoother night.',
    '2026-03-30T14:45:00.000Z',
+   'approved', 'google'),
+  ('rev-demo2-1', 'org-demo', 'site-demo', 'loc-demo-2',
+   'Michael T.',
+   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=96&q=80',
+   5,
+   'Unbelievable sourdough pizza right in the West Village! The Margherita is simple, fresh, and perfectly charred. Truly a hidden gem.',
+   'Thank you Michael! We are thrilled you enjoyed the neighborhood vibes and our signature crust.',
+   '2026-05-15T12:00:00.000Z',
+   'approved', 'google'),
+  ('rev-demo2-2', 'org-demo', 'site-demo', 'loc-demo-2',
+   'Emma W.',
+   'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=96&q=80',
+   5,
+   'Beautiful space, exceptionally friendly service, and a fantastic corner view. Highly recommend the Burrata and the Hot Honey pie!',
+   NULL, NULL,
    'approved', 'google');
 
--- Backfill reviewer photos and owner replies on re-runs
-UPDATE reviews SET reviewer_photo_url = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=96&q=80'
-  WHERE id = 'rev-demo-1' AND reviewer_photo_url IS NULL;
-UPDATE reviews SET
-  reviewer_photo_url = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=96&q=80',
-  owner_reply        = 'Thank you Sara — weekday lunches are our busiest and it means a lot to hear that. See you next time!',
-  owner_reply_at     = '2026-04-22T09:15:00.000Z'
-  WHERE id = 'rev-demo-2';
-UPDATE reviews SET
-  reviewer_photo_url = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=96&q=80',
-  owner_reply        = 'Thanks Derek — parking on Main St is tough, we know. Street parking on Hertel one block up is usually the move. Hope to see you back!',
-  owner_reply_at     = '2026-04-15T11:30:00.000Z'
-  WHERE id = 'rev-demo-3';
-UPDATE reviews SET reviewer_photo_url = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=96&q=80'
-  WHERE id = 'rev-demo-4' AND reviewer_photo_url IS NULL;
-UPDATE reviews SET reviewer_photo_url = 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=96&q=80'
-  WHERE id = 'rev-demo-5' AND reviewer_photo_url IS NULL;
-UPDATE reviews SET
-  reviewer_photo_url = 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=96&q=80',
-  owner_reply        = 'Hi Amy — sorry your visit landed on a hectic one. Come before 11am or after 2pm and you will breeze right through. Hope to see you again soon!',
-  owner_reply_at     = '2026-03-30T14:45:00.000Z'
-  WHERE id = 'rev-demo-6';
+-- Menu
+INSERT INTO menus (id, organization_id, site_id, location_id, name, description, section_order, status)
+VALUES (
+  'menu-demo', 'org-demo', 'site-demo', 'loc-demo', 'Menu',
+  'Wood-fired pizza, antipasti, salads, and drinks from the Ember & Slice oven.',
+  '["Wood-Fired Pizza","Antipasti","Pasta & Salads","Drinks"]',
+  'published'
+), (
+  'menu-demo-2', 'org-demo', 'site-demo', 'loc-demo-2', 'Menu',
+  'Wood-fired pizza, fresh local antipasti, and craft drinks in the West Village.',
+  '["Wood-Fired Pizza","Antipasti","Drinks"]',
+  'published'
+);
 
--- ── Menu ─────────────────────────────────────────────────────────────────────
-INSERT OR IGNORE INTO menus (id, organization_id, site_id, location_id, name, status)
-VALUES ('menu-demo', 'org-demo', 'site-demo', 'loc-demo', 'Menu', 'published');
-
-INSERT OR IGNORE INTO menu_items
-  (id, menu_id, section, name, slug, description, price,
+INSERT INTO menu_items
+  (id, menu_id, section, name, slug, description, price_amount,
    image_asset_id, allergens, dietary_notes, available, sort_order)
 VALUES
-  ('mi-1', 'menu-demo', 'Cold Hoagies', 'Italian Combo', 'italian-combo',
-   'Genoa salami, capicola, provolone, shredded lettuce, tomato, onion, oil and vinegar on a fresh-baked roll',
-   '$11', 'media-demo-italian', 'Gluten, Dairy', NULL, 1, 1),
+  ('mi-1', 'menu-demo', 'Wood-Fired Pizza', 'Margherita', 'margherita',
+   'San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt',
+   18, 'media-demo-margherita', 'Gluten, Dairy', 'Vegetarian', 1, 1),
+  ('mi-2', 'menu-demo', 'Wood-Fired Pizza', 'Pepperoni Calabrese', 'pepperoni-calabrese',
+   'Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano',
+   21, 'media-demo-pepperoni', 'Gluten, Dairy', NULL, 1, 2),
+  ('mi-3', 'menu-demo', 'Wood-Fired Pizza', 'Funghi Bianco', 'funghi-bianco',
+   'Roasted mushrooms, ricotta crema, garlic, thyme, mozzarella, pecorino',
+   22, 'media-demo-funghi', 'Gluten, Dairy', 'Vegetarian', 1, 3),
+  ('mi-4', 'menu-demo', 'Wood-Fired Pizza', 'Soppressata Hot Honey', 'soppressata-hot-honey',
+   'Spicy soppressata, tomato, mozzarella, pickled Fresno chile, Brooklyn hot honey',
+   23, NULL, 'Gluten, Dairy', NULL, 1, 4),
+  ('mi-5', 'menu-demo', 'Antipasti', 'Burrata', 'burrata',
+   'Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough',
+   16, 'media-demo-burrata', 'Gluten, Dairy', 'Vegetarian', 1, 1),
+  ('mi-6', 'menu-demo', 'Antipasti', 'Garlic Knots', 'garlic-knots',
+   'Wood-fired knots, parsley, roasted garlic butter, marinara',
+   9, 'media-demo-knots', 'Gluten, Dairy', 'Vegetarian', 1, 2),
+  ('mi-7', 'menu-demo', 'Pasta & Salads', 'Little Gem Caesar', 'little-gem-caesar',
+   'Little gem lettuce, anchovy dressing, sourdough crumbs, shaved pecorino',
+   14, NULL, 'Gluten, Dairy, Fish', NULL, 1, 1),
+  ('mi-8', 'menu-demo', 'Pasta & Salads', 'Rigatoni Pomodoro', 'rigatoni-pomodoro',
+   'Rigatoni, slow tomato sauce, basil, parmesan',
+   19, NULL, 'Gluten, Dairy', 'Vegetarian', 1, 2),
+  ('mi-9', 'menu-demo', 'Drinks', 'Sparkling Lemonade', 'sparkling-lemonade',
+   'House lemon cordial, soda, rosemary',
+   6, NULL, NULL, 'Vegan, Gluten-free', 1, 1),
+  ('mi-10', 'menu-demo', 'Drinks', 'Italian Soda', 'italian-soda',
+   'Blood orange, grapefruit, or limonata',
+   5, NULL, NULL, 'Vegan, Gluten-free', 1, 2),
+  ('mi-demo2-1', 'menu-demo-2', 'Wood-Fired Pizza', 'Margherita', 'margherita',
+   'San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt',
+   18, 'media-demo-margherita', 'Gluten, Dairy', 'Vegetarian', 1, 1),
+  ('mi-demo2-2', 'menu-demo-2', 'Wood-Fired Pizza', 'Pepperoni Calabrese', 'pepperoni-calabrese',
+   'Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano',
+   21, 'media-demo-pepperoni', 'Gluten, Dairy', NULL, 1, 2),
+  ('mi-demo2-3', 'menu-demo-2', 'Antipasti', 'Burrata', 'burrata',
+   'Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough',
+   16, 'media-demo-burrata', 'Gluten, Dairy', 'Vegetarian', 1, 1),
+  ('mi-demo2-4', 'menu-demo-2', 'Drinks', 'Sparkling Lemonade', 'sparkling-lemonade',
+   'House lemon cordial, soda, rosemary',
+   6, NULL, NULL, 'Vegan, Gluten-free', 1, 1);
 
-  ('mi-2', 'menu-demo', 'Cold Hoagies', 'Turkey Club', 'turkey-club',
-   'Sliced turkey breast, swiss, bacon, lettuce, tomato, mayo',
-   '$12', NULL, 'Gluten, Dairy', NULL, 1, 2),
-
-  ('mi-3', 'menu-demo', 'Cold Hoagies', 'Veggie', 'veggie',
-   'Provolone, roasted peppers, cucumber, lettuce, tomato, oil and vinegar',
-   '$10', NULL, 'Gluten, Dairy', 'Vegetarian', 1, 3),
-
-  ('mi-4', 'menu-demo', 'Hot Hoagies', 'Roast Beef', 'roast-beef',
-   'Slow-roasted beef, melted provolone, horseradish mayo, au jus on the side',
-   '$13', 'media-demo-roastbeef', 'Gluten, Dairy', NULL, 1, 1),
-
-  ('mi-5', 'menu-demo', 'Hot Hoagies', 'Meatball Parm', 'meatball-parm',
-   'House-made meatballs, marinara, fresh mozzarella, toasted roll',
-   '$12', NULL, 'Gluten, Dairy, Eggs', NULL, 1, 2),
-
-  ('mi-6', 'menu-demo', 'Hot Hoagies', 'Buffalo Chicken', 'buffalo-chicken',
-   'Crispy fried chicken, Frank''s RedHot, blue cheese, celery, pickled onion',
-   '$13', 'media-demo-buffalo', 'Gluten, Dairy, Eggs', NULL, 1, 3),
-
-  ('mi-7', 'menu-demo', 'Sides', 'House Chips', 'house-chips',
-   'Kettle-cooked in small batches with sea salt',
-   '$3', NULL, NULL, 'Vegan, Gluten-free', 1, 1),
-
-  ('mi-8', 'menu-demo', 'Sides', 'Pickle Spear', 'pickle-spear',
-   'Half-sour, house-brined',
-   '$1', NULL, NULL, 'Vegan, Gluten-free', 1, 2),
-
-  ('mi-9', 'menu-demo', 'Drinks', 'Fountain Soda', 'fountain-soda',
-   'Pepsi, Diet Pepsi, Mountain Dew, or lemonade',
-   '$2', NULL, NULL, 'Vegan', 1, 1),
-
-  ('mi-10', 'menu-demo', 'Drinks', 'Bottled Water', 'bottled-water',
-   'Still or sparkling',
-   '$2', NULL, NULL, 'Vegan, Gluten-free', 1, 2);
-
--- Backfill allergens/dietary_notes on re-runs
-UPDATE menu_items SET allergens = 'Gluten, Dairy'
-  WHERE id IN ('mi-1','mi-2','mi-4') AND allergens IS NULL;
-UPDATE menu_items SET allergens = 'Gluten, Dairy', dietary_notes = 'Vegetarian'
-  WHERE id = 'mi-3' AND allergens IS NULL;
-UPDATE menu_items SET allergens = 'Gluten, Dairy, Eggs'
-  WHERE id IN ('mi-5','mi-6') AND allergens IS NULL;
-UPDATE menu_items SET dietary_notes = 'Vegan, Gluten-free'
-  WHERE id IN ('mi-7','mi-8','mi-10') AND dietary_notes IS NULL;
-UPDATE menu_items SET dietary_notes = 'Vegan'
-  WHERE id = 'mi-9' AND dietary_notes IS NULL;
-
--- ── Location Q&A ─────────────────────────────────────────────────────────────
-INSERT OR IGNORE INTO location_qa
+-- Location Q&A
+INSERT INTO location_qa
   (id, organization_id, site_id, location_id,
    question, question_author, answer, answer_author,
    is_owner_answer, upvote_count, source, status, sort_order)
 VALUES
   ('qa-demo-1', 'org-demo', 'site-demo', 'loc-demo',
    'Do you take reservations?', 'A Guest',
-   'We are walk-in only — no reservations. Lines move quickly and we have never had anyone wait longer than 15 minutes.',
-   'The Hoagie Stop', 1, 12, 'manual', 'published', 1),
-
+   'Yes. We hold room for walk-ins, but reservations are recommended for dinner and weekends.',
+   'Ember & Slice Brooklyn', 1, 14, 'manual', 'published', 1),
+  ('qa-demo2-1', 'org-demo', 'site-demo', 'loc-demo-2',
+   'Do you offer outdoor seating?', 'Outdoor Diner',
+   'Absolutely! We have a lovely patio setup for the warmer months.',
+   'Ember & Slice West Village', 1, 8, 'manual', 'published', 1),
+  ('qa-demo2-2', 'org-demo', 'site-demo', 'loc-demo-2',
+   'Do you offer gluten-free crust?', 'Coeliac Foodie',
+   'Yes, we offer gluten-free crust for any of our wood-fired pizzas for an additional charge.',
+   'Ember & Slice West Village', 1, 5, 'manual', 'published', 2),
   ('qa-demo-2', 'org-demo', 'site-demo', 'loc-demo',
-   'Is the bread made in-house?', 'Another Guest',
-   'Yes — we bake our rolls fresh every morning. It is a big reason people keep coming back.',
-   'The Hoagie Stop', 1, 9, 'manual', 'published', 2),
-
+   'Do you offer gluten-free crust?', 'Another Guest',
+   'Not yet. Our dough room uses wheat flour all day, so we cannot safely guarantee a gluten-free crust.',
+   'Ember & Slice Brooklyn', 1, 8, 'manual', 'published', 2),
   ('qa-demo-3', 'org-demo', 'site-demo', 'loc-demo',
-   'Do you have gluten-free options?', 'A Guest',
-   'Not currently. Our kitchen uses wheat flour extensively and we cannot guarantee cross-contamination avoidance.',
-   'The Hoagie Stop', 1, 4, 'manual', 'published', 3),
-
+   'Can I order takeout?', 'A Guest',
+   'Yes. Call us directly for pickup. Wood-fired pies travel best when picked up close to oven time.',
+   'Ember & Slice Brooklyn', 1, 11, 'manual', 'published', 3),
   ('qa-demo-4', 'org-demo', 'site-demo', 'loc-demo',
    'What are your busiest times?', 'A Guest',
-   'Weekday lunch (11:30am–1pm) is our peak. If you want the fastest experience, come before 11am or after 2pm.',
-   'The Hoagie Stop', 1, 7, 'manual', 'published', 4),
-
+   'Friday and Saturday from 7pm to 9pm are peak. Earlier dinner or Sunday lunch is calmer.',
+   'Ember & Slice Brooklyn', 1, 6, 'manual', 'published', 4),
   ('qa-demo-5', 'org-demo', 'site-demo', 'loc-demo',
-   'Do you cater?', 'Event Planner',
-   'Yes — we do catering for groups of 10 or more. Call us directly to discuss your order and lead time.',
-   'The Hoagie Stop', 1, 3, 'manual', 'published', 5);
+   'Do you have vegetarian options?', 'A Guest',
+   'Absolutely. Margherita, Funghi Bianco, Burrata, Garlic Knots, and Rigatoni Pomodoro are vegetarian.',
+   'Ember & Slice Brooklyn', 1, 5, 'manual', 'published', 5);
 
--- ── Posts ─────────────────────────────────────────────────────────────────────
-INSERT OR IGNORE INTO posts
+-- Posts
+INSERT INTO posts
   (id, organization_id, site_id, location_id,
    post_type, title, body, image_asset_id,
    status, published_at, created_by)
 VALUES
   ('post-demo-1', 'org-demo', 'site-demo', 'loc-demo',
-   'update', 'New hours starting this week',
-   'We have extended our Friday and Saturday hours to 9pm to accommodate the dinner crowd. Come hungry.',
+   'update', 'Weekend lunch now starts at 11',
+   'The oven is lighting up earlier on Saturdays and Sundays. Come by for lunch pies, garlic knots, and spritzes from 11am.',
    'media-demo-post1', 'published', '2026-05-01T12:00:00.000Z', 'user-demo'),
-
   ('post-demo-2', 'org-demo', 'site-demo', 'loc-demo',
    'standard', NULL,
-   'The meatball parm is back after a two-week hiatus. We sourced better San Marzano tomatoes for the sauce. Worth the wait.',
+   'Our Funghi Bianco is back with roasted mushrooms, ricotta crema, thyme, and a little pecorino snow at the pass.',
    'media-demo-post2', 'published', '2026-04-18T10:00:00.000Z', 'user-demo'),
-
   ('post-demo-3', 'org-demo', 'site-demo', 'loc-demo',
-   'offer', 'Buy two hoagies, get chips free',
-   'Every Tuesday in May. No code needed — just mention it when you order. One offer per visit.',
+   'offer', 'Margherita Monday',
+   'Every Monday in May: Margherita pies are $14 from open to close. Dine-in only, one per guest.',
    'media-demo-post3', 'published', '2026-04-10T09:00:00.000Z', 'user-demo');
 
--- ── Post channel jobs ─────────────────────────────────────────────────────────
-INSERT OR IGNORE INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
+INSERT INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
 VALUES
   ('pcj-demo-1', 'post-demo-1', 'org-demo', 'site', 'published', '2026-05-01T12:00:00.000Z'),
   ('pcj-demo-2', 'post-demo-2', 'org-demo', 'site', 'published', '2026-04-18T10:00:00.000Z'),
   ('pcj-demo-3', 'post-demo-3', 'org-demo', 'site', 'published', '2026-04-10T09:00:00.000Z');
 
--- ── Site content ─────────────────────────────────────────────────────────────
-INSERT OR IGNORE INTO site_content
+-- Site content
+INSERT INTO site_content
   (id, organization_id, site_id, location_id,
    page, field, content, hero_title, hero_subtitle, hero_image_asset_id,
    type, source)
 VALUES
-  -- Home hero section
   ('sc-demo-home-hero', 'org-demo', 'site-demo', NULL,
    'home', 'hero', NULL,
-   'Come hungry.',
-   'Fresh-baked rolls. House-made spreads. One location, zero shortcuts.',
+   'Wood fire. Brooklyn nights.',
+   'Blistered pies & warm neighborhood vibes.',
    'media-demo-hero',
    'text', 'manual'),
-
-  -- Home CTA
   ('sc-demo-cta', 'org-demo', 'site-demo', NULL,
-   'home', 'cta.title', 'Come hungry.', NULL, NULL, NULL,
+   'home', 'cta.title', 'Book a table near the oven.', NULL, NULL, NULL,
    'text', 'manual'),
-
-  -- About: story/origin section with hero image
   ('sc-demo-story-image', 'org-demo', 'site-demo', NULL,
    'about', 'story.image',
-   'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1400&q=85',
+   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1400&q=85',
    NULL, NULL, NULL,
    'media', 'manual'),
-
   ('sc-demo-story-title', 'org-demo', 'site-demo', NULL,
    'about', 'story.title',
-   'One location. One kitchen.',
+   'A trattoria shaped by the oven.',
    NULL, NULL, NULL,
    'text', 'manual'),
-
   ('sc-demo-story-body', 'org-demo', 'site-demo', NULL,
    'about', 'story.body',
-   'Hoff''s Hogies started as a folding table in a garage off Main Street. Hoff baked rolls before sunrise, stacked cold cuts by hand, and sold out before lunch to neighbours who kept coming back with friends.
+   'Ember & Slice started with a sourdough starter, a borrowed mixer, and a pop-up oven behind a Brooklyn wine bar. The pies sold out before sunset, then again the next weekend, and then every weekend after that.
 
-The shop is still built around that first promise: fresh bread, honest portions, and no shortcuts hiding behind the counter.',
+Today the room is permanent, but the promise is the same: slow dough, live fire, seasonal produce, and the kind of service that makes a weeknight feel like an occasion.',
    NULL, NULL, NULL,
    'richtext', 'manual'),
-
-  -- About: Hoff's journey
   ('sc-demo-journey', 'org-demo', 'site-demo', NULL,
    'about', 'journey.body',
-   'Hoff started making hoagies out of his garage in 2011 — a folding table, a bread knife, and a standing order from his block. By 2013 he had a spot on Main Street. By 2016 there was a line out the door every day.
+   'We cold-ferment our dough, stretch every pie to order, and cook it hot enough for a crisp rim and a tender center. The menu changes around the market, but the Margherita never leaves the board.
 
-No secret formula. Just good bread, good meat, and the same sandwich he made at that folding table.',
+The oven anchors the room. Everything else moves around it.',
    NULL, NULL, NULL,
    'textarea', 'manual'),
-
-  -- About: experience/philosophy
   ('sc-demo-experience', 'org-demo', 'site-demo', NULL,
    'about', 'experience.body',
-   'We do not do loyalty apps, or seasonal menus, or limited-edition collabs. We do sandwiches. The same ones, made the same way, every single day.
+   'Come for a quick counter pie, stay for antipasti and another round, or bring a group and let the table fill itself. Ember & Slice is casual by design, but the details matter.
 
-If it is on the board, it is good. If it is not on the board, we do not make it.',
+Good tomatoes. Good flour. Good fire. No shortcuts.',
    NULL, NULL, NULL,
    'textarea', 'manual');
 
--- Backfill hero fields on re-runs
-DELETE FROM site_content
-WHERE site_id = 'site-demo'
-  AND page = 'about'
-  AND field = 'story.intro';
+UPDATE site_content SET hero_video_asset_id = 'media-demo-hero-video' WHERE id = 'sc-demo-home-hero';
 
-DELETE FROM media_assets
-WHERE id = 'media-demo-story'
-  AND site_id = 'site-demo';
-
-UPDATE site_content SET
-  hero_title         = 'Come hungry.',
-  hero_subtitle      = 'Fresh-baked rolls. House-made spreads. One location, zero shortcuts.',
-  hero_image_asset_id = 'media-demo-hero'
-  WHERE id = 'sc-demo-home-hero';
-
-UPDATE site_content SET
-  content = 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1400&q=85',
-  type = 'media'
-  WHERE id = 'sc-demo-story-image';
-
-UPDATE site_content SET
-  content = 'One location. One kitchen.',
-  type = 'text'
-  WHERE id = 'sc-demo-story-title';
-
-UPDATE site_content SET
-  content = 'Hoff''s Hogies started as a folding table in a garage off Main Street. Hoff baked rolls before sunrise, stacked cold cuts by hand, and sold out before lunch to neighbours who kept coming back with friends.
-
-The shop is still built around that first promise: fresh bread, honest portions, and no shortcuts hiding behind the counter.',
-  type = 'richtext'
-  WHERE id = 'sc-demo-story-body';
-
--- ── Thai demo translations ───────────────────────────────────────────────────
-INSERT OR IGNORE INTO site_content_translations
+-- Thai demo translations
+INSERT INTO site_content_translations
   (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, reviewed_at)
 VALUES
   ('sct-demo-th-home-hero', 'org-demo', 'site-demo', NULL, 'th', 'home', 'hero',
-   NULL, 'มาด้วยความหิว', 'ขนมปังอบสดใหม่ ซอสโฮมเมด ร้านเดียว ไม่มีทางลัด', 'มาด้วยความหิว', 'text', 'published',
-   '1f2815106918b55c78d62fb2d2c6523de31631bb6e80fb0f0622054e501a147a', '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
+   NULL, 'ไฟฟืนและค่ำคืนในบรูคลิน', 'พิซซ่าแป้งซาวโดว์ขอบพองกรอบ แอนติพาสติตามฤดูกาล และห้องอาหารที่อบอุ่นด้วยแสงจากเตา', 'ไฟฟืนและค่ำคืนในบรูคลิน', 'text', 'published',
+   'demo-pizza-home-hero-v1', '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
   ('sct-demo-th-cta', 'org-demo', 'site-demo', NULL, 'th', 'home', 'cta.title',
-   'มาด้วยความหิว', NULL, NULL, 'มาด้วยความหิว', 'text', 'published',
-   'c5735ea650613ba043f846c8772fe205126dcef124fc91c56454b5de05cab9aa', '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
+   'จองโต๊ะใกล้เตาอบ', NULL, NULL, 'จองโต๊ะใกล้เตาอบ', 'text', 'published',
+   'demo-pizza-cta-v1', '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
   ('sct-demo-th-story-title', 'org-demo', 'site-demo', NULL, 'th', 'about', 'story.title',
-   'ร้านเดียว ครัวเดียว', NULL, NULL, 'ร้านเดียว ครัวเดียว', 'text', 'published',
-   'fdf7557fd79e25d71a404ca05caa024d6959e6f5a5d2f91193c2c1383afa26d5', '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
+   'แทรตโทเรียที่มีเตาอบเป็นหัวใจ', NULL, NULL, 'แทรตโทเรียที่มีเตาอบเป็นหัวใจ', 'text', 'published',
+   'demo-pizza-story-title-v1', '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
   ('sct-demo-th-story-body', 'org-demo', 'site-demo', NULL, 'th', 'about', 'story.body',
-   'Hoff''s Hogies เริ่มจากโต๊ะพับในโรงรถใกล้ถนน Main Street Hoff อบขนมปังก่อนพระอาทิตย์ขึ้น เรียงเนื้อด้วยมือ และขายหมดก่อนมื้อกลางวันให้เพื่อนบ้านที่กลับมาพร้อมเพื่อนๆ เสมอ\n\nร้านนี้ยังยึดสัญญาแรกเหมือนเดิม: ขนมปังสด ปริมาณจริงใจ และไม่มีทางลัดหลังเคาน์เตอร์',
+   'Ember & Slice เริ่มจากแป้งซาวโดว์ เครื่องผสมที่ยืมมา และเตาอบป๊อปอัพหลังบาร์ไวน์แห่งหนึ่งในบรูคลิน พิซซ่าขายหมดก่อนพระอาทิตย์ตก แล้วก็ขายหมดอีกในสุดสัปดาห์ถัดมา และทุกสุดสัปดาห์หลังจากนั้น\n\nวันนี้ร้านมีที่อยู่ถาวรแล้ว แต่คำสัญญายังเหมือนเดิม: แป้งที่ใช้เวลา ไฟจริง วัตถุดิบตามฤดูกาล และการบริการที่ทำให้คืนธรรมดารู้สึกพิเศษ',
    NULL, NULL,
-   'Hoff''s Hogies เริ่มจากโต๊ะพับในโรงรถใกล้ถนน Main Street Hoff อบขนมปังก่อนพระอาทิตย์ขึ้น เรียงเนื้อด้วยมือ และขายหมดก่อนมื้อกลางวันให้เพื่อนบ้านที่กลับมาพร้อมเพื่อนๆ เสมอ',
-   'richtext', 'published', 'a44beb08682e9686bbda01fafc360ef8bb8079a2368450d591ee6361f1ca2905',
+   'Ember & Slice เริ่มจากแป้งซาวโดว์ เครื่องผสมที่ยืมมา และเตาอบป๊อปอัพหลังบาร์ไวน์แห่งหนึ่งในบรูคลิน',
+   'richtext', 'published', 'demo-pizza-story-body-v1',
    '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z');
 
-UPDATE site_content_translations SET
-  hero_title = 'มาด้วยความหิว',
-  hero_subtitle = 'ขนมปังอบสดใหม่ ซอสโฮมเมด ร้านเดียว ไม่มีทางลัด',
-  value = 'มาด้วยความหิว',
-  status = 'published',
-  source_hash = '1f2815106918b55c78d62fb2d2c6523de31631bb6e80fb0f0622054e501a147a'
-  WHERE id = 'sct-demo-th-home-hero';
-UPDATE site_content_translations SET content = 'มาด้วยความหิว', value = 'มาด้วยความหิว', status = 'published', source_hash = 'c5735ea650613ba043f846c8772fe205126dcef124fc91c56454b5de05cab9aa'
-  WHERE id = 'sct-demo-th-cta';
-UPDATE site_content_translations SET content = 'ร้านเดียว ครัวเดียว', value = 'ร้านเดียว ครัวเดียว', status = 'published', source_hash = 'fdf7557fd79e25d71a404ca05caa024d6959e6f5a5d2f91193c2c1383afa26d5'
-  WHERE id = 'sct-demo-th-story-title';
-UPDATE site_content_translations SET source_hash = 'a44beb08682e9686bbda01fafc360ef8bb8079a2368450d591ee6361f1ca2905'
-  WHERE id = 'sct-demo-th-story-body';
-
-INSERT OR IGNORE INTO business_location_translations
+INSERT INTO business_location_translations
   (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, reviewed_at)
 VALUES
   ('blt-demo-th-loc', 'org-demo', 'site-demo', 'loc-demo', 'th',
-   'เดอะ โฮกี สต็อป', '2285 Main St', 'บัฟฟาโล',
-   'โฮกีสไตล์บัฟฟาโลบนขนมปังอบสดใหม่ พร้อมซอสโฮมเมด ร้านเดียว ครัวเดียว ไม่มีทางลัด',
-   'ขนมปังอบสด ซอสโฮมเมด โฮกีที่ดีที่สุดของบัฟฟาโล',
-   'published', 'fafbbb67b1e43c67c5bb2b20a41551bceec5461168805a54ce21668c1a019d1b',
+   'Ember & Slice บรูคลิน', '184 Wythe Ave', 'บรูคลิน',
+   'แทรตโทเรียพิซซ่าเตาฟืนในบรูคลิน เสิร์ฟพิซซ่าแป้งซาวโดว์ แอนติพาสติตามฤดูกาล และบรรยากาศอบอุ่นรอบเตาอบ',
+   'พิซซ่าเตาฟืน แอนติพาสติตามฤดูกาล และการต้อนรับแบบเพื่อนบ้านในบรูคลิน',
+   'published', 'demo-pizza-location-v1',
    '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z');
 
-UPDATE business_location_translations SET
-  title = 'เดอะ โฮกี สต็อป',
-  city = 'บัฟฟาโล',
-  description = 'โฮกีสไตล์บัฟฟาโลบนขนมปังอบสดใหม่ พร้อมซอสโฮมเมด ร้านเดียว ครัวเดียว ไม่มีทางลัด',
-  short_description = 'ขนมปังอบสด ซอสโฮมเมด โฮกีที่ดีที่สุดของบัฟฟาโล',
-  status = 'published',
-  source_hash = 'fafbbb67b1e43c67c5bb2b20a41551bceec5461168805a54ce21668c1a019d1b'
-  WHERE id = 'blt-demo-th-loc';
-
-INSERT OR IGNORE INTO menu_translations
+INSERT INTO menu_translations
   (id, organization_id, site_id, menu_id, locale, name, description, section_order, status, source_hash, translated_at, reviewed_at)
 VALUES
-  ('mt-demo-th-menu', 'org-demo', 'site-demo', 'menu-demo', 'th', 'เมนู', NULL,
-   '["โฮกีเย็น","โฮกีร้อน","เครื่องเคียง","เครื่องดื่ม"]',
-   'published', '4d2c1756e5aee6658678d954b65d2bb832e12d943c33e909218244bf4f9d2ca8',
+  ('mt-demo-th-menu', 'org-demo', 'site-demo', 'menu-demo', 'th', 'เมนู', 'พิซซ่าเตาฟืน แอนติพาสตี สลัด และเครื่องดื่มจาก Ember & Slice',
+   '["พิซซ่าเตาฟืน","แอนติพาสตี","พาสต้าและสลัด","เครื่องดื่ม"]',
+   'published', 'demo-pizza-menu-v1',
    '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z');
 
-UPDATE menu_translations SET name = 'เมนู', section_order = '["โฮกีเย็น","โฮกีร้อน","เครื่องเคียง","เครื่องดื่ม"]', status = 'published', source_hash = '4d2c1756e5aee6658678d954b65d2bb832e12d943c33e909218244bf4f9d2ca8'
-  WHERE id = 'mt-demo-th-menu';
-
-INSERT OR IGNORE INTO menu_item_translations
+INSERT INTO menu_item_translations
   (id, organization_id, site_id, menu_item_id, locale, section, name, description, allergens, dietary_notes, status, source_hash, translated_at, reviewed_at)
 VALUES
-  ('mit-demo-th-mi-1', 'org-demo', 'site-demo', 'mi-1', 'th', 'โฮกีเย็น', 'อิตาเลียนคอมโบ',
-   'ซาลามีเจนัว คาปิโคลา โพรโวโลน ผักกาดหั่น มะเขือเทศ หัวหอม น้ำมันและน้ำส้มสายชู บนขนมปังอบสด',
-   'กลูเตน, นม', NULL, 'published', '8aadc4f437c3caaf5596291357b298e611c48e5f9b68854796823b283374e1da',
+  ('mit-demo-th-mi-1', 'org-demo', 'site-demo', 'mi-1', 'th', 'พิซซ่าเตาฟืน', 'มาร์เกริตา',
+   'มะเขือเทศซานมาร์ซาโน ฟิออร์ดิลาเต้ ใบโหระพา น้ำมันมะกอกเอ็กซ์ตร้าเวอร์จิน และเกลือทะเล',
+   'กลูเตน, นม', 'มังสวิรัติ', 'published', 'demo-pizza-mi-1-v1',
    '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
-  ('mit-demo-th-mi-4', 'org-demo', 'site-demo', 'mi-4', 'th', 'โฮกีร้อน', 'โรสต์บีฟ',
-   'เนื้อวัวย่างช้า โพรโวโลนละลาย มายองเนสมะรุม เสิร์ฟพร้อมออจู',
-   'กลูเตน, นม', NULL, 'published', '9ffff766e2a659708cb470b67529eeb2112ef6b7fe1a583129d757f0421ee981',
+  ('mit-demo-th-mi-2', 'org-demo', 'site-demo', 'mi-2', 'th', 'พิซซ่าเตาฟืน', 'เปปเปอโรนีคาลาเบรเซ',
+   'ซอสมะเขือเทศ มอซซาเรลลา เปปเปอโรนี พริกคาลาเบรีย และออริกาโน',
+   'กลูเตน, นม', NULL, 'published', 'demo-pizza-mi-2-v1',
    '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
-  ('mit-demo-th-mi-6', 'org-demo', 'site-demo', 'mi-6', 'th', 'โฮกีร้อน', 'ไก่บัฟฟาโล',
-   'ไก่ทอดกรอบ ซอส Frank''s RedHot บลูชีส เซเลอรี และหัวหอมดอง',
-   'กลูเตน, นม, ไข่', NULL, 'published', 'b2477ca02986acc1536e8df6c44691d237f9808dd3a67d7fbde734dede08184e',
+  ('mit-demo-th-mi-3', 'org-demo', 'site-demo', 'mi-3', 'th', 'พิซซ่าเตาฟืน', 'ฟุงกีบิอังโก',
+   'เห็ดย่าง ครีมริคอตตา กระเทียม ไทม์ มอซซาเรลลา และเปโคริโน',
+   'กลูเตน, นม', 'มังสวิรัติ', 'published', 'demo-pizza-mi-3-v1',
    '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
-  ('mit-demo-th-mi-7', 'org-demo', 'site-demo', 'mi-7', 'th', 'เครื่องเคียง', 'มันฝรั่งทอดโฮมเมด',
-   'ทอดกรอบเป็นชุดเล็กๆ โรยเกลือทะเล',
-   NULL, 'วีแกน, ปลอดกลูเตน', 'published', '4f79f5e4ac4df84396b41cfa79b264c0a59dc169197f540f63f58fac2ffd874a',
+  ('mit-demo-th-mi-5', 'org-demo', 'site-demo', 'mi-5', 'th', 'แอนติพาสตี', 'บูราตา',
+   'บูราตาครีมมี่ มะเขือเทศเชอร์รีย่าง น้ำมันโหระพา และซาวโดว์ย่าง',
+   'กลูเตน, นม', 'มังสวิรัติ', 'published', 'demo-pizza-mi-5-v1',
    '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z'),
-  ('mit-demo-th-mi-9', 'org-demo', 'site-demo', 'mi-9', 'th', 'เครื่องดื่ม', 'น้ำอัดลมกด',
-   'Pepsi, Diet Pepsi, Mountain Dew หรือน้ำเลมอน',
-   NULL, 'วีแกน', 'published', '8ea2a88fc4418ef4ae5661f45f0711c1a1ee0eb1be3c1d8200012ea7be34d204',
+  ('mit-demo-th-mi-6', 'org-demo', 'site-demo', 'mi-6', 'th', 'แอนติพาสตี', 'การ์ลิกนอตส์',
+   'ขนมปังนอตส์อบเตาฟืน คลุกพาร์สลีย์ เนยกระเทียมย่าง และมารินารา',
+   'กลูเตน, นม', 'มังสวิรัติ', 'published', 'demo-pizza-mi-6-v1',
    '2026-05-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z');
 
-UPDATE menu_item_translations SET status = 'published',
-  source_hash = CASE menu_item_id
-    WHEN 'mi-1' THEN '8aadc4f437c3caaf5596291357b298e611c48e5f9b68854796823b283374e1da'
-    WHEN 'mi-4' THEN '9ffff766e2a659708cb470b67529eeb2112ef6b7fe1a583129d757f0421ee981'
-    WHEN 'mi-6' THEN 'b2477ca02986acc1536e8df6c44691d237f9808dd3a67d7fbde734dede08184e'
-    WHEN 'mi-7' THEN '4f79f5e4ac4df84396b41cfa79b264c0a59dc169197f540f63f58fac2ffd874a'
-    WHEN 'mi-9' THEN '8ea2a88fc4418ef4ae5661f45f0711c1a1ee0eb1be3c1d8200012ea7be34d204'
-    ELSE source_hash
-  END
-  WHERE organization_id = 'org-demo' AND site_id = 'site-demo' AND locale = 'th';
-
--- ── AI credits (realistic balance for a demo account) ─────────────────────────
-INSERT OR IGNORE INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at)
+-- AI credits
+INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at)
 VALUES ('org-demo', 500, 127, '2026-05-01T00:00:00.000Z');
 
--- ── Billing (free plan — shows correct plan badge in dashboard) ───────────────
-INSERT OR IGNORE INTO organization_billing (id, organization_id, status, plan)
+-- Billing
+INSERT INTO organization_billing (id, organization_id, status, plan)
 VALUES ('billing-demo', 'org-demo', 'free', 'free');

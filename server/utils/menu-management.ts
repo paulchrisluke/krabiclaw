@@ -1,4 +1,5 @@
 import type { Menu, MenuItem, MenuWithItems, CreateMenuRequest, UpdateMenuRequest, CreateMenuItemRequest, UpdateMenuItemRequest } from '../types/menu'
+import { normalizePriceAmount } from '~/shared/money'
 
 const MAX_SUFFIX_ATTEMPTS = 50
 
@@ -304,7 +305,7 @@ export async function getMenuWithItems(
 
   // Get menu items
   const items = await db.prepare(`
-    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price,
+    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -341,7 +342,7 @@ export async function getActiveMenu(
     if (locationMenu) {
       const mappedMenu = mapMenu(locationMenu)
       const items = await db.prepare(`
-        SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price,
+        SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
                mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
                mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
                mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -372,7 +373,7 @@ export async function getActiveMenu(
   const mappedMenu = mapMenu(brandMenu)
 
   const items = await db.prepare(`
-    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price,
+    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -396,7 +397,7 @@ export async function getPublicMenuItem(
   slug: string
 ): Promise<MenuItem | null> {
   const item = await db.prepare(`
-    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price,
+    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -548,7 +549,7 @@ export async function createMenuItem(
   const slug = await uniqueSlug(db, menuId, item.name)
 
   const result = await db.prepare(`
-    INSERT INTO menu_items (id, menu_id, section, name, slug, description, price, image_asset_id, available, featured, featured_sort_order, sort_order,
+    INSERT INTO menu_items (id, menu_id, section, name, slug, description, price_amount, image_asset_id, available, featured, featured_sort_order, sort_order,
       allergens, ingredients, dietary_notes, preparation, serving_note, created_at, updated_at, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
@@ -558,7 +559,7 @@ export async function createMenuItem(
     item.name,
     slug,
     item.description || null,
-    item.price || null,
+    normalizePriceAmount(item.price_amount),
     item.image_asset_id || null,
     item.available !== undefined ? item.available : true,
     item.featured !== undefined ? item.featured : false,
@@ -582,7 +583,7 @@ export async function createMenuItem(
   }
 
   const createdItem = await db.prepare(`
-    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price,
+    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -637,9 +638,9 @@ export async function updateMenuItem(
     setParts.push('description = ?')
     params.push(updates.description)
   }
-  if (updates.price !== undefined) {
-    setParts.push('price = ?')
-    params.push(updates.price)
+  if (updates.price_amount !== undefined) {
+    setParts.push('price_amount = ?')
+    params.push(normalizePriceAmount(updates.price_amount))
   }
   if (updates.image_asset_id !== undefined) {
     setParts.push('image_asset_id = ?')
@@ -702,7 +703,7 @@ export async function updateMenuItem(
   }
 
   const updatedItem = await db.prepare(`
-    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price,
+    SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by

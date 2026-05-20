@@ -170,8 +170,7 @@
 
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours } from '~/utils/formatters'
-import { usePageContent } from '~/composables/usePageContent'
-import DOMPurify from 'isomorphic-dompurify'
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 
 definePageMeta({ layout: 'saya' })
 
@@ -181,13 +180,9 @@ if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
 
-const { getField: getContentField } = usePageContent('location')
-
-const { data, pending } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}`,
-  { key: () => `loc-contact-${siteId}-${slug.value}`, default: () => ({ location: null }) }
-)
-const location = computed(() => (data as ApiValue).value?.location ?? null)
+// Bootstrap: location data + page content (parking/notes) — 1 SSR call
+const { location, getField: getContentField, data: bootstrapData } = useBootstrap()
+const pending = computed(() => !bootstrapData.value)
 
 const formattedAddress = computed(() => {
   const loc = location.value
@@ -244,7 +239,8 @@ const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 useSeoMeta({
   title: () => `Plan a visit · ${location.value?.title || slug.value}`,
   description: () => `Hours, address and directions for ${location.value?.title}.`,
-  ogUrl: () => `/locations/${slug.value}/contact`
+  ogImage: useSharedOgImage(),
+  ogUrl: useSeoUrl(() => `/locations/${slug.value}/contact`)
 })
 
 useSchemaOrg([

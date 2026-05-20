@@ -1,12 +1,14 @@
 <template>
   <div class="min-h-screen bg-default text-default">
-    <SayaHero
-      :title="getField('hero.title', 'Reserve a Table') ?? 'Reserve a Table'"
-      :subtitle="getField('hero.subtitle', 'Book Your Authentic Dining Experience') ?? 'Book Your Authentic Dining Experience'"
-      size="page"
-    />
+    <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
+      <p class="saya-kicker mb-6">Reservations</p>
+      <h1 class="saya-display-md text-default">
+        <em class="saya-italic">{{ getField('hero.title', 'Reserve a table') }}</em>
+      </h1>
+      <p v-if="getField('hero.subtitle')" class="mt-5 max-w-xl text-sm leading-relaxed text-muted">{{ getField('hero.subtitle') }}</p>
+    </header>
 
-    <div class="mx-auto max-w-6xl px-4 py-12">
+    <div class="mx-auto max-w-6xl px-4 pb-24">
       <div class="grid gap-12 md:grid-cols-2">
 
         <!-- Reservation Form / Thank-you -->
@@ -281,19 +283,21 @@ const cancelUrl = computed(() => {
 })
 
 // ── SEO ───────────────────────────────────────────────────────────────────
-const config = useRuntimeConfig()
-const platformHostname = (config.public.freeSiteDomain as string | undefined)?.replace(/^https?:\/\//, '').replace(/\/$/, '') || 'krabiclaw.com'
+const sharedOgImage = useSharedOgImage()
+const currentPageUrl = useSeoUrl('/reservations')
+const requestUrl = useRequestURL()
 
 useBreadcrumbSchema([
   { name: 'Home', url: `/` },
   { name: 'Reservations', url: `/reservations` }
 ])
 
+const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Restaurant')
 useSeoMeta({
-  title: 'Reserve a Table | Saya Kitchen',
-  description: 'Reserve a table at Saya Kitchen in Krabi.',
-  ogImage: '/og-image.jpg',
-  ogUrl: `https://${(site as ApiValue)?.subdomain || 'restaurant'}.${platformHostname}/reservations`,
+  title: computed(() => `${brandName.value} | Reserve a Table`),
+  description: computed(() => `Reserve a table at ${brandName.value}.`),
+  ogImage: sharedOgImage,
+  ogUrl: currentPageUrl,
   ogType: 'website'
 })
 
@@ -301,12 +305,12 @@ useSchemaOrg([
   ({
     '@context': 'https://schema.org',
     '@type': 'Restaurant',
-    name: (site as ApiValue)?.title || 'Restaurant',
-    url: `https://${(site as ApiValue)?.subdomain || 'restaurant'}.${platformHostname}`,
-    reservationUrl: `https://${(site as ApiValue)?.subdomain || 'restaurant'}.${platformHostname}/reservations`,
+    name: (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Restaurant',
+    url: requestUrl.origin,
+    reservationUrl: `${requestUrl.origin}/reservations`,
     potentialAction: {
       '@type': 'ReserveAction',
-      target: { '@type': 'EntryPoint', urlTemplate: `https://${(site as ApiValue)?.subdomain || 'restaurant'}.${platformHostname}/reservations` },
+      target: { '@type': 'EntryPoint', urlTemplate: `${requestUrl.origin}/reservations` },
       result: { '@type': 'Reservation' }
     }
   })

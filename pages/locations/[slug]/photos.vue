@@ -1,19 +1,8 @@
 <template>
   <div class="min-h-screen bg-default text-default">
 
-    <!-- Loading -->
-    <template v-if="pending">
-      <div class="saya-masonry mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div
-          v-for="i in 9"
-          :key="i"
-          class="overflow-hidden rounded-2xl bg-muted"
-          :style="`height: ${120 + (i % 4) * 80}px; animation: sayaPulse 1.6s ease-in-out infinite`"
-        />
-      </div>
-    </template>
 
-    <template v-else-if="location">
+    <template v-if="location">
       <!-- Sub-nav (Level 2) -->
       <SayaSubNav 
         :location-slug="slug" 
@@ -145,17 +134,9 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
-const { data: locData } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}`,
-  { key: () => `loc-photos-loc-${siteId}-${slug.value}`, default: () => ({ location: null }) }
-)
-const location = computed(() => (locData as ApiValue).value?.location ?? null)
+const { location, photosList } = useBootstrap()
 
-const { data, pending } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}/photos`,
-  { key: () => `loc-photos-${siteId}-${slug.value}`, default: () => ({ photos: [] }) }
-)
-const photos = computed(() => (data as ApiValue).value?.photos ?? [])
+const photos = photosList
 
 const cats = [
   { key: 'ALL', label: 'All' },
@@ -198,6 +179,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
+const currentPageUrl = useSeoUrl(() => `/locations/${slug.value}/photos`)
+const ogImage = useSharedOgImage(() => photos.value[0]?.local_url || photos.value[0]?.google_url || photos.value[0]?.thumbnail_url)
 
 function toAbsoluteUrl(value?: string | null): string | null {
   if (!value) return null
@@ -211,7 +194,8 @@ function toAbsoluteUrl(value?: string | null): string | null {
 useSeoMeta({
   title: () => `Photos · ${location.value?.title || slug.value}`,
   description: () => `${photos.value.length} photos from ${location.value?.title} at ${siteName.value}.`,
-  ogUrl: () => `${siteUrl}/locations/${slug.value}/photos`
+  ogImage,
+  ogUrl: currentPageUrl
 })
 
 useSchemaOrg([

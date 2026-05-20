@@ -2,7 +2,15 @@
 // Uses Web Crypto API AES-GCM for secure token storage
 
 export interface EncryptionEnv {
-  CONNECTOR_TOKEN_ENCRYPTION_KEY?: string
+  CONNECTOR_TOKEN_ENCRYPTION_KEY: string
+}
+
+export function encryptionEnv(env: { CONNECTOR_TOKEN_ENCRYPTION_KEY?: string }): EncryptionEnv {
+  const key = env.CONNECTOR_TOKEN_ENCRYPTION_KEY
+  if (!key) {
+    throw new Error('CONNECTOR_TOKEN_ENCRYPTION_KEY not set')
+  }
+  return { CONNECTOR_TOKEN_ENCRYPTION_KEY: key }
 }
 
 // Derive 256-bit AES key from base64-encoded key
@@ -14,14 +22,12 @@ async function getEncryptionKey(env: EncryptionEnv): Promise<CryptoKey> {
   
   // Convert base64 to Uint8Array (32 bytes = 256 bits)
   const binaryString = atob(keyString)
-  const keyBytes = new Uint8Array(32)
-  for (let i = 0; i < Math.min(binaryString.length, 32); i++) {
-    keyBytes[i] = binaryString.charCodeAt(i)
+  if (binaryString.length !== 32) {
+    throw new Error(`CONNECTOR_TOKEN_ENCRYPTION_KEY must be exactly 32 bytes when decoded (got ${binaryString.length})`)
   }
-  
-  // Pad with zeros if key is too short
-  for (let i = binaryString.length; i < 32; i++) {
-    keyBytes[i] = 0
+  const keyBytes = new Uint8Array(32)
+  for (let i = 0; i < 32; i++) {
+    keyBytes[i] = binaryString.charCodeAt(i)
   }
   
   return globalThis.crypto.subtle.importKey(
@@ -34,8 +40,7 @@ async function getEncryptionKey(env: EncryptionEnv): Promise<CryptoKey> {
 }
 
 // Encrypt secret using AES-GCM
-export async function encryptSecret(plaintext: string): Promise<string> {
-  const env = process.env as EncryptionEnv
+export async function encryptSecret(plaintext: string, env: EncryptionEnv): Promise<string> {
   const key = await getEncryptionKey(env)
   
   // Generate random 12-byte IV
@@ -59,8 +64,7 @@ export async function encryptSecret(plaintext: string): Promise<string> {
 }
 
 // Decrypt secret using AES-GCM
-export async function decryptSecret(value: string): Promise<string> {
-  const env = process.env as EncryptionEnv
+export async function decryptSecret(value: string, env: EncryptionEnv): Promise<string> {
   const key = await getEncryptionKey(env)
   
   // Parse versioned format
@@ -93,11 +97,11 @@ export async function decryptSecret(value: string): Promise<string> {
 }
 
 // Self-test for encryption roundtrip
-export async function testEncryption(): Promise<boolean> {
+export async function testEncryption(env: EncryptionEnv): Promise<boolean> {
   try {
     const testText = 'test-secret-token-' + Date.now()
-    const encrypted = await encryptSecret(testText)
-    const decrypted = await decryptSecret(encrypted)
+    const encrypted = await encryptSecret(testText, env)
+    const decrypted = await decryptSecret(encrypted, env)
     
     return testText === decrypted
   } catch (error) {
@@ -171,4 +175,3 @@ export async function verifyOAuthState<T = ApiRecord>(
     return null
   }
 }
-

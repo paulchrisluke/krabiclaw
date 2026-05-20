@@ -23,8 +23,10 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Validate site is active
-    const site = await db.prepare(`SELECT status FROM sites WHERE id = ? LIMIT 1`).bind(siteId).first()
-    if (!site || (site as any).status !== 'active') {
+    const site = await db.prepare(
+      `SELECT status, default_currency FROM sites WHERE id = ? LIMIT 1`
+    ).bind(siteId).first<{ status: string; default_currency: string | null }>()
+    if (!site || site.status !== 'active') {
       return jsonResponse({ error: 'Menu item not found' }, { status: 404 })
     }
 
@@ -38,7 +40,8 @@ export default defineEventHandler(async (event) => {
 
     return jsonResponse({
       success: true,
-      item
+      item,
+      currency: site.default_currency || 'THB'
     })
     
   } catch (error) {

@@ -101,6 +101,8 @@ const { data, pending } = isPlatform || !siteId
     })
 
 const experiences = computed<Experience[]>(() => (data.value as ApiValue)?.experiences ?? [])
+const currentPageUrl = useSeoUrl('/experiences')
+const ogImage = useSharedOgImage(() => experiences.value[0]?.image_url)
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} min`
@@ -117,8 +119,8 @@ useBreadcrumbSchema([
 useSeoMeta({
   title: computed(() => `Experiences | ${siteName.value}`),
   description: computed(() => `Book exclusive dining experiences at ${siteName.value} — chef's table events, tasting menus, and more. Reserve your spot today.`),
-  ogUrl: `${siteUrl}/experiences`,
+  ogUrl: currentPageUrl,
   ogType: 'website',
-  ogImage: experiences.value[0]?.image_url ?? '/og-image.jpg',
+  ogImage,
 })
 </script>

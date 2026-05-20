@@ -272,9 +272,9 @@ export const contentRegistry: Record<string, PageDefinition> = {
         placeholder: 'A short tagline shown under the page title'
       },
       'story.image': {
-        label: 'Story Image',
+        label: 'Story Image or Video',
         type: 'media',
-        mediaKind: 'image',
+        mediaKind: 'any',
         sources: ['manual'],
         defaultValue: ''
       },

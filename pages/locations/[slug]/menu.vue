@@ -114,7 +114,7 @@
                     >{{ tag }}</UBadge>
                   </div>
                   <div class="saya-dotted-leader" />
-                  <div class="shrink-0 tabular-nums text-base text-default">{{ item.price || '—' }}</div>
+                  <div class="shrink-0 tabular-nums text-base text-default">{{ formatMenuPrice(item.price_amount, '—') }}</div>
                 </div>
                 <p v-if="item.description" class="mt-1.5 max-w-xl text-sm leading-relaxed text-muted">
                   {{ item.description }}
@@ -140,6 +140,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatMoneyAmount } from '~/shared/money'
+
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
@@ -151,18 +153,12 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
-const { data: locData } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}`,
-  { key: () => `loc-menu-${siteId}-${slug.value}`, default: () => ({ location: null }) }
-)
-const location = computed(() => (locData as ApiValue).value?.location ?? null)
-
-if (!location.value) throw createError({ statusCode: 404 })
-
-const { menu, loading: menuLoading, hasMenu, menuItemsBySection } = usePublicMenu(siteId, location.value?.id)
+const { location, menu: bootstrapMenu, menuItemsBySection, data: bootstrapData } = useBootstrap()
+const menuLoading = computed(() => !bootstrapData.value)
+const hasMenu = computed(() => ((bootstrapMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
 
 const menuUpdated = computed(() => {
-  const d = menu.value?.updated_at
+  const d = bootstrapMenu.value?.updated_at
   if (!d) return 'recently'
   return new Date(d).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 })
@@ -196,11 +192,19 @@ const categoryTabs = computed(() =>
   }))
 )
 
-const activeCategory = ref('')
+const userSelectedCategory = ref('')
+const activeCategory = computed({
+  get() {
+    return userSelectedCategory.value || categories.value[0]?.id || ''
+  },
+  set(val) {
+    userSelectedCategory.value = val
+  }
+})
 const categoryNavHeight = ref(44)
-watch(categories, (cats: { id: string; name: string }[]) => {
-  if (cats.length && !activeCategory.value) activeCategory.value = cats[0]?.id ?? ''
-}, { immediate: true })
+watch(categories, () => {
+  userSelectedCategory.value = ''
+})
 
 function itemSlug(item: ApiValue): string {
   return item.slug || item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -220,14 +224,19 @@ function getDietaryTags(item: ApiValue): string[] {
 useSeoMeta({
   title: () => `Menu · ${location.value?.title || slug.value}`,
   description: () => `Full menu for ${location.value?.title} at ${siteName.value}.`,
-  ogUrl: () => `${siteUrl}/locations/${slug.value}/menu`
+  ogImage: useSharedOgImage(),
+  ogUrl: useSeoUrl(() => `/locations/${slug.value}/menu`)
 })
 
 const locationCurrency = computed(() => {
   const loc = location.value as ApiValue
   if (loc?.currency && typeof loc.currency === 'string') return loc.currency
+  const currency = (bootstrapData.value?.config as Record<string, string> | undefined)?.default_currency
+  if (currency) return currency
   return 'THB'
 })
+
+const formatMenuPrice = (amount: unknown, emptyLabel = 'TBD') => formatMoneyAmount(amount, locationCurrency.value, emptyLabel)
 
 useSchemaOrg([
   computed(() => ({
@@ -243,8 +252,8 @@ useSchemaOrg([
           description: item.description
         }
         // Only include offers if price is valid
-        if (item.price !== null && item.price !== undefined && item.price !== '') {
-          menuItem.offers = { '@type': 'Offer', price: item.price, priceCurrency: locationCurrency.value }
+        if (item.price_amount !== null && item.price_amount !== undefined && item.price_amount !== '') {
+          menuItem.offers = { '@type': 'Offer', price: item.price_amount, priceCurrency: locationCurrency.value }
         }
         return menuItem
       })

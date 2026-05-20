@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateMenuItem } from '~/server/utils/menu-management'
+import { normalizePriceAmount } from '~/shared/money'
 import type { UpdateMenuItemRequest } from '~/server/types/menu'
 
 export default defineEventHandler(async (event) => {
@@ -94,6 +95,10 @@ export default defineEventHandler(async (event) => {
       if (!asset) {
         return jsonResponse({ error: 'Invalid image_asset_id' }, { status: 400 })
       }
+    }
+
+    if (body.price_amount !== undefined && body.price_amount !== null && String(body.price_amount).trim() !== '' && !normalizePriceAmount(body.price_amount)) {
+      return jsonResponse({ error: 'Invalid price amount' }, { status: 400 })
     }
 
     const menuItem = await updateMenuItem(db, itemId, body, session.user.id)

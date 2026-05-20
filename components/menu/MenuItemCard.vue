@@ -33,7 +33,7 @@
       <!-- Price badge -->
       <div class="absolute top-3 right-3">
         <span class="bg-black/80 text-white text-sm font-semibold px-3 py-1 rounded-full">
-          {{ item.price != null ? `฿${item.price}` : 'TBD' }}
+          {{ formatMoneyAmount(item.price_amount, item.currency || 'THB') }}
         </span>
       </div>
 
@@ -54,13 +54,16 @@
 </template>
 
 <script setup lang="ts">
+import { formatMoneyAmount } from '~/shared/money'
+
 interface MenuItem {
   slug: string
   name: string
   image_asset_id?: string | null
   public_url?: string
   poster?: string
-  price?: string
+  price_amount?: string | number | null
+  currency?: string
   available?: boolean
   description?: string
 }

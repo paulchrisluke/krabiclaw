@@ -13,7 +13,7 @@ test.describe('dashboard smoke', () => {
     const sites = await page.goto(`${baseURL}/dashboard/sites`, { waitUntil: 'networkidle' })
     expect(sites?.status()).toBeLessThan(400)
     await expect(page.locator('body')).toContainText('Websites')
-    await expect(page.locator('body')).toContainText('demo')
+    await expect(page.locator('body')).toContainText('Create Website')
 
     expect(errors).toEqual([])
   })

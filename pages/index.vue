@@ -473,18 +473,14 @@
 </template>
 
 <script setup>
-import { usePageContent } from '~/composables/usePageContent'
-import { useTenantSite } from '~/composables/useTenantSite'
-import { usePublicMenu } from '~/composables/usePublicMenu'
 import { useAuth } from '~/composables/useAuth'
 import { useOrganizationSchema } from '~/composables/useSchemaOrg'
-// import DOMPurify from 'isomorphic-dompurify'
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: s => s }
-
+import { formatMoneyAmount } from '~/shared/money'
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
 
 definePageMeta({ layout: false })
 
-const { isPlatform, siteId } = useTenantSite()
+const { isPlatform, siteId, site } = useTenantSite()
 
 // Platform homepage data
 const avatars = [
@@ -501,13 +497,6 @@ const features = [
   { icon: 'i-heroicons-shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
   { icon: 'i-heroicons-chart-bar', title: 'Real-time insights', body: 'See covers, top dishes, busy hours — all in one dashboard.' },
 ]
-const { getField, getFieldStr, getHero } = usePageContent('home')
-const hero = computed(() => getHero({
-  title: businessTitle.value || '',
-  subtitle: businessSubtitle.value || '',
-  image: '',
-  video: ''
-}))
 const { isAuthenticated } = useAuth()
 
 // Validate tenant context ONLY for tenant sites
@@ -518,87 +507,37 @@ if (!isPlatform && !siteId) {
   })
 }
 
-// Hoist platform hostname as a plain string for both platform and tenant
-const config = useRuntimeConfig()
-const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
+// ── Single SSR call ───────────────────────────────────────────────────────
+// Replaces: /locations + /google-business + /config + /content/home + /menus
+// SayaHeader + SayaFooter share the same bootstrap key — zero duplicate calls.
+const {
+  locations: bootstrapLocations,
+  googleBusiness: bootstrapGB,
+  getField,
+  getHero,
+  config: bootstrapConfig,
+  menuItemsBySection,
+} = useBootstrap()
 
-// SEO for KrabiClaw Platform
-if (isPlatform) {
-  useOrganizationSchema()
-  
-  useSeoMeta({
-    title: 'KrabiClaw | AI Restaurant Website Builder',
-    description: 'Build your restaurant website in minutes with AI. No coding required.',
-    ogTitle: 'KrabiClaw | AI Restaurant Website Builder',
-    ogDescription: 'Professional restaurant websites with AI content and Google Business integration.',
-    ogImage: '/og-krabiclaw.jpg',
-    ogUrl: `https://${platformHostname}`,
-    ogType: 'website'
-  })
-}
-
-// SEO for tenant sites: set ogUrl to the tenant’s actual site URL
-if (!isPlatform && siteId) {
-  // Try to get subdomain from site context if available
-  const subdomain = getFieldStr ? getFieldStr('site.subdomain', null) : null
-  const tenantSubdomain = subdomain || 'restaurant'
-  useSeoMeta({
-    title: 'KrabiClaw | Beautiful Restaurant Websites. Powered by AI.',
-    description: 'Professional restaurant websites with AI-powered content and Google Business integration.',
-    ogImage: '/og-image.jpg',
-    ogUrl: `https://${tenantSubdomain}.${platformHostname}`,
-    ogType: 'website'
-  })
-}
-
-// Get locations data (tenant-scoped) - Only if not platform
-const { data: locationsData } = isPlatform
-  ? { data: ref({ locations: [] }) }
-  : await useFetch(`/api/public/sites/${siteId}/locations`, {
-      key: 'locations-data',
-      default: () => ({ locations: [] })
-    })
-
-const locations = computed(() => locationsData.value?.locations || [])
+const locations = computed(() => bootstrapLocations.value)
 const hasLocations = computed(() => locations.value.length > 0)
 const hasOrderLinks = computed(() =>
   locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
 
-
-// Get brand menu for preview
-const {
-  menu,
-  menuItemsBySection
-} = isPlatform ? { menu: ref(null), menuItemsBySection: ref({}) } : usePublicMenu(siteId, null)
-
-// Featured menu items: explicit featured picks first, then menu-order fallback.
-const featuredMenuItems = computed(() => {
-  if (!menu.value) return []
-  const allItems = Object.values(menuItemsBySection.value).flat()
-  const featured = allItems
-    .filter(item => item.available !== false && item.featured)
-    .sort((a, b) => {
-      if ((a.featured_sort_order ?? 0) !== (b.featured_sort_order ?? 0)) {
-        return (a.featured_sort_order ?? 0) - (b.featured_sort_order ?? 0)
-      }
-      if ((a.sort_order ?? 0) !== (b.sort_order ?? 0)) return (a.sort_order ?? 0) - (b.sort_order ?? 0)
-      return String(a.name ?? '').localeCompare(String(b.name ?? ''))
-    })
-
-  return (featured.length > 0 ? featured : allItems.filter(item => item.available !== false)).slice(0, 6)
+const googleBusiness = computed(() => {
+  const gb = bootstrapGB.value
+  if (!gb) return null
+  return {
+    ...gb,
+    media: gb.media && gb.media.length ? gb.media : [{ google_url: gb.business?.profile?.photoUrl || '' }],
+    reviews: (gb.reviews || []).map((r) => ({
+      ...r,
+      author_name: r.author || r.reviewer?.displayName || r.author_name || 'Anonymous',
+      date: r.date || r.createTime || r.updateTime
+    }))
+  }
 })
-
-// Review location filter (chip strip — links to per-location review pages)
-const reviewFilter = ref('all')
-
-// Google Business data (tenant-scoped)
-const { data: googleBusiness } = isPlatform
-  ? { data: ref({ business: null, reviews: [], media: [], posts: [] }) }
-  : await useFetch(`/api/public/sites/${siteId}/google-business`, {
-      key: 'google-business-public',
-      default: () => ({ business: null, reviews: [], media: [], posts: [] })
-    })
 
 const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
 const businessTitle = computed(() => googleBusiness.value?.business?.title ?? null)
@@ -619,6 +558,72 @@ const googleReviewSummary = computed(() => {
   if (!Number.isFinite(average) || average <= 0) return null
   return { average: average.toFixed(1), count: summary.totalReviewCount }
 })
+
+const restaurantName = computed(() => site?.brand_name || businessTitle.value || 'Restaurant')
+
+// Hero from CMS with Google Business fallbacks
+const hero = computed(() => getHero({
+  title: businessTitle.value || '',
+  subtitle: businessSubtitle.value || '',
+  image: '',
+  video: ''
+}))
+
+const currentPageUrl = useSeoUrl('/')
+const sharedOgImage = useSharedOgImage()
+
+// SEO for KrabiClaw Platform
+if (isPlatform) {
+  useOrganizationSchema()
+  
+  useSeoMeta({
+    title: 'KrabiClaw | AI Restaurant Website Builder',
+    description: 'Build your restaurant website in minutes with AI. No coding required.',
+    ogTitle: 'KrabiClaw | AI Restaurant Website Builder',
+    ogDescription: 'Professional restaurant websites with AI content and Google Business integration.',
+    ogImage: sharedOgImage,
+    ogUrl: currentPageUrl,
+    ogType: 'website'
+  })
+}
+
+// SEO for tenant sites: set ogUrl to the actual request URL so custom domains share correctly.
+if (!isPlatform && siteId) {
+  useSeoMeta({
+    title: computed(() => `${restaurantName.value} | ${businessTitle.value || 'Restaurant'}`),
+    description: computed(() => businessSubtitle.value || 'Professional restaurant website with menus, reservations, photos and reviews.'),
+    ogImage: useSharedOgImage(() => hero.value.image),
+    ogUrl: currentPageUrl,
+    ogType: 'website'
+  })
+}
+
+// Single-location tenants: redirect "/" to the location home
+if (import.meta.server && !isPlatform && bootstrapLocations.value.length === 1) {
+  const targetPath = `/locations/${bootstrapLocations.value[0].slug}`
+  if (useRoute().path !== targetPath) {
+    await navigateTo(targetPath, { replace: true, redirectCode: 301 })
+  }
+}
+
+// Featured menu items from bootstrap menu
+const featuredMenuItems = computed(() => {
+  const allItems = Object.values(menuItemsBySection.value).flat()
+  const featured = allItems
+    .filter(item => item.available !== false && item.featured)
+    .sort((a, b) => {
+      if ((a.featured_sort_order ?? 0) !== (b.featured_sort_order ?? 0)) {
+        return (a.featured_sort_order ?? 0) - (b.featured_sort_order ?? 0)
+      }
+      if ((a.sort_order ?? 0) !== (b.sort_order ?? 0)) return (a.sort_order ?? 0) - (b.sort_order ?? 0)
+      return String(a.name ?? '').localeCompare(String(b.name ?? ''))
+    })
+  return (featured.length > 0 ? featured : allItems.filter(item => item.available !== false)).slice(0, 6)
+})
+const defaultCurrency = computed(() => bootstrapConfig.value.default_currency || 'THB')
+
+// Review location filter
+const reviewFilter = ref('all')
 
 const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
 const featuredReviews = computed(() => googleReviews.value.slice(0, 3))
@@ -649,7 +654,7 @@ const highlights = computed(() => {
     tiles.push({
       type: 'dish',
       name: item.name,
-      price: item.price,
+      price: formatMoneyAmount(item.price_amount, defaultCurrency.value, ''),
       image: item.public_url || null,
       imageKind: item.kind || 'image',
       alt: item.name ? `${item.name} dish` : 'Featured dish image'

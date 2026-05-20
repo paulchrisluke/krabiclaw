@@ -21,6 +21,7 @@ playwright-report/
 .DS_Store
 .fleet
 .idea
+curl_output.html
 
 # Local env files
 .env

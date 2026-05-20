@@ -4,26 +4,8 @@
     <!-- ── TENANT: Brand contact page ────────────────────────── -->
     <div v-if="!isPlatform">
 
-      <!-- Single-location: redirect handled in setup, but show contact link as fallback -->
-      <template v-if="isSingleLocation">
-        <div class="mx-auto max-w-7xl px-4 py-24 text-center sm:px-6 lg:px-8">
-          <h1 class="saya-display-md saya-italic text-default">Get in touch.</h1>
-          <p class="mt-4 text-sm text-muted">Choose a location to find hours, address and directions.</p>
-          <div class="mt-12 flex justify-center gap-4 flex-wrap">
-            <NuxtLink
-              v-for="loc in locations"
-              :key="loc.id"
-              :to="`/locations/${loc.slug}/contact`"
-              class="inline-flex items-center rounded-full border border-default px-6 py-3 text-sm font-medium text-default no-underline transition hover:bg-muted"
-            >
-              {{ loc.title }} →
-            </NuxtLink>
-          </div>
-        </div>
-      </template>
-
-      <!-- Multi-location: full brand contact layout -->
-      <template v-else>
+      <!-- Brand contact layout — shows for all tenant shapes -->
+      <div>
         <!-- Page header -->
         <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
           <p class="saya-kicker mb-6">Contact</p>
@@ -31,13 +13,15 @@
             Get in <em class="saya-italic">touch</em>.
           </h1>
           <p class="mt-5 max-w-xl text-sm leading-relaxed text-muted">
-            {{ restaurantName }} runs {{ spelledCount(locations.length) }} {{ locations.length === 2 ? 'rooms' : 'locations' }}.
-            For a reservation, pick a location below — for press, partnerships, catering or anything else, use the form.
+            For a reservation or visit, head to your nearest location — for press, partnerships, catering or anything else, use the form below.
           </p>
         </header>
 
         <!-- Top grid: form (wide) + dark aside -->
-        <div class="mx-auto grid max-w-7xl gap-6 px-4 pb-6 sm:px-6 lg:grid-cols-[1.6fr_1fr] lg:px-8">
+        <div
+          class="mx-auto grid max-w-7xl gap-6 px-4 pb-6 sm:px-6 lg:px-8"
+          :class="(hasAnyBrandContact || activeSocials.length) ? 'lg:grid-cols-[1.6fr_1fr]' : 'lg:grid-cols-1'"
+        >
 
           <!-- MESSAGE FORM -->
           <section class="border border-default bg-default p-10 lg:p-11">
@@ -94,8 +78,8 @@
             </UForm>
           </section>
 
-          <!-- DARK ASIDE: brand contact + social -->
-          <aside class="bg-inverted p-10 text-inverted lg:p-11">
+          <!-- DARK ASIDE: brand contact + social — hidden when no emails or socials configured -->
+          <aside v-if="hasAnyBrandContact || activeSocials.length" class="bg-inverted p-10 text-inverted lg:p-11">
             <p class="saya-eyebrow mb-4 text-inverted/60">Brand inquiries</p>
             <h2 class="saya-display saya-italic text-3xl text-inverted">Or reach us direct.</h2>
 
@@ -226,8 +210,9 @@
             </div>
           </div>
         </section>
-      </template>
+      </div>
     </div>
+
 
     <!-- ── PLATFORM: KrabiClaw contact page ──────────────── -->
     <div v-else class="container mx-auto px-4 py-16">
@@ -290,22 +275,12 @@ const route = useRoute()
 const requestURL = useRequestURL()
 const toast = useToast()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const sharedOgImage = useSharedOgImage()
 
 const restaurantName = computed(() => site?.brand_name || 'Our Restaurant')
 
-const SPELLED = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
-const spelledCount = (n) => n <= 10 ? SPELLED[n] : String(n)
-
-// ── Locations ────────────────────────────────────────────
-const { data: locationsData } = !isPlatform && siteId
-  ? await useFetch(`/api/public/sites/${siteId}/locations`, {
-      key: `contact-locs-${siteId}`,
-      default: () => ({ locations: [] })
-    })
-  : { data: ref({ locations: [] }) }
-
-const locations = computed(() => locationsData.value?.locations ?? [])
-const isSingleLocation = computed(() => locations.value.length === 1)
+// ── Bootstrap: locations + config in one call ─────────────
+const { locations, config: siteConfig } = useBootstrap()
 
 function formatLocAddress(loc) {
   if (!loc.address) return loc.city || ''
@@ -313,16 +288,6 @@ function formatLocAddress(loc) {
   const a = loc.address
   return [a.addressLines?.[0], a.locality, a.administrativeArea].filter(Boolean).join(', ')
 }
-
-// ── Site config (social + brand contact emails) ──────────
-const { data: siteConfigData } = !isPlatform && siteId
-  ? useFetch(`/api/public/sites/${siteId}/config`, {
-      key: `contact-config-${siteId}`,
-      default: () => ({ config: {} })
-    })
-  : { data: ref({ config: {} }) }
-
-const siteConfig = computed(() => siteConfigData.value?.config ?? {})
 
 function safeUrl(val) {
   if (!val || typeof val !== 'string') return null
@@ -423,11 +388,13 @@ useSeoMeta(isPlatform
   ? {
       title: 'Contact | KrabiClaw',
       description: 'Contact the KrabiClaw team for support, questions, or partnership inquiries.',
+      ogImage: sharedOgImage,
       ogUrl: `${siteUrl}/contact`
     }
   : {
       title: computed(() => `Contact | ${restaurantName.value}`),
       description: 'Get in touch with our restaurant.',
+      ogImage: sharedOgImage,
       ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
     }
 )

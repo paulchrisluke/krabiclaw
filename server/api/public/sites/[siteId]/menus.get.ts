@@ -27,11 +27,11 @@ export default defineEventHandler(async (event) => {
   try {
     // Get site and organization info
     const site = await db.prepare(`
-      SELECT id, organization_id, brand_name, status, primary_location_id
+      SELECT id, organization_id, brand_name, status, primary_location_id, default_currency
       FROM sites 
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `).bind(siteId).first<{ id: string; organization_id: string; brand_name: string; status: string; primary_location_id: string | null }>()
+    `).bind(siteId).first<{ id: string; organization_id: string; brand_name: string; status: string; primary_location_id: string | null; default_currency: string | null }>()
     
     if (!site) {
       return jsonResponse({ 
@@ -73,6 +73,7 @@ export default defineEventHandler(async (event) => {
         locale: localeState.effectiveLocale,
         requestedLocale: localeState.requestedLocale,
         sourceLocale: localeState.sourceLocale,
+        currency: site.default_currency || 'THB',
       })
     }
 
@@ -84,6 +85,7 @@ export default defineEventHandler(async (event) => {
       locale: localeState.effectiveLocale,
       requestedLocale: localeState.requestedLocale,
       sourceLocale: localeState.sourceLocale,
+      currency: site.default_currency || 'THB',
     })
     
   } catch (error) {

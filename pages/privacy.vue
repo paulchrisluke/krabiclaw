@@ -84,12 +84,12 @@ useSeoMeta({
   description: 'Privacy Policy for KrabiClaw website builder platform. Learn how we collect, use, and protect your personal information.',
   ogTitle: 'Privacy Policy | KrabiClaw',
   ogDescription: 'Our commitment to protecting your privacy and personal data.',
-  ogImage: `${siteUrl}/og-image.jpg`,
+  ogImage: `${siteUrl}/og-image.png`,
   ogUrl: `${siteUrl}/privacy`,
   ogType: 'website',
   twitterCard: 'summary',
   twitterTitle: 'Privacy Policy - KrabiClaw',
   twitterDescription: 'How we protect your privacy and personal information.',
-  twitterImage: `${siteUrl}/og-image.jpg`
+  twitterImage: `${siteUrl}/og-image.png`
 })
 </script>

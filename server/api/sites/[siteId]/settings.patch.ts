@@ -143,7 +143,8 @@ export default defineEventHandler(async (event) => {
           error: 'Invalid default currency'
         }, { status: 400 })
       }
-      await setConfig(db, site.organization_id as string, siteId, 'default_currency', currency)
+      setParts.push('default_currency = ?')
+      params.push(currency)
     }
     if (body.primary_location_id !== undefined) {
       if (body.primary_location_id !== null && body.primary_location_id !== '') {
@@ -246,7 +247,7 @@ export default defineEventHandler(async (event) => {
     // Get updated settings
     const updatedSite = await db.prepare(`
       SELECT id, organization_id, subdomain, theme, status,
-             primary_location_id, public_url, custom_domain_status,
+             primary_location_id, public_url, custom_domain_status, default_currency,
              brand_name, brand_description, logo_url, logo_asset_id, contact_email,
              settings, last_published_at, created_at, updated_at
       FROM sites
@@ -277,7 +278,7 @@ export default defineEventHandler(async (event) => {
       logo_asset_id: updatedSite.logo_asset_id,
       contact_email: updatedSite.contact_email,
       brand_color: siteConfig.brand_color || '',
-      default_currency: siteConfig?.default_currency || 'THB',
+      default_currency: updatedSite.default_currency || 'THB',
       url_structure: siteSettings.url_structure || 'location_subdirectories',
       social_facebook: siteConfig.social_facebook || '',
       social_instagram: siteConfig.social_instagram || '',

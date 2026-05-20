@@ -2,6 +2,7 @@
 // Routes tenant requests to appropriate pages
 
 import { defineEventHandler, getRequestURL, sendRedirect } from 'h3'
+import { cloudflareEnv } from '~/server/utils/api-response'
 
 export default defineEventHandler(async (event) => {
   const tenantType = event.context.tenantType
@@ -48,8 +49,9 @@ export default defineEventHandler(async (event) => {
           } else if ((event.node.req.socket as ApiValue)?.encrypted) protocol = 'https'
           else if (event.node.req.socket) protocol = 'http'
           // Optionally allow override via env/config (validate)
-          if (process.env.DEFAULT_PROTOCOL) {
-            const envProto = process.env.DEFAULT_PROTOCOL.toLowerCase()
+          const env = cloudflareEnv(event)
+          if (env.DEFAULT_PROTOCOL) {
+            const envProto = env.DEFAULT_PROTOCOL.toLowerCase()
             protocol = (envProto === 'http' || envProto === 'https') ? envProto : protocol
           }
           return sendRedirect(event, `${protocol}://${event.context.canonicalDomain}${url.pathname}${url.search}`, 301)

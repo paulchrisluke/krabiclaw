@@ -1,5 +1,5 @@
--- Seed data for KrabiClaw Platform
--- Creates a default demo restaurant
+-- LEGACY seed kept for reference only. Do not run for the active demo tenant.
+-- Use seeds/demo.sql via yarn seed:local or yarn seed:remote --confirm-production.
 
 -- 1. Create a demo user
 DELETE FROM user WHERE id = 'user_demo';

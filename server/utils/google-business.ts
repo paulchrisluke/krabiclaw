@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
-import { encryptSecret, decryptSecret } from './encryption'
+import { encryptSecret, decryptSecret, encryptionEnv } from './encryption'
 
 type JsonPrimitive = string | number | boolean | null
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
@@ -11,6 +11,7 @@ type JsonRecord = Record<string, JsonValue>
 
 export interface GoogleBusinessEnv {
   REVIEWS_DB: D1Database
+  CONNECTOR_TOKEN_ENCRYPTION_KEY?: string
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
   GOOGLE_BUSINESS_ACCOUNT_ID?: string
@@ -303,10 +304,11 @@ export const storeGoogleBusinessConnection = async (
   const locationSuffix = connection.location_id ? `-${connection.location_id}` : ''
   const connectionId = `gb-connection-${connection.organization_id}-${connection.site_id}${locationSuffix}`
   const now = new Date().toISOString()
+  const tokenEnv = encryptionEnv(env)
 
   // Encrypt tokens
-  const encryptedAccessToken = await encryptSecret(connection.encrypted_access_token)
-  const encryptedRefreshToken = await encryptSecret(connection.encrypted_refresh_token)
+  const encryptedAccessToken = await encryptSecret(connection.encrypted_access_token, tokenEnv)
+  const encryptedRefreshToken = await encryptSecret(connection.encrypted_refresh_token, tokenEnv)
 
   await env.REVIEWS_DB.prepare(`
     INSERT OR REPLACE INTO google_business_connections
@@ -363,9 +365,11 @@ export const getGoogleBusinessConnection = async (
     return null
   }
 
+  const tokenEnv = encryptionEnv(env)
+
   // Decrypt tokens
-  connection.encrypted_access_token = await decryptSecret(connection.encrypted_access_token)
-  connection.encrypted_refresh_token = await decryptSecret(connection.encrypted_refresh_token)
+  connection.encrypted_access_token = await decryptSecret(connection.encrypted_access_token, tokenEnv)
+  connection.encrypted_refresh_token = await decryptSecret(connection.encrypted_refresh_token, tokenEnv)
 
   return connection
 }

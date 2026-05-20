@@ -15,14 +15,9 @@
 </template>
 
 <script setup>
-const { siteId } = useTenantSite()
+const { config } = useBootstrap()
 
-const { data: siteConfig } = await useFetch(
-  `/api/public/sites/${siteId}/config`,
-  { default: () => ({ config: {} }) }
-)
-
-const brandColor = computed(() => siteConfig.value?.config?.brand_color || null)
+const brandColor = computed(() => config.value?.brand_color || null)
 const brandTextColor = computed(() => getContrastColor(brandColor.value))
 
 const themeStyles = computed(() => {

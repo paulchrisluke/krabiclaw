@@ -1,6 +1,5 @@
 // Get public business location by slug
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getConfig } from '~/server/utils/site-config'
 import { calculateMapEmbedUrl } from '~/server/utils/google-business'
 
 export default defineEventHandler(async (event) => {
@@ -27,10 +26,10 @@ export default defineEventHandler(async (event) => {
   try {
     // Get site and verify it's active
     const site = await db.prepare(`
-      SELECT id, organization_id, status FROM sites 
+      SELECT id, organization_id, status, default_currency FROM sites 
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `).bind(siteId).first()
+    `).bind(siteId).first<{ id: string; organization_id: string; status: string; default_currency: string | null }>()
     
     if (!site) {
       return jsonResponse({ 
@@ -43,9 +42,12 @@ export default defineEventHandler(async (event) => {
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
              bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
              bl.is_primary, bl.status, bl.last_synced_at, bl.google_place_id, bl.city,
-             bl.hero_image_asset_id, ma.public_url, ma.kind
+             bl.hero_image_asset_id, bl.hero_video_asset_id,
+             ma_img.public_url AS hero_image_public_url, ma_img.kind AS hero_image_kind,
+             ma_vid.public_url AS hero_video_public_url, ma_vid.kind AS hero_video_kind
       FROM business_locations bl
-      LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
+      LEFT JOIN media_assets ma_img ON bl.hero_image_asset_id = ma_img.id AND ma_img.status = 'active'
+      LEFT JOIN media_assets ma_vid ON bl.hero_video_asset_id = ma_vid.id AND ma_vid.status = 'active'
       WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.slug = ? AND bl.status = 'active'
       LIMIT 1
     `).bind(site.organization_id, siteId, slug).first<ApiRecord>()
@@ -55,8 +57,6 @@ export default defineEventHandler(async (event) => {
         error: 'Location not found'
       }, { status: 404 })
     }
-
-    const siteConfig = await getConfig(db, site.organization_id as string, siteId)
 
     // Counts for sub-nav badges
     const photoCount = await db.prepare(
@@ -78,6 +78,9 @@ export default defineEventHandler(async (event) => {
 
 
     // Parse JSON fields and return public-safe data (email excluded)
+    const public_url = (location.hero_video_public_url || location.hero_image_public_url || null) as string | null
+    const kind = public_url ? (location.hero_video_public_url ? 'video' : 'image') : null
+
     const parsedLocation = {
       id: location.id,
       slug: location.slug,
@@ -103,10 +106,12 @@ export default defineEventHandler(async (event) => {
       qa_count: (qaCount as ApiValue)?.n ?? 0,
       is_primary: location.is_primary,
       status: location.status,
-      public_url: location.public_url,
-      kind: location.kind || 'image',
+      public_url,
+      kind,
+      hero_image_public_url: location.hero_image_public_url,
+      hero_video_public_url: location.hero_video_public_url,
       city: location.city,
-      currency: siteConfig?.default_currency || DEFAULT_CURRENCY,
+      currency: site.default_currency || DEFAULT_CURRENCY,
       google_place_id: location.google_place_id,
       gmb_review_url,
       gmb_qa_url

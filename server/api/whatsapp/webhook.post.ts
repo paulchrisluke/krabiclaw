@@ -1,5 +1,4 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getConfig } from '~/server/utils/site-config'
 import { fetchWhatsAppMedia, normalizePhone, sendWhatsAppText } from '~/server/utils/whatsapp'
 import { saveInboundMediaAsset } from '~/server/utils/chowbot-media'
 import { runChowBot } from '~/server/utils/chowbot-agent'
@@ -133,7 +132,9 @@ async function runChowBotAndReply(
     pendingMedia: { assetId: string; siteId: string } | null
   }
 ) {
-  const siteConfig = await getConfig(db, opts.organizationId, opts.siteId)
+  const site = await db.prepare(
+    `SELECT default_currency FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`
+  ).bind(opts.siteId, opts.organizationId).first<{ default_currency: string | null }>()
   const messages = await getRecentAgentMessages(db, opts.conversation.id, opts.siteId, opts.userId)
   let assistantText = ''
   const result = await runChowBot({
@@ -143,7 +144,7 @@ async function runChowBotAndReply(
     siteId: opts.siteId,
     userId: opts.userId,
     siteName: opts.siteName ?? 'your site',
-    defaultCurrency: siteConfig.default_currency || 'THB',
+    defaultCurrency: site?.default_currency || 'THB',
     messages,
     currentPage: 'whatsapp',
     channel: 'whatsapp',

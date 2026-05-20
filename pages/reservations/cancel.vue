@@ -1,12 +1,10 @@
 <template>
   <div class="min-h-screen bg-default text-default">
-    <SayaHero
-      title="Cancel Reservation"
-      subtitle="We're sorry you can't make it"
-      size="page"
-    />
+    <header class="mx-auto max-w-7xl px-4 pt-16 pb-10 sm:px-6 lg:px-8 text-center">
+      <h1 class="saya-display-md text-default"><em class="saya-italic">Cancel reservation</em></h1>
+    </header>
 
-    <div class="mx-auto max-w-xl px-4 py-24 text-center">
+    <div class="mx-auto max-w-xl px-4 pb-24 text-center">
       <template v-if="pending">
         <UIcon name="i-heroicons-arrow-path" class="mx-auto size-12 animate-spin text-muted" />
         <p class="mt-4 text-muted">Checking reservation details...</p>

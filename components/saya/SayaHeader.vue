@@ -16,8 +16,8 @@
         <!-- Desktop nav -->
         <nav class="hidden items-center gap-1 lg:flex" aria-label="Saya navigation">
           <!-- Locations dropdown -->
-          <UDropdownMenu :items="locationDropdownItems" :ui="{ content: 'min-w-64' }">
-            <button class="flex items-center gap-1.5 rounded-full border border-default bg-default px-3.5 py-2 text-sm text-default transition hover:border-muted">
+          <UDropdownMenu :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
+            <button class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default">
               Locations
               <UIcon name="i-heroicons-chevron-down" class="size-3 opacity-60" />
             </button>
@@ -52,7 +52,7 @@
 
         <div class="flex items-center gap-2">
           <!-- Language switcher -->
-          <UDropdownMenu :items="languageItems">
+          <UDropdownMenu :items="languageItems" :ui="{ content: 'saya-theme' }">
             <UButton variant="ghost" color="neutral" size="sm">
               <span>{{ getCurrentLocaleFlag() }}</span>
               <span class="hidden sm:inline">{{ currentLocale }}</span>
@@ -161,14 +161,8 @@ interface I18nComposable {
   setLocale: (_code: string) => void
 }
 
-interface PublicLocale {
-  locale: string
-  label: string | null
-  is_source: boolean
-  status: string
-}
 
-const { siteId, site } = useTenantSite()
+const { site } = useTenantSite()
 const i18n = useI18n() as ApiValue as I18nComposable
 const mobileMenuOpen = ref(false)
 const headerRef = ref<HTMLElement | null>(null)
@@ -192,24 +186,6 @@ onUnmounted(() => {
 })
 
 const currentLocale = computed(() => i18n.locale.value)
-const currentSiteIdForLocales = computed(() => siteId || '')
-const { data: localeData, execute: loadLocales } = useFetch<{ locales: PublicLocale[] }>(
-  () => `/api/public/sites/${currentSiteIdForLocales.value}/locales`,
-  {
-    key: () => `site-locales-${currentSiteIdForLocales.value || 'none'}`,
-    default: () => ({ locales: [] }),
-    watch: false,
-    immediate: false
-  }
-)
-const availableLocales = computed(() =>
-  (localeData.value?.locales?.length
-    ? localeData.value.locales.map(locale => ({ code: locale.locale, name: locale.label || locale.locale }))
-    : (i18n.locales?.value ?? [])).map((l: { code: string; name: string }) => ({
-    code: l.code,
-    name: l.name
-  }))
-)
 const getLocaleFlag = (code: string) =>
   ({ en: '🇺🇸', th: '🇹🇭', fr: '🇫🇷', ja: '🇯🇵', 'zh-CN': '🇨🇳', ko: '🇰🇷', es: '🇪🇸', de: '🇩🇪', it: '🇮🇹', ar: '🇸🇦' }[code] ?? '🌐')
 const getCurrentLocaleFlag = () => getLocaleFlag(currentLocale.value)
@@ -219,6 +195,15 @@ const logoUrl = computed(() => (site as Site | null)?.logo_url || null)
 
 useUpgradeModal()
 
+// Shared bootstrap — same key as page component + footer → single SSR request
+const { locations: bootstrapLocations, locales: bootstrapLocales, hasExperiences } = useBootstrap()
+
+const availableLocales = computed(() =>
+  bootstrapLocales.value.length
+    ? bootstrapLocales.value.map(l => ({ code: l.code, name: l.label || l.code }))
+    : (i18n.locales?.value ?? []).map((l: { code: string; name: string }) => ({ code: l.code, name: l.name }))
+)
+
 const languageItems = computed(() =>
   availableLocales.value.map((l: { code: string; name: string }) => ({
     label: `${getLocaleFlag(l.code)} ${l.name}`,
@@ -226,52 +211,10 @@ const languageItems = computed(() =>
   }))
 )
 
-// No await — this is a layout component, not a page. Data arrives reactively.
-const currentSiteId = computed(() => siteId || '')
-
-const { data: locationsData, error: locationsError, execute: loadLocations } = useFetch<{ locations: ApiRecord[] }>(
-  () => `/api/public/sites/${currentSiteId.value}/locations`,
-  {
-    key: () => `header-locs-${currentSiteId.value || 'none'}`,
-    default: () => ({ locations: [] }),
-    watch: false,
-    immediate: false
-  }
-)
-
-const { data: experiencesData, execute: loadExperiences } = useFetch<{ experiences: ApiRecord[] }>(
-  () => `/api/public/sites/${currentSiteId.value}/experiences`,
-  {
-    key: () => `header-xp-${currentSiteId.value || 'none'}`,
-    default: () => ({ experiences: [] }),
-    server: false,
-    immediate: false,
-    watch: false
-  }
-)
-
-watch(currentSiteId, (id: string) => {
-  if (id) {
-    loadLocations()
-    loadLocales()
-    loadExperiences()
-  }
-}, { immediate: true })
-
-const locations = computed(() => {
-  if (locationsError.value) {
-    console.error('Failed to load locations:', locationsError.value)
-    return []
-  }
-  if (!currentSiteId.value) return []
-  return locationsData.value?.locations ?? []
-})
-
+const locations = computed(() => bootstrapLocations.value)
 const hasOrderLinks = computed(() =>
   locations.value.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
-
-const hasExperiences = computed(() => (experiencesData.value?.experiences?.length ?? 0) > 0)
 
 const locationDropdownItems = computed(() => [
   locations.value.map((loc: { title: string; slug: string }) => ({

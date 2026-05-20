@@ -282,7 +282,7 @@ function buildMenuItemUpdates(itemRecord: Record<string, unknown>, match?: MenuI
   const section = getToolString(itemRecord, 'section', 100)
   const name = getToolString(itemRecord, 'name', 200)
   const description = getToolString(itemRecord, 'description', 500)
-  const price = getToolString(itemRecord, 'price', 50)
+  const priceAmount = getToolString(itemRecord, 'price_amount', 50)
   const imageAssetId = getToolString(itemRecord, 'image_asset_id', 120)
   const available = getToolBoolean(itemRecord, 'available')
   
@@ -295,7 +295,7 @@ function buildMenuItemUpdates(itemRecord: Record<string, unknown>, match?: MenuI
   if (section !== undefined && section.trim() && section !== match?.section) updates.section = section
   if (name !== undefined && name !== match?.name) updates.name = name
   if (description !== undefined && description !== match?.description) updates.description = description
-  if (price !== undefined && price !== match?.price) updates.price = price
+  if (priceAmount !== undefined && priceAmount !== match?.price_amount) updates.price_amount = priceAmount
   if (imageAssetId !== undefined && imageAssetId !== match?.image_asset_id) updates.image_asset_id = imageAssetId
   if (available !== undefined && available !== Boolean(match?.available)) updates.available = available
   
@@ -436,7 +436,7 @@ const TOOLS: AiTool[] = [
               section: { type: 'string', description: 'Section/category name.' },
               name: { type: 'string', description: 'Dish name.' },
               description: { type: 'string', description: 'Short description. Optional.' },
-              price: { type: 'string', description: 'Price string, e.g. "฿120". Optional.' },
+              price_amount: { type: 'string', description: 'Numeric price amount only, without currency, e.g. "120". Optional.' },
               image_asset_id: { type: 'string', description: 'Media asset ID from generate_image or pending WhatsApp media. Optional.' },
               allergens: { type: 'array', items: { type: 'string' }, description: 'List of allergens, e.g. ["dairy", "nuts"].' },
               ingredients: { type: 'array', items: { type: 'string' }, description: 'Key ingredients.' },
@@ -468,7 +468,7 @@ const TOOLS: AiTool[] = [
               section: { type: 'string', description: 'Section/category name.' },
               name: { type: 'string', description: 'Dish name.' },
               description: { type: 'string', description: 'Short description. Optional.' },
-              price: { type: 'string', description: 'Price string, e.g. "฿120". Optional.' },
+              price_amount: { type: 'string', description: 'Numeric price amount only, without currency, e.g. "120". Optional.' },
               image_asset_id: { type: 'string', description: 'Media asset ID from generate_image. Optional.' },
               available: { type: 'boolean', description: 'Whether the item should be shown as available.' },
               allergens: { type: 'array', items: { type: 'string' }, description: 'List of allergens.' },
@@ -497,7 +497,7 @@ const TOOLS: AiTool[] = [
         section: { type: 'string', description: 'Section/category.' },
         name: { type: 'string', description: 'Dish name.' },
         description: { type: 'string', description: 'Short description. Optional.' },
-        price: { type: 'string', description: 'Price string. Optional.' },
+        price_amount: { type: 'string', description: 'Numeric price amount only, without currency. Optional.' },
         image_asset_id: { type: 'string', description: 'Media asset ID from generate_image or pending WhatsApp media. Optional.' },
         allergens: { type: 'array', items: { type: 'string' } },
         ingredients: { type: 'array', items: { type: 'string' } },
@@ -510,7 +510,7 @@ const TOOLS: AiTool[] = [
   },
   {
     name: 'update_menu_item',
-    description: 'Update a menu item — name, price, description, image, availability, featured status, allergens, ingredients, dietary tags, preparation, or serving note.',
+    description: 'Update a menu item — name, numeric price amount, description, image, availability, featured status, allergens, ingredients, dietary tags, preparation, or serving note.',
     input_schema: {
       type: 'object',
       properties: {
@@ -518,7 +518,7 @@ const TOOLS: AiTool[] = [
         section: { type: 'string' },
         name: { type: 'string' },
         description: { type: 'string' },
-        price: { type: 'string' },
+        price_amount: { type: 'string', description: 'Numeric price amount only, without currency.' },
         image_asset_id: { type: 'string', description: 'New media asset ID from generate_image or pending WhatsApp media.' },
         available: { type: 'boolean' },
         featured: { type: 'boolean', description: 'Whether this item appears in the featured highlights on the home page.' },
@@ -1356,7 +1356,7 @@ async function executeTool(
       const items: unknown[] = Array.isArray(input.items) ? input.items.slice(0, 100) : []
       const existingKeys = new Set(menu.items.map((item) => item.slug || menuItemLookupKey(item.name)))
       const inputKeys = new Set<string>()
-      const created: Array<{ id: string; name: string; section: string; price: string | null }> = []
+      const created: Array<{ id: string; name: string; section: string; price_amount: string | number | null }> = []
       const skipped: Array<{ name: string; reason: string; existing_item_id?: string }> = []
 
       for (const item of items) {
@@ -1390,11 +1390,11 @@ async function executeTool(
             section,
             name,
             description: getToolString(itemRecord, 'description', 500),
-            price: getToolString(itemRecord, 'price', 50),
+            price_amount: getToolString(itemRecord, 'price_amount', 50),
             image_asset_id: getToolString(itemRecord, 'image_asset_id', 120),
           }, userId)
           existingKeys.add(createdItem.slug || menuItemLookupKey(createdItem.name))
-          created.push({ id: createdItem.id, name: createdItem.name, section: createdItem.section, price: createdItem.price })
+          created.push({ id: createdItem.id, name: createdItem.name, section: createdItem.section, price_amount: createdItem.price_amount })
         } catch (error) {
           if (!isUniqueConstraintError(error)) throw error
           skipped.push({ name, reason: 'unique_conflict' })
@@ -1413,8 +1413,8 @@ async function executeTool(
       const items: unknown[] = Array.isArray(input.items) ? input.items.slice(0, 100) : []
       const workingItems = [...menu.items]
       const touchedItemIds = new Set<string>()
-      const created: Array<{ id: string; name: string; section: string; price: string | null }> = []
-      const updated: Array<{ id: string; name: string; section: string; price: string | null; available: boolean }> = []
+      const created: Array<{ id: string; name: string; section: string; price_amount: string | number | null }> = []
+      const updated: Array<{ id: string; name: string; section: string; price_amount: string | number | null; available: boolean }> = []
       const unchanged: Array<{ id: string; name: string }> = []
       const skipped: Array<{ name: string; reason: string; item_id?: string }> = []
 
@@ -1445,7 +1445,7 @@ async function executeTool(
               id: updatedItem.id,
               name: updatedItem.name,
               section: updatedItem.section,
-              price: updatedItem.price,
+              price_amount: updatedItem.price_amount,
               available: Boolean(updatedItem.available),
             })
           } catch (error) {
@@ -1470,13 +1470,13 @@ async function executeTool(
             section,
             name,
             description: getToolString(itemRecord, 'description', 500),
-            price: getToolString(itemRecord, 'price', 50),
+            price_amount: getToolString(itemRecord, 'price_amount', 50),
             image_asset_id: getToolString(itemRecord, 'image_asset_id', 120),
             available: getToolBoolean(itemRecord, 'available'),
           }, userId)
           workingItems.push(createdItem)
           touchedItemIds.add(createdItem.id)
-          created.push({ id: createdItem.id, name: createdItem.name, section: createdItem.section, price: createdItem.price })
+          created.push({ id: createdItem.id, name: createdItem.name, section: createdItem.section, price_amount: createdItem.price_amount })
         } catch (error) {
           if (!isUniqueConstraintError(error)) throw error
           skipped.push({ name, reason: 'unique_conflict' })
@@ -1512,18 +1512,30 @@ async function executeTool(
     case 'add_menu_item': {
       const item = await createMenuItem(db, input.menu_id, {
         section: input.section, name: input.name,
-        description: input.description, price: input.price, image_asset_id: input.image_asset_id,
+        description: input.description, price_amount: input.price_amount, image_asset_id: input.image_asset_id,
       }, userId)
-      return { id: item.id, name: item.name, section: item.section, price: item.price }
+      return { id: item.id, name: item.name, section: item.section, price_amount: item.price_amount }
     }
 
     case 'update_menu_item': {
       const updates: Record<string, string | boolean | number | null> = {}
-      for (const f of ['section', 'name', 'description', 'price', 'image_asset_id', 'available', 'featured', 'featured_sort_order']) {
+      for (const f of ['section', 'name', 'description', 'price_amount', 'image_asset_id', 'available', 'featured', 'featured_sort_order', 'allergens', 'ingredients', 'dietary_notes', 'preparation', 'serving_note']) {
         if (input[f] !== undefined) updates[f] = input[f]
       }
       const item = await updateMenuItem(db, input.item_id, updates, userId)
-      return { id: item.id, name: item.name, price: item.price, available: item.available, featured: item.featured, featured_sort_order: item.featured_sort_order }
+      return {
+        id: item.id,
+        name: item.name,
+        price_amount: item.price_amount,
+        available: item.available,
+        featured: item.featured,
+        featured_sort_order: item.featured_sort_order,
+        allergens: item.allergens,
+        ingredients: item.ingredients,
+        dietary_notes: item.dietary_notes,
+        preparation: item.preparation,
+        serving_note: item.serving_note,
+      }
     }
 
     case 'delete_menu_item': {
@@ -2447,7 +2459,9 @@ async function executeTool(
       if (!currency || !supportedCurrencies.has(currency)) {
         return { error: 'Unsupported currency.' }
       }
-      await setConfig(db, orgId, siteId, 'default_currency', currency)
+      await db.prepare(
+        `UPDATE sites SET default_currency = ?, updated_at = ? WHERE id = ? AND organization_id = ?`
+      ).bind(currency, new Date().toISOString(), siteId, orgId).run()
       return { default_currency: currency, updated: true }
     }
 
@@ -2757,7 +2771,7 @@ Guidelines:
 - For existing menu edits, replacements, revised prices/descriptions, renamed dishes, or mixed create/update work, inspect the menu with get_menu and then use sync_menu_items or update_menu_item
 - For menu category changes like renaming Appetizers to Starters or Drinks to Beverages, use rename_menu_section
 - For deleting one dish use delete_menu_item; for deleting a whole category and all dishes inside it use delete_menu_section
-- Use the default menu currency for new or revised menu prices unless the user gives another currency
+- Store menu prices as price_amount only. Use the site default currency for display unless the user asks to change the currency, then call set_default_currency.
 - Use add_menu_items_batch only when the user is clearly adding brand-new items that are not already on the menu
 - Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
 - When creating menus, omit location_id — the server links it to the current location automatically

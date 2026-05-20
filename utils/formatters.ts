@@ -94,7 +94,126 @@ export const getIsOpenNow = (regularHours: GoogleRegularHours | GoogleRegularPer
     ? (regularHours as GoogleRegularPeriod[])
     : (regularHours as GoogleRegularHours)?.periods ?? []
 
-  if (!periods.length) return undefined
+  if (!periods.length) {
+    // Fall back to parsing weekdayDescriptions (e.g. "Monday: 2:00 – 11:00 PM")
+    const descs = !Array.isArray(regularHours)
+      ? (regularHours as GoogleRegularHours)?.weekdayDescriptions ?? []
+      : []
+    if (!descs.length) return undefined
+
+    const todayLine = descs.find(l => l.trim().toUpperCase().startsWith(today + ':'))
+    if (!todayLine) return false
+
+    const rangeStr = todayLine.replace(/^[^:]+:\s*/i, '').trim()
+    if (/closed/i.test(rangeStr)) return false
+
+    const ranges = rangeStr.split(',').map(r => r.trim()).filter(Boolean)
+    
+    let anyValidRange = false
+    let isOpen = false
+    
+    for (const singleRangeStr of ranges) {
+      const parts = singleRangeStr.split(/\s*[–\-]\s*/)
+      if (parts.length !== 2) continue
+
+      const parseAmPm = (s: string): { hour: number; minute: number; ampm: string | null } | null => {
+        const m = s.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i)
+        if (!m) return null
+        const h = parseInt(m[1] ?? '0', 10)
+        const min = parseInt(m[2] ?? '0', 10)
+        const ampm = m[3]?.toUpperCase() || null
+        return { hour: h, minute: min, ampm }
+      }
+
+      const openParsed = parseAmPm(parts[0] ?? '')
+      const closeParsed = parseAmPm(parts[1] ?? '')
+      if (!openParsed || !closeParsed) continue
+
+      anyValidRange = true
+
+      const toMins = (h: number, min: number, ampm: string | null): number => {
+        let hour = h
+        if (ampm === 'PM' && hour < 12) hour += 12
+        else if (ampm === 'AM' && hour === 12) hour = 0
+        return hour * 60 + min
+      }
+
+      // Infer AM/PM using hour-based inference
+      let openAmpm = openParsed.ampm
+      let closeAmpm = closeParsed.ampm
+
+      if (!openAmpm && !closeAmpm) {
+        // Try both AM, start AM end PM, start PM end AM
+        const assignments = [
+          { open: 'AM', close: 'AM' },
+          { open: 'AM', close: 'PM' },
+          { open: 'PM', close: 'AM' },
+          { open: 'PM', close: 'PM' },
+        ]
+        let bestAssignment: typeof assignments[0] | null = null
+        let bestDuration = -1
+
+        for (const assignment of assignments) {
+          const openMins = toMins(openParsed.hour, openParsed.minute, assignment.open)
+          const closeMins = toMins(closeParsed.hour, closeParsed.minute, assignment.close)
+          let duration = closeMins - openMins
+          if (duration < 0) duration += 24 * 60 // Handle midnight crossing
+
+          // Prefer positive duration <= 12h, with preference for same-day daytime spans (AM→PM)
+          if (duration > 0 && duration <= 12 * 60) {
+            if (bestDuration < 0 || duration < bestDuration || (assignment.open === 'AM' && assignment.close === 'PM')) {
+              bestAssignment = assignment
+              bestDuration = duration
+            }
+          }
+        }
+
+        if (bestAssignment) {
+          openAmpm = bestAssignment.open
+          closeAmpm = bestAssignment.close
+        }
+      } else if (!openAmpm && closeAmpm) {
+        // Try assigning open the same marker as close
+        openAmpm = closeAmpm
+        const openMins = toMins(openParsed.hour, openParsed.minute, openAmpm)
+        const closeMins = toMins(closeParsed.hour, closeParsed.minute, closeAmpm)
+        let duration = closeMins - openMins
+        if (duration < 0) duration += 24 * 60
+
+        // If duration is negative or implausibly long (>12h), flip the inferred marker
+        if (duration <= 0 || duration > 12 * 60) {
+          openAmpm = closeAmpm === 'AM' ? 'PM' : 'AM'
+        }
+      } else if (!closeAmpm && openAmpm) {
+        // Try assigning close the same marker as open
+        closeAmpm = openAmpm
+        const openMins = toMins(openParsed.hour, openParsed.minute, openAmpm)
+        const closeMins = toMins(closeParsed.hour, closeParsed.minute, closeAmpm)
+        let duration = closeMins - openMins
+        if (duration < 0) duration += 24 * 60
+
+        // If duration is negative or implausibly long (>12h), flip the inferred marker
+        if (duration <= 0 || duration > 12 * 60) {
+          closeAmpm = openAmpm === 'AM' ? 'PM' : 'AM'
+        }
+      }
+
+      const openMins = toMins(openParsed.hour, openParsed.minute, openAmpm)
+      const closeMins = toMins(closeParsed.hour, closeParsed.minute, closeAmpm)
+
+      const nowMins = new Date().getHours() * 60 + new Date().getMinutes()
+      let rangeIsOpen = false
+      if (closeMins < openMins) rangeIsOpen = nowMins >= openMins || nowMins < closeMins
+      else rangeIsOpen = nowMins >= openMins && nowMins < closeMins
+      
+      if (rangeIsOpen) {
+        isOpen = true
+      }
+    }
+    
+    if (!anyValidRange) return undefined
+    return isOpen
+  }
 
   const period = periods.find((p) => p.openDay === today)
   if (!period) return false
@@ -107,7 +226,6 @@ export const getIsOpenNow = (regularHours: GoogleRegularHours | GoogleRegularPer
   const nowMins = now.getHours() * 60 + now.getMinutes()
   const openMins = (open.hours ?? 0) * 60 + (open.minutes ?? 0)
   const closeMins = (close.hours ?? 0) * 60 + (close.minutes ?? 0)
-  // Handle midnight-crossing periods (e.g. 10 PM – 2 AM)
   if (closeMins < openMins) return nowMins >= openMins || nowMins < closeMins
   return nowMins >= openMins && nowMins < closeMins
 }

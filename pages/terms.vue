@@ -69,12 +69,12 @@ useSeoMeta({
   description: 'Terms and Conditions for KrabiClaw website builder platform. Read our terms of service for using our SaaS platform.',
   ogTitle: 'Terms and Conditions | KrabiClaw',
   ogDescription: 'Our terms of service for the website builder platform.',
-  ogImage: `${siteOrigin}/og-image.jpg`,
+  ogImage: `${siteOrigin}/og-image.png`,
   ogUrl: `${siteOrigin}/terms`,
   ogType: 'website',
   twitterCard: 'summary',
   twitterTitle: 'Terms and Conditions - KrabiClaw',
   twitterDescription: 'Terms of service for our website builder platform.',
-  twitterImage: `${siteOrigin}/og-image.jpg`
+  twitterImage: `${siteOrigin}/og-image.png`
 })
 </script>

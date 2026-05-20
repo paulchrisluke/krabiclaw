@@ -9,6 +9,17 @@
 
 <script setup lang="ts">
 const { isPlatform } = useTenantSite()
+const route = useRoute()
+const defaultOgImage = useSharedOgImage()
+const defaultPageUrl = useSeoUrl(() => route.path)
+
+useSeoMeta({
+  ogImage: defaultOgImage,
+  ogUrl: defaultPageUrl,
+  ogType: 'website',
+  twitterCard: 'summary_large_image',
+  twitterImage: defaultOgImage
+})
 
 const loadingColor = computed(() => {
   if (isPlatform) return 'var(--kc-loading-rainbow)'

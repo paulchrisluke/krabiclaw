@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
     // Verify user belongs to organization that owns the site
     const site = await db.prepare(`
       SELECT s.id, s.organization_id, s.subdomain, s.theme, s.status,
-             s.primary_location_id, s.public_url, s.custom_domain_status,
+             s.primary_location_id, s.public_url, s.custom_domain_status, s.default_currency,
              s.brand_name, s.brand_description, s.logo_url, s.logo_asset_id, s.contact_email,
              s.settings, s.last_published_at, s.created_at, s.updated_at,
              o.name as organization_name
@@ -86,7 +86,7 @@ export default defineEventHandler(async (event) => {
       logo_asset_id: site.logo_asset_id,
       contact_email: site.contact_email,
       brand_color: siteConfig.brand_color || '',
-      default_currency: siteConfig.default_currency || 'THB',
+      default_currency: site.default_currency || 'THB',
       social_facebook: siteConfig.social_facebook || '',
       social_instagram: siteConfig.social_instagram || '',
       social_tiktok: siteConfig.social_tiktok || '',

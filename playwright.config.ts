@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
+import { testBaseUrl, testEnv } from './tests/e2e/test-env'
 
-const port = Number(process.env.PORT || 3000)
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${port}`
+const port = Number(testEnv('PORT') || 3000)
+const baseURL = testBaseUrl()
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -22,7 +23,7 @@ export default defineConfig({
   },
   webServer: {
     command: `PORT=${port} yarn dev`,
-    url: baseURL,
+    url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000
   },

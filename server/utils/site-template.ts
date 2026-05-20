@@ -67,21 +67,21 @@ export async function seedNewSite(
   `).bind(menuId, organizationId, siteId, locationId))
 
   const menuItems = [
-    ['Starter', 'Sample Starter', 'starter', 'A delicious way to begin — update this with your actual starter.', '$8'],
-    ['Starter', 'Soup of the Day', 'soup', 'Ask your server. Made fresh daily.', '$7'],
-    ['Mains', 'House Special', 'house-special', 'Your signature dish goes here. Update with name, description, and price.', '$18'],
-    ['Mains', 'Chef\'s Recommendation', 'chefs-rec', 'The dish your team is most proud of.', '$20'],
-    ['Mains', 'Vegetarian Option', 'vegetarian', 'A plant-based option for every menu.', '$15'],
-    ['Desserts', 'Dessert of the Day', 'dessert', 'Ask your server what is on today.', '$7'],
-    ['Drinks', 'House Lemonade', 'lemonade', 'Made fresh each morning.', '$4'],
-    ['Drinks', 'Soft Drink', 'soft-drink', 'Pepsi, Diet Pepsi, or lemonade.', '$3'],
+    ['Starter', 'Sample Starter', 'starter', 'A delicious way to begin. Update this with your actual starter.', 8],
+    ['Starter', 'Soup of the Day', 'soup', 'Ask your server. Made fresh daily.', 7],
+    ['Mains', 'House Special', 'house-special', 'Your signature dish goes here. Update with name, description, and price.', 18],
+    ['Mains', 'Chef\'s Recommendation', 'chefs-rec', 'The dish your team is most proud of.', 20],
+    ['Mains', 'Vegetarian Option', 'vegetarian', 'A plant-based option for every menu.', 15],
+    ['Desserts', 'Dessert of the Day', 'dessert', 'Ask your server what is on today.', 7],
+    ['Drinks', 'House Lemonade', 'lemonade', 'Made fresh each morning.', 4],
+    ['Drinks', 'Soft Drink', 'soft-drink', 'Pepsi, Diet Pepsi, or lemonade.', 3],
   ]
 
   for (let i = 0; i < menuItems.length; i++) {
     const [section, name, slug, description, price] = menuItems[i]!
     statements.push(db.prepare(`
       INSERT OR IGNORE INTO menu_items
-        (id, menu_id, section, name, slug, description, price, available, sort_order)
+        (id, menu_id, section, name, slug, description, price_amount, available, sort_order)
       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
     `).bind(uid('mi'), menuId, section, name, slug, description, price, i))
   }

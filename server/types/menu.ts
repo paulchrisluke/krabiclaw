@@ -22,7 +22,7 @@ export interface MenuItem {
   name: string
   slug: string
   description: string | null
-  price: string | null
+  price_amount: string | number | null
   image_asset_id: string | null
   public_url?: string | null  // from media_assets join
   kind?: string | null
@@ -63,7 +63,7 @@ export interface CreateMenuItemRequest {
   name: string
   // slug is generated server-side from name
   description?: string
-  price?: string
+  price_amount?: string | number | null
   image_asset_id?: string | null
   available?: boolean
   featured?: boolean
@@ -81,7 +81,7 @@ export interface UpdateMenuItemRequest {
   name?: string
   // slug is intentionally not editable via the standard update path
   description?: string
-  price?: string
+  price_amount?: string | number | null
   image_asset_id?: string | null
   available?: boolean
   featured?: boolean

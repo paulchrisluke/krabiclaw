@@ -86,12 +86,14 @@ const faqs = [
     a: 'AI credits power menu extraction from photos, content generation, and the ChowBot AI assistant. Credits reset monthly. Additional top-ups are available from Dashboard → Billing.',
   },
 ]
+const sharedOgImage = useSharedOgImage()
+const currentPageUrl = useSeoUrl('/pricing')
 
 useSeoMeta({
   title: 'Pricing | KrabiClaw',
   description: 'Per-location pricing for restaurant websites. Free forever, or upgrade to Pro at $29/location/month as you grow. No setup fees, no contracts.',
-  ogImage: '/og-image.jpg',
-  ogUrl: computed(() => `https://${platformHostname.value}/pricing`),
+  ogImage: sharedOgImage,
+  ogUrl: currentPageUrl,
   ogType: 'website',
 })
 

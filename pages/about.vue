@@ -18,9 +18,19 @@
       <!-- Story: image + body -->
       <section class="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
         <div :class="getField('story.image') ? 'grid gap-16 lg:grid-cols-2 lg:items-start' : 'max-w-3xl'">
-          <!-- Story image -->
-          <div v-if="getField('story.image')" class="overflow-hidden">
+          <!-- Story image or video -->
+          <div v-if="getField('story.image')" class="overflow-hidden rounded-2xl bg-zinc-950/5 relative">
+            <video
+              v-if="isVideoUrl(getField('story.image'))"
+              :src="getField('story.image')"
+              autoplay
+              muted
+              loop
+              playsinline
+              class="w-full object-cover aspect-4/3"
+            />
             <img
+              v-else
               :src="getField('story.image')"
               alt=""
               aria-hidden="true"
@@ -93,7 +103,6 @@
             <p class="text-muted">Questions, partnership ideas, or just want to talk restaurants and technology — we'd love to hear from you.</p>
             <div class="not-prose flex flex-col sm:flex-row gap-4 mt-6">
               <UButton to="/contact" color="primary" size="lg">Contact Us</UButton>
-              <UButton href="https://x.com/paulchrisluke" target="_blank" rel="noopener" variant="outline" color="neutral" size="lg">Follow on X</UButton>
             </div>
           </section>
         </article>
@@ -104,41 +113,36 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { sanitizeHtml } from '~/utils/sanitize'
 definePageMeta({ layout: false })
 
 import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
-import { usePageContent } from '~/composables/usePageContent'
 
-const { isPlatform, siteId } = useTenantSite()
-const { getField } = usePageContent('about')
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
 
-const storyBody = ref(await sanitizeHtml(getField('story.body', '') || ''))
-const journeyBody = ref(await sanitizeHtml(getField('journey.body', '') || ''))
+const { isPlatform } = useTenantSite()
+const { getField, locations } = useBootstrap()
 
-watch(() => getField('story.body', ''), async (val) => {
-  storyBody.value = await sanitizeHtml(val || '')
-})
-watch(() => getField('journey.body', ''), async (val) => {
-  journeyBody.value = await sanitizeHtml(val || '')
-})
-
-const { data: aboutLocsData } = isPlatform || !siteId
-  ? { data: ref({ locations: [] }) }
-  : await useFetch(`/api/public/sites/${siteId}/locations`, {
-      key: `about-locs-${siteId}`,
-      default: () => ({ locations: [] })
-    })
+const storyBody = computed(() => DOMPurify.sanitize(getField('story.body', '') || ''))
+const journeyBody = computed(() => DOMPurify.sanitize(getField('journey.body', '') || ''))
 
 const hasOrderLinks = computed(() =>
-  (aboutLocsData.value?.locations ?? []).some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
+  locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
+
+function isVideoUrl(url) {
+  try {
+    const pathname = new URL(url).pathname
+    return /\.(mp4|webm|mov)$/i.test(pathname)
+  } catch {
+    return /\.(mp4|webm|mov)$/i.test(url)
+  }
+}
 
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 const route = useRoute()
 const requestURL = useRequestURL()
+const sharedOgImage = useSharedOgImage()
 
 if (isPlatform) {
   useOrganizationSchema()
@@ -152,12 +156,13 @@ useSeoMeta(isPlatform
   ? {
       title: 'About | KrabiClaw',
       description: 'KrabiClaw is an AI-powered restaurant website builder built in Krabi, Thailand by Paul Chris Luke.',
-      ogImage: '/og-image.jpg',
+      ogImage: sharedOgImage,
       ogUrl: `${siteUrl}/about`
     }
   : {
       title: computed(() => `About | ${getField('restaurant.name', 'Our Restaurant')}`),
       description: computed(() => getField('seo.description', 'Learn about our restaurant and our story.')),
+      ogImage: sharedOgImage,
       ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
     }
 )

@@ -21,7 +21,7 @@ Return a JSON object with a single key "items" containing an array. Each item mu
   - section: string (the menu section/category, e.g. "Appetizers", "Mains", "Desserts")
   - name: string (dish name)
   - description: string or null
-  - price: string or null (keep original formatting, e.g. "฿120", "120 THB", "$12.00")
+  - price_amount: string or null (the numeric amount only, without currency symbols or codes, e.g. "120", "12.00")
 
 If you cannot read the menu clearly, return {"items": [], "warning": "reason"}.
 Return ONLY valid JSON. No markdown, no explanation.`
@@ -75,7 +75,7 @@ export default defineEventHandler(async (event) => {
   const orgId: string = site.organization_id
 
   // Check credits before doing anything expensive (skipped in local dev)
-  const isDev = process.env.NODE_ENV === 'development'
+  const isDev = import.meta.dev
   if (!isDev) {
     const creditOk = await hasCredits(db, orgId)
     if (!creditOk) {
@@ -214,19 +214,20 @@ export default defineEventHandler(async (event) => {
 
   // Write items to draft menu (created_by marks them as AI-sourced)
   const createdItems = await Promise.all(
-    extractedItems.map((item: ApiValue) =>
-      createMenuItem(
+    extractedItems.map((item: ApiValue) => {
+      const priceAmount = item.price_amount ?? item.price
+      return createMenuItem(
         db,
         menuId!,
         {
           section: String(item.section || 'Menu').slice(0, 100),
           name: String(item.name || '').slice(0, 200),
           description: item.description ? String(item.description).slice(0, 500) : undefined,
-          price: item.price ? String(item.price).slice(0, 50) : undefined,
+          price_amount: priceAmount ? String(priceAmount).slice(0, 50) : undefined,
         },
         `ai:${session.user.id}`
       )
-    )
+    })
   )
 
   // Fire WhatsApp notifications — non-blocking

@@ -75,15 +75,15 @@
 
           <UCard>
             <template #header>
-              <p class="text-sm font-medium text-highlighted">Organisation</p>
+              <p class="text-sm font-medium text-highlighted">Organization</p>
             </template>
             <div class="space-y-4">
               <UFormField label="Section" required>
                 <UInput v-if="sectionOptions.length === 0" v-model="form.section" placeholder="Mains" />
                 <USelect v-else v-model="form.section" :items="sectionOptions" />
               </UFormField>
-              <UFormField label="Price">
-                <UInput v-model="form.price" :placeholder="pricePlaceholder" />
+              <UFormField label="Price amount" :help="`Displayed in ${displayCurrency}. Change currency in Site Settings.`">
+                <UInput v-model="form.price_amount" :placeholder="pricePlaceholder" />
               </UFormField>
             </div>
           </UCard>
@@ -167,7 +167,7 @@ const form = reactive({
   section: props.initialSection || '',
   name: '',
   description: '',
-  price: '',
+  price_amount: '',
   available: true,
   featured: false,
   image_asset_id: null as string | null,
@@ -219,19 +219,13 @@ const promptContext = computed(() => {
   return parts.join('. ')
 })
 
-const currencySymbols: Record<string, string> = {
-  THB: '฿', USD: '$', EUR: '€', GBP: '£', JPY: '¥',
-  AUD: 'A$', CAD: 'C$', SGD: 'S$', HKD: 'HK$', MYR: 'RM',
-  IDR: 'Rp', PHP: '₱', VND: '₫', INR: '₹',
-}
-
-const pricePlaceholder = computed(() => {
-  const currency = props.defaultCurrency?.trim()
+const displayCurrency = computed(() =>
+  props.defaultCurrency?.trim()
     ? props.defaultCurrency.trim().toUpperCase()
     : 'USD'
-  const symbol = currencySymbols[currency] || currency
-  return `${symbol}250`
-})
+)
+
+const pricePlaceholder = computed(() => '250')
 
 const splitList = (value: string) => value.split(',').map((part: string) => part.trim()).filter(Boolean)
 
@@ -255,7 +249,7 @@ const loadMenu = async () => {
       form.section = item.section || props.initialSection || ''
       form.name = item.name || ''
       form.description = item.description || ''
-      form.price = item.price || ''
+      form.price_amount = item.price_amount ? String(item.price_amount) : ''
       form.available = item.available
       form.featured = item.featured
       form.image_asset_id = item.image_asset_id || null
@@ -279,7 +273,7 @@ const payload = computed<CreateMenuItemRequest & UpdateMenuItemRequest>(() => ({
   section: form.section.trim(),
   name: form.name.trim(),
   description: form.description.trim() || undefined,
-  price: form.price.trim() || undefined,
+  price_amount: form.price_amount.trim() || undefined,
   available: form.available,
   featured: form.featured,
   image_asset_id: form.image_asset_id,

@@ -125,7 +125,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const env = cloudflareEnv(event)
-    const resendApiKey = env.RESEND_API_KEY || process.env.RESEND_API_KEY
+    const resendApiKey = env.RESEND_API_KEY
 
     if (!resendApiKey) {
       return jsonResponse({ error: 'Email service not configured' }, { status: 500 })

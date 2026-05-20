@@ -118,7 +118,7 @@
                 <span class="text-sm font-medium text-highlighted">{{ item.name || '(unnamed)' }}</span>
                 <span v-if="item.section" class="ml-2 text-xs text-muted">{{ item.section }}</span>
               </div>
-              <span v-if="item.price" class="shrink-0 text-sm text-default">{{ item.price }}</span>
+              <span v-if="item.price_amount" class="shrink-0 text-sm text-default">{{ item.price_amount }}</span>
               <UButton size="xs" color="neutral" variant="ghost" icon="i-heroicons-trash" @click.stop="editedItems.splice(idx, 1)" />
             </div>
 
@@ -130,7 +130,7 @@
                     <UInput v-model="item.name" size="sm" placeholder="Dish name" autofocus />
                   </UFormField>
                   <UFormField label="Price" size="sm">
-                    <UInput v-model="item.price" size="sm" placeholder="฿250" />
+                    <UInput v-model="item.price_amount" size="sm" placeholder="250" />
                   </UFormField>
                 </div>
                 <UFormField label="Section" size="sm">
@@ -232,7 +232,7 @@ const selectedFile = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploadError = ref<string | null>(null)
 const extractWarning = ref<string | null>(null)
-const editedItems = ref<{ section: string; name: string; description: string; price: string }[]>([])
+const editedItems = ref<{ section: string; name: string; description: string; price_amount: string }[]>([])
 const expandedIdx = ref<number | null>(null)
 const saving = ref(false)
 const savedCount = ref(0)
@@ -318,7 +318,7 @@ async function runExtraction() {
       section: item.section ?? '',
       name: item.name ?? '',
       description: item.description ?? '',
-      price: item.price ?? '',
+      price_amount: item.price_amount ?? '',
     }))
 
     step.value = 'preview'

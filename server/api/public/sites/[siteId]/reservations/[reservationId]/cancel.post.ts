@@ -45,13 +45,13 @@ export default defineEventHandler(async (event) => {
 
   const clientIp = await getClientIp(event)
   const hourKey = `reservation-cancel:ip:${clientIp}:${Math.floor(Date.now() / 3600000)}`
-  const rateLimitOk = await incrementRateLimit(db, hourKey, IP_HOURLY_LIMIT)
+  const rateLimitOk = await incrementRateLimit(db, hourKey, import.meta.dev ? 1000 : IP_HOURLY_LIMIT)
   if (!rateLimitOk) {
     return jsonResponse({ error: 'Too many cancellation attempts. Please try again later.' }, { status: 429 })
   }
 
   const reservationHourKey = `reservation-cancel:reservation:${siteId}:${reservationId}:${Math.floor(Date.now() / 3600000)}`
-  const reservationRateLimitOk = await incrementRateLimit(db, reservationHourKey, RESERVATION_HOURLY_LIMIT)
+  const reservationRateLimitOk = await incrementRateLimit(db, reservationHourKey, import.meta.dev ? 1000 : RESERVATION_HOURLY_LIMIT)
   if (!reservationRateLimitOk) {
     return jsonResponse({ error: 'Too many cancellation attempts. Please try again later.' }, { status: 429 })
   }

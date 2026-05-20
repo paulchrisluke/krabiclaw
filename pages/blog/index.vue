@@ -225,6 +225,7 @@ useBreadcrumbSchema([
 useSeoMeta({
   title: 'Blog | KrabiClaw',
   description: 'Restaurant marketing tips, industry insights, and strategies to help your restaurant succeed online.',
+  ogImage: useSharedOgImage(),
   ogUrl: `${siteUrl}/blog`,
   ogType: 'website'
 })

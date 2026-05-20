@@ -2,7 +2,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { hasCredits } from '~/server/utils/ai-credits'
-import { getConfig } from '~/server/utils/site-config'
 import { createChowBotStream, runChowBot, type ChowBotIncomingMessage, type ChowBotRunEvent } from '~/server/utils/chowbot-agent'
 import {
   createMessage,
@@ -72,8 +71,7 @@ export default defineEventHandler(async (event) => {
   }, session.user.id)
 
   const messages = await getRecentAgentMessages(db, conversation.id, siteId, session.user.id)
-  const siteConfig = await getConfig(db, site.organization_id, siteId)
-  const defaultCurrency = siteConfig?.default_currency || 'THB'
+  const defaultCurrency = site.default_currency || 'THB'
 
   setResponseHeader(event, 'Content-Type', 'text/event-stream')
   setResponseHeader(event, 'Cache-Control', 'no-cache')

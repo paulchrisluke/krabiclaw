@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
   `).bind(siteId, session.user.id).first<{ organization_id: string }>()
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const isDev = process.env.NODE_ENV === 'development'
+  const isDev = import.meta.dev
 
   if (!isDev) {
     const creditOk = await hasCredits(db, site.organization_id)

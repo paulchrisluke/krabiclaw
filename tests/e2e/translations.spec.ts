@@ -115,6 +115,6 @@ test.describe('site translations', () => {
     const publicMenuBody = await publicMenu.json()
     expect(publicMenuBody.locale).toBe('th')
     expect(publicMenuBody.menu?.name).toBe('เมนู')
-    expect(publicMenuBody.menu?.items.some((item: { name: string }) => item.name === 'อิตาเลียนคอมโบ')).toBe(true)
+    expect(publicMenuBody.menu?.items.some((item: { name: string }) => item.name === 'มาร์เกริตา')).toBe(true)
   })
 })

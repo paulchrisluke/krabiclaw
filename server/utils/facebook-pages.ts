@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
-import { encryptSecret, decryptSecret } from './encryption'
+import { encryptSecret, decryptSecret, encryptionEnv } from './encryption'
 
 const GRAPH_API_VERSION = 'v25.0'
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
@@ -235,10 +235,11 @@ export const storeFacebookPagesConnection = async (
 
   const connectionId = `fb-connection-${connection.organization_id}-${connection.site_id}`
   const now = new Date().toISOString()
+  const tokenEnv = encryptionEnv(env)
 
-  const encryptedUserToken = await encryptSecret(connection.encrypted_user_token)
+  const encryptedUserToken = await encryptSecret(connection.encrypted_user_token, tokenEnv)
   const encryptedPageToken = connection.encrypted_page_token
-    ? await encryptSecret(connection.encrypted_page_token)
+    ? await encryptSecret(connection.encrypted_page_token, tokenEnv)
     : null
 
   await env.REVIEWS_DB.prepare(`
@@ -294,9 +295,11 @@ export const getFacebookPagesConnection = async (
 
   if (!connection) return null
 
-  connection.encrypted_user_token = await decryptSecret(connection.encrypted_user_token)
+  const tokenEnv = encryptionEnv(env)
+
+  connection.encrypted_user_token = await decryptSecret(connection.encrypted_user_token, tokenEnv)
   if (connection.encrypted_page_token) {
-    connection.encrypted_page_token = await decryptSecret(connection.encrypted_page_token)
+    connection.encrypted_page_token = await decryptSecret(connection.encrypted_page_token, tokenEnv)
   }
 
   return connection

@@ -134,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import DOMPurify from 'isomorphic-dompurify'
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 
 import { marked } from 'marked'
 const { resolveMedia } = useMedia()
@@ -223,12 +223,13 @@ const postMedia = computed(() => resolveMedia({
   public_url: post.value?.public_url,
   kind: post.value?.kind
 }))
+const ogImage = useSharedOgImage(() => postMedia.value.thumb)
 
 useSeoMeta({
   title: computed(() => post.value ? `${post.value.title} | KrabiClaw Blog` : 'Blog | KrabiClaw'),
   description: computed(() => post.value?.excerpt ?? 'Restaurant tips and insights from KrabiClaw.'),
   ogUrl: computed(() => `${siteUrl}/blog/${route.params.slug}`),
   ogType: 'article',
-  ogImage: computed(() => postMedia.value.thumb || '/og-image.jpg')
+  ogImage
 })
 </script>

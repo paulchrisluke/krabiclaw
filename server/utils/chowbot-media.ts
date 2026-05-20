@@ -12,7 +12,7 @@ Return a JSON object with a single key "items" containing an array. Each item mu
   - section: string
   - name: string
   - description: string or null
-  - price: string or null
+  - price_amount: string or null (numeric amount only, without currency symbols or codes)
 
 If you cannot read the menu clearly, return {"items": [], "warning": "reason"}.
 Return ONLY valid JSON. No markdown, no explanation.`
@@ -177,6 +177,7 @@ export async function extractMenuFromMediaAsset(
   const createdItems: string[] = []
   try {
     for (const item of extractedItems as ApiValue[]) {
+      const priceAmount = item.price_amount ?? item.price
       const created = await createMenuItem(
         db,
         menu.id,
@@ -184,7 +185,7 @@ export async function extractMenuFromMediaAsset(
           section: String(item.section || 'Menu').slice(0, 100),
           name: String(item.name || '').slice(0, 200),
           description: item.description ? String(item.description).slice(0, 500) : undefined,
-          price: item.price ? String(item.price).slice(0, 50) : undefined,
+          price_amount: priceAmount !== null && priceAmount !== undefined ? String(priceAmount).slice(0, 50) : undefined,
         },
         `ai:${opts.userId}`
       )

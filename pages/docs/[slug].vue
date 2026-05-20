@@ -39,7 +39,7 @@
 definePageMeta({ layout: 'platform' })
 
 import { marked } from 'marked'
-import DOMPurify from 'isomorphic-dompurify'
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
 
 
 const route = useRoute()
@@ -72,7 +72,7 @@ function formatDate(iso) {
 useSeoMeta({
   title: computed(() => `${doc.value?.title || 'Documentation'} | KrabiClaw Docs`),
   description: computed(() => doc.value?.seo_description || doc.value?.excerpt || `Learn about ${doc.value?.title || 'this topic'} in KrabiClaw documentation.`),
-  ogImage: `${siteUrl}/og-image.jpg`,
+  ogImage: `${siteUrl}/og-image.png`,
   ogUrl: computed(() => `${siteUrl}/docs/${route.params.slug}`)
 })
 </script>
