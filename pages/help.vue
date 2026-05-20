@@ -200,6 +200,7 @@ const filteredSections = computed(() => {
 useSeoMeta({
   title: 'Help Center | KrabiClaw',
   description: 'Answers to common questions about KrabiClaw — the restaurant website builder built in Krabi, Thailand.',
+  ogImage: useSharedOgImage(),
   ogUrl: `${siteUrl}/help`
 })
 </script>

@@ -94,7 +94,42 @@ export const getIsOpenNow = (regularHours: GoogleRegularHours | GoogleRegularPer
     ? (regularHours as GoogleRegularPeriod[])
     : (regularHours as GoogleRegularHours)?.periods ?? []
 
-  if (!periods.length) return undefined
+  if (!periods.length) {
+    // Fall back to parsing weekdayDescriptions (e.g. "Monday: 2:00 – 11:00 PM")
+    const descs = !Array.isArray(regularHours)
+      ? (regularHours as GoogleRegularHours)?.weekdayDescriptions ?? []
+      : []
+    if (!descs.length) return undefined
+
+    const todayLine = descs.find(l => l.trim().toUpperCase().startsWith(today + ':'))
+    if (!todayLine) return false
+
+    const rangeStr = todayLine.replace(/^[^:]+:\s*/i, '').trim()
+    if (/closed/i.test(rangeStr)) return false
+
+    // Parse "2:00 – 11:00 PM" or "2:00 AM – 11:00 PM"
+    const parts = rangeStr.split(/\s*[–\-]\s*/)
+    if (parts.length !== 2) return undefined
+
+    const parseAmPm = (s: string): number | null => {
+      const m = s.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i)
+      if (!m) return null
+      let h = parseInt(m[1] ?? '0', 10)
+      const min = parseInt(m[2] ?? '0', 10)
+      const ampm = m[3]?.toUpperCase()
+      if (ampm === 'PM' && h < 12) h += 12
+      else if (ampm === 'AM' && h === 12) h = 0
+      return h * 60 + min
+    }
+
+    const openMins = parseAmPm(parts[0] ?? '')
+    const closeMins = parseAmPm(parts[1] ?? '')
+    if (openMins === null || closeMins === null) return undefined
+
+    const nowMins = new Date().getHours() * 60 + new Date().getMinutes()
+    if (closeMins < openMins) return nowMins >= openMins || nowMins < closeMins
+    return nowMins >= openMins && nowMins < closeMins
+  }
 
   const period = periods.find((p) => p.openDay === today)
   if (!period) return false
@@ -107,7 +142,6 @@ export const getIsOpenNow = (regularHours: GoogleRegularHours | GoogleRegularPer
   const nowMins = now.getHours() * 60 + now.getMinutes()
   const openMins = (open.hours ?? 0) * 60 + (open.minutes ?? 0)
   const closeMins = (close.hours ?? 0) * 60 + (close.minutes ?? 0)
-  // Handle midnight-crossing periods (e.g. 10 PM – 2 AM)
   if (closeMins < openMins) return nowMins >= openMins || nowMins < closeMins
   return nowMins >= openMins && nowMins < closeMins
 }

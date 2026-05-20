@@ -194,6 +194,8 @@ const { data } = isPlatform || !siteId
     })
 
 const experience = computed<Experience | null>(() => (data.value as ApiValue)?.experience ?? null)
+const currentPageUrl = useSeoUrl(() => `/experiences/${slug}`)
+const ogImage = useSharedOgImage(() => experience.value?.image_url)
 
 const sanitizedBody = computed(() => {
   const raw = experience.value?.body
@@ -292,9 +294,9 @@ useBreadcrumbSchema([
 useSeoMeta({
   title: computed(() => exp?.seo_title ?? (exp ? `${exp.title} | Experiences` : 'Experience')),
   description: computed(() => exp?.seo_description ?? exp?.tagline ?? `Book the ${exp?.title} experience.`),
-  ogUrl: `${siteUrl}/experiences/${slug}`,
+  ogUrl: currentPageUrl,
   ogType: 'website',
-  ogImage: computed(() => exp?.image_url ?? '/og-image.jpg'),
+  ogImage,
 })
 
 // JSON-LD — Event schema (best match for a bookable dining experience)

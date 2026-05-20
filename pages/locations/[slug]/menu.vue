@@ -151,15 +151,10 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
-const { data: locData } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}`,
-  { key: () => `loc-menu-${siteId}-${slug.value}`, default: () => ({ location: null }) }
-)
-const location = computed(() => (locData as ApiValue).value?.location ?? null)
+const { location, menu, menuItemsBySection } = useBootstrap()
 
-if (!location.value) throw createError({ statusCode: 404 })
-
-const { menu, loading: menuLoading, hasMenu, menuItemsBySection } = usePublicMenu(siteId, location.value?.id)
+const menuLoading = ref(false)
+const hasMenu = computed(() => menu.value && (menu.value as { items?: unknown[] }).items?.length > 0)
 
 const menuUpdated = computed(() => {
   const d = menu.value?.updated_at
@@ -220,7 +215,8 @@ function getDietaryTags(item: ApiValue): string[] {
 useSeoMeta({
   title: () => `Menu · ${location.value?.title || slug.value}`,
   description: () => `Full menu for ${location.value?.title} at ${siteName.value}.`,
-  ogUrl: () => `${siteUrl}/locations/${slug.value}/menu`
+  ogImage: useSharedOgImage(),
+  ogUrl: useSeoUrl(() => `/locations/${slug.value}/menu`)
 })
 
 const locationCurrency = computed(() => {

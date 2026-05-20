@@ -75,7 +75,7 @@ export default defineEventHandler(async (event) => {
   const orgId: string = site.organization_id
 
   // Check credits before doing anything expensive (skipped in local dev)
-  const isDev = process.env.NODE_ENV === 'development'
+  const isDev = import.meta.dev
   if (!isDev) {
     const creditOk = await hasCredits(db, orgId)
     if (!creditOk) {

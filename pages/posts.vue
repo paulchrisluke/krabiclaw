@@ -1,76 +1,29 @@
 <template>
-  <div>
-    <!-- Hero Section -->
-    <SayaHero
-      title="Business Updates"
-      subtitle="Latest News & Announcements"
-      size="page"
-    />
-
-
-
-    <SayaPosts
-      :posts="googlePosts"
-      bg="white"
-      padding="default"
-      :show-title="false"
-    />
+  <div class="min-h-screen bg-default text-default">
+    <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
+      <p class="saya-kicker mb-6">Latest updates</p>
+      <h1 class="saya-display-md text-default"><em class="saya-italic">From the kitchen</em></h1>
+    </header>
+    <SayaPosts :posts="googlePosts" :show-title="false" />
   </div>
 </template>
 
 <script setup>
 definePageMeta({ layout: 'saya' })
-import { useTenantSite } from '~/composables/useTenantSite'
 
-const { siteId } = await useTenantSite()
+const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/google-business`, {
-  key: `posts-google-business-${siteId}`,
-  default: () => ({
-    business: null,
-    reviews: [],
-    media: [],
-    posts: [],
-    errors: [],
-    syncedAt: null
-  })
-})
-
+const { googleBusiness } = useBootstrap()
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
+const restaurantName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Restaurant')
 
-// SEO Meta
+const sharedOgImage = useSharedOgImage()
+const currentPageUrl = useSeoUrl('/posts')
 useSeoMeta({
-  title: 'Posts | Restaurant Website | Business Updates',
-  description: 'Read the latest news, updates, and announcements from our restaurant. Stay informed about events, special offers, and restaurant news.',
-  ogTitle: 'Posts | Restaurant Website',
-  ogDescription: 'Business updates and news from our authentic restaurant.',
-  ogImage: '/og-image.jpg',
-  ogUrl: '/posts',
-  ogType: 'website',
-  twitterCard: 'summary_large_image',
-  twitterTitle: 'Posts - Restaurant Website',
-  twitterDescription: 'Latest updates from our Japanese restaurant.',
-  twitterImage: '/og-image.jpg'
+  title: computed(() => `Updates | ${restaurantName.value}`),
+  description: computed(() => `Latest news and updates from ${restaurantName.value}.`),
+  ogImage: sharedOgImage,
+  ogUrl: currentPageUrl
 })
-
-useSchemaOrg([
-  computed(() => ({
-    '@type': 'Restaurant',
-    name: 'Your Restaurant',
-    mainEntity: {
-      '@type': 'ItemList',
-      itemListElement: googlePosts.value.map(post => ({
-        '@type': 'Article',
-        headline: post.title,
-        datePublished: post.createTime,
-        author: {
-          '@type': 'Organization',
-          name: 'Your Restaurant'
-        },
-        image: post.media?.[0]?.googleUrl || '/og-image.jpg'
-      }))
-    }
-  }))
-])
 </script>

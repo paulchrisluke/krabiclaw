@@ -59,9 +59,14 @@
               <span class="size-1.5 rounded-full bg-zinc-400" />
               Closed · {{ todayHours }}
             </div>
+            <div v-else-if="todayHours" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
+              <span class="size-1.5 rounded-full bg-amber-400" />
+              {{ todayHours }}
+            </div>
             <div v-else class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
               <span class="size-1.5 rounded-full bg-zinc-300" />
-              Hours unknown
+              <a v-if="displayPhone" :href="`tel:${dialablePhone}`" class="text-white/80 no-underline hover:text-white">Call for hours · {{ displayPhone }}</a>
+              <span v-else>Contact us for hours</span>
             </div>
             <div class="mt-10 flex flex-wrap gap-3">
               <UButton
@@ -116,7 +121,7 @@
           </div>
           <div>
             <p class="saya-eyebrow mb-4 text-muted">Contact</p>
-            <a v-if="displayPhone" :href="`tel:${displayPhone.replace(/\s/g, '')}`" class="block text-sm text-default no-underline hover:underline">
+            <a v-if="displayPhone" :href="`tel:${dialablePhone}`" class="block text-sm text-default no-underline hover:underline">
               {{ displayPhone }}
             </a>
             <a v-if="displayEmail" :href="`mailto:${displayEmail}`" class="mt-2 block text-sm text-muted no-underline hover:underline break-all">
@@ -303,8 +308,8 @@
 
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow } from '~/utils/formatters'
-import { usePageContent } from '~/composables/usePageContent'
-import DOMPurify from 'isomorphic-dompurify'
+
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 
 const { resolveMedia } = useMedia()
 definePageMeta({ layout: 'saya' })
@@ -313,47 +318,39 @@ const route = useRoute()
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-// Location-scoped page content — hero override + parking/notes
-// usePageContent scopes to the location via route.params.slug automatically
-const { getField: getContentField, getHero: getContentHero } = usePageContent('location')
-
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
-// Fetch location
-const { data, pending } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}`,
-  { key: () => `public-location-${siteId}-${slug.value}`, default: () => ({ location: null }) }
-)
-const location = computed(() => (data as ApiValue).value?.location ?? null)
+// Bootstrap: location + all locations + page content + menu + reviews — 1 SSR call
+const {
+  location,
+  locations,
+  getField: getContentField,
+  getHero: getContentHero,
+  menu: bootstrapMenu,
+  locationReviews,
+} = useBootstrap()
 
-// Contact fallbacks to site config if location info is missing or placeholder-like
+const pending = ref(false)
+
+// Contact fallbacks
 const displayPhone = computed(() => {
   const p = location.value?.phone
   if (p && !p.includes('example.com')) return p
   return (site as ApiValue)?.config?.phone || null
 })
+const dialablePhone = computed(() => displayPhone.value?.replace(/[^\d+]/g, '') ?? '')
 const displayEmail = computed(() => {
   const e = location.value?.email
   if (e && !e.includes('example.com') && !e.includes('krabiclaw.com')) return e
   return (site as ApiValue)?.config?.email || null
 })
 
-// Fetch all locations for the "other locations" rail
-const { data: allLocationsData } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations`,
-  { key: () => `public-all-locations-${siteId}`, default: () => ({ locations: [] }) }
-)
-const otherLocations = computed(() =>
-  ((allLocationsData as ApiValue).value?.locations ?? []).filter((l: ApiValue) => l.slug !== slug.value)
-)
+// Other locations for the "Sister rooms" rail
+const otherLocations = computed(() => locations.value.filter((l: ApiRecord) => l.slug !== slug.value))
 
-// Fetch reviews preview (first 3)
-const { data: reviewsData } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}/reviews`,
-  { key: () => `public-reviews-preview-${siteId}-${slug.value}`, default: () => ({ reviews: [] }) }
-)
-const reviewsPreview = computed(() => ((reviewsData as ApiValue).value?.reviews ?? []).slice(0, 3))
+// Reviews preview from bootstrap
+const reviewsPreview = computed(() => locationReviews.value.slice(0, 3))
 
 // Sanitize hero background URL to prevent CSS injection
 const heroBackgroundStyle = computed(() => {
@@ -377,22 +374,10 @@ const heroBackgroundStyle = computed(() => {
   return { backgroundImage: `url("${safeHref}")` }
 })
 
-// Fetch menu for featured items
-const { data: menuData, execute: fetchMenu } = await useFetch(
-  () => `/api/public/sites/${siteId}/menus?locationId=${location.value?.id ?? ''}`,
-  {
-    key: () => `public-menu-preview-${siteId}-${slug.value}`,
-    default: () => ({ menu: null }),
-    immediate: false
-  }
-)
-
-watch(() => location.value?.id, (id: string | undefined) => {
-  if (id) fetchMenu()
-}, { immediate: true })
+// Featured items from bootstrap menu
 const featuredItems = computed(() => {
-  const items = (menuData as ApiValue).value?.menu?.items ?? []
-  return items.filter((i: ApiValue) => i.featured || i.available !== false).slice(0, 3)
+  const items = (bootstrapMenu.value as { items?: ApiRecord[] } | null)?.items ?? []
+  return items.filter((i: ApiRecord) => i.featured || i.available !== false).slice(0, 3)
 })
 
 // Content hero fields take precedence; fall back to Google Business primary photo
@@ -439,18 +424,20 @@ const isOpenNow = computed(() => getIsOpenNow(location.value?.opening_hours))
 
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
+const currentPageUrl = useSeoUrl(() => `/locations/${slug.value}`)
+const ogImage = useSharedOgImage(() => heroMedia.value.thumb)
 
 useSeoMeta({
   title: () => location.value ? `${location.value.title} | Locations` : 'Location',
   description: () => location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : '',
-  ogImage: () => heroMedia.value.thumb || '/og-image.jpg',
-  ogUrl: () => `${siteUrl}/locations/${slug.value}`
+  ogImage,
+  ogUrl: currentPageUrl
 })
 
 useSchemaOrg([
   computed(() => {
     const loc = location.value
-    if (!loc) return null
+    if (!loc) return {}
     return {
       '@type': ['Restaurant', 'LocalBusiness'],
       name: `${siteName.value} — ${loc.title}`,

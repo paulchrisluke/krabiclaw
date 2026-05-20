@@ -479,6 +479,8 @@ const reviewDateLabel = (review: Review) => {
 const schemaImage = computed(() =>
   mainMedia.value.url ?? undefined
 )
+const currentPageUrl = useSeoUrl(() => item.value ? `/menu/${item.value.slug}` : '/menu')
+const ogImage = useSharedOgImage(() => mainMedia.value.thumb)
 
 const loadReviews = async () => {
   if (!item.value?.slug) return
@@ -587,13 +589,13 @@ useSeoMeta({
   description: () => item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.',
   ogTitle: () => item.value ? `${item.value.name} | Menu | Saya Kitchen` : 'Menu Item Not Found',
   ogDescription: () => item.value ? item.value.description : 'Menu item not found',
-  ogImage: () => mainMedia.value.thumb || '/og-image.jpg',
-  ogUrl: () => item.value ? `/menu/${item.value.slug}` : '/menu',
+  ogImage,
+  ogUrl: currentPageUrl,
   ogType: 'website',
   twitterCard: 'summary_large_image',
   twitterTitle: () => item.value ? item.value.name : 'Menu Item Not Found',
   twitterDescription: () => item.value ? item.value.description : 'Menu item not found',
-  twitterImage: () => mainMedia.value.thumb || '/og-image.jpg'
+  twitterImage: ogImage
 })
 
 const schemaGraph = computed(() => {

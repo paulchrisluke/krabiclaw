@@ -11,6 +11,7 @@ type JsonRecord = Record<string, JsonValue>
 
 export interface GoogleBusinessEnv {
   REVIEWS_DB: D1Database
+  CONNECTOR_TOKEN_ENCRYPTION_KEY?: string
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
   GOOGLE_BUSINESS_ACCOUNT_ID?: string
@@ -305,8 +306,8 @@ export const storeGoogleBusinessConnection = async (
   const now = new Date().toISOString()
 
   // Encrypt tokens
-  const encryptedAccessToken = await encryptSecret(connection.encrypted_access_token)
-  const encryptedRefreshToken = await encryptSecret(connection.encrypted_refresh_token)
+  const encryptedAccessToken = await encryptSecret(connection.encrypted_access_token, env)
+  const encryptedRefreshToken = await encryptSecret(connection.encrypted_refresh_token, env)
 
   await env.REVIEWS_DB.prepare(`
     INSERT OR REPLACE INTO google_business_connections
@@ -364,8 +365,8 @@ export const getGoogleBusinessConnection = async (
   }
 
   // Decrypt tokens
-  connection.encrypted_access_token = await decryptSecret(connection.encrypted_access_token)
-  connection.encrypted_refresh_token = await decryptSecret(connection.encrypted_refresh_token)
+  connection.encrypted_access_token = await decryptSecret(connection.encrypted_access_token, env)
+  connection.encrypted_refresh_token = await decryptSecret(connection.encrypted_refresh_token, env)
 
   return connection
 }

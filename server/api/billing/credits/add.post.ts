@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event).catch(() => ({}))
 
   // Dev-only direct top-up — accepts either { amount } or { bundle }
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.dev) {
     const raw = body.amount ?? body.bundle
     if (raw === undefined || raw === null) {
       return jsonResponse({ error: 'amount or bundle is required' }, { status: 400 })

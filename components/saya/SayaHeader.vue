@@ -168,7 +168,7 @@ interface PublicLocale {
   status: string
 }
 
-const { siteId, site } = useTenantSite()
+const { isPlatform, siteId, site } = useTenantSite()
 const i18n = useI18n() as ApiValue as I18nComposable
 const mobileMenuOpen = ref(false)
 const headerRef = ref<HTMLElement | null>(null)
@@ -198,6 +198,7 @@ const { data: localeData, execute: loadLocales } = useFetch<{ locales: PublicLoc
   {
     key: () => `site-locales-${currentSiteIdForLocales.value || 'none'}`,
     default: () => ({ locales: [] }),
+    server: false,
     watch: false,
     immediate: false
   }
@@ -226,19 +227,11 @@ const languageItems = computed(() =>
   }))
 )
 
-// No await — this is a layout component, not a page. Data arrives reactively.
+// Shared bootstrap — same key as the page component → zero extra SSR requests
 const currentSiteId = computed(() => siteId || '')
+const { locations: bootstrapLocations } = useBootstrap()
 
-const { data: locationsData, error: locationsError, execute: loadLocations } = useFetch<{ locations: ApiRecord[] }>(
-  () => `/api/public/sites/${currentSiteId.value}/locations`,
-  {
-    key: () => `header-locs-${currentSiteId.value || 'none'}`,
-    default: () => ({ locations: [] }),
-    watch: false,
-    immediate: false
-  }
-)
-
+// Experiences — client-only, just controls nav visibility
 const { data: experiencesData, execute: loadExperiences } = useFetch<{ experiences: ApiRecord[] }>(
   () => `/api/public/sites/${currentSiteId.value}/experiences`,
   {
@@ -250,23 +243,15 @@ const { data: experiencesData, execute: loadExperiences } = useFetch<{ experienc
   }
 )
 
+// Locales — client-only, language switching is always a client action
 watch(currentSiteId, (id: string) => {
   if (id) {
-    loadLocations()
     loadLocales()
     loadExperiences()
   }
 }, { immediate: true })
 
-const locations = computed(() => {
-  if (locationsError.value) {
-    console.error('Failed to load locations:', locationsError.value)
-    return []
-  }
-  if (!currentSiteId.value) return []
-  return locationsData.value?.locations ?? []
-})
-
+const locations = computed(() => bootstrapLocations.value)
 const hasOrderLinks = computed(() =>
   locations.value.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )

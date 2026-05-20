@@ -7,13 +7,7 @@
         <!-- Brand column -->
         <div>
           <NuxtLink to="/" class="block no-underline leading-none">
-            <img
-              v-if="logoUrl"
-              :src="logoUrl"
-              :alt="restaurantName"
-              class="h-12 w-auto max-w-40 object-contain"
-            />
-            <span v-else class="saya-display text-5xl text-inverted">{{ restaurantName }}</span>
+            <span class="saya-display text-5xl text-inverted">{{ restaurantName }}</span>
           </NuxtLink>
           <p class="mt-4 max-w-xs text-sm leading-relaxed text-inverted/60">
             {{ tagline }}
@@ -144,12 +138,8 @@ import { getTodayGoogleHours } from '~/utils/formatters'
 
 const { isPlatform, siteId, site } = useTenantSite()
 
-const { data: siteConfigData } = !isPlatform && siteId
-  ? useFetch(`/api/public/sites/${siteId}/config`, {
-      key: `footer-config-${siteId}`,
-      default: () => ({ config: {} })
-    })
-  : { data: ref({ config: {} }) }
+// Shared bootstrap — same key as the page → zero extra SSR requests
+const { locations: bootstrapLocations, config: bootstrapConfig } = useBootstrap()
 
 const year = new Date().getFullYear()
 const restaurantName = computed(() => {
@@ -158,14 +148,8 @@ const restaurantName = computed(() => {
   }
   return DEFAULT_RESTAURANT_NAME
 })
-const logoUrl = computed(() => {
-  if (site && typeof site === 'object' && 'logo_url' in site && typeof site.logo_url === 'string' && site.logo_url) {
-    return site.logo_url
-  }
-  return null
-})
-const siteConfig = computed(() => (siteConfigData.value as ApiValue)?.config ?? {})
-const tagline = computed(() => (siteConfig.value as ApiValue)?.footer_tagline || 'Authentic dining, crafted with passion.')
+const siteConfig = bootstrapConfig
+const tagline = computed(() => siteConfig.value?.footer_tagline || '')
 const sitePlan = computed(() => (site as { plan?: string | null } | null)?.plan)
 const showBrandingCredit = computed(() => !isPlatform && sitePlan.value === 'free')
 
@@ -195,9 +179,9 @@ function safeHttpUrl(value: unknown): string | null {
   }
 }
 
-const facebookUrl = computed(() => safeHttpUrl((siteConfig.value as ApiValue)?.social_facebook) || '')
-const instagramUrl = computed(() => safeHttpUrl((siteConfig.value as ApiValue)?.social_instagram) || '')
-const tiktokUrl = computed(() => safeHttpUrl((siteConfig.value as ApiValue)?.social_tiktok) || '')
+const facebookUrl = computed(() => safeHttpUrl(siteConfig.value?.social_facebook) || '')
+const instagramUrl = computed(() => safeHttpUrl(siteConfig.value?.social_instagram) || '')
+const tiktokUrl = computed(() => safeHttpUrl(siteConfig.value?.social_tiktok) || '')
 
 interface SocialLink {
   name: string
@@ -236,16 +220,8 @@ const activeSocials = computed(() =>
 )
 const inactiveSocials = computed(() => allSocials.value.filter((s: SocialLink) => !s.url))
 
-const { data: locationsData, error: locationsError } = useFetch<PublicLocationsResponse>(
-  () => `/api/public/sites/${siteId}/locations`,
-  {
-    key: () => `footer-locs-${siteId}`,
-    default: () => ({ locations: [] }),
-    immediate: !isPlatform && !!siteId
-  }
-)
-
-const rawLocations = computed(() => locationsData.value?.locations ?? [])
+const locationsError = ref<Error | null>(null)
+const rawLocations = computed(() => bootstrapLocations.value)
 const locations = computed(() =>
   rawLocations.value.map((loc: PublicLocation) => {
     let phone = loc.phone

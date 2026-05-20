@@ -72,7 +72,7 @@ const docs = computed(() => data.value?.docs || [])
 useSeoMeta({
   title: 'Documentation | KrabiClaw',
   description: 'Documentation for KrabiClaw restaurant website builder. Learn how to use all features.',
-  ogImage: `${siteUrl}/og-image.jpg`,
+  ogImage: `${siteUrl}/og-image.png`,
   ogUrl: `${siteUrl}/docs`
 })
 </script>

@@ -164,11 +164,7 @@ const { open: openUpgrade } = useUpgradeModal()
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
-const { data: locData } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}`,
-  { key: () => `loc-qa-loc-${siteId}-${slug.value}`, default: () => ({ location: null }) }
-)
-const location = computed(() => (locData as ApiValue).value?.location ?? null)
+const { location } = useBootstrap()
 
 const { data, pending } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}/qa`,
@@ -195,7 +191,8 @@ const siteUrl = config.public.siteUrl
 useSeoMeta({
   title: () => `Questions and answers for ${location.value?.title} at ${siteName.value}.`,
   description: () => `Questions and answers for ${location.value?.title} at ${siteName.value}.`,
-  ogUrl: () => `${siteUrl}/locations/${slug.value}/qa`
+  ogImage: useSharedOgImage(),
+  ogUrl: useSeoUrl(() => `/locations/${slug.value}/qa`)
 })
 
 useSchemaOrg([

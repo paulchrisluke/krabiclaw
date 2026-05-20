@@ -223,12 +223,13 @@ const postMedia = computed(() => resolveMedia({
   public_url: post.value?.public_url,
   kind: post.value?.kind
 }))
+const ogImage = useSharedOgImage(() => postMedia.value.thumb)
 
 useSeoMeta({
   title: computed(() => post.value ? `${post.value.title} | KrabiClaw Blog` : 'Blog | KrabiClaw'),
   description: computed(() => post.value?.excerpt ?? 'Restaurant tips and insights from KrabiClaw.'),
   ogUrl: computed(() => `${siteUrl}/blog/${route.params.slug}`),
   ogType: 'article',
-  ogImage: computed(() => postMedia.value.thumb || '/og-image.jpg')
+  ogImage
 })
 </script>

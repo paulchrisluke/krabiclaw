@@ -34,8 +34,7 @@ async function getEncryptionKey(env: EncryptionEnv): Promise<CryptoKey> {
 }
 
 // Encrypt secret using AES-GCM
-export async function encryptSecret(plaintext: string): Promise<string> {
-  const env = process.env as EncryptionEnv
+export async function encryptSecret(plaintext: string, env: EncryptionEnv): Promise<string> {
   const key = await getEncryptionKey(env)
   
   // Generate random 12-byte IV
@@ -59,8 +58,7 @@ export async function encryptSecret(plaintext: string): Promise<string> {
 }
 
 // Decrypt secret using AES-GCM
-export async function decryptSecret(value: string): Promise<string> {
-  const env = process.env as EncryptionEnv
+export async function decryptSecret(value: string, env: EncryptionEnv): Promise<string> {
   const key = await getEncryptionKey(env)
   
   // Parse versioned format
@@ -93,11 +91,11 @@ export async function decryptSecret(value: string): Promise<string> {
 }
 
 // Self-test for encryption roundtrip
-export async function testEncryption(): Promise<boolean> {
+export async function testEncryption(env: EncryptionEnv): Promise<boolean> {
   try {
     const testText = 'test-secret-token-' + Date.now()
-    const encrypted = await encryptSecret(testText)
-    const decrypted = await decryptSecret(encrypted)
+    const encrypted = await encryptSecret(testText, env)
+    const decrypted = await decryptSecret(encrypted, env)
     
     return testText === decrypted
   } catch (error) {
@@ -171,4 +169,3 @@ export async function verifyOAuthState<T = ApiRecord>(
     return null
   }
 }
-

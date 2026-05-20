@@ -145,11 +145,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
-const { data: locData } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}`,
-  { key: () => `loc-photos-loc-${siteId}-${slug.value}`, default: () => ({ location: null }) }
-)
-const location = computed(() => (locData as ApiValue).value?.location ?? null)
+const { location } = useBootstrap()
 
 const { data, pending } = await useFetch(
   () => `/api/public/sites/${siteId}/locations/${slug.value}/photos`,
@@ -198,6 +194,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
+const currentPageUrl = useSeoUrl(() => `/locations/${slug.value}/photos`)
+const ogImage = useSharedOgImage(() => photos.value[0]?.google_url)
 
 function toAbsoluteUrl(value?: string | null): string | null {
   if (!value) return null
@@ -211,7 +209,8 @@ function toAbsoluteUrl(value?: string | null): string | null {
 useSeoMeta({
   title: () => `Photos · ${location.value?.title || slug.value}`,
   description: () => `${photos.value.length} photos from ${location.value?.title} at ${siteName.value}.`,
-  ogUrl: () => `${siteUrl}/locations/${slug.value}/photos`
+  ogImage,
+  ogUrl: currentPageUrl
 })
 
 useSchemaOrg([

@@ -208,19 +208,11 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
-const { data: locData } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}`,
-  { key: () => `loc-reviews-loc-${siteId}-${slug.value}`, default: () => ({ location: null }) }
-)
-const location = computed(() => (locData as ApiValue).value?.location ?? null)
+const { location, reviewsAggregate, reviewsList } = useBootstrap()
 
-const { data, pending } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}/reviews`,
-  { key: () => `loc-reviews-${siteId}-${slug.value}`, default: () => ({ aggregate: null, reviews: [] }) }
-)
-
-const aggregate = computed(() => (data as ApiValue).value?.aggregate ?? null)
-const reviews = computed(() => (data as ApiValue).value?.reviews ?? [])
+const pending = ref(false)
+const aggregate = reviewsAggregate
+const reviews = reviewsList
 
 const filters = [
   { key: 'recent', label: 'Most recent' },
@@ -272,7 +264,8 @@ function formatDate(ts: string | null) {
 useSeoMeta({
   title: () => `Reviews · ${location.value?.title || slug.value}`,
   description: () => `Guest reviews for ${location.value?.title} at ${siteName.value}.`,
-  ogUrl: () => `/locations/${slug.value}/reviews`
+  ogImage: useSharedOgImage(),
+  ogUrl: useSeoUrl(() => `/locations/${slug.value}/reviews`)
 })
 
 useSchemaOrg([

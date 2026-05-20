@@ -1,119 +1,72 @@
 <template>
-  <div>
-    <!-- Hero Section -->
-    <SayaHero
-      title="Photo Gallery"
-      subtitle="Visual Journey Through Our Restaurant"
-      size="page"
-    />
-
-    <!-- Photo Gallery -->
-    <UContainer class="py-12">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <!-- Real photos -->
-        <UCard 
-          v-for="media in googleMedia" 
-          :key="media.name" 
-          class="group overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
-        >
-          <div class="relative">
-            <img 
-              :src="media.googleUrl" 
-              :alt="media.description || 'Restaurant photo'"
-              class="w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300"
-            >
-            <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-opacity duration-300 flex items-end p-4">
-              <div class="text-white">
-                <p v-if="media.description" class="text-sm font-medium">{{ media.description }}</p>
-                <p class="text-xs opacity-75">{{ formatDate(media.createTime) }}</p>
-              </div>
-            </div>
-          </div>
-        </UCard>
-
-        <!-- Saya gallery placeholders when Google photos are not connected -->
-        <template v-if="googleMedia.length === 0">
-          <div
-            v-for="photo in sayaGalleryPlaceholders"
-            :key="photo.src"
-            class="aspect-square overflow-hidden rounded-lg"
-          >
-            <img :src="photo.src" :alt="photo.alt" class="h-full w-full object-cover transition-transform duration-300 hover:scale-105">
-          </div>
-        </template>
+  <NuxtLayout name="saya">
+    <div class="min-h-screen bg-default text-default">
+      <div v-if="pending" class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+        <USkeleton class="h-64 w-full" />
       </div>
-    </UContainer>
-  </div>
+
+      <!-- Single location: redirect handled server-side; this shows if redirect didn't fire -->
+      <div v-else-if="locations.length === 1" class="mx-auto max-w-7xl px-4 py-24 text-center sm:px-6 lg:px-8">
+        <NuxtLink :to="`/locations/${locations[0].slug}/photos`" class="saya-display-md saya-italic text-default no-underline hover:opacity-70">
+          View photos →
+        </NuxtLink>
+      </div>
+
+      <!-- Multi-location: link to each location's gallery -->
+      <div v-else-if="locations.length > 1">
+        <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
+          <p class="saya-kicker mb-6">Gallery</p>
+          <h1 class="saya-display-md saya-italic text-default">Photos from every room.</h1>
+        </header>
+        <div class="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
+          <div class="grid gap-6 sm:grid-cols-2">
+            <NuxtLink
+              v-for="loc in locations"
+              :key="loc.id"
+              :to="`/locations/${loc.slug}/photos`"
+              class="group block border border-default text-default no-underline transition hover:border-muted"
+            >
+              <div class="aspect-video overflow-hidden bg-muted">
+                <video v-if="loc.public_url && loc.kind === 'video'" :src="loc.public_url" class="h-full w-full object-cover" autoplay muted loop playsinline />
+                <img v-else-if="loc.public_url" :src="loc.public_url" :alt="loc.title" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              </div>
+              <div class="p-7">
+                <p class="saya-eyebrow mb-3 text-muted">{{ loc.city || loc.neighborhood }}</p>
+                <div class="saya-display saya-italic text-3xl text-default leading-none">{{ loc.title }}</div>
+                <p class="mt-4 text-xs uppercase tracking-widest text-muted">View photos →</p>
+              </div>
+            </NuxtLink>
+          </div>
+        </div>
+      </div>
+
+      <!-- No locations yet -->
+      <div v-else class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
+        <h1 class="saya-display-md text-muted">No photos yet.</h1>
+        <p class="mt-4 text-sm text-muted">Add a location and connect Google Business to sync photos.</p>
+      </div>
+    </div>
+  </NuxtLayout>
 </template>
 
 <script setup>
-definePageMeta({ layout: 'saya' })
-import { useTenantSite } from '~/composables/useTenantSite'
+definePageMeta({ layout: false })
 
-const { siteId } = await useTenantSite()
+const { siteId } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { data: googleBusiness } = await useFetch(`/api/public/sites/${siteId}/google-business`, {
-  key: `photos-google-business-${siteId}`,
-  default: () => ({
-    business: null,
-    reviews: [],
-    media: [],
-    posts: [],
-    errors: [],
-    syncedAt: null
-  })
-})
+const { locations } = useBootstrap()
 
-const googleMedia = computed(() => googleBusiness.value?.media || [])
-
-const sayaGalleryPlaceholders = [
-  { src: '/images/gallery/sushi-platter.jpg', alt: 'Sushi platter', attribution: 'Photo by Unsplash' },
-  { src: '/images/gallery/robatayaki-grill.jpg', alt: 'Grill dishes', attribution: 'Photo by Unsplash' },
-  { src: '/images/gallery/dining-room.jpg', alt: 'Restaurant dining room', attribution: 'Photo by Unsplash' },
-  { src: '/images/gallery/izakaya-dishes.jpg', alt: 'Japanese dishes', attribution: 'Photo by Unsplash' },
-  { src: '/images/gallery/fresh-sushi.jpg', alt: 'Fresh sushi rolls', attribution: 'Photo by Unsplash' },
-  { src: '/images/gallery/restaurant-tables.jpg', alt: 'Restaurant seating', attribution: 'Photo by Unsplash' },
-  { src: '/images/gallery/shared-plates.jpg', alt: 'Shared plates', attribution: 'Photo by Unsplash' },
-  { src: '/images/gallery/chef-preparing.jpg', alt: 'Chef at work', attribution: 'Photo by Unsplash' },
-  { src: '/images/gallery/evening-atmosphere.jpg', alt: 'Evening ambiance', attribution: 'Photo by Unsplash' }
-]
-
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
+if (locations.value.length === 1) {
+  await navigateTo(`/locations/${locations.value[0].slug}/photos`, { replace: true, redirectCode: 301 })
 }
 
-const { site } = await useTenantSite()
-
-// SEO Meta
+const sharedOgImage = useSharedOgImage()
+const currentPageUrl = useSeoUrl('/photos')
 useSeoMeta({
-  title: `Photos | ${site?.title || 'Restaurant'}`,
-  description: `Browse photos from ${site?.title || 'our restaurant'}, featuring our dishes and dining atmosphere.`,
-  ogTitle: `Photos | ${site?.title || 'Restaurant'}`,
-  ogDescription: `Photo gallery for ${site?.title || 'our restaurant'}.`,
-  ogImage: '/og-image.jpg',
-  ogUrl: '/photos',
-  ogType: 'website',
-  twitterCard: 'summary_large_image',
-  twitterTitle: `Photos - ${site?.title || 'Restaurant'}`,
-  twitterDescription: `Browse photos of ${site?.title || 'our restaurant'}.`,
-  twitterImage: '/og-image.jpg'
+  title: 'Photos',
+  description: 'Photo gallery from our restaurant.',
+  ogImage: sharedOgImage,
+  ogUrl: currentPageUrl
 })
-
-useSchemaOrg([
-  computed(() => ({
-    '@type': 'Restaurant',
-    name: 'Saya Kitchen',
-    photo: googleMedia.value.map(media => ({
-      '@type': 'Photograph',
-      url: media.googleUrl,
-      description: media.description || 'Restaurant photo'
-    }))
-  }))
-])
 </script>

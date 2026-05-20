@@ -396,6 +396,7 @@ const siteNavigation = computed(() => [
       defaultOpen: true,
       children: [
         { label: 'Menu', to: sitePath('/menu') },
+        { label: 'Experiences', to: sitePath('/experiences') },
         { label: 'Posts', to: sitePath('/posts') },
         { label: 'Translations', to: sitePath('/translations') },
         { label: 'Photos', to: sitePath('/photos') },

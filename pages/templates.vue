@@ -263,6 +263,8 @@ const specs = [
   { label: 'Mobile', value: 'Fully responsive' },
   { label: 'Languages', value: 'EN / TH' }
 ]
+const sharedOgImage = useSharedOgImage()
+const currentPageUrl = useSeoUrl('/templates')
 
 useBreadcrumbSchema([
   { name: 'Home', url: `https://${platformHostname}/` },
@@ -272,8 +274,8 @@ useBreadcrumbSchema([
 useSeoMeta({
   title: 'Saya Theme | KrabiClaw',
   description: 'The Saya restaurant theme — editorial design, Google Business integration, AI content management. Free on all plans.',
-  ogImage: '/og-image.jpg',
-  ogUrl: `https://${platformHostname}/templates`,
+  ogImage: sharedOgImage,
+  ogUrl: currentPageUrl,
   ogType: 'website'
 })
 </script>

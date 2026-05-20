@@ -137,11 +137,8 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 const { isAuthenticated } = useAuth()
 
-const { data, pending } = await useFetch<LocationsResponse>(
-  `/api/public/sites/${siteId}/locations`,
-  { key: `public-locations-${siteId}` }
-)
-const locations = computed(() => data.value?.locations ?? [])
+const { locations } = useBootstrap()
+const pending = ref(false)
 
 function formatAddress(address: AddressInput) {
   if (!address) return ''
@@ -159,6 +156,7 @@ const siteName = computed(() => unref(site)?.name || 'Saya')
 useSeoMeta({
   title: () => `Locations · ${siteName.value}`,
   description: 'Find all our restaurant locations.',
-  ogUrl: '/locations'
+  ogImage: useSharedOgImage(),
+  ogUrl: useSeoUrl('/locations')
 })
 </script>

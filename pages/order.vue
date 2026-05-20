@@ -12,23 +12,25 @@
       </div>
 
       <template v-else>
-        <SayaHero
-          :title="getField('hero.title', 'Order Online')"
-          :subtitle="getField('hero.subtitle', 'Get our food delivered to your door')"
-          size="page"
-        />
+        <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
+          <p class="saya-kicker mb-6">Order</p>
+          <h1 class="saya-display-md text-default">
+            <em class="saya-italic">{{ getField('hero.title', 'Order online') }}</em>
+          </h1>
+          <p v-if="getField('hero.subtitle')" class="mt-5 max-w-xl text-sm leading-relaxed text-muted">{{ getField('hero.subtitle') }}</p>
+        </header>
 
-        <AppSection bg="white" padding="xl">
+        <section class="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
           <!-- Single location: centred platform buttons -->
-          <div v-if="orderableLocations.length === 1" class="mx-auto max-w-lg text-center">
-            <div class="flex flex-wrap justify-center gap-4">
+          <div v-if="orderableLocations.length === 1" class="max-w-lg">
+            <div class="flex flex-wrap gap-4">
               <a
                 v-for="link in platformLinks(orderableLocations[0])"
                 :key="link.label"
                 :href="link.url"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center gap-2 rounded-full border border-default bg-default px-6 py-3 text-sm font-semibold text-default shadow-sm transition hover:bg-muted"
+                class="inline-flex items-center gap-2 rounded-full border border-default bg-default px-6 py-3 text-sm font-medium text-default transition hover:bg-muted"
               >
                 {{ link.label }}
                 <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4 text-muted" />
@@ -37,22 +39,22 @@
           </div>
 
           <!-- Multi-location: cards -->
-          <div v-else class="mx-auto grid max-w-4xl gap-6 sm:grid-cols-2">
+          <div v-else class="grid gap-6 sm:grid-cols-2">
             <div
               v-for="loc in orderableLocations"
               :key="loc.id"
-              class="rounded-2xl border border-default bg-elevated p-6"
+              class="border border-default bg-elevated p-8"
             >
-              <h3 class="text-lg font-bold text-default">{{ loc.title }}</h3>
-              <p v-if="loc.city" class="mt-1 text-sm text-muted">{{ loc.city }}</p>
-              <div class="mt-5 flex flex-wrap gap-3">
+              <h3 class="saya-display saya-italic text-2xl text-default leading-none">{{ loc.title }}</h3>
+              <p v-if="loc.city || loc.neighborhood" class="saya-eyebrow mt-3 text-muted">{{ loc.neighborhood || loc.city }}</p>
+              <div class="mt-6 flex flex-wrap gap-3">
                 <a
                   v-for="link in platformLinks(loc)"
                   :key="link.label"
                   :href="link.url"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="inline-flex items-center gap-2 rounded-full border border-default bg-default px-4 py-2 text-sm font-semibold text-default transition hover:bg-muted"
+                  class="inline-flex items-center gap-2 rounded-full border border-default bg-default px-4 py-2 text-sm font-medium text-default transition hover:bg-muted"
                 >
                   {{ link.label }}
                   <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3.5 text-muted" />
@@ -61,12 +63,11 @@
             </div>
           </div>
 
-          <!-- Reservations fallback link -->
-          <p class="mt-12 text-center text-sm text-muted">
+          <p class="mt-16 text-sm text-muted">
             Prefer to dine in?
-            <NuxtLink to="/reservations" class="font-medium text-default underline-offset-4 hover:underline">Reserve a table</NuxtLink>
+            <NuxtLink to="/reservations" class="font-medium text-default underline-offset-4 hover:underline">Reserve a table →</NuxtLink>
           </p>
-        </AppSection>
+        </section>
       </template>
     </div>
   </NuxtLayout>
@@ -75,21 +76,10 @@
 <script setup>
 definePageMeta({ layout: false })
 
-import { usePageContent } from '~/composables/usePageContent'
+const { isPlatform } = useTenantSite()
+const { getField, locations } = useBootstrap()
 
-const { isPlatform, siteId } = useTenantSite()
-const { getField } = usePageContent('order')
-const route = useRoute()
-const requestURL = useRequestURL()
-
-const { data: locationsData } = isPlatform || !siteId
-  ? { data: ref({ locations: [] }) }
-  : await useFetch(`/api/public/sites/${siteId}/locations`, {
-      key: `order-locs-${siteId}`,
-      default: () => ({ locations: [] })
-    })
-
-const allLocations = computed(() => locationsData.value?.locations ?? [])
+const allLocations = computed(() => locations.value)
 
 const platformLinks = (loc) => [
   { label: 'Grab', url: loc.grab_url },
@@ -102,10 +92,12 @@ const orderableLocations = computed(() =>
 )
 
 const hasOrderLinks = computed(() => orderableLocations.value.length > 0)
+const sharedOgImage = useSharedOgImage()
 
 useSeoMeta({
   title: computed(() => `Order Online | ${getField('restaurant.name', 'Our Restaurant')}`),
   description: 'Order our food online for delivery.',
+  ogImage: sharedOgImage,
   ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
 })
 </script>

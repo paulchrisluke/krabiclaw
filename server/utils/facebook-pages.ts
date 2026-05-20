@@ -236,9 +236,9 @@ export const storeFacebookPagesConnection = async (
   const connectionId = `fb-connection-${connection.organization_id}-${connection.site_id}`
   const now = new Date().toISOString()
 
-  const encryptedUserToken = await encryptSecret(connection.encrypted_user_token)
+  const encryptedUserToken = await encryptSecret(connection.encrypted_user_token, env)
   const encryptedPageToken = connection.encrypted_page_token
-    ? await encryptSecret(connection.encrypted_page_token)
+    ? await encryptSecret(connection.encrypted_page_token, env)
     : null
 
   await env.REVIEWS_DB.prepare(`
@@ -294,9 +294,9 @@ export const getFacebookPagesConnection = async (
 
   if (!connection) return null
 
-  connection.encrypted_user_token = await decryptSecret(connection.encrypted_user_token)
+  connection.encrypted_user_token = await decryptSecret(connection.encrypted_user_token, env)
   if (connection.encrypted_page_token) {
-    connection.encrypted_page_token = await decryptSecret(connection.encrypted_page_token)
+    connection.encrypted_page_token = await decryptSecret(connection.encrypted_page_token, env)
   }
 
   return connection
