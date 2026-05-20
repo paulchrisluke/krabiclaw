@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const member = await db.prepare(
     'SELECT organizationId FROM member WHERE userId = ? LIMIT 1'
   ).bind(session.user.id).first<{ organizationId: string }>()
-  if (!member) return jsonResponse({ error: 'No organisation found' }, { status: 404 })
+  if (!member) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
   const orgId = member.organizationId
 

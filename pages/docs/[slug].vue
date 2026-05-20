@@ -39,7 +39,7 @@
 definePageMeta({ layout: 'platform' })
 
 import { marked } from 'marked'
-import DOMPurify from 'isomorphic-dompurify'
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
 
 
 const route = useRoute()

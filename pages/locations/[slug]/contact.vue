@@ -170,7 +170,7 @@
 
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours } from '~/utils/formatters'
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: any) => s }
 
 definePageMeta({ layout: 'saya' })
 
@@ -181,8 +181,8 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 
 // Bootstrap: location data + page content (parking/notes) — 1 SSR call
-const { location, getField: getContentField } = useBootstrap()
-const pending = ref(false)
+const { location, getField: getContentField, data: bootstrapData } = useBootstrap()
+const pending = computed(() => !bootstrapData.value)
 
 const formattedAddress = computed(() => {
   const loc = location.value

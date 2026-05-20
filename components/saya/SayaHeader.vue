@@ -168,7 +168,7 @@ interface PublicLocale {
   status: string
 }
 
-const { isPlatform, siteId, site } = useTenantSite()
+const { siteId, site } = useTenantSite()
 const i18n = useI18n() as ApiValue as I18nComposable
 const mobileMenuOpen = ref(false)
 const headerRef = ref<HTMLElement | null>(null)

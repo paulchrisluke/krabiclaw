@@ -176,7 +176,7 @@
 </template>
 
 <script setup lang="ts">
-import DOMPurify from 'isomorphic-dompurify'
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: any) => s }
 import type { Experience } from '~/server/utils/experiences'
 
 const route = useRoute()

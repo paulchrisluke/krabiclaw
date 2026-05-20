@@ -10,6 +10,7 @@
 //           menuItemsBySection, location, locationReviews } = useBootstrap()
 //
 // No arguments needed — params are inferred from the route.
+import { onMounted, onBeforeUnmount } from 'vue'
 import { useBootstrapParams, useBootstrapKey, useBootstrapUrl } from '~/composables/useBootstrapParams'
 
 interface ContentRow {
@@ -24,17 +25,30 @@ interface ContentRow {
   [key: string]: unknown
 }
 
-const emptyBootstrap = () => ({
-  locations: [] as ApiRecord[],
-  config: {} as Record<string, string>,
-  googleBusiness: { business: null, reviews: [], media: [], posts: [], syncedAt: null } as ApiRecord,
-  content: [] as ContentRow[],
-  menu: null as ApiRecord | null,
-  locationReviews: [] as ApiRecord[],
-  reviewsAggregate: null as ApiRecord | null,
-  reviewsList: [] as ApiRecord[],
-  photosList: [] as ApiRecord[],
-  qaList: [] as ApiRecord[],
+interface BootstrapPayload {
+  locations: ApiRecord[]
+  config: Record<string, string>
+  googleBusiness: ApiRecord
+  content: ContentRow[]
+  menu: ApiRecord | null
+  locationReviews: ApiRecord[]
+  reviewsAggregate: ApiRecord | null
+  reviewsList: ApiRecord[]
+  photosList: ApiRecord[]
+  qaList: ApiRecord[]
+}
+
+const emptyBootstrap = (): BootstrapPayload => ({
+  locations: [],
+  config: {},
+  googleBusiness: { business: null, reviews: [], media: [], posts: [], syncedAt: null },
+  content: [],
+  menu: null,
+  locationReviews: [],
+  reviewsAggregate: null,
+  reviewsList: [],
+  photosList: [],
+  qaList: [],
 })
 
 export const useBootstrap = () => {
@@ -47,9 +61,9 @@ export const useBootstrap = () => {
 
   const empty = emptyBootstrap()
 
-  const { data } = (isPlatform || !siteId)
-    ? { data: ref(empty) }
-    : useFetch(url, { key, default: emptyBootstrap, server: true })
+  const { data, error } = (isPlatform || !siteId)
+    ? { data: ref<BootstrapPayload>(empty), error: ref<Error | null>(null) }
+    : useFetch<BootstrapPayload>(url, { key, default: emptyBootstrap, server: true })
 
   // ── Locations ─────────────────────────────────────────────
   const locations = computed(() => (data.value?.locations ?? []) as ApiRecord[])
@@ -87,12 +101,28 @@ export const useBootstrap = () => {
   const previewOverrides = ref<Record<string, string>>({})
   if (import.meta.client) {
     const isPreview = computed(() => route.query.preview === 'true')
-    window.addEventListener('message', (e: MessageEvent) => {
-      if (!isPreview.value) return
-      const msg = e.data
-      if (msg?.type !== 'admin:content-update') return
-      if (typeof msg.field !== 'string' || typeof msg.value !== 'string') return
-      previewOverrides.value = { ...previewOverrides.value, [msg.field]: msg.value }
+    const expectedOrigin = computed(() => {
+      try {
+        return new URL(window.location.href).origin
+      } catch {
+        return null
+      }
+    })
+
+    onMounted(() => {
+      const handler = (e: MessageEvent) => {
+        if (!isPreview.value) return
+        if (!expectedOrigin.value) return
+        if (e.origin !== expectedOrigin.value) return
+        const msg = e.data
+        if (msg?.type !== 'admin:content-update') return
+        if (typeof msg.field !== 'string' || typeof msg.value !== 'string') return
+        previewOverrides.value = { ...previewOverrides.value, [msg.field]: msg.value }
+      }
+      window.addEventListener('message', handler)
+      onBeforeUnmount(() => {
+        window.removeEventListener('message', handler)
+      })
     })
   }
 
@@ -159,5 +189,6 @@ export const useBootstrap = () => {
     contentMap,
     menu: menuData,
     menuItemsBySection,
+    error,
   }
 }

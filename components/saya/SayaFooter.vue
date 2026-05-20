@@ -7,7 +7,13 @@
         <!-- Brand column -->
         <div>
           <NuxtLink to="/" class="block no-underline leading-none">
-            <span class="saya-display text-5xl text-inverted">{{ restaurantName }}</span>
+            <img
+              v-if="logoUrl"
+              :src="logoUrl"
+              :alt="restaurantName"
+              class="h-12 w-auto max-w-48 object-contain"
+            />
+            <span v-else class="saya-display text-5xl text-inverted">{{ restaurantName }}</span>
           </NuxtLink>
           <p class="mt-4 max-w-xs text-sm leading-relaxed text-inverted/60">
             {{ tagline }}
@@ -139,22 +145,23 @@ import { getTodayGoogleHours } from '~/utils/formatters'
 const { isPlatform, siteId, site } = useTenantSite()
 
 // Shared bootstrap — same key as the page → zero extra SSR requests
-const { locations: bootstrapLocations, config: bootstrapConfig } = useBootstrap()
-
+const { locations: bootstrapLocations, getField: getContentField, data: bootstrapData, error: bootstrapError } = useBootstrap()
+const locationsError = computed(() => bootstrapError.value)
 const year = new Date().getFullYear()
+const logoUrl = computed(() => (site as { logo_url?: string | null } | null)?.logo_url || null)
 const restaurantName = computed(() => {
   if (site && typeof site === 'object' && 'brand_name' in site && typeof site.brand_name === 'string' && site.brand_name.trim()) {
     return site.brand_name
   }
   return DEFAULT_RESTAURANT_NAME
 })
-const siteConfig = bootstrapConfig
+const siteConfig = bootstrapData
 const tagline = computed(() => siteConfig.value?.footer_tagline || '')
 const sitePlan = computed(() => (site as { plan?: string | null } | null)?.plan)
 const showBrandingCredit = computed(() => !isPlatform && sitePlan.value === 'free')
 
 const primaryLocation = computed<PublicLocation | null>(() =>
-  rawLocations.value.find((l: PublicLocation) => l.is_primary) ?? rawLocations.value[0] ?? null
+  bootstrapLocations.value.find((l: PublicLocation) => l.is_primary) ?? bootstrapLocations.value[0] ?? null
 )
 
 interface OrderLink { label: string; url: string }
@@ -219,8 +226,6 @@ const activeSocials = computed(() =>
   allSocials.value.filter((s: SocialLink): s is { name: string; url: string } => typeof s.url === 'string' && s.url.length > 0)
 )
 const inactiveSocials = computed(() => allSocials.value.filter((s: SocialLink) => !s.url))
-
-const locationsError = ref<Error | null>(null)
 const rawLocations = computed(() => bootstrapLocations.value)
 const locations = computed(() =>
   rawLocations.value.map((loc: PublicLocation) => {

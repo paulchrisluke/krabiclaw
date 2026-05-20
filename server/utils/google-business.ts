@@ -11,7 +11,7 @@ type JsonRecord = Record<string, JsonValue>
 
 export interface GoogleBusinessEnv {
   REVIEWS_DB: D1Database
-  CONNECTOR_TOKEN_ENCRYPTION_KEY?: string
+  CONNECTOR_TOKEN_ENCRYPTION_KEY: string
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
   GOOGLE_BUSINESS_ACCOUNT_ID?: string

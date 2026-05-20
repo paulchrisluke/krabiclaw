@@ -19,6 +19,21 @@ const PUBLIC_PHOTO_CATEGORY: Record<string, string> = {
   other: 'OTHER',
 }
 
+// Typed row shapes — column names must match the SELECT exactly
+interface ReviewRow {
+  id: string
+  author_name: string | null
+  reviewer_photo_url: string | null
+  rating: number
+  title: string | null
+  content: string | null
+  owner_reply: string | null
+  owner_reply_at: string | null
+  photo_urls: string | null
+  source: string | null
+  created_at: string | null
+}
+
 const parseJson = (raw: string | null) => {
   if (!raw) return null
   try { return JSON.parse(raw) } catch { return null }
@@ -105,7 +120,7 @@ export default defineEventHandler(async (event) => {
       SELECT author_name, rating, content, created_at
       FROM reviews WHERE location_id = ? AND site_id = ? AND status = 'approved'
       ORDER BY created_at DESC LIMIT 3
-    `).bind(locationId, siteId).all<Record<string, unknown>>() : Promise.resolve({ results: [] }),
+    `).bind(locationId, siteId).all<Record<string, unknown>>() : Promise.resolve({ results: [] as Record<string, unknown>[] }),
 
     // Full reviews list (type A — only for reviews page)
     locationId && dataType === 'reviews' ? db.prepare(`
@@ -113,7 +128,7 @@ export default defineEventHandler(async (event) => {
              owner_reply, owner_reply_at, photo_urls, source, created_at
       FROM reviews WHERE location_id = ? AND status = 'approved'
       ORDER BY created_at DESC LIMIT 50
-    `).bind(locationId).all<Record<string, unknown>>() : Promise.resolve({ results: [] }),
+    `).bind(locationId).all<ReviewRow>() : Promise.resolve({ results: [] as ReviewRow[] }),
 
     // Photos list (type E — only for photos page)
     locationId && dataType === 'photos' ? db.prepare(`
@@ -121,7 +136,7 @@ export default defineEventHandler(async (event) => {
       FROM media_assets
       WHERE site_id = ? AND location_id = ? AND kind = 'image' AND status = 'active'
       ORDER BY created_at DESC LIMIT 100
-    `).bind(siteId, locationId).all<Record<string, unknown>>() : Promise.resolve({ results: [] }),
+    `).bind(siteId, locationId).all<Record<string, unknown>>() : Promise.resolve({ results: [] as Record<string, unknown>[] }),
 
     // Q&A list (type F — only for qa page)
     locationId && dataType === 'qa' ? db.prepare(`
@@ -130,7 +145,7 @@ export default defineEventHandler(async (event) => {
       FROM location_qa
       WHERE location_id = ? AND status = 'published'
       ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at
-    `).bind(locationId).all<Record<string, unknown>>() : Promise.resolve({ results: [] }),
+    `).bind(locationId).all<Record<string, unknown>>() : Promise.resolve({ results: [] as Record<string, unknown>[] }),
   ])
 
   // Shape locations

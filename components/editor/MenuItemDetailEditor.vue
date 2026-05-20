@@ -75,7 +75,7 @@
 
           <UCard>
             <template #header>
-              <p class="text-sm font-medium text-highlighted">Organisation</p>
+              <p class="text-sm font-medium text-highlighted">Organization</p>
             </template>
             <div class="space-y-4">
               <UFormField label="Section" required>

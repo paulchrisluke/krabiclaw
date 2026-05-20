@@ -137,8 +137,8 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 const { isAuthenticated } = useAuth()
 
-const { locations } = useBootstrap()
-const pending = ref(false)
+const { locations, data: bootstrapData } = useBootstrap()
+const pending = computed(() => !bootstrapData.value)
 
 function formatAddress(address: AddressInput) {
   if (!address) return ''

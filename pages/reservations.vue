@@ -292,9 +292,10 @@ useBreadcrumbSchema([
   { name: 'Reservations', url: `/reservations` }
 ])
 
+const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Restaurant')
 useSeoMeta({
-  title: 'Reserve a Table | Saya Kitchen',
-  description: 'Reserve a table at Saya Kitchen in Krabi.',
+  title: `${brandName.value} | Reserve a Table`,
+  description: `Reserve a table at ${brandName.value}.`,
   ogImage: sharedOgImage,
   ogUrl: currentPageUrl,
   ogType: 'website'

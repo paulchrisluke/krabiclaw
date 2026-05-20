@@ -44,8 +44,8 @@
             </div>
           </div>
           <div class="flex shrink-0 items-center gap-2">
-            <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-pencil-square" @click="openEdit(exp)" />
-            <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-trash" @click="confirmDelete(exp)" />
+            <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-pencil-square" aria-label="Edit experience" @click="openEdit(exp)" />
+            <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-trash" aria-label="Delete experience" @click="confirmDelete(exp)" />
           </div>
         </div>
       </div>
@@ -137,6 +137,8 @@ async function loadExperiences() {
   try {
     const res = await $fetch<{ experiences: ApiRecord[] }>(`/api/editor/sites/${siteId}/experiences`)
     experiences.value = res.experiences ?? []
+  } catch {
+    experiences.value = []
   } finally {
     loading.value = false
   }
@@ -186,8 +188,8 @@ function openEdit(exp: ApiRecord) {
     tagline: exp.tagline ?? '',
     body: exp.body ?? '',
     price: exp.price ?? '',
-    duration_minutes: exp.duration_minutes ? String(exp.duration_minutes) : '',
-    max_capacity: exp.max_capacity ? String(exp.max_capacity) : '',
+    duration_minutes: exp.duration_minutes != null ? String(exp.duration_minutes) : '',
+    max_capacity: exp.max_capacity != null ? String(exp.max_capacity) : '',
     available_note: exp.available_note ?? '',
     status: exp.status ?? 'active',
   })
@@ -202,10 +204,15 @@ async function save() {
   }
   saving.value = true
   try {
+    const parseNumber = (value: string): number | null => {
+      if (!value.trim()) return null
+      const parsed = Number(value)
+      return Number.isFinite(parsed) ? parsed : null
+    }
     const payload = {
       ...form,
-      duration_minutes: form.duration_minutes !== '' ? Number(form.duration_minutes) : null,
-      max_capacity: form.max_capacity !== '' ? Number(form.max_capacity) : null,
+      duration_minutes: parseNumber(form.duration_minutes),
+      max_capacity: parseNumber(form.max_capacity),
       time_slots: timeSlotsInput.value
         ? timeSlotsInput.value.split(',').map(s => s.trim()).filter(Boolean)
         : null,

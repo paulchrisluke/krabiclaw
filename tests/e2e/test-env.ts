@@ -13,7 +13,11 @@ function parseEnvFile(path: string) {
       .map((line) => {
         const index = line.indexOf('=')
         const key = line.slice(0, index).trim()
-        const value = line.slice(index + 1).trim().replace(/^['"]|['"]$/g, '')
+        let value = line.slice(index + 1).trim()
+        // Only remove surrounding quotes if they form a matching pair
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1)
+        }
         return [key, value]
       })
   )
@@ -32,9 +36,7 @@ function readFileEnv() {
   return fileEnv
 }
 
-export function testEnv(key: string) {
-  return process.env[key] || readFileEnv()[key]
-}
+export const testEnv = (key: string): string => process.env[key] ?? readFileEnv()[key] ?? ''
 
 export function testBaseUrl() {
   const port = Number(testEnv('PORT') || 3000)

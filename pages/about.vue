@@ -21,7 +21,7 @@
           <!-- Story image or video -->
           <div v-if="getField('story.image')" class="overflow-hidden rounded-2xl bg-zinc-950/5 relative">
             <video
-              v-if="/\.(mp4|webm|mov)$/i.test(getField('story.image'))"
+              v-if="isVideoUrl(getField('story.image'))"
               :src="getField('story.image')"
               autoplay
               muted
@@ -117,7 +117,7 @@ definePageMeta({ layout: false })
 
 import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: s => s }
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
 
 const { isPlatform } = useTenantSite()
 const { getField, locations } = useBootstrap()
@@ -128,6 +128,15 @@ const journeyBody = computed(() => DOMPurify.sanitize(getField('journey.body', '
 const hasOrderLinks = computed(() =>
   locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
+
+function isVideoUrl(url) {
+  try {
+    const pathname = new URL(url).pathname
+    return /\.(mp4|webm|mov)$/i.test(pathname)
+  } catch {
+    return /\.(mp4|webm|mov)$/i.test(url)
+  }
+}
 
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl

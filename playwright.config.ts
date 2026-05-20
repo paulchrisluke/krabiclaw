@@ -23,7 +23,7 @@ export default defineConfig({
   },
   webServer: {
     command: `PORT=${port} yarn dev`,
-    url: baseURL,
+    url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000
   },

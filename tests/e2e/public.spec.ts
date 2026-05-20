@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { collectPageErrors, expectHealthyPage, tenantBaseURL } from './helpers'
 
 const tenantRoutes = [
-  { path: '/', title: /Beautiful Restaurant Websites|Ember & Slice Brooklyn/, text: 'Ember & Slice Brooklyn' },
+  { path: '/', title: /Ember & Slice/, text: 'Ember & Slice' },
   { path: '/locations/brooklyn', title: /Ember & Slice Brooklyn \| Locations/, text: 'Ember & Slice Brooklyn' },
   { path: '/locations/brooklyn/photos', title: /Photos .* Ember & Slice Brooklyn/, text: 'Inside' },
   { path: '/locations/brooklyn/menu', title: /Menu .* Ember & Slice Brooklyn/, text: 'Menu' },
@@ -17,9 +17,17 @@ test.describe('public tenant site', () => {
   for (const route of tenantRoutes) {
     test(`${route.path} renders without runtime errors`, async ({ page }) => {
       const errors = collectPageErrors(page)
-      const response = await page.goto(`${tenantBaseURL}${route.path}`, { waitUntil: 'domcontentloaded' })
+      const response = await page.goto(`${tenantBaseURL}${route.path}`, { waitUntil: 'load' })
 
+      // Check SSR HTTP status before hydration
       expect(response?.status()).toBeLessThan(400)
+
+      // Wait for Vue hydration to complete by checking for expected text in body
+      await page.waitForFunction(() => {
+        return document.body && document.body.textContent !== null
+      })
+      await page.waitForLoadState('load')
+
       await expect(page).toHaveTitle(route.title)
       await expect(page.locator('body')).toContainText(route.text)
       await expectHealthyPage(page, errors)

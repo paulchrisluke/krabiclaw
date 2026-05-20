@@ -93,6 +93,8 @@ const orderableLocations = computed(() =>
 
 const hasOrderLinks = computed(() => orderableLocations.value.length > 0)
 const sharedOgImage = useSharedOgImage()
+const route = useRoute()
+const requestURL = useRequestURL()
 
 useSeoMeta({
   title: computed(() => `Order Online | ${getField('restaurant.name', 'Our Restaurant')}`),

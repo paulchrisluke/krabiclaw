@@ -2,7 +2,7 @@
 // Uses Web Crypto API AES-GCM for secure token storage
 
 export interface EncryptionEnv {
-  CONNECTOR_TOKEN_ENCRYPTION_KEY?: string
+  CONNECTOR_TOKEN_ENCRYPTION_KEY: string
 }
 
 // Derive 256-bit AES key from base64-encoded key

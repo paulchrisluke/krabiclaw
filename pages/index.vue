@@ -475,12 +475,11 @@
 <script setup>
 import { useAuth } from '~/composables/useAuth'
 import { useOrganizationSchema } from '~/composables/useSchemaOrg'
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: s => s }
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
 
 definePageMeta({ layout: false })
 
 const { isPlatform, siteId, site } = useTenantSite()
-const restaurantName = computed(() => site?.brand_name || businessTitle.value || 'Restaurant')
 
 // Platform homepage data
 const avatars = [
@@ -506,6 +505,56 @@ if (!isPlatform && !siteId) {
     statusMessage: 'Site not found'
   })
 }
+
+// ── Single SSR call ───────────────────────────────────────────────────────
+// Replaces: /locations + /google-business + /config + /content/home + /menus
+// SayaHeader + SayaFooter share the same bootstrap key — zero duplicate calls.
+const {
+  locations: bootstrapLocations,
+  googleBusiness: bootstrapGB,
+  getField,
+  getHero,
+  menuItemsBySection,
+} = useBootstrap()
+
+const locations = computed(() => bootstrapLocations.value)
+const hasLocations = computed(() => locations.value.length > 0)
+const hasOrderLinks = computed(() =>
+  locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
+)
+
+// Google Business from bootstrap
+const googleBusiness = bootstrapGB
+
+const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
+const businessTitle = computed(() => googleBusiness.value?.business?.title ?? null)
+const businessSubtitle = computed(() => googleBusiness.value?.business?.profile?.description ?? null)
+const businessPrimaryPhoto = computed(() => googleBusiness.value?.media?.[0])
+const businessCity = computed(() => googleBusiness.value?.business?.city ?? null)
+const googlePosts = computed(() => googleBusiness.value?.posts || [])
+const googleReviews = computed(() => googleBusiness.value?.reviews ?? [])
+const googleReviewRating = review => starRatingMap[review.starRating] ?? Number(review.starRating ?? review.rating ?? 0)
+const googleReviewSummary = computed(() => {
+  const summary = googleBusiness.value?.business?.reviewSummary
+  if (!summary) {
+    const ratings = googleReviews.value.map(googleReviewRating).filter(Boolean)
+    if (ratings.length === 0) return null
+    return { average: (ratings.reduce((s, r) => s + r, 0) / ratings.length).toFixed(1), count: ratings.length }
+  }
+  const average = Number(summary.averageRating)
+  if (!Number.isFinite(average) || average <= 0) return null
+  return { average: average.toFixed(1), count: summary.totalReviewCount }
+})
+
+const restaurantName = computed(() => site?.brand_name || businessTitle.value || 'Restaurant')
+
+// Hero from CMS with Google Business fallbacks
+const hero = computed(() => getHero({
+  title: businessTitle.value || '',
+  subtitle: businessSubtitle.value || '',
+  image: '',
+  video: ''
+}))
 
 const currentPageUrl = useSeoUrl('/')
 const sharedOgImage = useSharedOgImage()
@@ -536,37 +585,10 @@ if (!isPlatform && siteId) {
   })
 }
 
-// ── Single SSR call ───────────────────────────────────────────────────────
-// Replaces: /locations + /google-business + /config + /content/home + /menus
-// SayaHeader + SayaFooter share the same bootstrap key — zero duplicate calls.
-const {
-  locations: bootstrapLocations,
-  googleBusiness: bootstrapGB,
-  getField,
-  getFieldStr,
-  getHero,
-  menu: bootstrapMenu,
-  menuItemsBySection,
-} = useBootstrap()
-
-const locations = computed(() => bootstrapLocations.value)
-const hasLocations = computed(() => locations.value.length > 0)
-const hasOrderLinks = computed(() =>
-  locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
-)
-
 // Single-location tenants: redirect "/" to the location home
 if (!isPlatform && bootstrapLocations.value.length === 1) {
   await navigateTo(`/locations/${bootstrapLocations.value[0].slug}`, { replace: true, redirectCode: 301 })
 }
-
-// Hero from CMS with Google Business fallbacks
-const hero = computed(() => getHero({
-  title: businessTitle.value || '',
-  subtitle: businessSubtitle.value || '',
-  image: '',
-  video: ''
-}))
 
 // Featured menu items from bootstrap menu
 const featuredMenuItems = computed(() => {
@@ -585,29 +607,6 @@ const featuredMenuItems = computed(() => {
 
 // Review location filter
 const reviewFilter = ref('all')
-
-// Google Business from bootstrap
-const googleBusiness = bootstrapGB
-
-const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
-const businessTitle = computed(() => googleBusiness.value?.business?.title ?? null)
-const businessSubtitle = computed(() => googleBusiness.value?.business?.profile?.description ?? null)
-const businessPrimaryPhoto = computed(() => googleBusiness.value?.media?.[0])
-const businessCity = computed(() => googleBusiness.value?.business?.city ?? null)
-const googlePosts = computed(() => googleBusiness.value?.posts || [])
-const googleReviews = computed(() => googleBusiness.value?.reviews ?? [])
-const googleReviewRating = review => starRatingMap[review.starRating] ?? Number(review.starRating ?? review.rating ?? 0)
-const googleReviewSummary = computed(() => {
-  const summary = googleBusiness.value?.business?.reviewSummary
-  if (!summary) {
-    const ratings = googleReviews.value.map(googleReviewRating).filter(Boolean)
-    if (ratings.length === 0) return null
-    return { average: (ratings.reduce((s, r) => s + r, 0) / ratings.length).toFixed(1), count: ratings.length }
-  }
-  const average = Number(summary.averageRating)
-  if (!Number.isFinite(average) || average <= 0) return null
-  return { average: average.toFixed(1), count: summary.totalReviewCount }
-})
 
 const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
 const featuredReviews = computed(() => googleReviews.value.slice(0, 3))

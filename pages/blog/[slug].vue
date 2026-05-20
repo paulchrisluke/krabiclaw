@@ -134,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import DOMPurify from 'isomorphic-dompurify'
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: any) => s }
 
 import { marked } from 'marked'
 const { resolveMedia } = useMedia()

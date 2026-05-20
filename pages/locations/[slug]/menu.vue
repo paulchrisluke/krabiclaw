@@ -151,13 +151,12 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
-const { location, menu, menuItemsBySection } = useBootstrap()
-
-const menuLoading = ref(false)
-const hasMenu = computed(() => menu.value && (menu.value as { items?: unknown[] }).items?.length > 0)
+const { location, menu: bootstrapMenu, menuItemsBySection, data: bootstrapData } = useBootstrap()
+const menuLoading = computed(() => !bootstrapData.value)
+const hasMenu = computed(() => bootstrapMenu.value && (bootstrapMenu.value as { items?: unknown[] }).items?.length > 0)
 
 const menuUpdated = computed(() => {
-  const d = menu.value?.updated_at
+  const d = bootstrapMenu.value?.updated_at
   if (!d) return 'recently'
   return new Date(d).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 })
@@ -191,11 +190,19 @@ const categoryTabs = computed(() =>
   }))
 )
 
-const activeCategory = ref('')
+const userSelectedCategory = ref('')
+const activeCategory = computed({
+  get() {
+    return userSelectedCategory.value || categories.value[0]?.id || ''
+  },
+  set(val) {
+    userSelectedCategory.value = val
+  }
+})
 const categoryNavHeight = ref(44)
-watch(categories, (cats: { id: string; name: string }[]) => {
-  if (cats.length && !activeCategory.value) activeCategory.value = cats[0]?.id ?? ''
-}, { immediate: true })
+watch(categories, () => {
+  userSelectedCategory.value = ''
+})
 
 function itemSlug(item: ApiValue): string {
   return item.slug || item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')

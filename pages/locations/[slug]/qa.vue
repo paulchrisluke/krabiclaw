@@ -52,18 +52,9 @@
       </div>
     </section>
 
-    <!-- Loading -->
-    <div v-if="pending" class="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-      <div v-for="i in 3" :key="i" class="mb-6 rounded-3xl border border-default p-9">
-        <USkeleton class="mb-4 h-5 w-3/4" />
-        <USkeleton class="h-4 w-full" />
-        <USkeleton class="mt-2 h-4 w-2/3" />
-      </div>
-    </div>
-
     <!-- Q&A list -->
     <section class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
-      <div v-if="sorted.length === 0 && !pending" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default bg-muted/30 py-20 text-center">
+      <div v-if="sorted.length === 0" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default bg-muted/30 py-20 text-center">
         <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
           <UIcon name="i-heroicons-question-mark-circle" class="size-7" />
         </div>
@@ -164,13 +155,9 @@ const { open: openUpgrade } = useUpgradeModal()
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
-const { location } = useBootstrap()
+const { location, qaList } = useBootstrap()
 
-const { data, pending } = await useFetch(
-  () => `/api/public/sites/${siteId}/locations/${slug.value}/qa`,
-  { key: () => `loc-qa-${siteId}-${slug.value}`, default: () => ({ qa: [] }) }
-)
-const qa = computed(() => (data as ApiValue).value?.qa ?? [])
+const qa = qaList
 
 const sorted = computed(() =>
   [...qa.value].sort((a, b) => {

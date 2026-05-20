@@ -41,7 +41,7 @@ INSERT INTO sites (
   'site-demo', 'org-demo', 'saya-theme-v1', 'saya', 'ember-slice-demo', 'demo',
   'Ember & Slice',
   'A Brooklyn wood-fired trattoria serving blistered pies, seasonal antipasti, and easy neighborhood hospitality.',
-  'active', 'free', 'active', 'location_subdirectories', 'loc-demo',
+  'active', 'free', 'active', 'location_subdirectories', NULL,
   'hello@emberandslice.example'
 );
 
@@ -105,6 +105,9 @@ INSERT INTO business_locations (
   'https://facebook.com/emberandslice',
   0, 'active'
 );
+
+-- Set primary location after business_locations row exists
+UPDATE sites SET primary_location_id = 'loc-demo' WHERE id = 'site-demo';
 
 -- Media assets
 INSERT INTO media_assets
@@ -210,6 +213,7 @@ VALUES
    'image/jpeg', 'post-margherita.jpg', 'Margherita pizza special', 'food', 'active');
 
 UPDATE business_locations SET hero_image_asset_id = 'media-demo-hero', hero_video_asset_id = 'media-demo-pizza-prep-video' WHERE id = 'loc-demo';
+-- Note: loc-demo-2 (Ao Nang) intentionally left without hero media for demo purposes
 
 -- Reviews
 INSERT INTO reviews
@@ -299,7 +303,7 @@ INSERT INTO menu_items
 VALUES
   ('mi-1', 'menu-demo', 'Wood-Fired Pizza', 'Margherita', 'margherita',
    'San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt',
-   '$18', 'media-demo-margherita-video', 'Gluten, Dairy', 'Vegetarian', 1, 1),
+   '$18', 'media-demo-margherita', 'Gluten, Dairy', 'Vegetarian', 1, 1),
   ('mi-2', 'menu-demo', 'Wood-Fired Pizza', 'Pepperoni Calabrese', 'pepperoni-calabrese',
    'Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano',
    '$21', 'media-demo-pepperoni', 'Gluten, Dairy', NULL, 1, 2),
@@ -329,7 +333,7 @@ VALUES
    '$5', NULL, NULL, 'Vegan, Gluten-free', 1, 2),
   ('mi-demo2-1', 'menu-demo-2', 'Wood-Fired Pizza', 'Margherita', 'margherita',
    'San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt',
-   '$18', 'media-demo-margherita-video', 'Gluten, Dairy', 'Vegetarian', 1, 1),
+   '$18', 'media-demo-margherita', 'Gluten, Dairy', 'Vegetarian', 1, 1),
   ('mi-demo2-2', 'menu-demo-2', 'Wood-Fired Pizza', 'Pepperoni Calabrese', 'pepperoni-calabrese',
    'Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano',
    '$21', 'media-demo-pepperoni', 'Gluten, Dairy', NULL, 1, 2),
@@ -339,6 +343,7 @@ VALUES
   ('mi-demo2-4', 'menu-demo-2', 'Drinks', 'Fresh Coconut Water', 'fresh-coconut',
    'Whole chilled fresh coconut from local organic farms',
    '$8', NULL, NULL, 'Vegan, Gluten-free', 1, 1);
+-- Note: USD pricing for Ao Nang (Thailand) location is intentional for demo purposes to test multi-currency display
 
 -- Location Q&A
 INSERT INTO location_qa

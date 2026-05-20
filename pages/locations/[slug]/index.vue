@@ -309,7 +309,7 @@
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow } from '~/utils/formatters'
 
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: any) => s }
 
 const { resolveMedia } = useMedia()
 definePageMeta({ layout: 'saya' })
@@ -329,9 +329,10 @@ const {
   getHero: getContentHero,
   menu: bootstrapMenu,
   locationReviews,
+  data: bootstrapData,
 } = useBootstrap()
 
-const pending = ref(false)
+const pending = computed(() => !bootstrapData.value)
 
 // Contact fallbacks
 const displayPhone = computed(() => {
