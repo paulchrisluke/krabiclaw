@@ -28,6 +28,11 @@ export default defineEventHandler(async (event) => {
   if (!isPlatformOwner(session.user.email, env)) return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
 
   const rows = await db.prepare(`
+    WITH single_site AS (
+      SELECT *,
+             ROW_NUMBER() OVER (PARTITION BY organization_id ORDER BY created_at DESC) as rn
+      FROM sites
+    )
     SELECT
       o.id AS org_id,
       o.name AS org_name,
@@ -43,7 +48,7 @@ export default defineEventHandler(async (event) => {
       o.createdAt AS created_at
     FROM organization o
     LEFT JOIN organization_billing ob ON ob.organization_id = o.id
-    LEFT JOIN sites s ON s.organization_id = o.id
+    LEFT JOIN single_site s ON s.organization_id = o.id AND s.rn = 1
     WHERE ob.plan IN ('growth', 'managed', 'seo_accelerator')
     ORDER BY
       CASE ob.plan

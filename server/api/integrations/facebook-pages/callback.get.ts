@@ -45,14 +45,19 @@ export default defineEventHandler(async (event) => {
 
   const { siteId, organizationId, userId } = stateData
   const settingsRedirect = async (status: string) => {
-    const db = env.DB
-    if (!db) return `/dashboard?fb=${status}`
-    const organization = await db.prepare(`
-      SELECT slug FROM organization WHERE id = ? LIMIT 1
-    `).bind(organizationId).first<{ slug: string | null }>()
-    return organization?.slug
-      ? `/dashboard/${organization.slug}/~/settings/general?fb=${status}`
-      : `/dashboard?fb=${status}`
+    try {
+      const db = env.DB
+      if (!db) return `/dashboard?fb=${status}`
+      const organization = await db.prepare(`
+        SELECT slug FROM organization WHERE id = ? LIMIT 1
+      `).bind(organizationId).first<{ slug: string | null }>()
+      return organization?.slug
+        ? `/dashboard/${organization.slug}/~/settings/general?fb=${status}`
+        : `/dashboard?fb=${status}`
+    } catch (e) {
+      console.error('Facebook Pages redirect organization query failed:', e)
+      return `/dashboard?fb=${status}`
+    }
   }
 
   try {

@@ -158,8 +158,9 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
 
-// WhatsApp number for Paul — swap for real number
-const WHATSAPP_NUMBER = '16197200000'
+const config = useRuntimeConfig()
+const rawWhatsapp = config.public.whatsappNumber || '16197200000'
+const WHATSAPP_NUMBER = /^\d+$/.test(String(rawWhatsapp)) ? String(rawWhatsapp) : '16197200000'
 
 const dashboard = useDashboardRestaurant()
 if (!dashboard.state.value) await dashboard.refresh()

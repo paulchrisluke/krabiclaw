@@ -35,19 +35,33 @@ export default defineEventHandler(async (event) => {
   const connectionRedirect = async (status: string) => {
     const db = env.DB
     if (!db) return `/dashboard?gb=${status}`
-    const organization = await db.prepare(`
-      SELECT slug FROM organization WHERE id = ? LIMIT 1
-    `).bind(organizationId).first<{ slug: string | null }>()
+
+    let organization: { slug: string | null } | null = null
+    try {
+      organization = await db.prepare(`
+        SELECT slug FROM organization WHERE id = ? LIMIT 1
+      `).bind(organizationId).first<{ slug: string | null }>()
+    } catch (e) {
+      console.error('Google Business redirect organization query failed:', e)
+      return `/dashboard?gb=${status}`
+    }
+
     if (!organization?.slug) return `/dashboard?gb=${status}`
     if (!locationId) return `/dashboard/${organization.slug}?gb=${status}`
-    const location = await db.prepare(`
-      SELECT slug FROM business_locations
-      WHERE id = ? AND organization_id = ? AND site_id = ?
-      LIMIT 1
-    `).bind(locationId, organizationId, siteId).first<{ slug: string }>()
-    return location?.slug
-      ? `/dashboard/${organization.slug}/${location.slug}?gb=${status}`
-      : `/dashboard/${organization.slug}?gb=${status}`
+
+    try {
+      const location = await db.prepare(`
+        SELECT slug FROM business_locations
+        WHERE id = ? AND organization_id = ? AND site_id = ?
+        LIMIT 1
+      `).bind(locationId, organizationId, siteId).first<{ slug: string }>()
+      return location?.slug
+        ? `/dashboard/${organization.slug}/${location.slug}?gb=${status}`
+        : `/dashboard/${organization.slug}?gb=${status}`
+    } catch (e) {
+      console.error('Google Business redirect location query failed:', e)
+      return `/dashboard/${organization.slug}?gb=${status}`
+    }
   }
 
   try {

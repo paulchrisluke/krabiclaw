@@ -1,7 +1,18 @@
 <template>
   <UPage class="h-full">
     <UPageBody class="h-[calc(100vh-4rem)] p-0 sm:p-0">
-      <ChowBot embedded :setup-mode="!hasRestaurant" />
+      <div v-if="dashboardError" class="p-6 flex flex-col items-center justify-center h-full gap-4 text-center">
+        <UAlert
+          color="error"
+          variant="soft"
+          icon="i-heroicons-exclamation-triangle"
+          title="Error Loading Dashboard"
+          :description="dashboardError"
+          class="max-w-md"
+        />
+        <UButton color="primary" :loading="loading" @click="loadDashboard">Retry</UButton>
+      </div>
+      <ChowBot v-else embedded :setup-mode="!hasRestaurant" />
     </UPageBody>
   </UPage>
 </template>
@@ -13,14 +24,43 @@ const route = useRoute()
 const dashboard = useDashboardRestaurant()
 const chowBot = useChowBot()
 
-if (!dashboard.state.value) await dashboard.refresh()
+const dashboardError = ref<string | null>(null)
+const loading = ref(false)
+
+async function loadDashboard() {
+  if (!dashboard.state.value) {
+    try {
+      loading.value = true
+      dashboardError.value = null
+      await dashboard.refresh()
+    } catch (error: any) {
+      console.error('Failed to load dashboard data:', error)
+      dashboardError.value = error.message || 'Failed to load restaurant data.'
+    } finally {
+      loading.value = false
+    }
+  }
+}
+
+await loadDashboard()
 
 const hasRestaurant = computed(() => Boolean(dashboard.restaurant.value))
 const promptSent = ref(false)
 
 async function sendRoutePrompt() {
   if (!hasRestaurant.value || promptSent.value) return
-  const prompt = typeof route.query.prompt === 'string' ? decodeURIComponent(route.query.prompt) : ''
+  let prompt = ''
+  if (typeof route.query.prompt === 'string') {
+    try {
+      prompt = decodeURIComponent(route.query.prompt)
+    } catch (e) {
+      if (e instanceof URIError) {
+        prompt = route.query.prompt || ''
+      } else {
+        prompt = ''
+      }
+    }
+  }
   if (!prompt.trim()) return
   promptSent.value = true
   await chowBot.sendMessage(prompt)

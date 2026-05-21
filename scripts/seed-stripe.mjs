@@ -38,13 +38,22 @@ const stripe = new Stripe(STRIPE_SECRET_KEY)
 // --- Archive old plans ---
 async function archiveOldPlans() {
   console.log('\nArchiving old pro/enterprise products...')
-  const products = await stripe.products.list({ active: true, limit: 100 })
-  for (const product of products.data) {
-    const planId = product.metadata?.plan_id
-    if (planId === 'pro' || planId === 'enterprise') {
-      await stripe.products.update(product.id, { active: false })
-      console.log(`  Archived: ${product.name} (${product.id})`)
+  let startingAfter;
+  while (true) {
+    const products = await stripe.products.list({
+      active: true,
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {})
+    })
+    for (const product of products.data) {
+      const planId = product.metadata?.plan_id
+      if (planId === 'pro' || planId === 'enterprise') {
+        await stripe.products.update(product.id, { active: false })
+        console.log(`  Archived: ${product.name} (${product.id})`)
+      }
     }
+    if (!products.has_more || products.data.length === 0) break
+    startingAfter = products.data[products.data.length - 1]?.id
   }
 }
 
@@ -86,6 +95,34 @@ async function createSubscriptionPlan({ name, description, planId, amountCents, 
 async function createOneTimePrice({ productName, amountCents, priceKey }) {
   console.log(`\nCreating one-time price: ${productName} ($${amountCents / 100})`)
 
+  // Check if product already exists by metadata.addon_type
+  const existingProducts = await stripe.products.list({ active: true, limit: 100 })
+  const existingProduct = existingProducts.data.find(p => p.metadata?.addon_type === priceKey)
+
+  if (existingProduct) {
+    console.log(`  Product already exists: ${existingProduct.id}`)
+    // Search for an existing price matching currency 'usd' and unit_amount === amountCents for that product
+    const existingPrices = await stripe.prices.list({
+      product: existingProduct.id,
+      active: true,
+      limit: 100
+    })
+    const existingPrice = existingPrices.data.find(p => p.currency === 'usd' && p.unit_amount === amountCents)
+    if (existingPrice) {
+      console.log(`  Price already exists: ${existingPrice.id} — skipping`)
+      return { product: existingProduct, price: existingPrice }
+    } else {
+      console.log(`  Product exists but matching price does not. Creating price...`)
+      const price = await stripe.prices.create({
+        product: existingProduct.id,
+        currency: 'usd',
+        unit_amount: amountCents,
+      })
+      console.log(`  Created price:   ${price.id}`)
+      return { product: existingProduct, price }
+    }
+  }
+
   const product = await stripe.products.create({
     name: productName,
     metadata: { addon_type: priceKey },
@@ -97,8 +134,8 @@ async function createOneTimePrice({ productName, amountCents, priceKey }) {
     unit_amount: amountCents,
   })
 
-  console.log(`  Product: ${product.id}`)
-  console.log(`  Price:   ${price.id}`)
+  console.log(`  Created product: ${product.id}`)
+  console.log(`  Created price:   ${price.id}`)
   return { product, price }
 }
 

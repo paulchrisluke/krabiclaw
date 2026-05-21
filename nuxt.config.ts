@@ -46,7 +46,8 @@ export default defineNuxtConfig({
       appName: process.env.NUXT_PUBLIC_APP_NAME || '',
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://krabiclaw.com',
       turnstileEnabled: process.env.NUXT_PUBLIC_TURNSTILE_ENABLED === 'true',
-      turnstileSiteKey: process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY || ''
+      turnstileSiteKey: process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY || '',
+      whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '16197200000'
     },
     turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || ''
   },

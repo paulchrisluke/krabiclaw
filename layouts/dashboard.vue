@@ -18,18 +18,7 @@
     <UDashboardGroup unit="rem" :min-size="14" :default-size="18" :max-size="24">
       <UDashboardSidebar resizable collapsible>
         <template #header="{ collapsed }">
-          <template v-if="inAdminWorkspace">
-            <div v-if="collapsed" class="flex items-center justify-center">
-              <div class="flex size-8 items-center justify-center rounded-lg bg-error">
-                <span class="text-sm font-bold text-white">A</span>
-              </div>
-            </div>
-            <div v-else class="px-2">
-              <span class="font-semibold text-sm">Platform Admin</span>
-            </div>
-          </template>
-
-          <template v-else-if="inLocationWorkspace">
+          <template v-if="inLocationWorkspace">
             <div v-if="collapsed" class="flex items-center justify-center w-full">
               <UButton
                 :to="orgBase ?? '/dashboard'"
@@ -542,14 +531,15 @@ const locationNavigation = computed(() => {
   ]
 })
 
+const adminTab = computed(() => String(route.query.tab || 'queue'))
 const adminNavigation = computed(() => [[
-  { label: 'Queue', icon: 'i-heroicons-inbox-stack', to: '/admin?tab=queue' },
-  { label: 'Clients', icon: 'i-heroicons-building-storefront', to: '/admin?tab=clients' },
-  { label: 'Analytics', icon: 'i-heroicons-chart-bar', to: '/admin?tab=analytics' },
-  { label: 'Domains', icon: 'i-heroicons-globe-alt', to: '/admin?tab=domains' },
-  { label: 'Users', icon: 'i-heroicons-users', to: '/admin?tab=users' },
-  { label: 'Content', icon: 'i-heroicons-document-text', to: '/admin?tab=content' },
-  { label: 'Blog', icon: 'i-heroicons-pencil-square', to: '/admin?tab=blog' },
+  { label: 'Queue',     icon: 'i-lucide-inbox',           to: '/admin?tab=queue',     active: adminTab.value === 'queue' },
+  { label: 'Clients',  icon: 'i-lucide-building-2',       to: '/admin?tab=clients',   active: adminTab.value === 'clients' },
+  { label: 'Analytics',icon: 'i-lucide-bar-chart-2',      to: '/admin?tab=analytics', active: adminTab.value === 'analytics' },
+  { label: 'Domains',  icon: 'i-lucide-globe',            to: '/admin?tab=domains',   active: adminTab.value === 'domains' },
+  { label: 'Users',    icon: 'i-lucide-users',            to: '/admin?tab=users',     active: adminTab.value === 'users' },
+  { label: 'Content',  icon: 'i-lucide-file-text',        to: '/admin?tab=content',   active: adminTab.value === 'content' },
+  { label: 'Blog',     icon: 'i-lucide-pencil',           to: '/admin?tab=blog',      active: adminTab.value === 'blog' },
 ]])
 
 const _utilityNavigation = computed(() => [[

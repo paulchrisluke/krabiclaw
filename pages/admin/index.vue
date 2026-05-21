@@ -1,7 +1,5 @@
 <template>
   <UPage>
-    <UPageHeader :title="currentTabLabel" :description="currentTabDescription" />
-
     <UPageBody>
 
       <!-- ── QUEUE ── -->
@@ -296,19 +294,6 @@ const toast = useToast()
 // ── Routing ──────────────────────────────────────────────────────────────────
 const route = useRoute()
 const activeTab = computed(() => String(route.query.tab || 'queue'))
-
-const TAB_META: Record<string, { label: string; description: string }> = {
-  queue:     { label: 'Fulfillment Queue',  description: 'Service add-ons purchased — mark each as done once fulfilled.' },
-  clients:   { label: 'Managed Clients',    description: 'Restaurants on Growth, Managed, or SEO Accelerator plans.' },
-  analytics: { label: 'Analytics',          description: 'Platform-wide usage and site metrics.' },
-  domains:   { label: 'Custom Domains',     description: 'Inspect and reconcile Cloudflare SaaS hostnames.' },
-  users:     { label: 'Users',              description: 'Find and impersonate accounts for support.' },
-  content:   { label: 'Platform Content',   description: 'Edit marketing pages.' },
-  blog:      { label: 'Platform Blog',      description: 'Manage platform blog posts.' },
-}
-
-const currentTabLabel = computed(() => TAB_META[activeTab.value]?.label ?? 'Admin')
-const currentTabDescription = computed(() => TAB_META[activeTab.value]?.description ?? '')
 
 // ── Shared helpers ──────────────────────────────────────────────────────────
 function formatDate(dateString: string | null | undefined) {
