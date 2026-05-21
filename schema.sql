@@ -645,7 +645,6 @@ CREATE TABLE IF NOT EXISTS media_assets (
   cloudflare_image_id TEXT,
   r2_key TEXT,
   google_media_name TEXT,
-  stream_uid TEXT,
 
   -- URLs
   public_url TEXT,
