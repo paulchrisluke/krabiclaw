@@ -69,9 +69,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
 
-  if (!env.REVIEWS_DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
+  if (!env.DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
 
   try {
     // Get primary location for this site

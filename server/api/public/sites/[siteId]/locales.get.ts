@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   if (!siteId) return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const site = await db.prepare(`

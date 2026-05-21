@@ -30,5 +30,8 @@ curl_output.html
 .dev.vars
 public/google-business-cache.json
 
+# Prod data backups (contain auth tokens — never commit)
+prod-backup-*.sql
+
 # Legacy admin archive (exclude from compilation)
 archive/

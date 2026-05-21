@@ -41,10 +41,6 @@ interface MembershipRow {
 export interface BillingEnv {
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
-  STRIPE_PRICE_PRO_MONTHLY?: string
-  STRIPE_PRICE_PRO_ANNUAL?: string
-  STRIPE_PRICE_AGENCY_MONTHLY?: string
-  STRIPE_PRICE_AGENCY_ANNUAL?: string
 }
 
 export interface OrganizationEntitlement {
@@ -212,7 +208,7 @@ function getPlanEntitlements(plan: string): EntitlementsMap {
         ai_credits: 5000,
       }
 
-    case 'agency':
+    case 'enterprise':
       return {
         ...baseEntitlements,
         custom_domains: true,
@@ -221,7 +217,7 @@ function getPlanEntitlements(plan: string): EntitlementsMap {
         advanced_seo: true,
         white_label: true,
         api_access: true,
-        max_sites: -1,
+        max_sites: 1,
         max_locations: -1,
         ai_credits: 50000,
       }
@@ -232,7 +228,7 @@ function getPlanEntitlements(plan: string): EntitlementsMap {
 }
 
 // Sync Stripe subscription item quantity to match current active location count.
-// Only runs for Pro plan — Agency is flat-rate so quantity stays at 1.
+// Only runs for Pro plan — Enterprise is flat-rate so quantity stays at 1.
 // Called fire-and-forget from location create/delete; errors are logged but never bubble up.
 export async function updateSubscriptionQuantity(
   env: BillingEnv,
@@ -319,21 +315,33 @@ export function verifyStripeWebhook(
   }
 }
 
-// Get price ID for plan + interval
-export function getPriceId(env: BillingEnv, plan: string, interval: 'month' | 'year' = 'month'): string {
-  let priceId: string | undefined
+export async function getPriceIdForPlan(
+  env: BillingEnv,
+  plan: string,
+  interval: 'month' | 'year' = 'month'
+): Promise<string> {
+  const stripe = getStripe(env)
+  const products = await stripe.products.list({ active: true, limit: 100 })
+  const product = products.data.find((candidate) => candidate.metadata?.plan_id === plan)
+  if (!product) throw new Error(`No active Stripe product found for plan ${plan}`)
 
-  if (plan === 'pro') {
-    priceId = interval === 'year' ? env.STRIPE_PRICE_PRO_ANNUAL : env.STRIPE_PRICE_PRO_MONTHLY
-  } else if (plan === 'agency') {
-    priceId = interval === 'year' ? env.STRIPE_PRICE_AGENCY_ANNUAL : env.STRIPE_PRICE_AGENCY_MONTHLY
-  } else {
-    throw new Error(`Unknown plan: ${plan}`)
-  }
+  const prices = await stripe.prices.list({
+    active: true,
+    product: product.id,
+    type: 'recurring',
+    limit: 100
+  })
+  const price = prices.data.find((candidate) => candidate.recurring?.interval === interval)
+  if (!price) throw new Error(`No active Stripe ${interval} price found for plan ${plan}`)
 
-  if (!priceId) {
-    throw new Error(`Missing price ID for plan ${plan} interval ${interval}`)
-  }
+  return price.id
+}
 
-  return priceId
+export async function getPlanFromStripePrice(env: BillingEnv, priceId: string): Promise<string | null> {
+  const stripe = getStripe(env)
+  const price = await stripe.prices.retrieve(priceId, { expand: ['product'] })
+  const product = typeof price.product === 'string' ? null : price.product
+  if (!product || product.deleted) return null
+  const plan = product?.metadata?.plan_id
+  return typeof plan === 'string' && plan.length > 0 ? plan : null
 }

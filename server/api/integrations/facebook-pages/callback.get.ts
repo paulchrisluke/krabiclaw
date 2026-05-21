@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
     const pages = await getFacebookPages(systemUserToken)
 
     if (pages.length === 0) {
-      return new Response(null, { status: 302, headers: { Location: `/dashboard/sites/${siteId}?fb=no_pages` } })
+      return new Response(null, { status: 302, headers: { Location: `/dashboard?fb=no_pages` } })
     }
 
     const firstPage = pages[0]
@@ -73,7 +73,7 @@ export default defineEventHandler(async (event) => {
 
     return new Response(null, {
       status: 302,
-      headers: { Location: `/dashboard/sites/${siteId}?fb=connected` },
+      headers: { Location: `/dashboard?fb=connected` },
     })
   } catch (err) {
     console.error('Facebook OAuth callback failed:', err)

@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
   if (!siteId || !assetId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const session = await getAuthSession(event, env)

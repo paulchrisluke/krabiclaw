@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   // Server-side 301 redirect for single-location sites
   if (normalizedPathname === '/' && event.context.tenantType === 'tenant' && event.context.siteId) {
     const env = cloudflareEnv(event)
-    const db = env.REVIEWS_DB
+    const db = env.DB
     if (db) {
       try {
         const locations = await db.prepare(`

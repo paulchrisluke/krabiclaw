@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS sites (
   source_locale TEXT NOT NULL DEFAULT 'en',
   default_currency TEXT NOT NULL DEFAULT 'THB',
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),
-  plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'paid', 'starter', 'pro', 'business')),
+  plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'enterprise')),
   onboarding_status TEXT DEFAULT 'pending' CHECK (onboarding_status IN ('pending', 'active', 'failed')),
   url_structure TEXT NOT NULL DEFAULT 'location_subdirectories' CHECK (url_structure IN ('location_subdirectories', 'brand_pages')),
   settings TEXT,
@@ -144,9 +144,25 @@ CREATE TABLE IF NOT EXISTS sites (
   FOREIGN KEY (logo_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_one_per_organization
+  ON sites(organization_id);
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_custom_domain_unique
   ON sites(custom_domain)
   WHERE custom_domain IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS dashboard_preferences (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  organization_id TEXT NOT NULL,
+  selected_location_id TEXT,
+  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (selected_location_id) REFERENCES business_locations(id) ON DELETE SET NULL,
+  UNIQUE(user_id, organization_id)
+);
 
 CREATE TABLE IF NOT EXISTS site_domains (
   id TEXT PRIMARY KEY,
@@ -1138,8 +1154,6 @@ ON CONFLICT(id) DO UPDATE SET
 -- Location Q&A
 --------------------------------------------------------------------------------
 
-DROP TABLE IF EXISTS location_photos;
-
 CREATE TABLE IF NOT EXISTS location_qa (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1383,3 +1397,31 @@ CREATE INDEX IF NOT EXISTS idx_experience_bookings_experience
 
 CREATE INDEX IF NOT EXISTS idx_experience_bookings_site
   ON experience_bookings(site_id, status, created_at DESC);
+
+--------------------------------------------------------------------------------
+-- Site Events
+--------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS site_events (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  location_id TEXT,
+  actor_id TEXT,
+  event_type TEXT NOT NULL,
+  entity_type TEXT,
+  entity_id TEXT,
+  metadata TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE SET NULL,
+  FOREIGN KEY (actor_id) REFERENCES user(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_events_site
+  ON site_events(site_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_site_events_location
+  ON site_events(location_id, created_at DESC)
+  WHERE location_id IS NOT NULL;

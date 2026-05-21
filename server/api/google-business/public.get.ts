@@ -4,7 +4,7 @@ import { createError, defineEventHandler } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
 
   if (!db) {
     throw createError({ statusCode: 503, message: 'Database unavailable' })

@@ -13,19 +13,17 @@ Use this checklist when a restaurant owner needs to get from a blank KrabiClaw a
 
 ## Start Here
 
-1. Open [Your Sites](/dashboard/sites).
-2. Choose the restaurant site you are working on.
-3. Open [Setup](/dashboard/sites/{siteId}/setup) for the guided checklist.
-
-Replace `{siteId}` in dashboard links with the site id shown in your browser URL.
+1. Open [Dashboard](/dashboard).
+2. Use the location switcher in the dashboard header to choose the working location.
+3. Open [Setup](/dashboard/setup) for the guided checklist.
 
 ## Required Before Publishing
 
-- Confirm the restaurant name, phone, email, and address in [Site Settings](/dashboard/sites/{siteId}/settings).
-- Add the dining location in [Locations](/dashboard/sites/{siteId}/locations).
-- Add core menu sections and items in [Menus](/dashboard/sites/{siteId}/menu).
-- Upload real food, interior, and storefront photos in [Media](/dashboard/sites/{siteId}/media).
-- Review the public pages in [Content](/dashboard/sites/{siteId}/content).
+- Confirm the restaurant name, phone, email, and address in [Settings](/dashboard/settings).
+- Add the dining location in [Locations](/dashboard/locations).
+- Add core menu sections and items in [Menus](/dashboard/menu).
+- Upload real food, interior, and storefront photos in [Media](/dashboard/media).
+- Review the public pages in [Content](/dashboard/content).
 
 ## Recommended First Pages
 
@@ -61,10 +59,10 @@ Your restaurant details power the public site, customer contact points, Google s
 
 ## Exact Pages
 
-- Site-wide business details: [Site Settings](/dashboard/sites/{siteId}/settings)
-- Physical dining locations: [Locations](/dashboard/sites/{siteId}/locations)
-- Individual location edits: [Location Details](/dashboard/sites/{siteId}/locations/{locationId})
-- Customer-facing pages: [Content](/dashboard/sites/{siteId}/content)
+- Site-wide business details: [Settings](/dashboard/settings)
+- Physical dining locations: [Locations](/dashboard/locations)
+- Individual location edits: [Location Details](/dashboard/locations/{locationId})
+- Customer-facing pages: [Content](/dashboard/content)
 
 ## What To Add
 
@@ -110,9 +108,9 @@ The menu is usually the page customers care about most. Treat it as operating in
 
 ## Exact Pages
 
-- Menu list and sections: [Menus](/dashboard/sites/{siteId}/menu)
-- Add a dish: [New Menu Item](/dashboard/sites/{siteId}/menu/items/new)
-- Edit a dish: [Menu Item Editor](/dashboard/sites/{siteId}/menu/items/{itemId})
+- Menu list and sections: [Menus](/dashboard/menu)
+- Add a dish: [New Menu Item](/dashboard/menu/items/new)
+- Edit a dish: [Menu Item Editor](/dashboard/menu/items/{itemId})
 
 ## Recommended Structure
 
@@ -168,10 +166,10 @@ Connect Google Business Profile when the restaurant already maintains hours, pho
 
 ## Exact Pages
 
-- Site integrations: [Integrations](/dashboard/sites/{siteId}/integrations)
-- Location-specific Google connection: [Location Details](/dashboard/sites/{siteId}/locations/{locationId})
-- Reviews after sync: [Reviews](/dashboard/sites/{siteId}/reviews)
-- Photos after sync: [Photos](/dashboard/sites/{siteId}/photos)
+- Integrations: [Integrations](/dashboard/integrations)
+- Location-specific Google connection: [Location Details](/dashboard/locations/{locationId})
+- Reviews after sync: [Reviews](/dashboard/reviews)
+- Photos after sync: [Photos](/dashboard/photos)
 
 ## When To Connect
 
@@ -218,11 +216,11 @@ ChowBot helps restaurant owners make real site updates from chat and WhatsApp. I
 
 ## Exact Pages
 
-- ChowBot dashboard: [ChowBot](/dashboard/sites/{siteId}/chowbot)
-- Owner inbox: [Inbox](/dashboard/sites/{siteId}/inbox)
-- WhatsApp setup: [Integrations](/dashboard/sites/{siteId}/integrations)
-- Menu review after imports: [Menus](/dashboard/sites/{siteId}/menu)
-- Posts created from chat: [Posts](/dashboard/sites/{siteId}/posts)
+- ChowBot dashboard: [ChowBot](/dashboard/chowbot)
+- Owner inbox: [Inbox](/dashboard/inbox)
+- WhatsApp setup: [Integrations](/dashboard/integrations)
+- Menu review after imports: [Menus](/dashboard/menu)
+- Posts created from chat: [Posts](/dashboard/posts)
 
 ## Good Requests
 
@@ -236,10 +234,10 @@ ChowBot helps restaurant owners make real site updates from chat and WhatsApp. I
 
 Always review important operational changes in the dashboard page that owns the data:
 
-- Menu changes in [Menus](/dashboard/sites/{siteId}/menu)
-- Content changes in [Content](/dashboard/sites/{siteId}/content)
-- Posts in [Posts](/dashboard/sites/{siteId}/posts)
-- FAQs in [Q&A](/dashboard/sites/{siteId}/qa)
+- Menu changes in [Menus](/dashboard/menu)
+- Content changes in [Content](/dashboard/content)
+- Posts in [Posts](/dashboard/posts)
+- FAQs in [Q&A](/dashboard/qa)
 
 ## WhatsApp Rule
 
@@ -268,10 +266,10 @@ Restaurant content should help customers decide where to eat, what to order, and
 
 ## Exact Pages
 
-- Main website pages: [Content](/dashboard/sites/{siteId}/content)
-- Page editor: [Pages](/dashboard/sites/{siteId}/pages)
-- Restaurant updates: [Posts](/dashboard/sites/{siteId}/posts)
-- Media library: [Media](/dashboard/sites/{siteId}/media)
+- Main website pages: [Content](/dashboard/content)
+- Page editor: [Pages](/dashboard/pages)
+- Restaurant updates: [Posts](/dashboard/posts)
+- Media library: [Media](/dashboard/media)
 
 ## What Belongs On Core Pages
 
@@ -315,10 +313,10 @@ These pages handle high-intent customer interactions. Keep them accurate and che
 
 ## Exact Pages
 
-- Reservation requests: [Reservations](/dashboard/sites/{siteId}/reservations)
-- Customer reviews: [Reviews](/dashboard/sites/{siteId}/reviews)
-- Restaurant Q&A: [Q&A](/dashboard/sites/{siteId}/qa)
-- Customer messages: [Inbox](/dashboard/sites/{siteId}/inbox)
+- Reservation requests: [Reservations](/dashboard/reservations)
+- Customer reviews: [Reviews](/dashboard/reviews)
+- Restaurant Q&A: [Q&A](/dashboard/qa)
+- Customer messages: [Inbox](/dashboard/inbox)
 
 ## Reservations
 
@@ -368,10 +366,10 @@ Photos are not decoration for restaurant sites. They answer whether the food, ro
 
 ## Exact Pages
 
-- Upload and manage assets: [Media](/dashboard/sites/{siteId}/media)
-- Public photo gallery: [Photos](/dashboard/sites/{siteId}/photos)
-- Content pages that use images: [Content](/dashboard/sites/{siteId}/content)
-- Menu items that need food photos: [Menus](/dashboard/sites/{siteId}/menu)
+- Upload and manage assets: [Media](/dashboard/media)
+- Public photo gallery: [Photos](/dashboard/photos)
+- Content pages that use images: [Content](/dashboard/content)
+- Menu items that need food photos: [Menus](/dashboard/menu)
 
 ## Minimum Photo Set
 
@@ -399,6 +397,205 @@ Open the public site on mobile and check that photos crop well, do not hide impo
   'restaurant photos, food photography, restaurant media, menu photos, restaurant website images',
   'Beginner',
   8,
+  'published',
+  datetime('now'),
+  datetime('now'),
+  datetime('now')
+);
+
+INSERT OR REPLACE INTO platform_docs (id, title, slug, body, excerpt, category, author_id, seo_description, seo_keywords, difficulty_level, sort_order, status, published_at, created_at, updated_at)
+VALUES (
+  'doc-009',
+  'Restaurant SEO & Analytics Setup Guide',
+  'restaurant-seo-analytics-setup-guide',
+  '# Restaurant SEO & Analytics Setup Guide
+
+Search Engine Optimization (SEO) and web analytics are the difference between a beautiful restaurant website that stays quiet and a high-performance customer-acquisition engine that keeps your tables booked.
+
+This guide provides a comprehensive overview of how KrabiClaw optimizes your search presence under the hood and how to connect industry-standard tools like Google Search Console and Google Analytics (GA4) to maximize your visibility.
+
+---
+
+## 1. How KrabiClaw Handles SEO Automatically
+
+KrabiClaw is engineered from the ground up for speed, structural semantics, and maximum indexability. Out of the box, your storefront website includes:
+* **Server-Side Rendering (SSR)**: Nuxt prerenders your pages so search crawlers can instantly index your menu items, dishes, prices, and locations.
+* **Structured Data & Schema Markup**: We generate valid `Restaurant` and `Menu` JSON-LD schema markup. When Google indexes your site, it understands your location, currency, cuisine, and exact menu items, helping you rank for rich rich snippets (like star ratings and direct menu prices in Google search results).
+* **Vite-Optimized Performance**: With a sleek, lightweight CSS theme engine, storefronts load on mobile edge networks in milliseconds, satisfying Google’s strict Core Web Vitals requirements.
+* **Automatic XML Sitemaps**: Dynamic, live sitemaps are automatically compiled to tell search engines about new menu updates or blog posts instantly.
+
+---
+
+## 2. Setting Up Google Search Console (GSC)
+
+Google Search Console is a free service that helps you monitor, maintain, and troubleshoot your site''s presence in Google Search results. It tells you exactly what keywords guests are searching when they discover your restaurant.
+
+### Step 1: Add a Property in Google Search Console
+1. Go to the [Google Search Console Dashboard](https://search.google.com/search-console).
+2. Click **Add Property**.
+3. Select **URL prefix** and enter your restaurant''s canonical web address (e.g., `https://yourrestaurant.com` or your `*.krabiclaw.com` address).
+4. Click **Continue**.
+
+### Step 2: Retrieve the HTML Tag Verification Code
+1. Under **Other verification methods**, select **HTML tag**.
+2. Google will display a meta tag like this:
+   `<meta name="google-site-verification" content="YOUR_VERIFICATION_STRING" />`
+3. Copy only the value inside the `content="..."` attribute (the `YOUR_VERIFICATION_STRING` part).
+
+### Step 3: Enter Verification Code in KrabiClaw
+1. Open your KrabiClaw Dashboard and navigate to [Settings](/dashboard/settings).
+2. Scroll to the **SEO & Analytics** section.
+3. Paste your code into the **Google Search Console Verification** field.
+4. Click **Save Settings** in the bottom bar.
+5. Go back to Google Search Console and click **Verify**.
+
+---
+
+## 3. Setting Up Google Analytics (GA4)
+
+Google Analytics allows you to track website traffic, monitor guest behavior, and measure conversion events like menu clicks, calls, or reservation attempts.
+
+### Step 1: Create a Google Analytics 4 Property
+1. Go to the [Google Analytics Console](https://analytics.google.com/).
+2. Create a new Account or Property for your restaurant.
+3. In the Property setup, choose **Web** as the data stream platform.
+4. Enter your website URL and stream name (e.g., "Main Website"), and click **Create stream**.
+
+### Step 2: Find Your Measurement ID
+1. Once the web data stream is created, locate the **Measurement ID** in the top right corner.
+2. The ID always starts with **`G-`** followed by alphanumeric characters (e.g., `G-XXXXXXXXXX`). Copy this ID.
+
+### Step 3: Connect to KrabiClaw
+1. Go to your KrabiClaw Dashboard''s [Settings](/dashboard/settings).
+2. Locate the **SEO & Analytics** section.
+3. Paste the Measurement ID into the **Google Analytics Measurement ID** field.
+4. Click **Save Settings**.
+5. KrabiClaw will automatically compile the global site tag scripts and inject them dynamically in the head of your public storefront. Traffic will start registering inside Google Analytics within a few hours.
+
+---
+
+## 4. Operational SEO Checklist for Restaurant Owners
+
+To get ranked ahead of third-party delivery apps and directory websites, follow these local search best practices:
+
+* **Use a Primary Custom Domain**: Brands on custom domains (e.g., `sushibar.com`) consistently outrank generic platform subdomains. Add your domain in the [Domain Settings](/dashboard/settings) card.
+* **Keep Menu Prices Accurate**: Crawlers scan prices and compare them across local index data. Having matching menu prices on your website, Google Business Profile, and third-party menus builds search trust.
+* **Fill Out Business Descriptions Plainly**: Use clean, descriptive copy that states your cuisine, primary neighborhood, and location (e.g., "Family-style Italian kitchen in downtown Chiang Mai serving hand-tossed sourdough pizza and handmade pasta").
+* **Publish Regular Updates**: Post weekly updates (like holiday hours, seasonal menus, or event nights) on your [Posts](/dashboard/posts) page to keep crawl patterns frequent and fresh.',
+  'Optimize your restaurant''s search engine ranking and track customer traffic with Google Search Console and Google Analytics.',
+  'SEO & Marketing',
+  NULL,
+  'Ultimate guide to restaurant SEO, Google Analytics (GA4) setup, Google Search Console verification, custom domains, and local search strategies on KrabiClaw.',
+  'restaurant seo, google analytics restaurant, search console restaurant, local seo, restaurant marketing, rich snippets, schema markup',
+  'Intermediate',
+  9,
+  'published',
+  datetime('now'),
+  datetime('now'),
+  datetime('now')
+);
+
+INSERT OR REPLACE INTO platform_docs (id, title, slug, body, excerpt, category, author_id, seo_description, seo_keywords, difficulty_level, sort_order, status, published_at, created_at, updated_at)
+VALUES (
+  'doc-010',
+  'Managing Your Subscription, Invoices, and Credit Balance',
+  'manage-subscription-invoices-billing-portal',
+  '# Managing Your Subscription, Invoices, and Credit Balance
+
+KrabiClaw utilizes a secure self-service billing system powered by Stripe. You have complete control over your subscription plans, PDF tax invoices, and AI credit balances directly from your dashboard.
+
+---
+
+## 1. Accessing Your Billing Settings
+
+To manage your billing, plans, or check your credit balance:
+1. Open your [Dashboard](/dashboard).
+2. Navigate to **Billing** under the main menu sidebar or open [Billing Settings](/dashboard/billing) directly.
+3. Only organization owners have permission to access billing dashboards. If you receive an access error, confirm your membership role is set to Owner.
+
+---
+
+## 2. Secure self-service Stripe Customer Portal
+
+For high-security operations, KrabiClaw routes you to a secure Stripe-hosted Billing Portal. From this portal, you can:
+* **Download PDF Invoices**: Obtain official tax invoices and receipts for past subscription cycles.
+* **Update Payment Methods**: Add new credit or debit cards, remove expired cards, or set a primary payment source.
+* **Change Plans**: Switch between Pro and Enterprise tiers, or upgrade from the Free tier instantly.
+* **Cancel Subscription**: Downgrade back to the Free plan. Downgrades take effect at the end of your current billing period.
+
+To launch the portal, click the **Manage Subscription** button on the [Billing Dashboard](/dashboard/billing).
+
+---
+
+## 3. Purchasing AI Credit Top-Ups
+
+Your monthly AI credit allowance (500 for Free, 5,000 for Pro, 50,000 for Enterprise) powers automated workflows like photo menu extraction and natural language copywriting with ChowBot. 
+
+If you exhaust your monthly credit balance before the next billing cycle:
+* **No Site Disruptions**: Your website remains fully online and functional. Only new AI requests will return a "credits exhausted" alert.
+* **Flexibility**: You can buy one-time credit top-up packages directly from your [Billing Settings](/dashboard/billing) page.
+* **Top-Up Bundles**: Available in packs of 500, 2,500, or 5,000 credits.
+* **No Expiry**: Purchased top-up credits never expire and roll over indefinitely.
+
+---
+
+## 4. Refund Guarantee
+
+We stand behind our product. KrabiClaw offers a **30-day money-back guarantee** on all paid plans. If you are not satisfied with the platform for any reason, email hello@krabiclaw.com within 30 days of your first payment for a full refund.',
+  'Learn how to manage your subscription plan, download PDF tax invoices, update credit cards, and buy AI credits through the Stripe Customer Portal.',
+  'Getting Started',
+  NULL,
+  'Self-service guide to managing your KrabiClaw billing, Stripe Customer Portal, PDF tax invoices, payment updates, and AI credit packages.',
+  'restaurant billing, stripe customer portal, download invoice restaurant, update credit card, purchase ai credits, krabiclaw subscription',
+  'Beginner',
+  10,
+  'published',
+  datetime('now'),
+  datetime('now'),
+  datetime('now')
+);
+
+INSERT OR REPLACE INTO platform_docs (id, title, slug, body, excerpt, category, author_id, seo_description, seo_keywords, difficulty_level, sort_order, status, published_at, created_at, updated_at)
+VALUES (
+  'doc-011',
+  'Multi-Location Restaurant Billing and Proration Explained',
+  'multi-location-restaurant-billing-proration',
+  '# Multi-Location Restaurant Billing and Proration Explained
+
+KrabiClaw is built specifically to support multi-location restaurant brands. Our Pro plan scales dynamically with your physical presence, ensuring you only pay for what you actually use.
+
+---
+
+## 1. Per-Location Pricing Model
+
+On KrabiClaw, pricing scales on a **per-location** basis:
+* **The Shared Workspace is Free**: Your website design, global digital menus, domain settings, and dashboard user accounts are shared across your entire brand workspace at no extra cost.
+* **Per-Location Billing**: You only pay for active physical dining rooms. If you run one restaurant location, your Pro plan is $29/month. If you open a second dining room, the system scales to $58/month.
+
+---
+
+## 2. Dynamic Stripe Subscription Quantity Sync
+
+To make adding or removing locations frictionless, KrabiClaw automatically handles Stripe quantity mapping under the hood:
+1. **Adding a Location**: When you add a new business location from the [Locations Dashboard](/dashboard/locations), KrabiClaw immediately queries your active location count.
+2. **Stripe Quantity Match**: The platform immediately sends a webhook to Stripe, updating your subscription item quantity to match the new location count.
+3. **Automatic Proration**: Stripe automatically calculates the prorated difference. You will only pay the partial-month price for the new location for the remainder of your billing cycle.
+4. **Removing a Location**: If you deactivate or delete a location, the quantity on Stripe immediately adjusts downward. The lower pricing takes effect on your next monthly invoice.
+
+---
+
+## 3. Managing Inactive Locations
+
+If you have a location that operates seasonally (e.g., closed for winter) or is undergoing temporary renovations, you do not need to delete it and lose your custom data:
+* **Deactivate Status**: Toggle the location status to **Inactive** in [Location Settings](/dashboard/locations/{locationId}).
+* **Billing Impact**: Inactive locations do not count toward your active billing quantity. KrabiClaw will automatically reduce your Stripe quantity at the end of the current period, saving you money while preserving your setup.',
+  'Understand how our dynamic per-location billing model works, how Stripe prorations are calculated when adding locations, and how to manage seasonal closures.',
+  'Advanced',
+  NULL,
+  'Multi-location restaurant billing, Stripe proration explanation, adding locations, managing seasonal restaurant status, and Pro plan scaling rules.',
+  'multi location billing, restaurant billing proration, stripe proration restaurant, seasonal location closing, krabiclaw pro plan',
+  'Intermediate',
+  11,
   'published',
   datetime('now'),
   datetime('now'),

@@ -13,7 +13,7 @@ const BUNDLE_PRICE_MAP: Record<number, keyof NodeJS.ProcessEnv> = {
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const session = await getAuthSession(event, env)
@@ -65,11 +65,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const member = await db.prepare(
-    'SELECT organizationId FROM member WHERE userId = ? LIMIT 1'
-  ).bind(session.user.id).first() as { organizationId: string } | null
+    'SELECT m.organizationId, o.slug FROM member m JOIN organization o ON o.id = m.organizationId WHERE m.userId = ? LIMIT 1'
+  ).bind(session.user.id).first() as { organizationId: string; slug: string | null } | null
   if (!member) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
   const orgId = member.organizationId
+  const orgSlug = member.slug
 
   const billing = await db.prepare(
     'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1'
@@ -87,8 +88,8 @@ export default defineEventHandler(async (event) => {
     payment_intent_data: {
       setup_future_usage: 'off_session',
     },
-    success_url: `${origin}/dashboard/billing?credits_success=true`,
-    cancel_url: `${origin}/dashboard/billing`,
+    success_url: `${origin}/dashboard/${orgSlug}/settings/billing?credits_success=true`,
+    cancel_url: `${origin}/dashboard/${orgSlug}/settings/billing`,
     metadata: {
       organization_id: orgId,
       type: 'credit_topup',

@@ -21,29 +21,43 @@ function appendQuery(path: string, query: Record<string, string | null | undefin
   return queryString ? `${path}?${queryString}` : path
 }
 
-export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: MaybeRef<string | null | undefined>) {
-  const normalizedSiteId = computed(() => String(unref(siteId) || ''))
+export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: MaybeRef<string | null | undefined>, orgSlug?: MaybeRef<string | null | undefined>) {
+  void siteId
+  const dashboard = useDashboardRestaurant()
 
   const paths = computed(() => {
-    const base = `/dashboard/sites/${normalizedSiteId.value}`
+    const base = '/dashboard'
+    const slug = orgSlug ? unref(orgSlug) : dashboard.organization.value?.slug
+    const locationSlug = dashboard.selectedLocation.value?.slug
+    const orgBase = slug ? `${base}/${slug}` : base
+    const projectBase = slug && locationSlug ? `${orgBase}/${locationSlug}` : orgBase
+    const settingsBase = `${orgBase}/~/settings`
     return {
       base,
-      chowbot: `${base}/chowbot`,
-      setup: `${base}/setup`,
-      pages: `${base}/pages`,
-      content: `${base}/content`,
-      menu: `${base}/menu`,
-      posts: `${base}/posts`,
-      reviews: `${base}/reviews`,
-      photos: `${base}/photos`,
-      qa: `${base}/qa`,
-      inbox: `${base}/inbox`,
-      reservations: `${base}/reservations`,
-      order: `${base}/order`,
-      integrations: `${base}/integrations`,
-      media: `${base}/media`,
-      locations: `${base}/locations`,
-      settings: `${base}/settings`
+      org: orgBase,
+      project: projectBase,
+      chowbot: `${projectBase}/chowbot`,
+      pages: `${projectBase}/pages`,
+      content: `${projectBase}/content`,
+      menu: `${projectBase}/menu`,
+      posts: `${projectBase}/posts`,
+      reviews: `${projectBase}/reviews`,
+      photos: `${projectBase}/photos`,
+      qa: `${projectBase}/qa`,
+      inbox: `${projectBase}/inbox`,
+      reservations: `${projectBase}/reservations`,
+      order: `${projectBase}/order`,
+      media: `${projectBase}/media`,
+      locations: orgBase,
+      integrations: `${orgBase}/integrations`,
+      translations: `${orgBase}/translations`,
+      settings: settingsBase,
+      settingsGeneral: `${settingsBase}/general`,
+      settingsBilling: `${settingsBase}/billing`,
+      // Account-level (no slug)
+      account: `${base}/account/settings`,
+      accountAuthentication: `${base}/account/settings/authentication`,
+      accountBillingItems: `${base}/account/settings/billing-items`,
     }
   })
 
@@ -77,9 +91,9 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
   }))
 
   const overviewLink = computed<DashboardActionLink>(() => ({
-    label: 'Overview',
+    label: 'Restaurant',
     icon: 'i-heroicons-home',
-    to: paths.value.base,
+    to: paths.value.org,
     color: 'neutral',
     variant: 'soft'
   }))
@@ -95,7 +109,10 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     return links
   }
 
-  const locationPath = (locationId: string) => `${paths.value.locations}/${locationId}`
+  const locationPath = (locationId: string) => {
+    const location = dashboard.locations.value.find(candidate => candidate.id === locationId || candidate.slug === locationId)
+    return `${paths.value.org}/${location?.slug ?? locationId}`
+  }
   const locationMenuPath = (locationId: string) => appendQuery(paths.value.menu, { locationId })
   const locationContentPath = (locationId: string) => appendQuery(paths.value.content, { locationId, page: 'location' })
 
@@ -109,7 +126,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     query: page ? { page } : {}
   })
 
-  const editorBackPath = computed(() => paths.value.base)
+  const editorBackPath = computed(() => paths.value.project)
 
   return {
     paths,

@@ -1,7 +1,7 @@
 // Create Stripe checkout session for organization
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getStripe, getPriceId, requireBillingAccess } from '../../utils/billing'
+import { getStripe, getPriceIdForPlan, requireBillingAccess } from '../../utils/billing'
 
 interface CheckoutRequest {
   organizationId?: string
@@ -21,9 +21,9 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Plan is required' }, { status: 400 })
   }
 
-  if (plan !== 'pro' && plan !== 'agency') {
+  if (plan !== 'pro' && plan !== 'enterprise') {
     return jsonResponse({
-      error: 'Invalid plan. Allowed values are pro or agency'
+      error: 'Invalid plan. Allowed values are pro or enterprise'
     }, { status: 400 })
   }
 
@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
   }
   
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   
   if (!db) {
     return jsonResponse({ 
@@ -60,17 +60,22 @@ export default defineEventHandler(async (event) => {
 
   // Auto-detect org from session when not provided (e.g. pricing page CTA)
   if (!organizationId) {
-    const userOrgs = await db.prepare(`
-      SELECT organizationId FROM member WHERE userId = ?
-    `).bind(session.user.id).all() as { results: Array<{ organizationId: string }> } | null
-    const orgIds = userOrgs?.results?.map((r) => r.organizationId) ?? []
-    if (orgIds.length === 0) {
+    const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string }
+    const activeOrganizationId = typeof sessionRecord.activeOrganizationId === 'string'
+      ? sessionRecord.activeOrganizationId
+      : ''
+    const userOrg = await db.prepare(`
+      SELECT o.id AS organizationId
+      FROM organization o
+      JOIN member m ON o.id = m.organizationId
+      WHERE m.userId = ?
+      ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC
+      LIMIT 1
+    `).bind(session.user.id, activeOrganizationId).first<{ organizationId: string }>()
+    if (!userOrg) {
       return jsonResponse({ error: 'No organization found' }, { status: 404 })
     }
-    if (orgIds.length > 1) {
-      return jsonResponse({ error: 'User belongs to multiple organizations. Please specify organizationId.' }, { status: 400 })
-    }
-    organizationId = orgIds[0]!
+    organizationId = userOrg.organizationId
   }
 
   const orgId: string = organizationId!
@@ -81,10 +86,10 @@ export default defineEventHandler(async (event) => {
     
     // Get organization details
     const organization = await db.prepare(`
-      SELECT o.name, b.stripe_customer_id FROM organization o
+      SELECT o.name, o.slug, b.stripe_customer_id FROM organization o
       LEFT JOIN organization_billing b ON o.id = b.organization_id
       WHERE o.id = ?
-    `).bind(orgId).first<{ name: string; stripe_customer_id: string | null }>()
+    `).bind(orgId).first<{ name: string; slug: string | null; stripe_customer_id: string | null }>()
     
     if (!organization) {
       return jsonResponse({ 
@@ -95,7 +100,7 @@ export default defineEventHandler(async (event) => {
     // Get price ID for plan + interval
     let priceId: string
     try {
-      priceId = getPriceId(env, plan, interval)
+      priceId = await getPriceIdForPlan(env, plan, interval)
     } catch (error) {
       console.error('Invalid Stripe pricing configuration in checkout', { plan, interval, error })
       return jsonResponse({
@@ -132,7 +137,6 @@ export default defineEventHandler(async (event) => {
     // Create checkout session
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: customerId,
-      payment_method_types: ['card'],
       mode: 'subscription',
       line_items: [
         {
@@ -140,8 +144,8 @@ export default defineEventHandler(async (event) => {
           quantity: 1
         }
       ],
-      success_url: successUrl || `${getRequestURL(event).origin}/dashboard/billing?success=true`,
-      cancel_url: cancelUrl || `${getRequestURL(event).origin}/dashboard/billing?canceled=true`,
+      success_url: successUrl || `${getRequestURL(event).origin}/dashboard/${organization.slug}/settings/billing?success=true`,
+      cancel_url: cancelUrl || `${getRequestURL(event).origin}/dashboard/${organization.slug}/settings/billing?canceled=true`,
       metadata: {
         organization_id: organizationId,
         plan

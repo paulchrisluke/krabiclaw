@@ -23,7 +23,7 @@ export const useChowBotHistory = () => {
   const conversationsBySite = conversationsState()
 
   const load = async (siteId: string) => {
-    const res = await $fetch<{ conversations: ChowBotConv[] }>(`/api/ai/${siteId}/conversations`)
+    const res = await $fetch<{ conversations: ChowBotConv[] }>(`/api/dashboard/ai/conversations`)
     conversationsBySite.value = {
       ...conversationsBySite.value,
       [siteId]: res.conversations ?? [],
@@ -33,7 +33,7 @@ export const useChowBotHistory = () => {
   const forSite = (siteId: string): ChowBotConv[] => conversationsBySite.value[siteId] ?? []
 
   const get = async (siteId: string, conversationId: string): Promise<{ conversation: ChowBotConv; messages: ChowbotMessage[] }> => {
-    const res = await $fetch<{ conversation: ChowBotConv; messages: StoredMessage[] }>(`/api/ai/${siteId}/conversations/${conversationId}`)
+    const res = await $fetch<{ conversation: ChowBotConv; messages: StoredMessage[] }>(`/api/dashboard/ai/conversations/${conversationId}`)
     return {
       conversation: res.conversation,
       messages: (res.messages ?? [])
@@ -56,7 +56,7 @@ export const useChowBotHistory = () => {
     }
 
     try {
-      await $fetch(`/api/ai/${siteId}/conversations/${conversationId}`, { method: 'DELETE' })
+      await $fetch(`/api/dashboard/ai/conversations/${conversationId}`, { method: 'DELETE' })
       await load(siteId)
     } catch (error) {
       console.error('Failed to remove conversation:', error)

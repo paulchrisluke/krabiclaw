@@ -59,7 +59,7 @@ export const useEditorContext = (siteId?: string) => {
       const response = await $fetch<{
         success: boolean
         context: EditorContext
-      }>(`/api/editor/sites/${effectiveSiteId.value}/context`)
+      }>(`/api/dashboard/editor/context`)
 
       if (response.success) {
         context.value = response.context

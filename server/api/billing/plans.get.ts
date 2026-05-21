@@ -114,9 +114,9 @@ const STATIC_PLANS: Plan[] = [
     cta: { label: 'Get Started', href: '/signup?plan=pro' },
   },
   {
-    id: 'agency',
-    name: 'Agency',
-    tagline: 'Unlimited sites, one flat rate',
+    id: 'enterprise',
+    name: 'Enterprise',
+    tagline: 'Advanced features and higher AI capacity',
     highlighted: false,
     prices: [
       { id: '', amount: 9900, currency: 'usd', interval: 'month' },
@@ -124,7 +124,7 @@ const STATIC_PLANS: Plan[] = [
     ],
     features: [
       'Everything in Pro, plus:',
-      'Unlimited sites at one flat rate',
+      'Enterprise AI credit allowance',
       'API access',
       'White-label ready',
       'Dedicated account manager',
@@ -133,7 +133,7 @@ const STATIC_PLANS: Plan[] = [
     ],
     limits: {
       locations: 'unlimited',
-      sites: 'unlimited',
+      sites: 1,
       aiCredits: 50000,
       customDomain: true,
       googleBusiness: true,
@@ -161,7 +161,7 @@ function parseLimits(metadata: Record<string, string>): Partial<PlanLimits> {
     locations: loc === 'unlimited' ? 'unlimited' : parseOptionalInt(loc),
     sites: sit === 'unlimited' ? 'unlimited' : parseOptionalInt(sit),
     aiCredits: parseOptionalInt(credits),
-    customDomain: metadata.custom_domain === 'true',
+    customDomain: metadata.custom_domain === 'true' || metadata.custom_domains === 'true',
     googleBusiness: metadata.google_business === 'true',
     advancedSeo: metadata.advanced_seo === 'true',
     whiteLabel: metadata.white_label === 'true',

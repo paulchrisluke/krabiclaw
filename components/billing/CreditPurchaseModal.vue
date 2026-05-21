@@ -28,7 +28,7 @@
             <p class="text-sm font-medium text-highlighted">Never run out of credits</p>
             <p class="text-xs text-muted">Auto top-up this amount when balance drops below 100</p>
           </div>
-          <UToggle v-model="wantsAutoTopup" class="ml-4 shrink-0" />
+          <USwitch v-model="wantsAutoTopup" class="ml-4 shrink-0" />
         </div>
       </div>
     </template>

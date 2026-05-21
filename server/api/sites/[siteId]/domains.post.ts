@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
   if (!requestedDomain) return jsonResponse({ error: 'Domain is required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const session = await getAuthSession(event, env)
@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
       actorType
     })
 
-    const dashboardUrl = `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/sites/${siteId}/settings`
+    const dashboardUrl = `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/settings`
     for (const domain of domains) {
       await notifyDomainLifecycle(env, db, {
         organizationId: site.organization_id,

@@ -18,18 +18,18 @@ export default defineTask({
   async run({ context }) {
     const taskContext = context as TranslationTaskContext | undefined
     const env = taskContext?.cloudflare?.env ?? {}
-    const db = env.REVIEWS_DB
+    const db = env.DB
     if (!db && import.meta.dev) {
       const result: TranslationTaskResult = {
         processed_jobs: 0,
         results: [],
-        skipped: 'REVIEWS_DB unavailable in local scheduled task context',
+        skipped: 'DB unavailable in local scheduled task context',
       }
       return {
         result
       }
     }
-    if (!db) throw new Error('REVIEWS_DB is required')
+    if (!db) throw new Error('DB is required')
 
     const processed = await processQueuedTranslationJobs(db, env, {
       limit: 3,

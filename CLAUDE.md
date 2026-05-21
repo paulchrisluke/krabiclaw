@@ -7,7 +7,7 @@ When an internal API returns errors, nulls, or malformed data, fix the API contr
 ## Stack
 
 - **Nuxt 4** + **Nitro** with `cloudflare-pages` preset
-- **D1** (SQLite) via `@atinux/kysely-d1` — single binding: `REVIEWS_DB`
+- **D1** (SQLite) via `@atinux/kysely-d1` — single binding: `DB`
 - **Better Auth 1.6+** — Google OAuth + `organization` plugin; `phoneNumber` plugin for WhatsApp OTP
 - **Stripe** — subscriptions, entitlements
 - **Cloudflare Workers** — serverless runtime
@@ -70,7 +70,7 @@ When an internal API returns errors, nulls, or malformed data, fix the API contr
 ## Multi-Tenancy
 
 - Organizations map 1:1 with restaurant owners (Better Auth `organization` plugin)
-- Sites belong to an org; multiple sites per org supported
+- One site per org — enforced by unique index on `sites(organization_id)`
 - Tenant resolution: `server/middleware/tenant-resolution.ts`
   - `localhost` / `krabiclaw.com` = platform routes
   - `*.krabiclaw.com` or custom domains = tenant sites
@@ -92,7 +92,7 @@ When an internal API returns errors, nulls, or malformed data, fix the API contr
 ## Local Testing
 
 - Dev login (bypasses OAuth): `http://localhost:3000/api/dev/login` — only works in `import.meta.dev`, creates session for first local D1 user
-- To test `/admin` locally, promote a user: `yarn wrangler d1 execute REVIEWS_DB --local --command "UPDATE user SET role = 'admin' WHERE lower(email) = 'your@email.com';"`
+- To test `/admin` locally, promote a user: `yarn wrangler d1 execute DB --local --command "UPDATE user SET role = 'admin' WHERE lower(email) = 'your@email.com';"`
 - Stripe webhooks: run `yarn stripe:listen` in a second terminal; use the CLI-output signing secret as `STRIPE_WEBHOOK_SECRET` in `.env` during local dev only
 
 ---
@@ -100,3 +100,11 @@ When an internal API returns errors, nulls, or malformed data, fix the API contr
 ## MCP
 
 - Nuxt UI MCP server required for building UI components with Nuxt UI integration
+
+---
+
+## Design System Enforcement
+
+- Never bypass Nuxt UI layout components (`UCard`, `UPage`, `UPageHeader`) to write custom Tailwind `div` wrappers, even when matching external design references. 
+- If a specific visual layout (like a flat Vercel card) is needed, you must use the Nuxt UI component and override its specific tokens via the `:ui` prop (e.g., `<UCard :ui="{ shadow: '', rounded: 'rounded-xl', body: { padding: 'p-0' } }">`). 
+- Do not introduce custom `border` or `bg` classes that break the global theme inheritance.

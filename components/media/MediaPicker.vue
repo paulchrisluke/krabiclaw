@@ -174,7 +174,7 @@ watch(() => props.modelValue, async (id) => {
 
   try {
     const res = await $fetch<{ media: PickerMediaAsset[] }>(
-      `/api/editor/sites/${props.siteId}/media?id=${encodeURIComponent(id)}&limit=1`,
+      `/api/dashboard/editor/media?id=${encodeURIComponent(id)}&limit=1`,
       { signal: controller.signal }
     )
 

@@ -34,7 +34,7 @@
         <p>KrabiClaw will not be held liable for any indirect, incidental, or consequential damages resulting from the use of our services.</p>
 
         <h2>5. Governing Law</h2>
-        <p>These Terms and Conditions are governed by and construed in accordance with the laws of Thailand.</p>
+        <p>These Terms and Conditions are governed by and construed in accordance with the laws of the jurisdiction in which the service operator is registered.</p>
 
         <h2>6. Contact Us</h2>
         <p>If you have any questions about these Terms and Conditions, please contact us at:</p>

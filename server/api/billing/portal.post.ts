@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   }
   
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   
   if (!db) {
     return jsonResponse({ 
@@ -49,10 +49,10 @@ export default defineEventHandler(async (event) => {
     
     // Get organization with Stripe customer
     const organization = await db.prepare(`
-      SELECT o.name, b.stripe_customer_id FROM organization o
+      SELECT o.name, o.slug, b.stripe_customer_id FROM organization o
       LEFT JOIN organization_billing b ON o.id = b.organization_id
       WHERE o.id = ?
-    `).bind(organizationId).first<{ stripe_customer_id: string | null }>()
+    `).bind(organizationId).first<{ slug: string | null; stripe_customer_id: string | null }>()
     
     if (!organization) {
       return jsonResponse({ 
@@ -71,7 +71,7 @@ export default defineEventHandler(async (event) => {
     // Create billing portal session
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: organization.stripe_customer_id,
-      return_url: returnUrl || `${getRequestURL(event).origin}/dashboard/billing`
+      return_url: returnUrl || `${getRequestURL(event).origin}/dashboard/${organization.slug}/settings/billing`
     })
 
     return jsonResponse({

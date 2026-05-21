@@ -10,7 +10,7 @@ interface JsonObject {
 type JsonRecord = Record<string, JsonValue>
 
 export interface GoogleBusinessEnv {
-  REVIEWS_DB: D1Database
+  DB: D1Database
   CONNECTOR_TOKEN_ENCRYPTION_KEY?: string
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
@@ -297,7 +297,7 @@ export const storeGoogleBusinessConnection = async (
   env: GoogleBusinessEnv,
   connection: Omit<GoogleBusinessConnection, 'id' | 'created_at' | 'updated_at'>
 ): Promise<string> => {
-  if (!env.REVIEWS_DB) {
+  if (!env.DB) {
     throw new Error('Database not available')
   }
 
@@ -310,7 +310,7 @@ export const storeGoogleBusinessConnection = async (
   const encryptedAccessToken = await encryptSecret(connection.encrypted_access_token, tokenEnv)
   const encryptedRefreshToken = await encryptSecret(connection.encrypted_refresh_token, tokenEnv)
 
-  await env.REVIEWS_DB.prepare(`
+  await env.DB.prepare(`
     INSERT OR REPLACE INTO google_business_connections
     (id, organization_id, site_id, location_id, connected_by_user_id, provider_account_email,
      encrypted_access_token, encrypted_refresh_token, scopes, expires_at, status, created_at, updated_at)
@@ -341,20 +341,20 @@ export const getGoogleBusinessConnection = async (
   siteId: string,
   locationId?: string
 ): Promise<GoogleBusinessConnection | null> => {
-  if (!env.REVIEWS_DB) {
+  if (!env.DB) {
     return null
   }
 
   let connection: GoogleBusinessConnection | null
 
   if (locationId) {
-    connection = await env.REVIEWS_DB.prepare(`
+    connection = await env.DB.prepare(`
       SELECT * FROM google_business_connections
       WHERE organization_id = ? AND site_id = ? AND location_id = ? AND status = 'active'
       LIMIT 1
     `).bind(organizationId, siteId, locationId).first() as GoogleBusinessConnection | null
   } else {
-    connection = await env.REVIEWS_DB.prepare(`
+    connection = await env.DB.prepare(`
       SELECT * FROM google_business_connections
       WHERE organization_id = ? AND site_id = ? AND location_id IS NULL AND status = 'active'
       LIMIT 1
@@ -416,7 +416,7 @@ export const syncGoogleLocations = async (
   connectionId: string,
   locations: GoogleLocation[]
 ): Promise<void> => {
-  if (!env.REVIEWS_DB) {
+  if (!env.DB) {
     throw new Error('Database not available')
   }
 
@@ -427,7 +427,7 @@ export const syncGoogleLocations = async (
     const slug = generateLocationSlug(location.title)
 
     // Check if location already exists
-    const existing = await env.REVIEWS_DB.prepare(`
+    const existing = await env.DB.prepare(`
       SELECT id FROM business_locations 
       WHERE organization_id = ? AND site_id = ? AND google_location_id = ?
       LIMIT 1
@@ -435,7 +435,7 @@ export const syncGoogleLocations = async (
 
     if (existing) {
       // Update existing location
-      await env.REVIEWS_DB.prepare(`
+      await env.DB.prepare(`
         UPDATE business_locations 
         SET title = ?, address = ?, phone = ?, website_url = ?, 
             latitude = ?, longitude = ?, rating = ?, review_count = ?,
@@ -458,7 +458,7 @@ export const syncGoogleLocations = async (
       ).run()
     } else {
       // Insert new location
-      await env.REVIEWS_DB.prepare(`
+      await env.DB.prepare(`
         INSERT INTO business_locations 
         (id, organization_id, site_id, google_location_id, 
          slug, title, address, phone, website_url, latitude, longitude, 

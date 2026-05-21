@@ -14,7 +14,7 @@
             </span>
           </NuxtLink>
           <p class="text-[13px] leading-relaxed text-inverted/60 max-w-75">
-            The Shopify for restaurants. Built in Krabi, Thailand. 🦀
+            The Shopify for restaurants. Empowering independent eateries globally. 🦀
           </p>
         </div>
 
@@ -57,7 +57,7 @@
 
       <!-- Bottom bar -->
       <div class="border-t border-inverted/10 pt-6 text-center text-[12px] text-inverted/50">
-        &copy; {{ new Date().getFullYear() }} KrabiClaw Co., Ltd. — Made with care in Krabi, Thailand.
+        &copy; {{ new Date().getFullYear() }} KrabiClaw. All rights reserved. Built for independent restaurants globally.
       </div>
     </div>
   </footer>
@@ -65,7 +65,7 @@
 
 <script setup>
 const productLinks = [
-  { label: 'Features', to: '/#features' },
+  { label: 'Features', to: '/features' },
   { label: 'Pricing', to: '/pricing' },
   { label: 'Templates', to: '/templates' },
   { label: 'Changelog', to: '/changelog' },

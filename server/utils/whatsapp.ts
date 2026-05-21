@@ -107,7 +107,7 @@ const TEMPLATES: Record<
       type: 'body',
       parameters: [
         { type: 'text', text: v.credits_remaining ?? '0' },
-        { type: 'text', text: v.upgrade_url ?? 'https://krabiclaw.com/dashboard/billing' },
+        { type: 'text', text: v.upgrade_url ?? 'https://krabiclaw.com/dashboard' },
       ],
     }],
   }),

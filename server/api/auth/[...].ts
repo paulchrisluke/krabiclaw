@@ -36,7 +36,7 @@ async function normalizedAuthRequest(event: H3Event): Promise<Request> {
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event) as CloudflareEnv
-  if (!env?.REVIEWS_DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
+  if (!env?.DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
 
   const auth = createAuth(env)
   

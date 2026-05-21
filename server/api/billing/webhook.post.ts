@@ -1,6 +1,6 @@
 // Handle Stripe webhooks for subscription management
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
-import { verifyStripeWebhook, setOrganizationEntitlementsFromPlan } from '../../utils/billing'
+import { verifyStripeWebhook, setOrganizationEntitlementsFromPlan, getPlanFromStripePrice } from '../../utils/billing'
 import { deleteOrganizationCustomDomains } from '../../utils/domains'
 import Stripe from 'stripe'
 
@@ -21,7 +21,7 @@ interface SubscriptionTimingFields {
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   
   if (!db) {
     return jsonResponse({ 
@@ -220,7 +220,7 @@ async function handleSubscriptionUpdated(env: Record<string, string | undefined>
     billing.organization_id
   ).run()
 
-  const plan = getPlanFromSubscription(env, subscription)
+  const plan = await getPlanFromSubscription(env, subscription)
   if (plan) {
     await setOrganizationEntitlementsFromPlan(env, db, billing.organization_id, plan)
   } else {
@@ -329,13 +329,10 @@ async function handleCreditTopup(db: D1Database, organizationId: string, credits
 }
 
 // Extract plan from subscription items
-function getPlanFromSubscription(env: Record<string, string | undefined>, subscription: Stripe.Subscription): string | null {
+async function getPlanFromSubscription(env: Record<string, string | undefined>, subscription: Stripe.Subscription): Promise<string | null> {
   const priceId = subscription.items.data[0]?.price.id
   
   if (!priceId) return null
 
-  if (priceId === env.STRIPE_PRICE_PRO_MONTHLY || priceId === env.STRIPE_PRICE_PRO_ANNUAL) return 'pro'
-  if (priceId === env.STRIPE_PRICE_AGENCY_MONTHLY || priceId === env.STRIPE_PRICE_AGENCY_ANNUAL) return 'agency'
-  
-  return null
+  return await getPlanFromStripePrice(env, priceId)
 }

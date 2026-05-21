@@ -9,7 +9,7 @@ CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
 #   yarn wrangler pages secret put CRON_SECRET
 
 [[d1_databases]]
-binding = "REVIEWS_DB"
+binding = "DB"
 database_name = "thaiclaw-reviews"
 database_id = "57cc9c44-1a23-41c3-8ec9-6b404c12ca2c"
 

@@ -14,7 +14,11 @@ export async function seedNewSite(
 
   const { organizationId, siteId, restaurantName } = params
 
-  const locationId = uid('loc')
+  // Reuse existing location on resume (site may have failed mid-seed)
+  const existing = await db.prepare(
+    'SELECT id FROM business_locations WHERE site_id = ? AND slug = ? LIMIT 1'
+  ).bind(siteId, 'main').first<{ id: string }>()
+  const locationId = existing?.id ?? uid('loc')
   const heroMediaId = uid('media')
   const storyMediaId = uid('media')
   const menuId = uid('menu')
@@ -37,7 +41,7 @@ export async function seedNewSite(
     INSERT OR IGNORE INTO media_assets
       (id, organization_id, site_id, location_id, kind, provider, source,
        public_url, thumbnail_url, mime_type, file_name, alt_text, status)
-    VALUES (?, ?, ?, ?, 'image', 'external_url', 'template',
+    VALUES (?, ?, ?, ?, 'image', 'external_url', 'external',
       'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&q=80',
       'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=70',
       'image/jpeg', 'hero.jpg', ?, 'active')
@@ -54,7 +58,7 @@ export async function seedNewSite(
     INSERT OR IGNORE INTO media_assets
       (id, organization_id, site_id, location_id, kind, provider, source,
        public_url, thumbnail_url, mime_type, file_name, alt_text, status)
-    VALUES (?, ?, ?, ?, 'image', 'external_url', 'template',
+    VALUES (?, ?, ?, ?, 'image', 'external_url', 'external',
       'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=1400&q=85',
       'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=600&q=70',
       'image/jpeg', 'story.jpg', ?, 'active')

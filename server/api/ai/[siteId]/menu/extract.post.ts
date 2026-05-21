@@ -47,7 +47,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
 
   if (!db) {
     return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -60,19 +60,20 @@ export default defineEventHandler(async (event) => {
 
   // Verify user owns this site
   const site = await db.prepare(`
-    SELECT s.id, s.organization_id
+    SELECT s.id, s.organization_id, o.slug as org_slug
     FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member om ON o.id = om.organizationId
     WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
     LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; org_slug: string | null }>()
 
   if (!site) {
     return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
   }
 
   const orgId: string = site.organization_id
+  const orgSlug: string = site.org_slug ?? orgId
 
   // Check credits before doing anything expensive (skipped in local dev)
   const isDev = import.meta.dev
@@ -241,7 +242,7 @@ export default defineEventHandler(async (event) => {
       template: 'ai_action_complete',
       vars: {
         action_summary: `${createdItems.length} menu item${createdItems.length === 1 ? '' : 's'} extracted and saved as draft`,
-        preview_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/sites/${siteId}/menu`,
+        preview_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/menu`,
       },
     }).catch(console.error)
 
@@ -254,7 +255,7 @@ export default defineEventHandler(async (event) => {
         template: 'low_credits',
         vars: {
           credits_remaining: String(newBalance),
-          upgrade_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/billing`,
+          upgrade_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/${orgSlug}/settings/billing`,
         },
       }).catch(console.error)
     }

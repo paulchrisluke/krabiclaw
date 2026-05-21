@@ -14,15 +14,10 @@
         </UButton>
       </div>
     </div>
-    <UDashboardGroup
-      unit="rem"
-      :min-size="14"
-      :default-size="18"
-      :max-size="24"
-    >
+
+    <UDashboardGroup unit="rem" :min-size="14" :default-size="18" :max-size="24">
       <UDashboardSidebar resizable collapsible>
         <template #header="{ collapsed }">
-          <!-- Admin level -->
           <template v-if="inAdminWorkspace">
             <div v-if="collapsed" class="flex items-center justify-center">
               <div class="flex size-8 items-center justify-center rounded-lg bg-error">
@@ -34,159 +29,289 @@
             </div>
           </template>
 
-          <!-- Org level -->
-          <template v-else-if="!inSiteWorkspace">
-            <div v-if="collapsed" class="flex items-center justify-center">
-              <div class="flex size-8 items-center justify-center rounded-lg bg-primary">
-                <span class="text-sm font-bold text-white">K</span>
-              </div>
-            </div>
-            <div v-else class="px-2">
-              <span class="font-semibold text-sm">KrabiClaw</span>
-            </div>
-          </template>
-          
-          <!-- Site level — show site selector with back button -->
-          <template v-else-if="inSiteWorkspace">
-            <div v-if="collapsed" class="flex items-center justify-center">
-              <div class="flex size-8 items-center justify-center rounded-lg bg-primary">
-                <span class="text-sm font-bold text-white">K</span>
-              </div>
-            </div>
-            <div v-else class="flex items-center gap-2 px-2 min-w-0 overflow-hidden">
+          <template v-else-if="inLocationWorkspace">
+            <div v-if="collapsed" class="flex items-center justify-center w-full">
               <UButton
-                to="/dashboard/sites"
-                icon="i-heroicons-arrow-left"
-                variant="ghost"
+                :to="orgBase ?? '/dashboard'"
+                icon="i-lucide-arrow-left"
                 color="neutral"
-                size="xs"
-                class="shrink-0"
+                variant="ghost"
+                size="sm"
+                aria-label="Back to Restaurant"
               />
-              <UDropdownMenu
-                :items="siteMenuItems"
-                :content="{ align: 'start', collisionPadding: 12 }"
-                :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-52' }"
-              >
-                <UButton
-                  v-bind="selectedSiteButton"
-                  trailing-icon="i-lucide-chevrons-up-down"
-                  color="neutral"
-                  variant="ghost"
-                  square
-                  class="w-full data-[state=open]:bg-elevated overflow-hidden"
-                  :ui="{ trailingIcon: 'text-dimmed ms-auto' }"
-                />
-              </UDropdownMenu>
             </div>
+            <NuxtLink
+              v-else
+              :to="orgBase ?? '/dashboard'"
+              class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
+            >
+              <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
+              <span class="truncate">{{ currentLocation?.title ?? 'Location' }}</span>
+            </NuxtLink>
           </template>
+
+          <template v-else-if="inSettingsWorkspace">
+            <div v-if="collapsed" class="flex items-center justify-center w-full">
+              <UButton
+                :to="orgBase ?? '/dashboard'"
+                icon="i-lucide-arrow-left"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                aria-label="Back to Dashboard"
+              />
+            </div>
+            <NuxtLink
+              v-else
+              :to="orgBase ?? '/dashboard'"
+              class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
+            >
+              <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
+              <span class="truncate">Back to Dashboard</span>
+            </NuxtLink>
+          </template>
+
+          <UDropdownMenu
+            v-else
+            :items="organizationMenuItems"
+            :content="{ align: 'start', collisionPadding: 12 }"
+            :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-64' }"
+          >
+            <UButton
+              :avatar="organizationAvatar"
+              :label="collapsed ? undefined : organizationLabel"
+              trailing-icon="i-lucide-chevrons-up-down"
+              color="neutral"
+              variant="ghost"
+              class="w-full data-[state=open]:bg-elevated"
+              :block="collapsed"
+              :ui="{ label: 'truncate text-left', trailingIcon: 'text-dimmed ms-auto' }"
+            />
+          </UDropdownMenu>
         </template>
 
         <template #default="{ collapsed }">
-          <!-- Platform/Admin navigation - use flat UNavigationMenu -->
           <UNavigationMenu
-            v-if="!inSiteWorkspace || inAdminWorkspace"
             :collapsed="collapsed"
             :items="navigationItems"
             orientation="vertical"
           />
 
-          <!-- Site navigation - use UNavigationMenu with nested children -->
-          <template v-else>
-            <UNavigationMenu
-              :collapsed="collapsed"
-              :items="siteNavigation"
-              orientation="vertical"
-            />
-
-            <!-- ChowBot section -->
-            <ClientOnly>
-              <div v-if="!collapsed" class="mt-4 border-t border-default pt-4 px-2">
-                <div class="flex items-center justify-between px-1 py-1 mb-1">
-                  <span class="text-xs font-medium text-muted">ChowBot</span>
-                  <UTooltip text="New conversation">
-                    <UButton
-                      icon="i-heroicons-plus"
-                      size="xs"
-                      variant="ghost"
-                      color="neutral"
-                      @click="newChowBotChat"
-                    />
-                  </UTooltip>
-                </div>
-                <UButton
-                  v-for="conv in siteConversations"
-                  :key="conv.id"
-                  :label="conv.title"
-                  icon="i-lucide-message-square"
-                  variant="ghost"
-                  color="neutral"
-                  size="xs"
-                  class="w-full justify-start mb-0.5"
-                  :ui="{ label: 'truncate text-left' }"
-                  @click="loadChowBotChat(conv)"
-                />
-                <p v-if="!siteConversations.length" class="px-1 text-xs text-muted italic">
-                  No conversations yet
-                </p>
+          <ClientOnly>
+            <div v-if="!collapsed && !inAdminWorkspace && !inSettingsWorkspace && !inLocationWorkspace && restaurant" class="mt-4 border-t border-default pt-4 px-2">
+              <div class="flex items-center justify-between px-1 py-1 mb-1">
+                <span class="text-xs font-medium text-muted">ChowBot</span>
+                <UTooltip text="New conversation">
+                  <UButton
+                    icon="i-heroicons-plus"
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    @click="newChowBotChat"
+                  />
+                </UTooltip>
               </div>
-            </ClientOnly>
-          </template>
+              <UButton
+                v-for="conv in siteConversations"
+                :key="conv.id"
+                :label="conv.title"
+                icon="i-lucide-message-square"
+                variant="ghost"
+                color="neutral"
+                size="xs"
+                class="w-full justify-start mb-0.5"
+                :ui="{ label: 'truncate text-left' }"
+                @click="loadChowBotChat(conv)"
+              />
+              <p v-if="!siteConversations.length" class="px-1 text-xs text-muted italic">
+                No conversations yet
+              </p>
+            </div>
+          </ClientOnly>
         </template>
 
         <template #footer="{ collapsed }">
-          <!-- Utility navigation for site workspace -->
-          <UNavigationMenu
-            v-if="inSiteWorkspace && !inAdminWorkspace && !collapsed"
-            :items="siteUtilityNavigation"
-            orientation="vertical"
-            class="mb-2"
-          />
-
-          <!-- User menu -->
-          <UDropdownMenu :items="profileMenuItems" :content="{ align: 'start', collisionPadding: 12, side: 'top' }">
-            <UButton
-              :avatar="{
-                src: sessionData?.user?.image ?? undefined,
-                loading: 'lazy',
-                alt: sessionData?.user?.name || 'User avatar'
-              }"
-              color="neutral"
-              variant="ghost"
-              class="w-full min-w-0"
-              :ui="{ base: 'min-w-0 justify-start', leadingAvatar: 'shrink-0' }"
-              :block="collapsed"
+          <div class="flex flex-col w-full gap-1.5">
+            <UPopover
+              :content="{ align: 'start', collisionPadding: 12, side: 'top', sideOffset: 12 }"
+              class="w-full"
+              :ui="{ content: 'w-[260px] p-0 overflow-hidden rounded-xl border border-default bg-elevated shadow-xl z-50' }"
             >
-              <template v-if="!collapsed" #default>
-                <span class="min-w-0 flex-1 truncate text-left">{{ sessionData?.user?.name }}</span>
-                <UBadge
-                  v-if="currentPlan"
-                  :label="currentPlan"
-                  :color="currentPlan === 'free' ? 'neutral' : 'success'"
-                  variant="soft"
-                  size="xs"
-                  class="shrink-0 capitalize"
-                />
+              <template #default="{ open }">
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  class="w-full min-w-0"
+                  :class="[
+                    open ? 'bg-muted/80' : '',
+                    collapsed ? 'justify-center' : 'justify-between'
+                  ]"
+                  :ui="{ base: 'min-w-0 w-full items-center px-2 py-1.5', leadingAvatar: 'shrink-0' }"
+                >
+                  <div class="flex items-center gap-2 min-w-0">
+                    <UAvatar
+                      :src="sessionData?.user?.image ?? undefined"
+                      :alt="sessionData?.user?.name || 'User avatar'"
+                      size="sm"
+                      class="shrink-0"
+                    />
+                    <span v-if="!collapsed" class="min-w-0 flex-1 truncate text-left text-sm font-medium text-highlighted">
+                      {{ sessionData?.user?.name }}
+                    </span>
+                  </div>
+                  <div
+                    v-if="!collapsed"
+                    class="size-7 hover:bg-muted rounded-full border border-default flex items-center justify-center text-dimmed shrink-0 transition-colors"
+                  >
+                    <UIcon name="i-lucide-ellipsis" class="size-4" />
+                  </div>
+                </UButton>
               </template>
-            </UButton>
-          </UDropdownMenu>
+
+              <template #content="{ close }">
+                <div class="flex flex-col text-default divide-y divide-default w-full overflow-hidden">
+                  <!-- Header row -->
+                  <div class="flex items-center justify-between px-4 py-3 min-w-0 bg-elevated">
+                    <div class="flex flex-col min-w-0">
+                      <span class="text-sm font-semibold text-highlighted truncate">
+                        {{ sessionData?.user?.name || 'User' }}
+                      </span>
+                      <span class="text-xs text-muted truncate mt-0.5">
+                        {{ sessionData?.user?.email }}
+                      </span>
+                    </div>
+                    <UButton
+                      to="/dashboard/account/settings"
+                      variant="ghost"
+                      color="neutral"
+                      icon="i-lucide-settings"
+                      size="sm"
+                      class="text-muted hover:text-highlighted hover:bg-muted shrink-0"
+                      @click="close"
+                    />
+                  </div>
+
+                  <!-- Menu items list -->
+                  <div class="p-1 flex flex-col gap-0.5 bg-elevated">
+                    <!-- Theme item with segmented control -->
+                    <div class="w-full flex items-center justify-between px-3 py-1.5 text-sm font-medium text-default">
+                      <span>Theme</span>
+                      <div class="bg-muted border border-default p-0.5 rounded-full flex items-center gap-0.5 shadow-inner">
+                        <button
+                          v-for="pref in ['system', 'light', 'dark'] as const"
+                          :key="pref"
+                          class="rounded-full size-7 flex items-center justify-center transition-all cursor-pointer"
+                          :class="colorMode.preference === pref ? 'bg-elevated text-highlighted shadow-sm border border-default' : 'text-dimmed hover:text-muted'"
+                          @click="colorMode.preference = pref"
+                        >
+                          <UIcon :name="getThemeIcon(pref)" class="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Changelog -->
+                    <NuxtLink
+                      to="/changelog"
+                      class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg text-default hover:text-highlighted hover:bg-muted transition-colors text-left"
+                      @click="close"
+                    >
+                      <span>Changelog</span>
+                      <UIcon name="i-lucide-square-pen" class="size-4 text-muted" />
+                    </NuxtLink>
+
+                    <!-- Help -->
+                    <NuxtLink
+                      to="/dashboard/help"
+                      class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg text-default hover:text-highlighted hover:bg-muted transition-colors text-left"
+                      @click="close"
+                    >
+                      <span>Help</span>
+                      <UIcon name="i-lucide-circle-help" class="size-4 text-muted" />
+                    </NuxtLink>
+
+                    <!-- Docs -->
+                    <NuxtLink
+                      to="/docs"
+                      class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg text-default hover:text-highlighted hover:bg-muted transition-colors text-left"
+                      @click="close"
+                    >
+                      <span>Docs</span>
+                      <UIcon name="i-lucide-book-open" class="size-4 text-muted" />
+                    </NuxtLink>
+
+                    <!-- Log Out -->
+                    <button
+                      class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg text-error hover:text-error/85 hover:bg-error/10 transition-colors cursor-pointer text-left"
+                      @click="handleSignOut(); close();"
+                    >
+                      <span>Log Out</span>
+                      <UIcon name="i-lucide-log-out" class="size-4 text-error/80" />
+                    </button>
+                  </div>
+
+                  <!-- Platform Status flat row -->
+                  <div class="px-4 py-3 flex items-center justify-between select-none bg-muted/10">
+                    <div class="flex flex-col">
+                      <span class="text-[10px] text-dimmed uppercase tracking-wider font-semibold">
+                        Platform Status
+                      </span>
+                      <span class="text-xs font-semibold text-highlighted mt-0.5">
+                        {{ platformStatus === 'normal' ? 'All systems normal.' : platformStatus === 'loading' ? 'Checking status...' : 'System interruption' }}
+                      </span>
+                    </div>
+                    <!-- glowing status dot -->
+                    <span class="relative flex size-2">
+                      <span
+                        class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+                        :class="{
+                          'bg-emerald-500': platformStatus === 'normal',
+                          'bg-amber-500': platformStatus === 'loading',
+                          'bg-red-500': platformStatus === 'error'
+                        }"
+                      />
+                      <span
+                        class="relative inline-flex size-2 rounded-full"
+                        :class="{
+                          'bg-emerald-500': platformStatus === 'normal',
+                          'bg-amber-500': platformStatus === 'loading',
+                          'bg-red-500': platformStatus === 'error'
+                        }"
+                      />
+                    </span>
+                  </div>
+                </div>
+              </template>
+            </UPopover>
+          </div>
         </template>
       </UDashboardSidebar>
 
       <UDashboardPanel>
         <template #header>
-          <UDashboardNavbar :title="navbarTitle">
+          <UDashboardNavbar>
+            <span class="text-sm font-semibold text-highlighted">{{ navbarTitle }}</span>
+            <template #left>
+              <UDropdownMenu
+                v-if="!inAdminWorkspace && restaurant"
+                :items="locationMenuItems"
+                :content="{ align: 'start', collisionPadding: 12 }"
+                :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-64' }"
+              >
+                <UButton
+                  :label="selectedLocation?.title ?? 'No locations'"
+                  :avatar="{ icon: 'i-lucide-map-pin' }"
+                  trailing-icon="i-lucide-chevrons-up-down"
+                  color="neutral"
+                  variant="ghost"
+                  class="data-[state=open]:bg-elevated"
+                  :ui="{ label: 'truncate text-left max-w-48', trailingIcon: 'text-dimmed' }"
+                />
+              </UDropdownMenu>
+            </template>
+
             <template #right>
-              <UButton
-                v-if="inSiteWorkspace && siteContext"
-                :to="sitePath('/settings')"
-                icon="i-heroicons-cog-6-tooth"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                aria-label="Scope settings"
-              />
               <UColorModeButton variant="ghost" color="neutral" size="sm" />
-              <UTooltip v-if="!inAdminWorkspace" text="ChowBot">
+              <UTooltip v-if="!inAdminWorkspace && restaurant" text="ChowBot">
                 <UButton
                   icon="i-lucide-bot"
                   color="neutral"
@@ -212,91 +337,171 @@
 </template>
 
 <script setup lang="ts">
+import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useChowBot } from '~/composables/useChowBot'
 import type { ChowBotConv } from '~/composables/useChowBotHistory'
 import { useChowBotHistory } from '~/composables/useChowBotHistory'
 
-interface DashboardSite {
+interface AuthOrganization {
   id: string
-  brand_name: string
-  subdomain: string
-  status: string
+  name: string
+  slug?: string | null
+  logo?: string | null
 }
 
 const route = useRoute()
-const router = useRouter()
 const { data: sessionData, signOut } = useAuth()
 const toast = useToast()
 const stoppingImpersonation = ref(false)
+const dashboard = useDashboardRestaurant()
+const organizationsState = authClient.useListOrganizations()
+
+const colorMode = useColorMode()
+
+function getThemeIcon(pref: 'system' | 'light' | 'dark') {
+  if (pref === 'system') return 'i-lucide-monitor'
+  if (pref === 'light') return 'i-lucide-sun'
+  return 'i-lucide-moon'
+}
+
 const chowBot = useChowBot()
-const toggleChowbot = () => chowBot.toggle()
 const chowBotHistory = useChowBotHistory()
-const siteRefreshSignal = useState<number>('site:refresh', () => 0)
+const billingStatus = ref<{ billing: { plan: string } } | null>(null)
+const platformStatus = ref<'normal' | 'loading' | 'error'>('loading')
 
-watch(siteRefreshSignal, () => loadSiteContext())
+async function checkPlatformStatus() {
+  try {
+    const res = await $fetch<{ status: string }>('/api/health')
+    if (res.status === 'ok') {
+      platformStatus.value = 'normal'
+    } else {
+      platformStatus.value = 'error'
+    }
+  } catch (err) {
+    console.error('Failed to fetch platform status:', err)
+    platformStatus.value = 'error'
+  }
+}
 
-const siteConversations = computed(() =>
-  routeSiteId.value ? chowBotHistory.forSite(routeSiteId.value) : []
-)
+const organization = dashboard.organization
+const restaurant = dashboard.restaurant
+const selectedLocation = dashboard.selectedLocation
+const locations = dashboard.locations
+const activeSiteId = dashboard.siteId
 
+const toggleChowbot = () => chowBot.toggle()
 const newChowBotChat = () => chowBot.startNewConversation()
 const loadChowBotChat = (conv: ChowBotConv) => chowBot.loadConversation(conv)
 
-const siteContext = ref<DashboardSite | null>(null)
-const sites = ref<DashboardSite[]>([])
-const selectedSiteId = ref<string | null>(null)
-
-const billingStatus = ref<{ billing: { plan: string } } | null>(null)
-const currentPlan = computed(() => billingStatus.value?.billing?.plan ?? null)
+const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
   return session?.impersonatedBy
 })
+const inAdminWorkspace = computed(() => route.path.startsWith('/admin'))
+const orgSlug = computed(() => organization.value?.slug ?? null)
+const orgSettingsBase = computed(() => orgSlug.value ? `/dashboard/${orgSlug.value}/~/settings` : null)
 
-const routeSiteId = computed(() => {
-  const param = route.params.siteId || route.params.id
-  return typeof param === 'string' && route.path.startsWith('/dashboard/sites/') ? param : null
+const orgBase = computed(() => orgSlug.value ? `/dashboard/${orgSlug.value}` : null)
+const projectBase = computed(() => orgBase.value && selectedLocation.value?.slug ? `${orgBase.value}/${selectedLocation.value.slug}` : orgBase.value)
+
+const locationSlugFromRoute = computed(() => {
+  const slug = route.params.locationSlug
+  return typeof slug === 'string' ? slug : null
 })
 
-watch(routeSiteId, (siteId) => {
-  if (!import.meta.client) return
-  if (siteId) chowBotHistory.load(siteId).catch(console.error)
-}, { immediate: true })
-
-const inSiteWorkspace = computed(() => Boolean(routeSiteId.value))
-const inAdminWorkspace = computed(() => route.path.startsWith('/admin'))
-const activeSiteId = computed(() => routeSiteId.value || selectedSiteId.value)
-
-const selectedSiteLabel = computed(() =>
-  siteContext.value?.brand_name
-    ?? sites.value.find((site: DashboardSite) => site.id === selectedSiteId.value)?.brand_name
-    ?? 'Choose a website'
+const currentLocation = computed(() =>
+  locations.value.find(l => l.slug === locationSlugFromRoute.value || l.id === locationSlugFromRoute.value) ?? selectedLocation.value
 )
 
-const sitePath = (path = '', query?: Record<string, string>) => {
-  if (!activeSiteId.value) {
-    throw new Error('sitePath requires an active site ID')
-  }
-  const { paths } = useDashboardSiteLinks(activeSiteId.value)
-  return {
-    path: `${paths.value.base}${path}`,
-    query
-  }
-}
+const inLocationWorkspace = computed(() => Boolean(locationSlugFromRoute.value))
 
-const navbarTitle = computed(() => {
-  if (inAdminWorkspace.value) return 'Platform Admin'
-  if (!inSiteWorkspace.value || !siteContext.value) return 'Dashboard'
-  return siteContext.value.brand_name
+const inSettingsWorkspace = computed(() => {
+  if (route.path.startsWith('/dashboard/account')) return true
+  if (route.path.startsWith('/dashboard/help')) return true
+  if (orgSettingsBase.value && route.path.startsWith(orgSettingsBase.value)) return true
+  return /^\/dashboard\/[^/]+\/~\/settings/.test(route.path)
 })
+const siteConversations = computed(() => activeSiteId.value ? chowBotHistory.forSite(activeSiteId.value) : [])
 
-const platformNavigation = computed(() => [[
-  { label: 'Dashboard', icon: 'i-heroicons-home', to: '/dashboard' },
-  { label: 'Sites', icon: 'i-heroicons-globe-alt', to: '/dashboard/sites' },
-  { label: 'Billing', icon: 'i-heroicons-credit-card', to: '/dashboard/billing' },
-  { label: 'Settings', icon: 'i-heroicons-cog-6-tooth', to: '/dashboard/settings' }
-]])
+const organizationLabel = computed(() => organization.value?.name ?? 'Restaurant')
+const organizationAvatar = computed(() => ({
+  src: organization.value?.logo ?? undefined,
+  alt: organizationLabel.value,
+  icon: organization.value?.logo ? undefined : 'i-lucide-building-2'
+}))
+
+const organizationMenuItems = computed(() => [
+  organizations.value.map((org) => ({
+    label: org.name,
+    avatar: { src: org.logo ?? undefined, icon: org.logo ? undefined : 'i-lucide-building-2' },
+    icon: org.id === organization.value?.id ? 'i-heroicons-check' : undefined,
+    onSelect: () => switchOrganization(org.id)
+  })),
+  [
+    {
+      label: 'Create restaurant',
+      icon: 'i-heroicons-plus',
+      to: '/dashboard/onboarding'
+    }
+  ]
+])
+
+const locationMenuItems = computed(() => [
+  locations.value.map((location) => ({
+    label: location.title,
+    icon: location.id === selectedLocation.value?.id ? 'i-heroicons-check' : 'i-lucide-map-pin',
+    onSelect: () => dashboard.selectLocation(location.id)
+  })),
+  [
+    {
+      label: 'All locations',
+      icon: 'i-lucide-layout-dashboard',
+      to: orgBase.value ?? '/dashboard'
+    }
+  ]
+])
+
+const mainNavigation = computed(() => [
+  [
+    { label: 'Restaurant', icon: 'i-lucide-layout-dashboard', to: orgBase.value ?? '/dashboard' },
+    { label: 'ChowBot', icon: 'i-lucide-bot', to: projectBase.value ? `${projectBase.value}/chowbot` : '/dashboard' },
+  ],
+  [
+    { label: 'Integrations', icon: 'i-lucide-plug', to: orgBase.value ? `${orgBase.value}/integrations` : '/dashboard' },
+    { label: 'Translations', icon: 'i-lucide-languages', to: orgBase.value ? `${orgBase.value}/translations` : '/dashboard' },
+  ],
+  [
+    { label: 'Settings', icon: 'i-lucide-settings', to: orgSettingsBase.value ? `${orgSettingsBase.value}/general` : '/dashboard' },
+  ],
+])
+
+const locationNavigation = computed(() => {
+  const project = projectBase.value
+  if (!project) return [[]]
+  return [
+    [
+      { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: project },
+    ],
+    [
+      { label: 'Menu', icon: 'i-lucide-utensils', to: `${project}/menu` },
+      { label: 'Content', icon: 'i-lucide-files', to: `${project}/content?page=location` },
+      { label: 'Posts', icon: 'i-lucide-newspaper', to: `${project}/posts` },
+      { label: 'Media', icon: 'i-lucide-images', to: `${project}/media` },
+      { label: 'Pages', icon: 'i-lucide-file-text', to: `${project}/pages` },
+    ],
+    [
+      { label: 'Reviews', icon: 'i-lucide-star', to: `${project}/reviews` },
+      { label: 'Inbox', icon: 'i-lucide-inbox', to: `${project}/inbox` },
+      { label: 'Reservations', icon: 'i-lucide-calendar-check', to: `${project}/reservations` },
+      { label: 'Orders', icon: 'i-lucide-shopping-bag', to: `${project}/order` },
+    ],
+    [
+      { label: 'Experiences', icon: 'i-lucide-ticket', to: `${project}/experiences` },
+    ],
+  ]
+})
 
 const adminNavigation = computed(() => [[
   { label: 'Analytics', icon: 'i-heroicons-chart-bar', to: '/admin' },
@@ -308,193 +513,87 @@ const adminNavigation = computed(() => [[
   { label: 'Back to Dashboard', icon: 'i-heroicons-arrow-left', to: '/dashboard' },
 ]])
 
-const selectedSiteButton = computed(() => ({
-  label: selectedSiteLabel.value,
-  icon: 'i-heroicons-globe-alt'
-}))
+const _utilityNavigation = computed(() => [[
+  { label: 'Account', icon: 'i-lucide-user-cog', to: '/dashboard/account/settings' },
+  { label: 'Help', icon: 'i-lucide-circle-help', to: '/dashboard/help' }
+]])
 
-const siteMenuItems = computed(() => [
-  sites.value.map((site: DashboardSite) => ({
-    label: site.brand_name,
-    icon: site.id === activeSiteId.value ? 'i-heroicons-check' : 'i-heroicons-globe-alt',
-    onSelect: () => handleSiteChange(site.id)
-  })),
-  [
-    {
-      label: 'All websites',
-      icon: 'i-heroicons-squares-2x2',
-      onSelect: () => router.push('/dashboard/sites')
-    },
-    {
-      label: 'Create website',
-      icon: 'i-heroicons-plus',
-      onSelect: () => router.push('/dashboard/onboarding')
-    }
-  ]
-])
+const accountSettingsNavigation = computed(() => [[
+  { label: 'Account Profile', icon: 'i-lucide-user', to: '/dashboard/account/settings' },
+  { label: 'Authentication', icon: 'i-lucide-shield', to: '/dashboard/account/settings/authentication' },
+  { label: 'Billing Items', icon: 'i-lucide-receipt', to: '/dashboard/account/settings/billing-items' },
+]])
 
-const profileMenuItems = computed(() => [
-  [
-    {
-      label: sessionData.value?.user?.email || 'User',
-      icon: 'i-heroicons-envelope',
-      disabled: true,
-      type: 'label' as const
-    }
-  ],
-  [
-    {
-      label: 'Account Settings',
-      icon: 'i-heroicons-cog-6-tooth',
-      to: '/dashboard/settings'
-    }
-  ],
-  [
-    {
-      label: 'Log out',
-      icon: 'i-lucide-log-out',
-      color: 'error' as const,
-      onSelect: handleSignOut
-    }
-  ]
-])
+const orgSettingsNavigation = computed(() => {
+  const org = orgSettingsBase.value
+  if (!org) return [[]]
+  return [[
+    { label: 'General', icon: 'i-lucide-sliders', to: `${org}/general` },
+    { label: 'Billing', icon: 'i-lucide-credit-card', to: `${org}/billing` },
+    { label: 'Members', icon: 'i-lucide-users', to: `${org}/members` },
+  ]]
+})
 
-const siteNavigation = computed(() => [
-  // Overview - top-level item
-  [
-    {
-      label: 'Overview',
-      icon: 'i-lucide-layout-dashboard',
-      to: activeSiteId.value ? sitePath() : undefined
-    }
-  ],
-  // Main navigation groups
-  [
-    {
-      label: 'Setup',
-      icon: 'i-lucide-wand-sparkles',
-      defaultOpen: false,
-      children: [
-        { label: 'Business profile', to: sitePath('/setup') },
-        { label: 'Branding', to: sitePath('/setup/branding') },
-        { label: 'Hours', to: sitePath('/setup/hours') }
-      ]
-    },
-    {
-      label: 'Site',
-      icon: 'i-lucide-globe',
-      defaultOpen: false,
-      children: [
-        { label: 'Pages', to: sitePath('/pages') },
-        { label: 'Locations', to: sitePath('/locations') },
-        { label: 'Preview', to: sitePath('/preview') }
-      ]
-    },
-    {
-      label: 'Content',
-      icon: 'i-lucide-files',
-      defaultOpen: true,
-      children: [
-        { label: 'Menu', to: sitePath('/menu') },
-        { label: 'Experiences', to: sitePath('/experiences') },
-        { label: 'Posts', to: sitePath('/posts') },
-        { label: 'Translations', to: sitePath('/translations') },
-        { label: 'Photos', to: sitePath('/photos') },
-        { label: 'Media', to: sitePath('/media') },
-        { label: 'Q&A', to: sitePath('/qa') }
-      ]
-    },
-    {
-      label: 'Customers',
-      icon: 'i-lucide-users',
-      defaultOpen: false,
-      children: [
-        { label: 'Reviews', to: sitePath('/reviews') },
-        { label: 'Inbox', to: sitePath('/inbox') },
-        { label: 'Reservations', to: sitePath('/reservations') }
-      ]
-    },
-    {
-      label: 'Commerce',
-      icon: 'i-lucide-shopping-bag',
-      defaultOpen: false,
-      children: [
-        { label: 'Orders', to: sitePath('/order') }
-      ]
-    },
-    {
-      label: 'Admin',
-      icon: 'i-lucide-settings',
-      defaultOpen: false,
-      children: [
-        { label: 'Integrations', to: sitePath('/integrations') },
-        { label: 'Settings', to: sitePath('/settings') }
-      ]
-    }
-  ]
-])
-
-const siteUtilityNavigation = computed(() => [
-  [
-    { label: 'All Sites', icon: 'i-heroicons-squares-2x2', to: '/dashboard/sites' },
-    { label: 'Billing', icon: 'i-lucide-credit-card', to: '/dashboard/billing' }
-  ]
-])
+const settingsNavigation = computed(() => {
+  const onOrgSettings = orgSettingsBase.value && route.path.startsWith(orgSettingsBase.value)
+  return onOrgSettings ? orgSettingsNavigation.value : accountSettingsNavigation.value
+})
 
 const navigationItems = computed(() => {
   if (inAdminWorkspace.value) return adminNavigation.value
-  if (!activeSiteId.value || !routeSiteId.value) return platformNavigation.value
-  return siteNavigation.value
+  if (inSettingsWorkspace.value) return settingsNavigation.value
+  if (inLocationWorkspace.value) return locationNavigation.value
+  return mainNavigation.value
 })
 
-const loadSites = async () => {
-  try {
-    const response = await $fetch<{ sites: DashboardSite[] }>('/api/sites')
-    sites.value = response.sites || []
-
-    if (routeSiteId.value) {
-      selectedSiteId.value = routeSiteId.value
-    } else if (!selectedSiteId.value && sites.value.length > 0) {
-      selectedSiteId.value = sites.value[0]!.id
-    }
-  } catch (err) {
-    console.error('Failed to load sites:', err)
-    sites.value = []
+const navbarTitle = computed(() => {
+  if (inAdminWorkspace.value) return 'Platform Admin'
+  const parts = route.path.split('/').filter(Boolean)
+  const segment = inLocationWorkspace.value ? parts.at(3) : parts.at(2)
+  if (!segment) return 'Overview'
+  const labels: Record<string, string> = {
+    account: 'Account',
+    billing: 'Billing',
+    chowbot: 'ChowBot',
+    content: 'Content',
+    experiences: 'Experiences',
+    help: 'Help',
+    inbox: 'Inbox',
+    integrations: 'Integrations',
+    locations: 'Locations',
+    media: 'Media',
+    menu: 'Menu',
+    order: 'Orders',
+    pages: 'Pages',
+    photos: 'Photos',
+    posts: 'Posts',
+    qa: 'Q&A',
+    reservations: 'Reservations',
+    reviews: 'Reviews',
+    settings: 'Settings',
+    setup: 'Setup',
+    translations: 'Translations'
   }
+  return labels[segment] ?? 'Dashboard'
+})
+
+async function switchOrganization(organizationId: string) {
+  const organizationApi = authClient.organization as unknown as {
+    setActive?: (_input: { organizationId: string }) => Promise<unknown>
+  }
+  await organizationApi.setActive?.({ organizationId })
+  await dashboard.refresh()
+  await navigateTo('/dashboard')
 }
 
-const loadSiteContext = async () => {
-  if (!routeSiteId.value || !sessionData.value?.user?.id) {
-    siteContext.value = null
-    return
-  }
-
-  try {
-    const settingsResponse = await $fetch<{ success: boolean; settings: DashboardSite }>(`/api/sites/${routeSiteId.value}/settings`)
-    if (settingsResponse.success) siteContext.value = settingsResponse.settings
-  } catch (err) {
-    const statusCode = typeof err === 'object' && err !== null && 'statusCode' in err ? err.statusCode : undefined
-    if (statusCode !== 401) console.error('Failed to load site context:', err)
-    siteContext.value = null
-  }
-}
-
-const handleSiteChange = async (siteId: string) => {
-  selectedSiteId.value = siteId
-  await router.push(`/dashboard/sites/${siteId}`)
-}
-
-watch(
-  () => [routeSiteId.value, selectedSiteId.value],
-  async () => {
-    if (routeSiteId.value) selectedSiteId.value = routeSiteId.value
-    await loadSiteContext()
-  },
-  { immediate: true }
-)
+watch(activeSiteId, (siteId) => {
+  if (!import.meta.client || !siteId) return
+  chowBotHistory.load(siteId).catch(console.error)
+}, { immediate: true })
 
 onMounted(async () => {
-  await loadSites()
+  await dashboard.refresh()
+  checkPlatformStatus().catch(console.error)
   try {
     billingStatus.value = await $fetch<{ billing: { plan: string } }>('/api/billing/status')
   } catch (err) {

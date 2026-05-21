@@ -1,12 +1,12 @@
 import { spawn } from 'node:child_process'
 
 if (!process.argv.includes('--confirm-production')) {
-  console.error('Refusing to seed remote REVIEWS_DB without --confirm-production.')
+  console.error('Refusing to seed remote DB without --confirm-production.')
   console.error('Usage: yarn seed:remote --confirm-production')
   process.exit(1)
 }
 
-const child = spawn('npx', ['wrangler', 'd1', 'execute', 'REVIEWS_DB', '--remote', '--file', 'seeds/demo.sql'], {
+const child = spawn('npx', ['wrangler', 'd1', 'execute', 'DB', '--remote', '--file', 'seeds/demo.sql'], {
   stdio: 'inherit',
   shell: process.platform === 'win32'
 })

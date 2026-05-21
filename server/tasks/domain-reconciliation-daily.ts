@@ -1,7 +1,7 @@
 import { reconcileDueDomains } from '~/server/utils/domains'
 
 interface ReconciliationTaskEnv {
-  REVIEWS_DB?: ApiValue
+  DB?: ApiValue
   CF_ZONE_ID?: string
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
@@ -21,11 +21,11 @@ export default defineTask({
   async run({ context }) {
     const taskContext = context as ReconciliationTaskContext | undefined
     const env = taskContext?.cloudflare?.env
-    const db = env?.REVIEWS_DB
+    const db = env?.DB
     if (!db && import.meta.dev) {
-      return { result: { checked: 0, failed: 0, skipped: 'REVIEWS_DB unavailable in local scheduled task context' } }
+      return { result: { checked: 0, failed: 0, skipped: 'DB unavailable in local scheduled task context' } }
     }
-    if (!db) throw new Error('REVIEWS_DB is required')
+    if (!db) throw new Error('DB is required')
 
     const missingKeys: string[] = []
     if (!env?.CF_ZONE_ID) missingKeys.push('CF_ZONE_ID')

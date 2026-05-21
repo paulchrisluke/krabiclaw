@@ -21,13 +21,18 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   if (!db) throw createError({ statusCode: 500, statusMessage: 'No database' })
 
   const auth = createAuth(env)
   const ctx = await auth.$context
 
-  const user = await db.prepare('SELECT id, email FROM user LIMIT 1').first() as { id: string; email: string } | null
+  const query = getQuery(event)
+  const userId = query.userId as string | undefined
+
+  const user = userId
+    ? await db.prepare('SELECT id, email FROM user WHERE id = ? LIMIT 1').bind(userId).first() as { id: string; email: string } | null
+    : await db.prepare('SELECT id, email FROM user LIMIT 1').first() as { id: string; email: string } | null
   if (!user) throw createError({ statusCode: 500, statusMessage: 'No users in database' })
 
   const session = await ctx.internalAdapter.createSession(user.id)

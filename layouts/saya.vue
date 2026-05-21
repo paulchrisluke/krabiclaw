@@ -29,6 +29,51 @@ const themeStyles = computed(() => {
     '--brand-text-color': brandTextColor.value
   }
 })
+
+const googleAnalyticsId = computed(() => config.value?.google_analytics_measurement_id || null)
+const googleSiteVerification = computed(() => config.value?.google_site_verification || null)
+
+function isValidGoogleAnalyticsId(id) {
+  if (!id || typeof id !== 'string') return false
+  return /^G-[A-Z0-9]+$/.test(id) || /^UA-\d+-\d+$/.test(id)
+}
+
+const validGoogleAnalyticsId = computed(() => {
+  const id = googleAnalyticsId.value
+  return isValidGoogleAnalyticsId(id) ? id : null
+})
+
+useHead(() => {
+  const meta = []
+  if (googleSiteVerification.value) {
+    meta.push({
+      name: 'google-site-verification',
+      content: googleSiteVerification.value
+    })
+  }
+
+  const script = []
+  if (validGoogleAnalyticsId.value) {
+    script.push({
+      src: `https://www.googletagmanager.com/gtag/js?id=${validGoogleAnalyticsId.value}`,
+      async: true
+    })
+    script.push({
+      innerHTML: `
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${validGoogleAnalyticsId.value}');
+      `.trim(),
+      type: 'text/javascript'
+    })
+  }
+
+  return {
+    meta,
+    script
+  }
+})
 </script>
 
 <style>

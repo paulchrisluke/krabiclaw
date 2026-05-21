@@ -19,12 +19,7 @@ export function useOrganizationSchema() {
     name: 'KrabiClaw',
     url: 'https://krabiclaw.com',
     logo: 'https://krabiclaw.com/krabi-claw-logo.png',
-    description: 'The Shopify for restaurants. AI-powered restaurant website builder built in Krabi, Thailand.',
-    address: {
-      '@type': 'PostalAddress',
-      addressLocality: 'Krabi',
-      addressCountry: 'TH'
-    },
+    description: 'The Shopify for restaurants. AI-powered website builder for independent restaurants.',
     contactPoint: {
       '@type': 'ContactPoint',
       email: 'hello@krabiclaw.com',

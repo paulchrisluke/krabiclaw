@@ -19,8 +19,8 @@ DELETE FROM user WHERE id IN ('user-demo', 'user_demo');
 DELETE FROM site_domains WHERE domain IN ('demo.localhost', 'demo.krabiclaw.com');
 
 -- User
-INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt)
-VALUES ('user-demo', 'Demo Owner', 'demo@krabiclaw.com', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
+VALUES ('user-demo', 'Demo Owner', 'demo@krabiclaw.com', 1, 'admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- Organization
 INSERT INTO organization (id, name, slug, createdAt)

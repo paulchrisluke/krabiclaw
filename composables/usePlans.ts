@@ -10,7 +10,7 @@ export const usePlans = () => {
   const plans = computed(() => data.value ?? null)
   const freePlan = computed(() => plans.value?.find(p => p.id === 'free') ?? null)
   const proPlan = computed(() => plans.value?.find(p => p.id === 'pro') ?? null)
-  const agencyPlan = computed(() => plans.value?.find(p => p.id === 'agency') ?? null)
+  const enterprisePlan = computed(() => plans.value?.find(p => p.id === 'enterprise') ?? null)
 
   function monthlyPrice(plan: Plan): number | null {
     return plan.prices.find(p => p.interval === 'month')?.amount ?? null
@@ -34,5 +34,5 @@ export const usePlans = () => {
     return cents !== null ? formatPrice(cents) : '$0'
   }
 
-  return { plans, freePlan, proPlan, agencyPlan, monthlyPrice, annualPrice, formatPrice, displayPrice, status }
+  return { plans, freePlan, proPlan, enterprisePlan, monthlyPrice, annualPrice, formatPrice, displayPrice, status }
 }

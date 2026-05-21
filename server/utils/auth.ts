@@ -7,17 +7,13 @@ import type { H3Event } from 'h3'
 import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
 
 export interface CloudflareEnv {
-  REVIEWS_DB: D1Database
+  DB: D1Database
   BETTER_AUTH_SECRET: string
   BETTER_AUTH_URL?: string
   GOOGLE_CLIENT_ID: string
   GOOGLE_CLIENT_SECRET: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
-  STRIPE_PRICE_STARTER?: string
-  STRIPE_PRICE_GROWTH?: string
-  STRIPE_PRICE_PRO?: string
-  STRIPE_PRICE_ADDON_LOCATION?: string
   CLOUDFLARE_ACCOUNT_ID?: string
   CLOUDFLARE_API_TOKEN?: string
   CLOUDFLARE_IMAGES_ACCOUNT_ID?: string
@@ -43,7 +39,7 @@ export interface CloudflareEnv {
 const authCache = new WeakMap<D1Database, unknown>()
 
 export function createAuth(env: CloudflareEnv) {
-  const d1 = env.REVIEWS_DB
+  const d1 = env.DB
 
   const cached = authCache.get(d1)
   if (cached) return cached as ReturnType<typeof betterAuth>

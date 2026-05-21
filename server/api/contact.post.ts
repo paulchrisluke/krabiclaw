@@ -91,7 +91,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Rate limiting (simplified - in production use KV or proper rate limit store)
-  const db = cloudflareEnv(event).REVIEWS_DB
+  const db = cloudflareEnv(event).DB
   const clientIp = getClientIp(event)
   const hourKey = `rate:ip:${clientIp}:${Math.floor(Date.now() / 3600000)}`
   const emailHash = await hashEmail(email)

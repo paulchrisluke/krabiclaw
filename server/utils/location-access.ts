@@ -18,7 +18,7 @@ export async function requireLocationAccess(
   roles = ['owner', 'admin', 'editor']
 ) {
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   if (!db) {
     throw createError({ statusCode: 500, message: 'Database not available' })
   }

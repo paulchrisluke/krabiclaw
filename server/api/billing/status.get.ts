@@ -5,7 +5,7 @@ import { getOrganizationBillingStatus } from '../../utils/billing'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   
   if (!db) {
     return jsonResponse({ 
@@ -27,13 +27,17 @@ export default defineEventHandler(async (event) => {
   let organizationId = query.organizationId as string
   
   if (!organizationId) {
-    // Get user's first organization
+    const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string }
+    const activeOrganizationId = typeof sessionRecord.activeOrganizationId === 'string'
+      ? sessionRecord.activeOrganizationId
+      : ''
     const userOrg = await db.prepare(`
       SELECT o.id FROM organization o
       JOIN member m ON o.id = m.organizationId
       WHERE m.userId = ?
+      ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC
       LIMIT 1
-    `).bind(session.user.id).first<{ id: string }>()
+    `).bind(session.user.id, activeOrganizationId).first<{ id: string }>()
     
     if (!userOrg) {
       return jsonResponse({ error: 'No organization found' }, { status: 404 })

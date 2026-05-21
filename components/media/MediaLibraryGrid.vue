@@ -211,7 +211,7 @@ async function loadAssets() {
     const params = new URLSearchParams()
     if (kindFilter.value && kindFilter.value !== ALL_MEDIA_KIND) params.set('kind', kindFilter.value)
     if (props.locationId) params.set('locationId', props.locationId)
-    const res = await $fetch<{ media: MediaAsset[] }>(`/api/editor/sites/${props.siteId}/media?${params}`, {
+    const res = await $fetch<{ media: MediaAsset[] }>(`/api/dashboard/editor/media?${params}`, {
       signal: controller.signal,
     })
 
@@ -270,7 +270,7 @@ async function uploadImage(file: File) {
   uploading.value = true
   try {
     const { assetId, uploadUrl } = await $fetch<{ assetId: string; uploadUrl: string; imageId: string }>(
-      `/api/editor/sites/${props.siteId}/media/request-upload`,
+      `/api/dashboard/editor/media/request-upload`,
       { method: 'POST', body: { filename: file.name, locationId: props.locationId } }
     )
 
@@ -279,7 +279,7 @@ async function uploadImage(file: File) {
     const res = await fetch(uploadUrl, { method: 'POST', body: form })
     if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
 
-    const confirmEndpoint = `/api/editor/sites/${props.siteId}/media/${assetId}/confirm`
+    const confirmEndpoint = `/api/dashboard/editor/media/${assetId}/confirm`
     let asset: MediaAsset | null = null
     let lastError: unknown = null
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -322,7 +322,7 @@ async function uploadVideo(file: File) {
     const form = new FormData()
     form.append('file', file)
     if (props.locationId) form.append('locationId', props.locationId)
-    const asset = await $fetch<MediaAsset>(`/api/editor/sites/${props.siteId}/media/upload`, { method: 'POST', body: form })
+    const asset = await $fetch<MediaAsset>(`/api/dashboard/editor/media/upload`, { method: 'POST', body: form })
     toast.add({ title: 'File uploaded', icon: 'i-heroicons-check-circle', color: 'success' })
     await loadAssets()
     emit('uploaded', asset)

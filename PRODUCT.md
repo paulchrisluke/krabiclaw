@@ -14,7 +14,7 @@ Pricing managed entirely in Stripe — never duplicated in code. All pricing UI 
 |------|-------------|
 | Free | Subdomain, Saya theme, manual editor, starter AI credits, 1 location |
 | Pro | Custom domain + SSL, Google Places sync, more AI credits/mo, unlimited locations |
-| Agency | Everything Pro + unlimited sites, white-label, API access |
+| Enterprise | Everything Pro + higher AI credits, white-label, API access, priority support |
 | Credit top-ups | 3 one-time bundles (500 / 2,500 / 5,000) — never expire |
 
 **Upgrade modal** triggers on: connecting Google Business, adding location 2+, custom domain setup, removing KrabiClaw branding.
@@ -81,3 +81,14 @@ Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locat
 - WhatsApp and Instagram both go through the same Facebook app — single OAuth covers both
 - ChowBot is the owner of AI conversations; dashboard and WhatsApp are interfaces over the same D1-backed backend
 - Credit system enforced at the `/api/ai/*` route layer — 402 on exhaustion
+
+---
+
+## Dashboard Model
+
+- **Organization** is the restaurant brand workspace and billing/team boundary.
+- Each organization owns exactly **one restaurant site** in `sites`.
+- **Locations** are the persistent dashboard working context, selected from the header on every dashboard page.
+- Public tenant routes remain location-centric under `/locations/[slug]`.
+- Dashboard routes follow the Vercel-style workspace shape: `/dashboard/{orgSlug}` for the restaurant workspace, `/dashboard/{orgSlug}/{locationSlug}` for the selected location workspace, `/dashboard/{orgSlug}/~/settings/billing` for org billing, and `/dashboard/account/settings` for personal account settings. Dashboard UI should not expose site IDs.
+- App-facing dashboard APIs use `/api/dashboard/*`; server code resolves the canonical restaurant site from the active Better Auth organization.

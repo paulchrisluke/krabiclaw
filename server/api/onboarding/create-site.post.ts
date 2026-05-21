@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
   }
   
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   
   if (!db) {
     return jsonResponse({ 
@@ -91,21 +91,20 @@ export default defineEventHandler(async (event) => {
           .run()
       }
       
-      // Step 2: Check if this organization already has a site with the requested subdomain
+      // Step 2: This product is one restaurant site per organization.
       const existingSite = await db.prepare(`
         SELECT id, onboarding_status FROM sites 
-        WHERE organization_id = ? AND subdomain = ?
+        WHERE organization_id = ?
         LIMIT 1
-      `).bind(organizationId, normalizedSubdomain).first<{ id: string; onboarding_status: string }>()
+      `).bind(organizationId).first<{ id: string; onboarding_status: string }>()
       
       if (existingSite) {
-        // Site already exists for this user and subdomain
         if (existingSite.onboarding_status === 'active') {
           return jsonResponse({
-            siteId: existingSite.id,
+            restaurantId: existingSite.id,
             organizationId,
             subdomain: normalizedSubdomain,
-            message: 'Site already exists'
+            message: 'Restaurant site already exists'
           })
         } else if (existingSite.onboarding_status === 'pending' || existingSite.onboarding_status === 'failed') {
           // Resume incomplete onboarding
@@ -258,7 +257,7 @@ async function performRequiredSeeding(env: OnboardingEnv, db: D1Database, siteId
     `).bind(now, siteId).run()
     
     return jsonResponse({
-      siteId,
+      restaurantId: siteId,
       organizationId,
       subdomain: resolvedSubdomain,
       message: 'Site created successfully'

@@ -22,6 +22,8 @@ export interface SiteSettings {
   brand_color: string
   default_currency: CurrencyCode
   url_structure: 'location_subdirectories' | 'brand_pages'
+  google_analytics_measurement_id?: string
+  google_site_verification?: string
   last_published_at: string | null
   created_at: string
   updated_at: string
@@ -47,6 +49,8 @@ export interface UpdateSiteSettingsRequest {
   partnerships_email?: string
   catering_email?: string
   careers_email?: string
+  google_analytics_measurement_id?: string
+  google_site_verification?: string
 }
 
 export interface LaunchReadiness {

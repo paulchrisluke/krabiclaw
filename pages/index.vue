@@ -362,7 +362,7 @@
             </p>
             <NuxtLink
               v-if="isAuthenticated"
-              to="/dashboard/sites"
+              to="/dashboard"
               class="mt-8 inline-flex items-center gap-2 rounded-full border border-inverted/20 px-5 py-2.5 text-xs uppercase tracking-widest text-inverted/60 no-underline transition hover:border-inverted/40 hover:text-inverted/80"
             >
               Add your story in the dashboard →

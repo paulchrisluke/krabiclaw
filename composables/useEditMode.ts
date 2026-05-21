@@ -67,7 +67,7 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
         queryParams.set('locationId', effectiveLocationId.value)
       }
 
-      await $fetch(`/api/editor/sites/${tenant.siteId}/content/draft?${queryParams.toString()}`, {
+      await $fetch(`/api/dashboard/editor/content/draft?${queryParams.toString()}`, {
         method: 'POST',
         body: { 
           page: currentPage.value,
@@ -102,7 +102,7 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
         publishQueryParams.set('locationId', effectiveLocationId.value)
       }
 
-      await $fetch(`/api/editor/sites/${tenant.siteId}/content/publish?${publishQueryParams.toString()}`, {
+      await $fetch(`/api/dashboard/editor/content/publish?${publishQueryParams.toString()}`, {
         method: 'POST',
         body: { page: currentPage.value }
       })
@@ -126,7 +126,7 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
         throw new Error('No site context available')
       }
 
-      await $fetch(`/api/editor/sites/${tenant.siteId}/content/publish`, {
+      await $fetch(`/api/dashboard/editor/content/publish`, {
         method: 'POST',
         body: { all: true }
       })
@@ -156,7 +156,7 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
         discardQueryParams.set('locationId', effectiveLocationId.value)
       }
 
-      await $fetch(`/api/editor/sites/${tenant.siteId}/content/discard?${discardQueryParams.toString()}`, {
+      await $fetch(`/api/dashboard/editor/content/discard?${discardQueryParams.toString()}`, {
         method: 'POST',
         body: { page: currentPage.value }
       })
@@ -184,7 +184,7 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
         statusQueryParams.set('locationId', effectiveLocationId.value)
       }
 
-      const status = await $fetch<{ hasDrafts: boolean }>(`/api/editor/sites/${tenant.siteId}/content/status?${statusQueryParams.toString()}`)
+      const status = await $fetch<{ hasDrafts: boolean }>(`/api/dashboard/editor/content/status?${statusQueryParams.toString()}`)
       hasDrafts.value = status.hasDrafts
     } catch {
       // silently ignore — not critical

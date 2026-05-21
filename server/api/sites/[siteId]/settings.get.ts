@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   
   if (!db) {
     return jsonResponse({ 
@@ -95,6 +95,8 @@ export default defineEventHandler(async (event) => {
       partnerships_email: siteConfig.partnerships_email || '',
       catering_email: siteConfig.catering_email || '',
       careers_email: siteConfig.careers_email || '',
+      google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '',
+      google_site_verification: siteConfig.google_site_verification || '',
       url_structure: siteSettings.url_structure || 'location_subdirectories',
       max_locations,
       last_published_at: site.last_published_at,

@@ -51,7 +51,7 @@ export const useScopedContent = (siteId: string, page: string, locationId?: stri
         siteId: string
         locationId: string | null
         page: string
-      }>(`/api/editor/sites/${siteId}/content/${page}?${queryParams.toString()}`)
+      }>(`/api/dashboard/editor/content/${page}?${queryParams.toString()}`)
 
       if (response.success) {
         content.value = response.content

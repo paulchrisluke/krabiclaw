@@ -5,7 +5,7 @@ const GRAPH_API_VERSION = 'v25.0'
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 
 export interface FacebookEnv {
-  REVIEWS_DB: D1Database
+  DB: D1Database
   FACEBOOK_APP_ID?: string
   FACEBOOK_APP_SECRET?: string
   FACEBOOK_REDIRECT_URI?: string
@@ -231,7 +231,7 @@ export const storeFacebookPagesConnection = async (
   env: FacebookEnv,
   connection: Omit<FacebookPagesConnection, 'id' | 'created_at' | 'updated_at'>
 ): Promise<string> => {
-  if (!env.REVIEWS_DB) throw new Error('Database not available')
+  if (!env.DB) throw new Error('Database not available')
 
   const connectionId = `fb-connection-${connection.organization_id}-${connection.site_id}`
   const now = new Date().toISOString()
@@ -242,7 +242,7 @@ export const storeFacebookPagesConnection = async (
     ? await encryptSecret(connection.encrypted_page_token, tokenEnv)
     : null
 
-  await env.REVIEWS_DB.prepare(`
+  await env.DB.prepare(`
     INSERT INTO facebook_pages_connections
     (id, organization_id, site_id, connected_by_user_id,
      facebook_user_id, facebook_page_id, facebook_page_name,
@@ -285,9 +285,9 @@ export const getFacebookPagesConnection = async (
   organizationId: string,
   siteId: string
 ): Promise<FacebookPagesConnection | null> => {
-  if (!env.REVIEWS_DB) return null
+  if (!env.DB) return null
 
-  const connection = await env.REVIEWS_DB.prepare(`
+  const connection = await env.DB.prepare(`
     SELECT * FROM facebook_pages_connections
     WHERE organization_id = ? AND site_id = ? AND status = 'active'
     LIMIT 1
@@ -360,7 +360,7 @@ export const syncPageInfoToLocation = async (
   siteId: string,
   locationId: string
 ): Promise<void> => {
-  if (!env.REVIEWS_DB) throw new Error('Database not available')
+  if (!env.DB) throw new Error('Database not available')
 
   const now = new Date().toISOString()
   const updates: string[] = ['facebook_page_id = ?', 'facebook_connection_id = ?', 'last_synced_at = ?', 'updated_at = ?']
@@ -378,7 +378,7 @@ export const syncPageInfoToLocation = async (
   }
 
   values.push(organizationId, siteId, locationId)
-  await env.REVIEWS_DB.prepare(`
+  await env.DB.prepare(`
     UPDATE business_locations
     SET ${updates.join(', ')}
     WHERE organization_id = ? AND site_id = ? AND id = ?

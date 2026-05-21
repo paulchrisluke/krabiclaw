@@ -98,7 +98,7 @@
 const { isAuthenticated } = useAuth()
 
 const navItems = [
-  { label: 'Features', to: '/#features' },
+  { label: 'Features', to: '/features' },
   { label: 'Pricing', to: '/pricing' },
   { label: 'Templates', to: '/templates' },
   { label: 'Docs', to: '/docs' },

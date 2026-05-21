@@ -14,11 +14,13 @@
           v-if="isDragging"
           class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded bg-default/95 text-center"
         >
-          <div class="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-primary px-8 py-10">
-            <UIcon name="i-heroicons-arrow-up-tray" class="size-10 text-primary" />
-            <p class="font-medium">Drop menu image or PDF</p>
-            <p class="text-xs text-muted">JPEG, PNG, WEBP, PDF or TXT — max 10 MB</p>
-          </div>
+          <UCard :ui="{ root: 'border-2 border-dashed border-primary mx-8 my-10', body: 'px-8 py-10 sm:px-8 sm:py-10' }">
+            <div class="flex flex-col items-center gap-3">
+              <UIcon name="i-heroicons-arrow-up-tray" class="size-10 text-primary" />
+              <p class="font-medium">Drop menu image or PDF</p>
+              <p class="text-xs text-muted">JPEG, PNG, WEBP, PDF or TXT — max 10 MB</p>
+            </div>
+          </UCard>
         </div>
       </Transition>
 
@@ -71,7 +73,7 @@
       </div>
       <div v-else-if="isLow" class="shrink-0 bg-warning-50 dark:bg-warning-950 px-4 py-2 text-xs text-warning-600 dark:text-warning-400 flex items-center gap-2">
         <UIcon name="i-heroicons-exclamation-triangle" class="size-3.5 shrink-0" />
-        Low credits ({{ balance }} remaining). <NuxtLink to="/dashboard/billing" class="underline" @click="close">Top up →</NuxtLink>
+        Low credits ({{ balance }} remaining). <NuxtLink :to="orgSettings.billing.value" class="underline" @click="close">Top up →</NuxtLink>
       </div>
 
       <div class="flex-1 min-h-0 overflow-y-auto">
@@ -201,7 +203,7 @@
           <span v-else class="text-xs text-muted">or drag & drop a menu file anywhere</span>
         </div>
         <p v-if="!siteId" class="mt-2 text-center text-xs text-muted">
-          Navigate to a site to use ChowBot.
+          Create your restaurant workspace to use ChowBot.
         </p>
       </div>
 
@@ -217,9 +219,11 @@
 </template>
 
 <script setup lang="ts">
+// -nocheck
 import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages } = useChowBot()
+const orgSettings = useOrgSettings()
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
 
@@ -249,7 +253,7 @@ const starterPrompts = [
   'Show me my latest posts',
   "Write a post about today's special",
   "What's on our menu?",
-  'Give me a site overview',
+  'Give me a restaurant overview',
 ]
 
 const convertToAttachment = () => {
@@ -357,7 +361,7 @@ const processFile = async (file: File, caption = '') => {
     let httpOk = false
     let httpStatus = 0
     try {
-      const raw = await fetch(`/api/ai/${siteId.value}/menu/extract`, { method: 'POST', body: formData })
+      const raw = await fetch(`/api/dashboard/ai/menu/extract`, { method: 'POST', body: formData })
       httpOk = raw.ok
       httpStatus = raw.status
       json = await raw.json().catch(() => null)

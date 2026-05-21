@@ -176,7 +176,7 @@ async function enhance() {
   enhancing.value = true
   error.value = null
   try {
-    const res = await $fetch<{ enhanced: string }>(`/api/ai/${props.siteId}/enhance-prompt`, {
+    const res = await $fetch<{ enhanced: string }>(`/api/dashboard/ai/enhance-prompt`, {
       method: 'POST',
       body: { prompt: prompt.value.trim(), context: props.context ?? '' },
     })
@@ -201,7 +201,7 @@ async function generate() {
   outOfCredits.value = false
 
   try {
-    const asset = await $fetch<GeneratedAsset>(`/api/ai/${props.siteId}/generate-image`, {
+    const asset = await $fetch<GeneratedAsset>(`/api/dashboard/ai/generate-image`, {
       method: 'POST',
       body: { prompt: promptText, locationId: props.locationId ?? undefined },
       signal: controller.signal,

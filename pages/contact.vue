@@ -228,8 +228,8 @@
                 <p class="text-muted">hello@krabiclaw.com</p>
               </div>
               <div>
-                <h3 class="font-semibold text-default mb-1">Location</h3>
-                <p class="text-muted">Krabi, Thailand 🦀</p>
+                <h3 class="font-semibold text-default mb-1">Operating Model</h3>
+                <p class="text-muted">Fully Distributed & Remote 🌐</p>
               </div>
               <div>
                 <h3 class="font-semibold text-default mb-1">Support</h3>

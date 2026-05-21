@@ -27,11 +27,7 @@ export const useChowBot = () => {
 
   const route = useRoute()
   const history = useChowBotHistory()
-
-  const siteId = computed(() => {
-    const param = route.params.siteId
-    return typeof param === 'string' ? param : null
-  })
+  const { siteId, selectedLocation } = useDashboardRestaurant()
 
   const locationId = computed(() => {
     const param = route.query.locationId
@@ -83,14 +79,16 @@ export const useChowBot = () => {
 
     // Keep panel open across navigation — set isLoading briefly as a guard
     // so the overlay @click doesn't fire during the route transition
+    const dashboardLinks = useDashboardSiteLinks(siteId.value)
+    const paths = dashboardLinks.paths.value
     let target = ''
     if (names.has('create_post') || names.has('publish_post')) {
-      target = `/dashboard/sites/${siteId.value}/posts`
+      target = paths.posts
     } else if (names.has('create_location') || names.has('update_location')) {
-      target = `/dashboard/sites/${siteId.value}/locations`
+      target = paths.org
     } else if ([...names].some(n => MENU_TOOLS.has(n))) {
       const locId = locationId.value
-      target = `/dashboard/sites/${siteId.value}/menu${locId ? `?locationId=${encodeURIComponent(locId)}` : ''}`
+      target = locId ? dashboardLinks.locationMenuPath(locId) : paths.menu
     }
 
     if (target) {
@@ -142,7 +140,7 @@ export const useChowBot = () => {
     if (!siteId.value) {
       messages.value = [...messages.value, {
         role: 'assistant',
-        content: 'Navigate to a site to use ChowBot.',
+        content: 'Create your restaurant workspace to use ChowBot.',
       }]
       return
     }
@@ -157,14 +155,14 @@ export const useChowBot = () => {
     isLoading.value = true
 
     try {
-      const response = await fetch(`/api/ai/${siteId.value}/agent`, {
+      const response = await fetch(`/api/dashboard/ai/agent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationId: conversationId.value,
           message: text.trim(),
           currentPage: currentPageOverride.value ?? route.name,
-          locationId: locationId.value,
+          locationId: locationId.value ?? selectedLocation.value?.id ?? null,
         }),
       })
 

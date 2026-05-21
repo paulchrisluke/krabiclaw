@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   
   if (!db) {
     return jsonResponse({ 
@@ -196,7 +196,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const socialUrlKeys = new Set(['social_facebook', 'social_instagram', 'social_tiktok'])
-    for (const key of ['social_facebook', 'social_instagram', 'social_tiktok', 'footer_tagline', 'press_email', 'partnerships_email', 'catering_email', 'careers_email'] as const) {
+    for (const key of ['social_facebook', 'social_instagram', 'social_tiktok', 'footer_tagline', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_analytics_measurement_id', 'google_site_verification'] as const) {
       if (body[key] !== undefined) {
         const value = body[key]
         if (value) {
@@ -288,6 +288,8 @@ export default defineEventHandler(async (event) => {
       partnerships_email: siteConfig.partnerships_email || '',
       catering_email: siteConfig.catering_email || '',
       careers_email: siteConfig.careers_email || '',
+      google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '',
+      google_site_verification: siteConfig.google_site_verification || '',
       last_published_at: updatedSite.last_published_at,
       created_at: updatedSite.created_at,
       updated_at: updatedSite.updated_at

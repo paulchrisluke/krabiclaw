@@ -6,7 +6,7 @@
           <div class="mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl bg-primary/10">
             <UIcon name="i-lucide-bot" class="size-8 text-primary" />
           </div>
-          <h1 class="text-3xl font-bold text-highlighted">Create your restaurant website</h1>
+          <h1 class="text-3xl font-bold text-highlighted">Create your restaurant workspace</h1>
           <p class="mt-2 text-muted">Give your restaurant a name and ChowBot will handle the rest.</p>
         </div>
 
@@ -132,17 +132,17 @@ async function handleContinue() {
   createError.value = ''
 
   try {
-    const res = await $fetch<{ siteId: string }>('/api/onboarding/create-site', {
+    await $fetch<{ restaurantId: string }>('/api/onboarding/create-site', {
       method: 'POST',
       body: { restaurantName: restaurantName.value.trim(), subdomain: subdomain.value }
     })
-    const { paths } = useDashboardSiteLinks(res.siteId)
-    await navigateTo(paths.value.setup)
+    await useDashboardRestaurant().refresh()
+    await navigateTo('/dashboard')
   } catch (err) {
     const msg = err && typeof err === 'object' && 'data' in err
       ? (err as { data?: { message?: string } }).data?.message
-      : (err instanceof Error ? err.message : 'Failed to create site')
-    createError.value = msg || 'Failed to create site. Please try again.'
+      : (err instanceof Error ? err.message : 'Failed to create restaurant')
+    createError.value = msg || 'Failed to create restaurant. Please try again.'
     if (createError.value.toLowerCase().includes('taken') || createError.value.toLowerCase().includes('subdomain')) {
       subdomainAvailable.value = false
       subdomainError.value = 'This subdomain is already taken.'
@@ -152,5 +152,5 @@ async function handleContinue() {
   }
 }
 
-useSeoMeta({ title: 'Create Restaurant Website | KrabiClaw', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Create Restaurant | KrabiClaw', robots: 'noindex, nofollow' })
 </script>

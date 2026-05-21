@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
     }, { status: 400 })
   }
   
-  const db = env.REVIEWS_DB
+  const db = env.DB
   
   if (!db) {
     return jsonResponse({ 

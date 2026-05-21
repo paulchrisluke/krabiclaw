@@ -34,7 +34,7 @@
         </ul>
 
         <div class="mt-6">
-          <UButton to="/dashboard/billing" color="primary" block @click="close">
+          <UButton :to="orgSettings.billing.value" color="primary" block @click="close">
             Get Pro
           </UButton>
         </div>
@@ -45,6 +45,7 @@
 
 <script setup lang="ts">
 const { isOpen, feature, close } = useUpgradeModal()
+const orgSettings = useOrgSettings()
 
 const featureMap: Record<string, { title: string; description: string }> = {
   'qa-writeback': {

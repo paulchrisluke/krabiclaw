@@ -76,35 +76,83 @@
     </div>
 
     <!-- ── PLATFORM: KrabiClaw about page ────────────────── -->
-    <div v-else class="container mx-auto px-4 py-16">
-      <div class="max-w-3xl mx-auto">
-        <div class="mb-16">
-          <h1 class="text-4xl font-bold text-default mb-4">About KrabiClaw</h1>
-          <p class="text-xl text-muted">
-            A restaurant website platform inspired by the restaurants we love in Krabi — built to help independent restaurants compete online without needing technical skills or expensive agencies.
+    <div v-else class="relative overflow-hidden bg-default min-h-screen py-20 lg:py-28">
+      <!-- Ambient Mesh Background Lights -->
+      <div class="absolute top-0 right-1/4 -z-10 w-96 h-96 bg-primary/10 rounded-full blur-3xl opacity-50"></div>
+      <div class="absolute bottom-1/3 left-1/4 -z-10 w-[500px] h-[500px] bg-(--kc-teal)/10 rounded-full blur-3xl opacity-40"></div>
+
+      <div class="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl relative z-10">
+        
+        <!-- Header -->
+        <div class="text-center max-w-3xl mx-auto mb-20 flex flex-col items-center gap-4">
+          <!-- Eyebrow -->
+          <span class="inline-flex items-center gap-2 text-[11px] font-bold tracking-[0.2em] uppercase text-(--kc-teal-600) bg-(--kc-teal-100) px-3.5 py-1.5 rounded-full border border-(--kc-teal)/25">
+            <span class="w-1.5 h-1.5 rounded-full bg-(--kc-teal) shrink-0 animate-ping" />
+            Our Story &amp; Mission
+          </span>
+          
+          <h1 class="text-[clamp(36px,5vw,56px)] font-extrabold leading-[1.05] tracking-tight text-default text-balance m-0 mt-2">
+            The heart behind <span class="bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">KrabiClaw</span>.
+          </h1>
+          
+          <p class="text-lg leading-relaxed text-muted m-0 max-w-2xl mt-2">
+            A restaurant website platform inspired by the independent, family-run eateries we love around the world — built to help them thrive in the digital era.
           </p>
         </div>
-        <article class="prose prose-lg max-w-none text-default space-y-8">
-          <section>
-            <h2 class="text-2xl font-bold text-default mb-4">How It Started</h2>
-            <p class="text-muted">KrabiClaw began during COVID, when restaurants suddenly needed online ordering, delivery systems, and websites just to survive. Early versions of the platform were built to help restaurants get online quickly and manage food delivery operations without complicated software.</p>
-            <p class="text-muted">But one problem kept appearing: menu management.</p>
-            <p class="text-muted">Most restaurant owners didn't want to log into dashboards or learn website builders. They wanted to send a WhatsApp message like "add this item," "change this price," or upload a photo of a new menu page.</p>
-            <p class="text-muted">Then AI changed what was possible.</p>
-            <p class="text-muted">That led to ChowBot — the assistant behind KrabiClaw. Restaurant owners can simply message ChowBot on WhatsApp to update menus, generate food images, create marketing content, publish announcements, and manage their restaurant website using natural conversation.</p>
-          </section>
-          <section>
-            <h2 class="text-2xl font-bold text-default mb-4">Why KrabiClaw Exists</h2>
-            <p class="text-muted">Generic website builders weren't made for restaurants. They don't understand menus, delivery workflows, Google Business integration, or how restaurant owners actually operate day to day.</p>
-            <p class="text-muted">KrabiClaw is built specifically for restaurants. Every feature comes from solving real operational problems faced by real restaurant owners.</p>
-          </section>
-          <section>
-            <h2 class="text-2xl font-bold text-default mb-4">Get in Touch</h2>
-            <p class="text-muted">Questions, partnership ideas, or just want to talk restaurants and technology — we'd love to hear from you.</p>
-            <div class="not-prose flex flex-col sm:flex-row gap-4 mt-6">
-              <UButton to="/contact" color="primary" size="lg">Contact Us</UButton>
+
+        <!-- Story Sections -->
+        <article class="space-y-12">
+          <!-- How It Started Card -->
+          <div class="group relative bg-elevated/40 backdrop-blur-md border border-default p-8 sm:p-10 rounded-[32px] shadow-lg hover:shadow-xl transition-all duration-300">
+            <div class="absolute -top-12 -right-12 w-32 h-32 bg-primary/10 rounded-full blur-2xl opacity-50"></div>
+            <div class="relative z-10">
+              <span class="text-xs font-black tracking-widest uppercase text-primary">01 / Origin</span>
+              <h2 class="text-2xl font-black text-default mt-2 mb-4">How It Started</h2>
+              <div class="space-y-4 text-[14px] leading-relaxed text-muted">
+                <p>KrabiClaw began during COVID, when restaurants suddenly needed online ordering, delivery systems, and websites just to survive. Early versions of the platform were built to help restaurants get online quickly and manage food delivery operations without complicated software.</p>
+                <p>But one problem kept appearing: menu management. Most restaurant owners didn't want to log into dashboards or learn website builders. They wanted to send a simple WhatsApp message like "add this item," "change this price," or upload a photo of a new menu page.</p>
+                <p>That led to <strong class="text-default">ChowBot</strong> — the assistant behind KrabiClaw. Restaurant owners can simply message ChowBot on WhatsApp to update menus, generate food descriptions, publish announcements, and manage their restaurant website using natural, friendly conversation.</p>
+              </div>
             </div>
-          </section>
+          </div>
+
+          <!-- Why KrabiClaw Exists Card -->
+          <div class="group relative bg-elevated/40 backdrop-blur-md border border-default p-8 sm:p-10 rounded-[32px] shadow-lg hover:shadow-xl transition-all duration-300">
+            <div class="absolute -bottom-12 -right-12 w-32 h-32 bg-(--kc-teal)/10 rounded-full blur-2xl opacity-50"></div>
+            <div class="relative z-10">
+              <span class="text-xs font-black tracking-widest uppercase text-(--kc-teal-600)">02 / Purpose</span>
+              <h2 class="text-2xl font-black text-default mt-2 mb-4">Why KrabiClaw Exists</h2>
+              <div class="space-y-4 text-[14px] leading-relaxed text-muted">
+                <p>Generic website builders weren't made for restaurants. They don't understand menus, digital reservations, delivery workflows, Google Business sync, or how restaurant owners actually operate day-to-day.</p>
+                <p>KrabiClaw is built specifically for restaurants. Every single detail comes from solving real operational challenges faced by real restaurant owners. We focus on simplicity, premium design, and AI automation so you can focus on the food.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- CTA Banner -->
+          <div class="relative overflow-hidden bg-gradient-to-br from-primary/5 via-elevated/40 to-(--kc-teal)/5 border border-default rounded-[32px] p-8 sm:p-10 text-center shadow-lg">
+            <div class="absolute inset-0 bg-gradient-to-tr from-primary/10 via-(--kc-coral)/15 to-(--kc-teal)/10 rounded-full blur-3xl -z-10 animate-pulse duration-[8s]"></div>
+            <div class="relative z-10 flex flex-col items-center gap-4">
+              <div class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                <UIcon name="i-heroicons-envelope" class="size-6" />
+              </div>
+              <h3 class="text-xl font-extrabold text-default">Get in Touch</h3>
+              <p class="text-sm text-muted max-w-xl">
+                Have questions, partnership ideas, or just want to talk restaurants and technology? We'd love to hear from you.
+              </p>
+              <div class="mt-2 flex flex-wrap justify-center gap-4">
+                <UButton 
+                  to="/contact" 
+                  color="primary" 
+                  size="xl" 
+                  class="rounded-xl font-bold cursor-pointer transition-all duration-300 hover:scale-[1.02]"
+                >
+                  Contact Us
+                  <UIcon name="i-heroicons-arrow-right" class="size-4" />
+                </UButton>
+              </div>
+            </div>
+          </div>
         </article>
       </div>
     </div>
@@ -155,7 +203,7 @@ if (isPlatform) {
 useSeoMeta(isPlatform
   ? {
       title: 'About | KrabiClaw',
-      description: 'KrabiClaw is an AI-powered restaurant website builder built in Krabi, Thailand by Paul Chris Luke.',
+      description: 'KrabiClaw is a premium, AI-powered website builder designed for independent restaurants globally.',
       ogImage: sharedOgImage,
       ogUrl: `${siteUrl}/about`
     }

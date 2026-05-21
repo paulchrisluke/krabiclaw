@@ -60,8 +60,8 @@ export default defineEventHandler(async (event) => {
     })
 
     const redirectTo = locationId
-      ? `/dashboard/sites/${siteId}/locations/${locationId}?gb=connected`
-      : `/dashboard/sites/${siteId}?gb=connected`
+      ? `/dashboard/locations/${locationId}?gb=connected`
+      : `/dashboard?gb=connected`
 
     return new Response(null, { status: 302, headers: { Location: redirectTo } })
   } catch (error) {

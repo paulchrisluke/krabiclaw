@@ -8,7 +8,7 @@
             <p class="text-sm font-medium text-highlighted">Auto top-up</p>
             <p class="text-xs text-muted">Automatically add credits when your balance runs low</p>
           </div>
-          <UToggle v-model="form.enabled" />
+          <USwitch v-model="form.enabled" />
         </div>
 
         <div v-if="form.enabled" class="space-y-4 border-t border-default pt-4">

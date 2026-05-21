@@ -322,3 +322,70 @@ The system is simple: QR code on every table, WhatsApp follow-up for regulars, r
   '2026-04-28T09:00:00.000Z',
   '2026-04-28T09:00:00.000Z'
 );
+
+-- Post 5: SEO & Analytics
+INSERT OR IGNORE INTO platform_blog_posts (id, title, slug, body, excerpt, category, author_id, published_at, created_at, updated_at)
+VALUES (
+  'b1a2c3d4-e5f6-7890-abcd-ef1234567805',
+  'Demystifying Restaurant SEO: Why You Need Search Console and Analytics Connected',
+  'demystifying-restaurant-seo-search-console-analytics',
+  '## The Battle for the Front Page of Google
+
+When someone in your neighborhood searches "sushi near me" or "best Italian restaurant," a war breaks out in the search results. 
+
+If you don''t have your SEO set up, who wins? It''s almost always the multi-billion dollar delivery giants: Grab, Foodpanda, Tripadvisor, and Yelp. They dominate the top search slots, capture the hungry customer, and then charge you a 30% commission on the order or hold your customer data hostage.
+
+But it doesn''t have to be this way. By connecting **Google Search Console** and **Google Analytics 4 (GA4)** to your KrabiClaw storefront, you can turn your website into a direct, high-converting acquisition channel. Here is why these two tools are your secret weapons for commission-free growth.
+
+## Why Custom Domains and Direct SEO Matter
+
+Search engine optimization (SEO) is the difference between paying a middleman and keeping 100% of your revenue. 
+
+When you use a third-party portal, you are renting someone else''s audience. When you build a direct web presence on your own custom domain, you are building an asset. 
+
+KrabiClaw is designed from the ground up to rank. Every theme includes:
+- **Lightning-fast edge delivery** so search engines score you highly for speed.
+- **Automated JSON-LD Schema markup**, telling Google exactly what cuisine you serve, your physical coordinates, and your opening hours.
+- **Dynamic XML sitemaps** that automatically update whenever you change your menu.
+
+But to unlock the full potential of these features, you must claim ownership of your data. That''s where Search Console and Analytics come in.
+
+## Google Search Console: The Eyes of Your Website
+
+Think of Google Search Console (GSC) as a two-way radio between your restaurant and Google. It is a free tool that tells you exactly how the search engine sees your site.
+
+When you connect Search Console via our [Restaurant SEO & Analytics Setup Guide](/docs/restaurant-seo-analytics-setup-guide), you gain access to vital insights:
+- **Search Queries**: What exact terms did people type before clicking on your restaurant? (e.g., "outdoor dining Krabi" vs "authentic pad thai near me").
+- **Indexing Status**: Are all your pages (like individual locations or special event pages) successfully indexed by Google?
+- **Sitemap Submission**: You can submit your sitemap directly, telling Google to index your new dishes immediately.
+
+Without GSC, you are flying blind. With it, you know exactly what keywords to write into your pages to attract more diners.
+
+## Google Analytics 4: Understanding the Diner''s Journey
+
+If Search Console tells you *how* people got to your website, Google Analytics 4 (GA4) tells you *what they did* once they arrived.
+
+By adding your Measurement ID, GA4 begins tracking behavior:
+- **Menu Visits**: Do diners spend 3 minutes looking at your menu page? If so, is your menu optimized to build trust? Refer to our guide on how to [Build a Menu Customers Can Trust](/docs/build-a-menu-customers-can-trust) to make sure your descriptions and allergen labels convert scanning into cravings.
+- **Reservation Conversion**: What percentage of visitors actually click "Book a Table"? If traffic is high but bookings are low, your reservation flow might have too much friction.
+- **Traffic Sources**: Are your customers coming from Instagram Reels, local blogs, or organic Google searches?
+
+Knowing this data allows you to make smart, business-driven decisions. If Instagram is driving 80% of your bookings, you double down on video. If direct organic search dominates, you focus on local keywords.
+
+## How to Get Started in 5 Minutes
+
+We designed KrabiClaw to keep things simple. You don''t need to hire an expensive agency or deal with complex code.
+
+1. **Verify Your Site**: Follow the simple steps in our [Launch Your Restaurant Website](/docs/launch-your-restaurant-website) checklist to verify your ownership in Google Search Console.
+2. **Input Your Tags**: Go to your KrabiClaw Dashboard, navigate to **Site Settings**, scroll to the **SEO & Analytics** card, and input your GA4 Measurement ID and GSC verification code.
+3. **Analyze & Grow**: Let the data collect for a week, then check your analytics. 
+
+Every direct reservation is money saved from third-party commissions. Claim your front-page search listings, connect your analytics, and watch your direct bookings grow.',
+  'Why do third-party delivery apps dominate restaurant search results, and how can your restaurant reclaim its organic traffic? Discover why connecting Google Search Console and Google Analytics 4 is the most critical step to driving direct, commission-free reservations.',
+  'SEO',
+  'system',
+  '2026-05-20T10:00:00.000Z',
+  '2026-05-20T10:00:00.000Z',
+  '2026-05-20T10:00:00.000Z'
+);
+

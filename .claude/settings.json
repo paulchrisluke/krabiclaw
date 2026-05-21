@@ -1,4 +1,5 @@
 {
+  "enabledMcpjsonServers": ["nuxt-ui"],
   "permissions": {
     "allow": [
       "Bash(gh pr *)",

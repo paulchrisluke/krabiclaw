@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   if (!siteId || !domainId) return jsonResponse({ error: 'Site ID and domain ID are required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const session = await getAuthSession(event, env)
@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
       status: 'deleted',
       title: `Domain deleted: ${domain.domain}`,
       message: `${domain.domain} has been removed from KrabiClaw.`,
-      dashboardUrl: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/sites/${siteId}/settings`
+      dashboardUrl: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN}/dashboard/settings`
     })
     return jsonResponse({ success: true })
   } catch (error) {

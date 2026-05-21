@@ -8,21 +8,21 @@ export default defineTask({
   async run({ context }) {
     const taskContext = context as { cloudflare?: { env?: ApiRecord } } | undefined
     const env = taskContext?.cloudflare?.env ?? {}
-    const db = env?.REVIEWS_DB
+    const db = env?.DB
 
     if (!db && import.meta.dev) {
       return {
         result: {
           aggregated: '',
           cleaned: 0,
-          skipped: 'REVIEWS_DB unavailable in local scheduled task context',
+          skipped: 'DB unavailable in local scheduled task context',
           message: 'Skipped analytics aggregation in dev mode',
           error: ''
         }
       }
     }
 
-    if (!db) throw new Error('REVIEWS_DB is required')
+    if (!db) throw new Error('DB is required')
 
     try {
       // Aggregate analytics for yesterday (previous day)

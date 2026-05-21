@@ -28,7 +28,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
         params.set('locationId', effectiveLocationId.value)
       }
       const response = await $fetch<{ success: boolean; menus: Menu[] }>(
-        `/api/editor/sites/${siteId}/menus${params.toString() ? `?${params.toString()}` : ''}`
+        `/api/dashboard/editor/menus${params.toString() ? `?${params.toString()}` : ''}`
       )
 
       if (requestId !== loadMenusRequestId) return
@@ -54,7 +54,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     error.value = null
     try {
       const response = await $fetch<{ success: boolean; menu: MenuWithItems }>(
-        `/api/editor/sites/${siteId}/menus/${menuId}`
+        `/api/dashboard/editor/menus/${menuId}`
       )
       if (response.success) {
         currentMenu.value = response.menu
@@ -73,7 +73,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     error.value = null
     try {
       const response = await $fetch<{ success: boolean; menu: Menu }>(
-        `/api/editor/sites/${siteId}/menus`,
+        `/api/dashboard/editor/menus`,
         { method: 'POST', body: { ...menuData, locationId: effectiveLocationId.value } }
       )
       if (response.success) {
@@ -94,7 +94,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     error.value = null
     try {
       const response = await $fetch<{ success: boolean; menu: Menu }>(
-        `/api/editor/sites/${siteId}/menus/${menuId}`,
+        `/api/dashboard/editor/menus/${menuId}`,
         { method: 'PATCH', body: updates }
       )
       if (response.success) {
@@ -116,7 +116,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      await $fetch(`/api/editor/sites/${siteId}/menus/${menuId}`, { method: 'DELETE' })
+      await $fetch(`/api/dashboard/editor/menus/${menuId}`, { method: 'DELETE' })
       currentMenu.value = null
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
@@ -132,7 +132,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     error.value = null
     try {
       const response = await $fetch<{ success: boolean; menuItem: MenuItem }>(
-        `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items`,
+        `/api/dashboard/editor/menus/${currentMenu.value.id}/items`,
         { method: 'POST', body: itemData }
       )
       if (response.success) {
@@ -154,7 +154,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     error.value = null
     try {
       const response = await $fetch<{ success: boolean; menuItem: MenuItem }>(
-        `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items/${itemId}`,
+        `/api/dashboard/editor/menus/${currentMenu.value.id}/items/${itemId}`,
         { method: 'PATCH', body: updates }
       )
       if (response.success) {
@@ -176,7 +176,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      await $fetch(`/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items/${itemId}`, { method: 'DELETE' })
+      await $fetch(`/api/dashboard/editor/menus/${currentMenu.value.id}/items/${itemId}`, { method: 'DELETE' })
       currentMenu.value.items = currentMenu.value.items.filter(item => item.id !== itemId)
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
@@ -192,7 +192,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     error.value = null
     try {
       const response = await $fetch<{ success: boolean; old_section: string; new_section: string; updated: number }>(
-        `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/sections`,
+        `/api/dashboard/editor/menus/${currentMenu.value.id}/sections`,
         { method: 'PATCH', body: { old_section: oldSection, new_section: newSection } }
       )
       if (response.success) {
@@ -220,7 +220,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     try {
       const encodedSection = encodeURIComponent(section)
       const response = await $fetch<{ success: boolean; section: string; deleted: number }>(
-        `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/sections?section=${encodedSection}`,
+        `/api/dashboard/editor/menus/${currentMenu.value.id}/sections?section=${encodedSection}`,
         { method: 'DELETE' }
       )
       if (response.success) {
@@ -242,7 +242,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      await $fetch(`/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/reorder`, {
+      await $fetch(`/api/dashboard/editor/menus/${currentMenu.value.id}/reorder`, {
         method: 'POST',
         body: { items }
       })

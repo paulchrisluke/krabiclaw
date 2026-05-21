@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
   const eventId = body.message?.messageId ?? crypto.randomUUID()
   const locationId = locationName ? locationName.split('/').pop() : locationName
 
-  await env.REVIEWS_DB.prepare(
+  await env.DB.prepare(
     `INSERT OR IGNORE INTO google_business_events (id, google_location_id, event_type, payload, status)
      VALUES (?, ?, ?, ?, 'received')`
   ).bind(eventId, locationId, eventType, JSON.stringify({ body, decoded, reviewName })).run()
@@ -44,12 +44,12 @@ export default defineEventHandler(async (event) => {
   try {
     // Get location from event data for sync
     await getGoogleBusinessData(env, locationId)
-    await env.REVIEWS_DB.prepare(
+    await env.DB.prepare(
       `UPDATE google_business_events SET status = 'synced' WHERE id = ?`
     ).bind(eventId).run()
     return jsonResponse({ ok: true })
   } catch (error) {
-    await env.REVIEWS_DB.prepare(
+    await env.DB.prepare(
       `UPDATE google_business_events SET status = 'sync_failed' WHERE id = ?`
     ).bind(eventId).run()
     return jsonResponse({

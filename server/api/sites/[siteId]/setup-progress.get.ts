@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const db = env.REVIEWS_DB
+  const db = env.DB
 
   if (!db) {
     return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -139,7 +139,7 @@ export default defineEventHandler(async (event) => {
         description: 'Add your restaurant\'s physical location so guests can find you.',
         done: hasPrimaryLocation,
         required: true,
-        action_url: `/dashboard/sites/${siteId}/locations`
+        action_url: `/dashboard/locations`
       },
       {
         id: 'location_address',
@@ -147,7 +147,7 @@ export default defineEventHandler(async (event) => {
         description: 'A full address enables the map on your contact page.',
         done: hasAddress,
         required: true,
-        action_url: hasPrimaryLocation ? `/dashboard/sites/${siteId}/locations` : undefined
+        action_url: hasPrimaryLocation ? `/dashboard/locations` : undefined
       },
       {
         id: 'opening_hours',
@@ -155,7 +155,7 @@ export default defineEventHandler(async (event) => {
         description: 'Guests need to know when you\'re open.',
         done: hasHours,
         required: true,
-        action_url: hasPrimaryLocation ? `/dashboard/sites/${siteId}/locations` : undefined
+        action_url: hasPrimaryLocation ? `/dashboard/locations` : undefined
       },
       {
         id: 'menu_items',
@@ -164,8 +164,8 @@ export default defineEventHandler(async (event) => {
         done: hasFiveMenuItems,
         required: true,
         action_url: primaryLocation
-          ? `/dashboard/sites/${siteId}/menu?locationId=${primaryLocation.id}`
-          : `/dashboard/sites/${siteId}/menu`
+          ? `/dashboard/menu?locationId=${primaryLocation.id}`
+          : `/dashboard/menu`
       },
       {
         id: 'logo',
@@ -173,7 +173,7 @@ export default defineEventHandler(async (event) => {
         description: 'Upload your logo for a polished look across your site.',
         done: hasLogo,
         required: false,
-        action_url: `/dashboard/sites/${siteId}/settings`
+        action_url: `/dashboard/account/settings`
       },
       {
         id: 'brand_description',
@@ -181,7 +181,7 @@ export default defineEventHandler(async (event) => {
         description: 'A short tagline used in SEO and your homepage.',
         done: hasBrandDescription,
         required: false,
-        action_url: `/dashboard/sites/${siteId}/settings`
+        action_url: `/dashboard/account/settings`
       },
       {
         id: 'photos',
@@ -189,7 +189,7 @@ export default defineEventHandler(async (event) => {
         description: 'Photos bring your restaurant to life.',
         done: hasPhotos,
         required: false,
-        action_url: `/dashboard/sites/${siteId}/media`
+        action_url: `/dashboard/media`
       },
       {
         id: 'about_page',
@@ -197,7 +197,7 @@ export default defineEventHandler(async (event) => {
         description: 'Tell your story — where you came from, what makes you special.',
         done: hasAboutPage,
         required: false,
-        action_url: `/dashboard/sites/${siteId}/content`
+        action_url: `/dashboard/content`
       },
       {
         id: 'contact_email',
@@ -205,7 +205,7 @@ export default defineEventHandler(async (event) => {
         description: 'Let guests reach you directly from your website.',
         done: hasContactEmail,
         required: false,
-        action_url: `/dashboard/sites/${siteId}/settings`
+        action_url: `/dashboard/account/settings`
       }
     ]
 

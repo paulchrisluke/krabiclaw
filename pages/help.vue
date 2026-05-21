@@ -44,7 +44,7 @@
 
       <div class="mt-12 bg-elevated rounded-2xl p-8 text-center border border-default">
         <p class="text-default font-semibold mb-2">Still need help?</p>
-        <p class="text-muted mb-6">We're based in Krabi, Thailand and reply within one business day.</p>
+        <p class="text-muted mb-6">Our fully distributed team operates across global timezones and replies within one business day.</p>
         <UButton color="primary" to="/contact">Contact Support</UButton>
       </div>
     </div>
@@ -149,7 +149,7 @@ const sections = [
     faqs: [
       {
         q: 'How does Google Business sync work?',
-        a: 'Connect your Google Business Profile under Dashboard → Integrations. KrabiClaw then pulls your name, address, hours, photos, reviews, and Q&amp;A automatically. Updates you make on Google Business appear on your site within minutes.'
+        a: 'Connect under Integrations to pull name, address, hours, photos, reviews.'
       },
       {
         q: 'Will my Google reviews show on my site?',
@@ -199,7 +199,7 @@ const filteredSections = computed(() => {
 
 useSeoMeta({
   title: 'Help Center | KrabiClaw',
-  description: 'Answers to common questions about KrabiClaw — the restaurant website builder built in Krabi, Thailand.',
+  description: 'Answers to common questions about KrabiClaw — the premium AI-powered restaurant website builder.',
   ogImage: useSharedOgImage(),
   ogUrl: `${siteUrl}/help`
 })

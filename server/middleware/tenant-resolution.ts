@@ -5,7 +5,7 @@ import { defineEventHandler, getRequestURL, getHeader } from 'h3'
 import { cloudflareEnv } from '../utils/api-response'
 
 interface TenantResolutionEnv {
-  REVIEWS_DB?: D1Database
+  DB?: D1Database
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
 }
 
@@ -90,6 +90,7 @@ function isPlatformRoute(pathname: string): boolean {
     '/pricing',
     '/dashboard',
     '/api/auth',
+    '/api/dashboard',
     '/api/sites',
     '/api/admin',
     '/templates',
@@ -108,7 +109,7 @@ function isPlatformRoute(pathname: string): boolean {
 
 async function resolveTenantSite(host: string, event: Parameters<typeof cloudflareEnv>[0]): Promise<TenantSiteRow | null> {
   const env = cloudflareEnv(event) as TenantResolutionEnv
-  const db = env.REVIEWS_DB
+  const db = env.DB
   const hostname = host?.split(':')[0] || ''
   
   if (!db || !hostname) return null
