@@ -1,40 +1,14 @@
 <template>
   <div>
-    <!-- Billing toggle -->
-    <div class="flex items-center justify-center mb-16">
-      <div class="inline-flex items-center gap-4 bg-elevated/80 backdrop-blur-md border border-default px-6 py-3 rounded-full shadow-sm">
-        <span class="text-sm font-semibold transition-colors duration-200" :class="!annual ? 'text-primary' : 'text-muted'">Monthly</span>
-        <button
-          class="relative w-12 h-6 rounded-full transition-all duration-300 cursor-pointer shadow-inner"
-          :class="annual ? 'bg-primary' : 'bg-muted/70'"
-          role="switch"
-          :aria-checked="annual"
-          aria-label="Toggle annual billing"
-          @click="annual = !annual"
-        >
-          <span
-            class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300"
-            :class="{ 'translate-x-6': annual }"
-          />
-        </button>
-        <span class="text-sm font-semibold transition-colors duration-200 flex items-center gap-1.5" :class="annual ? 'text-primary' : 'text-muted'">
-          Annual 
-          <span class="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200/50">
-            Save {{ savingsPercentLabel }}
-          </span>
-        </span>
-      </div>
-    </div>
-
-    <!-- Cards -->
-    <div class="grid md:grid-cols-3 gap-8 items-stretch">
+    <!-- Plan cards — 4 cols on large screens -->
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
       <div
         v-for="plan in plans"
         :key="plan.id"
-        :class="plan.highlighted ? 'md:-mt-4 md:mb-4' : ''"
+        :class="plan.highlighted ? 'lg:-mt-4 lg:mb-4' : ''"
         class="flex flex-col"
       >
-        <BillingPlanCard :plan="plan" :annual="annual" class="h-full flex-1">
+        <BillingPlanCard :plan="plan" :annual="false" class="h-full flex-1">
           <template v-if="plan.prices.length" #cta>
             <UButton
               size="xl"
@@ -42,8 +16,8 @@
               :loading="upgrading === plan.id"
               class="rounded-xl font-bold cursor-pointer transition-all duration-300 shadow-sm"
               :class="[
-                plan.highlighted 
-                  ? 'bg-primary hover:bg-primary/95 text-white hover:scale-[1.01]' 
+                plan.highlighted
+                  ? 'bg-primary hover:bg-primary/95 text-white hover:scale-[1.01]'
                   : 'text-default border-default hover:bg-primary/5 hover:border-primary/50'
               ]"
               :variant="plan.highlighted ? 'solid' : 'outline'"
@@ -64,45 +38,45 @@
       </div>
     </div>
 
-    <!-- Per-location callout -->
+    <!-- Managed service callout -->
     <div class="max-w-3xl mx-auto mt-20 relative overflow-hidden bg-gradient-to-br from-primary/5 via-elevated/40 to-(--kc-teal)/5 border border-default/70 backdrop-blur-md rounded-3xl p-8 sm:p-10 text-center shadow-lg hover:shadow-xl transition-shadow duration-300">
-      <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 rounded-full blur-3xl opacity-40"></div>
-      <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-(--kc-teal)/10 rounded-full blur-3xl opacity-40"></div>
+      <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 rounded-full blur-3xl opacity-40" />
+      <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-(--kc-teal)/10 rounded-full blur-3xl opacity-40" />
 
       <div class="relative z-10 flex flex-col items-center gap-3">
         <div class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-1">
-          <UIcon name="i-heroicons-map-pin" class="size-6" />
+          <UIcon name="i-heroicons-sparkles" class="size-6" />
         </div>
-        <h3 class="text-xl font-extrabold text-default tracking-tight">Why per-location pricing?</h3>
+        <h3 class="text-xl font-extrabold text-default tracking-tight">Send us a WhatsApp. We handle the rest.</h3>
         <p class="text-sm leading-relaxed text-muted max-w-2xl">
-          A single restaurant and a chain with five locations get very different value from their website.
-          Per-location pricing means you start small and only pay more as your business actually grows.
-          A 5-location brand on Pro pays {{ proFiveLocationsMonthlyLabel }} — less than one hour of traditional web agency work.
+          On Managed or SEO Accelerator, Paul & Julia own your restaurant's online presence.
+          Menu change? Voice note us. New seasonal menu? We update it. Tourists can't find you? We fix it.
+          Less than one hour of agency work per month — at a fraction of the cost.
         </p>
       </div>
     </div>
 
     <!-- Feature comparison table -->
-    <div class="max-w-4xl mx-auto mt-24">
+    <div class="max-w-5xl mx-auto mt-24">
       <div class="text-center mb-10 flex flex-col items-center gap-1.5">
         <span class="text-[10px] font-extrabold tracking-widest uppercase text-(--kc-teal-600)">Deep Dive</span>
         <h3 class="text-2xl font-black text-default tracking-tight">Compare All Features</h3>
       </div>
-      
+
       <div class="overflow-hidden border border-default/80 rounded-2xl shadow-sm bg-elevated/30 backdrop-blur-sm">
         <div class="overflow-x-auto">
           <table class="w-full text-sm border-collapse">
             <thead>
               <tr class="border-b border-default bg-elevated/60 backdrop-blur-md">
-                <th class="text-left py-5 px-6 text-xs font-bold uppercase tracking-wider text-muted w-1/2">Feature</th>
+                <th class="text-left py-5 px-6 text-xs font-bold uppercase tracking-wider text-muted w-1/3">Feature</th>
                 <th v-for="plan in plans" :key="plan.id" class="text-center py-5 px-4 text-sm font-extrabold text-default">
                   {{ plan.name }}
                 </th>
               </tr>
             </thead>
             <tbody class="divide-y divide-default">
-              <tr 
-                v-for="row in comparisonRows" 
+              <tr
+                v-for="row in comparisonRows"
                 :key="row.feature"
                 class="hover:bg-primary/5 transition-colors duration-150"
               >
@@ -132,8 +106,7 @@
 </template>
 
 <script setup lang="ts">
-const annual = ref(false)
-const { plans, proPlan, monthlyPrice } = usePlans()
+const { plans } = usePlans()
 const { isAuthenticated } = useAuth()
 const orgSettings = useOrgSettings()
 const upgrading = ref<string | null>(null)
@@ -155,7 +128,7 @@ async function handleUpgrade(planId: string) {
   try {
     const res = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
       method: 'POST',
-      body: { plan: planId, interval: annual.value ? 'year' : 'month' }
+      body: { plan: planId, interval: 'month' }
     })
     if (res.checkoutUrl) {
       await navigateTo(res.checkoutUrl, { external: true })
@@ -171,45 +144,21 @@ async function handleUpgrade(planId: string) {
 }
 
 type CellValue = boolean | string
-type ComparisonRow = {
-  feature: string
-} & Record<string, CellValue>
+type ComparisonRow = { feature: string } & Record<string, CellValue>
 
 const comparisonRows: ComparisonRow[] = [
-  { feature: 'Locations', free: '1', pro: 'Unlimited', enterprise: 'Unlimited' },
-  { feature: 'Custom domain', free: false, pro: true, enterprise: true },
-  { feature: 'SSL certificate', free: true, pro: true, enterprise: true },
-  { feature: 'Google Business sync', free: false, pro: true, enterprise: true },
-  { feature: 'AI credits / month', free: '500', pro: '5,000', enterprise: '50,000' },
-  { feature: 'AI menu extraction', free: true, pro: true, enterprise: true },
-  { feature: 'Reservations page', free: true, pro: true, enterprise: true },
-  { feature: 'Reviews display', free: true, pro: true, enterprise: true },
-  { feature: 'SEO & schema markup', free: 'Basic', pro: 'Advanced', enterprise: 'Advanced' },
-  { feature: 'White-label', free: false, pro: false, enterprise: true },
-  { feature: 'API access', free: false, pro: false, enterprise: true },
-  { feature: 'Support', free: 'Community', pro: 'Priority email', enterprise: 'Dedicated' },
+  { feature: 'Site & menu',            free: true,        growth: true,         managed: true,       seo_accelerator: true },
+  { feature: 'Translation',            free: false,       growth: '1 language', managed: 'Unlimited', seo_accelerator: 'Unlimited' },
+  { feature: 'Menu updates',           free: 'Self',      growth: 'Via WhatsApp', managed: 'We do it', seo_accelerator: 'We do it' },
+  { feature: 'Google Business',        free: false,       growth: 'Basics',     managed: 'Full mgmt', seo_accelerator: 'Full mgmt' },
+  { feature: 'SEO & schema markup',    free: 'Basic',     growth: 'Basic',      managed: 'Advanced', seo_accelerator: 'Expert' },
+  { feature: 'Custom domain',          free: false,       growth: false,        managed: true,       seo_accelerator: true },
+  { feature: 'AI credits / month',     free: '500',       growth: '2,000',      managed: 'Unlimited', seo_accelerator: 'Unlimited' },
+  { feature: 'Monthly report',         free: false,       growth: true,         managed: true,       seo_accelerator: true },
+  { feature: 'Content cadence',        free: false,       growth: false,        managed: false,      seo_accelerator: true },
+  { feature: 'Keyword targeting',      free: false,       growth: false,        managed: false,      seo_accelerator: true },
+  { feature: 'Support',                free: 'Community', growth: 'WhatsApp',   managed: 'Priority WhatsApp', seo_accelerator: 'Dedicated' },
 ]
-
-const savingsPercentLabel = computed(() => {
-  const pro = proPlan.value
-  if (!pro) return '~0%'
-  const monthly = monthlyPrice(pro)
-  const annualPriceCents = pro.prices.find((p: { interval: string, amount: number }) => p.interval === 'year')?.amount ?? null
-  if (!monthly || !annualPriceCents) return '~0%'
-  const fullYearMonthly = monthly * 12
-  if (!fullYearMonthly) return '~0%'
-  const pct = Math.max(0, Math.round(((fullYearMonthly - annualPriceCents) / fullYearMonthly) * 100))
-  return `~${pct}%`
-})
-
-const proFiveLocationsMonthlyLabel = computed(() => {
-  const pro = proPlan.value
-  if (!pro) return '$0/month'
-  const monthly = monthlyPrice(pro)
-  if (!monthly) return '$0/month'
-  const amount = (monthly * 5) / 100
-  return `$${amount.toLocaleString('en-US')}/month`
-})
 
 function cellValue(row: ComparisonRow, planId: string): CellValue {
   const value = row[planId]

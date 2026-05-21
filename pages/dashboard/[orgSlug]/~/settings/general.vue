@@ -66,6 +66,83 @@
           </div>
         </UCard>
 
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h2 class="font-semibold text-highlighted">Facebook and Instagram</h2>
+                <p class="mt-1 text-sm text-muted">Restaurant-site publishing connection.</p>
+              </div>
+              <UBadge
+                :label="facebookConnection?.connected ? 'Connected' : 'Not connected'"
+                :color="facebookConnection?.connected ? 'success' : 'neutral'"
+                variant="soft"
+              />
+            </div>
+          </template>
+
+          <div v-if="loadingIntegrations" class="space-y-3">
+            <USkeleton class="h-16 rounded-lg" />
+            <USkeleton class="h-9 rounded-lg" />
+          </div>
+          <div v-else class="space-y-4">
+            <div v-if="facebookConnection?.connected" class="space-y-3 text-sm">
+              <div class="flex items-center justify-between gap-4">
+                <span class="text-muted">Page</span>
+                <span class="truncate text-right font-medium text-highlighted">{{ facebookConnection.facebook_page_name || 'Connected page' }}</span>
+              </div>
+              <div v-if="facebookConnection.facebook_page_id" class="flex items-center justify-between gap-4">
+                <span class="text-muted">Page ID</span>
+                <span class="truncate text-right text-highlighted">{{ facebookConnection.facebook_page_id }}</span>
+              </div>
+              <p class="text-muted">Instagram publishing is available when the connected Page has a linked Instagram Business account.</p>
+            </div>
+            <p v-else class="text-sm text-muted">Connect a Facebook Page to sync page info and publish posts from this restaurant site.</p>
+
+            <UButton
+              icon="i-simple-icons-facebook"
+              :loading="connectingFacebook"
+              @click="startFacebookConnect"
+            >
+              {{ facebookConnection?.connected ? 'Reconnect Facebook' : 'Connect Facebook' }}
+            </UButton>
+          </div>
+        </UCard>
+
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h2 class="font-semibold text-highlighted">WhatsApp Notifications</h2>
+                <p class="mt-1 text-sm text-muted">Restaurant-site alert recipient.</p>
+              </div>
+              <UBadge
+                :label="whatsappPhone ? 'Configured' : 'Not configured'"
+                :color="whatsappPhone ? 'success' : 'neutral'"
+                variant="soft"
+              />
+            </div>
+          </template>
+
+          <div v-if="loadingIntegrations" class="space-y-3">
+            <USkeleton class="h-10 rounded-lg" />
+            <USkeleton class="h-9 rounded-lg" />
+          </div>
+          <div v-else class="space-y-4">
+            <UFormField label="Notification phone" help="Use international format, for example +66812345678.">
+              <UInput v-model="whatsappForm.phone" type="tel" placeholder="+66..." />
+            </UFormField>
+            <UButton
+              icon="i-heroicons-check"
+              :loading="savingWhatsapp"
+              :disabled="!whatsappForm.phone.trim()"
+              @click="saveWhatsappPhone"
+            >
+              Save WhatsApp number
+            </UButton>
+          </div>
+        </UCard>
+
         <!-- Danger Zone -->
         <UCard class="lg:col-span-2 border border-red-200 dark:border-red-900">
           <template #header>
@@ -141,6 +218,8 @@ import { useAuth } from '~/composables/useAuth'
 definePageMeta({ layout: 'dashboard' })
 
 const { data: sessionData } = useAuth()
+const route = useRoute()
+const toast = useToast()
 const organizationsState = authClient.useListOrganizations()
 const organization = computed(() => unref(organizationsState)?.data?.[0] || null)
 const organizationRole = computed(() => {
@@ -155,6 +234,20 @@ const deleteModalOpen = ref(false)
 const deleteConfirmText = ref('')
 const deleting = ref(false)
 const deleteError = ref('')
+const loadingIntegrations = ref(true)
+const connectingFacebook = ref(false)
+const savingWhatsapp = ref(false)
+const whatsappPhone = ref<string | null>(null)
+const whatsappForm = reactive({ phone: '' })
+const facebookConnection = ref<FacebookConnectionStatus | null>(null)
+
+interface FacebookConnectionStatus {
+  connected: boolean
+  facebook_user_id?: string
+  facebook_page_id?: string
+  facebook_page_name?: string
+  status?: string
+}
 
 interface DeleteErrorBody {
   error?: string
@@ -184,6 +277,68 @@ function resetDeleteModal() {
   deleteConfirmText.value = ''
   deleteError.value = ''
   deleting.value = false
+}
+
+async function loadSiteIntegrations() {
+  loadingIntegrations.value = true
+  try {
+    const [notificationsRes, facebookRes] = await Promise.all([
+      $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null } }>('/api/dashboard/editor/notifications'),
+      $fetch<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection')
+    ])
+    whatsappPhone.value = notificationsRes.notifications.whatsapp_phone
+    whatsappForm.phone = notificationsRes.notifications.whatsapp_phone ?? ''
+    facebookConnection.value = facebookRes
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Failed to load site connections'), color: 'error' })
+  } finally {
+    loadingIntegrations.value = false
+  }
+}
+
+async function startFacebookConnect() {
+  connectingFacebook.value = true
+  try {
+    const res = await $fetch<{ success: boolean; authUrl?: string; error?: string }>(
+      '/api/integrations/facebook-pages/auth',
+      { method: 'POST' }
+    )
+    if (!res.authUrl) throw new Error(res.error || 'No authorization URL returned')
+    window.location.href = res.authUrl
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Failed to start Facebook connection'), color: 'error' })
+    connectingFacebook.value = false
+  }
+}
+
+async function saveWhatsappPhone() {
+  savingWhatsapp.value = true
+  try {
+    const res = await $fetch<{ success: boolean; notifications: { whatsapp_phone: string } }>('/api/dashboard/editor/notifications', {
+      method: 'PATCH',
+      body: { whatsapp_phone: whatsappForm.phone }
+    })
+    whatsappPhone.value = res.notifications.whatsapp_phone
+    whatsappForm.phone = res.notifications.whatsapp_phone
+    toast.add({ description: 'WhatsApp number saved', color: 'success' })
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Failed to save WhatsApp number'), color: 'error' })
+  } finally {
+    savingWhatsapp.value = false
+  }
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const data = (error as Record<string, unknown>).data
+    if (data && typeof data === 'object') {
+      const errorMessage = (data as Record<string, unknown>).error
+      if (typeof errorMessage === 'string' && errorMessage) return errorMessage
+    }
+    const message = (error as Record<string, unknown>).message
+    if (typeof message === 'string' && message) return message
+  }
+  return fallback
 }
 
 async function confirmDeleteAccount() {
@@ -226,6 +381,20 @@ async function confirmDeleteAccount() {
     deleting.value = false
   }
 }
+
+onMounted(() => {
+  loadSiteIntegrations()
+  const fbStatus = typeof route.query.fb === 'string' ? route.query.fb : null
+  if (fbStatus === 'connected') {
+    toast.add({ title: 'Facebook connected', description: 'Your Facebook Page has been linked successfully.', color: 'success' })
+  } else if (fbStatus === 'error') {
+    toast.add({ title: 'Facebook connection failed', description: 'Something went wrong. Please try again.', color: 'error' })
+  } else if (fbStatus === 'denied') {
+    toast.add({ title: 'Facebook access denied', description: 'You declined the Facebook authorization.', color: 'warning' })
+  } else if (fbStatus === 'no_pages') {
+    toast.add({ title: 'No Facebook Pages found', description: 'Your account has no Pages. Create a Facebook Page for your business and try again.', color: 'warning' })
+  }
+})
 
 useSeoMeta({ title: 'Settings | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

@@ -44,6 +44,16 @@ export default defineEventHandler(async (event) => {
   }
 
   const { siteId, organizationId, userId } = stateData
+  const settingsRedirect = async (status: string) => {
+    const db = env.DB
+    if (!db) return `/dashboard?fb=${status}`
+    const organization = await db.prepare(`
+      SELECT slug FROM organization WHERE id = ? LIMIT 1
+    `).bind(organizationId).first<{ slug: string | null }>()
+    return organization?.slug
+      ? `/dashboard/${organization.slug}/~/settings/general?fb=${status}`
+      : `/dashboard?fb=${status}`
+  }
 
   try {
     // System-user access tokens from FLB never expire — no long-lived exchange needed
@@ -52,7 +62,7 @@ export default defineEventHandler(async (event) => {
     const pages = await getFacebookPages(systemUserToken)
 
     if (pages.length === 0) {
-      return new Response(null, { status: 302, headers: { Location: `/dashboard?fb=no_pages` } })
+      return new Response(null, { status: 302, headers: { Location: await settingsRedirect('no_pages') } })
     }
 
     const firstPage = pages[0]
@@ -73,10 +83,10 @@ export default defineEventHandler(async (event) => {
 
     return new Response(null, {
       status: 302,
-      headers: { Location: `/dashboard?fb=connected` },
+      headers: { Location: await settingsRedirect('connected') },
     })
   } catch (err) {
     console.error('Facebook OAuth callback failed:', err)
-    return new Response(null, { status: 302, headers: { Location: '/dashboard?fb=error' } })
+    return new Response(null, { status: 302, headers: { Location: await settingsRedirect('error') } })
   }
 })

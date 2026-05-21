@@ -2721,9 +2721,9 @@ export async function runChowBot(opts: RunChowBotOptions): Promise<RunChowBotRes
     locationName = loc?.title ?? null
   }
 
-  const isOnboarding = currentPage === 'onboarding'
+  const isSetup = currentPage === 'setup'
 
-  const ONBOARDING_PREAMBLE = isOnboarding ? `
+  const SETUP_PREAMBLE = isSetup ? `
 You are in SETUP MODE. Your job is to guide the restaurant owner through a structured setup interview to get their site live.
 
 Setup order (ask one topic at a time, save each answer immediately using tools before moving on):
@@ -2746,7 +2746,7 @@ Rules in setup mode:
 
   const SYSTEM = `You are ChowBot, an AI assistant for restaurant website owners using Kikuzuki.
 Help manage all site content with concise, action-oriented responses.
-${ONBOARDING_PREAMBLE}
+${SETUP_PREAMBLE}
 Site: ${siteName}
 Default menu currency: ${opts.defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ''}

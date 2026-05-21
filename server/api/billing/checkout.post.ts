@@ -21,9 +21,10 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Plan is required' }, { status: 400 })
   }
 
-  if (plan !== 'pro' && plan !== 'enterprise') {
+  const ALLOWED_PLANS = ['growth', 'managed', 'seo_accelerator']
+  if (!ALLOWED_PLANS.includes(plan)) {
     return jsonResponse({
-      error: 'Invalid plan. Allowed values are pro or enterprise'
+      error: `Invalid plan. Allowed values are ${ALLOWED_PLANS.join(', ')}`
     }, { status: 400 })
   }
 
@@ -144,8 +145,8 @@ export default defineEventHandler(async (event) => {
           quantity: 1
         }
       ],
-      success_url: successUrl || `${getRequestURL(event).origin}/dashboard/${organization.slug}/settings/billing?success=true`,
-      cancel_url: cancelUrl || `${getRequestURL(event).origin}/dashboard/${organization.slug}/settings/billing?canceled=true`,
+      success_url: successUrl || `${getRequestURL(event).origin}/dashboard/${organization.slug}/~/settings/billing?success=true`,
+      cancel_url: cancelUrl || `${getRequestURL(event).origin}/dashboard/${organization.slug}/~/settings/billing?canceled=true`,
       metadata: {
         organization_id: organizationId,
         plan

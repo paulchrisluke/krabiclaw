@@ -1,6 +1,10 @@
 <template>
-  <UPage>
-    <UPageBody>
+  <UPage class="h-full">
+    <UPageBody v-if="!loading && !hasRestaurant" class="h-[calc(100vh-4rem)] p-0 sm:p-0">
+      <ChowBot embedded setup-mode />
+    </UPageBody>
+
+    <UPageBody v-else>
       <!-- Skeleton -->
       <div v-if="loading" class="space-y-6">
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -128,6 +132,7 @@ const loading = ref(true)
 const locations = ref<Location[]>([])
 const credits = ref<Credits | null>(null)
 const events = ref<SiteEvent[]>([])
+const hasRestaurant = computed(() => Boolean(dashboardState.restaurant.value))
 
 const avgRating = computed(() => {
   const rated = locations.value.filter(l => l.rating)
@@ -157,6 +162,9 @@ function timeAgo(dateStr: string) {
 onMounted(async () => {
   try {
     if (!dashboardState.state.value) await dashboardState.refresh()
+    if (!dashboardState.restaurant.value) {
+      return
+    }
     const data = await $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[] }>('/api/dashboard/home')
     locations.value = data.locations
     credits.value = data.credits

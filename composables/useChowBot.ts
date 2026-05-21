@@ -22,7 +22,7 @@ export const useChowBot = () => {
   const messages = useState<ChowbotMessage[]>('chowbot:messages', () => [])
   const isLoading = useState<boolean>('chowbot:loading', () => false)
   const conversationId = useState<string | null>('chowbot:convId', () => null)
-  // Pages can override the currentPage sent to the agent (e.g. 'onboarding')
+  // Pages can override the currentPage sent to the agent (e.g. 'setup')
   const currentPageOverride = useState<string | null>('chowbot:currentPageOverride', () => null)
 
   const route = useRoute()
@@ -32,6 +32,12 @@ export const useChowBot = () => {
   const locationId = computed(() => {
     const param = route.query.locationId
     return typeof param === 'string' ? param : null
+  })
+  const isConversationsWorkspace = computed(() => /^\/dashboard\/[^/]+\/conversations(?:\/|$)/.test(route.path))
+  const agentLocationId = computed(() => {
+    if (locationId.value) return locationId.value
+    if (isConversationsWorkspace.value) return null
+    return selectedLocation.value?.id ?? null
   })
 
   const { update: updateCredits } = useAiCredits(siteId)
@@ -162,7 +168,7 @@ export const useChowBot = () => {
           conversationId: conversationId.value,
           message: text.trim(),
           currentPage: currentPageOverride.value ?? route.name,
-          locationId: locationId.value ?? selectedLocation.value?.id ?? null,
+          locationId: agentLocationId.value,
         }),
       })
 

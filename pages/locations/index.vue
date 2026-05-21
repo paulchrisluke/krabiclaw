@@ -99,7 +99,7 @@
         </div>
         <div v-if="isAuthenticated" class="mt-12 text-center">
           <UButton
-            to="/dashboard/integrations"
+            to="/dashboard"
             color="primary"
             variant="solid"
             class="rounded-full"

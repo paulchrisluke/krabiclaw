@@ -1,11 +1,11 @@
-// Site creation API with idempotency and rollback safety
+// Restaurant site creation API with idempotency and rollback safety
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { seedNewSite } from '../../utils/site-template'
 import { getAuthSession } from '../../utils/auth'
 import { createSystemSubdomain } from '../../utils/domains'
 import { defineEventHandler, readBody } from 'h3'
 
-type OnboardingEnv = Parameters<typeof createSystemSubdomain>[0]
+type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
 interface MemberRoleRow {
   role: string
@@ -107,8 +107,7 @@ export default defineEventHandler(async (event) => {
             message: 'Restaurant site already exists'
           })
         } else if (existingSite.onboarding_status === 'pending' || existingSite.onboarding_status === 'failed') {
-          // Resume incomplete onboarding
-          return await resumeOnboarding(env, db, existingSite.id, organizationId, restaurantName)
+          return await resumeRestaurantSetup(env, db, existingSite.id, organizationId, restaurantName)
         }
       }
       
@@ -226,18 +225,16 @@ export default defineEventHandler(async (event) => {
   }
 })
 
-// Resume incomplete onboarding
-async function resumeOnboarding(env: OnboardingEnv, db: D1Database, siteId: string, organizationId: string, restaurantName: string) {
+async function resumeRestaurantSetup(env: SetupEnv, db: D1Database, siteId: string, organizationId: string, restaurantName: string) {
   try {
     return await performRequiredSeeding(env, db, siteId, organizationId, restaurantName, '')
   } catch (error) {
-    console.error('Failed to resume onboarding:', error)
+    console.error('Failed to resume restaurant setup:', error)
     throw error
   }
 }
 
-// Perform required seeding (must succeed for onboarding to complete)
-async function performRequiredSeeding(env: OnboardingEnv, db: D1Database, siteId: string, organizationId: string, restaurantName: string, subdomain: string) {
+async function performRequiredSeeding(env: SetupEnv, db: D1Database, siteId: string, organizationId: string, restaurantName: string, subdomain: string) {
   const now = new Date().toISOString()
   
   try {
@@ -250,7 +247,7 @@ async function performRequiredSeeding(env: OnboardingEnv, db: D1Database, siteId
     }
     await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
 
-    // Step 3: Mark site as active (onboarding complete)
+    // Step 3: Mark site as active after required setup data exists
     await db.prepare(`
       UPDATE sites SET onboarding_status = 'active', updated_at = ?
       WHERE id = ?

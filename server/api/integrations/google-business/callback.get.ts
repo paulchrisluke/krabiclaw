@@ -32,6 +32,24 @@ export default defineEventHandler(async (event) => {
     return new Response(null, { status: 302, headers: { Location: '/dashboard?gb=expired' } })
   }
 
+  const connectionRedirect = async (status: string) => {
+    const db = env.DB
+    if (!db) return `/dashboard?gb=${status}`
+    const organization = await db.prepare(`
+      SELECT slug FROM organization WHERE id = ? LIMIT 1
+    `).bind(organizationId).first<{ slug: string | null }>()
+    if (!organization?.slug) return `/dashboard?gb=${status}`
+    if (!locationId) return `/dashboard/${organization.slug}?gb=${status}`
+    const location = await db.prepare(`
+      SELECT slug FROM business_locations
+      WHERE id = ? AND organization_id = ? AND site_id = ?
+      LIMIT 1
+    `).bind(locationId, organizationId, siteId).first<{ slug: string }>()
+    return location?.slug
+      ? `/dashboard/${organization.slug}/${location.slug}?gb=${status}`
+      : `/dashboard/${organization.slug}?gb=${status}`
+  }
+
   try {
     const tokenData = await exchangeGoogleBusinessCode(env, code)
 
@@ -59,13 +77,9 @@ export default defineEventHandler(async (event) => {
       status: 'active'
     })
 
-    const redirectTo = locationId
-      ? `/dashboard/locations/${locationId}?gb=connected`
-      : `/dashboard?gb=connected`
-
-    return new Response(null, { status: 302, headers: { Location: redirectTo } })
+    return new Response(null, { status: 302, headers: { Location: await connectionRedirect('connected') } })
   } catch (error) {
     console.error('Google Business OAuth callback failed:', error)
-    return new Response(null, { status: 302, headers: { Location: '/dashboard?gb=error' } })
+    return new Response(null, { status: 302, headers: { Location: await connectionRedirect('error') } })
   }
 })

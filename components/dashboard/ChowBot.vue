@@ -1,8 +1,11 @@
 <template>
   <Transition name="chowbot-panel">
     <div
-      v-if="isOpen"
-      class="flex w-96 shrink-0 flex-col border-l border-default bg-default"
+      v-if="embedded || isOpen"
+      :class="[
+        'flex flex-col bg-default',
+        embedded ? 'h-full min-h-0 w-full' : 'w-96 shrink-0 border-l border-default'
+      ]"
       @dragenter.prevent="onDragEnter"
       @dragover.prevent
       @dragleave="onDragLeave"
@@ -47,10 +50,11 @@
               variant="ghost"
               size="xs"
               :disabled="!messages.length"
-              @click="clearMessages"
+              @click="handleClearMessages"
             />
           </UTooltip>
           <UButton
+            v-if="!embedded"
             icon="i-heroicons-x-mark"
             color="neutral"
             variant="ghost"
@@ -83,8 +87,8 @@
             class="flex h-full flex-col items-center justify-center gap-3 px-6 py-16 text-center"
           >
             <UIcon name="i-lucide-bot" class="size-8 text-primary opacity-60" />
-            <p class="text-sm font-medium">What can I help with?</p>
-            <p class="text-xs text-muted">Ask anything, or drop a menu image to extract it.</p>
+            <p class="text-sm font-medium">{{ emptyTitle }}</p>
+            <p class="text-xs text-muted">{{ emptyDescription }}</p>
             <div class="mt-4 flex w-full flex-col gap-2">
               <UButton
                 v-for="prompt in starterPrompts"
@@ -167,9 +171,9 @@
 
         <UChatPrompt
           v-model="input"
-          :placeholder="isDepleted ? 'Purchase credits above to continue…' : pendingFile ? 'Add a caption (optional) then press send…' : pendingText ? 'Add a note (optional) then press send…' : 'Ask ChowBot anything…'"
-          :disabled="isLoading || isUploading || !siteId || isDepleted"
-          :loading="isLoading || isUploading"
+          :placeholder="promptPlaceholder"
+          :disabled="isLoading || isUploading || creatingRestaurant || (!siteId && !setupMode) || isDepleted"
+          :loading="isLoading || isUploading || creatingRestaurant"
           :maxrows="8"
           @submit="handleSubmit"
         />
@@ -195,14 +199,14 @@
               color="neutral"
               variant="ghost"
               size="xs"
-              :disabled="isLoading || isUploading || !siteId || isDepleted"
+              :disabled="isLoading || isUploading || !siteId || isDepleted || setupMode"
               @click="fileInputRef?.click()"
             />
           </UTooltip>
           <span v-if="isUploading" class="text-xs text-muted">Extracting menu…</span>
-          <span v-else class="text-xs text-muted">or drag & drop a menu file anywhere</span>
+          <span v-else-if="siteId && !setupMode" class="text-xs text-muted">or drag & drop a menu file anywhere</span>
         </div>
-        <p v-if="!siteId" class="mt-2 text-center text-xs text-muted">
+        <p v-if="!siteId && !setupMode" class="mt-2 text-center text-xs text-muted">
           Create your restaurant workspace to use ChowBot.
         </p>
       </div>
@@ -222,7 +226,12 @@
 // -nocheck
 import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
-const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages } = useChowBot()
+
+const props = defineProps<{ embedded?: boolean; setupMode?: boolean }>()
+const setupMode = computed(() => Boolean(props.setupMode))
+
+const dashboard = useDashboardRestaurant()
+const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, currentPageOverride } = useChowBot()
 const orgSettings = useOrgSettings()
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
@@ -248,13 +257,46 @@ const pendingText = ref<{ name: string; content: string } | null>(null)
 const isUploading = ref(false)
 const dragCounter = ref(0)
 const isDragging = computed(() => dragCounter.value > 0)
+const setupStep = ref<'source' | 'name' | 'subdomain'>('source')
+const setupSource = ref<'google' | 'facebook' | 'manual' | null>(null)
+const setupRestaurantName = ref('')
+const setupSubdomain = ref('')
+const creatingRestaurant = ref(false)
 
-const starterPrompts = [
+const regularStarterPrompts = [
   'Show me my latest posts',
   "Write a post about today's special",
   "What's on our menu?",
   'Give me a restaurant overview',
 ]
+
+const setupStarterPrompts = [
+  'Start from Google Business',
+  'Start from Facebook or Instagram',
+  'Build manually with ChowBot',
+]
+
+const starterPrompts = computed(() => setupMode.value && !siteId.value ? setupStarterPrompts : regularStarterPrompts)
+const emptyTitle = computed(() => setupMode.value && !siteId.value ? "Let's get your restaurant started" : 'What can I help with?')
+const emptyDescription = computed(() => setupMode.value && !siteId.value
+  ? 'Choose a starting point. I will create the workspace, then keep going from here.'
+  : 'Ask anything, or drop a menu image to extract it.'
+)
+const promptPlaceholder = computed(() => {
+  if (setupMode.value && !siteId.value) return setupStep.value === 'source' ? 'Tell ChowBot where to start...' : 'Reply to ChowBot...'
+  if (isDepleted.value) return 'Purchase credits above to continue...'
+  if (pendingFile.value) return 'Add a caption (optional) then press send...'
+  if (pendingText.value) return 'Add a note (optional) then press send...'
+  return 'Ask ChowBot anything...'
+})
+
+function handleClearMessages() {
+  clearMessages()
+  setupStep.value = 'source'
+  setupSource.value = null
+  setupRestaurantName.value = ''
+  setupSubdomain.value = ''
+}
 
 const convertToAttachment = () => {
   if (!input.value.trim()) return
@@ -266,6 +308,10 @@ const handleSubmit = async () => {
   const text = input.value.trim()
   if (!text && !pendingFile.value && !pendingText.value) return
   input.value = ''
+  if (setupMode.value && !siteId.value) {
+    await handleSetupMessage(text)
+    return
+  }
   if (pendingFile.value) {
     const file = pendingFile.value
     pendingFile.value = null
@@ -281,8 +327,123 @@ const handleSubmit = async () => {
 }
 
 const handleStarter = (prompt: string) => {
+  if (setupMode.value && !siteId.value) {
+    handleSetupStarter(prompt)
+    return
+  }
   input.value = prompt
   handleSubmit()
+}
+
+function normalizeSubdomain(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 63)
+}
+
+function setupPromptForSource() {
+  if (setupSource.value === 'google') {
+    return 'Help me start from my Google Business profile. I want to set up locations, hours, photos, and restaurant details.'
+  }
+  if (setupSource.value === 'facebook') {
+    return 'Help me start from my Facebook or Instagram presence. I want to turn existing social content into my restaurant site.'
+  }
+  return 'Help me build my restaurant manually from scratch. Start by asking for the most important details.'
+}
+
+function handleSetupStarter(prompt: string) {
+  const lower = prompt.toLowerCase()
+  setupSource.value = lower.includes('google') ? 'google' : lower.includes('facebook') ? 'facebook' : 'manual'
+  setupStep.value = 'name'
+  messages.value = [
+    ...messages.value,
+    { role: 'user', content: prompt },
+    {
+      role: 'assistant',
+      content: setupSource.value === 'google'
+        ? 'Great. First, what is the restaurant name? After I create the workspace, I can help connect Google Business from here.'
+        : setupSource.value === 'facebook'
+          ? 'Perfect. What is the restaurant name? After I create the workspace, I can help connect Meta and turn existing content into the site.'
+          : 'Easy. What is the restaurant name? I will create the workspace first, then we can build it together step by step.',
+    },
+  ]
+}
+
+async function handleSetupMessage(text: string) {
+  if (!text.trim() || creatingRestaurant.value) return
+
+  if (setupStep.value === 'source') {
+    handleSetupStarter(text)
+    return
+  }
+
+  if (setupStep.value === 'name') {
+    setupRestaurantName.value = text.trim()
+    setupSubdomain.value = normalizeSubdomain(text)
+    setupStep.value = 'subdomain'
+    messages.value = [
+      ...messages.value,
+      { role: 'user', content: text.trim() },
+      {
+        role: 'assistant',
+        content: `Got it. I can use **${setupSubdomain.value}.krabiclaw.com** for the site address. Reply **yes** to use that, or type a different address.`,
+      },
+    ]
+    return
+  }
+
+  const requestedSubdomain = /^(yes|y|ok|okay|sure)$/i.test(text.trim())
+    ? setupSubdomain.value
+    : normalizeSubdomain(text)
+
+  messages.value = [
+    ...messages.value,
+    { role: 'user', content: text.trim() },
+    { role: 'assistant', content: 'Creating the restaurant workspace...', streaming: true },
+  ]
+  creatingRestaurant.value = true
+
+  try {
+    const validation = await $fetch<{ available: boolean; message?: string }>('/api/dashboard/restaurant/validate-subdomain', {
+      method: 'POST',
+      body: { subdomain: requestedSubdomain }
+    })
+
+    if (!validation.available) {
+      updateSetupLastMessage(validation.message ?? 'That site address is not available. Try another one.', true)
+      return
+    }
+
+    await $fetch('/api/dashboard/restaurant', {
+      method: 'POST',
+      body: {
+        restaurantName: setupRestaurantName.value,
+        subdomain: requestedSubdomain,
+      }
+    })
+
+    await dashboard.refresh()
+    currentPageOverride.value = 'setup'
+    updateSetupLastMessage('Workspace created. I will keep going here.', false)
+    await nextTick()
+    await sendMessage(setupPromptForSource())
+  } catch (error) {
+    updateSetupLastMessage(error instanceof Error ? error.message : 'Could not create the restaurant workspace.', true)
+  } finally {
+    creatingRestaurant.value = false
+  }
+}
+
+function updateSetupLastMessage(content: string, error: boolean) {
+  const last = messages.value[messages.value.length - 1]
+  if (!last) return
+  messages.value = [
+    ...messages.value.slice(0, -1),
+    { ...last, content, error, streaming: false },
+  ]
 }
 
 // --- drag-drop ---

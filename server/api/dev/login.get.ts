@@ -46,5 +46,5 @@ export default defineEventHandler(async (event) => {
     maxAge: 60 * 60 * 24 * 7,
   })
 
-  await sendRedirect(event, '/dashboard')
+  await sendRedirect(event, '/api/post-login')
 })

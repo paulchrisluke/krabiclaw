@@ -1,135 +1,28 @@
 <template>
-  <div class="min-h-screen bg-muted">
-    <div class="container mx-auto px-4 py-16">
-      <div class="max-w-4xl mx-auto">
-        <h1 class="text-4xl font-bold text-highlighted mb-8">Billing & Plans</h1>
-        
-        <div class="bg-default rounded-2xl shadow-sm border border-default p-8">
-          <h2 class="text-2xl font-semibold text-highlighted mb-6">Choose Your Plan</h2>
-          
-          <div class="grid md:grid-cols-2 gap-8 overflow-visible">
-            <!-- Free Plan -->
-            <div class="border border-default rounded-xl p-6">
-              <h3 class="text-xl font-bold text-highlighted mb-2">Free</h3>
-              <p class="text-3xl font-bold text-highlighted mb-4">$0<span class="text-lg font-normal text-muted">/month</span></p>
-              <ul class="space-y-2 text-muted mb-6">
-                <li class="flex items-center">
-                  <svg class="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                  </svg>
-                  Subdomain site
-                </li>
-                <li class="flex items-center">
-                  <svg class="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                  </svg>
-                  Saya theme
-                </li>
-                <li class="flex items-center">
-                  <svg class="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                  </svg>
-                  Manual editor
-                </li>
-              </ul>
-              <UButton
-                variant="outline"
-                size="xl"
-                class="w-full"
-                :disabled="isCurrentPlan('free')"
-                @click="() => selectPlan('free')"
-              >
-                {{ isCurrentPlan('free') ? 'Current Plan' : 'Choose' }}
-              </UButton>
-            </div>
-            
-            <!-- Pro Plan -->
-            <div class="border-2 border-black rounded-xl p-6 relative">
-              <div class="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
-                <span class="bg-black text-white px-3 py-1 text-sm font-medium rounded-full">Popular</span>
-              </div>
-              <h3 class="text-xl font-bold text-highlighted mb-2">Pro</h3>
-              <p class="text-3xl font-bold text-highlighted mb-4">$25<span class="text-lg font-normal text-muted">/month</span></p>
-              <ul class="space-y-2 text-muted mb-6">
-                <li class="flex items-center">
-                  <svg class="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                  </svg>
-                  Custom domain
-                </li>
-                <li class="flex items-center">
-                  <svg class="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                  </svg>
-                  SSL certificate
-                </li>
-                <li class="flex items-center">
-                  <svg class="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                  </svg>
-                  Google Business sync
-                </li>
-                <li class="flex items-center">
-                  <svg class="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                  </svg>
-                  Priority support
-                </li>
-              </ul>
-              <UButton
-                color="primary"
-                size="xl"
-                class="w-full"
-                :disabled="isCurrentPlan('pro')"
-                @click="() => selectPlan('pro')"
-              >
-                {{ isCurrentPlan('pro') ? 'Current Plan' : 'Upgrade to Pro' }}
-              </UButton>
-            </div>
-          </div>
-        </div>
+  <div class="relative overflow-hidden bg-default min-h-screen py-20 lg:py-28">
+    <div class="absolute top-0 right-1/4 -z-10 w-96 h-96 bg-primary/10 rounded-full blur-3xl opacity-50" />
+    <div class="absolute bottom-1/3 left-1/4 -z-10 w-125 h-125 bg-(--kc-teal)/10 rounded-full blur-3xl opacity-40" />
+
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl relative z-10">
+      <div class="text-center max-w-3xl mx-auto mb-16 flex flex-col items-center gap-4">
+        <h1 class="text-[clamp(32px,5vw,52px)] font-extrabold leading-[1.05] tracking-tight text-default text-balance m-0">
+          Simple, <span class="bg-linear-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">transparent</span> pricing.
+        </h1>
+        <p class="text-lg leading-relaxed text-muted m-0 max-w-2xl">
+          Start free. Upgrade when you're ready — we handle translations, marketing, and your Google presence.
+        </p>
+      </div>
+
+      <div class="relative bg-elevated/20 backdrop-blur-md border border-default/50 rounded-4xl p-6 sm:p-10 shadow-2xl">
+        <BillingPricingTable />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-const currentPlan = ref('free')
-const loading = ref(true)
-
-onMounted(async () => {
-  try {
-    const res = await $fetch<{ billing?: { plan?: string } }>('/api/billing/status')
-    currentPlan.value = res.billing?.plan || 'free'
-  } catch (error) {
-    console.error('Failed to fetch plan:', error)
-  } finally {
-    loading.value = false
-  }
-})
-
-function isCurrentPlan(plan: string) {
-  return currentPlan.value === plan
-}
-
-async function selectPlan(plan: string) {
-  try {
-    const res = await $fetch<{ checkoutUrl?: string }>('/api/billing/checkout', {
-      method: 'POST',
-      body: { plan }
-    })
-    if (res.checkoutUrl) {
-      window.location.href = res.checkoutUrl
-    }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : (error && typeof error === 'object' && 'data' in error && typeof error.data === 'object' && error.data && 'message' in error.data && typeof error.data.message === 'string') ? error.data.message : 'Failed to initiate checkout'
-    alert(errorMessage)
-  }
-}
-
 useSeoMeta({
   title: 'Billing & Plans | KrabiClaw',
-  description: 'Choose the perfect plan for your restaurant website needs.'
+  description: 'Managed restaurant websites from $49/month. Start free, upgrade when ready.',
 })
 </script>

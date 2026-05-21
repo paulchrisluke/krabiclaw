@@ -237,7 +237,7 @@
             </div>
           </div>
           <div v-if="isAuthenticated" class="md:col-span-2 text-center pt-2">
-            <UButton to="/dashboard/integrations" color="neutral" variant="outline" size="sm" class="rounded-full">
+            <UButton to="/dashboard" color="neutral" variant="outline" size="sm" class="rounded-full">
               Connect Google Business →
             </UButton>
           </div>
@@ -390,7 +390,7 @@
             <h2 class="saya-display-md text-default opacity-30">What your guests say.</h2>
             <p class="mt-6 text-sm text-muted opacity-50">No reviews yet.</p>
             <NuxtLink
-              to="/dashboard/integrations"
+              to="/dashboard"
               class="mt-4 inline-block text-xs uppercase tracking-widest text-default opacity-50 no-underline underline-offset-4 hover:underline hover:opacity-80"
             >
               Connect Google Business →

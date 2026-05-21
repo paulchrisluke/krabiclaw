@@ -195,16 +195,21 @@ function getPlanEntitlements(plan: string): EntitlementsMap {
     advanced_seo: false,
     white_label: false,
     api_access: false,
+    translation: false,
+    translation_languages: 0,
+    managed_service: false,
+    seo_accelerator: false,
   }
 
   switch (plan) {
+    // Legacy tech plans (kept for backward compat)
     case 'pro':
       return {
         ...baseEntitlements,
         custom_domains: true,
         google_business: true,
         advanced_seo: true,
-        max_locations: -1, // unlimited — -1 means no limit in enforcement code
+        max_locations: -1,
         ai_credits: 5000,
       }
 
@@ -217,9 +222,45 @@ function getPlanEntitlements(plan: string): EntitlementsMap {
         advanced_seo: true,
         white_label: true,
         api_access: true,
-        max_sites: 1,
         max_locations: -1,
         ai_credits: 50000,
+      }
+
+    // Managed service plans
+    case 'growth':
+      return {
+        ...baseEntitlements,
+        translation: true,
+        translation_languages: 1,
+        ai_credits: 2000,
+        google_business: true,
+      }
+
+    case 'managed':
+      return {
+        ...baseEntitlements,
+        translation: true,
+        translation_languages: -1,
+        ai_credits: -1,
+        managed_service: true,
+        custom_domains: true,
+        google_business: true,
+        advanced_seo: true,
+        max_locations: -1,
+      }
+
+    case 'seo_accelerator':
+      return {
+        ...baseEntitlements,
+        translation: true,
+        translation_languages: -1,
+        ai_credits: -1,
+        managed_service: true,
+        seo_accelerator: true,
+        custom_domains: true,
+        google_business: true,
+        advanced_seo: true,
+        max_locations: -1,
       }
 
     default:
@@ -227,48 +268,12 @@ function getPlanEntitlements(plan: string): EntitlementsMap {
   }
 }
 
-// Sync Stripe subscription item quantity to match current active location count.
-// Only runs for Pro plan — Enterprise is flat-rate so quantity stays at 1.
-// Called fire-and-forget from location create/delete; errors are logged but never bubble up.
+// No-op: per-location quantity billing removed with migration to managed service plans.
 export async function updateSubscriptionQuantity(
-  env: BillingEnv,
-  db: D1Database,
-  organizationId: string
-): Promise<void> {
-  let stripeSubscriptionItemId: string | null = null
-
-  try {
-    const billing = await db.prepare(`
-      SELECT stripe_subscription_item_id, plan
-      FROM organization_billing
-      WHERE organization_id = ?
-    `).bind(organizationId).first<SubscriptionItemRow>()
-
-    stripeSubscriptionItemId = billing?.stripe_subscription_item_id ?? null
-    if (!billing || !stripeSubscriptionItemId || billing.plan !== 'pro') return
-
-    const result = await db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM business_locations bl
-      JOIN sites s ON bl.site_id = s.id
-      WHERE s.organization_id = ? AND bl.status = 'active'
-    `).bind(organizationId).first<CountRow>()
-
-    const quantity = Math.max(1, result?.count ?? 1)
-
-    const stripe = getStripe(env)
-    await stripe.subscriptionItems.update(stripeSubscriptionItemId, {
-      quantity,
-      proration_behavior: 'create_prorations',
-    })
-  } catch (error) {
-    console.error('Failed to sync Stripe subscription quantity', {
-      organizationId,
-      stripe_subscription_item_id: stripeSubscriptionItemId,
-      error,
-    })
-  }
-}
+  _env: BillingEnv,
+  _db: D1Database,
+  _organizationId: string
+): Promise<void> {}
 
 // Require billing access for organization
 export async function requireBillingAccess(

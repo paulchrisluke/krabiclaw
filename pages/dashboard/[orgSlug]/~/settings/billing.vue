@@ -120,7 +120,7 @@
                     Buy credits
                   </UButton>
                 </UDropdownMenu>
-                <UButton v-else size="xs" color="primary" variant="soft" icon="i-lucide-zap" :loading="upgrading === 'pro'" @click="upgradeToPlan('pro')">
+                <UButton v-else size="xs" color="primary" variant="soft" icon="i-lucide-zap" @click="openServiceUpsell('growth', 'billing-credits')">
                   Upgrade for more
                 </UButton>
               </div>
@@ -201,26 +201,8 @@
           </div>
         </UCard>
 
-        <!-- Billing interval toggle -->
-        <div class="flex items-center gap-3">
-          <span class="text-sm" :class="!annual ? 'font-semibold text-default' : 'text-muted'">Monthly</span>
-          <button
-            type="button"
-            class="relative w-10 h-5 rounded-full transition-colors"
-            :class="annual ? 'bg-(--kc-teal)' : 'bg-muted'"
-            role="switch"
-            :aria-checked="annual"
-            aria-label="Toggle annual billing"
-            @click="annual = !annual"
-          >
-            <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform" :class="{ 'translate-x-5': annual }" />
-          </button>
-          <span class="text-sm" :class="annual ? 'font-semibold text-default' : 'text-muted'">
-            Annual <span class="text-xs text-emerald-600 ml-1">Save ~30%</span>
-          </span>
-        </div>
 
-        <div class="grid gap-4 lg:grid-cols-3">
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <UCard
             v-for="plan in plans"
             :key="plan.id"
@@ -238,7 +220,7 @@
                 <p class="mt-2 text-3xl font-semibold text-highlighted">
                   {{ displayPrice(plan, annual) }}
                   <span v-if="plan.prices?.length" class="text-sm font-normal text-muted">
-                    {{ annual && plan.id === 'agency' ? '/yr' : annual ? '/location/yr' : plan.id === 'agency' ? '/mo' : '/location/mo' }}
+                    /mo
                   </span>
                 </p>
               </div>
@@ -363,6 +345,7 @@ const creditBundles = [
 ]
 
 const { plans, displayPrice } = usePlans()
+const { open: openServiceUpsell } = useServiceUpsell()
 
 const loadCredits = async () => {
   creditsLoading.value = true

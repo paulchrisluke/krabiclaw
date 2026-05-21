@@ -24,7 +24,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   tag: 'span',
   isGoogleManaged: false,
-  googleSyncPath: '/dashboard/integrations'
+  googleSyncPath: '/dashboard'
 })
 
 const emit = defineEmits<{

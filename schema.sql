@@ -1425,3 +1425,20 @@ CREATE INDEX IF NOT EXISTS idx_site_events_site
 CREATE INDEX IF NOT EXISTS idx_site_events_location
   ON site_events(location_id, created_at DESC)
   WHERE location_id IS NOT NULL;
+
+--------------------------------------------------------------------------------
+-- Service Add-on Purchases
+--------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS service_addon_purchases (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  addon_type TEXT NOT NULL,
+  stripe_payment_intent_id TEXT,
+  fulfilled_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_service_addon_purchases_org
+  ON service_addon_purchases(organization_id, created_at DESC);

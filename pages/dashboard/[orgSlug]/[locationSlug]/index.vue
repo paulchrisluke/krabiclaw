@@ -78,35 +78,30 @@
             <template #header>
               <div class="flex items-center gap-2">
                 <UIcon name="i-simple-icons-google" class="size-4 text-primary" />
-                <h2 class="font-semibold text-highlighted">Google Business</h2>
+                <h2 class="font-semibold text-highlighted">Google</h2>
               </div>
             </template>
 
-            <div class="space-y-4 text-sm">
-              <div v-if="gbConnection" class="space-y-3">
+            <div class="space-y-5 text-sm">
+              <section class="space-y-3">
                 <div class="flex items-center justify-between gap-4">
-                  <span class="text-muted">Account</span>
-                  <span class="truncate text-right text-highlighted">{{ gbConnection.provider_account_email }}</span>
+                  <span class="font-medium text-highlighted">Business Profile</span>
+                  <UBadge :color="gbConnection ? 'success' : 'neutral'" variant="soft">
+                    {{ gbConnection ? 'Connected' : 'Not connected' }}
+                  </UBadge>
                 </div>
-                <div class="flex items-center justify-between gap-4">
-                  <span class="text-muted">Status</span>
-                  <UBadge color="success" variant="soft">Connected</UBadge>
+                <div v-if="gbConnection" class="space-y-3">
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-muted">Account</span>
+                    <span class="truncate text-right text-highlighted">{{ gbConnection.provider_account_email }}</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-muted">Last synced</span>
+                    <span class="text-right text-highlighted">{{ location.last_synced_at || 'Never' }}</span>
+                  </div>
                 </div>
-                <div class="flex items-center justify-between gap-4">
-                  <span class="text-muted">Last synced</span>
-                  <span class="text-right text-highlighted">{{ location.last_synced_at || 'Never' }}</span>
-                </div>
-              </div>
+                <p v-else class="text-muted">Connect Google Business to sync reviews, photos, and location data.</p>
 
-              <div v-else class="space-y-3">
-                <div class="flex items-center justify-between gap-4">
-                  <span class="text-muted">Status</span>
-                  <UBadge color="neutral" variant="soft">Not connected</UBadge>
-                </div>
-                <p class="text-muted">Connect Google Business to sync reviews, photos, and location data.</p>
-              </div>
-
-              <div class="flex flex-col gap-2">
                 <UButton
                   v-if="!gbConnection"
                   icon="i-simple-icons-google"
@@ -116,18 +111,43 @@
                 >
                   Connect Google Business
                 </UButton>
+              </section>
+
+              <section class="space-y-3 border-t border-default pt-5">
+                <div class="flex items-center justify-between gap-4">
+                  <span class="font-medium text-highlighted">Places</span>
+                  <UBadge :color="location.google_place_id ? 'success' : 'neutral'" variant="soft">
+                    {{ location.google_place_id ? 'Ready' : 'No Place ID' }}
+                  </UBadge>
+                </div>
+                <p class="text-muted">
+                  {{ location.google_place_id ? `Place ID: ${location.google_place_id}` : 'Add a Google Place ID in Location Details to sync hours, address, rating, and reviews.' }}
+                </p>
+                <p v-if="placeSyncResult" class="text-success">{{ placeSyncResult }}</p>
                 <UButton
-                  v-if="location.maps_url"
-                  :to="location.maps_url"
-                  target="_blank"
+                  icon="i-simple-icons-googlemaps"
                   color="neutral"
                   variant="soft"
-                  icon="i-heroicons-map"
+                  :disabled="!location.google_place_id"
+                  :loading="syncingPlace"
                   block
+                  @click="syncGooglePlace"
                 >
-                  Open Maps
+                  Sync Google Places
                 </UButton>
-              </div>
+              </section>
+
+              <UButton
+                v-if="location.maps_url"
+                :to="location.maps_url"
+                target="_blank"
+                color="neutral"
+                variant="soft"
+                icon="i-heroicons-map"
+                block
+              >
+                Open Maps
+              </UButton>
             </div>
           </UCard>
         </div>
@@ -419,6 +439,8 @@ const location = ref<BusinessLocation | null>(null)
 const menus = ref<ApiRecord[]>([])
 const gbConnection = ref<GbConnection | null>(null)
 const connectingGoogle = ref(false)
+const syncingPlace = ref(false)
+const placeSyncResult = ref('')
 const { paths, buildHeaderLinks, locationMenuPath, locationContentPath, locationPath } = useDashboardSiteLinks(siteId, computed(() => {
   const value = site.value?.public_url
   return typeof value === 'string' ? value : null
@@ -721,6 +743,27 @@ const loadGbConnection = async () => {
   }
 }
 
+async function syncGooglePlace() {
+  if (!location.value?.google_place_id) return
+  syncingPlace.value = true
+  try {
+    const res = await $fetch<{ success: boolean; reviewsUpserted: number; place: { rating: number | null; ratingCount: number | null } }>(
+      '/api/integrations/google-places/sync',
+      { method: 'POST', body: { locationId: locationId.value } }
+    )
+    const parts = ['Synced hours, address, and rating']
+    if (res.reviewsUpserted > 0) parts.push(`${res.reviewsUpserted} new review${res.reviewsUpserted > 1 ? 's' : ''}`)
+    if (res.place.rating) parts.push(`${res.place.rating} stars (${res.place.ratingCount?.toLocaleString()} reviews)`)
+    placeSyncResult.value = parts.join(', ')
+    toast.add({ title: 'Synced', description: placeSyncResult.value, color: 'success' })
+    await loadLocationWorkspace()
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Google Places sync failed'), color: 'error' })
+  } finally {
+    syncingPlace.value = false
+  }
+}
+
 function resetReviewForm() {
   editingReviewId.value = null
   reviewForm.author_name = ''
@@ -843,6 +886,8 @@ const loadLocationWorkspace = async () => {
   }
 }
 
+const { evaluateAndSuggest } = useUpsellTriggers()
+
 onMounted(async () => {
   const workspaceLoaded = await loadLocationWorkspace()
   await loadGbConnection()
@@ -853,6 +898,8 @@ onMounted(async () => {
     const { gb: _gb, ...restQuery } = route.query
     router.replace({ path: route.path, query: restQuery })
   }
+
+  evaluateAndSuggest()
 })
 
 useSeoMeta({ title: 'Location Workspace | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

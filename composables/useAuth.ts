@@ -33,6 +33,6 @@ export const signOutUser = async () => {
 export const signInWithGoogle = async (callbackURL?: string) => {
   await authClient.signIn.social({
     provider: 'google',
-    callbackURL: callbackURL || '/dashboard'
+    callbackURL: callbackURL || '/api/post-login'
   })
 }

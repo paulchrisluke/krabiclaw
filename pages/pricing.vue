@@ -19,7 +19,7 @@
         </h1>
         
         <p class="text-lg leading-relaxed text-muted m-0 max-w-2xl mt-2">
-          Start free. Pay per location as you grow. No setup fees, no hidden hooks, cancel at any time.
+          Start free. Upgrade to a managed plan when you're ready — we handle translations, marketing, and your Google presence for you.
         </p>
       </div>
 
@@ -103,16 +103,20 @@ useBreadcrumbSchema([
 
 const faqs = [
   {
-    q: 'What counts as a location?',
-    a: 'Each physical restaurant address is one location. A brand with two restaurants pays for two Pro locations ($58/month). Your website and dashboard are shared across all locations — only the billing scales.',
-  },
-  {
-    q: 'Can I add or remove locations anytime?',
-    a: 'Yes. Additions are prorated immediately. Removals take effect at the end of your current billing period. You can manage everything from Dashboard → Billing.',
+    q: 'What does "Managed" actually mean?',
+    a: "On the Managed plan, Paul & Julia handle your restaurant's online presence entirely. Menu changes, seasonal updates, translations, Google Business management — send us a WhatsApp voice note and we take care of it. You focus on the restaurant.",
   },
   {
     q: 'Do I need a credit card to start?',
-    a: 'No. The Free plan is free forever — no credit card required. You only need a card when you upgrade to Pro.',
+    a: 'No. The Starter plan is free forever — no credit card required. You only need a card when you upgrade to a paid plan.',
+  },
+  {
+    q: 'What is the SEO Accelerator?',
+    a: 'Julia grew tiffycooks.com to over 1 million daily impressions. The SEO Accelerator applies that same local & travel SEO playbook to your restaurant — keyword targeting, Google Maps authority, and a monthly content cadence.',
+  },
+  {
+    q: 'What are the one-time add-ons?',
+    a: 'You can purchase individual services without a monthly plan: an additional language translation ($45), a seasonal relaunch package ($99), or a Google Business optimization ($49). These are fulfilled by Paul & Julia within 3–5 business days.',
   },
   {
     q: 'Do you offer refunds?',
@@ -120,11 +124,7 @@ const faqs = [
   },
   {
     q: 'What payment methods do you accept?',
-    a: 'All major credit and debit cards (Visa, Mastercard, Amex) via Stripe. Enterprise plans can be invoiced by bank transfer.',
-  },
-  {
-    q: 'What are AI credits used for?',
-    a: 'AI credits power menu extraction from photos, content generation, and the ChowBot AI assistant. Credits reset monthly. Additional top-ups are available from Dashboard → Billing.',
+    a: 'All major credit and debit cards (Visa, Mastercard, Amex) via Stripe.',
   },
 ]
 const sharedOgImage = useSharedOgImage()
@@ -132,7 +132,7 @@ const currentPageUrl = useSeoUrl('/pricing')
 
 useSeoMeta({
   title: 'Pricing | KrabiClaw',
-  description: 'Per-location pricing for restaurant websites. Free forever, or upgrade to Pro at $29/location/month as you grow. No setup fees, no contracts.',
+  description: 'Managed restaurant websites from $49/month. Paul & Julia handle translations, marketing, and Google — or start free and do it yourself. No contracts.',
   ogImage: sharedOgImage,
   ogUrl: currentPageUrl,
   ogType: 'website',
@@ -147,25 +147,27 @@ useSchemaOrg([
       '@type': 'OfferCatalog',
       name: 'KrabiClaw Pricing Plans',
       itemListElement: [
-        { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'USD', description: 'Get started free with basic features' },
+        { '@type': 'Offer', name: 'Starter', price: '0', priceCurrency: 'USD', description: 'Free restaurant website with menu and basic SEO' },
         {
           '@type': 'Offer',
-          name: 'Pro',
+          name: 'Growth',
           priceCurrency: 'USD',
-          priceSpecification: [
-            { '@type': 'UnitPriceSpecification', price: '29', priceCurrency: 'USD', billingDuration: 'P1M' },
-          ],
-          description: 'Professional features per location per month',
+          priceSpecification: [{ '@type': 'UnitPriceSpecification', price: '49', priceCurrency: 'USD', billingDuration: 'P1M' }],
+          description: 'One language translation and AI-assisted menu updates',
         },
         {
           '@type': 'Offer',
-          name: 'Enterprise',
+          name: 'Managed',
           priceCurrency: 'USD',
-          priceSpecification: [
-            { '@type': 'UnitPriceSpecification', price: '99', priceCurrency: 'USD', billingDuration: 'P1M' },
-            { '@type': 'UnitPriceSpecification', price: '990', priceCurrency: 'USD', billingDuration: 'P1Y' },
-          ],
-          description: 'Unlimited sites and advanced features',
+          priceSpecification: [{ '@type': 'UnitPriceSpecification', price: '149', priceCurrency: 'USD', billingDuration: 'P1M' }],
+          description: 'Full managed service — Paul & Julia handle everything',
+        },
+        {
+          '@type': 'Offer',
+          name: 'SEO Accelerator',
+          priceCurrency: 'USD',
+          priceSpecification: [{ '@type': 'UnitPriceSpecification', price: '349', priceCurrency: 'USD', billingDuration: 'P1M' }],
+          description: "Julia's 1M impressions/day SEO playbook applied to your restaurant",
         },
       ],
     },

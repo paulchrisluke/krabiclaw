@@ -1,245 +1,504 @@
 <template>
-  <div class="p-4 lg:p-6">
-    <div v-if="loading" class="text-center py-12">
-      <p class="text-muted">Loading...</p>
-    </div>
+  <UPage>
+    <UPageHeader :title="currentTabLabel" :description="currentTabDescription" />
 
-    <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-lg p-6">
-      <p class="text-red-600">{{ error }}</p>
-    </div>
+    <UPageBody>
 
-    <div v-else>
-      <div v-if="activeTab === 'content'" class="bg-elevated rounded-lg shadow-sm border border-default p-6">
-        <h2 class="text-xl font-bold text-default mb-4">Platform Content</h2>
-        <div class="space-y-4">
-          <div v-for="page in platformPages" :key="page" class="flex items-center justify-between p-4 bg-muted rounded-lg">
-            <span class="font-medium text-default capitalize">{{ page }}</span>
-            <UButton size="sm" variant="outline" @click="editContent(page)">Edit</UButton>
+      <!-- ── QUEUE ── -->
+      <div v-if="activeTab === 'queue'" class="space-y-4">
+        <div class="flex justify-end">
+          <UButton color="neutral" variant="ghost" size="xs" :loading="queueLoading" @click="loadQueue">
+            <UIcon name="i-heroicons-arrow-path" class="size-4" />
+          </UButton>
+        </div>
+
+        <UCard v-if="queueLoading">
+          <div class="space-y-3">
+            <USkeleton v-for="i in 3" :key="i" class="h-16 rounded-lg" />
           </div>
+        </UCard>
+
+        <UCard v-else-if="purchases.length === 0">
+          <div class="text-center">
+            <UIcon name="i-heroicons-check-badge" class="mx-auto size-10 text-success mb-3" />
+            <p class="font-semibold text-highlighted">All caught up</p>
+            <p class="text-sm text-muted mt-1">No pending service add-ons.</p>
+          </div>
+        </UCard>
+
+        <div v-else class="divide-y divide-default rounded-xl border border-default overflow-hidden">
+          <div
+            v-for="purchase in purchases"
+            :key="purchase.id"
+            class="flex items-center justify-between gap-4 px-5 py-4 bg-default hover:bg-elevated/50 transition-colors"
+          >
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" :class="addonColor(purchase.addon_type)">
+                <UIcon :name="addonIcon(purchase.addon_type)" class="size-4" />
+              </div>
+              <div class="min-w-0">
+                <p class="font-semibold text-default">{{ addonLabel(purchase.addon_type) }}</p>
+                <p class="text-sm text-muted truncate">{{ purchase.org_name }} · {{ formatDate(purchase.created_at) }}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <UButton
+                v-if="purchase.org_slug"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                icon="i-heroicons-arrow-top-right-on-square"
+                :to="`/dashboard/${purchase.org_slug}`"
+                target="_blank"
+              >
+                View
+              </UButton>
+              <UButton
+                size="xs"
+                color="success"
+                variant="soft"
+                icon="i-heroicons-check"
+                :loading="fulfillingId === purchase.id"
+                @click="markDone(purchase.id)"
+              >
+                Mark done
+              </UButton>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <UCheckbox v-model="showAllPurchases" label="Show fulfilled" @update:model-value="loadQueue" />
         </div>
       </div>
 
-      <div v-if="activeTab === 'blog'" class="bg-elevated rounded-lg shadow-sm border border-default p-6">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-xl font-bold text-default">Platform Blog</h2>
-            <UButton size="sm" @click="createPost">New Post</UButton>
-          </div>
-          <div v-if="blogError" class="text-center py-8 text-red-600">
-            {{ blogError }}
-          </div>
-          <div v-else-if="blogPosts.length === 0" class="text-center py-8 text-muted">
-            No blog posts yet. Create your first post!
-          </div>
-          <div v-else class="space-y-4">
-            <div v-for="post in blogPosts" :key="post.id" class="flex items-center justify-between p-4 bg-muted rounded-lg">
-              <div>
-                <h3 class="font-medium text-default">{{ post.title }}</h3>
-                <p class="text-sm text-muted">{{ post.published_at ? formatDate(post.published_at) : 'Draft' }}</p>
-              </div>
-              <div class="flex gap-2">
-                <UButton size="sm" variant="outline" @click="editPost(post.id)">Edit</UButton>
-                <UButton size="sm" variant="outline" color="red" :loading="deletingPostId === post.id" :disabled="deletingPostId === post.id" @click="openDeleteConfirm(post.id)">Delete</UButton>
-              </div>
-            </div>
-          </div>
+      <!-- ── CLIENTS ── -->
+      <div v-if="activeTab === 'clients'" class="space-y-4">
+        <div class="flex justify-end">
+          <UButton color="neutral" variant="ghost" size="xs" :loading="clientsLoading" @click="loadClients">
+            <UIcon name="i-heroicons-arrow-path" class="size-4" />
+          </UButton>
         </div>
 
-        <div v-if="activeTab === 'analytics'" class="bg-elevated rounded-lg shadow-sm border border-default p-6">
-          <h2 class="text-xl font-bold text-default mb-4">Platform Analytics</h2>
-          
-          <div v-if="analyticsLoading" class="text-center py-8">
-            <p class="text-muted">Loading analytics...</p>
+        <UCard v-if="clientsLoading">
+          <div class="space-y-3">
+            <USkeleton v-for="i in 4" :key="i" class="h-16 rounded-lg" />
           </div>
-          
-          <div v-else>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div class="bg-blue-50 rounded-lg p-6">
-                <h3 class="text-sm font-medium text-blue-600 mb-2">Total Users</h3>
-                <p class="text-3xl font-bold text-blue-900">{{ analytics?.metrics?.users }}</p>
-              </div>
-              <div class="bg-green-50 rounded-lg p-6">
-                <h3 class="text-sm font-medium text-green-600 mb-2">Total Sites</h3>
-                <p class="text-3xl font-bold text-green-900">{{ analytics?.metrics?.sites }}</p>
-              </div>
-              <div class="bg-purple-50 rounded-lg p-6">
-                <h3 class="text-sm font-medium text-purple-600 mb-2">Total Posts</h3>
-                <p class="text-3xl font-bold text-purple-900">{{ analytics?.metrics?.posts }}</p>
-              </div>
-            </div>
+        </UCard>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div class="bg-gray-50 rounded-lg p-6">
-                <h3 class="text-sm font-medium text-muted mb-2">Organizations</h3>
-                <p class="text-2xl font-bold text-default">{{ analytics?.metrics?.organizations }}</p>
-              </div>
-              <div class="bg-gray-50 rounded-lg p-6">
-                <h3 class="text-sm font-medium text-muted mb-2">Menus</h3>
-                <p class="text-2xl font-bold text-default">{{ analytics?.metrics?.menus }}</p>
-              </div>
-              <div class="bg-gray-50 rounded-lg p-6">
-                <h3 class="text-sm font-medium text-muted mb-2">Locations</h3>
-                <p class="text-2xl font-bold text-default">{{ analytics?.metrics?.locations }}</p>
-              </div>
-            </div>
+        <UCard v-else-if="clients.length === 0">
+          <div class="text-center">
+            <UIcon name="i-heroicons-building-storefront" class="mx-auto size-10 text-muted mb-3" />
+            <p class="font-semibold text-highlighted">No managed clients yet</p>
+            <p class="text-sm text-muted mt-1">Clients on Growth, Managed, or SEO Accelerator will appear here.</p>
+          </div>
+        </UCard>
 
-            <h3 class="text-lg font-bold text-default mb-4">Recent Sites</h3>
-            <div v-if="!analytics?.recentSites?.length" class="text-center py-4 text-muted">
-              No sites yet.
-            </div>
-            <div v-else class="space-y-2">
-              <div v-for="site in analytics.recentSites" :key="site.id" class="flex items-center justify-between p-3 bg-muted rounded">
-                <div>
-                  <p class="font-medium text-default">{{ site.brand_name || site.subdomain }}</p>
-                  <p class="text-sm text-muted">{{ site.subdomain }}.krabiclaw.com</p>
+        <div v-else class="divide-y divide-default rounded-xl border border-default overflow-hidden">
+          <div
+            v-for="client in clients"
+            :key="client.org_id"
+            class="flex items-center justify-between gap-4 px-5 py-4 bg-default hover:bg-elevated/50 transition-colors"
+          >
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <UIcon name="i-heroicons-building-storefront" class="size-4" />
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <p class="font-semibold text-default truncate">{{ client.brand_name || client.org_name }}</p>
+                  <UBadge :label="planLabel(client.plan)" :color="planColor(client.plan)" variant="soft" size="xs" />
                 </div>
-                <p class="text-sm text-muted">{{ formatDate(site.created_at) }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="activeTab === 'domains'" class="bg-elevated rounded-lg shadow-sm border border-default p-6">
-          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 class="text-xl font-bold text-default">Custom Domains</h2>
-              <p class="text-sm text-muted">Search, inspect, and reconcile Cloudflare SaaS hostnames.</p>
-            </div>
-            <div class="flex gap-2">
-              <UInput v-model="domainSearch" placeholder="Search domains" icon="i-heroicons-magnifying-glass" />
-              <UButton variant="soft" color="neutral" :loading="domainsLoading" @click="loadDomains">Refresh</UButton>
-            </div>
-          </div>
-
-          <div class="mt-6 space-y-3">
-            <div v-if="domainsLoading" class="text-sm text-muted">Loading domains...</div>
-            <div v-else-if="domains.length === 0" class="text-sm text-muted">No custom domains found.</div>
-            <div v-for="domain in domains" v-else :key="domain.id" class="rounded-lg border border-default p-4">
-              <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <p class="font-medium text-default">{{ domain.domain }}</p>
-                    <UBadge :color="domain.status === 'active' ? 'success' : domain.status === 'failed' || domain.status === 'blocked' ? 'error' : 'warning'" variant="soft">
-                      {{ domain.status }}
-                    </UBadge>
-                    <UBadge v-if="domain.role === 'canonical'" color="primary" variant="soft">Primary</UBadge>
-                  </div>
-                  <p class="mt-1 text-sm text-muted">{{ domain.site_name }} · {{ domain.organization_name }}</p>
-                  <p class="mt-1 text-xs text-muted">Cloudflare ID: {{ domain.cloudflare_hostname_id || 'pending' }}</p>
-                  <p v-if="domain.error_message" class="mt-1 text-xs text-error">{{ domain.error_message }}</p>
-                </div>
-                <UButton size="sm" variant="soft" color="neutral" icon="i-heroicons-arrow-path" :loading="adminSyncingDomainId === domain.id" @click="syncAdminDomain(domain.id)">
-                  Sync
-                </UButton>
-              </div>
-            </div>
-          </div>
-
-          <div class="mt-8">
-            <h3 class="font-semibold text-default mb-3">Recent Domain Events</h3>
-            <div class="space-y-2">
-              <template v-if="domainEvents.length > 0">
-                <p v-for="event in domainEvents" :key="event.id" class="rounded-md bg-muted p-3 text-xs text-muted">
-                  {{ formatDate(event.created_at) }} · {{ event.domain || 'domain' }} · {{ event.event_type }} · {{ event.message }}
+                <p class="text-sm text-muted">
+                  {{ client.subdomain }}.krabiclaw.com
+                  <template v-if="client.source_locale"> · {{ client.source_locale }}</template>
                 </p>
-              </template>
-              <template v-else>
-                <p class="rounded-md bg-muted p-3 text-xs text-muted">No recent domain events</p>
-              </template>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="activeTab === 'users'" class="bg-elevated rounded-lg shadow-sm border border-default p-6">
-          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
-            <div>
-              <h2 class="text-xl font-bold text-default">Users</h2>
-              <p class="text-sm text-muted">Find and impersonate accounts for support.</p>
-            </div>
-            <div class="flex gap-2">
-              <UInput v-model="userSearch" placeholder="Search users" icon="i-heroicons-magnifying-glass" @keyup.enter="loadUsers" />
-              <UButton variant="soft" color="neutral" :loading="usersLoading" @click="loadUsers">Search</UButton>
-            </div>
-          </div>
-
-          <UTable :data="users" :columns="userColumns" :loading="usersLoading">
-            <template #email-cell="{ row }">
-              <div class="flex items-center gap-2">
-                <span class="break-all font-medium text-default">{{ row.original.email }}</span>
-                <UBadge v-if="row.original.banned" color="error" variant="soft" size="xs">Banned</UBadge>
               </div>
-            </template>
-            <template #name-cell="{ row }">
-              <span class="text-muted">{{ row.original.name || '—' }}</span>
-            </template>
-            <template #role-cell="{ row }">
-              <UBadge :color="row.original.role === 'admin' ? 'primary' : 'neutral'" variant="soft" size="xs">
-                {{ row.original.role || 'user' }}
-              </UBadge>
-            </template>
-            <template #createdAt-cell="{ row }">
-              <span class="text-sm text-muted">{{ formatDate(row.original.createdAt) }}</span>
-            </template>
-            <template #actions-cell="{ row }">
-              <UTooltip :text="row.original.role === 'admin' ? 'Cannot impersonate admin' : 'Impersonate user'">
-                <UButton
-                  size="xs"
-                  variant="ghost"
-                  color="neutral"
-                  icon="i-heroicons-arrow-right-on-rectangle"
-                  :disabled="row.original.role === 'admin'"
-                  :loading="impersonatingUserId === row.original.id"
-                  @click="impersonateUser(row.original.id)"
-                />
-              </UTooltip>
-            </template>
-          </UTable>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <UButton
+                v-if="client.org_slug"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                icon="i-heroicons-language"
+                :to="`/dashboard/${client.org_slug}/translations`"
+                target="_blank"
+              >
+                Translations
+              </UButton>
+              <UButton
+                v-if="client.org_slug"
+                size="xs"
+                color="primary"
+                variant="soft"
+                icon="i-heroicons-arrow-top-right-on-square"
+                :to="`/dashboard/${client.org_slug}`"
+                target="_blank"
+              >
+                Workspace
+              </UButton>
+            </div>
+          </div>
         </div>
       </div>
 
-    <UModal v-model:open="deleteConfirmOpen" :ui="{ content: 'max-w-md' }">
-      <template #content>
-        <div class="p-6">
-          <h3 class="text-lg font-semibold text-default mb-2">Delete post?</h3>
-          <p class="text-sm text-muted mb-6">This action cannot be undone.</p>
-          <div class="flex justify-end gap-2">
-            <UButton variant="ghost" color="neutral" @click="closeDeleteConfirm">Cancel</UButton>
-            <UButton color="red" :loading="deletingPostId !== null" @click="confirmDeletePost">Delete</UButton>
+      <!-- ── ANALYTICS ── -->
+      <div v-if="activeTab === 'analytics'" class="space-y-6">
+        <div v-if="analyticsLoading" class="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <USkeleton v-for="i in 6" :key="i" class="h-24 rounded-xl" />
+        </div>
+        <div v-else>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+            <UCard v-for="stat in analyticsStats" :key="stat.label">
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted">{{ stat.label }}</p>
+              <p class="mt-1 text-2xl font-bold text-highlighted">{{ stat.value }}</p>
+            </UCard>
+          </div>
+
+          <h3 class="text-sm font-semibold text-default mb-3">Recent sites</h3>
+          <div class="divide-y divide-default rounded-xl border border-default overflow-hidden">
+            <div v-if="!analytics?.recentSites?.length" class="px-5 py-4 text-sm text-muted">No sites yet.</div>
+            <div
+              v-for="site in analytics?.recentSites"
+              :key="site.id"
+              class="flex items-center justify-between px-5 py-3"
+            >
+              <div>
+                <p class="font-medium text-default">{{ site.brand_name || site.subdomain }}</p>
+                <p class="text-xs text-muted">{{ site.subdomain }}.krabiclaw.com</p>
+              </div>
+              <p class="text-xs text-muted">{{ formatDate(site.created_at) }}</p>
+            </div>
           </div>
         </div>
-      </template>
-    </UModal>
-  </div>
+      </div>
+
+      <!-- ── DOMAINS ── -->
+      <div v-if="activeTab === 'domains'" class="space-y-4">
+        <div class="flex flex-col sm:flex-row gap-2">
+          <UInput v-model="domainSearch" placeholder="Search domains" icon="i-heroicons-magnifying-glass" class="flex-1" />
+          <UButton variant="soft" color="neutral" :loading="domainsLoading" @click="loadDomains">Refresh</UButton>
+        </div>
+
+        <div class="divide-y divide-default rounded-xl border border-default overflow-hidden">
+          <div v-if="domainsLoading" class="px-5 py-4 text-sm text-muted">Loading…</div>
+          <div v-else-if="domains.length === 0" class="px-5 py-4 text-sm text-muted">No custom domains found.</div>
+          <div v-for="domain in domains" :key="domain.id" class="px-5 py-4">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="font-medium text-default">{{ domain.domain }}</p>
+                  <UBadge :color="domain.status === 'active' ? 'success' : domain.status === 'failed' || domain.status === 'blocked' ? 'error' : 'warning'" variant="soft">{{ domain.status }}</UBadge>
+                  <UBadge v-if="domain.role === 'canonical'" color="primary" variant="soft">Primary</UBadge>
+                </div>
+                <p class="mt-1 text-sm text-muted">{{ domain.site_name }} · {{ domain.organization_name }}</p>
+                <p class="mt-0.5 text-xs text-muted">{{ domain.cloudflare_hostname_id || 'pending CF ID' }}</p>
+                <p v-if="domain.error_message" class="mt-0.5 text-xs text-error">{{ domain.error_message }}</p>
+              </div>
+              <UButton size="sm" variant="soft" color="neutral" icon="i-heroicons-arrow-path" :loading="syncingDomainId === domain.id" @click="syncDomain(domain.id)">Sync</UButton>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="domainEvents.length" class="space-y-2">
+          <h3 class="text-sm font-semibold text-default">Recent domain events</h3>
+          <p v-for="ev in domainEvents" :key="ev.id" class="rounded-lg bg-elevated px-4 py-2 text-xs text-muted">
+            {{ formatDate(ev.created_at) }} · {{ ev.domain || '—' }} · {{ ev.event_type }} · {{ ev.message }}
+          </p>
+        </div>
+      </div>
+
+      <!-- ── USERS ── -->
+      <div v-if="activeTab === 'users'" class="space-y-4">
+        <div class="flex gap-2">
+          <UInput v-model="userSearch" placeholder="Search users" icon="i-heroicons-magnifying-glass" class="flex-1" @keyup.enter="loadUsers" />
+          <UButton variant="soft" color="neutral" :loading="usersLoading" @click="loadUsers">Search</UButton>
+        </div>
+
+        <UTable :data="users" :columns="userColumns" :loading="usersLoading">
+          <template #email-cell="{ row }">
+            <div class="flex items-center gap-2">
+              <span class="break-all font-medium text-default">{{ row.original.email }}</span>
+              <UBadge v-if="row.original.banned" color="error" variant="soft" size="xs">Banned</UBadge>
+            </div>
+          </template>
+          <template #name-cell="{ row }">
+            <span class="text-muted">{{ row.original.name || '—' }}</span>
+          </template>
+          <template #role-cell="{ row }">
+            <UBadge :color="row.original.role === 'admin' ? 'primary' : 'neutral'" variant="soft" size="xs">{{ row.original.role || 'user' }}</UBadge>
+          </template>
+          <template #createdAt-cell="{ row }">
+            <span class="text-sm text-muted">{{ formatDate(row.original.createdAt) }}</span>
+          </template>
+          <template #actions-cell="{ row }">
+            <UTooltip :text="row.original.role === 'admin' ? 'Cannot impersonate admin' : 'Impersonate user'">
+              <UButton size="xs" variant="ghost" color="neutral" icon="i-heroicons-arrow-right-on-rectangle" :disabled="row.original.role === 'admin'" :loading="impersonatingUserId === row.original.id" @click="impersonateUser(row.original.id)" />
+            </UTooltip>
+          </template>
+        </UTable>
+      </div>
+
+      <!-- ── CONTENT ── -->
+      <div v-if="activeTab === 'content'" class="space-y-3">
+        <div v-for="page in ['about', 'contact', 'help']" :key="page" class="flex items-center justify-between rounded-xl border border-default px-5 py-4">
+          <span class="font-medium text-default capitalize">{{ page }}</span>
+          <UButton size="sm" variant="outline" @click="navigateTo(`/admin/content/${page}`)">Edit</UButton>
+        </div>
+      </div>
+
+      <!-- ── BLOG ── -->
+      <div v-if="activeTab === 'blog'" class="space-y-4">
+        <div class="flex justify-end">
+          <UButton size="sm" @click="navigateTo('/admin/blog/new')">New post</UButton>
+        </div>
+        <div v-if="blogError" class="text-sm text-error">{{ blogError }}</div>
+        <div v-else-if="blogPosts.length === 0" class="text-sm text-muted py-4">No posts yet.</div>
+        <div v-else class="divide-y divide-default rounded-xl border border-default overflow-hidden">
+          <div v-for="post in blogPosts" :key="post.id" class="flex items-center justify-between px-5 py-4">
+            <div>
+              <p class="font-medium text-default">{{ post.title }}</p>
+              <p class="text-xs text-muted">{{ post.published_at ? formatDate(post.published_at) : 'Draft' }}</p>
+            </div>
+            <div class="flex gap-2">
+              <UButton size="xs" variant="outline" @click="navigateTo(`/admin/blog/${post.id}`)">Edit</UButton>
+              <UButton size="xs" variant="outline" color="error" :loading="deletingPostId === post.id" @click="openDeleteConfirm(post.id)">Delete</UButton>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </UPageBody>
+  </UPage>
+
+  <!-- Delete post confirm modal -->
+  <UModal v-model:open="deleteConfirmOpen" :ui="{ content: 'max-w-md' }">
+    <template #content>
+      <div class="p-6">
+        <h3 class="text-lg font-semibold text-default mb-2">Delete post?</h3>
+        <p class="text-sm text-muted mb-6">This action cannot be undone.</p>
+        <div class="flex justify-end gap-2">
+          <UButton variant="ghost" color="neutral" @click="deleteConfirmOpen = false">Cancel</UButton>
+          <UButton color="error" :loading="deletingPostId !== null" @click="confirmDeletePost">Delete</UButton>
+        </div>
+      </div>
+    </template>
+  </UModal>
 </template>
 
-<script setup>
-definePageMeta({ layout: 'dashboard' })
+<script setup lang="ts">
+definePageMeta({ layout: 'dashboard', middleware: 'admin' })
 
-const auth = useAuth()
+// ── Auth ─────────────────────────────────────────────────────────────────────
+const toast = useToast()
+
+// ── Routing ──────────────────────────────────────────────────────────────────
 const route = useRoute()
-const activeTab = computed(() => route.query.tab || 'analytics')
-const loading = ref(true)
-const error = ref('')
-const { addToast } = useToast()
+const activeTab = computed(() => String(route.query.tab || 'queue'))
 
-const platformPages = ['about', 'contact', 'help']
-const blogPosts = ref([])
-const blogError = ref('')
-const deleteConfirmOpen = ref(false)
-const pendingDeletePostId = ref(null)
-const deletingPostId = ref(null)
+const TAB_META: Record<string, { label: string; description: string }> = {
+  queue:     { label: 'Fulfillment Queue',  description: 'Service add-ons purchased — mark each as done once fulfilled.' },
+  clients:   { label: 'Managed Clients',    description: 'Restaurants on Growth, Managed, or SEO Accelerator plans.' },
+  analytics: { label: 'Analytics',          description: 'Platform-wide usage and site metrics.' },
+  domains:   { label: 'Custom Domains',     description: 'Inspect and reconcile Cloudflare SaaS hostnames.' },
+  users:     { label: 'Users',              description: 'Find and impersonate accounts for support.' },
+  content:   { label: 'Platform Content',   description: 'Edit marketing pages.' },
+  blog:      { label: 'Platform Blog',      description: 'Manage platform blog posts.' },
+}
 
-const analytics = ref({ metrics: { users: 0, organizations: 0, sites: 0, posts: 0, menus: 0, locations: 0 }, recentSites: [] })
+const currentTabLabel = computed(() => TAB_META[activeTab.value]?.label ?? 'Admin')
+const currentTabDescription = computed(() => TAB_META[activeTab.value]?.description ?? '')
+
+// ── Shared helpers ──────────────────────────────────────────────────────────
+function formatDate(dateString: string | null | undefined) {
+  if (!dateString) return '—'
+  const d = new Date(dateString)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+// ── Queue ───────────────────────────────────────────────────────────────────
+interface Purchase {
+  id: string
+  organization_id: string
+  org_name: string
+  org_slug: string | null
+  addon_type: string
+  fulfilled_at: string | null
+  created_at: string
+}
+
+const purchases = ref<Purchase[]>([])
+const queueLoading = ref(false)
+const fulfillingId = ref<string | null>(null)
+const showAllPurchases = ref(false)
+
+const pendingCount = computed(() => purchases.value.filter(p => !p.fulfilled_at).length)
+
+const ADDON_LABELS: Record<string, string> = {
+  translation: 'Language Translation',
+  seasonal: 'Seasonal Relaunch',
+  gbp_setup: 'Google Business Optimization',
+}
+const ADDON_ICONS: Record<string, string> = {
+  translation: 'i-heroicons-language',
+  seasonal: 'i-heroicons-sparkles',
+  gbp_setup: 'i-heroicons-map-pin',
+}
+const ADDON_COLORS: Record<string, string> = {
+  translation: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400',
+  seasonal: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
+  gbp_setup: 'bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400',
+}
+
+function addonLabel(type: string) { return ADDON_LABELS[type] ?? type }
+function addonIcon(type: string) { return ADDON_ICONS[type] ?? 'i-heroicons-shopping-bag' }
+function addonColor(type: string) { return ADDON_COLORS[type] ?? 'bg-muted text-muted' }
+
+async function loadQueue() {
+  queueLoading.value = true
+  try {
+    const res = await $fetch<{ purchases: Purchase[] }>(`/api/admin/fulfillment?all=${showAllPurchases.value ? '1' : '0'}`)
+    purchases.value = res.purchases
+  } catch {
+    toast.add({ title: 'Failed to load queue', color: 'error' })
+  } finally {
+    queueLoading.value = false
+  }
+}
+
+async function markDone(id: string) {
+  fulfillingId.value = id
+  try {
+    await $fetch(`/api/admin/fulfillment/${id}/done`, { method: 'POST' })
+    toast.add({ title: 'Marked as fulfilled', color: 'success' })
+    await loadQueue()
+  } catch {
+    toast.add({ title: 'Failed to mark done', color: 'error' })
+  } finally {
+    fulfillingId.value = null
+  }
+}
+
+// ── Clients ─────────────────────────────────────────────────────────────────
+interface Client {
+  org_id: string
+  org_name: string
+  org_slug: string | null
+  plan: string
+  brand_name: string | null
+  subdomain: string | null
+  source_locale: string | null
+  subscription_status: string | null
+}
+
+const clients = ref<Client[]>([])
+const clientsLoading = ref(false)
+
+const PLAN_LABELS: Record<string, string> = {
+  growth: 'Growth',
+  managed: 'Managed',
+  seo_accelerator: 'SEO Accelerator',
+}
+const PLAN_COLORS: Record<string, 'primary' | 'success' | 'warning'> = {
+  growth: 'warning',
+  managed: 'primary',
+  seo_accelerator: 'success',
+}
+
+function planLabel(plan: string) { return PLAN_LABELS[plan] ?? plan }
+function planColor(plan: string) { return PLAN_COLORS[plan] ?? 'neutral' }
+
+async function loadClients() {
+  clientsLoading.value = true
+  try {
+    const res = await $fetch<{ clients: Client[] }>('/api/admin/clients')
+    clients.value = res.clients
+  } catch {
+    toast.add({ title: 'Failed to load clients', color: 'error' })
+  } finally {
+    clientsLoading.value = false
+  }
+}
+
+// ── Analytics ───────────────────────────────────────────────────────────────
+interface Analytics {
+  metrics: { users: number; organizations: number; sites: number; posts: number; menus: number; locations: number }
+  recentSites: { id: string; brand_name: string | null; subdomain: string | null; created_at: string }[]
+}
+
+const analytics = ref<Analytics | null>(null)
 const analyticsLoading = ref(false)
-const initialized = ref(false)
-const domains = ref([])
-const domainEvents = ref([])
+
+const analyticsStats = computed(() => [
+  { label: 'Users',         value: analytics.value?.metrics.users ?? '—' },
+  { label: 'Organizations', value: analytics.value?.metrics.organizations ?? '—' },
+  { label: 'Sites',         value: analytics.value?.metrics.sites ?? '—' },
+  { label: 'Locations',     value: analytics.value?.metrics.locations ?? '—' },
+  { label: 'Menus',         value: analytics.value?.metrics.menus ?? '—' },
+  { label: 'Posts',         value: analytics.value?.metrics.posts ?? '—' },
+])
+
+async function loadAnalytics() {
+  analyticsLoading.value = true
+  try {
+    analytics.value = await $fetch<Analytics>('/api/admin/analytics')
+  } catch {
+    toast.add({ title: 'Failed to load analytics', color: 'error' })
+  } finally {
+    analyticsLoading.value = false
+  }
+}
+
+// ── Domains ─────────────────────────────────────────────────────────────────
+interface Domain {
+  id: string; domain: string; status: string; role: string
+  site_name: string | null; organization_name: string | null
+  cloudflare_hostname_id: string | null; error_message: string | null
+}
+interface DomainEvent { id: string; domain: string | null; event_type: string; message: string; created_at: string }
+
+const domains = ref<Domain[]>([])
+const domainEvents = ref<DomainEvent[]>([])
 const domainSearch = ref('')
 const domainsLoading = ref(false)
-const adminSyncingDomainId = ref(null)
-const users = ref([])
+const syncingDomainId = ref<string | null>(null)
+
+async function loadDomains() {
+  domainsLoading.value = true
+  try {
+    const q = domainSearch.value.trim() ? `?q=${encodeURIComponent(domainSearch.value.trim())}` : ''
+    const res = await $fetch<{ domains: Domain[]; events: DomainEvent[] }>(`/api/admin/domains${q}`)
+    domains.value = res.domains ?? []
+    domainEvents.value = res.events ?? []
+  } catch {
+    toast.add({ title: 'Failed to load domains', color: 'error' })
+  } finally {
+    domainsLoading.value = false
+  }
+}
+
+async function syncDomain(id: string) {
+  syncingDomainId.value = id
+  try {
+    await $fetch(`/api/admin/domains/${id}/sync`, { method: 'POST' })
+    toast.add({ title: 'Domain synced', color: 'success' })
+    await loadDomains()
+  } catch {
+    toast.add({ title: 'Failed to sync domain', color: 'error' })
+  } finally {
+    syncingDomainId.value = null
+  }
+}
+
+// ── Users ───────────────────────────────────────────────────────────────────
+interface AdminUser { id: string; email: string; name: string | null; role: string | null; banned: boolean; createdAt: string }
+
+const users = ref<AdminUser[]>([])
 const userSearch = ref('')
 const usersLoading = ref(false)
-const impersonatingUserId = ref(null)
+const impersonatingUserId = ref<string | null>(null)
 
 const userColumns = [
   { accessorKey: 'email', header: 'Email' },
@@ -249,128 +508,28 @@ const userColumns = [
   { id: 'actions', header: '' },
 ]
 
-const isAdmin = computed(() => {
-  const user = auth.data.value?.user
-  return !!user && (user.role === 'admin' || user.isAdmin === true)
-})
-
-watch(() => auth.sessionLoading.value, async (pending) => {
-  if (!pending && !isAdmin.value) {
-    await navigateTo('/login')
-  }
-}, { immediate: true })
-
-watch([() => auth.sessionLoading.value, isAdmin], async ([pending, admin]) => {
-  if (pending || initialized.value) {
-    return
-  }
-
-  if (!admin) {
-    await navigateTo('/login')
-    return
-  }
-
-  initialized.value = true
-
-  const [blogResult, analyticsResult, domainsResult, usersResult] = await Promise.allSettled([loadBlogPosts(), loadAnalytics(), loadDomains(), loadUsers()])
-  const blogFailed = blogResult.status === 'fulfilled' ? blogResult.value === false : true
-  const analyticsFailed = analyticsResult.status === 'fulfilled' ? analyticsResult.value === false : true
-  const domainsFailed = domainsResult.status === 'fulfilled' ? domainsResult.value === false : true
-  const usersFailed = usersResult.status === 'fulfilled' ? usersResult.value === false : true
-
-  if (blogFailed && analyticsFailed && domainsFailed && usersFailed) {
-    error.value = 'Failed to load dashboard'
-  }
-
-  loading.value = false
-}, { immediate: true })
-
-async function loadAnalytics() {
-  analyticsLoading.value = true
-  try {
-    const response = await $fetch('/api/admin/analytics')
-    analytics.value = response
-    return true
-  } catch {
-    console.error('Failed to load analytics:', err)
-    return false
-  } finally {
-    analyticsLoading.value = false
-  }
-}
-
-async function loadBlogPosts() {
-  try {
-    const response = await $fetch('/api/admin/blog/posts')
-    blogPosts.value = response.posts || []
-    blogError.value = ''
-    return true
-  } catch {
-    console.error('Failed to load blog posts:', err)
-    blogError.value = 'Failed to load blog posts. Please try again.'
-    return false
-  }
-}
-
-async function loadDomains() {
-  domainsLoading.value = true
-  try {
-    const query = domainSearch.value.trim() ? `?q=${encodeURIComponent(domainSearch.value.trim())}` : ''
-    const response = await $fetch(`/api/admin/domains${query}`)
-    domains.value = response.domains || []
-    domainEvents.value = response.events || []
-    return true
-  } catch {
-    console.error('Failed to load domains:', err)
-    return false
-  } finally {
-    domainsLoading.value = false
-  }
-}
-
-async function syncAdminDomain(domainId) {
-  adminSyncingDomainId.value = domainId
-  try {
-    await $fetch(`/api/admin/domains/${domainId}/sync`, { method: 'POST' })
-    addToast('Domain synced', 'success')
-    await loadDomains()
-  } catch {
-    addToast('Failed to sync domain', 'error')
-  } finally {
-    adminSyncingDomainId.value = null
-  }
-}
-
 async function loadUsers() {
   usersLoading.value = true
   try {
-    const query = userSearch.value.trim() ? `?q=${encodeURIComponent(userSearch.value.trim())}` : ''
-    const response = await $fetch(`/api/admin/users${query}`)
-    users.value = response.users || []
-    return true
+    const q = userSearch.value.trim() ? `?q=${encodeURIComponent(userSearch.value.trim())}` : ''
+    const res = await $fetch<{ users: AdminUser[] }>(`/api/admin/users${q}`)
+    users.value = res.users ?? []
   } catch {
-    console.error('Failed to load users:', err)
-    return false
+    toast.add({ title: 'Failed to load users', color: 'error' })
   } finally {
     usersLoading.value = false
   }
 }
 
-async function impersonateUser(userId) {
+async function impersonateUser(userId: string) {
   impersonatingUserId.value = userId
   try {
-    await $fetch('/api/admin/impersonation/start', {
-      method: 'POST',
-      body: { userId }
-    })
-    if (typeof auth.session?.value?.refresh === 'function') {
-      await auth.session.value.refresh()
-    }
-    // Navigate to the impersonated user's first site, or their dashboard
+    await $fetch('/api/admin/impersonation/start', { method: 'POST', body: { userId } })
     try {
-      const { sites } = await $fetch('/api/sites')
-      if (sites?.length > 0) {
-        const { paths } = useDashboardSiteLinks(sites[0].id)
+      const { sites } = await $fetch<{ sites: { id: string }[] }>('/api/sites')
+      const firstSite = sites?.[0]
+      if (firstSite) {
+        const { paths } = useDashboardSiteLinks(firstSite.id)
         await navigateTo(paths.value.base)
       } else {
         await navigateTo('/dashboard')
@@ -379,61 +538,56 @@ async function impersonateUser(userId) {
       await navigateTo('/dashboard')
     }
   } catch {
-    addToast('Failed to impersonate user', 'error')
+    toast.add({ title: 'Failed to impersonate user', color: 'error' })
   } finally {
     impersonatingUserId.value = null
   }
 }
 
-function formatDate(dateString) {
-  if (!dateString) return '—'
+// ── Blog ─────────────────────────────────────────────────────────────────────
+interface BlogPost { id: string; title: string; published_at: string | null }
 
-  const parsed = new Date(dateString)
-  if (Number.isNaN(parsed.getTime())) return '—'
+const blogPosts = ref<BlogPost[]>([])
+const blogError = ref('')
+const deleteConfirmOpen = ref(false)
+const pendingDeletePostId = ref<string | null>(null)
+const deletingPostId = ref<string | null>(null)
 
-  return parsed.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
+async function loadBlogPosts() {
+  try {
+    const res = await $fetch<{ posts: BlogPost[] }>('/api/admin/blog/posts')
+    blogPosts.value = res.posts ?? []
+    blogError.value = ''
+  } catch {
+    blogError.value = 'Failed to load posts.'
+  }
 }
 
-function editContent(page) {
-  navigateTo(`/admin/content/${page}`)
-}
-
-function createPost() {
-  navigateTo('/admin/blog/new')
-}
-
-function editPost(postId) {
-  navigateTo(`/admin/blog/${postId}`)
-}
-
-function openDeleteConfirm(postId) {
-  pendingDeletePostId.value = postId
+function openDeleteConfirm(id: string) {
+  pendingDeletePostId.value = id
   deleteConfirmOpen.value = true
-}
-
-function closeDeleteConfirm() {
-  deleteConfirmOpen.value = false
-  pendingDeletePostId.value = null
 }
 
 async function confirmDeletePost() {
   if (!pendingDeletePostId.value) return
-
   deletingPostId.value = pendingDeletePostId.value
   try {
     await $fetch(`/api/admin/blog/posts/${pendingDeletePostId.value}`, { method: 'DELETE' })
+    toast.add({ title: 'Post deleted', color: 'success' })
     await loadBlogPosts()
-    addToast('Post deleted successfully', 'success')
   } catch {
-    addToast('Failed to delete post', 'error')
+    toast.add({ title: 'Failed to delete post', color: 'error' })
   } finally {
     deletingPostId.value = null
-    closeDeleteConfirm()
+    deleteConfirmOpen.value = false
+    pendingDeletePostId.value = null
   }
 }
 
+// ── Init ─────────────────────────────────────────────────────────────────────
+onMounted(() => {
+  Promise.allSettled([loadQueue(), loadClients(), loadAnalytics(), loadDomains(), loadUsers(), loadBlogPosts()])
+})
+
+useSeoMeta({ title: 'Platform Admin | KrabiClaw', robots: 'noindex, nofollow' })
 </script>

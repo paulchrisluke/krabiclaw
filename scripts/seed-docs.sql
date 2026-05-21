@@ -166,10 +166,10 @@ Connect Google Business Profile when the restaurant already maintains hours, pho
 
 ## Exact Pages
 
-- Integrations: [Integrations](/dashboard/integrations)
-- Location-specific Google connection: [Location Details](/dashboard/locations/{locationId})
-- Reviews after sync: [Reviews](/dashboard/reviews)
-- Photos after sync: [Photos](/dashboard/photos)
+- Location workspace: [Location Overview](/dashboard/{orgSlug}/{locationSlug})
+- Location details: [Location Details](/dashboard/{orgSlug}/{locationSlug})
+- Reviews after sync: [Reviews](/dashboard/{orgSlug}/{locationSlug}/reviews)
+- Photos after sync: [Photos](/dashboard/{orgSlug}/{locationSlug}/photos)
 
 ## When To Connect
 
@@ -216,9 +216,9 @@ ChowBot helps restaurant owners make real site updates from chat and WhatsApp. I
 
 ## Exact Pages
 
-- ChowBot dashboard: [ChowBot](/dashboard/chowbot)
+- Conversations: [Conversations](/dashboard/{orgSlug}/conversations)
 - Owner inbox: [Inbox](/dashboard/inbox)
-- WhatsApp setup: [Integrations](/dashboard/integrations)
+- WhatsApp setup: [Settings](/dashboard/{orgSlug}/~/settings/general)
 - Menu review after imports: [Menus](/dashboard/menu)
 - Posts created from chat: [Posts](/dashboard/posts)
 

@@ -1,5 +1,5 @@
 // Subdomain validation API endpoint
-import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
+import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
 
 const reservedSubdomains = [
   'www', 'app', 'api', 'admin', 'dashboard', 'login', 'signup', 

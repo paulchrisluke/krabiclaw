@@ -1,170 +1,155 @@
 <template>
   <UPage>
-    <UPageHeader
-      title="Translations"
-      description="Review generated language drafts, make edits, and publish them when they are ready."
-    >
-      <template #links>
-        <DashboardSiteHeaderLinks :links="headerLinks" />
-      </template>
-    </UPageHeader>
+    <UPageHeader title="Translations" :description="headerDescription" />
 
     <UPageBody>
-      <div class="space-y-6">
-        <div class="rounded-lg border border-default p-4">
-          <div class="grid gap-3 lg:grid-cols-[1fr_12rem_12rem_auto_auto]">
-            <UFormField label="Language">
-              <USelect
-                v-model="filters.locale"
-                :items="translationLocaleOptions"
-                value-key="value"
-                label-key="label"
-                :disabled="loading"
-              />
-            </UFormField>
-            <UFormField label="Scope">
-              <USelect
-                v-model="filters.scope"
-                :items="scopeOptions"
-                value-key="value"
-                label-key="label"
-                :disabled="loading"
-              />
-            </UFormField>
-            <UFormField label="Status">
-              <USelect
-                v-model="filters.status"
-                :items="statusOptions"
-                value-key="value"
-                label-key="label"
-                :disabled="loading"
-              />
-            </UFormField>
-            <div class="flex items-end">
-              <UButton
-                color="neutral"
-                variant="soft"
-                icon="i-heroicons-arrow-path"
-                :loading="loading"
-                :disabled="!filters.locale"
-                @click="loadReview"
-              >
-                Refresh
-              </UButton>
-            </div>
-            <div class="flex items-end">
-              <UButton
-                icon="i-heroicons-arrow-up-on-square"
-                :loading="publishing"
-                :disabled="!filters.locale"
-                @click="publishDrafts"
-              >
-                Publish drafts
-              </UButton>
-            </div>
-          </div>
+      <div class="max-w-2xl space-y-6">
+        <!-- No site yet -->
+        <UAlert
+          v-if="!siteId"
+          color="neutral"
+          variant="soft"
+          icon="i-lucide-languages"
+          title="No restaurant yet"
+          description="Translations will be available after your restaurant workspace is set up."
+        />
 
-          <UAlert
-            v-if="error"
-            class="mt-4"
-            color="error"
-            variant="soft"
-            icon="i-heroicons-exclamation-triangle"
-            :description="error"
-          />
-
-          <div v-if="estimate" class="mt-4 grid gap-3 sm:grid-cols-4">
-            <div class="rounded-md border border-default p-3">
-              <p class="text-xs font-medium uppercase text-muted">Items</p>
-              <p class="mt-1 text-lg font-semibold text-highlighted">{{ formatNumber(estimate.total_items) }}</p>
-            </div>
-            <div class="rounded-md border border-default p-3">
-              <p class="text-xs font-medium uppercase text-muted">Characters</p>
-              <p class="mt-1 text-lg font-semibold text-highlighted">{{ formatNumber(estimate.total_chars) }}</p>
-            </div>
-            <div class="rounded-md border border-default p-3">
-              <p class="text-xs font-medium uppercase text-muted">Estimated credits</p>
-              <p class="mt-1 text-lg font-semibold text-highlighted">{{ formatNumber(estimate.estimated_credits) }}</p>
-            </div>
-            <div class="rounded-md border border-default p-3">
-              <p class="text-xs font-medium uppercase text-muted">Source</p>
-              <p class="mt-1 text-lg font-semibold text-highlighted">{{ sourceLocale }}</p>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="loading" class="space-y-3">
-          <USkeleton class="h-48 w-full" />
-          <USkeleton class="h-48 w-full" />
-          <USkeleton class="h-48 w-full" />
-        </div>
-
-        <div v-else-if="!filters.locale" class="rounded-lg border border-dashed border-default p-8 text-center">
-          <UIcon name="i-heroicons-language" class="mx-auto size-9 text-muted" />
-          <h2 class="mt-3 font-semibold text-highlighted">Add a target language first</h2>
-          <p class="mt-1 text-sm text-muted">Languages are managed in site settings.</p>
-          <UButton class="mt-4" color="neutral" variant="soft" :to="paths.settings">Open settings</UButton>
-        </div>
-
-        <div v-else-if="reviewItems.length === 0" class="rounded-lg border border-dashed border-default p-8 text-center">
-          <UIcon name="i-heroicons-check-circle" class="mx-auto size-9 text-success" />
-          <h2 class="mt-3 font-semibold text-highlighted">Nothing to review</h2>
-          <p class="mt-1 text-sm text-muted">Try another status filter or create a translation job from Settings.</p>
-        </div>
-
-        <div v-else class="divide-y divide-default rounded-lg border border-default">
-          <section
-            v-for="item in reviewItems"
-            :key="itemKey(item)"
-            class="p-4"
-          >
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div class="min-w-0">
-                <div class="flex flex-wrap items-center gap-2">
-                  <h2 class="font-medium text-highlighted">{{ item.label }}</h2>
-                  <UBadge color="neutral" variant="soft">{{ entityLabel(item.entity_type) }}</UBadge>
-                  <UBadge :color="statusColor(item.status)" variant="soft">{{ item.status }}</UBadge>
-                </div>
-                <p class="mt-1 text-xs text-muted">{{ item.entity_id }} · {{ item.field }}</p>
+        <!-- Free plan → upsell -->
+        <template v-else-if="isFree">
+          <UCard>
+            <div class="flex flex-col items-center text-center gap-4 py-4">
+              <div class="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                <UIcon name="i-heroicons-language" class="size-7" />
               </div>
-              <UButton
-                size="sm"
-                color="neutral"
-                variant="soft"
-                icon="i-heroicons-document-check"
-                :loading="savingKey === itemKey(item)"
-                @click="saveItem(item)"
-              >
-                Save draft
-              </UButton>
+              <div>
+                <h2 class="text-lg font-bold text-highlighted">Translations are included in Growth</h2>
+                <p class="mt-1 text-sm text-muted max-w-md">
+                  Upgrade to Growth and we'll translate your entire site into one language — menu, pages, and all.
+                  You focus on the restaurant, we handle the words.
+                </p>
+              </div>
+              <div class="flex flex-col sm:flex-row gap-3">
+                <UButton color="primary" size="lg" @click="openUpsell('growth', 'translations-page')">
+                  Get Growth — $49/mo
+                </UButton>
+                <UButton color="neutral" variant="soft" size="lg" :href="whatsappLink('I want to learn more about translations for my restaurant')" target="_blank">
+                  Ask us on WhatsApp
+                </UButton>
+              </div>
+            </div>
+          </UCard>
+        </template>
+
+        <!-- Growth plan — 1 language included -->
+        <template v-else-if="isGrowth">
+          <UCard>
+            <div class="flex items-start gap-4">
+              <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <UIcon name="i-heroicons-language" class="size-5" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <h2 class="font-bold text-highlighted">1 language translation included</h2>
+                <p class="mt-1 text-sm text-muted">Your Growth plan includes one full site translation. Tell us which language and we'll get it done.</p>
+              </div>
             </div>
 
-            <div class="mt-4 space-y-4">
+            <div v-if="activeLocales.length" class="mt-5 space-y-2">
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted">Active language</p>
               <div
-                v-for="fieldName in fieldNames(item)"
-                :key="fieldName"
-                class="grid gap-3 lg:grid-cols-2"
+                v-for="locale in activeLocales"
+                :key="locale.locale"
+                class="flex items-center justify-between rounded-lg border border-default px-4 py-3"
               >
-                <UFormField :label="fieldLabel(fieldName, 'Source')">
-                  <UTextarea
-                    :model-value="item.source_fields[fieldName] || ''"
-                    :rows="fieldRows(item.source_fields[fieldName])"
-                    readonly
-                    class="font-mono text-sm"
-                  />
-                </UFormField>
-                <UFormField :label="fieldLabel(fieldName, localeLabel(filters.locale))">
-                  <UTextarea
-                    :model-value="draftValue(item, fieldName)"
-                    :rows="fieldRows(item.source_fields[fieldName])"
-                    :disabled="savingKey === itemKey(item)"
-                    @update:model-value="updateDraft(item, fieldName, String($event || ''))"
-                  />
-                </UFormField>
+                <div class="flex items-center gap-2">
+                  <UIcon name="i-heroicons-check-circle" class="size-4 text-success" />
+                  <span class="font-medium text-default">{{ localeLabel(locale.locale) }}</span>
+                  <UBadge :color="locale.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs">
+                    {{ locale.status }}
+                  </UBadge>
+                </div>
+                <UButton size="xs" color="neutral" variant="soft" :href="whatsappLink(`I need an update to my ${localeLabel(locale.locale)} translation`)" target="_blank">
+                  Request update
+                </UButton>
               </div>
             </div>
-          </section>
-        </div>
+
+            <div v-else class="mt-5">
+              <p class="text-sm font-medium text-default mb-3">Which language would you like?</p>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <UButton
+                  v-for="option in popularLocales"
+                  :key="option.value"
+                  color="neutral"
+                  variant="outline"
+                  :href="whatsappLink(`I'd like my site translated into ${option.label}`)"
+                  target="_blank"
+                  class="justify-start"
+                >
+                  {{ option.label }}
+                </UButton>
+              </div>
+              <p class="mt-3 text-xs text-muted">Need a different language? <a :href="whatsappLink('I need a language translation not listed')" target="_blank" class="text-primary hover:underline">Message us on WhatsApp</a></p>
+            </div>
+          </UCard>
+
+          <UCard v-if="activeLocales.length === 0">
+            <div class="flex items-start gap-3">
+              <UIcon name="i-heroicons-information-circle" class="size-5 text-primary shrink-0 mt-0.5" />
+              <p class="text-sm text-muted">
+                Want unlimited languages and full managed service?
+                <button class="text-primary hover:underline font-medium" @click="openUpsell('managed', 'translations-page')">Upgrade to Managed ($149/mo)</button>
+              </p>
+            </div>
+          </UCard>
+        </template>
+
+        <!-- Managed / SEO Accelerator — unlimited -->
+        <template v-else>
+          <UCard>
+            <div class="flex items-start gap-4">
+              <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <UIcon name="i-heroicons-language" class="size-5" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <h2 class="font-bold text-highlighted">Unlimited translations included</h2>
+                <p class="mt-1 text-sm text-muted">We manage all your translations. Request a new language any time — we handle the rest.</p>
+              </div>
+            </div>
+
+            <div v-if="activeLocales.length" class="mt-5 space-y-2">
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted">Active languages</p>
+              <div
+                v-for="locale in activeLocales"
+                :key="locale.locale"
+                class="flex items-center justify-between rounded-lg border border-default px-4 py-3"
+              >
+                <div class="flex items-center gap-2">
+                  <UIcon name="i-heroicons-check-circle" class="size-4 text-success" />
+                  <span class="font-medium text-default">{{ localeLabel(locale.locale) }}</span>
+                  <UBadge :color="locale.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs">
+                    {{ locale.status }}
+                  </UBadge>
+                </div>
+                <UButton size="xs" color="neutral" variant="soft" :href="whatsappLink(`I need an update to my ${localeLabel(locale.locale)} translation`)" target="_blank">
+                  Request update
+                </UButton>
+              </div>
+            </div>
+
+            <div class="mt-5 pt-4 border-t border-default flex items-center justify-between">
+              <p class="text-sm text-muted">Need another language?</p>
+              <UButton
+                color="primary"
+                variant="soft"
+                icon="i-heroicons-plus"
+                :href="whatsappLink('I want to add another language translation to my site')"
+                target="_blank"
+              >
+                Request a language
+              </UButton>
+            </div>
+          </UCard>
+        </template>
       </div>
     </UPageBody>
   </UPage>
@@ -173,272 +158,67 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
 
-type TranslationScope = 'site' | 'content' | 'menus' | 'locations' | 'posts'
-type TranslationStatus = 'all' | 'missing' | 'draft' | 'published' | 'stale'
-type TranslationEntityType = 'site_content' | 'menu' | 'menu_item' | 'business_location' | 'post'
+// WhatsApp number for Paul — swap for real number
+const WHATSAPP_NUMBER = '16197200000'
+
+const dashboard = useDashboardRestaurant()
+if (!dashboard.state.value) await dashboard.refresh()
+
+const siteId = computed(() => dashboard.siteId.value ?? '')
+const plan = computed(() => dashboard.restaurant.value?.plan ?? 'free')
+
+const isFree = computed(() => !plan.value || plan.value === 'free')
+const isGrowth = computed(() => plan.value === 'growth')
+
+const { open: openUpsell } = useServiceUpsell()
+
+const headerDescription = computed(() => {
+  if (isFree.value) return 'Reach more tourists by translating your site into their language.'
+  if (isGrowth.value) return 'Your Growth plan includes one full site translation, managed by our team.'
+  return 'Unlimited translations, managed by Paul & Julia. Request any language anytime.'
+})
+
+const popularLocales = [
+  { label: 'English', value: 'en' },
+  { label: 'Thai', value: 'th' },
+  { label: 'Chinese', value: 'zh-CN' },
+  { label: 'German', value: 'de' },
+  { label: 'Japanese', value: 'ja' },
+  { label: 'French', value: 'fr' },
+]
+
+const localeMap: Record<string, string> = {
+  en: 'English', th: 'Thai', 'zh-CN': 'Chinese (Simplified)',
+  de: 'German', ja: 'Japanese', fr: 'French',
+  ko: 'Korean', es: 'Spanish', ar: 'Arabic', it: 'Italian',
+}
+
+function localeLabel(locale: string) {
+  return localeMap[locale] ?? locale
+}
+
+function whatsappLink(message: string) {
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`
+}
 
 interface SiteLocaleRow {
   locale: string
   label: string | null
   is_source: boolean
   status: 'draft' | 'published' | 'disabled'
-  fallback_enabled: boolean
 }
 
-interface TranslationEstimate {
-  total_items: number
-  total_chars: number
-  estimated_credits: number
-}
-
-interface TranslationReviewItem {
-  entity_type: TranslationEntityType
-  entity_id: string
-  location_id: string | null
-  page: string | null
-  field: string
-  label: string
-  status: Exclude<TranslationStatus, 'all'>
-  source_hash: string
-  source_fields: Record<string, string>
-  translated_fields: Record<string, string>
-}
-
-const route = useRoute()
-const siteId = await useDashboardSiteId()
-const toast = useToast()
-const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId)
-
-const localeOptions = [
-  { label: 'English', value: 'en' },
-  { label: 'Thai', value: 'th' },
-  { label: 'French', value: 'fr' },
-  { label: 'Japanese', value: 'ja' },
-  { label: 'Arabic', value: 'ar' },
-  { label: 'Chinese (Simplified)', value: 'zh-CN' },
-  { label: 'Korean', value: 'ko' },
-  { label: 'Spanish', value: 'es' },
-  { label: 'German', value: 'de' },
-  { label: 'Italian', value: 'it' },
-]
-
-const scopeOptions = [
-  { label: 'Entire site', value: 'site' },
-  { label: 'Pages', value: 'content' },
-  { label: 'Menus', value: 'menus' },
-  { label: 'Locations', value: 'locations' },
-  { label: 'Posts', value: 'posts' },
-]
-
-const statusOptions = [
-  { label: 'All', value: 'all' },
-  { label: 'Draft', value: 'draft' },
-  { label: 'Stale', value: 'stale' },
-  { label: 'Missing', value: 'missing' },
-  { label: 'Published', value: 'published' },
-]
-
-const filters = reactive({
-  locale: typeof route.query.locale === 'string' ? route.query.locale : 'th',
-  scope: 'site' as TranslationScope,
-  status: 'draft' as TranslationStatus,
-})
-const locales = ref<SiteLocaleRow[]>([])
-const sourceLocale = ref('en')
-const reviewItems = ref<TranslationReviewItem[]>([])
-const estimate = ref<TranslationEstimate | null>(null)
-const draftValues = ref<Record<string, Record<string, string>>>({})
-const loading = ref(false)
-const publishing = ref(false)
-const savingKey = ref<string | null>(null)
-const error = ref('')
-const suppressReviewWatcher = ref(false)
-
-const headerLinks = computed(() => buildHeaderLinks([
-  { label: 'Settings', icon: 'i-heroicons-cog-6-tooth', to: paths.value.settings, color: 'neutral', variant: 'soft' }
-]))
-
-const translationLocaleOptions = computed(() => {
-  const options = locales.value
-    .filter(locale => !locale.is_source)
-    .map(locale => ({ label: localeLabel(locale.locale, locale.label), value: locale.locale }))
-  if (options.length) return options
-  return localeOptions.filter(option => option.value !== sourceLocale.value)
-})
-
-const localeLabel = (locale: string, label?: string | null) =>
-  label || localeOptions.find(option => option.value === locale)?.label || locale
-
-const itemKey = (item: Pick<TranslationReviewItem, 'entity_type' | 'entity_id' | 'field'>) =>
-  `${item.entity_type}:${item.entity_id}:${item.field}`
-
-const fieldNames = (item: TranslationReviewItem) => Object.keys(item.source_fields)
-
-const draftValue = (item: TranslationReviewItem, fieldName: string) =>
-  draftValues.value[itemKey(item)]?.[fieldName] ?? ''
-
-const updateDraft = (item: TranslationReviewItem, fieldName: string, value: string) => {
-  const key = itemKey(item)
-  draftValues.value = {
-    ...draftValues.value,
-    [key]: {
-      ...(draftValues.value[key] ?? {}),
-      [fieldName]: value,
-    }
-  }
-}
-
-const loadLocales = async () => {
-  const response = await $fetch<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>(
-    `/api/dashboard/editor/locales`
-  )
-  sourceLocale.value = response.source_locale || 'en'
-  locales.value = response.locales || []
-  filters.locale = translationLocaleOptions.value.find(option => option.value === filters.locale)?.value
-    || translationLocaleOptions.value[0]?.value
-    || ''
-}
-
-const loadReview = async () => {
-  if (!filters.locale) return
-  loading.value = true
-  error.value = ''
-  try {
-    const response = await $fetch<{
-      success: boolean
-      source_locale: string
-      estimate: TranslationEstimate
-      items: TranslationReviewItem[]
-    }>(`/api/dashboard/editor/translations/review`, {
-      query: {
-        locale: filters.locale,
-        scope: filters.scope,
-        status: filters.status,
-      }
-    })
-    sourceLocale.value = response.source_locale || sourceLocale.value
-    estimate.value = response.estimate
-    reviewItems.value = response.items || []
-    const nextDrafts: Record<string, Record<string, string>> = {}
-    for (const item of reviewItems.value) {
-      const key = itemKey(item)
-      nextDrafts[key] = Object.keys(draftValues.value[key] ?? {}).length
-        ? { ...draftValues.value[key] }
-        : { ...item.translated_fields }
-    }
-    draftValues.value = nextDrafts
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load translations'
-  } finally {
-    loading.value = false
-  }
-}
-
-const saveItem = async (item: TranslationReviewItem) => {
-  const key = itemKey(item)
-  savingKey.value = key
-  error.value = ''
-  try {
-    const response = await $fetch<{ success: boolean; item: Pick<TranslationReviewItem, 'entity_type' | 'entity_id' | 'field' | 'status' | 'translated_fields'> }>(
-      `/api/dashboard/editor/translations/review`,
-      {
-        method: 'PATCH',
-        body: {
-          locale: filters.locale,
-          scope: filters.scope,
-          entity_type: item.entity_type,
-          entity_id: item.entity_id,
-          field: item.field,
-          fields: draftValues.value[key] ?? {},
-        }
-      }
-    )
-    const saved = response.item
-    const savedKey = itemKey(saved)
-    reviewItems.value = reviewItems.value.map(reviewItem =>
-      itemKey(reviewItem) === savedKey
-        ? { ...reviewItem, status: saved.status, translated_fields: saved.translated_fields }
-        : reviewItem
-    )
-    draftValues.value = {
-      ...draftValues.value,
-      [savedKey]: { ...saved.translated_fields },
-    }
-    toast.add({ description: 'Translation draft saved', color: 'success' })
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to save translation'
-  } finally {
-    savingKey.value = null
-  }
-}
-
-const publishDrafts = async () => {
-  if (!filters.locale) return
-  publishing.value = true
-  error.value = ''
-  try {
-    const response = await $fetch<{ success: boolean; result: { published_items: number } }>(
-      `/api/dashboard/editor/translations/publish`,
-      {
-        method: 'POST',
-        body: {
-          locale: filters.locale,
-          scope: filters.scope,
-        }
-      }
-    )
-    toast.add({ description: `${response.result.published_items} translation drafts published`, color: 'success' })
-    await Promise.all([loadLocales(), loadReview()])
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to publish translations'
-  } finally {
-    publishing.value = false
-  }
-}
-
-const entityLabel = (type: TranslationEntityType) => {
-  if (type === 'site_content') return 'Page'
-  if (type === 'menu_item') return 'Menu item'
-  if (type === 'business_location') return 'Location'
-  return type.charAt(0).toUpperCase() + type.slice(1)
-}
-
-const fieldLabel = (fieldName: string, suffix: string) =>
-  `${fieldName.replaceAll('_', ' ')} (${suffix})`
-
-const fieldRows = (value?: string) => {
-  const length = value?.length ?? 0
-  if (length > 260) return 6
-  if (length > 120) return 4
-  return 2
-}
-
-const statusColor = (status: TranslationReviewItem['status']) => {
-  if (status === 'published') return 'success'
-  if (status === 'draft') return 'warning'
-  if (status === 'stale') return 'error'
-  return 'neutral'
-}
-
-const formatNumber = (value: number | null | undefined) =>
-  new Intl.NumberFormat().format(Number(value || 0))
-
-watch(
-  () => [filters.locale, filters.scope, filters.status],
-  () => {
-    if (filters.locale && !suppressReviewWatcher.value) loadReview()
-  }
-)
+const activeLocales = ref<SiteLocaleRow[]>([])
 
 onMounted(async () => {
+  if (!siteId.value) return
   try {
-    suppressReviewWatcher.value = true
-    await loadLocales()
-    await loadReview()
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load translations'
-  } finally {
-    suppressReviewWatcher.value = false
+    const response = await $fetch<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>(
+      '/api/dashboard/editor/locales'
+    )
+    activeLocales.value = (response.locales ?? []).filter(l => !l.is_source && l.status !== 'disabled')
+  } catch {
+    // silently ignore — locales section just won't show
   }
 })
 

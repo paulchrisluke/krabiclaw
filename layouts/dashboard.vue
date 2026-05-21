@@ -71,6 +71,27 @@
             </NuxtLink>
           </template>
 
+          <template v-else-if="inConversationsWorkspace">
+            <div v-if="collapsed" class="flex items-center justify-center w-full">
+              <UButton
+                :to="orgBase ?? '/dashboard'"
+                icon="i-lucide-arrow-left"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                aria-label="Back to Restaurant"
+              />
+            </div>
+            <NuxtLink
+              v-else
+              :to="orgBase ?? '/dashboard'"
+              class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
+            >
+              <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
+              <span class="truncate">Back to Restaurant</span>
+            </NuxtLink>
+          </template>
+
           <UDropdownMenu
             v-else
             :items="organizationMenuItems"
@@ -91,42 +112,55 @@
         </template>
 
         <template #default="{ collapsed }">
+          <template v-if="inConversationsWorkspace">
+            <div class="flex flex-col gap-3 px-2">
+              <UTooltip :text="collapsed ? 'New conversation' : undefined">
+                <UButton
+                  icon="i-heroicons-plus"
+                  :label="collapsed ? undefined : 'New conversation'"
+                  color="primary"
+                  variant="soft"
+                  size="sm"
+                  :block="!collapsed"
+                  @click="newChowBotChat"
+                />
+              </UTooltip>
+
+              <ClientOnly>
+                <div v-if="!collapsed" class="space-y-1">
+                  <UButton
+                    v-for="conv in siteConversations"
+                    :key="conv.id"
+                    :label="conv.title"
+                    :icon="conv.active_channel === 'whatsapp' ? 'i-simple-icons-whatsapp' : 'i-lucide-message-square'"
+                    :color="conv.id === activeConversationId ? 'primary' : 'neutral'"
+                    :variant="conv.id === activeConversationId ? 'soft' : 'ghost'"
+                    size="sm"
+                    class="w-full justify-start"
+                    :ui="{ label: 'truncate text-left' }"
+                    @click="loadChowBotChat(conv)"
+                  />
+                  <p v-if="!siteConversations.length" class="px-1 py-2 text-xs text-muted">
+                    No conversations yet
+                  </p>
+                </div>
+                <template #fallback>
+                  <div v-if="!collapsed" class="space-y-1">
+                    <USkeleton v-for="i in 4" :key="i" class="h-8 rounded-lg" />
+                  </div>
+                </template>
+              </ClientOnly>
+            </div>
+          </template>
           <UNavigationMenu
+            v-else
             :collapsed="collapsed"
             :items="navigationItems"
             orientation="vertical"
           />
 
           <ClientOnly>
-            <div v-if="!collapsed && !inAdminWorkspace && !inSettingsWorkspace && !inLocationWorkspace && restaurant" class="mt-4 border-t border-default pt-4 px-2">
-              <div class="flex items-center justify-between px-1 py-1 mb-1">
-                <span class="text-xs font-medium text-muted">ChowBot</span>
-                <UTooltip text="New conversation">
-                  <UButton
-                    icon="i-heroicons-plus"
-                    size="xs"
-                    variant="ghost"
-                    color="neutral"
-                    @click="newChowBotChat"
-                  />
-                </UTooltip>
-              </div>
-              <UButton
-                v-for="conv in siteConversations"
-                :key="conv.id"
-                :label="conv.title"
-                icon="i-lucide-message-square"
-                variant="ghost"
-                color="neutral"
-                size="xs"
-                class="w-full justify-start mb-0.5"
-                :ui="{ label: 'truncate text-left' }"
-                @click="loadChowBotChat(conv)"
-              />
-              <p v-if="!siteConversations.length" class="px-1 text-xs text-muted italic">
-                No conversations yet
-              </p>
-            </div>
+            <template #fallback />
           </ClientOnly>
         </template>
 
@@ -311,7 +345,7 @@
 
             <template #right>
               <UColorModeButton variant="ghost" color="neutral" size="sm" />
-              <UTooltip v-if="!inAdminWorkspace && restaurant" text="ChowBot">
+              <UTooltip v-if="!inAdminWorkspace && !inConversationsWorkspace && restaurant" text="ChowBot">
                 <UButton
                   icon="i-lucide-bot"
                   color="neutral"
@@ -330,9 +364,10 @@
         </template>
       </UDashboardPanel>
 
-      <ChowBot />
+      <ChowBot v-if="!inConversationsWorkspace" />
     </UDashboardGroup>
     <BillingCreditPurchaseModal />
+    <BillingServiceUpsellModal />
   </div>
 </template>
 
@@ -423,7 +458,12 @@ const inSettingsWorkspace = computed(() => {
   if (orgSettingsBase.value && route.path.startsWith(orgSettingsBase.value)) return true
   return /^\/dashboard\/[^/]+\/~\/settings/.test(route.path)
 })
+const inConversationsWorkspace = computed(() => {
+  if (!orgBase.value) return /^\/dashboard\/[^/]+\/conversations(?:\/|$)/.test(route.path)
+  return route.path === `${orgBase.value}/conversations` || route.path.startsWith(`${orgBase.value}/conversations/`)
+})
 const siteConversations = computed(() => activeSiteId.value ? chowBotHistory.forSite(activeSiteId.value) : [])
+const activeConversationId = computed(() => chowBot.conversationId.value)
 
 const organizationLabel = computed(() => organization.value?.name ?? 'Restaurant')
 const organizationAvatar = computed(() => ({
@@ -443,7 +483,7 @@ const organizationMenuItems = computed(() => [
     {
       label: 'Create restaurant',
       icon: 'i-heroicons-plus',
-      to: '/dashboard/onboarding'
+      to: orgBase.value ?? '/dashboard'
     }
   ]
 ])
@@ -466,10 +506,9 @@ const locationMenuItems = computed(() => [
 const mainNavigation = computed(() => [
   [
     { label: 'Restaurant', icon: 'i-lucide-layout-dashboard', to: orgBase.value ?? '/dashboard' },
-    { label: 'ChowBot', icon: 'i-lucide-bot', to: projectBase.value ? `${projectBase.value}/chowbot` : '/dashboard' },
+    { label: 'Conversations', icon: 'i-lucide-messages-square', to: orgBase.value ? `${orgBase.value}/conversations` : '/dashboard' },
   ],
   [
-    { label: 'Integrations', icon: 'i-lucide-plug', to: orgBase.value ? `${orgBase.value}/integrations` : '/dashboard' },
     { label: 'Translations', icon: 'i-lucide-languages', to: orgBase.value ? `${orgBase.value}/translations` : '/dashboard' },
   ],
   [
@@ -504,13 +543,13 @@ const locationNavigation = computed(() => {
 })
 
 const adminNavigation = computed(() => [[
-  { label: 'Analytics', icon: 'i-heroicons-chart-bar', to: '/admin' },
-  { label: 'Blog', icon: 'i-heroicons-newspaper', to: '/admin?tab=blog' },
-  { label: 'Content', icon: 'i-heroicons-document-text', to: '/admin?tab=content' },
+  { label: 'Queue', icon: 'i-heroicons-inbox-stack', to: '/admin?tab=queue' },
+  { label: 'Clients', icon: 'i-heroicons-building-storefront', to: '/admin?tab=clients' },
+  { label: 'Analytics', icon: 'i-heroicons-chart-bar', to: '/admin?tab=analytics' },
   { label: 'Domains', icon: 'i-heroicons-globe-alt', to: '/admin?tab=domains' },
   { label: 'Users', icon: 'i-heroicons-users', to: '/admin?tab=users' },
-], [
-  { label: 'Back to Dashboard', icon: 'i-heroicons-arrow-left', to: '/dashboard' },
+  { label: 'Content', icon: 'i-heroicons-document-text', to: '/admin?tab=content' },
+  { label: 'Blog', icon: 'i-heroicons-pencil-square', to: '/admin?tab=blog' },
 ]])
 
 const _utilityNavigation = computed(() => [[
@@ -541,6 +580,7 @@ const settingsNavigation = computed(() => {
 
 const navigationItems = computed(() => {
   if (inAdminWorkspace.value) return adminNavigation.value
+  if (inConversationsWorkspace.value) return []
   if (inSettingsWorkspace.value) return settingsNavigation.value
   if (inLocationWorkspace.value) return locationNavigation.value
   return mainNavigation.value
@@ -554,12 +594,11 @@ const navbarTitle = computed(() => {
   const labels: Record<string, string> = {
     account: 'Account',
     billing: 'Billing',
-    chowbot: 'ChowBot',
+    conversations: 'Conversations',
     content: 'Content',
     experiences: 'Experiences',
     help: 'Help',
     inbox: 'Inbox',
-    integrations: 'Integrations',
     locations: 'Locations',
     media: 'Media',
     menu: 'Menu',
