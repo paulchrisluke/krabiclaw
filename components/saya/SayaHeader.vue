@@ -15,8 +15,15 @@
 
         <!-- Desktop nav -->
         <nav class="hidden items-center gap-1 lg:flex" aria-label="Saya navigation">
-          <!-- Locations dropdown -->
-          <UDropdownMenu :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
+          <NuxtLink
+            v-if="singleLocationMenuPath"
+            :to="singleLocationMenuPath"
+            class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
+          >
+            Menu
+          </NuxtLink>
+
+          <UDropdownMenu v-else :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
             <button class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default">
               Locations
               <UIcon name="i-heroicons-chevron-down" class="size-3 opacity-60" />
@@ -92,18 +99,28 @@
         class="absolute inset-x-0 top-16 border-b border-default bg-default p-4 shadow-sm lg:hidden"
       >
         <nav class="grid gap-1" aria-label="Saya mobile navigation">
-          <div class="pb-2 pt-1">
-            <p class="px-4 text-xs font-medium uppercase tracking-widest text-muted">Locations</p>
-          </div>
           <NuxtLink
-            v-for="loc in locations"
-            :key="loc.id"
-            :to="`/locations/${loc.slug}`"
-            class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
+            v-if="singleLocationMenuPath"
+            :to="singleLocationMenuPath"
+            class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
-            {{ loc.title }}
+            Menu
           </NuxtLink>
+          <template v-else>
+            <div class="pb-2 pt-1">
+              <p class="px-4 text-xs font-medium uppercase tracking-widest text-muted">Locations</p>
+            </div>
+            <NuxtLink
+              v-for="loc in locations"
+              :key="loc.id"
+              :to="`/locations/${loc.slug}`"
+              class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
+              @click="mobileMenuOpen = false"
+            >
+              {{ loc.title }}
+            </NuxtLink>
+          </template>
           <div class="my-1 border-t border-default" />
           <NuxtLink
             to="/about"
@@ -212,6 +229,10 @@ const languageItems = computed(() =>
 )
 
 const locations = computed(() => bootstrapLocations.value)
+const singleLocation = computed(() => locations.value.length === 1 ? locations.value[0] : null)
+const singleLocationMenuPath = computed(() =>
+  singleLocation.value?.slug ? `/locations/${singleLocation.value.slug}/menu` : ''
+)
 const hasOrderLinks = computed(() =>
   locations.value.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )

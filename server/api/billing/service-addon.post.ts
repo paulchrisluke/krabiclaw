@@ -19,6 +19,50 @@ const ADDON_NAMES: Record<AddonType, string> = {
   gbp_setup: 'Google Business Optimization',
 }
 
+function slugifyOrgName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48)
+}
+
+async function ensureOrganizationSlug(db: D1Database, orgId: string, existingSlug: string | null) {
+  if (existingSlug) return existingSlug
+
+  const organization = await db.prepare(`
+    SELECT name, slug FROM organization WHERE id = ? LIMIT 1
+  `).bind(orgId).first<{ name: string; slug: string | null }>()
+
+  if (organization?.slug) return organization.slug
+
+  const fallbackBase = `org-${orgId.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 8)}`
+  const baseSlug = slugifyOrgName(organization?.name ?? '') || fallbackBase
+
+  for (let index = 0; index < 12; index++) {
+    const candidate = index === 0 ? baseSlug : `${baseSlug}-${index}`
+    const conflict = await db.prepare(`
+      SELECT id FROM organization WHERE slug = ? AND id != ? LIMIT 1
+    `).bind(candidate, orgId).first()
+    if (conflict) continue
+
+    try {
+      await db.prepare(`
+        UPDATE organization SET slug = ? WHERE id = ? AND (slug IS NULL OR slug = '')
+      `).bind(candidate, orgId).run()
+      return candidate
+    } catch {
+      // Slug was claimed between the check and update; try the next candidate.
+    }
+  }
+
+  const candidate = `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`
+  try {
+    await db.prepare(`
+      UPDATE organization SET slug = ? WHERE id = ? AND (slug IS NULL OR slug = '')
+    `).bind(candidate, orgId).run()
+    return candidate
+  } catch {
+    return null
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -62,10 +106,19 @@ export default defineEventHandler(async (event) => {
   if (!userOrg) return jsonResponse({ error: 'No organization found' }, { status: 404 })
 
   const orgId = userOrg.organizationId
-  const orgSlug = userOrg.slug
+  let orgSlug: string | null = null
+  try {
+    orgSlug = await ensureOrganizationSlug(db, orgId, userOrg.slug)
+  } catch (error) {
+    console.error('Failed to ensure organization slug for service add-on checkout:', error)
+  }
 
   if (!orgSlug) {
-    return jsonResponse({ error: 'Organization slug is missing' }, { status: 400 })
+    return jsonResponse({
+      error: 'Organization setup is incomplete',
+      message: 'Complete your restaurant workspace setup before purchasing managed services.',
+      settingsUrl: '/dashboard/account/settings',
+    }, { status: 400 })
   }
 
   await requireBillingAccess(env, db, orgId, session.user.id)
@@ -76,6 +129,7 @@ export default defineEventHandler(async (event) => {
 
   const stripe = getStripe(env)
   const origin = getRequestURL(event).origin
+  const encodedOrgSlug = encodeURIComponent(orgSlug)
 
   const checkoutSession = await stripe.checkout.sessions.create({
     customer: billing?.stripe_customer_id || undefined,
@@ -83,8 +137,8 @@ export default defineEventHandler(async (event) => {
     mode: 'payment',
     line_items: [{ price: priceId, quantity: 1 }],
     payment_intent_data: { setup_future_usage: 'off_session' },
-    success_url: `${origin}/dashboard/${orgSlug}/~/settings/billing?addon_success=${addonType}`,
-    cancel_url: `${origin}/dashboard/${orgSlug}/~/settings/billing`,
+    success_url: `${origin}/dashboard/${encodedOrgSlug}/~/settings/billing?addon_success=${addonType}`,
+    cancel_url: `${origin}/dashboard/${encodedOrgSlug}/~/settings/billing`,
     metadata: {
       organization_id: orgId,
       type: 'service_addon',

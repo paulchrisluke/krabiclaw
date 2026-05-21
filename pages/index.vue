@@ -598,14 +598,6 @@ if (!isPlatform && siteId) {
   })
 }
 
-// Single-location tenants: redirect "/" to the location home
-if (import.meta.server && !isPlatform && bootstrapLocations.value.length === 1) {
-  const targetPath = `/locations/${bootstrapLocations.value[0].slug}`
-  if (useRoute().path !== targetPath) {
-    await navigateTo(targetPath, { replace: true, redirectCode: 301 })
-  }
-}
-
 // Featured menu items from bootstrap menu
 const featuredMenuItems = computed(() => {
   const allItems = Object.values(menuItemsBySection.value).flat()

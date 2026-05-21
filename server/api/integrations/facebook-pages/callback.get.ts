@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
         SELECT slug FROM organization WHERE id = ? LIMIT 1
       `).bind(organizationId).first<{ slug: string | null }>()
       return organization?.slug
-        ? `/dashboard/${organization.slug}/~/settings/general?fb=${status}`
+        ? `/dashboard/${encodeURIComponent(organization.slug)}/~/settings/general?fb=${status}`
         : `/dashboard?fb=${status}`
     } catch (e) {
       console.error('Facebook Pages redirect organization query failed:', e)

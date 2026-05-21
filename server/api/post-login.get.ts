@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const user = session.user as typeof session.user & { role?: string }
 
   // Platform owners and admins always go to admin
-  if (user.role === 'admin' || isPlatformOwner(user.email, env)) {
+  if (user.role === 'admin' || (typeof user.email === 'string' && user.email.trim() !== '' && isPlatformOwner(user.email, env))) {
     return sendRedirect(event, '/admin')
   }
 

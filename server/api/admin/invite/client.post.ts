@@ -23,6 +23,8 @@ export default defineEventHandler(async (event) => {
 
   // Find a unique slug
   const baseSlug = slugify(restaurantName)
+  if (!baseSlug) return jsonResponse({ error: 'Restaurant name must include letters or numbers' }, { status: 400 })
+
   let orgSlug = baseSlug
   let i = 1
   while (true) {
