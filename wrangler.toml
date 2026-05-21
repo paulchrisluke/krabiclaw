@@ -10,8 +10,8 @@ CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "thaiclaw-reviews"
-database_id = "57cc9c44-1a23-41c3-8ec9-6b404c12ca2c"
+database_name = "krabiclaw-db"
+database_id = "0d0cd133-1914-48b1-b010-8fe574fede0c"
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
