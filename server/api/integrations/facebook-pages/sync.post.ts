@@ -9,6 +9,7 @@ import {
   storeFacebookPagesConnection,
 } from '../../../utils/facebook-pages'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
+import { hasEntitlement } from '~/server/utils/billing'
 
 // Syncs page info + recent posts from Facebook into the location record.
 // Optionally accepts pageId in the body to switch which page is connected.
@@ -38,6 +39,9 @@ export default defineEventHandler(async (event) => {
     : dashboard?.restaurant
 
   if (!site) return jsonResponse({ error: 'Create a restaurant before syncing Facebook.' }, { status: 400 })
+
+  const allowed = await hasEntitlement(env, db, site.organization_id, 'managed_service')
+  if (!allowed) return jsonResponse({ error: 'Facebook sync is included in the Managed plan and above.' }, { status: 403 })
 
   const connection = await getFacebookPagesConnection(env, site.organization_id, site.id)
   if (!connection) return jsonResponse({ error: 'No Facebook connection found. Connect Facebook first.' }, { status: 404 })

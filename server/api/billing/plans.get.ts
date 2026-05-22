@@ -37,138 +37,35 @@ interface MarketingFeature {
   name: string
 }
 
-const DEFAULT_PLAN_LIMITS: PlanLimits = {
-  locations: 1,
-  sites: 1,
-  aiCredits: 0,
-  customDomain: false,
-  googleBusiness: false,
-  advancedSeo: false,
-  whiteLabel: false,
-  apiAccess: false,
-  support: 'Community',
+// Starter has no Stripe product — it is genuinely free with no subscription.
+const STARTER_PLAN: Plan = {
+  id: 'free',
+  name: 'Starter',
+  tagline: 'Get your restaurant online for free',
+  highlighted: false,
+  prices: [],
+  features: [],
+  limits: {
+    locations: 1, sites: 1, aiCredits: 500,
+    customDomain: false, googleBusiness: false, advancedSeo: false,
+    whiteLabel: false, apiAccess: false, support: 'Community',
+  },
+  image: '/krabi-claw-free.png',
+  cta: { label: 'Start Free', href: '/signup' },
 }
 
-const STATIC_PLANS: Plan[] = [
-  {
-    id: 'free',
-    name: 'Starter',
-    tagline: 'Get your restaurant online for free',
-    highlighted: false,
-    prices: [],
-    features: [
-      'Subdomain hosting',
-      'Saya restaurant theme',
-      'Visual content editor',
-      'Menu management',
-      'Basic SEO (schema markup, sitemap)',
-      'Mobile-responsive design',
-      '500 AI credits / month',
-      '1 location',
-    ],
-    limits: {
-      locations: 1,
-      sites: 1,
-      aiCredits: 500,
-      customDomain: false,
-      googleBusiness: false,
-      advancedSeo: false,
-      whiteLabel: false,
-      apiAccess: false,
-      support: 'Community',
-    },
-    image: '/krabi-claw-free.png',
-    cta: { label: 'Start Free', href: '/signup' },
-  },
-  {
-    id: 'growth',
-    name: 'Growth',
-    tagline: 'We handle translations & updates — you focus on cooking',
-    highlighted: false,
-    prices: [
-      { id: '', amount: 4900, currency: 'usd', interval: 'month' },
-    ],
-    features: [
-      'One language translation (EN, ZH, or DE)',
-      'AI-assisted menu updates via WhatsApp',
-      'Monthly traffic & performance snapshot',
-      'Google Business profile basics',
-      '2,000 AI credits / month',
-    ],
-    limits: {
-      locations: 1,
-      sites: 1,
-      aiCredits: 2000,
-      customDomain: true,
-      googleBusiness: true,
-      advancedSeo: false,
-      whiteLabel: false,
-      apiAccess: false,
-      support: 'WhatsApp',
-    },
-    cta: { label: 'Get Growth', href: '/signup?plan=growth' },
-  },
-  {
-    id: 'managed',
-    name: 'Managed',
-    tagline: 'Paul & Julia run your restaurant online',
-    highlighted: true,
-    badge: 'Best Value',
-    prices: [
-      { id: '', amount: 14900, currency: 'usd', interval: 'month' },
-    ],
-    features: [
-      'Everything in Growth, plus:',
-      'Unlimited language translations',
-      'Menu, posts & seasonal content managed for you',
-      'Full Google Business profile management',
-      'Custom domain + free SSL',
-      'Monthly marketing report',
-      'Priority WhatsApp support from Paul & Julia',
-    ],
-    limits: {
-      locations: 'unlimited',
-      sites: 1,
-      aiCredits: 'unlimited',
-      customDomain: true,
-      googleBusiness: true,
-      advancedSeo: true,
-      whiteLabel: false,
-      apiAccess: false,
-      support: 'Priority WhatsApp',
-    },
-    cta: { label: 'Get Managed', href: '/signup?plan=managed' },
-  },
-  {
-    id: 'seo_accelerator',
-    name: 'SEO Accelerator',
-    tagline: "Julia's 1M impressions/day playbook for your restaurant",
-    highlighted: false,
-    prices: [
-      { id: '', amount: 34900, currency: 'usd', interval: 'month' },
-    ],
-    features: [
-      'Everything in Managed, plus:',
-      'Local & travel keyword targeting',
-      'Google Maps authority building',
-      'Monthly content cadence (blog, photos, posts)',
-      'Competitive analysis & reporting',
-      "The same playbook behind tiffycooks.com's 1M daily impressions",
-    ],
-    limits: {
-      locations: 'unlimited',
-      sites: 1,
-      aiCredits: 'unlimited',
-      customDomain: true,
-      googleBusiness: true,
-      advancedSeo: true,
-      whiteLabel: false,
-      apiAccess: false,
-      support: 'Dedicated',
-    },
-    cta: { label: 'Get SEO Accelerator', href: '/signup?plan=seo_accelerator' },
-  },
-]
+// CTA labels and hrefs are app config — not Stripe data.
+const PLAN_CTA: Record<string, { label: string; href: string }> = {
+  growth:          { label: 'Get Growth',          href: '/signup?plan=growth' },
+  managed:         { label: 'Get Managed',          href: '/signup?plan=managed' },
+  seo_accelerator: { label: 'Get SEO Accelerator',  href: '/signup?plan=seo_accelerator' },
+}
+
+const DEFAULT_PLAN_LIMITS: PlanLimits = {
+  locations: 1, sites: 1, aiCredits: 0,
+  customDomain: false, googleBusiness: false, advancedSeo: false,
+  whiteLabel: false, apiAccess: false, support: 'Community',
+}
 
 function parseOptionalInt(value?: string): number | undefined {
   if (!value) return undefined
@@ -180,7 +77,6 @@ function parseLimits(metadata: Record<string, string>): Partial<PlanLimits> {
   const loc = metadata.max_locations
   const sit = metadata.max_sites
   const credits = metadata.ai_credits
-
   return {
     locations: loc === 'unlimited' ? 'unlimited' : parseOptionalInt(loc),
     sites: sit === 'unlimited' ? 'unlimited' : parseOptionalInt(sit),
@@ -202,33 +98,21 @@ function isMarketingFeatureArray(value: ApiValue): value is MarketingFeature[] {
 async function fetchStripeProducts(env: Record<string, string | undefined>): Promise<Plan[]> {
   const stripe = new Stripe(env.STRIPE_SECRET_KEY!)
 
-  const products = await stripe.products.list({
-    active: true,
-    expand: ['data.default_price'],
-  })
+  const products = await stripe.products.list({ active: true, expand: ['data.default_price'] })
 
   const priceLookup: Record<string, PlanPrice[]> = {}
   let startingAfter: string | undefined
 
   while (true) {
     const prices = await stripe.prices.list({ active: true, limit: 100, ...(startingAfter ? { starting_after: startingAfter } : {}) })
-
     for (const price of prices.data) {
       if (!price.unit_amount || price.type !== 'recurring') continue
-
       const interval = price.recurring?.interval
       if (interval !== 'month' && interval !== 'year') continue
-
       const pid = typeof price.product === 'string' ? price.product : price.product.id
       if (!priceLookup[pid]) priceLookup[pid] = []
-      priceLookup[pid].push({
-        id: price.id,
-        amount: price.unit_amount,
-        currency: price.currency,
-        interval,
-      })
+      priceLookup[pid].push({ id: price.id, amount: price.unit_amount, currency: price.currency, interval })
     }
-
     if (!prices.has_more || prices.data.length === 0) break
     startingAfter = prices.data[prices.data.length - 1]?.id
   }
@@ -240,51 +124,45 @@ async function fetchStripeProducts(env: Record<string, string | undefined>): Pro
     const planId = meta.plan_id
     if (!planId || planId === 'free') continue
 
-    const staticFallback = STATIC_PLANS.find(p => p.id === planId)
     const productWithMarketing = product as Stripe.Product & { marketing_features?: ApiValue }
     const features = isMarketingFeatureArray(productWithMarketing.marketing_features)
       ? productWithMarketing.marketing_features.map(f => f.name)
-      : (staticFallback?.features ?? [])
+      : []
 
     plans.push({
       id: planId,
       name: product.name,
-      tagline: product.description ?? staticFallback?.tagline ?? '',
+      tagline: product.description ?? '',
       highlighted: meta.highlighted === 'true',
-      badge: meta.badge || staticFallback?.badge,
-      image: product.images?.[0] ?? staticFallback?.image,
+      badge: meta.badge || undefined,
+      image: product.images?.[0] ?? undefined,
       prices: (priceLookup[product.id] ?? []).sort((a, b) => {
         const rank: Record<string, number> = { month: 0, year: 1 }
         return (rank[a.interval] ?? 0) - (rank[b.interval] ?? 0)
       }),
       features,
-      limits: {
-        ...DEFAULT_PLAN_LIMITS,
-        ...staticFallback?.limits,
-        ...parseLimits(meta),
-      },
-      cta: staticFallback?.cta ?? { label: 'Get started', href: '/signup' },
+      limits: { ...DEFAULT_PLAN_LIMITS, ...parseLimits(meta) },
+      cta: PLAN_CTA[planId] ?? { label: 'Get started', href: '/signup' },
     })
   }
 
-  // Sort by price ascending
   plans.sort((a, b) => {
     const aPrice = a.prices.find(p => p.interval === 'month')?.amount ?? 0
     const bPrice = b.prices.find(p => p.interval === 'month')?.amount ?? 0
     return aPrice - bPrice
   })
 
-  return [STATIC_PLANS[0]!, ...plans]
+  return [STARTER_PLAN, ...plans]
 }
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
 
-  setHeader(event, 'Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400')
-
   if (!env.STRIPE_SECRET_KEY) {
-    return jsonResponse(STATIC_PLANS)
+    throw createError({ statusCode: 503, message: 'Billing not configured' })
   }
+
+  setHeader(event, 'Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400')
 
   const plans = await fetchStripeProducts(env as Record<string, string | undefined>)
   return jsonResponse(plans)

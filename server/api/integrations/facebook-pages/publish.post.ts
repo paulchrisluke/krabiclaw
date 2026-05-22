@@ -2,6 +2,7 @@ import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getFacebookPagesConnection, publishToPage } from '../../../utils/facebook-pages'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
+import { hasEntitlement } from '~/server/utils/billing'
 
 // Publishes a post to the connected Facebook Page on behalf of a site.
 export default defineEventHandler(async (event) => {
@@ -37,6 +38,9 @@ export default defineEventHandler(async (event) => {
       : dashboard?.restaurant
 
   if (!site) return jsonResponse({ error: 'Create a restaurant before publishing to Facebook.' }, { status: 400 })
+
+  const allowed = await hasEntitlement(env, db, site.organization_id, 'managed_service')
+  if (!allowed) return jsonResponse({ error: 'Facebook sync is included in the Managed plan and above.' }, { status: 403 })
 
   const connection = await getFacebookPagesConnection(env, site.organization_id, site.id)
   if (!connection) return jsonResponse({ error: 'No Facebook connection found. Connect Facebook first.' }, { status: 404 })

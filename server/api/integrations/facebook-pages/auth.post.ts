@@ -3,6 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getFacebookAuthUrl } from '../../../utils/facebook-pages'
 import { signOAuthState } from '../../../utils/encryption'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
+import { hasEntitlement } from '~/server/utils/billing'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -25,6 +26,11 @@ export default defineEventHandler(async (event) => {
     : dashboard?.restaurant
 
   if (!site) return jsonResponse({ error: 'Create a restaurant before connecting Facebook.' }, { status: 400 })
+
+  const allowed = await hasEntitlement(env, db, site.organization_id, 'managed_service')
+  if (!allowed) {
+    return jsonResponse({ error: 'Facebook sync is included in the Managed plan and above.' }, { status: 403 })
+  }
 
   if (!env.CONNECTOR_TOKEN_ENCRYPTION_KEY) {
     return jsonResponse({ error: 'Server misconfiguration' }, { status: 500 })
