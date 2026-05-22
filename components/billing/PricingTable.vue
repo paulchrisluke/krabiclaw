@@ -48,7 +48,7 @@
       </div>
       <div class="shrink-0 flex flex-col items-start sm:items-end gap-3">
         <p class="text-3xl font-bold text-highlighted">
-          ${{ (seoAcceleratorPlan.prices[0]?.amount ?? 34900) / 100 }}
+          ${{ (seoAcceleratorPlan.prices[0]?.amount ?? SEO_ACCELERATOR_DEFAULT_PRICE_CENTS) / 100 }}
           <span class="text-base font-normal text-muted">/mo</span>
         </p>
         <UButton
@@ -140,6 +140,9 @@
 </template>
 
 <script setup lang="ts">
+// Fallback only reached if Stripe returns seo_accelerator without a monthly price — should not happen in practice.
+const SEO_ACCELERATOR_DEFAULT_PRICE_CENTS = 34900
+
 const { plans } = usePlans()
 
 const MAIN_PLAN_IDS = ['free', 'growth', 'managed']

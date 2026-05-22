@@ -11,6 +11,11 @@ const VALID_PRIORITIES: Priority[] = ['low', 'normal', 'high', 'urgent']
 export default defineEventHandler(async (event) => {
   const { db, organization, restaurant } = await getDashboardContext(event, { requireRestaurant: false })
 
+  const plan = restaurant?.plan ?? 'free'
+  if (plan === 'free') {
+    return jsonResponse({ error: 'Work requests require a Growth plan or above.' }, { status: 403 })
+  }
+
   const body = await readBody(event).catch(() => ({})) as {
     type?: string
     title?: string
