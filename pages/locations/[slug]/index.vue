@@ -230,7 +230,7 @@
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div class="mb-12 flex flex-wrap items-end justify-between gap-8">
             <div>
-              <p class="saya-kicker mb-6 text-inverted/60">Sister rooms</p>
+              <p class="saya-kicker mb-6">{{ hasExperiences ? 'Other spaces' : 'Sister rooms' }}</p>
               <h2 class="saya-display-md text-inverted">
                 Also part of <em class="saya-italic">{{ siteName }}</em>.
               </h2>

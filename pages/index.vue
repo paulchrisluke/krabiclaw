@@ -163,7 +163,16 @@
           </div>
           <div v-else class="mt-12 flex flex-wrap gap-4">
             <UButton v-if="hasOrderLinks" to="/order" color="neutral" variant="solid" size="xl" class="rounded-full bg-white! text-black! hover:bg-zinc-100!">Order Now</UButton>
-            <UButton :to="hasOrderLinks ? '/reservations' : '/reservations'" color="neutral" :variant="hasOrderLinks ? 'outline' : 'solid'" size="xl" class="rounded-full" :class="hasOrderLinks ? 'border-white/50 text-white hover:bg-white/10' : 'bg-white! text-black! hover:bg-zinc-100!'">Reserve a table</UButton>
+            <UButton
+              :to="hasExperiences ? '/experiences' : '/reservations'"
+              color="neutral"
+              :variant="hasOrderLinks ? 'outline' : 'solid'"
+              size="xl"
+              class="rounded-full"
+              :class="hasOrderLinks ? 'border-white/50 text-white hover:bg-white/10' : 'bg-white! text-black! hover:bg-zinc-100!'"
+            >
+              {{ hasExperiences ? 'Book a class' : 'Reserve a table' }}
+            </UButton>
           </div>
         </div>
       </section>
@@ -173,7 +182,7 @@
         <div class="mb-16 max-w-2xl">
           <p class="saya-kicker mb-6">Find us</p>
           <h2 class="saya-display-md text-default">
-            {{ locations.length }} location{{ locations.length === 1 ? '' : 's' }}, one kitchen philosophy.
+            {{ locations.length }} location{{ locations.length === 1 ? '' : 's' }}{{ hasExperiences ? '.' : ', one kitchen philosophy.' }}
           </h2>
         </div>
         <!-- Real locations -->
@@ -465,7 +474,15 @@
         </div>
         <div class="flex flex-wrap gap-4">
           <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">Order Now</UButton>
-          <UButton to="/reservations" color="primary" :variant="hasOrderLinks ? 'outline' : 'solid'" size="xl" class="rounded-full">Reserve a table</UButton>
+          <UButton
+            :to="hasExperiences ? '/experiences' : '/reservations'"
+            color="primary"
+            :variant="hasOrderLinks ? 'outline' : 'solid'"
+            size="xl"
+            class="rounded-full"
+          >
+            {{ hasExperiences ? 'Book a class' : 'Reserve a table' }}
+          </UButton>
         </div>
       </section>
     </div>
@@ -517,6 +534,7 @@ const {
   getHero,
   config: bootstrapConfig,
   menuItemsBySection,
+  hasExperiences,
 } = useBootstrap()
 
 const locations = computed(() => bootstrapLocations.value)

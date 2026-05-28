@@ -1,9 +1,9 @@
 <template>
   <div class="min-h-screen bg-default text-default">
     <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
-      <p class="saya-kicker mb-6">Reservations</p>
+      <p class="saya-kicker mb-6">{{ hasExperiences ? 'Bookings' : 'Reservations' }}</p>
       <h1 class="saya-display-md text-default">
-        <em class="saya-italic">{{ getField('hero.title', 'Reserve a table') }}</em>
+        <em class="saya-italic">{{ getField('hero.title', hasExperiences ? 'Book a class' : 'Reserve a table') }}</em>
       </h1>
       <p v-if="getField('hero.subtitle')" class="mt-5 max-w-xl text-sm leading-relaxed text-muted">{{ getField('hero.subtitle') }}</p>
     </header>
@@ -13,7 +13,7 @@
 
         <!-- Reservation Form / Thank-you -->
         <div>
-          <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">Make a Reservation</h2>
+          <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ hasExperiences ? 'Make a Booking' : 'Make a Reservation' }}</h2>
 
           <UCard class="rounded-2xl bg-muted">
 
@@ -73,21 +73,21 @@
 
               <!-- Special requests -->
               <UFormField
-                label="Special requests"
+                :label="hasExperiences ? 'Special requests / notes' : 'Special requests'"
                 name="requests"
-                description="Dietary needs, accessibility requests, preferred seating, or celebration notes."
+                :description="hasExperiences ? 'Dietary needs, accessibility requests, or other notes.' : 'Dietary needs, accessibility requests, preferred seating, or celebration notes.'"
               >
                 <UTextarea
                   v-model="reservationForm.requests"
                   size="lg"
-                  placeholder="Tell us anything that will help us prepare for your visit."
+                  :placeholder="hasExperiences ? 'Tell us anything that will help us prepare for your visit.' : 'Tell us anything that will help us prepare for your visit.'"
                   :rows="3"
                   class="w-full"
                 />
               </UFormField>
 
               <UButton type="submit" color="primary" variant="solid" size="xl" block :loading="submitting">
-                Request Reservation
+                {{ hasExperiences ? 'Request Booking' : 'Request Reservation' }}
               </UButton>
             </UForm>
 
@@ -110,16 +110,16 @@
                 at <strong class="text-default">{{ lastSubmission?.time }}</strong>.
               </p>
               <p class="mt-2 text-sm text-muted">
-                Our team will confirm your reservation shortly via email or phone.
+                Our team will confirm your {{ hasExperiences ? 'booking' : 'reservation' }} shortly via email or phone.
               </p>
 
               <!-- Manage reservation -->
               <div v-if="cancelUrl" class="mt-10 rounded-2xl border border-default bg-default px-6 py-5">
-                <p class="saya-eyebrow mb-1 text-muted">Manage reservation</p>
+                <p class="saya-eyebrow mb-1 text-muted">{{ hasExperiences ? 'Manage booking' : 'Manage reservation' }}</p>
                 <p class="text-sm text-muted">Changed your plans? Cancel anytime before your visit.</p>
                 <UButton :to="cancelUrl" color="error" variant="ghost" size="sm" class="mt-4 rounded-full">
                   <UIcon name="i-heroicons-x-circle" class="mr-1.5 size-4" />
-                  Cancel reservation
+                  Cancel {{ hasExperiences ? 'booking' : 'reservation' }}
                 </UButton>
               </div>
 
@@ -128,7 +128,7 @@
                   Call us: {{ contactPhone }}
                 </UButton>
                 <UButton color="primary" variant="ghost" size="sm" @click="resetForm">
-                  Make another reservation
+                  Make another {{ hasExperiences ? 'booking' : 'reservation' }}
                 </UButton>
               </div>
             </div>
@@ -138,7 +138,7 @@
 
         <!-- Sidebar -->
         <div>
-          <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">Reservation Details</h2>
+          <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ hasExperiences ? 'Booking Details' : 'Reservation Details' }}</h2>
 
           <UCard class="mb-6 rounded-2xl bg-muted">
             <h3 class="mb-4 text-lg font-semibold text-default">Contact Information</h3>
@@ -149,7 +149,7 @@
           </UCard>
 
           <UCard class="mb-6 rounded-2xl bg-muted">
-            <h3 class="mb-4 text-lg font-semibold text-default">Reservation Policies</h3>
+            <h3 class="mb-4 text-lg font-semibold text-default">{{ hasExperiences ? 'Booking Policies' : 'Reservation Policies' }}</h3>
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div v-html="policiesBody" class="text-muted" />
           </UCard>
@@ -159,7 +159,9 @@
               Call {{ contactPhone }}
             </UButton>
             <UButton to="/contact" color="primary" variant="outline" class="w-full">Contact Form</UButton>
-            <UButton to="/menu" color="primary" variant="outline" class="w-full">View Menu</UButton>
+            <UButton :to="hasExperiences ? '/experiences' : '/menu'" color="primary" variant="outline" class="w-full">
+              {{ hasExperiences ? 'View Experiences' : 'View Menu' }}
+            </UButton>
           </div>
         </div>
 
@@ -177,6 +179,7 @@ definePageMeta({ layout: 'saya' })
 
 const { getField } = usePageContent('reservations')
 const { site, siteId } = useTenantSite()
+const { hasExperiences } = useBootstrap()
 
 // ── Calendar ──────────────────────────────────────────────────────────────
 // selectedDate is untyped to bridge the two moduleResolution instances of

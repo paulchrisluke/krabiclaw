@@ -66,11 +66,19 @@
       <!-- CTA strip -->
       <section class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-24 sm:px-6 lg:px-8">
         <h3 class="saya-display-md saya-italic text-default">
-          {{ getField('cta.title', 'Come dine with us.') }}
+          {{ getField('cta.title', hasExperiences ? 'Book a class.' : 'Come dine with us.') }}
         </h3>
         <div class="flex flex-wrap gap-3">
           <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">Order Now</UButton>
-          <UButton to="/reservations" color="primary" :variant="hasOrderLinks ? 'outline' : 'solid'" size="xl" class="rounded-full">Reserve a table</UButton>
+          <UButton
+            :to="hasExperiences ? '/experiences' : '/reservations'"
+            color="primary"
+            :variant="hasOrderLinks ? 'outline' : 'solid'"
+            size="xl"
+            class="rounded-full"
+          >
+            {{ hasExperiences ? 'Book a class' : 'Reserve a table' }}
+          </UButton>
         </div>
       </section>
     </div>
@@ -168,7 +176,7 @@ import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSch
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
 
 const { isPlatform } = useTenantSite()
-const { getField, locations } = useBootstrap()
+const { getField, locations, hasExperiences } = useBootstrap()
 
 const storyBody = computed(() => DOMPurify.sanitize(getField('story.body', '') || ''))
 const journeyBody = computed(() => DOMPurify.sanitize(getField('journey.body', '') || ''))
