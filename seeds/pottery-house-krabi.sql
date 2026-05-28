@@ -115,7 +115,7 @@ INSERT INTO business_locations (
 UPDATE sites SET primary_location_id = 'loc-pottery-house' WHERE id = 'site-pottery-house';
 
 -- Media assets (using actual client images from the new-client folder)
-INSERT INTO media_assets
+INSERT OR REPLACE INTO media_assets
   (id, organization_id, site_id, location_id,
    kind, provider, source,
    public_url, thumbnail_url,
@@ -199,7 +199,7 @@ UPDATE business_locations SET hero_image_asset_id = 'media-ph-hero' WHERE id = '
 UPDATE business_locations SET hero_image_asset_id = 'media-ph-beach' WHERE id = 'loc-pottery-beachfront';
 
 -- Experiences (no menu — this is an experience-only site)
-INSERT INTO experiences
+INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id,
    title, slug, tagline, body,
    image_asset_id, price, duration_minutes, max_capacity,
