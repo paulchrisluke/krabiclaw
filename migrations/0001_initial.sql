@@ -1,5 +1,5 @@
 -- KrabiClaw canonical D1 schema. v2 (media assets + domain overhaul).
--- Edit this file directly when the database shape changes.
+-- DO NOT modify this file once applied. Add schema changes as new migrations: wrangler d1 migrations create DB <description>
 
 PRAGMA foreign_keys = ON;
 

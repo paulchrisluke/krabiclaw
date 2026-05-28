@@ -736,7 +736,7 @@ function openHandoff(client: Client) {
   handoffMessage.value = ''
   handoffPlan.value = ''
   handoffCoupon.value = ''
-  handoffDomain.value = client.subdomain ? `${client.subdomain}.krabiclaw.com` : ''
+  handoffDomain.value = ''
   handoffResult.value = null
   handoffError.value = ''
   handoffOpen.value = true

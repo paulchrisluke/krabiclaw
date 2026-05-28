@@ -141,39 +141,44 @@
 
         <!-- Right: live preview -->
         <div class="relative bg-muted/20 lg:order-2 lg:sticky lg:top-0 lg:h-screen overflow-hidden">
-          <!-- mobile strip (visual only) -->
-          <div class="lg:hidden h-56 relative overflow-hidden border-b border-default">
-            <iframe
-              :src="iframeUrl"
-              class="absolute top-0 left-0 w-full h-full border-none"
-              style="pointer-events: none;"
-              sandbox="allow-scripts allow-same-origin"
-              loading="lazy"
-              title="Site preview"
-            />
-            <a :href="iframeUrl" target="_blank" rel="noopener" class="absolute inset-0 flex items-end justify-end p-3">
-              <span class="flex items-center gap-1.5 bg-default/90 backdrop-blur-sm rounded-lg px-3 py-1.5 text-xs font-medium text-default shadow border border-default">
-                <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3.5" />
-                Open full site
-              </span>
-            </a>
-          </div>
-          <!-- desktop: scrollable iframe -->
-          <div class="hidden lg:block absolute inset-0">
-            <iframe
-              :src="iframeUrl"
-              class="w-full h-full border-none"
-              sandbox="allow-scripts allow-same-origin"
-              loading="lazy"
-              title="Site preview"
-            />
-            <!-- open button pinned top-right, doesn't block iframe -->
-            <div class="absolute top-4 right-4 pointer-events-none">
-              <a :href="iframeUrl" target="_blank" rel="noopener" class="pointer-events-auto flex items-center gap-1.5 bg-default/90 backdrop-blur-sm rounded-lg px-3 py-2 text-sm font-medium text-default shadow border border-default">
-                <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4" />
-                Open full site
+          <template v-if="iframeUrl">
+            <!-- mobile strip (visual only) -->
+            <div class="lg:hidden h-56 relative overflow-hidden border-b border-default">
+              <iframe
+                :src="iframeUrl"
+                class="absolute top-0 left-0 w-full h-full border-none"
+                style="pointer-events: none;"
+                sandbox="allow-scripts allow-same-origin"
+                loading="lazy"
+                title="Site preview"
+              />
+              <a :href="iframeUrl" target="_blank" rel="noopener" class="absolute inset-0 flex items-end justify-end p-3">
+                <span class="flex items-center gap-1.5 bg-default/90 backdrop-blur-sm rounded-lg px-3 py-1.5 text-xs font-medium text-default shadow border border-default">
+                  <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3.5" />
+                  Open full site
+                </span>
               </a>
             </div>
+            <!-- desktop: scrollable iframe -->
+            <div class="hidden lg:block absolute inset-0">
+              <iframe
+                :src="iframeUrl"
+                class="w-full h-full border-none"
+                sandbox="allow-scripts allow-same-origin"
+                loading="lazy"
+                title="Site preview"
+              />
+              <!-- open button pinned top-right, doesn't block iframe -->
+              <div class="absolute top-4 right-4 pointer-events-none">
+                <a :href="iframeUrl" target="_blank" rel="noopener" class="pointer-events-auto flex items-center gap-1.5 bg-default/90 backdrop-blur-sm rounded-lg px-3 py-2 text-sm font-medium text-default shadow border border-default">
+                  <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4" />
+                  Open full site
+                </a>
+              </div>
+            </div>
+          </template>
+          <div v-else class="flex items-center justify-center h-56 lg:h-full text-sm text-muted">
+            Preview unavailable
           </div>
         </div>
 
@@ -238,11 +243,9 @@ const planName = computed(() => {
   return PLAN_NAMES[transfer.value.invited_plan] ?? transfer.value.invited_plan
 })
 
-// Always use krabiclaw subdomain for iframe — custom domain may not be DNS'd yet
 const iframeUrl = computed(() => {
-  if (!transfer.value) return ''
-  if (transfer.value.site_subdomain) return `https://${transfer.value.site_subdomain}.krabiclaw.com`
-  return 'https://krabiclaw.com'
+  if (!transfer.value?.site_subdomain) return ''
+  return `https://${transfer.value.site_subdomain}.krabiclaw.com`
 })
 
 const expiresIn = computed(() => {

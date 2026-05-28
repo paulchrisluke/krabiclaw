@@ -106,6 +106,7 @@ export default defineEventHandler(async (event) => {
 
       let customerId = orgRow?.stripe_customer_id ?? null
       if (!customerId) {
+        if (!userEmail) throw new Error('User email required to create Stripe customer')
         const customer = await stripe.customers.create({
           email: userEmail,
           name: orgRow?.name ?? userEmail,
