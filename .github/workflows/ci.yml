@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  typecheck:
+    name: Type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn typecheck
+
+  lint-seeds:
+    name: Seed schema lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn lint:seeds
+
+  lint-scripts:
+    name: Script syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check all pipeline scripts
+        run: |
+          for f in \
+            scripts/client-import.mjs \
+            scripts/client-verify.mjs \
+            scripts/client-onboard.mjs \
+            scripts/client-override.mjs \
+            scripts/client-deploy.mjs \
+            scripts/lint-seeds.mjs \
+            scripts/fixtures/pottery-house-krabi.fixture.mjs; do
+            node --check "$f" && echo "✓ $f" || exit 1
+          done
+
+# ── Pottery House fixture ─────────────────────────────────────────────────────
+# The fixture (yarn fixture:pottery-house) requires a running site — it cannot
+# run in standard CI without a full dev server and seeded local D1.
+#
+# REQUIRED MANUAL CHECK before merging any PR that touches:
+#   scripts/         (importer pipeline changes)
+#   components/saya/ (theme copy changes)
+#   utils/vertical-copy.ts
+#   pages/           (routing changes)
+#
+# Run locally against your dev instance:
+#   yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-house-krabi
+#
+# Or trigger the fixture.yml workflow against a preview deploy.
+# See .github/workflows/fixture.yml

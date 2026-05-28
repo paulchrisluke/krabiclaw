@@ -198,7 +198,7 @@ export default defineNuxtConfig({
 
   // Nitro configuration for Cloudflare deployment
   nitro: {
-    preset: 'cloudflare-pages',
+    preset: 'cloudflare-module',
     experimental: {
       tasks: true
     },
@@ -206,9 +206,6 @@ export default defineNuxtConfig({
       '*/5 * * * *': ['translation-jobs-process'],
       '*/10 * * * *': ['domain-reconciliation'],
       '0 3 * * *': ['domain-reconciliation-daily']
-    },
-    cloudflare: {
-      deployConfig: true
     },
     devServer: {
       watch: ['server']

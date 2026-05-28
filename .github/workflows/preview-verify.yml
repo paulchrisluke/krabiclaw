@@ -1,0 +1,44 @@
+name: Preview Verify
+
+# Trigger manually after a preview deploy (Cloudflare Workers preview URLs are
+# not automatically known at PR time — run this after wrangler deploy --env preview).
+on:
+  workflow_dispatch:
+    inputs:
+      preview_url:
+        description: Preview site URL (e.g. https://pottery-house-krabi.krabiclaw.com)
+        required: true
+      vertical:
+        description: 'Site vertical (restaurant | experience | retail | wellness | service)'
+        required: true
+        default: restaurant
+      site_id:
+        description: Site ID (e.g. site-pottery-house-krabi)
+        required: true
+      slug:
+        description: Client slug (e.g. pottery-house-krabi) — used for report output
+        required: false
+
+jobs:
+  verify:
+    name: Smoke-test preview site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Run client:verify
+        run: |
+          ARGS=("--url" "${{ inputs.preview_url }}" "--vertical" "${{ inputs.vertical }}" "--site-id" "${{ inputs.site_id }}")
+          if [ -n "${{ inputs.slug }}" ]; then ARGS+=("--slug" "${{ inputs.slug }}"); fi
+          node scripts/client-verify.mjs "${ARGS[@]}"
+      - name: Upload verify report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-report-${{ inputs.slug || 'site' }}
+          path: client-imports/${{ inputs.slug || 'site' }}/verify-report.*
+          if-no-files-found: ignore

@@ -32,7 +32,7 @@
               class="px-6 py-4 bg-elevated text-muted border-t border-default"
               role="region"
             >
-              <p>{{ faq.a }}</p>
+              <p v-html="faq.a"></p>
             </div>
           </div>
         </div>
@@ -86,19 +86,19 @@ const sections = [
     faqs: [
       {
         q: 'Do I need technical skills to use KrabiClaw?',
-        a: 'No. KrabiClaw is designed for restaurant owners, not developers. If you can fill out a form, you can build a professional website. The whole setup takes about 10 minutes.'
+        a: 'No. KrabiClaw is designed for business owners, not developers. If you can fill out a form, you can build a professional website. The whole setup takes about 10 minutes.'
       },
       {
         q: 'How do I create my first website?',
-        a: 'Sign up at krabiclaw.com, enter your restaurant name, and choose a subdomain. Your site is live immediately — you can then add your menu, photos, and content from the dashboard.'
+        a: 'Sign up at krabiclaw.com, enter your business name, and choose a subdomain. Your site is live immediately — you can then add your offerings, photos, and content from the dashboard.'
       },
       {
         q: 'Can I use KrabiClaw without a Google Business Profile?',
-        a: "Connect your Google Business Profile under Dashboard → Integrations for the easiest setup. But it's entirely optional — you can enter your menu, hours, photos, and location details manually. Connecting later will auto-fill anything you haven't added yet."
+        a: "Connect your Google Business Profile under Dashboard → Integrations for the easiest setup. But it's entirely optional — you can enter your offerings, hours, photos, and location details manually. Connecting later will auto-fill anything you haven't added yet."
       },
       {
         q: 'What languages does KrabiClaw support?',
-        a: 'The platform interface supports English and Thai. Your restaurant website can display content in any language — just type it in.'
+        a: 'The platform interface supports English and Thai. Your business website can display content in any language — just type it in.'
       }
     ]
   },
@@ -107,11 +107,11 @@ const sections = [
     faqs: [
       {
         q: 'How do I add menu items?',
-        a: 'Go to Dashboard → Menu. Add categories and items manually, or use AI menu extraction: take a photo of your printed menu and ChowBot will read it and import the items automatically.'
+        a: 'Go to Dashboard → Offerings. Add categories and items manually, or use AI extraction: take a photo of your printed offerings and ChowBot will read it and import the items automatically.'
       },
       {
         q: 'Can I upload photos of my dishes?',
-        a: 'Yes. Each menu item supports a photo. You can also upload a general photo gallery for your location — photos from Google Business sync automatically on Pro plans.'
+        a: 'Yes. Each item supports a photo. You can also upload a general photo gallery for your location — photos from Google Business sync automatically on Pro plans.'
       },
       {
         q: 'How do I update my opening hours?',
@@ -128,7 +128,7 @@ const sections = [
     faqs: [
       {
         q: 'What domain do I get on the free plan?',
-        a: 'On the free plan you get a subdomain: <strong>your-restaurant.krabiclaw.com</strong>. It is fully live, indexed by Google, and shareable with customers from day one.'
+        a: 'On the free plan you get a subdomain: <strong>your-business.krabiclaw.com</strong>. It is fully live, indexed by Google, and shareable with customers from day one.'
       },
       {
         q: 'How do I connect my own domain?',
@@ -199,7 +199,7 @@ const filteredSections = computed(() => {
 
 useSeoMeta({
   title: 'Help Center | KrabiClaw',
-  description: 'Answers to common questions about KrabiClaw — the premium AI-powered restaurant website builder.',
+  description: 'Answers to common questions about KrabiClaw — the premium AI-powered website builder for local businesses.',
   ogImage: useSharedOgImage(),
   ogUrl: `${siteUrl}/help`
 })

@@ -48,6 +48,8 @@ export default defineEventHandler(async (event) => {
     available_note: body.available_note ? String(body.available_note).trim() : null,
     status: (['active', 'inactive', 'sold_out'].includes(String(body.status)) ? String(body.status) : 'active') as 'active' | 'inactive' | 'sold_out',
     sort_order: optionalInteger(body.sort_order) ?? 0,
+    featured: typeof body.featured === 'boolean' ? body.featured : false,
+    featured_sort_order: optionalInteger(body.featured_sort_order) ?? 0,
     location_id: body.location_id ? String(body.location_id) : null,
     seo_title: body.seo_title ? String(body.seo_title).trim() : null,
     seo_description: body.seo_description ? String(body.seo_description).trim() : null,

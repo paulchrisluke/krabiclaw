@@ -230,7 +230,7 @@
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div class="mb-12 flex flex-wrap items-end justify-between gap-8">
             <div>
-              <p class="saya-kicker mb-6">{{ hasExperiences ? 'Other spaces' : 'Sister rooms' }}</p>
+              <p class="saya-kicker mb-6">{{ locationIndexCopy.otherLocationsHeading }}</p>
               <h2 class="saya-display-md text-inverted">
                 Also part of <em class="saya-italic">{{ siteName }}</em>.
               </h2>
@@ -318,6 +318,7 @@ definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
 const { siteId, site } = useTenantSite()
+const locationIndexCopy = getVerticalCopy((site as ApiValue)?.vertical)
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
@@ -333,6 +334,7 @@ const {
   locationReviews,
   data: bootstrapData,
   hasExperiences,
+  experiencesList,
 } = useBootstrap()
 
 const pending = computed(() => !bootstrapData.value)
@@ -342,15 +344,8 @@ const hasMenu = computed(() => {
   return !!(m && m.items && m.items.length > 0)
 })
 
-const primaryCtaPath = computed(() => {
-  if (hasExperiences.value && !hasMenu.value) return '/experiences'
-  return '/reservations'
-})
-
-const primaryCtaLabel = computed(() => {
-  if (hasExperiences.value && !hasMenu.value) return 'Book a Class'
-  return 'Reserve a table'
-})
+const primaryCtaPath = computed(() => locationIndexCopy.ctaRoute)
+const primaryCtaLabel = computed(() => locationIndexCopy.reserveCta)
 
 const secondaryCtaPath = computed(() => {
   if (hasMenu.value) return `/locations/${slug.value}/menu`
@@ -408,10 +403,28 @@ const heroBackgroundStyle = computed(() => {
   return { backgroundImage: `url("${safeHref}")` }
 })
 
-// Featured items from bootstrap menu
+// Featured items from bootstrap menu or experiences (if no menu)
 const featuredItems = computed(() => {
-  const items = (bootstrapMenu.value as { items?: ApiRecord[] } | null)?.items ?? []
-  return items.filter((i: ApiRecord) => i.featured || i.available !== false).slice(0, 3)
+  if (hasMenu.value) {
+    // Use featured menu items
+    const items = (bootstrapMenu.value as { items?: ApiRecord[] } | null)?.items ?? []
+    return items.filter((i: ApiRecord) => i.featured || i.available !== false).slice(0, 3)
+  } else {
+    // Use featured experiences
+    const experiences = experiencesList.value || []
+    const featured = experiences
+      .filter(exp => exp.status === 'active' && exp.featured)
+      .sort((a, b) => {
+        const fa = Number(a.featured_sort_order ?? Number.MAX_SAFE_INTEGER)
+        const fb = Number(b.featured_sort_order ?? Number.MAX_SAFE_INTEGER)
+        if (fa !== fb) return fa - fb
+        const sa = Number(a.sort_order ?? Number.MAX_SAFE_INTEGER)
+        const sb = Number(b.sort_order ?? Number.MAX_SAFE_INTEGER)
+        if (sa !== sb) return sa - sb
+        return String(a.title ?? '').localeCompare(String(b.title ?? ''))
+      })
+    return (featured.length > 0 ? featured : experiences.filter(exp => exp.status === 'active')).slice(0, 3)
+  }
 })
 
 const defaultCurrency = computed(() => bootstrapData.value?.config?.default_currency || 'THB')

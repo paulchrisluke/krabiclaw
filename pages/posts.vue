@@ -3,7 +3,7 @@
     <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
       <p class="saya-kicker mb-6">Latest updates</p>
       <h1 class="saya-display-md text-default">
-        <em class="saya-italic">{{ hasExperiences ? 'From the studio' : 'From the kitchen' }}</em>
+        <em class="saya-italic">{{ postsCopy.postsEyebrow }}</em>
       </h1>
     </header>
 
@@ -41,8 +41,9 @@ definePageMeta({ layout: 'saya' })
 
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
+const postsCopy = getVerticalCopy(site?.vertical)
 
-const { googleBusiness, hasExperiences } = useBootstrap()
+const { googleBusiness } = useBootstrap()
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
 const restaurantName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Restaurant')
 

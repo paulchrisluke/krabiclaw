@@ -1,8 +1,21 @@
 <template>
   <NuxtLayout name="saya">
 
+    <!-- Loading -->
+    <div v-if="pending" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+      <div class="grid gap-10 lg:grid-cols-[1fr_400px] lg:items-start">
+        <USkeleton class="aspect-4/3 rounded-xl" />
+        <div class="space-y-4">
+          <USkeleton class="h-6 w-24" />
+          <USkeleton class="h-10 w-full" />
+          <USkeleton class="h-24 w-full" />
+          <USkeleton class="h-12 w-full rounded-full" />
+        </div>
+      </div>
+    </div>
+
     <!-- Not found -->
-    <div v-if="!experience" class="mx-auto max-w-7xl px-4 py-32 text-center">
+    <div v-else-if="!experience" class="mx-auto max-w-7xl px-4 py-32 text-center">
       <h1 class="text-2xl font-semibold text-default">Experience not found</h1>
       <p class="mt-3 text-muted">This experience may no longer be available.</p>
       <UButton to="/experiences" class="mt-6" variant="soft">View all experiences</UButton>
@@ -21,7 +34,7 @@
 
         <div class="grid gap-10 lg:grid-cols-[1fr_400px] lg:items-start">
           <!-- Image -->
-          <div class="overflow-hidden rounded-xl bg-muted aspect-[4/3] lg:aspect-auto lg:h-[480px]">
+          <div class="aspect-4/3 overflow-hidden rounded-xl bg-muted lg:h-120 lg:aspect-auto">
             <img
               v-if="experience.image_url"
               :src="experience.image_url"
@@ -176,25 +189,18 @@
 </template>
 
 <script setup lang="ts">
-import type { Experience } from '~/server/utils/experiences'
 
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 
 const route = useRoute()
 const slug = route.params.slug as string
-const { isPlatform, siteId, site } = useTenantSite()
+const { siteId, site } = useTenantSite()
 const siteName = computed(() => (site as ApiValue)?.name || 'KrabiClaw')
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
-const { data } = isPlatform || !siteId
-  ? { data: ref(null) }
-  : await useFetch(`/api/public/sites/${siteId}/experiences/${slug}`, {
-      key: `experience-${siteId}-${slug}`,
-      server: true,
-    })
-
-const experience = computed<Experience | null>(() => (data.value as ApiValue)?.experience ?? null)
+const { experienceDetail: experience, data: bootstrapData } = useBootstrap()
+const pending = computed(() => !bootstrapData.value)
 const currentPageUrl = useSeoUrl(() => `/experiences/${slug}`)
 const ogImage = useSharedOgImage(() => experience.value?.image_url)
 
@@ -283,11 +289,11 @@ async function submitBooking() {
 }
 
 // SEO + structured data: make it reactive so it handles async fetch correctly!
-useBreadcrumbSchema([
+useBreadcrumbSchema(computed(() => [
   { name: 'Home', url: `${siteUrl}/` },
   { name: 'Experiences', url: `${siteUrl}/experiences` },
-  { name: computed(() => experience.value?.title ?? slug), url: `${siteUrl}/experiences/${slug}` },
-])
+  { name: experience.value?.title ?? slug, url: `${siteUrl}/experiences/${slug}` },
+]))
 
 useSeoMeta({
   title: computed(() => experience.value?.seo_title ?? (experience.value ? `${experience.value.title} | Experiences` : 'Experience')),

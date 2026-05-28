@@ -4,19 +4,17 @@
 
       <!-- Header -->
       <div class="mb-16 max-w-2xl">
-        <p class="saya-kicker mb-4">{{ hasExperiences ? 'Offerings' : 'Experiences' }}</p>
-        <h1 class="saya-display-md text-default">{{ hasExperiences ? 'Calm, craft & clay.' : 'Dine differently.' }}</h1>
-        <p class="mt-5 text-base leading-relaxed text-muted">
-          {{ hasExperiences 
-            ? 'One-of-a-kind workshops, social gatherings, and creative sessions — crafted for guests who want to connect with clay.' 
-            : 'Exclusive culinary events, chef encounters, and one-of-a-kind dining moments — crafted for guests who want more than a meal.' }}
+        <p class="saya-kicker mb-4">{{ getField('hero.kicker', 'Experiences') }}</p>
+        <h1 class="saya-display-md text-default">{{ getField('hero.title', expCopy.reserveCta) }}</h1>
+        <p v-if="getField('hero.subtitle')" class="mt-5 text-base leading-relaxed text-muted">
+          {{ getField('hero.subtitle') }}
         </p>
       </div>
 
       <!-- Loading -->
       <div v-if="pending" class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         <div v-for="i in 3" :key="i" class="animate-pulse">
-          <div class="aspect-[4/3] rounded-lg bg-muted" />
+          <div class="aspect-4/3 rounded-lg bg-muted" />
           <div class="mt-4 h-4 w-2/3 rounded bg-muted" />
           <div class="mt-2 h-3 w-full rounded bg-muted" />
         </div>
@@ -35,7 +33,7 @@
           :to="`/experiences/${exp.slug}`"
           class="group block no-underline"
         >
-          <div class="relative overflow-hidden rounded-lg bg-muted aspect-[4/3]">
+          <div class="relative aspect-4/3 overflow-hidden rounded-lg bg-muted">
             <img
               v-if="exp.image_url"
               :src="exp.image_url"
@@ -90,21 +88,16 @@
 <script setup lang="ts">
 import type { Experience } from '~/server/utils/experiences'
 
-const { isPlatform, siteId, site } = useTenantSite()
+const { isPlatform, site } = useTenantSite()
 const siteName = computed(() => (site as ApiValue)?.name || 'KrabiClaw')
+const expCopy = getVerticalCopy((site as ApiValue)?.vertical)
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
-const { hasExperiences } = useBootstrap()
+const { experiencesList, data: bootstrapData, getField } = useBootstrap()
 
-const { data, pending } = isPlatform || !siteId
-  ? { data: ref(null), pending: ref(false) }
-  : await useFetch(`/api/public/sites/${siteId}/experiences`, {
-      key: `experiences-${siteId}`,
-      server: true,
-    })
-
-const experiences = computed<Experience[]>(() => (data.value as ApiValue)?.experiences ?? [])
+const pending = computed(() => !isPlatform && !bootstrapData.value)
+const experiences = computed<Experience[]>(() => experiencesList.value)
 const currentPageUrl = useSeoUrl('/experiences')
 const ogImage = useSharedOgImage(() => experiences.value[0]?.image_url)
 
@@ -122,7 +115,7 @@ useBreadcrumbSchema([
 
 useSeoMeta({
   title: computed(() => `Experiences | ${siteName.value}`),
-  description: computed(() => `Book exclusive dining experiences at ${siteName.value} — chef's table events, tasting menus, and more. Reserve your spot today.`),
+  description: computed(() => expCopy.seoReservationDescription(siteName.value)),
   ogUrl: currentPageUrl,
   ogType: 'website',
   ogImage,

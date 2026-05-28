@@ -16,6 +16,8 @@ export interface Experience {
   available_note: string | null
   status: 'active' | 'inactive' | 'sold_out'
   sort_order: number
+  featured: boolean
+  featured_sort_order: number
   seo_title: string | null
   seo_description: string | null
   created_at: string
@@ -40,6 +42,8 @@ interface ExperienceRow {
   available_note: string | null
   status: string
   sort_order: number
+  featured: number
+  featured_sort_order: number
   seo_title: string | null
   seo_description: string | null
   created_at: string
@@ -51,7 +55,12 @@ function parseRow(row: ExperienceRow): Experience {
   if (row.time_slots) {
     try { time_slots = JSON.parse(row.time_slots) } catch { time_slots = null }
   }
-  return { ...row, status: row.status as Experience['status'], time_slots }
+  return { 
+    ...row, 
+    status: row.status as Experience['status'], 
+    time_slots,
+    featured: Boolean(row.featured)
+  }
 }
 
 const SELECT = `
@@ -59,6 +68,7 @@ const SELECT = `
          e.title, e.slug, e.tagline, e.body, e.image_asset_id,
          e.price, e.duration_minutes, e.max_capacity, e.time_slots,
          e.available_note, e.status, e.sort_order,
+         e.featured, e.featured_sort_order,
          e.seo_title, e.seo_description, e.created_at, e.updated_at,
          img.public_url AS image_url
   FROM experiences e
@@ -142,6 +152,8 @@ export interface CreateExperienceInput {
   available_note?: string | null
   status?: 'active' | 'inactive' | 'sold_out'
   sort_order?: number
+  featured?: boolean
+  featured_sort_order?: number
   location_id?: string | null
   seo_title?: string | null
   seo_description?: string | null
@@ -164,8 +176,9 @@ export async function createExperience(
       `INSERT INTO experiences
        (id, organization_id, site_id, location_id, title, slug, tagline, body,
         image_asset_id, price, duration_minutes, max_capacity, time_slots,
-        available_note, status, sort_order, seo_title, seo_description, created_at, updated_at, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        available_note, status, sort_order, featured, featured_sort_order,
+        seo_title, seo_description, created_at, updated_at, created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
     .bind(
       id, organizationId, siteId,
@@ -182,6 +195,8 @@ export async function createExperience(
       input.available_note ?? null,
       input.status ?? 'active',
       input.sort_order ?? 0,
+      input.featured ? 1 : 0,
+      input.featured_sort_order ?? 0,
       input.seo_title ?? null,
       input.seo_description ?? null,
       now, now, userId,
@@ -233,6 +248,8 @@ export async function updateExperience(
   if (input.available_note !== undefined) { sets.push('available_note = ?'); params.push(input.available_note ?? null) }
   if (input.status !== undefined) { sets.push('status = ?'); params.push(input.status) }
   if (input.sort_order !== undefined) { sets.push('sort_order = ?'); params.push(input.sort_order) }
+  if (input.featured !== undefined) { sets.push('featured = ?'); params.push(input.featured ? 1 : 0) }
+  if (input.featured_sort_order !== undefined) { sets.push('featured_sort_order = ?'); params.push(input.featured_sort_order) }
   if (input.location_id !== undefined) { sets.push('location_id = ?'); params.push(input.location_id ?? null) }
   if (input.seo_title !== undefined) { sets.push('seo_title = ?'); params.push(input.seo_title ?? null) }
   if (input.seo_description !== undefined) { sets.push('seo_description = ?'); params.push(input.seo_description ?? null) }
