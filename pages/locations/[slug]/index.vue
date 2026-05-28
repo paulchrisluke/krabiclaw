@@ -412,29 +412,35 @@ const featuredItems = computed(() => {
   } else {
     // Use featured experiences, normalized to menu item shape
     const experiences = experiencesList.value || []
+    function safeNum(val: unknown) {
+      const n = Number(val);
+      return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+    }
     const featured = experiences
       .filter(exp => exp.status === 'active' && exp.featured)
       .sort((a, b) => {
-        const fa = Number(a.featured_sort_order ?? Number.MAX_SAFE_INTEGER)
-        const fb = Number(b.featured_sort_order ?? Number.MAX_SAFE_INTEGER)
-        if (fa !== fb) return fa - fb
-        const sa = Number(a.sort_order ?? Number.MAX_SAFE_INTEGER)
-        const sb = Number(b.sort_order ?? Number.MAX_SAFE_INTEGER)
-        if (sa !== sb) return sa - sb
-        return String(a.title ?? '').localeCompare(String(b.title ?? ''))
+        const fa = safeNum(a.featured_sort_order);
+        const fb = safeNum(b.featured_sort_order);
+        if (fa !== fb) return fa - fb;
+        const sa = safeNum(a.sort_order);
+        const sb = safeNum(b.sort_order);
+        if (sa !== sb) return sa - sb;
+        return String(a.title ?? '').localeCompare(String(b.title ?? ''));
       })
     const toUse = featured.length > 0 ? featured : experiences.filter(exp => exp.status === 'active')
     // Normalize experience objects to match menu item shape expected by template
     return toUse.slice(0, 3).map(exp => ({
       id: exp.id,
       name: exp.title,
-      description: exp.tagline || (exp.summary ? exp.summary.slice(0, 120) : ''),
+      description: exp.tagline || '',
       public_url: exp.image_url || null,
       price_amount: typeof exp.price === 'number' ? exp.price : null,
       price_display: exp.price,
       kind: 'image',
       featured: exp.featured,
       available: exp.status === 'active',
+      source: 'experience',
+      isExperience: true,
     }))
   }
 })

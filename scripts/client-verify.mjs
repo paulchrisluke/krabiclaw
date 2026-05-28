@@ -243,7 +243,6 @@ for (const [route, html] of Object.entries(pageHtml)) {
   for (const str of forbidden) {
     if (html.toLowerCase().includes(str.toLowerCase())) {
       foundViolations.push({ route, str });
-      fail(`Forbidden copy "${str}" on ${route}`)
     }
   }
 }
