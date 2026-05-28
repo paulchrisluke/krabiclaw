@@ -170,7 +170,7 @@
 
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours } from '~/utils/formatters'
-
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 
 definePageMeta({ layout: 'saya' })
 
@@ -231,10 +231,10 @@ const mapEmbedSrc = computed(() => (location.value as ApiValue)?.map_embed_url |
 
 const parkingInfo = computed(() => getContentField('parking.info', '') ?? '')
 const extraNotes = computed(() => getContentField('extra.notes', '') ?? '')
-const sanitizedParkingInfo = useSanitizedHtml(() => parkingInfo.value)
-const sanitizedExtraNotes = useSanitizedHtml(() => extraNotes.value)
+const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value))
+const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
-const siteName = computed(() => (site as ApiValue)?.name || (site as ApiValue)?.title || 'KrabiClaw')
+const siteName = computed(() => (site as ApiValue)?.title || 'KrabiClaw')
 
 useSeoMeta({
   title: () => `Plan a visit · ${location.value?.title || slug.value}`,

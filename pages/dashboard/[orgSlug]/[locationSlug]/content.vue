@@ -319,7 +319,7 @@
               contenteditable="true"
               class="prose prose-sm min-h-40 w-full max-w-none rounded-md border border-default bg-default px-3 py-2 text-sm text-highlighted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               :data-placeholder="activeFieldDef?.placeholder || 'Start typing...'"
-              v-html="DOMPurify.value.sanitize(editingValue || '')"
+              v-html="DOMPurify.sanitize(editingValue || '')"
               @blur="onRichTextBlur"
               @paste.prevent="onRichTextPaste"
             />
@@ -390,13 +390,7 @@
 // -nocheck
 import { ref, computed, onMounted, watch } from 'vue'
 // import DOMPurify from 'isomorphic-dompurify'
-const DOMPurify = shallowRef<any>({ sanitize: (s: string, _options?: unknown) => s })
-
-onMounted(async () => {
-  if (import.meta.client) {
-    DOMPurify.value = (await import('isomorphic-dompurify')).default
-  }
-})
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string, _options?: unknown) => s }
 
 import { contentRegistry, editablePages, getFieldDef } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
@@ -690,7 +684,7 @@ watch(editingValue, () => {
 })
 
 const onRichTextBlur = (e: FocusEvent) => {
-  editingValue.value = DOMPurify.value.sanitize((e.target as HTMLElement).innerHTML)
+  editingValue.value = DOMPurify.sanitize((e.target as HTMLElement).innerHTML)
 }
 
 const onRichTextPaste = (e: ClipboardEvent) => {
@@ -705,7 +699,7 @@ const onRichTextPaste = (e: ClipboardEvent) => {
   let cleaned: string
   if (html) {
     // Strip inline style/class/color attrs so pasted content inherits editor theme
-    cleaned = DOMPurify.value.sanitize(html, {
+    cleaned = DOMPurify.sanitize(html, {
       ALLOWED_TAGS: allowedPasteTags,
       ALLOWED_ATTR: ['href'],
     })
@@ -713,14 +707,14 @@ const onRichTextPaste = (e: ClipboardEvent) => {
     cleaned = text.split('\n').map(line => `<p>${line ? escapeHtml(line) : '<br>'}</p>`).join('')
   }
 
-  const sanitized = DOMPurify.value.sanitize(cleaned, {
+  const sanitized = DOMPurify.sanitize(cleaned, {
     ALLOWED_TAGS: allowedPasteTags,
     ALLOWED_ATTR: ['href'],
   })
 
   document.execCommand('insertHTML', false, sanitized)
   const target = e.target as HTMLElement
-  editingValue.value = DOMPurify.value.sanitize(target.innerHTML)
+  editingValue.value = DOMPurify.sanitize(target.innerHTML)
 }
 
 // Tracks the picked asset ID separately so MediaPicker can show the thumbnail
