@@ -102,12 +102,12 @@ INSERT INTO business_locations (
   8.057425, 98.7486163,
   'A pop-up beachfront pottery session at Sea View, Klong Muang. Throw on the wheel with the Gulf of Thailand in front of you. Limited seats, unforgettable setting.',
   'Beachfront wheel throwing sessions at Klong Muang beach. Limited seats.',
-  '[]',
+  '[{"openDay":"MONDAY","openTime":"12:00","closeTime":"19:30"},{"openDay":"TUESDAY","openTime":"12:00","closeTime":"19:30"},{"openDay":"WEDNESDAY","openTime":"12:00","closeTime":"19:30"},{"openDay":"THURSDAY","openTime":"12:00","closeTime":"19:30"},{"openDay":"FRIDAY","openTime":"12:00","closeTime":"19:30"},{"openDay":"SATURDAY","openTime":"12:00","closeTime":"19:30"},{"openDay":"SUNDAY","openTime":"12:00","closeTime":"19:30"}]',
   4.9, 18,
   '฿฿',
   '["Pottery Studio","Beachfront Experience","Pottery Classes"]',
   'https://instagram.com/potteryclasseskrabi',
-  NULL,
+  'ChIJNfYDGwC_UTARU_DUo4sLtK8',
   0, 'active'
 );
 
