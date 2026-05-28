@@ -27,6 +27,7 @@ CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
 binding = "DB"
 database_name = "krabiclaw-db"
 database_id = "0d0cd133-1914-48b1-b010-8fe574fede0c"
+migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"

@@ -21,7 +21,7 @@ When an internal API returns errors, nulls, or malformed data, fix the API contr
 - Always use `nodejs_compat_v2` (not `nodejs_compat`) in `wrangler.toml` — Better Auth 1.6+ requires it
 - `yarn dev` runs `nuxt dev` — secrets are read from `.env`. `.dev.vars` is only used by `wrangler dev` (not the default dev command here)
 - Never rely on `process.env` alone in server code — always merge with `event.context.cloudflare?.env` via `cloudflareEnv()` in `server/utils/api-response.ts`
-- Schema: `yarn schema:local` / `yarn schema:remote`
+- Schema migrations: `yarn schema:local` (local) / `yarn schema:remote` (remote) — run automatically on `yarn deploy`
 - Deploys require patching the generated Nitro/Cloudflare process shim — always use `yarn deploy`, never `wrangler deploy` directly
 - Secrets: managed via `wrangler secret put <KEY>` or `wrangler secret bulk <file.json>` — never `wrangler pages secret`
 - Wildcard subdomains (`*.krabiclaw.com`) are handled automatically via Worker route — no per-tenant DNS setup needed
@@ -61,12 +61,17 @@ When an internal API returns errors, nulls, or malformed data, fix the API contr
 
 ## Database Schema Workflow
 
-1. `schema.sql` is the single source of truth — edit this, never add numbered migration files
-2. Apply locally: `yarn schema:local` — remotely: `yarn schema:remote`
-3. Greenfield — drop and recreate freely when a rebuild is cleaner
-4. No inline migration blocks, compatibility columns, duplicate indexes, or legacy aliases in `schema.sql`
-5. Better Auth tables must use exact camelCase column names; app tables use snake_case
-6. Any schema change must be checked against current server queries before finishing
+Migrations are managed via **wrangler D1 migrations** — applied automatically on every deploy.
+
+1. To change the schema, create a new migration: `wrangler d1 migrations create DB <description>`
+2. Edit the generated file in `migrations/` — write only the delta (ALTER TABLE, CREATE TABLE, etc.)
+3. Apply locally to test: `yarn schema:local`
+4. Migrations run automatically on deploy: `yarn deploy` runs `wrangler d1 migrations apply DB --remote` before uploading the Worker
+5. Never write ad-hoc SQL files in `scripts/` for schema changes — they will not be tracked and will cause production outages
+6. Better Auth tables must use exact camelCase column names; app tables use snake_case
+7. Any schema change must be checked against current server queries before finishing
+
+The current canonical schema is `migrations/0001_initial.sql`. Each subsequent migration file is the source of truth for its delta.
 
 ---
 
