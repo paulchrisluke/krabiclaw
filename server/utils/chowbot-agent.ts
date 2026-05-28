@@ -2663,8 +2663,15 @@ async function executeTool(
       if (input.location_id !== undefined) updates.location_id = toSqlText(input.location_id) ?? null
       if (input.status !== undefined && ['active', 'inactive', 'sold_out'].includes(String(input.status))) updates.status = String(input.status)
       if (input.sort_order !== undefined) updates.sort_order = Number(input.sort_order)
-      if (input.featured !== undefined) updates.featured = typeof input.featured === 'boolean' ? input.featured : false
-      if (input.featured_sort_order !== undefined) updates.featured_sort_order = Number(input.featured_sort_order)
+      if (input.featured !== undefined) {
+        if (typeof input.featured !== 'boolean') return { error: 'featured must be a boolean' }
+        updates.featured = input.featured
+      }
+      if (input.featured_sort_order !== undefined) {
+        const parsed = Number(input.featured_sort_order)
+        if (!Number.isFinite(parsed)) return { error: 'featured_sort_order must be a number' }
+        updates.featured_sort_order = parsed
+      }
       if (input.seo_title !== undefined) updates.seo_title = toSqlText(input.seo_title) ?? null
       if (input.seo_description !== undefined) updates.seo_description = toSqlText(input.seo_description) ?? null
       const updated = await updateExperience(db, siteId, id, updates as ApiValue)

@@ -22,6 +22,8 @@ import { parseArgs } from 'node:util'
 import { spawnSync } from 'node:child_process'
 import { join, relative } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { createInterface } from 'node:readline'
 
 // ── Minimal YAML parser for intake files ──────────────────────────────────────
@@ -226,34 +228,63 @@ if (NON_INTERACTIVE) {
     process.exit(1)
   }
   console.log(`  Using existing approval: approved by ${approved.approved_by} at ${approved.approved_at}`)
+  
+  // Run dry-run to generate current manifests
+  step(1, 'Dry run — fetch Google Places data, scan images, generate manifests')
+  run('dry-run', [...importArgs, '--dry-run'])
+  
+  // Verify hash matches approved.json
+  const manifestPath = join(OUT_DIR, 'client-manifest.json')
+  const seedPath = join(OUT_DIR, 'seed-preview.sql')
+  if (!existsSync(manifestPath) || !existsSync(seedPath)) {
+    console.error('Error: Dry-run failed to generate manifests.')
+    process.exit(1)
+  }
+  
+  const manifestContent = await readFile(manifestPath, 'utf8')
+  const seedContent = await readFile(seedPath, 'utf8')
+  const currentHash = createHash('sha256')
+    .update(manifestContent)
+    .update(seedContent)
+    .digest('hex')
+  
+  if (currentHash !== approved.manifest_hash) {
+    console.error('Error: Manifest hash mismatch — the dry-run output has changed since approval.')
+    console.error('  Re-run interactively for human review: yarn client:onboard --slug ${SLUG} --vertical ${VERTICAL}')
+    process.exit(1)
+  }
+  
+  console.log('  Hash verified — proceeding with apply')
 }
 
 // ── Step 1: Dry run ───────────────────────────────────────────────────────────
 
-step(1, 'Dry run — fetch Google Places data, scan images, generate manifests')
-run('dry-run', [...importArgs, '--dry-run'])
+if (!NON_INTERACTIVE) {
+  step(1, 'Dry run — fetch Google Places data, scan images, generate manifests')
+  run('dry-run', [...importArgs, '--dry-run'])
 
-// Print manifest paths for review
-const reviewFiles = [
-  'client-manifest.json',
-  'seed-preview.sql',
-  'route-manifest.json',
-  'media-manifest.json',
-  'missing-fields.json',
-  'copy-scan.txt',
-]
-console.log(`\n  Review these files before continuing:\n`)
-for (const f of reviewFiles) {
-  const p = join(OUT_DIR, f)
-  if (existsSync(p)) console.log(`    ${relative(process.cwd(), p)}`)
+  // Print manifest paths for review
+  const reviewFiles = [
+    'client-manifest.json',
+    'seed-preview.sql',
+    'route-manifest.json',
+    'media-manifest.json',
+    'missing-fields.json',
+    'copy-scan.txt',
+  ]
+  console.log(`\n  Review these files before continuing:\n`)
+  for (const f of reviewFiles) {
+    const p = join(OUT_DIR, f)
+    if (existsSync(p)) console.log(`    ${relative(process.cwd(), p)}`)
+  }
+
+  await gate('Review the manifests above. Check locations, seed SQL, copy scan, and images.')
+
+  // ── Step 2: Approve ───────────────────────────────────────────────────────────
+
+  step(2, 'Approve — sign manifest hash to gate the apply step')
+  run('approve', [...importArgs, '--approve'])
 }
-
-await gate('Review the manifests above. Check locations, seed SQL, copy scan, and images.')
-
-// ── Step 2: Approve ───────────────────────────────────────────────────────────
-
-step(2, 'Approve — sign manifest hash to gate the apply step')
-run('approve', [...importArgs, '--approve'])
 
 // ── Step 3: Apply ─────────────────────────────────────────────────────────────
 

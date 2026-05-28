@@ -750,7 +750,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   photo_urls TEXT,                    -- JSON array
   helpful_count INTEGER DEFAULT 0,
   status TEXT DEFAULT 'pending',
-  source TEXT DEFAULT 'direct' CHECK (source IN ('direct','google_maps','llm_generated','manual_override')),
+  source TEXT DEFAULT 'direct' CHECK (source IN ('direct','google','google_maps','llm_generated','manual_override')),
   ip_hash TEXT,
   user_agent TEXT,
   created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),

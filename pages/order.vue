@@ -8,7 +8,7 @@
           <h1 class="text-2xl font-bold text-default">Online ordering not available</h1>
           <p class="mt-2 text-muted">We'd love to see you in person.</p>
         </div>
-        <UButton to="/reservations" size="lg" color="primary" class="rounded-full">Reserve a Table</UButton>
+        <UButton :to="orderCopy.ctaRoute" size="lg" color="primary" class="rounded-full">{{ orderCopy.reserveCta }}</UButton>
       </div>
 
       <template v-else>

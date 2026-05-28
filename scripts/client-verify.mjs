@@ -238,15 +238,19 @@ if (SITE_ID) {
 info('── Forbidden copy scan')
 
 const forbidden = FORBIDDEN_COPY[VERTICAL] ?? []
+const foundViolations = [];
 for (const [route, html] of Object.entries(pageHtml)) {
   for (const str of forbidden) {
     if (html.toLowerCase().includes(str.toLowerCase())) {
+      foundViolations.push({ route, str });
       fail(`Forbidden copy "${str}" on ${route}`)
     }
   }
 }
 
-if (forbidden.length === 0 || Object.keys(pageHtml).length === 0) {
+if (foundViolations.length > 0) {
+  fail(`Forbidden copy found: ${foundViolations.map(f => `"${f.str}" on ${f.route}`).join(', ')}`)
+} else if (forbidden.length === 0) {
   pass('No forbidden copy to scan (or no HTML fetched)')
 } else {
   pass('Forbidden copy scan complete')

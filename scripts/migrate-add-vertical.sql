@@ -31,6 +31,14 @@ END;
 -- Tracks where the description copy came from: google_maps | client_supplied | llm_generated | manual_override
 ALTER TABLE business_locations ADD COLUMN description_provenance TEXT;
 
+-- Validate description_provenance values
+CREATE TRIGGER IF NOT EXISTS business_locations_description_provenance_check
+BEFORE INSERT OR UPDATE OF description_provenance ON business_locations
+WHEN NEW.description_provenance IS NOT NULL AND NEW.description_provenance NOT IN ('google_maps', 'client_supplied', 'llm_generated', 'manual_override')
+BEGIN
+  SELECT RAISE(ABORT, 'Invalid description_provenance value');
+END;
+
 -- NOTE: location_qa.source and reviews.source CHECK constraints are widened in schema.sql.
 -- SQLite does not support ALTER COLUMN — fresh installs pick up the new constraint automatically.
 -- For existing DBs, the narrower constraint remains; new rows seeded by client:import use

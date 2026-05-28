@@ -81,9 +81,9 @@ export const useBootstrap = () => {
   const empty = emptyBootstrap();
 
   const nuxtApp = useNuxtApp();
-  const { data, error } =
+  const { data, error, pending } =
     isPlatform || !siteId
-      ? { data: ref<BootstrapPayload>(empty), error: ref<Error | null>(null) }
+      ? { data: ref<BootstrapPayload>(empty), error: ref<Error | null>(null), pending: ref(false) }
       : useAsyncData<BootstrapPayload>(
           key,
           () => $fetch<BootstrapPayload>(url),
@@ -260,6 +260,7 @@ export const useBootstrap = () => {
 
   return {
     data,
+    pending,
     locations,
     location,
     config,

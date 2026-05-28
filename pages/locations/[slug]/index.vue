@@ -410,7 +410,7 @@ const featuredItems = computed(() => {
     const items = (bootstrapMenu.value as { items?: ApiRecord[] } | null)?.items ?? []
     return items.filter((i: ApiRecord) => i.featured || i.available !== false).slice(0, 3)
   } else {
-    // Use featured experiences
+    // Use featured experiences, normalized to menu item shape
     const experiences = experiencesList.value || []
     const featured = experiences
       .filter(exp => exp.status === 'active' && exp.featured)
@@ -423,7 +423,19 @@ const featuredItems = computed(() => {
         if (sa !== sb) return sa - sb
         return String(a.title ?? '').localeCompare(String(b.title ?? ''))
       })
-    return (featured.length > 0 ? featured : experiences.filter(exp => exp.status === 'active')).slice(0, 3)
+    const toUse = featured.length > 0 ? featured : experiences.filter(exp => exp.status === 'active')
+    // Normalize experience objects to match menu item shape expected by template
+    return toUse.slice(0, 3).map(exp => ({
+      id: exp.id,
+      name: exp.title,
+      description: exp.tagline || (exp.summary ? exp.summary.slice(0, 120) : ''),
+      public_url: exp.image_url || null,
+      price_amount: typeof exp.price === 'number' ? exp.price : null,
+      price_display: exp.price,
+      kind: 'image',
+      featured: exp.featured,
+      available: exp.status === 'active',
+    }))
   }
 })
 

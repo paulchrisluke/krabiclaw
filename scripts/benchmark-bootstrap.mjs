@@ -82,17 +82,28 @@ async function runAutocannon(url, options) {
 
 async function probeResponse(url) {
   const startedAt = Date.now();
-  const response = await fetch(url, {
-    method: "GET",
-    headers: { "cache-control": "no-cache" },
-  });
-  const buffer = await response.arrayBuffer();
-  const endedAt = Date.now();
-  return {
-    statusCode: response.status,
-    responseBytes: buffer.byteLength,
-    singleRequestMs: endedAt - startedAt,
-  };
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { "cache-control": "no-cache" },
+    });
+    const buffer = await response.arrayBuffer();
+    const endedAt = Date.now();
+    return {
+      statusCode: response.status,
+      responseBytes: buffer.byteLength,
+      singleRequestMs: endedAt - startedAt,
+      errorMessage: null,
+    };
+  } catch (err) {
+    const endedAt = Date.now();
+    return {
+      statusCode: 0,
+      responseBytes: 0,
+      singleRequestMs: endedAt - startedAt,
+      errorMessage: err && err.message ? String(err.message) : 'Unknown error',
+    };
+  }
 }
 
 function buildDefaultCases(params) {
@@ -268,7 +279,12 @@ async function main() {
       return sum;
     }, 0);
     const statusCodeDistribution = runSamples.reduce((acc, sample) => {
-      const total = (sample["1xx"] || 0) + (sample["2xx"] || 0) + (sample["3xx"] || 0) + (sample["4xx"] || 0) + (sample["5xx"] || 0);
+      const total =
+        (sample["1xx"] || 0) +
+        (sample["2xx"] || 0) +
+        (sample["3xx"] || 0) +
+        (sample["4xx"] || 0) +
+        (sample["5xx"] || 0);
       acc["1xx"] = (acc["1xx"] || 0) + (sample["1xx"] || 0);
       acc["2xx"] = (acc["2xx"] || 0) + (sample["2xx"] || 0);
       acc["3xx"] = (acc["3xx"] || 0) + (sample["3xx"] || 0);
@@ -307,21 +323,17 @@ async function main() {
     });
   }
 
+  const p95List = results.map((item) => item.p95Ms);
+  const responseBytesList = results.map((item) => item.responseBytes);
   const summary = {
     startedAt: startedAtIso,
     completedAt: new Date().toISOString(),
     config,
     routesBenchmarked: results.length,
     aggregate: {
-      medianP95Ms: quantile(
-        results.map((item) => item.p95Ms).sort((a, b) => a - b),
-        0.5,
-      ),
-      medianResponseBytes: quantile(
-        results.map((item) => item.responseBytes).sort((a, b) => a - b),
-        0.5,
-      ),
-      maxP95Ms: Math.max(...results.map((item) => item.p95Ms)),
+      medianP95Ms: p95List.length > 0 ? quantile(p95List.sort((a, b) => a - b), 0.5) : null,
+      medianResponseBytes: responseBytesList.length > 0 ? quantile(responseBytesList.sort((a, b) => a - b), 0.5) : null,
+      maxP95Ms: p95List.length > 0 ? Math.max(...p95List) : null,
       totalErrors: results.reduce(
         (sum, item) => sum + item.errors + item.timeouts,
         0,

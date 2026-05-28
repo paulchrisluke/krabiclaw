@@ -288,12 +288,12 @@ async function submitBooking() {
   }
 }
 
-// SEO + structured data: make it reactive so it handles async fetch correctly!
-useBreadcrumbSchema(computed(() => [
+// SEO + structured data
+useBreadcrumbSchema([
   { name: 'Home', url: `${siteUrl}/` },
   { name: 'Experiences', url: `${siteUrl}/experiences` },
   { name: experience.value?.title ?? slug, url: `${siteUrl}/experiences/${slug}` },
-]))
+])
 
 useSeoMeta({
   title: computed(() => experience.value?.seo_title ?? (experience.value ? `${experience.value.title} | Experiences` : 'Experience')),

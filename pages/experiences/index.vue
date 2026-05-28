@@ -14,7 +14,7 @@
       <!-- Loading -->
       <div v-if="pending" class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         <div v-for="i in 3" :key="i" class="animate-pulse">
-          <div class="aspect-4/3 rounded-lg bg-muted" />
+          <div class="aspect-[4/3] rounded-lg bg-muted" />
           <div class="mt-4 h-4 w-2/3 rounded bg-muted" />
           <div class="mt-2 h-3 w-full rounded bg-muted" />
         </div>
@@ -33,7 +33,7 @@
           :to="`/experiences/${exp.slug}`"
           class="group block no-underline"
         >
-          <div class="relative aspect-4/3 overflow-hidden rounded-lg bg-muted">
+          <div class="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
             <img
               v-if="exp.image_url"
               :src="exp.image_url"

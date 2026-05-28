@@ -53,12 +53,13 @@ const registry = {
     contactSubtitle: 'For a visit or product question, head to your nearest location — for press, partnerships, wholesale or anything else, use the form below.',
     contactSubjectCatering: 'Events & wholesale',
     reserveCta: 'Visit us',
-    reservationPageKicker: 'Reservations',
-    reservationFormTitle: 'Make a Reservation',
-    reservationRequestButton: 'Request Reservation',
-    reservationWord: 'reservation',
-    reservationExploreLabel: 'Learn More',
-    reservationExploreRoute: '/about',
+    // The following reservation keys are not relevant for retail; replaced with visit/locations language or disabled
+    reservationPageKicker: undefined,
+    reservationFormTitle: undefined,
+    reservationRequestButton: undefined,
+    reservationWord: undefined,
+    reservationExploreLabel: 'Plan a visit',
+    reservationExploreRoute: '/locations',
     locationGroupLine: (count: number) => `${count} location${count === 1 ? '' : 's'}, one shared vision.`,
     postsEyebrow: 'From the team',
     bookingNotesPlaceholder: 'Accessibility requests, group details, or other notes.',
@@ -114,6 +115,9 @@ const registry = {
 } as const satisfies Record<SiteVertical, object>
 
 export function getVerticalCopy(vertical: string | null | undefined) {
-  const v = (vertical ?? 'restaurant') as SiteVertical
-  return registry[v] ?? registry.restaurant
+  const v = String(vertical ?? 'restaurant')
+  if (Object.prototype.hasOwnProperty.call(registry, v)) {
+    return registry[v as SiteVertical]
+  }
+  return registry.restaurant
 }

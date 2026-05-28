@@ -29,7 +29,7 @@ import { readdir, stat, mkdir, writeFile, readFile } from 'node:fs/promises'
 import { join, extname, basename } from 'node:path'
 import { existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { execSync, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 
 // ── Args ─────────────────────────────────────────────────────────────────────
 
@@ -49,6 +49,13 @@ const { values: rawArgs } = parseArgs({
 })
 
 const SLUG        = rawArgs.slug
+
+// Slug validation: only allow letters, digits, hyphens, underscores
+const SLUG_SAFE_PATTERN = /^[a-zA-Z0-9_-]+$/
+if (!SLUG_SAFE_PATTERN.test(SLUG)) {
+  console.error('Error: --slug contains invalid characters. Only letters, digits, hyphens, and underscores are allowed.')
+  process.exit(1)
+}
 const VERTICAL    = rawArgs.vertical
 const MAPS_URLS   = rawArgs['maps-url'] ?? []
 const IMAGES_DIR  = rawArgs.images
@@ -293,8 +300,17 @@ async function scanImages(dir) {
     return { error: `Image directory not found: ${dir}`, files: [] }
   }
 
-  const dirStat = await stat(dir)
-  const entries = await readdir(dir)
+  // Resolve and normalize path to prevent traversal attacks
+  const resolvedPath = join(process.cwd(), dir)
+  const normalizedPath = join(resolvedPath)
+  
+  // Reject absolute paths or paths outside cwd
+  if (dir.startsWith('/') || dir.startsWith('..') || !normalizedPath.startsWith(process.cwd())) {
+    return { error: `Invalid image directory path: ${dir}`, files: [] }
+  }
+
+  const dirStat = await stat(resolvedPath)
+  const entries = await readdir(resolvedPath)
   const files = []
 
   const brandLabel = SLUG.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
@@ -303,8 +319,13 @@ async function scanImages(dir) {
     const ext = extname(entry).toLowerCase()
     if (!IMAGE_EXTS.has(ext)) continue
 
-    const fullPath = join(dir, entry)
+    const fullPath = join(resolvedPath, entry)
     const info = await stat(fullPath)
+    
+    // Reject symlinks
+    if (info.isSymbolicLink()) {
+      continue
+    }
     const normalName = normalizeFilename(basename(entry, ext)) + ext
 
     const contents = await readFile(fullPath)
@@ -441,8 +462,8 @@ INSERT INTO business_locations (
 
   const heroAssets = mediaManifest.files.slice(0, 3).map((f, i) => {
     const assetId = `asset-${SLUG}-${i}`
-    return `INSERT INTO media_assets (id, site_id, public_url, alt_text, kind, status)
-VALUES ('${assetId}', '${siteId}', '${f.proposed_public_path}', '${brandName}', 'image', 'active')
+    return `INSERT INTO media_assets (id, site_id, organization_id, public_url, alt_text, kind, provider, source, status)
+VALUES ('${assetId}', '${siteId}', '${orgId}', '${f.public_url}', '${brandName}', 'image', 'local', 'import', 'active')
 ON CONFLICT(id) DO UPDATE SET
   public_url = excluded.public_url,
   alt_text = excluded.alt_text,
@@ -718,8 +739,9 @@ if (MODE === 'apply') {
   console.log(`\n→ Executing seed SQL against ${REMOTE ? 'remote' : 'local'} D1...`)
   const d1Flag = REMOTE ? '--remote' : '--local'
   try {
-    execSync(
-      `yarn wrangler d1 execute DB ${d1Flag} --file "${seedPath}"`,
+    spawnSync(
+      'yarn',
+      ['wrangler', 'd1', 'execute', 'DB', d1Flag, '--file', seedPath],
       { stdio: 'inherit', cwd: process.cwd() }
     )
   } catch {
@@ -828,8 +850,14 @@ if (existsSync(overridesPath)) {
         if (overrides.address)             { places[0].formatted_address = overrides.address }
         if (overrides.title)               { places[0].name = overrides.title }
         if (overrides.website)             { places[0].website = overrides.website }
-        if (overrides.lat)                 { places[0].lat = parseFloat(overrides.lat) }
-        if (overrides.lng)                 { places[0].lng = parseFloat(overrides.lng) }
+        if (overrides.lat) {
+          const lat = parseFloat(overrides.lat)
+          if (Number.isFinite(lat)) places[0].lat = lat
+        }
+        if (overrides.lng) {
+          const lng = parseFloat(overrides.lng)
+          if (Number.isFinite(lng)) places[0].lng = lng
+        }
       }
       for (const k of keys) console.log(`  ${k} = ${JSON.stringify(overrides[k])}`)
     }

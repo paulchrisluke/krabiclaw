@@ -120,9 +120,9 @@ if (verifyResult.status === 0) {
 } else {
   console.error(`  ✗ Post-deploy verify FAILED`)
   console.error(`\n  The Worker is already deployed. Fix the issues reported above, then:`)
-  console.error(`    yarn client:deploy --slug ${SLUG} --skip-seed --skip-deploy`)
+  console.error(`    yarn client:deploy --slug ${SLUG} --vertical ${VERTICAL} --site-id ${SITE_ID} --skip-seed --skip-deploy`)
   console.error(`  Or redeploy with fixes:`)
-  console.error(`    yarn client:deploy --slug ${SLUG} --skip-seed`)
+  console.error(`    yarn client:deploy --slug ${SLUG} --vertical ${VERTICAL} --site-id ${SITE_ID} --skip-seed`)
   console.log(hr('═'))
   process.exit(verifyResult.status ?? 1)
 }

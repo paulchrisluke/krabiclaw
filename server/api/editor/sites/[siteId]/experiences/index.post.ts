@@ -36,6 +36,15 @@ export default defineEventHandler(async (event) => {
   const title = String(body.title ?? '').trim()
   if (!title) return jsonResponse({ error: 'title is required' }, { status: 400 })
 
+  // Validate featured and featured_sort_order when explicitly provided
+  if ('featured' in body && typeof body.featured !== 'boolean') {
+    return jsonResponse({ error: 'featured must be a boolean' }, { status: 400 })
+  }
+  if ('featured_sort_order' in body) {
+    const parsed = optionalInteger(body.featured_sort_order)
+    if (parsed === null) return jsonResponse({ error: 'featured_sort_order must be an integer' }, { status: 400 })
+  }
+
   const experience = await createExperience(db, site.organization_id, siteId, {
     title,
     tagline: body.tagline ? String(body.tagline).trim() : null,

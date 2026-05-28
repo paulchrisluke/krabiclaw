@@ -283,8 +283,8 @@ export default defineEventHandler(async (event) => {
       .bind(siteId)
       .first<{ cnt: number }>(),
 
-    // Experiences list (for /experiences index and home page)
-    (page === "experiences" && !experienceSlug) || page === "home"
+    // Experiences list (for /experiences index, home page, and location pages)
+    (page === "experiences" && !experienceSlug) || page === "home" || page === "location"
       ? listExperiences(db, siteId, { activeOnly: true })
       : Promise.resolve([]),
 

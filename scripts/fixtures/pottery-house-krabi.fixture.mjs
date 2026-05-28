@@ -27,7 +27,6 @@
  */
 
 import { parseArgs } from 'node:util'
-import { _spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 
@@ -221,7 +220,9 @@ section('Contact data (phone and email)')
 
 if (bootstrapData) {
   const phones = (bootstrapData.locations ?? []).map(l => l.phone).filter(Boolean)
+  const emails = (bootstrapData.locations ?? []).map(l => l.email).filter(Boolean)
   assert('At least one location has a phone number', phones.length >= 1, true)
+  assert('At least one location has an email', emails.length >= 1, true)
 }
 
 // ── 8. Q&A presence ──────────────────────────────────────────────────────────

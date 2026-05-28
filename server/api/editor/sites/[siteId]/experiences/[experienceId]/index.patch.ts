@@ -55,7 +55,10 @@ export default defineEventHandler(async (event) => {
     if (sortOrder === null) return jsonResponse({ error: 'sort_order must be an integer' }, { status: 400 })
     updates.sort_order = sortOrder
   }
-  if ('featured' in body) updates.featured = typeof body.featured === 'boolean' ? body.featured : false
+  if ('featured' in body) {
+    if (typeof body.featured !== 'boolean') return jsonResponse({ error: 'featured must be a boolean' }, { status: 400 })
+    updates.featured = body.featured
+  }
   if ('featured_sort_order' in body) {
     const featuredSortOrder = optionalInteger(body.featured_sort_order)
     if (featuredSortOrder === null) return jsonResponse({ error: 'featured_sort_order must be an integer' }, { status: 400 })

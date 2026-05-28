@@ -32,7 +32,7 @@
               class="px-6 py-4 bg-elevated text-muted border-t border-default"
               role="region"
             >
-              <p v-html="faq.a"></p>
+              <p>{{ faq.a }}</p>
             </div>
           </div>
         </div>
@@ -128,7 +128,7 @@ const sections = [
     faqs: [
       {
         q: 'What domain do I get on the free plan?',
-        a: 'On the free plan you get a subdomain: <strong>your-business.krabiclaw.com</strong>. It is fully live, indexed by Google, and shareable with customers from day one.'
+        a: 'On the free plan you get a subdomain: your-business.krabiclaw.com. It is fully live, indexed by Google, and shareable with customers from day one.'
       },
       {
         q: 'How do I connect my own domain?',
