@@ -503,13 +503,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Contact Phone',
         type: 'text',
         sources: ['manual'],
-        defaultValue: '+66 81 154 3606'
+        defaultValue: ''
       },
       'contact.email': {
         label: 'Contact Email',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'hello@sayakitchen.example'
+        defaultValue: ''
       }
     }
   }

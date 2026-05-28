@@ -13,7 +13,19 @@
         <em v-else class="saya-italic">What guests are saying</em>
       </h1>
     </header>
-    <SayaReviews :reviews="googleReviews" :rating-summary="googleReviewSummary" :show-title="false" />
+
+    <!-- Reviews grid -->
+    <SayaReviews :reviews="visibleReviews" :rating-summary="googleReviewSummary" :show-title="false" />
+
+    <!-- Load more -->
+    <div v-if="hasMore" class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8 text-center">
+      <button
+        class="inline-flex items-center gap-2 rounded-full border border-default px-8 py-3 text-[11px] font-medium uppercase tracking-widest text-default transition hover:bg-muted"
+        @click="loadMore"
+      >
+        Show more <span class="opacity-50">({{ remaining }} remaining)</span>
+      </button>
+    </div>
   </div>
 </template>
 
@@ -25,13 +37,13 @@ if (!siteId) throw createError({ statusCode: 404 })
 
 const { googleBusiness } = useBootstrap()
 const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
-const googleReviews = computed(() => googleBusiness.value?.reviews ?? [])
+const allReviews = computed(() => googleBusiness.value?.reviews ?? [])
 const googleReviewRating = r => starRatingMap[r.starRating] ?? Number(r.starRating ?? r.rating ?? 0)
 
 const googleReviewSummary = computed(() => {
   const summary = googleBusiness.value?.business?.reviewSummary
   if (!summary) {
-    const ratings = googleReviews.value.map(googleReviewRating).filter(Boolean)
+    const ratings = allReviews.value.map(googleReviewRating).filter(Boolean)
     if (!ratings.length) return null
     return { average: (ratings.reduce((s, r) => s + r, 0) / ratings.length).toFixed(1), count: ratings.length }
   }
@@ -39,6 +51,14 @@ const googleReviewSummary = computed(() => {
   if (!Number.isFinite(average) || average <= 0) return null
   return { average: average.toFixed(1), count: summary.totalReviewCount }
 })
+
+// Progressive reveal — 8 at a time
+const PAGE_SIZE = 8
+const visibleCount = ref(PAGE_SIZE)
+const visibleReviews = computed(() => allReviews.value.slice(0, visibleCount.value))
+const hasMore = computed(() => visibleCount.value < allReviews.value.length)
+const remaining = computed(() => allReviews.value.length - visibleCount.value)
+function loadMore() { visibleCount.value += PAGE_SIZE }
 
 const restaurantName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Restaurant')
 
@@ -55,7 +75,7 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'Restaurant',
     name: restaurantName.value,
-    review: googleReviews.value.map(r => ({
+    review: allReviews.value.map(r => ({
       '@type': 'Review',
       author: { '@type': 'Person', name: r.reviewer?.displayName || 'Guest' },
       datePublished: r.createTime,

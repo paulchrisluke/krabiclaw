@@ -140,14 +140,24 @@ export default defineEventHandler(async (event) => {
       ORDER BY created_at DESC LIMIT 100
     `).bind(siteId, locationId).all<Record<string, unknown>>() : Promise.resolve({ results: [] as Record<string, unknown>[] }),
 
-    // Q&A list (type F — only for qa page)
-    siteId && locationId && dataType === 'qa' ? db.prepare(`
-      SELECT id, question, question_author, question_date,
-             answer, answer_author, answer_date, is_owner_answer, upvote_count
-      FROM location_qa
-      WHERE location_id = ? AND site_id = ? AND status = 'published'
-      ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at
-    `).bind(locationId, siteId).all<Record<string, unknown>>() : Promise.resolve({ results: [] as Record<string, unknown>[] }),
+    // Q&A list (type F — for /qa page: all site locations; for /locations/[slug]/qa: one location)
+    siteId && dataType === 'qa' ? (
+      locationId
+        ? db.prepare(`
+            SELECT id, question, question_author, question_date,
+                   answer, answer_author, answer_date, is_owner_answer, upvote_count
+            FROM location_qa
+            WHERE location_id = ? AND site_id = ? AND status = 'published'
+            ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at
+          `).bind(locationId, siteId).all<Record<string, unknown>>()
+        : db.prepare(`
+            SELECT id, question, question_author, question_date,
+                   answer, answer_author, answer_date, is_owner_answer, upvote_count
+            FROM location_qa
+            WHERE site_id = ? AND status = 'published'
+            ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at
+          `).bind(siteId).all<Record<string, unknown>>()
+    ) : Promise.resolve({ results: [] as Record<string, unknown>[] }),
 
     // Site locales for language switching
     db.prepare(`

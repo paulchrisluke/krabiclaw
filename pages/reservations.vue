@@ -231,8 +231,8 @@ onMounted(async () => {
 if (!process.client) policiesBody.value = rawPoliciesHtml
 
 // ── Contact ───────────────────────────────────────────────────────────────
-const contactPhone = computed(() => getField('contact.phone', (site as ApiValue)?.config?.phone || '+66 81 154 3606'))
-const contactEmail = computed(() => getField('contact.email', (site as ApiValue)?.config?.email || 'info@kikuzuki-thailand.com'))
+const contactPhone = computed(() => getField('contact.phone', (site as ApiValue)?.config?.phone || ''))
+const contactEmail = computed(() => getField('contact.email', (site as ApiValue)?.config?.email || ''))
 
 // ── Form state ────────────────────────────────────────────────────────────
 const reservationForm = ref({ name: '', email: '', phone: '', date: '', time: '', guests: '', requests: '' })

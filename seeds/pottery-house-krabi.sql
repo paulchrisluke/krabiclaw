@@ -80,7 +80,7 @@ INSERT INTO business_locations (
 ) VALUES (
   'loc-pottery-house', 'org-pottery-house', 'site-pottery-house', 'krabi', 'Pottery House Krabi', 'Krabi',
   '{"addressLines":[""],"locality":"Krabi","administrativeArea":"Krabi","postalCode":"81000","country":"TH"}',
-  NULL,
+  '+66626505890',
   'bamboo.chow@gmail.com',
   'https://maps.app.goo.gl/pottery-house-krabi',
   8.0557285, 98.7504791,
@@ -96,7 +96,7 @@ INSERT INTO business_locations (
 ), (
   'loc-pottery-beachfront', 'org-pottery-house', 'site-pottery-house', 'klong-muang-beach', 'Pottery House — Beachfront at Klong Muang', 'Krabi',
   '{"addressLines":["Sea View, Klong Muang"],"locality":"Krabi","administrativeArea":"Krabi","postalCode":"81000","country":"TH"}',
-  NULL,
+  '+66626505890',
   'bamboo.chow@gmail.com',
   'https://maps.app.goo.gl/pottery-house-klong-muang',
   8.1180, 98.7720,

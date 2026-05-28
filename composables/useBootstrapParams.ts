@@ -40,6 +40,11 @@ export const useBootstrapParams = (): BootstrapParams => {
   if (path.startsWith('/contact')) return { page: 'contact', location: null, menu: false, data: null }
   if (path.startsWith('/reservations')) return { page: 'reservations', location: null, menu: false, data: null }
   if (path.startsWith('/order')) return { page: 'order', location: null, menu: false, data: null }
+  if (path.startsWith('/qa')) return { page: 'qa', location: null, menu: false, data: 'qa' }
+  if (path.startsWith('/reviews')) return { page: 'reviews', location: null, menu: false, data: null }
+  if (path.startsWith('/posts')) return { page: 'posts', location: null, menu: false, data: null }
+  if (path.startsWith('/experiences')) return { page: 'experiences', location: null, menu: false, data: null }
+  if (path.startsWith('/photos')) return { page: 'photos', location: null, menu: false, data: null }
 
   return { page: null, location: null, menu: false, data: null }
 }
