@@ -69,15 +69,15 @@
           <!-- Dark mode toggle -->
           <UColorModeButton variant="ghost" color="neutral" size="sm" />
 
-          <!-- Primary CTA: Order Now if delivery links exist, otherwise Reserve -->
+          <!-- Primary CTA: Order Now if delivery links exist, otherwise dynamic Reserve/Book -->
           <UButton
-            :to="hasOrderLinks ? '/order' : '/reservations'"
+            :to="primaryCtaPath"
             color="primary"
             variant="solid"
             size="sm"
             class="rounded-full"
           >
-            {{ hasOrderLinks ? 'Order Now' : 'Reserve' }}
+            {{ primaryCtaLabel }}
           </UButton>
 
           <!-- Mobile menu toggle -->
@@ -213,7 +213,12 @@ const logoUrl = computed(() => (site as Site | null)?.logo_url || null)
 useUpgradeModal()
 
 // Shared bootstrap — same key as page component + footer → single SSR request
-const { locations: bootstrapLocations, locales: bootstrapLocales, hasExperiences } = useBootstrap()
+const { locations: bootstrapLocations, locales: bootstrapLocales, hasExperiences, menu } = useBootstrap()
+
+const hasMenu = computed(() => {
+  const m = menu.value as { items?: unknown[] } | null
+  return !!(m && m.items && m.items.length > 0)
+})
 
 const availableLocales = computed(() =>
   bootstrapLocales.value.length
@@ -231,11 +236,23 @@ const languageItems = computed(() =>
 const locations = computed(() => bootstrapLocations.value)
 const singleLocation = computed(() => locations.value.length === 1 ? locations.value[0] : null)
 const singleLocationMenuPath = computed(() =>
-  singleLocation.value?.slug ? `/locations/${singleLocation.value.slug}/menu` : ''
+  (singleLocation.value?.slug && hasMenu.value) ? `/locations/${singleLocation.value.slug}/menu` : ''
 )
 const hasOrderLinks = computed(() =>
   locations.value.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
+
+const primaryCtaPath = computed(() => {
+  if (hasOrderLinks.value) return '/order'
+  if (hasExperiences.value && !hasMenu.value) return '/experiences'
+  return '/reservations'
+})
+
+const primaryCtaLabel = computed(() => {
+  if (hasOrderLinks.value) return 'Order Now'
+  if (hasExperiences.value && !hasMenu.value) return 'Book Class'
+  return 'Reserve'
+})
 
 const locationDropdownItems = computed(() => [
   locations.value.map((loc: { title: string; slug: string }) => ({

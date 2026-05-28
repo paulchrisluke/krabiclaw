@@ -31,7 +31,10 @@
     <!-- Empty state -->
     <div v-else-if="!hasMenu" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
       <div class="saya-display saya-italic text-3xl text-default mb-4">Menu coming soon.</div>
-      <p class="text-sm text-muted">Our menu for {{ location?.title }} is being prepared.</p>
+      <p class="text-sm text-muted mb-6">Our menu for {{ location?.title }} is being prepared.</p>
+      <UButton v-if="hasExperiences" to="/experiences" color="primary" variant="solid" class="rounded-full">
+        View experiences
+      </UButton>
     </div>
 
     <!-- Sticky category tab bar -->
@@ -153,7 +156,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
 
-const { location, menu: bootstrapMenu, menuItemsBySection, data: bootstrapData } = useBootstrap()
+const { location, menu: bootstrapMenu, menuItemsBySection, data: bootstrapData, hasExperiences } = useBootstrap()
 const menuLoading = computed(() => !bootstrapData.value)
 const hasMenu = computed(() => ((bootstrapMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
 

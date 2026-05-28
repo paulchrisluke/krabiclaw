@@ -70,18 +70,19 @@
             </div>
             <div class="mt-10 flex flex-wrap gap-3">
               <UButton
-                to="/reservations"
+                :to="primaryCtaPath"
                 size="lg"
                 color="primary"
                 class="rounded-full bg-white! text-black! hover:bg-zinc-100!"
               >
-                Reserve a table
+                {{ primaryCtaLabel }}
               </UButton>
               <NuxtLink
-                :to="`/locations/${slug}/menu`"
+                v-if="secondaryCtaPath"
+                :to="secondaryCtaPath"
                 class="inline-flex items-center rounded-full border border-white/50 px-6 py-2.5 text-sm font-medium uppercase tracking-widest text-white transition hover:bg-white/10"
               >
-                View menu
+                {{ secondaryCtaLabel }}
               </NuxtLink>
             </div>
           </div>
@@ -278,13 +279,13 @@
           <h2 class="saya-display-md saya-italic text-default">See you soon.</h2>
           <div class="flex flex-wrap gap-3">
             <UButton
-              to="/reservations"
+              :to="primaryCtaPath"
               color="primary"
               variant="solid"
               size="xl"
               class="rounded-full"
             >
-              Reserve a table
+              {{ primaryCtaLabel }}
             </UButton>
             <NuxtLink
               :to="`/locations/${slug}/contact`"
@@ -331,9 +332,37 @@ const {
   menu: bootstrapMenu,
   locationReviews,
   data: bootstrapData,
+  hasExperiences,
 } = useBootstrap()
 
 const pending = computed(() => !bootstrapData.value)
+
+const hasMenu = computed(() => {
+  const m = bootstrapMenu.value as { items?: unknown[] } | null
+  return !!(m && m.items && m.items.length > 0)
+})
+
+const primaryCtaPath = computed(() => {
+  if (hasExperiences.value && !hasMenu.value) return '/experiences'
+  return '/reservations'
+})
+
+const primaryCtaLabel = computed(() => {
+  if (hasExperiences.value && !hasMenu.value) return 'Book a Class'
+  return 'Reserve a table'
+})
+
+const secondaryCtaPath = computed(() => {
+  if (hasMenu.value) return `/locations/${slug.value}/menu`
+  if (hasExperiences.value) return '/experiences'
+  return null
+})
+
+const secondaryCtaLabel = computed(() => {
+  if (hasMenu.value) return 'View menu'
+  if (hasExperiences.value) return 'View experiences'
+  return null
+})
 
 // Contact fallbacks
 const displayPhone = computed(() => {

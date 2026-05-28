@@ -31,12 +31,26 @@ const props = defineProps<{
   active: 'overview' | 'menu' | 'reviews' | 'photos' | 'qa' | 'contact'
 }>()
 
-const items = computed(() => [
-  { key: 'overview', label: 'Overview', href: `/locations/${props.locationSlug}` },
-  { key: 'menu',     label: 'Menu',     href: `/locations/${props.locationSlug}/menu` },
-  { key: 'reviews',  label: 'Reviews',  href: `/locations/${props.locationSlug}/reviews` },
-  { key: 'photos',   label: 'Photos',   href: `/locations/${props.locationSlug}/photos` },
-  { key: 'qa',       label: 'Q&A',      href: `/locations/${props.locationSlug}/qa` },
-  { key: 'contact',  label: 'Visit',    href: `/locations/${props.locationSlug}/contact` }
-])
+const { menu } = useBootstrap()
+
+const hasMenu = computed(() => {
+  const m = menu.value as { items?: unknown[] } | null
+  return !!(m && m.items && m.items.length > 0)
+})
+
+const items = computed(() => {
+  const list = [
+    { key: 'overview', label: 'Overview', href: `/locations/${props.locationSlug}` }
+  ]
+  if (hasMenu.value) {
+    list.push({ key: 'menu', label: 'Menu', href: `/locations/${props.locationSlug}/menu` })
+  }
+  list.push(
+    { key: 'reviews',  label: 'Reviews',  href: `/locations/${props.locationSlug}/reviews` },
+    { key: 'photos',   label: 'Photos',   href: `/locations/${props.locationSlug}/photos` },
+    { key: 'qa',       label: 'Q&A',      href: `/locations/${props.locationSlug}/qa` },
+    { key: 'contact',  label: 'Visit',    href: `/locations/${props.locationSlug}/contact` }
+  )
+  return list
+})
 </script>

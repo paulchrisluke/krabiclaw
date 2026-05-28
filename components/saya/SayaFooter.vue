@@ -79,7 +79,8 @@
         <div>
           <h4 class="saya-eyebrow mb-5 text-inverted/50">Experience</h4>
           <ul class="space-y-3 text-sm">
-            <li><NuxtLink to="/menu" class="text-inverted/60 no-underline transition hover:text-inverted">Menu</NuxtLink></li>
+            <li v-if="hasMenu"><NuxtLink to="/menu" class="text-inverted/60 no-underline transition hover:text-inverted">Menu</NuxtLink></li>
+            <li v-if="hasExperiences"><NuxtLink to="/experiences" class="text-inverted/60 no-underline transition hover:text-inverted">Experiences</NuxtLink></li>
             <li><NuxtLink to="/reservations" class="text-inverted/60 no-underline transition hover:text-inverted">Reservations</NuxtLink></li>
             <li><NuxtLink to="/photos" class="text-inverted/60 no-underline transition hover:text-inverted">Gallery</NuxtLink></li>
             <li><NuxtLink to="/about" class="text-inverted/60 no-underline transition hover:text-inverted">Our Story</NuxtLink></li>
@@ -145,8 +146,13 @@ import { getTodayGoogleHours } from '~/utils/formatters'
 const { isPlatform, site } = useTenantSite()
 
 // Shared bootstrap — same key as the page → zero extra SSR requests
-const { locations: bootstrapLocations, error: bootstrapError, config: siteConfig } = useBootstrap()
+const { locations: bootstrapLocations, error: bootstrapError, config: siteConfig, menu, hasExperiences } = useBootstrap()
 const locationsError = computed(() => bootstrapError.value)
+
+const hasMenu = computed(() => {
+  const m = menu.value as { items?: unknown[] } | null
+  return !!(m && m.items && m.items.length > 0)
+})
 const year = new Date().getFullYear()
 const logoUrl = computed(() => (site as { logo_url?: string | null } | null)?.logo_url || null)
 const restaurantName = computed(() => {
