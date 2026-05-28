@@ -19,7 +19,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '22'
+          node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: yarn typecheck
@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '22'
+          node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: yarn lint:seeds
@@ -47,7 +47,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '22'
+          node-version: "22"
       - name: Check all pipeline scripts
         run: |
           for f in \

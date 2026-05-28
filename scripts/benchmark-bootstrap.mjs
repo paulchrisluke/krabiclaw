@@ -101,7 +101,7 @@ async function probeResponse(url) {
       statusCode: 0,
       responseBytes: 0,
       singleRequestMs: endedAt - startedAt,
-      errorMessage: err && err.message ? String(err.message) : 'Unknown error',
+      errorMessage: err && err.message ? String(err.message) : "Unknown error",
     };
   }
 }
@@ -331,8 +331,20 @@ async function main() {
     config,
     routesBenchmarked: results.length,
     aggregate: {
-      medianP95Ms: p95List.length > 0 ? quantile(p95List.sort((a, b) => a - b), 0.5) : null,
-      medianResponseBytes: responseBytesList.length > 0 ? quantile(responseBytesList.sort((a, b) => a - b), 0.5) : null,
+      medianP95Ms:
+        p95List.length > 0
+          ? quantile(
+              p95List.sort((a, b) => a - b),
+              0.5,
+            )
+          : null,
+      medianResponseBytes:
+        responseBytesList.length > 0
+          ? quantile(
+              responseBytesList.sort((a, b) => a - b),
+              0.5,
+            )
+          : null,
       maxP95Ms: p95List.length > 0 ? Math.max(...p95List) : null,
       totalErrors: results.reduce(
         (sum, item) => sum + item.errors + item.timeouts,

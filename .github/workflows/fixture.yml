@@ -13,14 +13,14 @@ on:
   workflow_dispatch:
     inputs:
       site_url:
-        description: 'Site URL (e.g. https://pottery-house-krabi.krabiclaw.com or http://staging...)'
+        description: "Site URL (e.g. https://pottery-house-krabi.krabiclaw.com or http://staging...)"
         required: true
       site_id:
-        description: 'Site ID (default: site-pottery-house-krabi)'
+        description: "Site ID (default: site-pottery-house-krabi)"
         required: false
         default: site-pottery-house-krabi
       slug:
-        description: 'Client slug (default: pottery-house-krabi)'
+        description: "Client slug (default: pottery-house-krabi)"
         required: false
         default: pottery-house-krabi
 
@@ -34,7 +34,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '22'
+          node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
       - name: Run Pottery House fixture
