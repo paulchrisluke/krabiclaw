@@ -457,34 +457,15 @@
         </div>
       </section>
 
-      <!-- ── CTA strip ───────────────────────────────────────── -->
-      <section id="section-cta" class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-20 pb-28 sm:px-6 lg:px-8">
-        <div class="max-w-3xl">
-          <h3 v-if="getField('cta.title')" data-field="cta.title" class="saya-display saya-italic text-5xl text-default leading-none">
-            {{ getField('cta.title') }}
-          </h3>
-          <!-- eslint-disable vue/no-v-html -->
-          <div
-            v-if="getField('cta.description')"
-            data-field="cta.description"
-            class="mt-5 max-w-2xl text-sm leading-7 text-muted"
-            v-html="DOMPurify.sanitize(getField('cta.description') || '')"
-          />
-          <!-- eslint-enable vue/no-v-html -->
-        </div>
-        <div class="flex flex-wrap gap-4">
-          <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">Order Now</UButton>
-          <UButton
-            :to="homeCopy.ctaRoute"
-            color="primary"
-            :variant="hasOrderLinks ? 'outline' : 'solid'"
-            size="xl"
-            class="rounded-full"
-          >
-            {{ homeCopy.reserveCta }}
-          </UButton>
-        </div>
-      </section>
+      <!-- ── CTA strip (strict component) ───────────────────── -->
+      <SayaCTA
+        :title="getField('cta.title')"
+        :description="getField('cta.description')"
+        :cta-route="homeCopy.ctaRoute"
+        :reserve-cta="homeCopy.reserveCta"
+        :bg="'default'"
+        :padding="'lg'"
+      />
     </div>
   </NuxtLayout>
 </template>
@@ -493,7 +474,8 @@
 import { useAuth } from '~/composables/useAuth'
 import { useOrganizationSchema } from '~/composables/useSchemaOrg'
 import { formatMoneyAmount } from '~/shared/money'
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
+
+import SayaCTA from '~/components/saya/SayaCTA.vue'
 
 definePageMeta({ layout: false })
 

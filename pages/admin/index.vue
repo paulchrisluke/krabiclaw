@@ -240,6 +240,16 @@
                 Translations
               </UButton>
               <UButton
+                v-if="client.site_id"
+                size="xs"
+                color="success"
+                variant="soft"
+                icon="i-heroicons-paper-airplane"
+                @click="openHandoff(client)"
+              >
+                Send Handoff
+              </UButton>
+              <UButton
                 v-if="client.org_slug"
                 size="xs"
                 color="primary"
@@ -383,6 +393,93 @@
 
     </UPageBody>
   </UPage>
+
+  <!-- Send Handoff modal -->
+  <UModal v-model:open="handoffOpen" :ui="{ content: 'max-w-lg' }">
+    <template #content>
+      <div class="p-6 space-y-5">
+        <div>
+          <h3 class="text-lg font-semibold text-highlighted">Send Handoff</h3>
+          <p class="text-sm text-muted mt-0.5">
+            {{ handoffClient?.brand_name || handoffClient?.org_name }} — invite your client to claim ownership.
+          </p>
+        </div>
+
+        <template v-if="!handoffResult">
+          <div class="space-y-4">
+            <UFormField label="Client email" required>
+              <UInput v-model="handoffEmail" type="email" placeholder="owner@restaurant.com" class="w-full" />
+            </UFormField>
+
+            <UFormField label="Their domain (optional)">
+              <UInput v-model="handoffDomain" placeholder="potteryhouse.com" class="w-full" />
+              <template #help>If you've already set up DNS, enter it here — shown as a selling point in the email and claim page.</template>
+            </UFormField>
+
+            <UFormField label="Plan to invite them to">
+              <USelect v-model="handoffPlan" :options="PLAN_OPTIONS" value-attribute="value" label-attribute="label" class="w-full" />
+            </UFormField>
+
+            <UFormField label="Stripe coupon code (optional)">
+              <UInput v-model="handoffCoupon" placeholder="e.g. FRIEND50" class="w-full" />
+              <template #help>Applied automatically at checkout. Use the coupon ID from your Stripe dashboard.</template>
+            </UFormField>
+
+            <UFormField label="Personal note (optional)">
+              <UTextarea v-model="handoffMessage" placeholder="Your website is ready — I think you'll love it!" :rows="3" class="w-full" />
+            </UFormField>
+          </div>
+
+          <p v-if="handoffError" class="text-sm text-error">{{ handoffError }}</p>
+
+          <div class="flex justify-end gap-2 pt-2">
+            <UButton variant="ghost" color="neutral" @click="handoffOpen = false">Cancel</UButton>
+            <UButton
+              color="primary"
+              :loading="handoffSending"
+              :disabled="!handoffEmail.trim()"
+              icon="i-heroicons-paper-airplane"
+              @click="sendHandoff"
+            >
+              Send invite email
+            </UButton>
+          </div>
+        </template>
+
+        <template v-else>
+          <UAlert
+            color="success"
+            variant="soft"
+            icon="i-heroicons-check-circle"
+            :title="`Invite sent to ${handoffResult.to_email}`"
+            :description="handoffResult.invited_plan ? `Plan: ${handoffResult.invited_plan} — they'll be taken to Stripe after claiming.` : 'No plan attached — they can choose after claiming.'"
+          />
+
+          <div>
+            <p class="text-sm font-medium text-highlighted mb-2">Transfer link</p>
+            <div class="flex gap-2">
+              <UInput :model-value="handoffResult.transfer_url" readonly class="flex-1 font-mono text-xs" />
+              <UButton color="neutral" variant="soft" icon="i-lucide-copy" @click="copyHandoffLink">Copy</UButton>
+              <UButton
+                color="success"
+                variant="soft"
+                icon="i-lucide-message-circle"
+                :href="`https://wa.me/?text=${encodeURIComponent('Hi! Your website is ready — claim it here: ' + handoffResult.transfer_url)}`"
+                target="_blank"
+              >
+                WhatsApp
+              </UButton>
+            </div>
+            <p class="text-xs text-muted mt-2">An invite email was also sent automatically. Share this link as a backup via WhatsApp.</p>
+          </div>
+
+          <div class="flex justify-end">
+            <UButton variant="ghost" color="neutral" @click="handoffOpen = false">Close</UButton>
+          </div>
+        </template>
+      </div>
+    </template>
+  </UModal>
 
   <!-- Delete post confirm modal -->
   <UModal v-model:open="deleteConfirmOpen" :ui="{ content: 'max-w-md' }">
@@ -571,6 +668,7 @@ interface Client {
   org_name: string
   org_slug: string | null
   plan: string
+  site_id: string | null
   brand_name: string | null
   subdomain: string | null
   source_locale: string | null
@@ -603,6 +701,80 @@ async function loadClients() {
     toast.add({ title: 'Failed to load clients', color: 'error' })
   } finally {
     clientsLoading.value = false
+  }
+}
+
+// ── Handoff modal ────────────────────────────────────────────────────────────
+interface HandoffResult {
+  transfer_url: string
+  to_email: string
+  site_name: string
+  invited_plan: string | null
+}
+
+const handoffOpen = ref(false)
+const handoffClient = ref<Client | null>(null)
+const handoffEmail = ref('')
+const handoffMessage = ref('')
+const handoffPlan = ref('')
+const handoffCoupon = ref('')
+const handoffDomain = ref('')
+const handoffSending = ref(false)
+const handoffResult = ref<HandoffResult | null>(null)
+const handoffError = ref('')
+
+const PLAN_OPTIONS = [
+  { label: 'No plan (they choose later)', value: '' },
+  { label: 'Growth — $49/mo', value: 'growth' },
+  { label: 'Managed — $149/mo', value: 'managed' },
+  { label: 'SEO Accelerator — $349/mo', value: 'seo_accelerator' },
+]
+
+function openHandoff(client: Client) {
+  handoffClient.value = client
+  handoffEmail.value = ''
+  handoffMessage.value = ''
+  handoffPlan.value = ''
+  handoffCoupon.value = ''
+  handoffDomain.value = client.subdomain ? `${client.subdomain}.krabiclaw.com` : ''
+  handoffResult.value = null
+  handoffError.value = ''
+  handoffOpen.value = true
+}
+
+async function sendHandoff() {
+  if (!handoffClient.value?.site_id || !handoffEmail.value.trim()) return
+  handoffSending.value = true
+  handoffError.value = ''
+  handoffResult.value = null
+  try {
+    const res = await $fetch<HandoffResult>(`/api/admin/sites/${handoffClient.value.site_id}/transfer`, {
+      method: 'POST',
+      body: {
+        email: handoffEmail.value.trim(),
+        message: handoffMessage.value.trim() || undefined,
+        plan: handoffPlan.value || undefined,
+        coupon: handoffCoupon.value.trim() || undefined,
+        domain: handoffDomain.value.trim() || undefined,
+      },
+    })
+    handoffResult.value = res
+  } catch (err: unknown) {
+    const data = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
+    const msg = err instanceof Error ? err.message : null
+    handoffError.value = data?.error ?? msg ?? 'Failed to send handoff'
+  } finally {
+    handoffSending.value = false
+  }
+}
+
+async function copyHandoffLink() {
+  if (!handoffResult.value?.transfer_url) return
+  try {
+    await navigator.clipboard.writeText(handoffResult.value.transfer_url)
+    toast.add({ title: 'Link copied', color: 'success' })
+  } catch {
+    toast.add({ title: 'Failed to copy', color: 'error' })
   }
 }
 

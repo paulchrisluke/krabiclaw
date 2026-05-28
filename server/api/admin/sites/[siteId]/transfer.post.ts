@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
 
+const ALLOWED_PLANS = ['growth', 'managed', 'seo_accelerator']
 const TOKEN_BYTES = 32
 const EXPIRY_DAYS = 7
 
@@ -10,6 +11,15 @@ function generateToken(): string {
   const bytes = new Uint8Array(TOKEN_BYTES)
   crypto.getRandomValues(bytes)
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 export default defineEventHandler(async (event) => {
@@ -40,12 +50,19 @@ export default defineEventHandler(async (event) => {
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  let body: { email?: string; message?: string }
+  let body: { email?: string; message?: string; plan?: string; coupon?: string; domain?: string }
   try {
     body = await readBody(event)
   } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
+
+  const invitedPlan = body.plan?.trim() || null
+  if (invitedPlan && !ALLOWED_PLANS.includes(invitedPlan)) {
+    return jsonResponse({ error: `Invalid plan. Allowed: ${ALLOWED_PLANS.join(', ')}` }, { status: 400 })
+  }
+  const invitedCoupon = body.coupon?.trim() || null
+  const invitedDomain = body.domain?.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') || null
 
   const toEmailRaw = body.email ?? ''
   if (typeof toEmailRaw !== 'string' || toEmailRaw !== toEmailRaw.trim() || toEmailRaw.trim() === '') {
@@ -57,7 +74,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'A valid recipient email is required' }, { status: 400 })
   }
 
-  // First, check if there is an identical pending request already to avoid double-submission
+  // Check for identical pending request to avoid double-submission
   const existingPending = await db
     .prepare(
       `SELECT id FROM site_transfer_requests
@@ -82,8 +99,8 @@ export default defineEventHandler(async (event) => {
 
   const insertStmt = db.prepare(
     `INSERT INTO site_transfer_requests
-     (id, site_id, from_organization_id, to_email, token, status, initiated_by_user_id, message, created_at, expires_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`
+     (id, site_id, from_organization_id, to_email, token, status, initiated_by_user_id, message, invited_plan, invited_coupon, invited_domain, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     id,
     siteId,
@@ -92,6 +109,9 @@ export default defineEventHandler(async (event) => {
     token,
     userId,
     body.message?.trim() ?? null,
+    invitedPlan,
+    invitedCoupon,
+    invitedDomain,
     now.toISOString(),
     expiresAt,
   )
@@ -111,6 +131,67 @@ export default defineEventHandler(async (event) => {
 
   const platformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'krabiclaw.com'
   const transferUrl = `https://${platformDomain}/transfer/${token}`
+  const siteName = site.brand_name ?? siteId
+
+  // Send invite email via Resend (best-effort — don't block the response)
+  if (env.RESEND_API_KEY) {
+    const initiatorName = (session.user as { name?: string }).name || session.user.email || 'Your web designer'
+    const planLabel: Record<string, string> = {
+      growth: 'Growth ($49/mo)',
+      managed: 'Managed ($149/mo)',
+      seo_accelerator: 'SEO Accelerator ($349/mo)',
+    }
+    const discountNote = invitedCoupon ? ' — a discount has been applied automatically at checkout' : ''
+    const planLine = invitedPlan
+      ? `<p style="margin:8px 0 0"><strong>Recommended plan:</strong> ${planLabel[invitedPlan] ?? invitedPlan}${discountNote}</p>`
+      : ''
+    const personalNote = body.message?.trim()
+      ? `<p style="font-style:italic;color:#71717a;margin:16px 0">"${escapeHtml(body.message.trim())}"</p>`
+      : ''
+
+    const domainLine = invitedDomain
+      ? `<p style="margin:8px 0 0"><strong>Your domain:</strong> ${escapeHtml(invitedDomain)} — already set up, no extra hosting needed</p>`
+      : ''
+
+    const html = `
+      <p>Hi there,</p>
+      <p><strong>${escapeHtml(initiatorName)}</strong> has built your website and it's ready for you to claim.</p>
+      <div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px;margin:16px 0">
+        <p style="margin:0"><strong>Website:</strong> ${escapeHtml(siteName)}</p>
+        <p style="margin:8px 0 0"><strong>Live preview:</strong> <a href="https://${escapeHtml(invitedDomain ?? platformDomain)}" style="color:#8F1D21">View your live site</a></p>
+        ${domainLine}
+        ${planLine}
+      </div>
+      ${personalNote}
+      <p>Click the button below to sign in and take ownership of your site. You only pay once you've had a look around and you're happy.</p>
+      <p style="margin:24px 0">
+        <a href="${escapeHtml(transferUrl)}" style="background:#8F1D21;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Claim your website</a>
+      </p>
+      <p style="font-size:12px;color:#71717a">This link expires in 7 days. If you didn't expect this email, you can safely ignore it.</p>
+    `
+
+    const textParts = [
+      'Hi there,',
+      '',
+      `${initiatorName} has built your website (${siteName}) and it's ready to claim.`,
+    ]
+    if (invitedDomain) textParts.push('', `Your domain: ${invitedDomain} — already set up, no extra hosting needed`)
+    if (personalNote) textParts.push('', `"${body.message!.trim()}"`)
+    if (invitedPlan) textParts.push('', `Recommended plan: ${planLabel[invitedPlan] ?? invitedPlan}${discountNote}`)
+    textParts.push('', `Claim your website: ${transferUrl}`, '', 'This link expires in 7 days.')
+
+    fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'KrabiClaw <hello@krabiclaw.com>',
+        to: [toEmail],
+        subject: `${initiatorName} built your website — it's ready to claim`,
+        html,
+        text: textParts.join('\n'),
+      }),
+    }).catch((err) => console.error('transfer_invite_email_failed', err))
+  }
 
   return jsonResponse({
     id,
@@ -118,6 +199,9 @@ export default defineEventHandler(async (event) => {
     transfer_url: transferUrl,
     to_email: toEmail,
     expires_at: expiresAt,
-    site_name: site.brand_name ?? siteId,
+    site_name: siteName,
+    invited_plan: invitedPlan,
+    invited_coupon: invitedCoupon,
+    invited_domain: invitedDomain,
   })
 })
