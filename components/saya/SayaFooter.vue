@@ -81,7 +81,7 @@
           <ul class="space-y-3 text-sm">
             <li v-if="hasMenu"><NuxtLink to="/menu" class="text-inverted/60 no-underline transition hover:text-inverted">Menu</NuxtLink></li>
             <li v-if="hasExperiences"><NuxtLink to="/experiences" class="text-inverted/60 no-underline transition hover:text-inverted">Experiences</NuxtLink></li>
-            <li><NuxtLink to="/reservations" class="text-inverted/60 no-underline transition hover:text-inverted">{{ hasExperiences ? 'Bookings' : 'Reservations' }}</NuxtLink></li>
+            <li><NuxtLink to="/reservations" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
             <li v-if="!hasExperiences"><NuxtLink to="/photos" class="text-inverted/60 no-underline transition hover:text-inverted">Gallery</NuxtLink></li>
             <li><NuxtLink to="/about" class="text-inverted/60 no-underline transition hover:text-inverted">Our Story</NuxtLink></li>
           </ul>
@@ -131,7 +131,7 @@
             rel="noopener noreferrer"
             class="transition hover:text-inverted/70"
           >
-            Powered by krabiclaw.com, restaurant sites that run themselves
+            Powered by krabiclaw.com, {{ copy.poweredByTagline }}
           </a>
         </div>
       </div>
@@ -142,8 +142,10 @@
 <script setup lang="ts">
 import { DEFAULT_RESTAURANT_NAME } from '~/config/constants'
 import { getTodayGoogleHours } from '~/utils/formatters'
+import { getVerticalCopy } from '~/utils/vertical-copy'
 
 const { isPlatform, site } = useTenantSite()
+const copy = computed(() => getVerticalCopy((site as { vertical?: string } | null)?.vertical))
 
 // Shared bootstrap — same key as the page → zero extra SSR requests
 const { locations: bootstrapLocations, error: bootstrapError, config: siteConfig, menu, hasExperiences } = useBootstrap()

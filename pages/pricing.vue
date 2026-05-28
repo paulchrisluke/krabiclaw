@@ -104,7 +104,7 @@ useBreadcrumbSchema([
 const faqs = [
   {
     q: 'What does "Managed" actually mean?',
-    a: "On the Managed plan, Paul & Julia handle your restaurant's online presence entirely. Menu changes, seasonal updates, translations, Google Business management — send us a WhatsApp voice note and we take care of it. You focus on the restaurant.",
+    a: "On the Managed plan, Paul & Julia handle your business's online presence entirely. Content changes, seasonal updates, translations, Google Business management — send us a WhatsApp voice note and we take care of it. You focus on your business.",
   },
   {
     q: 'Do I need a credit card to start?',
@@ -112,7 +112,7 @@ const faqs = [
   },
   {
     q: 'What is the SEO Accelerator?',
-    a: 'Julia grew tiffycooks.com to over 1 million daily impressions. The SEO Accelerator applies that same local & travel SEO playbook to your restaurant — keyword targeting, Google Maps authority, and a monthly content cadence.',
+    a: 'Julia grew tiffycooks.com to over 1 million daily impressions. The SEO Accelerator applies that same local & travel SEO playbook to your business — keyword targeting, Google Maps authority, and a monthly content cadence.',
   },
   {
     q: 'What are the one-time add-ons?',
@@ -132,7 +132,7 @@ const currentPageUrl = useSeoUrl('/pricing')
 
 useSeoMeta({
   title: 'Pricing | KrabiClaw',
-  description: 'Managed restaurant websites from $49/month. Paul & Julia handle translations, marketing, and Google — or start free and do it yourself. No contracts.',
+  description: 'Managed business websites from $49/month. Paul & Julia handle translations, marketing, and Google — or start free and do it yourself. No contracts.',
   ogImage: sharedOgImage,
   ogUrl: currentPageUrl,
   ogType: 'website',
@@ -147,13 +147,13 @@ useSchemaOrg([
       '@type': 'OfferCatalog',
       name: 'KrabiClaw Pricing Plans',
       itemListElement: [
-        { '@type': 'Offer', name: 'Starter', price: '0', priceCurrency: 'USD', description: 'Free restaurant website with menu and basic SEO' },
+        { '@type': 'Offer', name: 'Starter', price: '0', priceCurrency: 'USD', description: 'Free business website with offerings and basic SEO' },
         {
           '@type': 'Offer',
           name: 'Growth',
           priceCurrency: 'USD',
           priceSpecification: [{ '@type': 'UnitPriceSpecification', price: '49', priceCurrency: 'USD', billingDuration: 'P1M' }],
-          description: 'One language translation and AI-assisted menu updates',
+          description: 'One language translation and AI-assisted content updates',
         },
         {
           '@type': 'Offer',
@@ -167,7 +167,7 @@ useSchemaOrg([
           name: 'SEO Accelerator',
           priceCurrency: 'USD',
           priceSpecification: [{ '@type': 'UnitPriceSpecification', price: '349', priceCurrency: 'USD', billingDuration: 'P1M' }],
-          description: "Julia's 1M impressions/day SEO playbook applied to your restaurant",
+          description: "Julia's 1M impressions/day SEO playbook applied to your business",
         },
       ],
     },

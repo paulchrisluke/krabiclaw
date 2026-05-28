@@ -5,9 +5,9 @@
       <div class="lg:col-span-3">
         <!-- Header -->
         <div class="text-center mb-16">
-          <h1 class="text-5xl font-bold text-default mb-6">Restaurant Blog</h1>
+          <h1 class="text-5xl font-bold text-default mb-6">Business Blog</h1>
           <p class="text-xl text-muted max-w-2xl mx-auto">
-            Tips, insights, and stories to help your restaurant thrive in the digital age.
+            Tips, insights, and stories to help your business thrive in the digital age.
           </p>
         </div>
 
@@ -106,7 +106,7 @@
         <div class="bg-inverted text-inverted rounded-2xl p-8 text-center">
           <h2 class="text-3xl font-bold mb-4">Stay Updated</h2>
           <p class="text-inverted/70 mb-6 max-w-2xl mx-auto">
-            Get the latest restaurant marketing tips and industry insights delivered to your inbox.
+            Get the latest marketing tips and industry insights delivered to your inbox.
           </p>
           <form @submit.prevent="handleNewsletterSubmit" class="flex flex-col sm:flex-row gap-4 max-w-md mx-auto items-center justify-center">
             <input
@@ -224,7 +224,7 @@ useBreadcrumbSchema([
 
 useSeoMeta({
   title: 'Blog | KrabiClaw',
-  description: 'Restaurant marketing tips, industry insights, and strategies to help your restaurant succeed online.',
+  description: 'Marketing tips, industry insights, and strategies to help your business succeed online.',
   ogImage: useSharedOgImage(),
   ogUrl: `${siteUrl}/blog`,
   ogType: 'website'

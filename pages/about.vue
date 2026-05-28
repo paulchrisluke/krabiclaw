@@ -66,18 +66,18 @@
       <!-- CTA strip -->
       <section class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-24 sm:px-6 lg:px-8">
         <h3 class="saya-display-md saya-italic text-default">
-          {{ getField('cta.title', hasExperiences ? 'Book a class.' : 'Come dine with us.') }}
+          {{ getField('cta.title', copy.ctaTitle) }}
         </h3>
         <div class="flex flex-wrap gap-3">
           <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">Order Now</UButton>
           <UButton
-            :to="hasExperiences ? '/experiences' : '/reservations'"
+            :to="copy.ctaRoute"
             color="primary"
             :variant="hasOrderLinks ? 'outline' : 'solid'"
             size="xl"
             class="rounded-full"
           >
-            {{ hasExperiences ? 'Book a class' : 'Reserve a table' }}
+            {{ copy.reserveCta }}
           </UButton>
         </div>
       </section>
@@ -104,7 +104,7 @@
           </h1>
           
           <p class="text-lg leading-relaxed text-muted m-0 max-w-2xl mt-2">
-            A restaurant website platform inspired by the independent, family-run eateries we love around the world — built to help them thrive in the digital era.
+            A website platform for local businesses inspired by the independent, family-run businesses we love around the world — built to help them thrive in the digital era.
           </p>
         </div>
 
@@ -117,9 +117,9 @@
               <span class="text-xs font-black tracking-widest uppercase text-primary">01 / Origin</span>
               <h2 class="text-2xl font-black text-default mt-2 mb-4">How It Started</h2>
               <div class="space-y-4 text-[14px] leading-relaxed text-muted">
-                <p>KrabiClaw began during COVID, when restaurants suddenly needed online ordering, delivery systems, and websites just to survive. Early versions of the platform were built to help restaurants get online quickly and manage food delivery operations without complicated software.</p>
-                <p>But one problem kept appearing: menu management. Most restaurant owners didn't want to log into dashboards or learn website builders. They wanted to send a simple WhatsApp message like "add this item," "change this price," or upload a photo of a new menu page.</p>
-                <p>That led to <strong class="text-default">ChowBot</strong> — the assistant behind KrabiClaw. Restaurant owners can simply message ChowBot on WhatsApp to update menus, generate food descriptions, publish announcements, and manage their restaurant website using natural, friendly conversation.</p>
+                <p>KrabiClaw began during COVID, when businesses suddenly needed online presence, booking systems, and websites just to survive. Early versions of the platform were built to help businesses get online quickly and manage operations without complicated software.</p>
+                <p>But one problem kept appearing: content management. Most business owners didn't want to log into dashboards or learn website builders. They wanted to send a simple WhatsApp message like "add this item," "change this price," or upload a photo of a new offering.</p>
+                <p>That led to <strong class="text-default">ChowBot</strong> — the assistant behind KrabiClaw. Business owners can simply message ChowBot on WhatsApp to update offerings, generate descriptions, publish announcements, and manage their website using natural, friendly conversation.</p>
               </div>
             </div>
           </div>
@@ -131,8 +131,8 @@
               <span class="text-xs font-black tracking-widest uppercase text-(--kc-teal-600)">02 / Purpose</span>
               <h2 class="text-2xl font-black text-default mt-2 mb-4">Why KrabiClaw Exists</h2>
               <div class="space-y-4 text-[14px] leading-relaxed text-muted">
-                <p>Generic website builders weren't made for restaurants. They don't understand menus, digital reservations, delivery workflows, Google Business sync, or how restaurant owners actually operate day-to-day.</p>
-                <p>KrabiClaw is built specifically for restaurants. Every single detail comes from solving real operational challenges faced by real restaurant owners. We focus on simplicity, premium design, and AI automation so you can focus on the food.</p>
+                <p>Generic website builders weren't made for local businesses. They don't understand offerings, digital bookings, workflows, Google Business sync, or how business owners actually operate day-to-day.</p>
+                <p>KrabiClaw is built specifically for local businesses. Every single detail comes from solving real operational challenges faced by real business owners. We focus on simplicity, premium design, and AI automation so you can focus on what you do best.</p>
               </div>
             </div>
           </div>
@@ -146,7 +146,7 @@
               </div>
               <h3 class="text-xl font-extrabold text-default">Get in Touch</h3>
               <p class="text-sm text-muted max-w-xl">
-                Have questions, partnership ideas, or just want to talk restaurants and technology? We'd love to hear from you.
+                Have questions, partnership ideas, or just want to talk business and technology? We'd love to hear from you.
               </p>
               <div class="mt-2 flex flex-wrap justify-center gap-4">
                 <UButton 
@@ -172,11 +172,13 @@
 definePageMeta({ layout: false })
 
 import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
+import { getVerticalCopy } from '~/utils/vertical-copy'
 
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
 
-const { isPlatform } = useTenantSite()
-const { getField, locations, hasExperiences } = useBootstrap()
+const { isPlatform, site } = useTenantSite()
+const { getField, locations } = useBootstrap()
+const copy = getVerticalCopy(site?.vertical)
 
 const storyBody = computed(() => DOMPurify.sanitize(getField('story.body', '') || ''))
 const journeyBody = computed(() => DOMPurify.sanitize(getField('journey.body', '') || ''))

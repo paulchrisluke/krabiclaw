@@ -34,13 +34,13 @@ INSERT INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
   status, plan, onboarding_status, url_structure, primary_location_id,
-  contact_email, default_currency
+  contact_email, default_currency, vertical, content_source, media_source
 ) VALUES (
   'site-demo', 'org-demo', 'saya-theme-v1', 'saya', 'ember-slice-demo', 'demo',
   'Ember & Slice',
   'A Brooklyn wood-fired trattoria serving blistered pies, seasonal antipasti, and easy neighborhood hospitality.',
   'active', 'free', 'active', 'location_subdirectories', NULL,
-  'hello@emberandslice.example', 'USD'
+  'hello@emberandslice.example', 'USD', 'restaurant', 'generated', 'stock'
 );
 
 -- Demo languages

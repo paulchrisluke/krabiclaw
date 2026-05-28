@@ -35,3 +35,6 @@ prod-backup-*.sql
 
 # Legacy admin archive (exclude from compilation)
 archive/
+
+# Client import manifests and generated seed previews (review locally, don't commit)
+client-imports/

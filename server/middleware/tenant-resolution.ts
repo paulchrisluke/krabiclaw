@@ -18,6 +18,7 @@ interface TenantSiteRow {
   canonical_domain: string | null
   brand_name: string | null
   logo_url: string | null
+  vertical: string | null
 }
 
 // Get platform domain from runtime config
@@ -58,7 +59,7 @@ export default defineEventHandler(async (event) => {
     event.context.tenantType = 'tenant'
     event.context.tenantHost = host.split(':')[0]
     event.context.canonicalDomain = site.canonical_domain || null
-    event.context.site = { brand_name: site.brand_name || null, logo_url: site.logo_url || null }
+    event.context.site = { brand_name: site.brand_name || null, logo_url: site.logo_url || null, vertical: site.vertical || 'restaurant' }
     return
   }
   
@@ -120,19 +121,19 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
     return await db.prepare(`
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
              s.subdomain || '.localhost' AS canonical_domain,
-             s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url
+             s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
       FROM sites s
       LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
       WHERE s.subdomain = ? AND s.status = 'active'
       LIMIT 1
     `).bind(subdomain).first() as TenantSiteRow | null
   }
-  
+
   // Try custom domains first (from site_domains table)
   const customDomainSite = await db.prepare(`
     SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
            COALESCE(canonical.domain, sd.domain) AS canonical_domain,
-           s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url
+           s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
     FROM sites s
     JOIN site_domains sd ON s.id = sd.site_id
     LEFT JOIN site_domains canonical
@@ -142,9 +143,9 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
       AND s.status = 'active' AND s.onboarding_status = 'active'
     LIMIT 1
   `).bind(hostname).first() as TenantSiteRow | null
-  
+
   if (customDomainSite) return customDomainSite
-  
+
   // Try subdomains
   const platformDomain = getPlatformDomain(env)
   const subdomain = platformDomain && hostname.endsWith(`.${platformDomain}`)
@@ -154,7 +155,7 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
     const subdomainSite = await db.prepare(`
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
              COALESCE(canonical.domain, sd.domain) AS canonical_domain,
-             s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url
+             s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
       FROM sites s
       JOIN site_domains sd ON s.id = sd.site_id
       LEFT JOIN site_domains canonical
@@ -164,9 +165,9 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
         AND s.status = 'active' AND s.onboarding_status = 'active'
       LIMIT 1
     `).bind(`${subdomain}.${platformDomain}`).first() as TenantSiteRow | null
-    
+
     if (subdomainSite) return subdomainSite
   }
-  
+
   return null
 }

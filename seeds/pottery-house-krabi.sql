@@ -41,13 +41,13 @@ INSERT INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
   status, plan, onboarding_status, url_structure, primary_location_id,
-  contact_email, default_currency
+  contact_email, default_currency, vertical, content_source, media_source
 ) VALUES (
   'site-pottery-house', 'org-pottery-house', 'saya-theme-v1', 'saya', 'pottery-house-krabi', 'pottery-house',
   'Pottery House Krabi',
   'A creative pottery studio in Krabi, Thailand. Wheel throwing classes, handbuilding workshops, Cocktails & Clay nights, and a beachfront popup. Clay, calm, and a place to return to each week.',
   'active', 'free', 'active', 'location_subdirectories', NULL,
-  'bamboo.chow@gmail.com', 'THB'
+  'bamboo.chow@gmail.com', 'THB', 'experience', 'google_maps', 'client_photos'
 );
 
 -- Languages
@@ -204,7 +204,7 @@ INSERT OR REPLACE INTO experiences
    title, slug, tagline, body,
    image_asset_id, price, duration_minutes, max_capacity,
    time_slots, available_note,
-   status, sort_order,
+   status, sort_order, featured, featured_sort_order,
    seo_title, seo_description)
 VALUES
   -- 1. Pottery Wheel Class (flagship)
@@ -225,7 +225,7 @@ What to expect:
    '฿1,200', 90, 8,
    '["10:00","12:00","14:00","16:00"]',
    'Book online or message us on Instagram @potteryclasseskrabi',
-   'active', 1,
+   'active', 1, 1, 1,
    'Pottery Wheel Class Krabi — Pottery House',
    'Join a pottery wheel throwing class at Pottery House Krabi. All materials and firing included. Perfect for beginners and returning students in Krabi, Thailand.'),
 
@@ -249,7 +249,7 @@ What is included:
    '฿1,500', 180, 12,
    '["19:00"]',
    'Every Friday, 7PM to 10PM. Book in advance as spots fill quickly.',
-   'active', 2,
+   'active', 2, 1, 2,
    'Cocktails & Clay Friday Night — Pottery House Krabi',
    'Cocktails & Clay every Friday 7PM–10PM at Pottery House Krabi. A social pottery evening with drinks, wheels, and good company.'),
 
@@ -271,7 +271,7 @@ Good for:
    '฿1,800', 120, 4,
    '["09:00","15:00"]',
    'Available on selected days. Message us on Instagram @potteryclasseskrabi to check availability.',
-   'active', 3,
+   'active', 3, 1, 3,
    'Beachfront Pottery Class Klong Muang Krabi — Pottery House',
    'A unique beachfront pottery experience at Klong Muang beach, Krabi. Limited seats. Wheel throwing with a Gulf of Thailand view. All materials and firing included.'),
 
@@ -298,7 +298,7 @@ Ask us about current member hours, firing schedule, and monthly pricing.',
    'Ask us', NULL, NULL,
    NULL,
    'Contact us on Instagram @potteryclasseskrabi or email hello@potteryhoueskrabi.com to discuss membership.',
-   'active', 4,
+   'active', 4, 0, 0,
    'Monthly Pottery Studio Membership Krabi — Pottery House',
    'Monthly pottery studio membership at Pottery House Krabi. For long-stay visitors, expats, and remote workers. Studio access, tools, storage, and firing included.');
 

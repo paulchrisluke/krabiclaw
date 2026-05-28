@@ -1,9 +1,9 @@
 <template>
   <div class="min-h-screen bg-default text-default">
     <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
-      <p class="saya-kicker mb-6">{{ hasExperiences ? 'Bookings' : 'Reservations' }}</p>
+      <p class="saya-kicker mb-6">{{ resCopy.reservationPageKicker }}</p>
       <h1 class="saya-display-md text-default">
-        <em class="saya-italic">{{ getField('hero.title', hasExperiences ? 'Book a class' : 'Reserve a table') }}</em>
+        <em class="saya-italic">{{ getField('hero.title', resCopy.reserveCta) }}</em>
       </h1>
       <p v-if="getField('hero.subtitle')" class="mt-5 max-w-xl text-sm leading-relaxed text-muted">{{ getField('hero.subtitle') }}</p>
     </header>
@@ -13,7 +13,7 @@
 
         <!-- Reservation Form / Thank-you -->
         <div>
-          <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ hasExperiences ? 'Make a Booking' : 'Make a Reservation' }}</h2>
+          <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ resCopy.reservationFormTitle }}</h2>
 
           <UCard class="rounded-2xl bg-muted">
 
@@ -73,21 +73,21 @@
 
               <!-- Special requests -->
               <UFormField
-                :label="hasExperiences ? 'Special requests / notes' : 'Special requests'"
+                label="Special requests"
                 name="requests"
-                :description="hasExperiences ? 'Dietary needs, accessibility requests, or other notes.' : 'Dietary needs, accessibility requests, preferred seating, or celebration notes.'"
+                :description="resCopy.bookingNotesPlaceholder"
               >
                 <UTextarea
                   v-model="reservationForm.requests"
                   size="lg"
-                  :placeholder="hasExperiences ? 'Tell us anything that will help us prepare for your visit.' : 'Tell us anything that will help us prepare for your visit.'"
+                  placeholder="Tell us anything that will help us prepare for your visit."
                   :rows="3"
                   class="w-full"
                 />
               </UFormField>
 
               <UButton type="submit" color="primary" variant="solid" size="xl" block :loading="submitting">
-                {{ hasExperiences ? 'Request Booking' : 'Request Reservation' }}
+                {{ resCopy.reservationRequestButton }}
               </UButton>
             </UForm>
 
@@ -110,16 +110,16 @@
                 at <strong class="text-default">{{ lastSubmission?.time }}</strong>.
               </p>
               <p class="mt-2 text-sm text-muted">
-                Our team will confirm your {{ hasExperiences ? 'booking' : 'reservation' }} shortly via email or phone.
+                Our team will confirm your {{ resCopy.reservationWord }} shortly via email or phone.
               </p>
 
               <!-- Manage reservation -->
               <div v-if="cancelUrl" class="mt-10 rounded-2xl border border-default bg-default px-6 py-5">
-                <p class="saya-eyebrow mb-1 text-muted">{{ hasExperiences ? 'Manage booking' : 'Manage reservation' }}</p>
+                <p class="saya-eyebrow mb-1 text-muted">Manage {{ resCopy.reservationWord }}</p>
                 <p class="text-sm text-muted">Changed your plans? Cancel anytime before your visit.</p>
                 <UButton :to="cancelUrl" color="error" variant="ghost" size="sm" class="mt-4 rounded-full">
                   <UIcon name="i-heroicons-x-circle" class="mr-1.5 size-4" />
-                  Cancel {{ hasExperiences ? 'booking' : 'reservation' }}
+                  Cancel {{ resCopy.reservationWord }}
                 </UButton>
               </div>
 
@@ -128,7 +128,7 @@
                   Call us: {{ contactPhone }}
                 </UButton>
                 <UButton color="primary" variant="ghost" size="sm" @click="resetForm">
-                  Make another {{ hasExperiences ? 'booking' : 'reservation' }}
+                  Make another {{ resCopy.reservationWord }}
                 </UButton>
               </div>
             </div>
@@ -138,7 +138,7 @@
 
         <!-- Sidebar -->
         <div>
-          <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ hasExperiences ? 'Booking Details' : 'Reservation Details' }}</h2>
+          <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ resCopy.reservationFormTitle }} Details</h2>
 
           <UCard class="mb-6 rounded-2xl bg-muted">
             <h3 class="mb-4 text-lg font-semibold text-default">Contact Information</h3>
@@ -149,7 +149,7 @@
           </UCard>
 
           <UCard class="mb-6 rounded-2xl bg-muted">
-            <h3 class="mb-4 text-lg font-semibold text-default">{{ hasExperiences ? 'Booking Policies' : 'Reservation Policies' }}</h3>
+            <h3 class="mb-4 text-lg font-semibold text-default">{{ resCopy.reservationFormTitle }} Policies</h3>
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div v-html="policiesBody" class="text-muted" />
           </UCard>
@@ -159,8 +159,8 @@
               Call {{ contactPhone }}
             </UButton>
             <UButton to="/contact" color="primary" variant="outline" class="w-full">Contact Form</UButton>
-            <UButton :to="hasExperiences ? '/experiences' : '/menu'" color="primary" variant="outline" class="w-full">
-              {{ hasExperiences ? 'View Experiences' : 'View Menu' }}
+            <UButton :to="resCopy.reservationExploreRoute" color="primary" variant="outline" class="w-full">
+              {{ resCopy.reservationExploreLabel }}
             </UButton>
           </div>
         </div>
@@ -179,7 +179,8 @@ definePageMeta({ layout: 'saya' })
 
 const { getField } = usePageContent('reservations')
 const { site, siteId } = useTenantSite()
-const { hasExperiences } = useBootstrap()
+const resCopy = getVerticalCopy((site as ApiValue)?.vertical)
+useBootstrap()
 
 // ── Calendar ──────────────────────────────────────────────────────────────
 // selectedDate is untyped to bridge the two moduleResolution instances of
@@ -297,8 +298,8 @@ useBreadcrumbSchema([
 
 const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Restaurant')
 useSeoMeta({
-  title: computed(() => `${brandName.value} | Reserve a Table`),
-  description: computed(() => `Reserve a table at ${brandName.value}.`),
+  title: computed(() => `${brandName.value} | ${resCopy.reserveCta}`),
+  description: computed(() => resCopy.seoReservationDescription(brandName.value)),
   ogImage: sharedOgImage,
   ogUrl: currentPageUrl,
   ogType: 'website'

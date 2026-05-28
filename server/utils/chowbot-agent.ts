@@ -1131,6 +1131,8 @@ const TOOLS: AiTool[] = [
         tagline: { type: 'string', description: 'One-line hook shown on the listing card.' },
         body: { type: 'string', description: 'Rich HTML body — full description, what\'s included, atmosphere, etc.' },
         price: { type: 'string', description: 'Price string, e.g. "THB 1,500 / person".' },
+        featured: { type: 'boolean', description: 'Whether to feature this experience on the homepage/location pages (when no menu exists).' },
+        featured_sort_order: { type: 'number', description: 'Sort order for featured experiences (lower numbers appear first).' },
         duration_minutes: { type: 'number', description: 'Duration in minutes, e.g. 90.' },
         max_capacity: { type: 'number', description: 'Maximum guests per booking.' },
         time_slots: { type: 'array', items: { type: 'string' }, description: 'Available time slots, e.g. ["17:00","19:00","21:00"].' },
@@ -1154,6 +1156,8 @@ const TOOLS: AiTool[] = [
         title: { type: 'string' },
         tagline: { type: 'string' },
         body: { type: 'string' },
+        featured: { type: 'boolean', description: 'Whether to feature this experience on the homepage/location pages (when no menu exists).' },
+        featured_sort_order: { type: 'number', description: 'Sort order for featured experiences (lower numbers appear first).' },
         price: { type: 'string' },
         duration_minutes: { type: 'number' },
         max_capacity: { type: 'number' },
@@ -2633,6 +2637,9 @@ async function executeTool(
         image_asset_id: toSqlText(input.image_asset_id) ?? null,
         location_id: toSqlText(input.location_id) ?? null,
         status: (['active', 'inactive', 'sold_out'].includes(String(input.status ?? '')) ? String(input.status) : 'active') as 'active' | 'inactive' | 'sold_out',
+        sort_order: typeof input.sort_order === 'number' ? Math.round(input.sort_order) : 0,
+        featured: typeof input.featured === 'boolean' ? input.featured : false,
+        featured_sort_order: typeof input.featured_sort_order === 'number' ? Math.round(input.featured_sort_order) : 0,
         seo_title: toSqlText(input.seo_title) ?? null,
         seo_description: toSqlText(input.seo_description) ?? null,
       }, userId)
@@ -2656,6 +2663,15 @@ async function executeTool(
       if (input.location_id !== undefined) updates.location_id = toSqlText(input.location_id) ?? null
       if (input.status !== undefined && ['active', 'inactive', 'sold_out'].includes(String(input.status))) updates.status = String(input.status)
       if (input.sort_order !== undefined) updates.sort_order = Number(input.sort_order)
+      if (input.featured !== undefined) {
+        if (typeof input.featured !== 'boolean') return { error: 'featured must be a boolean' }
+        updates.featured = input.featured
+      }
+      if (input.featured_sort_order !== undefined) {
+        const parsed = Number(input.featured_sort_order)
+        if (!Number.isFinite(parsed)) return { error: 'featured_sort_order must be a number' }
+        updates.featured_sort_order = parsed
+      }
       if (input.seo_title !== undefined) updates.seo_title = toSqlText(input.seo_title) ?? null
       if (input.seo_description !== undefined) updates.seo_description = toSqlText(input.seo_description) ?? null
       const updated = await updateExperience(db, siteId, id, updates as ApiValue)

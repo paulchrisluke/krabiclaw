@@ -104,7 +104,7 @@
           </div>
           <p class="mt-3 text-lg leading-relaxed text-muted">
             The flagship KrabiClaw theme. Editorial typography, location-centric navigation,
-            and deep Google Business integration — designed for restaurants that want to look
+            and deep Google Business integration — designed for local businesses that want to look
             as good online as they do in person.
           </p>
 
@@ -141,7 +141,7 @@
               fallback-class="flex h-full w-full items-center justify-center rounded-xl bg-inverted text-lg font-bold"
             />
             <h3 class="text-xl font-bold text-default">Saya</h3>
-            <p class="mt-1 text-sm text-muted">Elegant &amp; Minimal Restaurant Theme</p>
+            <p class="mt-1 text-sm text-muted">Elegant &amp; Minimal Theme</p>
 
             <div class="mt-4 rounded-lg bg-primary/5 border border-primary/10 px-4 py-3">
               <p class="text-sm font-semibold text-primary">Free on all plans</p>
@@ -223,7 +223,7 @@ const featureScreenshots = [
   {
     icon: 'i-heroicons-map-pin',
     label: 'Location pages',
-    description: 'Hours, map embed, address, menu preview, reviews, photos, and Q&A — all under one location URL.'
+    description: 'Hours, map embed, address, offerings preview, reviews, photos, and Q&A — all under one location URL.'
   },
   {
     icon: 'i-heroicons-star',
@@ -232,8 +232,8 @@ const featureScreenshots = [
   },
   {
     icon: 'i-heroicons-list-bullet',
-    label: 'Full menu',
-    description: 'Sections, item photos, prices, dietary flags, and availability — all editable from the dashboard.'
+    label: 'Full offerings',
+    description: 'Sections, item photos, prices, details, and availability — all editable from the dashboard.'
   },
   {
     icon: 'i-heroicons-sparkles',
@@ -244,7 +244,7 @@ const featureScreenshots = [
 
 const included = [
   'Homepage with hero, location grid, and review highlights',
-  'Location sub-pages: menu, reviews, photos, Q&A, contact',
+  'Location sub-pages: offerings, reviews, photos, Q&A, contact',
   'Google Business data sync (Pro plan)',
   'ChowBot AI content management',
   'Reservation form',
@@ -273,7 +273,7 @@ useBreadcrumbSchema([
 
 useSeoMeta({
   title: 'Saya Theme | KrabiClaw',
-  description: 'The Saya restaurant theme — editorial design, Google Business integration, AI content management. Free on all plans.',
+  description: 'The Saya theme — editorial design, Google Business integration, AI content management. Free on all plans.',
   ogImage: sharedOgImage,
   ogUrl: currentPageUrl,
   ogType: 'website'
