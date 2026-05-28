@@ -176,7 +176,6 @@
 </template>
 
 <script setup lang="ts">
-import DOMPurify from 'isomorphic-dompurify'
 import type { Experience } from '~/server/utils/experiences'
 
 const route = useRoute()
@@ -197,10 +196,27 @@ const experience = computed<Experience | null>(() => (data.value as ApiValue)?.e
 const currentPageUrl = useSeoUrl(() => `/experiences/${slug}`)
 const ogImage = useSharedOgImage(() => experience.value?.image_url)
 
-const sanitizedBody = computed(() => {
-  const raw = experience.value?.body
-  if (!raw) return ''
-  return DOMPurify.sanitize(raw)
+const sanitizedBody = ref('')
+
+onMounted(async () => {
+  if (experience.value?.body) {
+    const DOMPurify = (await import('isomorphic-dompurify')).default
+    sanitizedBody.value = DOMPurify.sanitize(experience.value.body)
+  }
+})
+
+// On server, render raw HTML immediately so the initial payload has the content
+if (import.meta.server) {
+  sanitizedBody.value = experience.value?.body || ''
+}
+
+watch(experience, async (newExp) => {
+  if (import.meta.client && newExp?.body) {
+    const DOMPurify = (await import('isomorphic-dompurify')).default
+    sanitizedBody.value = DOMPurify.sanitize(newExp.body)
+  } else if (!newExp?.body) {
+    sanitizedBody.value = ''
+  }
 })
 
 function formatDuration(minutes: number): string {
