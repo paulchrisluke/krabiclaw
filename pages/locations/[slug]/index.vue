@@ -311,7 +311,7 @@
 import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow } from '~/utils/formatters'
 import { formatMoneyAmount } from '~/shared/money'
 
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
+
 
 const { resolveMedia } = useMedia()
 definePageMeta({ layout: 'saya' })
@@ -321,7 +321,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.name || (site as ApiValue)?.title || 'KrabiClaw')
 
 // Bootstrap: location + all locations + page content + menu + reviews — 1 SSR call
 const {
@@ -388,16 +388,19 @@ const heroBackgroundStyle = computed(() => {
   const raw = String(heroMedia.value?.url || '').trim()
   if (!raw) return {}
 
-  let parsed: URL
+  let safeHref = ''
   try {
-    parsed = new URL(raw)
+    if (raw.startsWith('/')) {
+      safeHref = encodeURI(raw)
+    } else {
+      const parsed = new URL(raw)
+      if (!['http:', 'https:'].includes(parsed.protocol)) return {}
+      safeHref = encodeURI(parsed.href)
+    }
   } catch {
     return {}
   }
 
-  if (!['http:', 'https:'].includes(parsed.protocol)) return {}
-
-  const safeHref = encodeURI(parsed.href)
   if (/["'\\);]/.test(safeHref) || safeHref.includes('/*') || safeHref.includes('*/')) {
     return {}
   }
@@ -426,8 +429,8 @@ const heroSubtitle = computed(() => contentHero.value.subtitle || null)
 
 const parkingInfo = computed(() => getContentField('parking.info', '') ?? '')
 const extraNotes = computed(() => getContentField('extra.notes', '') ?? '')
-const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value))
-const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
+const sanitizedParkingInfo = useSanitizedHtml(() => parkingInfo.value)
+const sanitizedExtraNotes = useSanitizedHtml(() => extraNotes.value)
 
 // Derived location data
 const formattedAddress = computed(() => {

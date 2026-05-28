@@ -173,7 +173,7 @@ definePageMeta({ layout: false })
 
 import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
+
 
 const { isPlatform } = useTenantSite()
 const { getField, locations, hasExperiences } = useBootstrap()
