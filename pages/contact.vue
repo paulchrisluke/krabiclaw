@@ -13,7 +13,9 @@
             Get in <em class="saya-italic">touch</em>.
           </h1>
           <p class="mt-5 max-w-xl text-sm leading-relaxed text-muted">
-            For a reservation or visit, head to your nearest location — for press, partnerships, catering or anything else, use the form below.
+            {{ hasExperiences 
+              ? 'For booking a class or checking availability, head to your nearest location — for press, partnerships, workshops or anything else, use the form below.' 
+              : 'For a reservation or visit, head to your nearest location — for press, partnerships, catering or anything else, use the form below.' }}
           </p>
         </header>
 
@@ -93,7 +95,7 @@
                 <dd class="m-0 font-['Instrument_Serif',serif] italic"><a :href="`mailto:${siteConfig.partnerships_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.partnerships_email }}</a></dd>
               </div>
               <div v-if="siteConfig.catering_email" class="flex justify-between gap-4 border-b border-inverted/10 py-4">
-                <dt class="saya-eyebrow text-inverted/60">Catering</dt>
+                <dt class="saya-eyebrow text-inverted/60">{{ hasExperiences ? 'Workshops' : 'Catering' }}</dt>
                 <dd class="m-0 font-['Instrument_Serif',serif] italic"><a :href="`mailto:${siteConfig.catering_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.catering_email }}</a></dd>
               </div>
               <div v-if="siteConfig.careers_email" class="flex justify-between gap-4 border-b border-inverted/10 py-4">
@@ -127,8 +129,14 @@
           <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
             <div class="mb-12 max-w-2xl">
               <p class="saya-kicker mb-6">By location</p>
-              <h2 class="saya-display-md text-default">Hours, address, phone — for each room.</h2>
-              <p class="mt-5 text-sm leading-relaxed text-muted">For full parking, accessibility and policy details, follow the "Plan a visit" link on each card.</p>
+              <h2 class="saya-display-md text-default">
+                {{ hasExperiences ? 'Hours, address, phone — for each studio.' : 'Hours, address, phone — for each room.' }}
+              </h2>
+              <p class="mt-5 text-sm leading-relaxed text-muted">
+                {{ hasExperiences 
+                  ? 'For full parking, accessibility and booking policies, follow the "Plan a visit" link on each card.' 
+                  : 'For full parking, accessibility and policy details, follow the "Plan a visit" link on each card.' }}
+              </p>
             </div>
 
             <div class="flex flex-col gap-6">
@@ -199,10 +207,10 @@
                       Directions
                     </NuxtLink>
                     <NuxtLink
-                      :to="`/locations/${loc.slug}/menu`"
+                      :to="hasExperiences ? '/experiences' : `/locations/${loc.slug}/menu`"
                       class="inline-flex items-center rounded-full border border-default px-5 py-2.5 text-[11px] font-medium uppercase tracking-widest text-default no-underline transition hover:bg-muted"
                     >
-                      Menu
+                      {{ hasExperiences ? 'View experiences' : 'Menu' }}
                     </NuxtLink>
                   </div>
                 </div>
@@ -280,7 +288,7 @@ const sharedOgImage = useSharedOgImage()
 const restaurantName = computed(() => site?.brand_name || 'Our Restaurant')
 
 // ── Bootstrap: locations + config in one call ─────────────
-const { locations, config: siteConfig } = useBootstrap()
+const { locations, config: siteConfig, hasExperiences } = useBootstrap()
 
 function formatLocAddress(loc) {
   if (!loc.address) return loc.city || ''
@@ -309,13 +317,24 @@ const hasAnyBrandContact = computed(() =>
 )
 
 // ── Tenant form ──────────────────────────────────────────
-const subjectOptions = [
-  { key: 'general', label: 'General' },
-  { key: 'press', label: 'Press' },
-  { key: 'partnerships', label: 'Partnerships' },
-  { key: 'catering', label: 'Catering & events' },
-  { key: 'careers', label: 'Careers' }
-]
+const subjectOptions = computed(() => {
+  if (hasExperiences.value) {
+    return [
+      { key: 'general', label: 'General' },
+      { key: 'press', label: 'Press' },
+      { key: 'partnerships', label: 'Partnerships' },
+      { key: 'catering', label: 'Workshops & events' },
+      { key: 'careers', label: 'Careers' }
+    ]
+  }
+  return [
+    { key: 'general', label: 'General' },
+    { key: 'press', label: 'Press' },
+    { key: 'partnerships', label: 'Partnerships' },
+    { key: 'catering', label: 'Catering & events' },
+    { key: 'careers', label: 'Careers' }
+  ]
+})
 
 const tenantForm = ref({ name: '', email: '', subject: 'general', message: '' })
 const tenantSubmitting = ref(false)

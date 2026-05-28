@@ -281,38 +281,37 @@ async function submitBooking() {
   }
 }
 
-// ── SEO + structured data ─────────────────────────────────────────────────────
-
-const exp = experience.value
-
+// SEO + structured data: make it reactive so it handles async fetch correctly!
 useBreadcrumbSchema([
   { name: 'Home', url: `${siteUrl}/` },
   { name: 'Experiences', url: `${siteUrl}/experiences` },
-  { name: exp?.title ?? slug, url: `${siteUrl}/experiences/${slug}` },
+  { name: computed(() => experience.value?.title ?? slug), url: `${siteUrl}/experiences/${slug}` },
 ])
 
 useSeoMeta({
-  title: computed(() => exp?.seo_title ?? (exp ? `${exp.title} | Experiences` : 'Experience')),
-  description: computed(() => exp?.seo_description ?? exp?.tagline ?? `Book the ${exp?.title} experience.`),
+  title: computed(() => experience.value?.seo_title ?? (experience.value ? `${experience.value.title} | Experiences` : 'Experience')),
+  description: computed(() => experience.value?.seo_description ?? experience.value?.tagline ?? `Book the ${experience.value?.title} experience.`),
   ogUrl: currentPageUrl,
   ogType: 'website',
   ogImage,
 })
 
 // JSON-LD — Event schema (best match for a bookable dining experience)
-if (exp) {
-  useHead({
-    script: [
-      {
-        type: 'application/ld+json',
-        innerHTML: JSON.stringify({
+useHead({
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: () => {
+        const val = experience.value
+        if (!val) return '{}'
+        return JSON.stringify({
           '@context': 'https://schema.org',
           '@type': 'Event',
-          name: exp.title,
-          description: exp.seo_description ?? exp.tagline ?? undefined,
-          image: exp.image_url ?? undefined,
-          url: `${siteUrl}/experiences/${exp.slug}`,
-          eventStatus: exp.status === 'sold_out'
+          name: val.title,
+          description: val.seo_description ?? val.tagline ?? undefined,
+          image: val.image_url ?? undefined,
+          url: `${siteUrl}/experiences/${val.slug}`,
+          eventStatus: val.status === 'sold_out'
             ? 'https://schema.org/EventSoldOut'
             : 'https://schema.org/EventScheduled',
           eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
@@ -326,20 +325,20 @@ if (exp) {
             name: siteName.value,
             url: siteUrl,
           },
-          offers: exp.price
+          offers: val.price
             ? {
                 '@type': 'Offer',
-                name: exp.title,
-                description: exp.price,
-                availability: exp.status === 'sold_out'
+                name: val.title,
+                description: val.price,
+                availability: val.status === 'sold_out'
                   ? 'https://schema.org/SoldOut'
                   : 'https://schema.org/InStock',
-                url: `${siteUrl}/experiences/${exp.slug}`,
+                url: `${siteUrl}/experiences/${val.slug}`,
               }
             : undefined,
-        }),
-      },
-    ],
-  })
-}
+        })
+      }
+    },
+  ],
+})
 </script>

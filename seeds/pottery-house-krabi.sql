@@ -145,8 +145,8 @@ VALUES
   -- Wheel class image
   ('media-ph-wheel', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
    'image', 'external_url', 'external',
-   '/images/pottery-house/WhatsApp Image 2026-05-28 at 08.11.53.jpeg',
-   '/images/pottery-house/WhatsApp Image 2026-05-28 at 08.11.53.jpeg',
+   '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.11.53.jpeg',
+   '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.11.53.jpeg',
    'image/jpeg', 'pottery-wheel-class.jpg', 'Pottery wheel throwing class at Pottery House Krabi', 'interior', 'active'),
 
   -- Finished ceramics on display
@@ -173,25 +173,25 @@ VALUES
   -- Beachfront location
   ('media-ph-beach', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-beachfront',
    'image', 'external_url', 'external',
-   '/images/pottery-house/WhatsApp Image 2026-05-28 at 08.11.54.jpeg',
-   '/images/pottery-house/WhatsApp Image 2026-05-28 at 08.11.54.jpeg',
+   '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.11.54.jpeg',
+   '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.11.54.jpeg',
    'image/jpeg', 'klong-muang-beachfront.jpg', 'Beachfront pottery session at Klong Muang with Gulf of Thailand view', 'exterior', 'active'),
 
   -- Post images
   ('media-ph-post1', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
    'image', 'external_url', 'external',
-   '/images/pottery-house/WhatsApp Image 2026-05-28 at 08.17.57.jpeg',
-   '/images/pottery-house/WhatsApp Image 2026-05-28 at 08.17.57.jpeg',
+   '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.17.57.jpeg',
+   '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.17.57.jpeg',
    'image/jpeg', 'post-wheel.jpg', 'Pottery wheel class at Pottery House Krabi', 'interior', 'active'),
   ('media-ph-post2', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
    'image', 'external_url', 'external',
-   '/images/pottery-house/WhatsApp Image 2026-05-28 at 08.12.48.jpeg',
-   '/images/pottery-house/WhatsApp Image 2026-05-28 at 08.12.48.jpeg',
+   '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.12.48.jpeg',
+   '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.12.48.jpeg',
    'image/jpeg', 'post-team.jpg', 'Pottery House Krabi team', 'team', 'active'),
   ('media-ph-post3', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
    'image', 'external_url', 'external',
-   '/images/pottery-house/WhatsApp Image 2026-05-28 at 08.12.15.jpeg',
-   '/images/pottery-house/WhatsApp Image 2026-05-28 at 08.12.15.jpeg',
+   '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.12.15.jpeg',
+   '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.12.15.jpeg',
    'image/jpeg', 'post-cocktails.jpg', 'Cocktails and Clay Friday event', 'interior', 'active');
 
 -- Set hero images

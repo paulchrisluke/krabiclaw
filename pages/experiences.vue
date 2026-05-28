@@ -4,10 +4,12 @@
 
       <!-- Header -->
       <div class="mb-16 max-w-2xl">
-        <p class="saya-kicker mb-4">Experiences</p>
-        <h1 class="saya-display-md text-default">Dine differently.</h1>
+        <p class="saya-kicker mb-4">{{ hasExperiences ? 'Offerings' : 'Experiences' }}</p>
+        <h1 class="saya-display-md text-default">{{ hasExperiences ? 'Calm, craft & clay.' : 'Dine differently.' }}</h1>
         <p class="mt-5 text-base leading-relaxed text-muted">
-          Exclusive culinary events, chef encounters, and one-of-a-kind dining moments — crafted for guests who want more than a meal.
+          {{ hasExperiences 
+            ? 'One-of-a-kind workshops, social gatherings, and creative sessions — crafted for guests who want to connect with clay.' 
+            : 'Exclusive culinary events, chef encounters, and one-of-a-kind dining moments — crafted for guests who want more than a meal.' }}
         </p>
       </div>
 
@@ -92,6 +94,8 @@ const { isPlatform, siteId, site } = useTenantSite()
 const siteName = computed(() => (site as ApiValue)?.name || 'KrabiClaw')
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
+
+const { hasExperiences } = useBootstrap()
 
 const { data, pending } = isPlatform || !siteId
   ? { data: ref(null), pending: ref(false) }
