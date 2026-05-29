@@ -119,65 +119,64 @@ async function runAutocannon(url, options) {
   return new Promise((resolve, reject) => {
     autocannon(
       {
-        url,
-<<<<<<< HEAD
-        connections: config.connections,
-        duration: config.durationSeconds,
-        timeout: config.timeoutSeconds,
-        // Don't follow redirects — measure what the server returns
-      },
-      (err, result) => {
-        if (err) reject(err)
-        else resolve(result)
-      },
-    )
-  })
-}
-
-function median(arr) {
-  if (!arr.length) return 0
-  const sorted = [...arr].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
-}
-
-function mean(arr) {
-  if (!arr.length) return 0
-  return arr.reduce((a, b) => a + b, 0) / arr.length
-}
-
-async function benchmarkRoute(route) {
-  const url = `${config.baseUrl}${route.path}`
-  process.stdout.write(`\n  ${route.name.padEnd(25)} `)
-
-  // Preflight: get real HTTP status and response size
-  const { status: statusCode, bytes: responseBytes } = await checkStatus(url)
-
-  // Warmup runs (results discarded)
-  for (let i = 0; i < config.warmupRuns; i++) {
-    await runAutocannon(url)
-    process.stdout.write('w')
+        {
+          connections: config.connections,
+          duration: config.durationSeconds,
+          timeout: config.timeoutSeconds,
+          // Don't follow redirects — measure what the server returns
+        },
+        (err, result) => {
+          if (err) reject(err)
+          else resolve(result)
+        },
+      )
+    })
   }
 
-  const samples = []
-  for (let i = 0; i < config.runs; i++) {
-    const result = await runAutocannon(url)
-    samples.push(result)
-    process.stdout.write('.')
+  function median(arr) {
+    if (!arr.length) return 0
+    const sorted = [...arr].sort((a, b) => a - b)
+    const mid = Math.floor(sorted.length / 2)
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
   }
 
-  // Aggregate across samples
-  const p50s = samples.map((s) => s.latency.p50)
-  const p95s = samples.map((s) => s.latency.p97_5) // autocannon calls this p97_5
-  const p99s = samples.map((s) => s.latency.p99)
-  const reqPerSecs = samples.map((s) => s.requests.average)
-  const bytesPerSecs = samples.map((s) => s.throughput.average)
-  const totalErrors = samples.reduce((sum, s) => sum + (s.errors || 0), 0)
-  const totalTimeouts = samples.reduce((sum, s) => sum + (s.timeouts || 0), 0)
-  const totalAttempts = samples.reduce((sum, s) => sum + s.requests.total, 0)
-  const errorRate = totalAttempts > 0 ? totalErrors / totalAttempts : 0
+  function mean(arr) {
+    if (!arr.length) return 0
+    return arr.reduce((a, b) => a + b, 0) / arr.length
+  }
 
-  // Status code distribution — sum across all samples
+  async function benchmarkRoute(route) {
+    const url = `${config.baseUrl}${route.path}`
+    process.stdout.write(`\n  ${route.name.padEnd(25)} `)
+
+    // Preflight: get real HTTP status and response size
+    const { status: statusCode, bytes: responseBytes } = await checkStatus(url)
+
+    // Warmup runs (results discarded)
+    for (let i = 0; i < config.warmupRuns; i++) {
+      await runAutocannon(url)
+      process.stdout.write('w')
+    }
+
+    const samples = []
+    for (let i = 0; i < config.runs; i++) {
+      const result = await runAutocannon(url)
+      samples.push(result)
+      process.stdout.write('.')
+    }
+
+    // Aggregate across samples
+    const p50s = samples.map((s) => s.latency.p50)
+    const p95s = samples.map((s) => s.latency.p97_5) // autocannon calls this p97_5
+    const p99s = samples.map((s) => s.latency.p99)
+    const reqPerSecs = samples.map((s) => s.requests.average)
+    const bytesPerSecs = samples.map((s) => s.throughput.average)
+    const totalErrors = samples.reduce((sum, s) => sum + (s.errors || 0), 0)
+    const totalTimeouts = samples.reduce((sum, s) => sum + (s.timeouts || 0), 0)
+    const totalAttempts = samples.reduce((sum, s) => sum + s.requests.total, 0)
+    const errorRate = totalAttempts > 0 ? totalErrors / totalAttempts : 0
+
+    // Status code distribution — sum across all samples
   const statusCodeDistribution = { '1xx': 0, '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0 }
   for (const s of samples) {
     statusCodeDistribution['1xx'] += s['1xx'] || 0

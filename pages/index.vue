@@ -589,12 +589,6 @@ if (isPlatform) {
   useOrganizationSchema()
   
   useSeoMeta({
-<<<<<<< HEAD
-    title: 'KrabiClaw | AI Restaurant Website Builder',
-    description: 'Your restaurant online in minutes — AI-built, with reservations, menus, multi-language support, Google Business sync, and optional WhatsApp integrations. Managed service available on paid plans.',
-    ogTitle: 'KrabiClaw | AI Restaurant Website Builder',
-    ogDescription: 'AI-built restaurant site with reservations, menus, multi-language, Google Business sync, and optional WhatsApp integrations. Managed service available on Growth+ plans.',
-=======
     title: 'KrabiClaw | AI Website Builder for Local Businesses',
     description: 'Build your business website in minutes with AI. No coding required.',
     ogTitle: 'KrabiClaw | AI Website Builder for Local Businesses',
