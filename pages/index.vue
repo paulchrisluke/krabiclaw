@@ -112,7 +112,7 @@
             <span class="kc-eyebrow text-dimmed">Simple pricing</span>
             <h2 class="text-[44px] font-extrabold tracking-tight leading-[1.05] text-default m-0">Start free. Grow when you're ready.</h2>
           </div>
-          <BillingPricingTable />
+          <LazyBillingPricingTable />
         </div>
       </section>
     </div>
@@ -121,7 +121,21 @@
     <div v-else class="saya-restaurant-theme">
 
       <!-- ── Brand hero ─────────────────────────────────────── -->
-      <section id="section-hero" class="relative min-h-160 overflow-hidden flex items-center">
+      <SayaHomeHero
+        v-if="contentBlocks.find(b => b.component === 'SayaHomeHero')"
+        :data="{
+          hero: getHero(),
+          locations: bootstrapLocations,
+          businessTitle: googleBusiness?.title,
+          businessSubtitle: googleBusiness?.profile?.description,
+          businessCity: googleBusiness?.storefrontAddress?.locality,
+          businessPrimaryPhoto: googleBusiness?.media?.[0],
+          hasOrderLinks: hasOrderLinks,
+          ctaRoute: homeCopy.ctaRoute,
+          reserveCta: homeCopy.reserveCta
+        }"
+      />
+      <section v-else id="section-hero" class="relative min-h-160 overflow-hidden flex items-center">
         <!-- Background video (takes precedence over photo) -->
         <div v-if="hero.video && hero.videoKind === 'video'" data-field="hero.video" class="absolute inset-0">
           <video :src="hero.video" autoplay muted loop playsinline aria-hidden="true" role="presentation" class="w-full h-full object-cover opacity-50" />
@@ -187,8 +201,60 @@
         </div>
       </section>
 
+      <!-- ── Featured content (dishes / experiences) ─────────── -->
+      <LazySayaFeaturedContent
+        v-if="contentBlocks.find(b => b.component === 'SayaFeaturedContent')"
+        :data="{
+          items: featuredContent,
+          hasMenu: hasMenu
+        }"
+      />
+      <section v-else-if="featuredContent.length" class="mx-auto max-w-7xl px-4 pt-16 pb-8 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <NuxtLink
+            v-for="(item, i) in featuredContent"
+            :key="i"
+            :to="item.href"
+            class="group block overflow-hidden bg-elevated no-underline text-default transition hover:opacity-90"
+          >
+            <div class="aspect-square overflow-hidden bg-muted">
+              <video
+                v-if="item.imageKind === 'video' && item.image"
+                :src="item.image"
+                autoplay
+                muted
+                loop
+                playsinline
+                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+              <img
+                v-else-if="item.image"
+                :src="item.image"
+                :alt="item.alt"
+                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              >
+              <div v-else class="flex h-full w-full items-center justify-center">
+                <UIcon name="i-heroicons-sparkles" class="size-8 text-muted" />
+              </div>
+            </div>
+            <div class="p-3 pt-2">
+              <p class="saya-display saya-italic text-base text-default leading-snug line-clamp-2">{{ item.name }}</p>
+              <p v-if="item.price" class="mt-0.5 text-xs tabular-nums text-muted">{{ item.price }}</p>
+            </div>
+          </NuxtLink>
+        </div>
+      </section>
+
       <!-- ── Locations grid ─────────────────────────────────── -->
-      <section class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+      <LazySayaLocationsGrid
+        v-if="contentBlocks.find(b => b.component === 'SayaLocationsGrid')"
+        :data="{
+          locations: locations,
+          heading: homeCopy.locationGroupLine(locations.length),
+          isAuthenticated: isAuthenticated
+        }"
+      />
+      <section v-else class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
         <div class="mb-16 max-w-2xl">
           <p class="saya-kicker mb-6">Find us</p>
           <h2 class="saya-display-md text-default">
@@ -263,84 +329,86 @@
         </div>
       </section>
 
-      <!-- ── Aggregated highlights ───────────────────────────── -->
-      <section v-if="highlights.length" class="bg-elevated">
+      <!-- ── Posts / Lately ────────────────────────────────── -->
+      <section v-if="recentPosts.length" class="bg-elevated">
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div class="mb-16 max-w-2xl">
             <p class="saya-kicker mb-6">Lately</p>
-            <h2 class="saya-display-md text-default">Posts, reviews &amp; dishes from across the brand.</h2>
-            <p class="mt-6 text-sm leading-relaxed text-muted">{{ $t('home.highlights') }}</p>
+            <h2 class="saya-display-md text-default">{{ homeCopy.highlightsSectionHeading }}</h2>
           </div>
           <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <template v-for="(tile, i) in highlights" :key="i">
-              <!-- Post tile -->
+            <UModal
+              v-for="post in recentPosts"
+              :key="post.id"
+              :ui="{ content: 'max-w-2xl' }"
+            >
+              <!-- Trigger tile -->
               <article
-                v-if="tile.type === 'post'"
-                class="overflow-hidden bg-default"
-                :class="tile.wide ? 'sm:col-span-2' : ''"
+                class="group cursor-pointer overflow-hidden bg-default text-default transition hover:opacity-90"
+                :class="post.wide ? 'sm:col-span-2' : ''"
               >
-                <div v-if="tile.image" class="overflow-hidden bg-muted" :class="tile.wide ? 'aspect-video' : 'aspect-square'">
+                <div v-if="post.image" class="overflow-hidden bg-muted" :class="post.wide ? 'aspect-video' : 'aspect-square'">
                   <video
-                    v-if="tile.imageKind === 'video'"
-                    :src="tile.image"
+                    v-if="post.imageKind === 'video'"
+                    :src="post.image"
                     autoplay
                     muted
                     loop
                     playsinline
-                    class="h-full w-full object-cover"
+                    class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                   <img
                     v-else
-                    :src="tile.image"
-                    :alt="tile.alt || tile.name || `${tile.type} image`"
-                    class="h-full w-full object-cover"
+                    :src="post.image"
+                    :alt="post.alt"
+                    class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   >
                 </div>
                 <div class="p-5 pt-4">
-                  <p class="saya-eyebrow mb-2 text-muted">Google Post</p>
-                  <p class="text-sm leading-relaxed text-default line-clamp-3">{{ tile.text }}</p>
+                  <p class="saya-eyebrow mb-2 text-muted">{{ homeCopy.postsEyebrow }}</p>
+                  <p class="text-sm leading-relaxed text-default line-clamp-3">{{ post.text }}</p>
+                  <p class="mt-3 saya-eyebrow text-muted opacity-60">Read more →</p>
                 </div>
               </article>
 
-              <!-- Dish tile -->
-              <article v-else-if="tile.type === 'dish'" class="overflow-hidden bg-default">
-                <div v-if="tile.image" class="aspect-square overflow-hidden bg-muted">
+              <!-- Modal: full post -->
+              <template #body>
+                <div v-if="post.image" class="-mx-6 -mt-6 mb-6 overflow-hidden bg-muted">
                   <video
-                    v-if="tile.imageKind === 'video'"
-                    :src="tile.image"
+                    v-if="post.imageKind === 'video'"
+                    :src="post.image"
                     autoplay
                     muted
                     loop
                     playsinline
-                    class="h-full w-full object-cover"
+                    class="w-full aspect-video object-cover"
                   />
                   <img
                     v-else
-                    :src="tile.image"
-                    :alt="tile.alt || tile.name || `${tile.type} image`"
-                    class="h-full w-full object-cover"
+                    :src="post.image"
+                    :alt="post.alt"
+                    class="w-full aspect-video object-cover"
                   >
                 </div>
-                <div class="p-5 pt-4">
-                  <p class="saya-eyebrow mb-2 text-muted">Featured</p>
-                  <p class="saya-display saya-italic text-xl text-default leading-snug">{{ tile.name }}</p>
-                  <p v-if="tile.price" class="mt-1 text-sm tabular-nums text-muted">{{ tile.price }}</p>
-                </div>
-              </article>
-
-              <!-- Review quote tile -->
-              <article v-else-if="tile.type === 'review'" class="bg-default p-6 flex flex-col">
-                <UIcon name="i-heroicons-chat-bubble-left" class="mb-4 size-6 text-muted opacity-30" />
-                <p class="saya-display saya-italic text-xl text-default leading-snug flex-1">"{{ tile.text }}"</p>
-                <p class="mt-4 text-xs text-muted">{{ tile.author }}</p>
-              </article>
-            </template>
+                <p class="saya-eyebrow mb-4 text-muted">{{ homeCopy.postsEyebrow }}</p>
+                <p class="text-base leading-relaxed text-default whitespace-pre-line">{{ post.text }}</p>
+              </template>
+            </UModal>
           </div>
         </div>
       </section>
 
       <!-- ── Brand story ─────────────────────────────────────── -->
-      <section class="bg-inverted text-inverted">
+      <LazySayaBrandStory
+        v-if="contentBlocks.find(b => b.component === 'SayaBrandStory')"
+        :data="{
+          headline: getField('story.headline', businessTitle),
+          body: getField('story.body', businessSubtitle),
+          image: getField('story.image'),
+          isAuthenticated: isAuthenticated
+        }"
+      />
+      <section v-else class="bg-inverted text-inverted">
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
 
           <!-- Filled state -->
@@ -377,7 +445,7 @@
             <p class="saya-eyebrow mb-8 text-inverted/60">Our story</p>
             <h2 class="saya-display-md max-w-3xl text-inverted/30">Your brand story goes here.</h2>
             <p class="mt-6 max-w-lg text-sm leading-relaxed text-inverted/30">
-              Two or three sentences about your restaurant — what you cook, how you cook it, why it matters.
+              Two or three sentences about your brand — what you do, how you do it, why it matters.
             </p>
             <NuxtLink
               v-if="isAuthenticated"
@@ -403,7 +471,7 @@
               {{ googleReviewSummary.average }}
               <span v-if="googleReviewSummary.count" class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
             </h2>
-            <p class="mt-6 text-sm text-muted">{{ $t('home.reviews') }}</p>
+            <p class="mt-6 text-sm text-muted">Guest reviews &amp; ratings.</p>
           </template>
           <template v-else-if="isAuthenticated">
             <h2 class="saya-display-md text-default opacity-30">What your guests say.</h2>
@@ -468,7 +536,7 @@
       </section>
 
       <!-- ── CTA strip (strict component) ───────────────────── -->
-      <SayaCTA
+      <LazySayaCTA
         :title="getField('cta.title')"
         :description="getField('cta.description')"
         :cta-route="homeCopy.ctaRoute"
@@ -476,6 +544,17 @@
         :bg="'default'"
         :padding="'lg'"
       />
+
+      <!-- ── Dynamic content blocks ───────────────────────────── -->
+      <template v-if="contentBlocks.length > 0">
+        <component
+          v-for="block in contentBlocks.filter(b => b.component)"
+          :key="block._uid || block.field"
+          :is="resolveComponent(block.component)"
+          :data="block"
+          class="content-block"
+        />
+      </template>
     </div>
   </NuxtLayout>
 </template>
@@ -484,13 +563,13 @@
 import { useAuth } from '~/composables/useAuth'
 import { useOrganizationSchema } from '~/composables/useSchemaOrg'
 import { formatMoneyAmount } from '~/shared/money'
-
-import SayaCTA from '~/components/saya/SayaCTA.vue'
+import { useDynamicComponent } from '~/composables/useDynamicComponent'
 
 definePageMeta({ layout: false })
 
 const { isPlatform, siteId, site } = useTenantSite()
 const homeCopy = getVerticalCopy(site?.vertical)
+const { resolveComponent } = useDynamicComponent()
 
 // Platform homepage data
 const avatars = [
@@ -528,6 +607,7 @@ const {
   config: bootstrapConfig,
   menuItemsBySection,
   experiencesList,
+  contentBlocks,
 } = useBootstrap()
 
 const locations = computed(() => bootstrapLocations.value)
@@ -654,59 +734,43 @@ const reviewFilter = ref('all')
 const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
 const featuredReviews = computed(() => googleReviews.value.slice(0, 3))
 
-// Aggregated highlights — mix posts, dishes/experiences, review quotes (max 7 tiles)
-const highlights = computed(() => {
-  const tiles = []
-
-  // Up to 2 GMB posts with photos
+// Recent posts — shown in the "Lately" section (posts only, each links to /posts)
+const recentPosts = computed(() => {
   const posts = (googlePosts.value || []).filter(p => p.media?.[0]?.googleUrl)
-  for (let i = 0; i < Math.min(2, posts.length); i++) {
-    const post = posts[i]
-    const image = post?.media?.[0]?.googleUrl || null
-    const kind = post?.media?.[0]?.kind || 'image'
-    tiles.push({
-      type: 'post',
-      image,
-      imageKind: kind,
-      text: post?.summary || post?.name,
-      alt: post?.summary || post?.name || 'Google post image',
-      wide: i === 0
-    })
-  }
+  return posts.slice(0, 4).map((post, i) => ({
+    id: post.name?.split('/').pop() || String(i),
+    image: post.media?.[0]?.googleUrl || null,
+    imageKind: post.media?.[0]?.kind || 'image',
+    text: post.summary || post.name || '',
+    alt: post.summary || 'Post image',
+    wide: i === 0,
+  }))
+})
 
-  // Up to 3 featured dishes (or featured experiences if no menu)
+// Featured content — dishes or experiences, shown right below the hero
+const featuredContent = computed(() => {
   const featuredItems = hasMenu.value ? featuredMenuItems.value : featuredExperiences.value
-  for (let i = 0; i < Math.min(3, featuredItems.length); i++) {
-    const item = featuredItems[i]
+  return featuredItems.slice(0, 4).map(item => {
     if (hasMenu.value) {
-      tiles.push({
-        type: 'dish',
+      return {
         name: item.name,
         price: formatMoneyAmount(item.price_amount, defaultCurrency.value, ''),
         image: item.public_url || null,
         imageKind: item.kind || 'image',
-        alt: item.name ? `${item.name} dish` : 'Featured dish image'
-      })
+        alt: item.name ? `${item.name} dish` : 'Featured dish image',
+        href: item.slug ? `/menu/${item.slug}` : '/menu',
+      }
     } else {
-      tiles.push({
-        type: 'dish',
+      return {
         name: item.title,
         price: item.price || '',
         image: item.image_url || null,
         imageKind: 'image',
-        alt: item.title ? `${item.title} experience` : 'Featured experience image'
-      })
+        alt: item.title ? `${item.title} experience` : 'Featured experience image',
+        href: item.slug ? `/experiences/${item.slug}` : '/experiences',
+      }
     }
-  }
-
-  // Up to 2 review quotes
-  const reviews = googleReviews.value.filter(r => (r.comment?.text || r.content)?.length > 40)
-  for (let i = 0; i < Math.min(2, reviews.length); i++) {
-    const r = reviews[i]
-    tiles.push({ type: 'review', text: (r.comment?.text || r.content || '').slice(0, 160), author: r.reviewer?.displayName || r.author_name || 'Anonymous' })
-  }
-
-  return tiles.slice(0, 7)
+  })
 })
 
 </script>

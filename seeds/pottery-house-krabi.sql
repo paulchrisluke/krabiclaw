@@ -194,9 +194,29 @@ VALUES
    '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.12.15.jpeg',
    'image/jpeg', 'post-cocktails.jpg', 'Cocktails and Clay Friday event', 'interior', 'active');
 
--- Set hero images
+-- Hero video assets (R2-hosted)
+INSERT OR REPLACE INTO media_assets
+  (id, organization_id, site_id, location_id,
+   kind, provider, source,
+   r2_key, public_url,
+   mime_type, file_name, alt_text, category, status)
+VALUES
+  ('media-ph-hero-video', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
+   'video', 'cloudflare_r2', 'uploaded',
+   'sites/site-pottery-house/media/media-ph-hero-video.mp4',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-hero-video.mp4',
+   'video/mp4', 'pottery-house-hero.mp4', 'Pottery House Krabi studio hero video', 'exterior', 'active'),
+  ('media-ph-beach-hero-video', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-beachfront',
+   'video', 'cloudflare_r2', 'uploaded',
+   'sites/site-pottery-house/media/media-ph-beach-hero-video.mp4',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-beach-hero-video.mp4',
+   'video/mp4', 'pottery-house-beach-hero.mp4', 'Beachfront pottery session hero video at Klong Muang', 'exterior', 'active');
+
+-- Set hero images and videos
 UPDATE business_locations SET hero_image_asset_id = 'media-ph-hero' WHERE id = 'loc-pottery-house';
 UPDATE business_locations SET hero_image_asset_id = 'media-ph-beach' WHERE id = 'loc-pottery-beachfront';
+UPDATE business_locations SET hero_video_asset_id = 'media-ph-hero-video' WHERE id = 'loc-pottery-house';
+UPDATE business_locations SET hero_video_asset_id = 'media-ph-beach-hero-video' WHERE id = 'loc-pottery-beachfront';
 
 -- Experiences (no menu — this is an experience-only site)
 INSERT OR REPLACE INTO experiences

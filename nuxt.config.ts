@@ -4,11 +4,14 @@ import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
 
 export default defineNuxtConfig({
-  modules: ['nitro-cloudflare-dev', 'nuxt-gtag', '@nuxtjs/robots', '@nuxtjs/sitemap', 'nuxt-schema-org', '@nuxtjs/i18n', '@nuxt/ui', '@nuxt/eslint'],
+  modules: ['nitro-cloudflare-dev', '@nuxt/scripts', '@nuxtjs/robots', '@nuxtjs/sitemap', 'nuxt-schema-org', '@nuxtjs/i18n', '@nuxt/ui', '@nuxt/eslint', '@nuxt/image', '@nuxt/fonts'],
 
-  
-  gtag: {
-    id: 'G-Z18L1Y4G7K'
+  scripts: {
+    registry: {
+      googleAnalytics: {
+        id: 'G-Z18L1Y4G7K'
+      }
+    }
   },
   
   app: {
@@ -194,6 +197,12 @@ export default defineNuxtConfig({
     chokidar: {
       ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
     }
+  },
+
+  // Caching Rules
+  routeRules: {
+    '/': { swr: 3600 },
+    '/assets/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } }
   },
 
   // Nitro configuration for Cloudflare deployment

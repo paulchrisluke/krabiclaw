@@ -5,14 +5,14 @@
       <main class="grow">
         <slot />
       </main>
-      <PlatformFooter />
+      <LazyPlatformFooter />
     </UTheme>
   </div>
 </template>
 
 <script setup>
 import PlatformHeader from '~/components/platform/PlatformHeader.vue'
-import PlatformFooter from '~/components/platform/PlatformFooter.vue'
+
 
 useHead({
   titleTemplate: (title) => title ? `${title} | KrabiClaw` : 'KrabiClaw | AI Restaurant Platform'

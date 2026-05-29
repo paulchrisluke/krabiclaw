@@ -296,6 +296,17 @@
           </div>
         </div>
       </section>
+
+      <!-- ── Dynamic content blocks ───────────────────────────── -->
+      <template v-if="contentBlocks.length > 0">
+        <component
+          v-for="block in contentBlocks.filter(b => b.component)"
+          :key="block._uid || block.field"
+          :is="resolveComponent(block.component)"
+          :data="block"
+          class="content-block"
+        />
+      </template>
     </template>
 
     <!-- Not found -->
@@ -310,10 +321,12 @@
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow } from '~/utils/formatters'
 import { formatMoneyAmount } from '~/shared/money'
+import { useDynamicComponent } from '~/composables/useDynamicComponent'
 
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 
 const { resolveMedia } = useMedia()
+const { resolveComponent } = useDynamicComponent()
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
@@ -336,6 +349,7 @@ const {
   config: bootstrapConfig,
   hasExperiences,
   experiencesList,
+  contentBlocks,
 } = useBootstrap()
 
 const hasMenu = computed(() => {

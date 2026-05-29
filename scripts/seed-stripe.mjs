@@ -158,15 +158,15 @@ async function main() {
   // Recurring plans
   await createSubscriptionPlan({
     name: 'Growth',
-    description: 'Your site, your domain — we handle updates so you can focus on the food.',
+    description: 'Your site, your domain — we handle updates so you can focus on your business.',
     planId: 'growth',
     amountCents: 4900,
     highlighted: false,
     features: [
       'AI-built site live in minutes',
-      'Your own domain (yourrestaurant.com)',
-      'WhatsApp menu & hours updates — we handle it',
-      'Reservations, experiences & delivery links',
+      'Your own domain (yourbusiness.com)',
+      'WhatsApp content & hours updates — we handle it',
+      'Bookings, experiences & ordering links',
       'Booking notifications via WhatsApp or email',
       '1 language translation by our team',
       'Google Business profile basics',
@@ -175,7 +175,7 @@ async function main() {
 
   await createSubscriptionPlan({
     name: 'Managed',
-    description: 'Send us a WhatsApp. We run your restaurant online — no dashboard login needed.',
+    description: 'Send us a WhatsApp. We run your online presence — no dashboard login needed.',
     planId: 'managed',
     amountCents: 14900,
     highlighted: true,

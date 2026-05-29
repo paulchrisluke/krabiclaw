@@ -14,7 +14,7 @@
 
     <!-- Background image slot (only rendered if no video) -->
     <div v-else-if="image" class="absolute inset-0">
-      <img :src="image" :alt="title" class="w-full h-full object-cover" />
+      <NuxtImg :src="image" :alt="title" class="w-full h-full object-cover" fetchpriority="high" preload format="webp" />
     </div>
 
     <!-- Content -->

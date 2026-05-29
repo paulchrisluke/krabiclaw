@@ -87,8 +87,8 @@
         </div>
         <h3 class="text-xl font-extrabold text-default tracking-tight">Send us a WhatsApp. We handle the rest.</h3>
         <p class="text-sm leading-relaxed text-muted max-w-2xl">
-          On Managed or SEO Accelerator, Paul & Julia own your restaurant's online presence.
-          Menu change? Voice note us. New seasonal menu? We update it. Tourists can't find you? We fix it.
+          On Managed or SEO Accelerator, Paul & Julia own your online presence.
+          Content update? Voice note us. New season or offerings? We update it. Visitors can't find you? We fix it.
           Less than one hour of agency work per month — at a fraction of the cost.
         </p>
       </div>
@@ -196,9 +196,9 @@ type ComparisonRow = { feature: string } & Record<string, CellValue>
 
 const comparisonRows: ComparisonRow[] = [
   { feature: 'AI site builder (live in minutes)', free: true,    growth: true,      managed: true },
-  { feature: 'WhatsApp menu updates',             free: false,   growth: true,      managed: true },
-  { feature: 'Reservations & experiences',        free: true,    growth: true,      managed: true },
-  { feature: 'Delivery / order links',            free: true,    growth: true,      managed: true },
+  { feature: 'WhatsApp content updates',          free: false,   growth: true,      managed: true },
+  { feature: 'Bookings & experiences',            free: true,    growth: true,      managed: true },
+  { feature: 'Order & delivery links',            free: true,    growth: true,      managed: true },
   { feature: 'AI content generation',             free: '500 credits', growth: '2,000 credits', managed: 'Unlimited' },
   { feature: 'LLM-ready SEO (get found by AI)',   free: 'Basic', growth: 'Advanced', managed: 'Advanced' },
   { feature: 'Multi-language support',            free: false,   growth: '1 language', managed: 'Unlimited' },

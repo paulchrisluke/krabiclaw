@@ -8,8 +8,8 @@
       <main class="grow">
         <slot />
       </main>
-      <SayaFooter />
-      <SayaUpgradeModal />
+      <LazySayaFooter />
+      <LazySayaUpgradeModal />
     </UTheme>
   </div>
 </template>
@@ -43,6 +43,10 @@ const validGoogleAnalyticsId = computed(() => {
   return isValidGoogleAnalyticsId(id) ? id : null
 })
 
+if (validGoogleAnalyticsId.value) {
+  useScriptGoogleAnalytics({ id: validGoogleAnalyticsId })
+}
+
 useHead(() => {
   const meta = []
   if (googleSiteVerification.value) {
@@ -52,26 +56,8 @@ useHead(() => {
     })
   }
 
-  const script = []
-  if (validGoogleAnalyticsId.value) {
-    script.push({
-      src: `https://www.googletagmanager.com/gtag/js?id=${validGoogleAnalyticsId.value}`,
-      async: true
-    })
-    script.push({
-      innerHTML: `
-window.dataLayer = window.dataLayer || [];
-function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date());
-gtag('config', '${validGoogleAnalyticsId.value}');
-      `.trim(),
-      type: 'text/javascript'
-    })
-  }
-
   return {
-    meta,
-    script
+    meta
   }
 })
 </script>

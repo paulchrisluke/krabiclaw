@@ -27,6 +27,7 @@ interface ContentRow {
   hero_kind: string | null;
   hero_video_public_url: string | null;
   hero_video_kind: string | null;
+  component: string | null;
   [key: string]: unknown;
 }
 
@@ -258,6 +259,16 @@ export const useBootstrap = () => {
     }, {});
   });
 
+  // ── Content Blocks for Dynamic Rendering ───────────────────
+  const contentBlocks = computed(() => {
+    const rows = (data.value?.content ?? []) as ContentRow[];
+    return rows.map((row) => ({
+      ...row,
+      _uid: row.field, // Use field as unique identifier for now
+      component: row.component || null,
+    }));
+  });
+
   return {
     data,
     pending,
@@ -278,6 +289,7 @@ export const useBootstrap = () => {
     getFieldStr,
     getHero,
     contentMap,
+    contentBlocks,
     menu: menuData,
     menuItemsBySection,
     error,

@@ -5,7 +5,7 @@
       <h1 class="saya-display-md text-default"><em class="saya-italic">Frequently</em> asked</h1>
       <p class="mt-5 max-w-xl text-sm leading-relaxed text-muted">Questions asked by guests on Google. Owner-answered questions are pinned to the top.</p>
     </header>
-    <SayaQA :qa="googleQA" :show-title="false" />
+    <LazySayaQA :qa="googleQA" :show-title="false" />
   </div>
 </template>
 

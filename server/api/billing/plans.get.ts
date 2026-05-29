@@ -41,10 +41,15 @@ interface MarketingFeature {
 const STARTER_PLAN: Plan = {
   id: "free",
   name: "Starter",
-  tagline: "Get your restaurant online for free",
+  tagline: "Get your business online for free",
   highlighted: false,
   prices: [],
-  features: [],
+  features: [
+    "AI-built site live in minutes",
+    "Bookings & ordering links",
+    "500 AI credits to start",
+    "Basic SEO — get found by search & AI",
+  ],
   limits: {
     locations: 1,
     sites: 1,
