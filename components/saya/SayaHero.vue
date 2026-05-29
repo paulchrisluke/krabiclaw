@@ -88,6 +88,10 @@ const { showVideo, videoEl } = useHeroVideo(() => props.video)
 if (props.image && props.video) {
   console.warn('[SayaHero] Both image and video props provided. Video will take precedence over image.')
 }
+// Warn if video is set without poster — poster is required for SSR/LCP
+if (import.meta.dev && props.video && !props.poster) {
+  console.warn('[SayaHero] "video" prop is set but "poster" is missing. A poster image is required for SSR and LCP performance.')
+}
 
 const heights = {
   home: '100vh',

@@ -9,7 +9,7 @@
       </div>
       <NuxtLink
         :to="linkTarget"
-        class="mb-1 inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-default no-underline opacity-70 transition-opacity hover:opacity-100"
+        class="group mb-1 inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-default no-underline opacity-70 transition-opacity hover:opacity-100"
       >
         {{ copy.featuredViewAll }}
         <span class="transition-transform duration-200 group-hover:translate-x-0.5">→</span>
@@ -27,8 +27,10 @@
         <div class="aspect-4/5 overflow-hidden bg-muted">
           <video
             v-if="item.imageKind === 'video' && item.image"
-            :src="item.image"
+            :src="clientReady ? item.image : undefined"
             :autoplay="i === 0"
+            :preload="i === 0 ? 'auto' : 'none'"
+            :loading="i === 0 ? undefined : 'lazy'"
             muted
             loop
             playsinline
@@ -86,6 +88,9 @@ const props = withDefaults(defineProps<Props>(), {
 const items = computed(() => props.data?.items ?? [])
 const hasMenu = computed(() => props.data?.hasMenu ?? false)
 const vertical = computed(() => props.data?.vertical ?? 'restaurant')
+
+const clientReady = ref(false)
+onMounted(() => { clientReady.value = true })
 
 const copy = computed(() => getVerticalCopy(vertical.value))
 const linkTarget = computed(() => hasMenu.value ? '/menu' : '/experiences')

@@ -15,9 +15,10 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   error: Object
 })
+const { error } = props
 const isDev = import.meta.env.MODE === 'development'
 const errorMessage = computed(() => {
   if (error.statusCode === 404) return 'Page not found.'

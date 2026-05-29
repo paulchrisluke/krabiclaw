@@ -1022,29 +1022,32 @@ WHERE id = '${assetId}' AND site_id = '${siteIdForPatch}';`;
     `\n→ Executing seed SQL against ${REMOTE ? "remote" : "local"} D1...`,
   );
   const d1Flag = REMOTE ? "--remote" : "--local";
-  try {
-    spawnSync(
+  {
+    const result = spawnSync(
       "yarn",
       ["wrangler", "d1", "execute", "DB", d1Flag, "--file", seedPath],
       { stdio: "inherit", cwd: process.cwd() },
     );
-  } catch {
-    console.error("\n✗ Seed execution failed — check wrangler output above.");
-    process.exit(1);
+    if (result.status !== 0) {
+      console.error("\n✗ Seed execution failed — check wrangler output above.");
+      process.exit(1);
+    }
   }
 
   // Apply CF Images patch if one was generated
   if (cfImagesPatchPath && existsSync(cfImagesPatchPath)) {
     console.log("\n→ Applying CF Images URL patch...");
-    try {
-      spawnSync(
+    {
+      const result = spawnSync(
         "yarn",
         ["wrangler", "d1", "execute", "DB", d1Flag, "--file", cfImagesPatchPath],
         { stdio: "inherit", cwd: process.cwd() },
       );
+      if (result.status !== 0) {
+        console.error("  ✗ CF Images patch failed — run manually: wrangler d1 execute DB --file " + cfImagesPatchPath);
+        process.exit(1);
+      }
       console.log("  ✓ CF Images URLs applied");
-    } catch {
-      console.error("  ✗ CF Images patch failed — run manually: wrangler d1 execute DB --file " + cfImagesPatchPath);
     }
   }
 

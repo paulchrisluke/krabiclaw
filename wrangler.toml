@@ -36,6 +36,10 @@ bucket_name = "krabiclaw-media"
 [[kv_namespaces]]
 binding = "SITE_CACHE"
 id = "7fadf142e35745d6bec16b260eaab2f2"
+# preview_id should be set to a separate KV namespace for preview environments
+# Run: wrangler kv:namespace create "SITE_CACHE_PREVIEW" --preview
+# Then update preview_id below with the returned ID
+# preview_id = "PREVIEW_NAMESPACE_ID_HERE"
 
 [ai]
 binding = "AI"

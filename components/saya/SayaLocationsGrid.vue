@@ -16,14 +16,24 @@
         class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
       >
         <div class="aspect-video overflow-hidden bg-muted">
-          <ClientOnly v-if="loc.public_url && loc.kind === 'video'">
-            <video
-              v-if="visibleCards.has(i)"
-              :src="loc.public_url"
-              class="aspect-video w-full object-cover"
-              :autoplay="i === 0"
-              muted loop playsinline preload="none"
-            />
+          <ClientOnly v-if="loc.kind === 'video'">
+            <template v-if="visibleCards.has(i)">
+              <video
+                :src="loc.public_url"
+                :poster="loc.hero_video_thumbnail_url || undefined"
+                class="aspect-video w-full object-cover"
+                :autoplay="i === 0"
+                muted loop playsinline preload="none"
+              />
+            </template>
+            <template v-else>
+              <img
+                v-if="loc.hero_video_thumbnail_url || loc.public_url"
+                :src="loc.hero_video_thumbnail_url || loc.public_url"
+                :alt="loc.title"
+                class="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+            </template>
           </ClientOnly>
           <img
             v-else-if="loc.public_url"

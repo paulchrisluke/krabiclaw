@@ -85,9 +85,9 @@
       <!-- ── Dynamic content blocks ───────────────────────────── -->
       <template v-if="contentBlocks.length > 0">
         <component
-          v-for="block in contentBlocks.filter(b => b.component && !['story', 'journey', 'cta'].includes(b.field))"
+          v-for="block in contentBlocks.filter(b => b.component && !['hero','story', 'journey', 'cta'].includes(b.field))"
           :key="block._uid || block.field"
-          :is="resolveComponent(block.component)"
+          :is="resolveComponent(block.component) || 'SayaContentBlockFallback'"
           :data="block"
           class="content-block"
         />

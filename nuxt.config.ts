@@ -64,7 +64,11 @@ export default defineNuxtConfig({
       }
     },
     build: {
-      cssCodeSplit: false,
+      // CSS code splitting was disabled due to FOUC/hydration races in the
+      // Cloudflare Workers SSR environment. Re-enable via env flag when you're
+      // confident the runtime supports async CSS chunk loading. Default remains
+      // false to avoid accidental FOUC in production.
+      cssCodeSplit: process.env.NUXT_CSS_CODE_SPLIT === 'true',
     },
   },
 
@@ -223,9 +227,20 @@ export default defineNuxtConfig({
     '/signup':       { headers: { 'cache-control': 'no-store' } },
     '/login':        { headers: { 'cache-control': 'no-store' } },
 
+    // Root path: no edge caching to avoid browser-language redirect conflicts
+    // detectBrowserLanguage redirects based on Accept-Language without a cookie,
+    // so CDN caching would serve the wrong locale redirect. Disable edge cache here.
+    '/': { headers: { 'cache-control': 'public, max-age=0, s-maxage=0' } },
+
     // Public marketing pages — cache at Cloudflare edge for 5 minutes
     // Requires a Cloudflare Cache Rule set to "Cache Everything" for *.krabiclaw.com/*
-    // to override the default Set-Cookie bypass behavior
+    // to override the default Set-Cookie bypass behavior.
+    // IMPORTANT (multi-tenant): The Cloudflare Cache Rule MUST include a custom cache key
+    // that incorporates the Host header (subdomain) so responses for demo.krabiclaw.com
+    // and pottery-house.krabiclaw.com are cached separately. Without this, Cloudflare keys
+    // by path alone and tenants will receive each other's cached pages.
+    // Automation: there's a lightweight e2e that asserts cache isolation between hostnames
+    // at tests/e2e/cache-key.spec.ts — run `yarn test:e2e` after deployment to validate.
     '/**': { headers: { 'cache-control': 'public, s-maxage=300, stale-while-revalidate=3600, max-age=0' } },
   },
 

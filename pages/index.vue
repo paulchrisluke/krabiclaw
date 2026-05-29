@@ -241,7 +241,7 @@
           <NuxtLink
             v-for="(loc, locIdx) in locations"
             :key="loc.id"
-            :ref="el => { if (el) locCardRefs[locIdx] = el }"
+            :ref="el => { const node = el && (el.$el || el); if (node) locCardRefs[locIdx] = node }"
             :to="`/locations/${loc.slug}`"
             class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
           >
@@ -529,7 +529,7 @@
         <component
           v-for="block in contentBlocks.filter(b => b.component && !['hero', 'featured', 'locations', 'story', 'cta'].includes(b.field))"
           :key="block._uid || block.field"
-          :is="resolveComponent(block.component)"
+          :is="resolveComponent(block.component) || 'SayaContentBlockFallback'"
           :data="block"
           class="content-block"
         />
@@ -554,21 +554,22 @@ const { showVideo: heroVideoShow, videoEl: heroVideoEl } = useHeroVideo(() => he
 // Inline location grid — load videos via IntersectionObserver when cards scroll into view
 const locCardRefs = ref([])
 const visibleLocCards = ref(new Set())
+let obs = null
 onMounted(() => {
   if (!('IntersectionObserver' in window)) {
     setTimeout(() => { locations.value.forEach((_, i) => visibleLocCards.value.add(i)) }, 2000)
     return
   }
-  const obs = new IntersectionObserver((entries) => {
+  obs = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (!entry.isIntersecting) return
       const i = locCardRefs.value.indexOf(entry.target)
       if (i >= 0) { visibleLocCards.value = new Set([...visibleLocCards.value, i]); obs.unobserve(entry.target) }
     })
   }, { rootMargin: '200px' })
-  watch(locCardRefs, refs => refs.forEach(el => el && obs.observe(el)), { immediate: true })
-  onUnmounted(() => obs.disconnect())
+  watch(locCardRefs, refs => refs.forEach(el => el && obs && obs.observe(el)), { immediate: true })
 })
+onUnmounted(() => { if (obs) obs.disconnect() })
 
 // Platform homepage data
 const avatars = [

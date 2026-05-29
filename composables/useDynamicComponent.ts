@@ -8,6 +8,7 @@ export function useDynamicComponent() {
    * @returns The Vue component name or the fallback component name
    */
   const resolveComponent = (componentName: string | null | undefined) => {
+    if (!componentName || (typeof componentName === 'string' && componentName.trim() === '')) return undefined
     const resolved = getVueComponent(componentName)
     return resolved || 'SayaContentBlockFallback'
   }

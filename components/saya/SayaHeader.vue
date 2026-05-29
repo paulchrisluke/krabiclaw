@@ -216,9 +216,9 @@ const languageItems = computed(() =>
   }))
 )
 
-const locations = computed(() => bootstrapLocations.value)
+const locations = computed(() => Array.isArray(bootstrapLocations.value) ? bootstrapLocations.value : [])
 const hasOrderLinks = computed(() =>
-  locations.value.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
+  (locations.value || []).some((loc: ApiRecord) => loc && (loc.grab_url || loc.uber_eats_url || loc.foodpanda_url))
 )
 
 const primaryCtaPath = computed(() => {

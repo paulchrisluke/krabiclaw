@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // Script to populate component field in site_content based on field patterns
 // This maps existing field names to component identifiers for dynamic rendering
 
@@ -42,7 +43,7 @@ const fieldToComponentMap = {
   'qa.heading': 'SayaQA',
 }
 
-// SQL to update component field based on field patterns (using parameterized approach)
+// SQL to update component field based on field patterns (using escaped literals)
 const updateStatements = Object.entries(fieldToComponentMap).map(([field, component]) => {
   // Escape single quotes to prevent SQL injection
   const safeField = field.replace(/'/g, "''")

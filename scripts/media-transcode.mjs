@@ -12,13 +12,13 @@
  *
  * Options:
  *   --max-duration <s>   Trim if video is longer than N seconds (default: 15)
- *   --crf <n>            H.264 CRF, 0–51, lower = better quality (default: 26)
+ *   --crf <n>            H.264 CRF, 0–51, lower = better quality (default: 30)
  *   --remote             Use remote D1/R2 (default: local)
  */
 
 import { parseArgs } from 'node:util'
-import { readdir, stat, mkdir, writeFile, readFile, unlink } from 'node:fs/promises'
-import { join, extname, basename } from 'node:path'
+import { readdir, stat, mkdir, unlink } from 'node:fs/promises'
+import { join, extname } from 'node:path'
 import { existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { spawnSync, execFileSync } from 'node:child_process'
@@ -77,9 +77,13 @@ if (!SLUG_SAFE.test(SLUG)) {
 // ── ffmpeg / ffprobe check ────────────────────────────────────────────────────
 
 function requireBin(name) {
-  const result = spawnSync('which', [name], { encoding: 'utf8' })
-  if (result.status !== 0) {
-    console.error(`Error: ${name} not found in PATH. Install with: brew install ffmpeg`)
+  const result = spawnSync(name, ['--version'], { encoding: 'utf8' })
+  if (result.error && result.error.code === 'ENOENT') {
+    console.error(`Error: ${name} not found in PATH. Please install ${name} and ensure it's available in your PATH.`)
+    process.exit(1)
+  }
+  if (result.status !== 0 && result.error) {
+    console.error(`Error: failed to invoke ${name}: ${result.error.message}`)
     process.exit(1)
   }
 }
@@ -204,8 +208,8 @@ function d1Query(sql) {
   try {
     const arr = JSON.parse(match[0])
     return arr[0]?.results ?? null
-  } catch {
-    return null
+  } catch (err) {
+    throw new Error(`d1Query JSON parse failed: ${err.message}; output: ${raw}`)
   }
 }
 
@@ -218,7 +222,8 @@ function d1Execute(sql) {
 }
 
 function lookupSite(slug) {
-  const rows = d1Query(`SELECT id, organization_id FROM sites WHERE slug = '${slug}' LIMIT 1`)
+  const safeSlug = String(slug).replace(/'/g, "''")
+  const rows = d1Query(`SELECT id, organization_id FROM sites WHERE slug = '${safeSlug}' LIMIT 1`)
   if (!rows?.length) {
     console.error(`Error: No site found for slug '${slug}' in ${REMOTE ? 'remote' : 'local'} D1`)
     process.exit(1)
@@ -282,12 +287,12 @@ async function transcodeDir() {
     console.log(`  ↑ Uploading to R2...`)
     r2Put(outputPath, r2Key)
 
-    const thumbPath = join(tmpDir, `${assetId}-thumb.jpg`)
-    const thumbR2Key = `sites/${siteId}/media/${assetId}-thumb.jpg`
+    const thumbPath = join(tmpDir, `${assetId}-thumb.webp`)
+    const thumbR2Key = `sites/${siteId}/media/${assetId}-thumb.webp`
     const thumbPublicUrl = `https://media.krabiclaw.com/${thumbR2Key}`
     console.log(`  ✂  Extracting thumbnail at ${THUMBNAIL_AT}s...`)
     extractThumbnail(outputPath, thumbPath, THUMBNAIL_AT)
-    r2Put(thumbPath, thumbR2Key, 'image/jpeg')
+    r2Put(thumbPath, thumbR2Key, 'image/webp')
     await unlink(thumbPath)
 
     const escapedFilename = filename.replace(/'/g, "''")
@@ -370,12 +375,12 @@ async function transcodeAsset() {
   console.log(`\n→ Re-uploading to R2 (same key)...`)
   r2Put(outputPath, asset.r2_key)
 
-  const thumbR2Key = asset.r2_key.replace(/\.mp4$/, '-thumb.jpg')
+  const thumbR2Key = asset.r2_key.replace(/\.mp4$/, '-thumb.webp')
   const thumbPublicUrl = `https://media.krabiclaw.com/${thumbR2Key}`
-  const thumbPath = join(tmpDir, 'thumb.jpg')
+  const thumbPath = join(tmpDir, 'thumb.webp')
   console.log(`\n→ Extracting thumbnail at ${THUMBNAIL_AT}s...`)
   extractThumbnail(outputPath, thumbPath, THUMBNAIL_AT)
-  r2Put(thumbPath, thumbR2Key, 'image/jpeg')
+  r2Put(thumbPath, thumbR2Key, 'image/webp')
   await unlink(thumbPath)
 
   console.log(`\n→ Updating file_size + thumbnail_url in D1...`)
@@ -404,7 +409,7 @@ async function thumbnailOnlyAsset() {
 
   const tmpDir = join(tmpdir(), `kc-thumb-${SLUG}-${Date.now()}`)
   await mkdir(tmpDir, { recursive: true })
-  const thumbPath = join(tmpDir, 'thumb.jpg')
+  const thumbPath = join(tmpDir, 'thumb.webp')
 
   let sourcePath
   let cleanup = false
@@ -438,12 +443,12 @@ async function thumbnailOnlyAsset() {
 
   let thumbPublicUrl
   if (asset.provider === 'cloudflare_r2') {
-    const thumbR2Key = asset.r2_key.replace(/\.mp4$/, '-thumb.jpg')
-    thumbPublicUrl = `https://media.krabiclaw.com/${thumbR2Key}`
-    r2Put(thumbPath, thumbR2Key, 'image/jpeg')
+  const thumbR2Key = asset.r2_key.replace(/\.mp4$/, '-thumb.webp')
+  thumbPublicUrl = `https://media.krabiclaw.com/${thumbR2Key}`
+  r2Put(thumbPath, thumbR2Key, 'image/webp')
   } else {
     // Store alongside the source in public/
-    const rel = asset.public_url.replace(/^\//, '').replace(/\.mp4$/, '-thumb.jpg')
+  const rel = asset.public_url.replace(/^\//, '').replace(/\.mp4$/, '-thumb.webp')
     const destPath = join(process.cwd(), 'public', rel)
     const { copyFile } = await import('node:fs/promises')
     await copyFile(thumbPath, destPath)

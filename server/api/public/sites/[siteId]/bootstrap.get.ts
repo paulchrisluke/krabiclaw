@@ -99,7 +99,8 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Parallelize location slug resolution (only needs siteId)
+  // Resolve location slug after site resolution (location lookup runs after
+  // site metadata is fetched; not parallelized).
   const locationRow = await (locationSlug
     ? db
         .prepare(

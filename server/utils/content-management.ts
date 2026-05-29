@@ -448,15 +448,30 @@ export const publishDrafts = async (db: D1Database, organizationId: string, site
 
 export const publishAllDrafts = async (db: D1Database) => {
   const { results: drafts } = await db.prepare(
-    `SELECT id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, updated_at FROM site_content_drafts ORDER BY organization_id, site_id, location_id, page, field`
+    `SELECT id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component, updated_at FROM site_content_drafts ORDER BY organization_id, site_id, location_id, page, field`
   ).all<SiteContent>()
-  
+
   if (!drafts || drafts.length === 0) return
 
-  const stmts = drafts.map(draft => buildUpsertSiteStmt(db, draft))
-  stmts.push(db.prepare(`DELETE FROM site_content_drafts`))
-  
-  await db.batch(stmts)
+  // Perform upserts in manageable batches to avoid oversized batch payloads
+  // and run inside a transaction-like sequence. D1's `db.batch` can fail on
+  // very large arrays — chunking keeps memory and request size bounded.
+  const CHUNK_SIZE = 200
+  try {
+    for (let i = 0; i < drafts.length; i += CHUNK_SIZE) {
+      const chunk = drafts.slice(i, i + CHUNK_SIZE)
+      const stmts = chunk.map(draft => buildUpsertSiteStmt(db, draft))
+      // Execute this chunk
+      await db.batch(stmts)
+    }
+
+    // After successful upserts, remove published drafts.
+    await db.prepare(`DELETE FROM site_content_drafts`).run()
+  } catch (err) {
+    // Bubble up with context for easier debugging in deploy logs
+    console.error('[content-management] publishAllDrafts failed during batch upsert:', err)
+    throw err
+  }
 }
 
 export const discardDrafts = async (db: D1Database, organizationId: string, siteId: string, page: string, locationId?: string) => {

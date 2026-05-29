@@ -43,10 +43,13 @@ const validGoogleAnalyticsId = computed(() => {
   return isValidGoogleAnalyticsId(id) ? id : null
 })
 
-const _gaId = validGoogleAnalyticsId.value
-if (_gaId) {
-  useScriptGoogleAnalytics({ id: _gaId })
-}
+const lastRegisteredGaId = ref(null)
+watch(validGoogleAnalyticsId, (newId) => {
+  if (newId && newId !== lastRegisteredGaId.value) {
+    useScriptGoogleAnalytics({ id: newId })
+    lastRegisteredGaId.value = newId
+  }
+}, { immediate: true })
 
 useHead(() => {
   const meta = []
