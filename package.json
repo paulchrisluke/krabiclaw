@@ -22,11 +22,6 @@
     "schema:remote": "wrangler d1 migrations apply DB --remote",
     "seed:local": "yarn wrangler d1 execute DB --local --file seeds/demo.sql",
     "seed:remote": "node scripts/seed-remote-guard.mjs",
-<<<<<<< HEAD
-    "secret:cron": "yarn wrangler pages secret put CRON_SECRET",
-    "stripe:listen": "stripe listen --forward-to localhost:3000/api/billing/webhook",
-    "benchmark": "node scripts/benchmark-bootstrap.mjs"
-=======
     "seed:pottery-local": "yarn wrangler d1 execute DB --local --file seeds/pottery-house-krabi.sql",
     "seed:pottery-remote": "yarn wrangler d1 execute DB --remote --file seeds/pottery-house-krabi.sql",
     "client:import": "node scripts/client-import.mjs",
@@ -38,8 +33,8 @@
     "lint:seeds": "node scripts/lint-seeds.mjs",
     "secret:cron": "yarn wrangler secret put CRON_SECRET",
     "stripe:listen": "stripe listen --forward-to localhost:3000/api/billing/webhook",
+    "benchmark": "node scripts/benchmark-bootstrap.mjs",
     "benchmark:bootstrap": "node scripts/benchmark-bootstrap.mjs"
->>>>>>> origin/main
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260503.1",

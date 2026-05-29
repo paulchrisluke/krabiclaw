@@ -12,13 +12,8 @@
           The Ultimate Platform
         </span>
         <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[1.05] text-default m-0 text-balance">
-<<<<<<< HEAD
           Supercharge Your Business. <br class="hidden sm:inline" />
           <span class="bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">Zero Middlemen.</span>
-=======
-          Supercharge Your Business. <br class="hidden sm:inline" />
-          <span class="bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">Zero Middlemen.</span>
->>>>>>> origin/main
         </h1>
         <p class="text-lg sm:text-xl text-muted leading-relaxed m-0 text-balance">
           Say goodbye to expensive agencies, 30% commissions, and buggy plugins. KrabiClaw gives your business a high-converting storefront, direct bookings, and automated local SEO in one simple system.

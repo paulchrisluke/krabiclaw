@@ -1,222 +1,330 @@
-import { callAiGateway, type AiTool, type AiMessage } from '~/server/utils/ai-gateway'
-import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
-import { listPosts, createPost, publishPost } from '~/server/utils/post-management'
-import { getMenus, getMenuWithItems, createMenu, updateMenu, createMenuItem, updateMenuItem, deleteMenuItem, deleteMenu, renameMenuSection, deleteMenuSection } from '~/server/utils/menu-management'
-import { deleteDraftContentField, deleteSiteContentField, discardDrafts, getDraftContent, getPageContent, getSiteContentField, publishDrafts, upsertDraftContent, upsertSiteContent } from '~/server/utils/content-management'
-import { setConfig } from '~/server/utils/site-config'
-import { deleteSiteLocale, listSiteLocales, upsertSiteLocale } from '~/server/utils/site-locales'
-import { buildTranslationInventory, createTranslationJob, publishTranslationDrafts } from '~/server/utils/translation-inventory'
-import { processTranslationJobBatch } from '~/server/utils/translation-processor'
-import { getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
-import { extractMenuFromMediaAsset } from '~/server/utils/chowbot-media'
-import { upsertChannelState } from '~/server/utils/chowbot-conversations'
-import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
-import { contentRegistry, getFieldDef } from '~/config/content-registry'
-import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
-import type { MenuItem, UpdateMenuItemRequest } from '~/server/types/menu'
+import {
+  callAiGateway,
+  type AiTool,
+  type AiMessage,
+} from "~/server/utils/ai-gateway";
+import { hasCredits, chargeCredits } from "~/server/utils/ai-credits";
+import {
+  listPosts,
+  createPost,
+  publishPost,
+} from "~/server/utils/post-management";
+import {
+  getMenus,
+  getMenuWithItems,
+  createMenu,
+  updateMenu,
+  createMenuItem,
+  updateMenuItem,
+  deleteMenuItem,
+  deleteMenu,
+  renameMenuSection,
+  deleteMenuSection,
+} from "~/server/utils/menu-management";
+import {
+  deleteDraftContentField,
+  deleteSiteContentField,
+  discardDrafts,
+  getDraftContent,
+  getPageContent,
+  getSiteContentField,
+  publishDrafts,
+  upsertDraftContent,
+  upsertSiteContent,
+} from "~/server/utils/content-management";
+import { setConfig } from "~/server/utils/site-config";
+import {
+  deleteSiteLocale,
+  listSiteLocales,
+  upsertSiteLocale,
+} from "~/server/utils/site-locales";
+import {
+  buildTranslationInventory,
+  createTranslationJob,
+  publishTranslationDrafts,
+} from "~/server/utils/translation-inventory";
+import { processTranslationJobBatch } from "~/server/utils/translation-processor";
+import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
+import { extractMenuFromMediaAsset } from "~/server/utils/chowbot-media";
+import { upsertChannelState } from "~/server/utils/chowbot-conversations";
+import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
+import { contentRegistry, getFieldDef } from "~/config/content-registry";
+import { SUPPORTED_CURRENCIES } from "~/shared/currencies";
+import type { MenuItem, UpdateMenuItemRequest } from "~/server/types/menu";
 
-const MAX_ITERATIONS = 10
-const MAX_SLUG_ATTEMPTS = 10
-const RESERVATIONS_PAGE = 'reservations'
-const RESERVATION_POLICIES_FIELD = 'policies.body'
-const HERO_FIELDS = new Set(['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'])
-const PLATFORM_PAGES = ['about', 'contact', 'help'] as const
-const TRANSLATION_SCOPES = new Set(['site', 'content', 'menus', 'locations', 'posts'])
+const MAX_ITERATIONS = 10;
+const MAX_SLUG_ATTEMPTS = 10;
+const RESERVATIONS_PAGE = "reservations";
+const RESERVATION_POLICIES_FIELD = "policies.body";
+const HERO_FIELDS = new Set([
+  "hero.title",
+  "hero.subtitle",
+  "hero.image",
+  "hero.video",
+]);
+const PLATFORM_PAGES = ["about", "contact", "help"] as const;
+const TRANSLATION_SCOPES = new Set([
+  "site",
+  "content",
+  "menus",
+  "locations",
+  "posts",
+]);
 
-type SqlBindValue = string | number | boolean | null
-export type JsonSerializable = string | number | boolean | null | JsonSerializable[] | { [key: string]: JsonSerializable }
+type SqlBindValue = string | number | boolean | null;
+export type JsonSerializable =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonSerializable[]
+  | { [key: string]: JsonSerializable };
 
 export interface ChowBotIncomingMessage {
-  role: 'user' | 'assistant'
-  content: string | JsonSerializable
+  role: "user" | "assistant";
+  content: string | JsonSerializable;
 }
 
 export interface ChowBotToolCall {
-  name: string
-  input: JsonSerializable
-  result: JsonSerializable
+  name: string;
+  input: JsonSerializable;
+  result: JsonSerializable;
 }
 
 export interface ChowBotRunEvent {
-  type: 'tool_start' | 'tool_done' | 'text' | 'done' | 'error'
-  name?: string
-  content?: string
-  message?: string
-  toolCalls?: ChowBotToolCall[]
-  creditsRemaining?: number | null
+  type: "tool_start" | "tool_done" | "text" | "done" | "error";
+  name?: string;
+  content?: string;
+  message?: string;
+  toolCalls?: ChowBotToolCall[];
+  creditsRemaining?: number | null;
 }
 
 export interface RunChowBotOptions {
-  db: D1Database
-  env: ApiRecord
-  orgId: string
-  siteId: string
-  userId: string
-  siteName: string
-  defaultCurrency: string
-  messages: ChowBotIncomingMessage[]
-  currentPage?: string
-  locationId?: string | null
-  channel?: 'dashboard' | 'whatsapp'
-  pendingMedia?: { assetId: string; siteId: string }
-  onEvent?: (_event: ChowBotRunEvent) => Promise<void> | void
+  db: D1Database;
+  env: ApiRecord;
+  orgId: string;
+  siteId: string;
+  userId: string;
+  siteName: string;
+  defaultCurrency: string;
+  messages: ChowBotIncomingMessage[];
+  currentPage?: string;
+  locationId?: string | null;
+  channel?: "dashboard" | "whatsapp";
+  pendingMedia?: { assetId: string; siteId: string };
+  onEvent?: (_event: ChowBotRunEvent) => Promise<void> | void;
 }
 
 export interface RunChowBotResult {
-  responseText: string
-  toolCalls: ChowBotToolCall[]
-  creditsRemaining: number | null
+  responseText: string;
+  toolCalls: ChowBotToolCall[];
+  creditsRemaining: number | null;
 }
 
 interface StatusCountRow {
-  status: string
-  count: number
+  status: string;
+  count: number;
 }
 
 const toSlug = (s: string) => {
-  const normalized = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-  if (normalized) return normalized
+  const normalized = s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  if (normalized) return normalized;
 
-  let hash = 0
+  let hash = 0;
   for (let i = 0; i < s.length; i += 1) {
-    hash = (hash * 31 + s.charCodeAt(i)) >>> 0
+    hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
   }
-  return `site-${hash.toString(36) || '0'}`
-}
+  return `site-${hash.toString(36) || "0"}`;
+};
 
 function isUniqueConstraintError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error || '')
-  return /UNIQUE constraint failed/i.test(message)
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /UNIQUE constraint failed/i.test(message);
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return error.message
-  return fallback
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
 }
 
 function toSqlText(value: ApiValue): string | null | undefined {
-  if (value === undefined) return undefined
-  if (value === null) return null
-  if (typeof value === 'string') return value
-  if (typeof value === 'number') return String(value)
-  return null
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return null;
 }
 
 function isValidHttpUrl(value: string): boolean {
   try {
-    const parsed = new URL(value)
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
   } catch {
-    return false
+    return false;
   }
 }
 
-
-
 function normalizeOrderingUrl(value: unknown, field: string): string | null {
-  if (value === undefined || value === null || value === '') return null
+  if (value === undefined || value === null || value === "") return null;
 
-  if (typeof value !== 'string') {
-    throw new Error(`${field} must be a URL string`)
+  if (typeof value !== "string") {
+    throw new Error(`${field} must be a URL string`);
   }
 
-  const trimmed = value.trim()
-  if (!trimmed) return null
+  const trimmed = value.trim();
+  if (!trimmed) return null;
 
   try {
-    const url = new URL(trimmed)
+    const url = new URL(trimmed);
 
-    if (!['http:', 'https:'].includes(url.protocol)) {
-      throw new Error('Invalid protocol')
+    if (!["http:", "https:"].includes(url.protocol)) {
+      throw new Error("Invalid protocol");
     }
 
-    return url.toString()
+    return url.toString();
   } catch {
-    throw new Error(`${field} must be a valid http:// or https:// URL`)
+    throw new Error(`${field} must be a valid http:// or https:// URL`);
   }
 }
 
 function menuItemKey(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 }
 
 function menuItemLookupKey(name: string): string {
-  const key = menuItemKey(name)
-  return key || name.trim().toLowerCase()
+  const key = menuItemKey(name);
+  return key || name.trim().toLowerCase();
 }
 
-function getToolString(record: Record<string, unknown>, key: string, maxLength: number): string | undefined {
-  const value = record[key]
-  return typeof value === 'string' ? value.slice(0, maxLength) : undefined
+function getToolString(
+  record: Record<string, unknown>,
+  key: string,
+  maxLength: number,
+): string | undefined {
+  const value = record[key];
+  return typeof value === "string" ? value.slice(0, maxLength) : undefined;
 }
 
-function getToolStringArray(record: Record<string, unknown>, key: string): string[] | undefined {
-  const value = record[key]
+function getToolStringArray(
+  record: Record<string, unknown>,
+  key: string,
+): string[] | undefined {
+  const value = record[key];
   if (Array.isArray(value)) {
-    return value.filter(v => typeof v === 'string')
+    return value.filter((v) => typeof v === "string");
   }
-  return undefined
+  return undefined;
 }
 
-function getToolBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
-  const value = record[key]
-  return typeof value === 'boolean' ? value : undefined
+function getToolBoolean(
+  record: Record<string, unknown>,
+  key: string,
+): boolean | undefined {
+  const value = record[key];
+  return typeof value === "boolean" ? value : undefined;
 }
 
 function normalizeAddressLines(value: string): string[] {
   return value
     .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(Boolean)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function isSiteContentPage(page: string): page is keyof typeof contentRegistry {
-  return Object.prototype.hasOwnProperty.call(contentRegistry, page)
+  return Object.prototype.hasOwnProperty.call(contentRegistry, page);
 }
 
-function isHeroField(field: string): field is 'hero.title' | 'hero.subtitle' | 'hero.image' | 'hero.video' {
-  return HERO_FIELDS.has(field)
+function isHeroField(
+  field: string,
+): field is "hero.title" | "hero.subtitle" | "hero.image" | "hero.video" {
+  return HERO_FIELDS.has(field);
 }
 
-function heroColumnForField(field: 'hero.title' | 'hero.subtitle' | 'hero.image' | 'hero.video') {
-  if (field === 'hero.title') return 'hero_title'
-  if (field === 'hero.subtitle') return 'hero_subtitle'
-  if (field === 'hero.image') return 'hero_image_asset_id'
-  return 'hero_video_asset_id'
+function heroColumnForField(
+  field: "hero.title" | "hero.subtitle" | "hero.image" | "hero.video",
+) {
+  if (field === "hero.title") return "hero_title";
+  if (field === "hero.subtitle") return "hero_subtitle";
+  if (field === "hero.image") return "hero_image_asset_id";
+  return "hero_video_asset_id";
 }
 
-async function readHeroContentState(db: D1Database, orgId: string, siteId: string, page: string, locationId?: string) {
-  const liveRow = await getSiteContentField(db, orgId, siteId, locationId ?? null, page, 'hero')
+async function readHeroContentState(
+  db: D1Database,
+  orgId: string,
+  siteId: string,
+  page: string,
+  locationId?: string,
+) {
+  const liveRow = await getSiteContentField(
+    db,
+    orgId,
+    siteId,
+    locationId ?? null,
+    page,
+    "hero",
+  );
   const draftRow = locationId
-    ? await db.prepare(
-        `SELECT id, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, updated_at
+    ? await db
+        .prepare(
+          `SELECT id, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, updated_at
          FROM site_content_drafts
          WHERE organization_id = ? AND site_id = ? AND page = ? AND field = 'hero' AND location_id = ?
-         LIMIT 1`
-      ).bind(orgId, siteId, page, locationId).first<Record<string, unknown>>()
-    : await db.prepare(
-        `SELECT id, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, updated_at
+         LIMIT 1`,
+        )
+        .bind(orgId, siteId, page, locationId)
+        .first<Record<string, unknown>>()
+    : await db
+        .prepare(
+          `SELECT id, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, updated_at
          FROM site_content_drafts
          WHERE organization_id = ? AND site_id = ? AND page = ? AND field = 'hero' AND location_id IS NULL
-         LIMIT 1`
-      ).bind(orgId, siteId, page).first<Record<string, unknown>>()
+         LIMIT 1`,
+        )
+        .bind(orgId, siteId, page)
+        .first<Record<string, unknown>>();
 
-  const base = draftRow ?? liveRow ?? null
+  const base = draftRow ?? liveRow ?? null;
   return {
-    id: typeof base?.id === 'string' ? base.id : undefined,
-    hero_title: typeof base?.hero_title === 'string' ? base.hero_title : null,
-    hero_subtitle: typeof base?.hero_subtitle === 'string' ? base.hero_subtitle : null,
-    hero_image_asset_id: typeof base?.hero_image_asset_id === 'string' ? base.hero_image_asset_id : null,
-    hero_video_asset_id: typeof base?.hero_video_asset_id === 'string' ? base.hero_video_asset_id : null,
-  }
+    id: typeof base?.id === "string" ? base.id : undefined,
+    hero_title: typeof base?.hero_title === "string" ? base.hero_title : null,
+    hero_subtitle:
+      typeof base?.hero_subtitle === "string" ? base.hero_subtitle : null,
+    hero_image_asset_id:
+      typeof base?.hero_image_asset_id === "string"
+        ? base.hero_image_asset_id
+        : null,
+    hero_video_asset_id:
+      typeof base?.hero_video_asset_id === "string"
+        ? base.hero_video_asset_id
+        : null,
+  };
 }
 
-function isEmptyHeroState(state: { hero_title: string | null; hero_subtitle: string | null; hero_image_asset_id: string | null; hero_video_asset_id: string | null }) {
-  return !state.hero_title && !state.hero_subtitle && !state.hero_image_asset_id && !state.hero_video_asset_id
+function isEmptyHeroState(state: {
+  hero_title: string | null;
+  hero_subtitle: string | null;
+  hero_image_asset_id: string | null;
+  hero_video_asset_id: string | null;
+}) {
+  return (
+    !state.hero_title &&
+    !state.hero_subtitle &&
+    !state.hero_image_asset_id &&
+    !state.hero_video_asset_id
+  );
 }
 
-function isPlatformPage(page: string): page is typeof PLATFORM_PAGES[number] {
-  return PLATFORM_PAGES.includes(page as typeof PLATFORM_PAGES[number])
+function isPlatformPage(page: string): page is (typeof PLATFORM_PAGES)[number] {
+  return PLATFORM_PAGES.includes(page as (typeof PLATFORM_PAGES)[number]);
 }
 
 async function upsertHeroContentState(
@@ -225,1297 +333,2052 @@ async function upsertHeroContentState(
   siteId: string,
   page: string,
   locationId: string | undefined,
-  state: { hero_title: string | null; hero_subtitle: string | null; hero_image_asset_id: string | null; hero_video_asset_id: string | null },
+  state: {
+    hero_title: string | null;
+    hero_subtitle: string | null;
+    hero_image_asset_id: string | null;
+    hero_video_asset_id: string | null;
+  },
 ) {
-  const id = `content::${orgId}::${siteId}::${locationId ?? 'site'}::${page}::hero`
+  const id = `content::${orgId}::${siteId}::${locationId ?? "site"}::${page}::hero`;
   const payload = {
     id,
     organization_id: orgId,
     site_id: siteId,
     location_id: locationId,
     page,
-    field: 'hero',
+    field: "hero",
     value: undefined,
-    type: 'text',
-    source: 'manual',
+    type: "text",
+    source: "manual",
     content: undefined,
     hero_title: state.hero_title ?? undefined,
     hero_subtitle: state.hero_subtitle ?? undefined,
     hero_image_asset_id: state.hero_image_asset_id ?? undefined,
     hero_video_asset_id: state.hero_video_asset_id ?? undefined,
-  }
+  };
 
-  await upsertSiteContent(db, payload)
-  await upsertDraftContent(db, payload)
+  await upsertSiteContent(db, payload);
+  await upsertDraftContent(db, payload);
 }
 
-function getToolNumber(record: Record<string, unknown>, key: string): number | null | undefined {
-  const value = record[key]
-  if (value === undefined) return undefined
-  if (value === null || value === '') return null
-  const numeric = Number(value)
-  return Number.isFinite(numeric) ? numeric : undefined
+function getToolNumber(
+  record: Record<string, unknown>,
+  key: string,
+): number | null | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
 }
 
-function getToolInteger(record: Record<string, unknown>, key: string): number | null | undefined {
-  const numeric = getToolNumber(record, key)
-  if (numeric === undefined || numeric === null) return numeric
-  return Number.isInteger(numeric) ? numeric : undefined
+function getToolInteger(
+  record: Record<string, unknown>,
+  key: string,
+): number | null | undefined {
+  const numeric = getToolNumber(record, key);
+  if (numeric === undefined || numeric === null) return numeric;
+  return Number.isInteger(numeric) ? numeric : undefined;
 }
 
-function findMenuItemMatch(itemRecord: Record<string, unknown>, menuItems: MenuItem[]): MenuItem | null {
-  const itemId = getToolString(itemRecord, 'item_id', 120)
+function findMenuItemMatch(
+  itemRecord: Record<string, unknown>,
+  menuItems: MenuItem[],
+): MenuItem | null {
+  const itemId = getToolString(itemRecord, "item_id", 120);
   if (itemId) {
-    return menuItems.find((item) => item.id === itemId) ?? null
+    return menuItems.find((item) => item.id === itemId) ?? null;
   }
 
-  const name = getToolString(itemRecord, 'name', 200)?.trim()
-  if (!name) return null
+  const name = getToolString(itemRecord, "name", 200)?.trim();
+  if (!name) return null;
 
-  const key = menuItemLookupKey(name)
-  const lowerName = name.toLowerCase()
-  return menuItems.find((item) => item.slug === key || item.name.toLowerCase() === lowerName) ?? null
+  const key = menuItemLookupKey(name);
+  const lowerName = name.toLowerCase();
+  return (
+    menuItems.find(
+      (item) => item.slug === key || item.name.toLowerCase() === lowerName,
+    ) ?? null
+  );
 }
 
-function buildMenuItemUpdates(itemRecord: Record<string, unknown>, match?: MenuItem | null): UpdateMenuItemRequest {
-  const updates: UpdateMenuItemRequest = {}
-  const section = getToolString(itemRecord, 'section', 100)
-  const name = getToolString(itemRecord, 'name', 200)
-  const description = getToolString(itemRecord, 'description', 500)
-  const priceAmount = getToolString(itemRecord, 'price_amount', 50)
-  const imageAssetId = getToolString(itemRecord, 'image_asset_id', 120)
-  const available = getToolBoolean(itemRecord, 'available')
-  
-  const allergens = getToolStringArray(itemRecord, 'allergens')
-  const ingredients = getToolStringArray(itemRecord, 'ingredients')
-  const dietary_notes = getToolStringArray(itemRecord, 'dietary_notes')
-  const preparation = getToolString(itemRecord, 'preparation', 500)
-  const serving_note = getToolString(itemRecord, 'serving_note', 500)
+function buildMenuItemUpdates(
+  itemRecord: Record<string, unknown>,
+  match?: MenuItem | null,
+): UpdateMenuItemRequest {
+  const updates: UpdateMenuItemRequest = {};
+  const section = getToolString(itemRecord, "section", 100);
+  const name = getToolString(itemRecord, "name", 200);
+  const description = getToolString(itemRecord, "description", 500);
+  const priceAmount = getToolString(itemRecord, "price_amount", 50);
+  const imageAssetId = getToolString(itemRecord, "image_asset_id", 120);
+  const available = getToolBoolean(itemRecord, "available");
 
-  if (section !== undefined && section.trim() && section !== match?.section) updates.section = section
-  if (name !== undefined && name !== match?.name) updates.name = name
-  if (description !== undefined && description !== match?.description) updates.description = description
-  if (priceAmount !== undefined && priceAmount !== match?.price_amount) updates.price_amount = priceAmount
-  if (imageAssetId !== undefined && imageAssetId !== match?.image_asset_id) updates.image_asset_id = imageAssetId
-  if (available !== undefined && available !== Boolean(match?.available)) updates.available = available
-  
-  if (allergens !== undefined) updates.allergens = allergens
-  if (ingredients !== undefined) updates.ingredients = ingredients
-  if (dietary_notes !== undefined) updates.dietary_notes = dietary_notes
-  if (preparation !== undefined && preparation !== match?.preparation) updates.preparation = preparation
-  if (serving_note !== undefined && serving_note !== match?.serving_note) updates.serving_note = serving_note
+  const allergens = getToolStringArray(itemRecord, "allergens");
+  const ingredients = getToolStringArray(itemRecord, "ingredients");
+  const dietary_notes = getToolStringArray(itemRecord, "dietary_notes");
+  const preparation = getToolString(itemRecord, "preparation", 500);
+  const serving_note = getToolString(itemRecord, "serving_note", 500);
 
-  return updates
+  if (section !== undefined && section.trim() && section !== match?.section)
+    updates.section = section;
+  if (name !== undefined && name !== match?.name) updates.name = name;
+  if (description !== undefined && description !== match?.description)
+    updates.description = description;
+  if (priceAmount !== undefined && priceAmount !== match?.price_amount)
+    updates.price_amount = priceAmount;
+  if (imageAssetId !== undefined && imageAssetId !== match?.image_asset_id)
+    updates.image_asset_id = imageAssetId;
+  if (available !== undefined && available !== Boolean(match?.available))
+    updates.available = available;
+
+  if (allergens !== undefined) updates.allergens = allergens;
+  if (ingredients !== undefined) updates.ingredients = ingredients;
+  if (dietary_notes !== undefined) updates.dietary_notes = dietary_notes;
+  if (preparation !== undefined && preparation !== match?.preparation)
+    updates.preparation = preparation;
+  if (serving_note !== undefined && serving_note !== match?.serving_note)
+    updates.serving_note = serving_note;
+
+  return updates;
 }
 
 function hasMenuItemUpdates(updates: UpdateMenuItemRequest): boolean {
-  return Object.keys(updates).length > 0
+  return Object.keys(updates).length > 0;
 }
 
 const TOOLS: AiTool[] = [
   // ── Posts ──────────────────────────────────────────────────────────────────
   {
-    name: 'get_posts',
-    description: 'List posts for this site. Optionally filter by status or location.',
+    name: "get_posts",
+    description:
+      "List posts for this site. Optionally filter by status or location.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        status: { type: 'string', enum: ['draft', 'published', 'archived'], description: 'Filter by status. Omit to get all.' },
-        location_id: { type: 'string', description: 'Filter to posts for a specific location.' },
+        status: {
+          type: "string",
+          enum: ["draft", "published", "archived"],
+          description: "Filter by status. Omit to get all.",
+        },
+        location_id: {
+          type: "string",
+          description: "Filter to posts for a specific location.",
+        },
       },
     },
   },
   {
-    name: 'create_post',
-    description: 'Create a new draft post. Saved as draft — NOT published until publish_post is called.',
+    name: "create_post",
+    description:
+      "Create a new draft post. Saved as draft — NOT published until publish_post is called.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        title: { type: 'string', description: 'Short headline (max 80 chars). Optional.' },
-        body: { type: 'string', description: 'Post body (max 400 chars). Friendly, warm tone.' },
-        image_asset_id: { type: 'string', description: 'Optional media asset ID from generate_image, get_location_media, or pending WhatsApp media.' },
-        location_id: { type: 'string', description: 'Pin this post to a specific location. Omit for site-wide.' },
-        post_type: { type: 'string', enum: ['standard', 'offer', 'event', 'update'], description: 'Post type. Default: standard.' },
-        cta_type: { type: 'string', enum: ['BOOK', 'ORDER', 'SHOP', 'LEARN_MORE', 'SIGN_UP', 'CALL'], description: 'Call-to-action button type.' },
-        cta_url: { type: 'string', description: 'URL for the CTA button.' },
-        event_title: { type: 'string', description: 'Event name (for post_type: event).' },
-        event_start: { type: 'string', description: 'Event start datetime ISO string.' },
-        event_end: { type: 'string', description: 'Event end datetime ISO string.' },
-        offer_coupon: { type: 'string', description: 'Coupon code (for post_type: offer).' },
-        offer_terms: { type: 'string', description: 'Offer terms and conditions.' },
+        title: {
+          type: "string",
+          description: "Short headline (max 80 chars). Optional.",
+        },
+        body: {
+          type: "string",
+          description: "Post body (max 400 chars). Friendly, warm tone.",
+        },
+        image_asset_id: {
+          type: "string",
+          description:
+            "Optional media asset ID from generate_image, get_location_media, or pending WhatsApp media.",
+        },
+        location_id: {
+          type: "string",
+          description:
+            "Pin this post to a specific location. Omit for site-wide.",
+        },
+        post_type: {
+          type: "string",
+          enum: ["standard", "offer", "event", "update"],
+          description: "Post type. Default: standard.",
+        },
+        cta_type: {
+          type: "string",
+          enum: ["BOOK", "ORDER", "SHOP", "LEARN_MORE", "SIGN_UP", "CALL"],
+          description: "Call-to-action button type.",
+        },
+        cta_url: { type: "string", description: "URL for the CTA button." },
+        event_title: {
+          type: "string",
+          description: "Event name (for post_type: event).",
+        },
+        event_start: {
+          type: "string",
+          description: "Event start datetime ISO string.",
+        },
+        event_end: {
+          type: "string",
+          description: "Event end datetime ISO string.",
+        },
+        offer_coupon: {
+          type: "string",
+          description: "Coupon code (for post_type: offer).",
+        },
+        offer_terms: {
+          type: "string",
+          description: "Offer terms and conditions.",
+        },
       },
-      required: ['body'],
+      required: ["body"],
     },
   },
   {
-    name: 'publish_post',
-    description: 'Publish a draft post to the website. Only call after confirming content with the user.',
+    name: "publish_post",
+    description:
+      "Publish a draft post to the website. Only call after confirming content with the user.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        post_id: { type: 'string', description: 'ID of the post to publish.' },
+        post_id: { type: "string", description: "ID of the post to publish." },
       },
-      required: ['post_id'],
+      required: ["post_id"],
     },
   },
 
   // ── Menus ──────────────────────────────────────────────────────────────────
   {
-    name: 'get_menu',
-    description: 'Get a menu with all its sections and items.',
+    name: "get_menu",
+    description: "Get a menu with all its sections and items.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        menu_id: { type: 'string', description: 'Specific menu ID. Omit to get the first available menu.' },
+        menu_id: {
+          type: "string",
+          description:
+            "Specific menu ID. Omit to get the first available menu.",
+        },
       },
     },
   },
   {
-    name: 'create_menu',
-    description: 'Create a new menu.',
+    name: "create_menu",
+    description: "Create a new menu.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        name: { type: 'string', description: 'Menu name.' },
-        description: { type: 'string', description: 'Optional description.' },
-        location_id: { type: 'string', description: 'Link to a specific location.' },
+        name: { type: "string", description: "Menu name." },
+        description: { type: "string", description: "Optional description." },
+        location_id: {
+          type: "string",
+          description: "Link to a specific location.",
+        },
       },
-      required: ['name'],
+      required: ["name"],
     },
   },
   {
-    name: 'rename_menu',
-    description: 'Rename an existing menu.',
+    name: "rename_menu",
+    description: "Rename an existing menu.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        menu_id: { type: 'string', description: 'ID of the menu.' },
-        name: { type: 'string', description: 'New name.' },
-        description: { type: 'string', description: 'Optional new description.' },
+        menu_id: { type: "string", description: "ID of the menu." },
+        name: { type: "string", description: "New name." },
+        description: {
+          type: "string",
+          description: "Optional new description.",
+        },
       },
-      required: ['menu_id', 'name'],
+      required: ["menu_id", "name"],
     },
   },
   {
-    name: 'rename_menu_section',
-    description: 'Rename a menu category/section, such as Appetizers, Drinks, Mains, or Desserts. Updates all items in that section.',
+    name: "rename_menu_section",
+    description:
+      "Rename a menu category/section, such as Appetizers, Drinks, Mains, or Desserts. Updates all items in that section.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        menu_id: { type: 'string', description: 'ID of the menu.' },
-        old_section: { type: 'string', description: 'Current section/category title.' },
-        new_section: { type: 'string', description: 'New section/category title.' },
+        menu_id: { type: "string", description: "ID of the menu." },
+        old_section: {
+          type: "string",
+          description: "Current section/category title.",
+        },
+        new_section: {
+          type: "string",
+          description: "New section/category title.",
+        },
       },
-      required: ['menu_id', 'old_section', 'new_section'],
+      required: ["menu_id", "old_section", "new_section"],
     },
   },
   {
-    name: 'delete_menu_section',
-    description: 'Permanently delete a menu category/section and every item in it. Confirm with user first.',
+    name: "delete_menu_section",
+    description:
+      "Permanently delete a menu category/section and every item in it. Confirm with user first.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        menu_id: { type: 'string', description: 'ID of the menu.' },
-        section: { type: 'string', description: 'Section/category title to delete.' },
+        menu_id: { type: "string", description: "ID of the menu." },
+        section: {
+          type: "string",
+          description: "Section/category title to delete.",
+        },
       },
-      required: ['menu_id', 'section'],
+      required: ["menu_id", "section"],
     },
   },
   {
-    name: 'add_menu_items_batch',
-    description: 'Add multiple brand-new menu items in one call. Do not use for edits, replacements, renamed items, revised prices, or existing menu content. Up to 100 items.',
+    name: "add_menu_items_batch",
+    description:
+      "Add multiple brand-new menu items in one call. Do not use for edits, replacements, renamed items, revised prices, or existing menu content. Up to 100 items.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        menu_id: { type: 'string', description: 'Menu to add items to.' },
+        menu_id: { type: "string", description: "Menu to add items to." },
         items: {
-          type: 'array',
+          type: "array",
           items: {
-            type: 'object',
+            type: "object",
             properties: {
-              section: { type: 'string', description: 'Section/category name.' },
-              name: { type: 'string', description: 'Dish name.' },
-              description: { type: 'string', description: 'Short description. Optional.' },
-              price_amount: { type: 'string', description: 'Numeric price amount only, without currency, e.g. "120". Optional.' },
-              image_asset_id: { type: 'string', description: 'Media asset ID from generate_image or pending WhatsApp media. Optional.' },
-              allergens: { type: 'array', items: { type: 'string' }, description: 'List of allergens, e.g. ["dairy", "nuts"].' },
-              ingredients: { type: 'array', items: { type: 'string' }, description: 'Key ingredients.' },
-              dietary_notes: { type: 'array', items: { type: 'string' }, description: 'Dietary tags, e.g. ["V", "VG", "GF", "vegetarian", "vegan", "gluten-free"].' },
-              preparation: { type: 'string', description: 'How the dish is prepared.' },
-              serving_note: { type: 'string', description: 'Notes about serving size or accompaniment.' },
+              section: {
+                type: "string",
+                description: "Section/category name.",
+              },
+              name: { type: "string", description: "Dish name." },
+              description: {
+                type: "string",
+                description: "Short description. Optional.",
+              },
+              price_amount: {
+                type: "string",
+                description:
+                  'Numeric price amount only, without currency, e.g. "120". Optional.',
+              },
+              image_asset_id: {
+                type: "string",
+                description:
+                  "Media asset ID from generate_image or pending WhatsApp media. Optional.",
+              },
+              allergens: {
+                type: "array",
+                items: { type: "string" },
+                description: 'List of allergens, e.g. ["dairy", "nuts"].',
+              },
+              ingredients: {
+                type: "array",
+                items: { type: "string" },
+                description: "Key ingredients.",
+              },
+              dietary_notes: {
+                type: "array",
+                items: { type: "string" },
+                description:
+                  'Dietary tags, e.g. ["V", "VG", "GF", "vegetarian", "vegan", "gluten-free"].',
+              },
+              preparation: {
+                type: "string",
+                description: "How the dish is prepared.",
+              },
+              serving_note: {
+                type: "string",
+                description: "Notes about serving size or accompaniment.",
+              },
             },
-            required: ['section', 'name'],
+            required: ["section", "name"],
           },
         },
       },
-      required: ['menu_id', 'items'],
+      required: ["menu_id", "items"],
     },
   },
   {
-    name: 'sync_menu_items',
-    description: 'Reconcile a menu item list with an existing menu. Use this for menu updates, replacements, revised prices/descriptions, renamed items, or mixed create/update work.',
+    name: "sync_menu_items",
+    description:
+      "Reconcile a menu item list with an existing menu. Use this for menu updates, replacements, revised prices/descriptions, renamed items, or mixed create/update work.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        menu_id: { type: 'string', description: 'Menu to update.' },
+        menu_id: { type: "string", description: "Menu to update." },
         items: {
-          type: 'array',
-          description: 'Items to reconcile. Existing items match by item_id first, then by normalized name/slug.',
+          type: "array",
+          description:
+            "Items to reconcile. Existing items match by item_id first, then by normalized name/slug.",
           items: {
-            type: 'object',
+            type: "object",
             properties: {
-              item_id: { type: 'string', description: 'Existing menu item ID when known.' },
-              section: { type: 'string', description: 'Section/category name.' },
-              name: { type: 'string', description: 'Dish name.' },
-              description: { type: 'string', description: 'Short description. Optional.' },
-              price_amount: { type: 'string', description: 'Numeric price amount only, without currency, e.g. "120". Optional.' },
-              image_asset_id: { type: 'string', description: 'Media asset ID from generate_image. Optional.' },
-              available: { type: 'boolean', description: 'Whether the item should be shown as available.' },
-              allergens: { type: 'array', items: { type: 'string' }, description: 'List of allergens.' },
-              ingredients: { type: 'array', items: { type: 'string' }, description: 'Key ingredients.' },
-              dietary_notes: { type: 'array', items: { type: 'string' }, description: 'Dietary tags, e.g. ["V", "VG", "GF", "vegetarian", "vegan", "gluten-free"].' },
-              preparation: { type: 'string' },
-              serving_note: { type: 'string' },
+              item_id: {
+                type: "string",
+                description: "Existing menu item ID when known.",
+              },
+              section: {
+                type: "string",
+                description: "Section/category name.",
+              },
+              name: { type: "string", description: "Dish name." },
+              description: {
+                type: "string",
+                description: "Short description. Optional.",
+              },
+              price_amount: {
+                type: "string",
+                description:
+                  'Numeric price amount only, without currency, e.g. "120". Optional.',
+              },
+              image_asset_id: {
+                type: "string",
+                description: "Media asset ID from generate_image. Optional.",
+              },
+              available: {
+                type: "boolean",
+                description: "Whether the item should be shown as available.",
+              },
+              allergens: {
+                type: "array",
+                items: { type: "string" },
+                description: "List of allergens.",
+              },
+              ingredients: {
+                type: "array",
+                items: { type: "string" },
+                description: "Key ingredients.",
+              },
+              dietary_notes: {
+                type: "array",
+                items: { type: "string" },
+                description:
+                  'Dietary tags, e.g. ["V", "VG", "GF", "vegetarian", "vegan", "gluten-free"].',
+              },
+              preparation: { type: "string" },
+              serving_note: { type: "string" },
             },
           },
         },
         set_missing_unavailable: {
-          type: 'boolean',
-          description: 'Only true when the user explicitly asks to remove, replace, hide, or make omitted items unavailable.',
+          type: "boolean",
+          description:
+            "Only true when the user explicitly asks to remove, replace, hide, or make omitted items unavailable.",
         },
       },
-      required: ['menu_id', 'items'],
+      required: ["menu_id", "items"],
     },
   },
   {
-    name: 'add_menu_item',
-    description: 'Add a single item to a menu.',
+    name: "add_menu_item",
+    description: "Add a single item to a menu.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        menu_id: { type: 'string', description: 'Menu to add to.' },
-        section: { type: 'string', description: 'Section/category.' },
-        name: { type: 'string', description: 'Dish name.' },
-        description: { type: 'string', description: 'Short description. Optional.' },
-        price_amount: { type: 'string', description: 'Numeric price amount only, without currency. Optional.' },
-        image_asset_id: { type: 'string', description: 'Media asset ID from generate_image or pending WhatsApp media. Optional.' },
-        allergens: { type: 'array', items: { type: 'string' } },
-        ingredients: { type: 'array', items: { type: 'string' } },
-        dietary_notes: { type: 'array', items: { type: 'string' } },
-        preparation: { type: 'string' },
-        serving_note: { type: 'string' },
+        menu_id: { type: "string", description: "Menu to add to." },
+        section: { type: "string", description: "Section/category." },
+        name: { type: "string", description: "Dish name." },
+        description: {
+          type: "string",
+          description: "Short description. Optional.",
+        },
+        price_amount: {
+          type: "string",
+          description: "Numeric price amount only, without currency. Optional.",
+        },
+        image_asset_id: {
+          type: "string",
+          description:
+            "Media asset ID from generate_image or pending WhatsApp media. Optional.",
+        },
+        allergens: { type: "array", items: { type: "string" } },
+        ingredients: { type: "array", items: { type: "string" } },
+        dietary_notes: { type: "array", items: { type: "string" } },
+        preparation: { type: "string" },
+        serving_note: { type: "string" },
       },
-      required: ['menu_id', 'section', 'name'],
+      required: ["menu_id", "section", "name"],
     },
   },
   {
-    name: 'update_menu_item',
-    description: 'Update a menu item — name, numeric price amount, description, image, availability, featured status, allergens, ingredients, dietary tags, preparation, or serving note.',
+    name: "update_menu_item",
+    description:
+      "Update a menu item — name, numeric price amount, description, image, availability, featured status, allergens, ingredients, dietary tags, preparation, or serving note.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        item_id: { type: 'string', description: 'ID of the item.' },
-        section: { type: 'string' },
-        name: { type: 'string' },
-        description: { type: 'string' },
-        price_amount: { type: 'string', description: 'Numeric price amount only, without currency.' },
-        image_asset_id: { type: 'string', description: 'New media asset ID from generate_image or pending WhatsApp media.' },
-        available: { type: 'boolean' },
-        featured: { type: 'boolean', description: 'Whether this item appears in the featured highlights on the home page.' },
-        featured_sort_order: { type: 'integer', description: 'Order among featured items (lower = shown first). Only relevant when featured is true.' },
-        allergens: { type: 'array', items: { type: 'string' } },
-        ingredients: { type: 'array', items: { type: 'string' } },
-        dietary_notes: { type: 'array', items: { type: 'string' } },
-        preparation: { type: 'string' },
-        serving_note: { type: 'string' },
+        item_id: { type: "string", description: "ID of the item." },
+        section: { type: "string" },
+        name: { type: "string" },
+        description: { type: "string" },
+        price_amount: {
+          type: "string",
+          description: "Numeric price amount only, without currency.",
+        },
+        image_asset_id: {
+          type: "string",
+          description:
+            "New media asset ID from generate_image or pending WhatsApp media.",
+        },
+        available: { type: "boolean" },
+        featured: {
+          type: "boolean",
+          description:
+            "Whether this item appears in the featured highlights on the home page.",
+        },
+        featured_sort_order: {
+          type: "integer",
+          description:
+            "Order among featured items (lower = shown first). Only relevant when featured is true.",
+        },
+        allergens: { type: "array", items: { type: "string" } },
+        ingredients: { type: "array", items: { type: "string" } },
+        dietary_notes: { type: "array", items: { type: "string" } },
+        preparation: { type: "string" },
+        serving_note: { type: "string" },
       },
-      required: ['item_id'],
+      required: ["item_id"],
     },
   },
   {
-    name: 'delete_menu_item',
-    description: 'Permanently delete one menu item. Confirm with user first.',
+    name: "delete_menu_item",
+    description: "Permanently delete one menu item. Confirm with user first.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        menu_id: { type: 'string', description: 'Menu ID for verification.' },
-        item_id: { type: 'string', description: 'ID of the item.' },
+        menu_id: { type: "string", description: "Menu ID for verification." },
+        item_id: { type: "string", description: "ID of the item." },
       },
-      required: ['menu_id', 'item_id'],
+      required: ["menu_id", "item_id"],
     },
   },
   {
-    name: 'publish_menu',
-    description: 'Publish a draft menu so it appears on the live site.',
+    name: "publish_menu",
+    description: "Publish a draft menu so it appears on the live site.",
     input_schema: {
-      type: 'object',
-      properties: { menu_id: { type: 'string' } },
-      required: ['menu_id'],
+      type: "object",
+      properties: { menu_id: { type: "string" } },
+      required: ["menu_id"],
     },
   },
   {
-    name: 'delete_menu',
-    description: 'Permanently delete a menu and all its items. Confirm with user first.',
+    name: "delete_menu",
+    description:
+      "Permanently delete a menu and all its items. Confirm with user first.",
     input_schema: {
-      type: 'object',
-      properties: { menu_id: { type: 'string' } },
-      required: ['menu_id'],
+      type: "object",
+      properties: { menu_id: { type: "string" } },
+      required: ["menu_id"],
     },
   },
 
   // ── Locations ──────────────────────────────────────────────────────────────
   {
-    name: 'get_locations',
-    description: 'List all locations for this site.',
-    input_schema: { type: 'object', properties: {} },
+    name: "get_locations",
+    description: "List all locations for this site.",
+    input_schema: { type: "object", properties: {} },
   },
   {
-    name: 'create_location',
-    description: 'Create a new location/branch.',
+    name: "create_location",
+    description: "Create a new location/branch.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        title: { type: 'string', description: 'Location name.' },
-        city: { type: 'string' },
-        phone: { type: 'string' },
-        address: { type: 'string' },
-        email: { type: 'string' },
-        website_url: { type: 'string' },
-        maps_url: { type: 'string' },
-        google_place_id: { type: 'string' },
-        description: { type: 'string', description: 'About this location.' },
-        short_description: { type: 'string', description: 'One-line tagline.' },
-        opening_hours: { type: 'string', description: 'Opening hours, one line per day.' },
-        rating: { type: 'number', description: 'Manual review rating from 0 to 5.' },
-        review_count: { type: 'integer', description: 'Manual total review count.' },
-        price_level: { type: 'string', enum: ['FREE', 'INEXPENSIVE', 'MODERATE', 'EXPENSIVE', 'VERY_EXPENSIVE'] },
-        facebook_url: { type: 'string' },
-        instagram_url: { type: 'string' },
-        tiktok_url: { type: 'string' },
-        grab_url: { type: 'string', description: 'Grab Food ordering link for this location.' },
-        uber_eats_url: { type: 'string', description: 'Uber Eats ordering link for this location.' },
-        foodpanda_url: { type: 'string', description: 'FoodPanda ordering link for this location.' },
-        hero_image_asset_id: { type: 'string', description: 'Media asset ID for hero image — from generate_image, get_location_media, or pending WhatsApp media.' },
-        hero_video_asset_id: { type: 'string', description: 'Media asset ID for hero video — from get_location_media or pending WhatsApp media.' },
-        is_primary: { type: 'boolean' },
+        title: { type: "string", description: "Location name." },
+        city: { type: "string" },
+        phone: { type: "string" },
+        address: { type: "string" },
+        email: { type: "string" },
+        website_url: { type: "string" },
+        maps_url: { type: "string" },
+        google_place_id: { type: "string" },
+        description: { type: "string", description: "About this location." },
+        short_description: { type: "string", description: "One-line tagline." },
+        opening_hours: {
+          type: "string",
+          description: "Opening hours, one line per day.",
+        },
+        rating: {
+          type: "number",
+          description: "Manual review rating from 0 to 5.",
+        },
+        review_count: {
+          type: "integer",
+          description: "Manual total review count.",
+        },
+        price_level: {
+          type: "string",
+          enum: [
+            "FREE",
+            "INEXPENSIVE",
+            "MODERATE",
+            "EXPENSIVE",
+            "VERY_EXPENSIVE",
+          ],
+        },
+        facebook_url: { type: "string" },
+        instagram_url: { type: "string" },
+        tiktok_url: { type: "string" },
+        grab_url: {
+          type: "string",
+          description: "Grab Food ordering link for this location.",
+        },
+        uber_eats_url: {
+          type: "string",
+          description: "Uber Eats ordering link for this location.",
+        },
+        foodpanda_url: {
+          type: "string",
+          description: "FoodPanda ordering link for this location.",
+        },
+        hero_image_asset_id: {
+          type: "string",
+          description:
+            "Media asset ID for hero image — from generate_image, get_location_media, or pending WhatsApp media.",
+        },
+        hero_video_asset_id: {
+          type: "string",
+          description:
+            "Media asset ID for hero video — from get_location_media or pending WhatsApp media.",
+        },
+        is_primary: { type: "boolean" },
       },
-      required: ['title'],
+      required: ["title"],
     },
   },
   {
-    name: 'update_location',
-    description: 'Update a location. Updating title auto-syncs the URL slug.',
+    name: "update_location",
+    description: "Update a location. Updating title auto-syncs the URL slug.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        location_id: { type: 'string', description: 'ID from get_locations.' },
-        title: { type: 'string', description: 'New name — also updates URL slug.' },
-        city: { type: 'string' },
-        neighborhood: { type: 'string', description: 'Short neighbourhood tag shown on location hero and cards, e.g. "Beachside · 2 min from Centre Point".' },
-        phone: { type: 'string' },
-        address: { type: 'string' },
-        email: { type: 'string' },
-        website_url: { type: 'string' },
-        maps_url: { type: 'string' },
-        google_place_id: { type: 'string' },
-        description: { type: 'string', description: 'About this location.' },
-        short_description: { type: 'string', description: 'One-line tagline.' },
-        opening_hours: { type: 'string', description: 'Opening hours, one line per day.' },
-        rating: { type: 'number', description: 'Manual review rating from 0 to 5.' },
-        review_count: { type: 'integer', description: 'Manual total review count.' },
-        price_level: { type: 'string', enum: ['FREE', 'INEXPENSIVE', 'MODERATE', 'EXPENSIVE', 'VERY_EXPENSIVE'] },
-        facebook_url: { type: 'string' },
-        instagram_url: { type: 'string' },
-        tiktok_url: { type: 'string' },
-        grab_url: { type: 'string', description: 'Grab Food ordering link for this location.' },
-        uber_eats_url: { type: 'string', description: 'Uber Eats ordering link for this location.' },
-        foodpanda_url: { type: 'string', description: 'FoodPanda ordering link for this location.' },
-        hero_image_asset_id: { type: 'string', description: 'Media asset ID for hero image — from generate_image, get_location_media, or pending WhatsApp media.' },
-        hero_video_asset_id: { type: 'string', description: 'Media asset ID for hero video — from get_location_media or pending WhatsApp media.' },
-        is_primary: { type: 'boolean' },
-        status: { type: 'string', enum: ['active', 'inactive', 'sync_error'] },
+        location_id: { type: "string", description: "ID from get_locations." },
+        title: {
+          type: "string",
+          description: "New name — also updates URL slug.",
+        },
+        city: { type: "string" },
+        neighborhood: {
+          type: "string",
+          description:
+            'Short neighbourhood tag shown on location hero and cards, e.g. "Beachside · 2 min from Centre Point".',
+        },
+        phone: { type: "string" },
+        address: { type: "string" },
+        email: { type: "string" },
+        website_url: { type: "string" },
+        maps_url: { type: "string" },
+        google_place_id: { type: "string" },
+        description: { type: "string", description: "About this location." },
+        short_description: { type: "string", description: "One-line tagline." },
+        opening_hours: {
+          type: "string",
+          description: "Opening hours, one line per day.",
+        },
+        rating: {
+          type: "number",
+          description: "Manual review rating from 0 to 5.",
+        },
+        review_count: {
+          type: "integer",
+          description: "Manual total review count.",
+        },
+        price_level: {
+          type: "string",
+          enum: [
+            "FREE",
+            "INEXPENSIVE",
+            "MODERATE",
+            "EXPENSIVE",
+            "VERY_EXPENSIVE",
+          ],
+        },
+        facebook_url: { type: "string" },
+        instagram_url: { type: "string" },
+        tiktok_url: { type: "string" },
+        grab_url: {
+          type: "string",
+          description: "Grab Food ordering link for this location.",
+        },
+        uber_eats_url: {
+          type: "string",
+          description: "Uber Eats ordering link for this location.",
+        },
+        foodpanda_url: {
+          type: "string",
+          description: "FoodPanda ordering link for this location.",
+        },
+        hero_image_asset_id: {
+          type: "string",
+          description:
+            "Media asset ID for hero image — from generate_image, get_location_media, or pending WhatsApp media.",
+        },
+        hero_video_asset_id: {
+          type: "string",
+          description:
+            "Media asset ID for hero video — from get_location_media or pending WhatsApp media.",
+        },
+        is_primary: { type: "boolean" },
+        status: { type: "string", enum: ["active", "inactive", "sync_error"] },
       },
-      required: ['location_id'],
+      required: ["location_id"],
     },
   },
   {
-    name: 'delete_location',
-    description: 'Permanently delete a location/branch. Confirm with user first.',
+    name: "delete_location",
+    description:
+      "Permanently delete a location/branch. Confirm with user first.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        location_id: { type: 'string', description: 'ID from get_locations.' },
+        location_id: { type: "string", description: "ID from get_locations." },
       },
-      required: ['location_id'],
+      required: ["location_id"],
     },
   },
 
   // ── Maps lookup ────────────────────────────────────────────────────────────
   {
-    name: 'lookup_maps_url',
-    description: 'Look up a Google Maps URL or share link to get location details — address, phone, coordinates, hours. Use when someone pastes a Google Maps link and wants to update their location details. After getting results, call update_location with the relevant fields.',
+    name: "lookup_maps_url",
+    description:
+      "Look up a Google Maps URL or share link to get location details — address, phone, coordinates, hours. Use when someone pastes a Google Maps link and wants to update their location details. After getting results, call update_location with the relevant fields.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        url: { type: 'string', description: 'Google Maps URL or share link (e.g. https://maps.app.goo.gl/... or https://www.google.com/maps/place/...)' },
+        url: {
+          type: "string",
+          description:
+            "Google Maps URL or share link (e.g. https://maps.app.goo.gl/... or https://www.google.com/maps/place/...)",
+        },
       },
-      required: ['url'],
+      required: ["url"],
     },
   },
 
   // ── Reviews ────────────────────────────────────────────────────────────────
   {
-    name: 'get_reviews',
-    description: 'Get reviews for a location, including aggregate score and star distribution.',
+    name: "get_reviews",
+    description:
+      "Get reviews for a location, including aggregate score and star distribution.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        location_id: { type: 'string', description: 'Location ID from get_locations.' },
+        location_id: {
+          type: "string",
+          description: "Location ID from get_locations.",
+        },
       },
-      required: ['location_id'],
+      required: ["location_id"],
     },
   },
   {
-    name: 'reply_to_review',
-    description: 'Add or update the owner reply on a review.',
+    name: "reply_to_review",
+    description: "Add or update the owner reply on a review.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        review_id: { type: 'string', description: 'Review ID from get_reviews.' },
-        reply: { type: 'string', description: 'Owner reply text.' },
+        review_id: {
+          type: "string",
+          description: "Review ID from get_reviews.",
+        },
+        reply: { type: "string", description: "Owner reply text." },
       },
-      required: ['review_id', 'reply'],
+      required: ["review_id", "reply"],
     },
   },
   {
-    name: 'create_review',
-    description: 'Create a manual customer review for a location.',
+    name: "create_review",
+    description: "Create a manual customer review for a location.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        location_id: { type: 'string', description: 'Location ID from get_locations.' },
-        author_name: { type: 'string', description: 'Guest name.' },
-        rating: { type: 'integer', description: '1 to 5 stars.' },
-        title: { type: 'string', description: 'Optional short review title.' },
-        content: { type: 'string', description: 'Review text.' },
-        created_at: { type: 'string', description: 'Optional ISO date/time for the review.' },
-        status: { type: 'string', enum: ['pending', 'approved', 'rejected'], description: 'Default approved.' },
+        location_id: {
+          type: "string",
+          description: "Location ID from get_locations.",
+        },
+        author_name: { type: "string", description: "Guest name." },
+        rating: { type: "integer", description: "1 to 5 stars." },
+        title: { type: "string", description: "Optional short review title." },
+        content: { type: "string", description: "Review text." },
+        created_at: {
+          type: "string",
+          description: "Optional ISO date/time for the review.",
+        },
+        status: {
+          type: "string",
+          enum: ["pending", "approved", "rejected"],
+          description: "Default approved.",
+        },
       },
-      required: ['location_id', 'author_name', 'rating', 'content'],
+      required: ["location_id", "author_name", "rating", "content"],
     },
   },
   {
-    name: 'update_review',
-    description: 'Update a manual customer review.',
+    name: "update_review",
+    description: "Update a manual customer review.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        review_id: { type: 'string', description: 'Review ID from get_reviews.' },
-        author_name: { type: 'string' },
-        rating: { type: 'integer', description: '1 to 5 stars.' },
-        title: { type: 'string' },
-        content: { type: 'string' },
-        created_at: { type: 'string' },
-        status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
+        review_id: {
+          type: "string",
+          description: "Review ID from get_reviews.",
+        },
+        author_name: { type: "string" },
+        rating: { type: "integer", description: "1 to 5 stars." },
+        title: { type: "string" },
+        content: { type: "string" },
+        created_at: { type: "string" },
+        status: { type: "string", enum: ["pending", "approved", "rejected"] },
       },
-      required: ['review_id'],
+      required: ["review_id"],
     },
   },
   {
-    name: 'delete_review',
-    description: 'Permanently delete a review. Confirm with user first.',
+    name: "delete_review",
+    description: "Permanently delete a review. Confirm with user first.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        review_id: { type: 'string', description: 'Review ID from get_reviews.' },
+        review_id: {
+          type: "string",
+          description: "Review ID from get_reviews.",
+        },
       },
-      required: ['review_id'],
+      required: ["review_id"],
     },
   },
 
   // ── Media ──────────────────────────────────────────────────────────────────
   {
-    name: 'get_location_media',
-    description: 'List media assets (images, videos) for a location.',
+    name: "get_location_media",
+    description: "List media assets (images, videos) for a location.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        location_id: { type: 'string', description: 'Location ID from get_locations.' },
-        kind: { type: 'string', enum: ['image', 'video', 'file'], description: 'Filter by media type. Omit for all.' },
+        location_id: {
+          type: "string",
+          description: "Location ID from get_locations.",
+        },
+        kind: {
+          type: "string",
+          enum: ["image", "video", "file"],
+          description: "Filter by media type. Omit for all.",
+        },
       },
-      required: ['location_id'],
+      required: ["location_id"],
     },
   },
   {
-    name: 'delete_media_asset',
-    description: 'Delete a media asset from the library and Cloudflare storage. Confirm with user first.',
+    name: "delete_media_asset",
+    description:
+      "Delete a media asset from the library and Cloudflare storage. Confirm with user first.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        asset_id: { type: 'string', description: 'ID from get_location_media.' },
+        asset_id: {
+          type: "string",
+          description: "ID from get_location_media.",
+        },
       },
-      required: ['asset_id'],
+      required: ["asset_id"],
     },
   },
   {
-    name: 'import_menu_from_pending_media',
-    description: 'Import menu items from the currently pending WhatsApp image or document. Use only when the user asks to import, extract, or read menu items from the pending file.',
+    name: "import_menu_from_pending_media",
+    description:
+      "Import menu items from the currently pending WhatsApp image or document. Use only when the user asks to import, extract, or read menu items from the pending file.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        menu_name: { type: 'string', description: 'Optional draft menu name.' },
+        menu_name: { type: "string", description: "Optional draft menu name." },
       },
     },
   },
   {
-    name: 'resolve_pending_media',
-    description: 'Clear the pending WhatsApp media state. Call with action=save_media after assigning the asset to any tool (menu item, hero, post, etc.) or when the user just wants it saved to the library. Call with action=cancel to discard.',
+    name: "resolve_pending_media",
+    description:
+      "Clear the pending WhatsApp media state. Call with action=save_media after assigning the asset to any tool (menu item, hero, post, etc.) or when the user just wants it saved to the library. Call with action=cancel to discard.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        action: { type: 'string', enum: ['save_media', 'cancel'] },
+        action: { type: "string", enum: ["save_media", "cancel"] },
       },
-      required: ['action'],
+      required: ["action"],
     },
   },
   {
-    name: 'generate_image',
-    description: 'Generate an AI image from a text prompt using the configured OpenAI image model. The image is automatically saved to the media library. Use for menu item photos, hero images, or social posts.',
+    name: "generate_image",
+    description:
+      "Generate an AI image from a text prompt using the configured OpenAI image model. The image is automatically saved to the media library. Use for menu item photos, hero images, or social posts.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        prompt: { type: 'string', description: 'Describe the image. Include food type, style, plating, lighting. Be specific.' },
-        location_id: { type: 'string', description: 'Optional: attach the generated image to a specific location.' },
+        prompt: {
+          type: "string",
+          description:
+            "Describe the image. Include food type, style, plating, lighting. Be specific.",
+        },
+        location_id: {
+          type: "string",
+          description:
+            "Optional: attach the generated image to a specific location.",
+        },
       },
-      required: ['prompt'],
+      required: ["prompt"],
     },
   },
 
   // ── Q&A ────────────────────────────────────────────────────────────────────
   {
-    name: 'get_location_qa',
-    description: 'Get Q&A pairs for a location.',
+    name: "get_location_qa",
+    description: "Get Q&A pairs for a location.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        location_id: { type: 'string' },
+        location_id: { type: "string" },
       },
-      required: ['location_id'],
+      required: ["location_id"],
     },
   },
   {
-    name: 'add_qa',
-    description: 'Add a Q&A pair to a location.',
+    name: "add_qa",
+    description: "Add a Q&A pair to a location.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        location_id: { type: 'string' },
-        question: { type: 'string' },
-        answer: { type: 'string', description: 'Owner answer. Optional — can be added later.' },
+        location_id: { type: "string" },
+        question: { type: "string" },
+        answer: {
+          type: "string",
+          description: "Owner answer. Optional — can be added later.",
+        },
       },
-      required: ['location_id', 'question'],
+      required: ["location_id", "question"],
     },
   },
   {
-    name: 'delete_qa',
-    description: 'Delete a Q&A entry. Confirm with user first.',
+    name: "delete_qa",
+    description: "Delete a Q&A entry. Confirm with user first.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        qa_id: { type: 'string' },
-        location_id: { type: 'string' },
+        qa_id: { type: "string" },
+        location_id: { type: "string" },
       },
-      required: ['qa_id', 'location_id'],
+      required: ["qa_id", "location_id"],
     },
   },
 
   // ── Submissions ────────────────────────────────────────────────────────────
   {
-    name: 'get_contact_submissions',
-    description: 'List contact form submissions for this site.',
-    input_schema: { type: 'object', properties: {} },
+    name: "get_contact_submissions",
+    description: "List contact form submissions for this site.",
+    input_schema: { type: "object", properties: {} },
   },
   {
-    name: 'get_reservation_submissions',
-    description: 'List reservation requests for this site.',
-    input_schema: { type: 'object', properties: {} },
+    name: "get_reservation_submissions",
+    description: "List reservation requests for this site.",
+    input_schema: { type: "object", properties: {} },
   },
   {
-    name: 'get_reservation_policies',
-    description: 'Read the reservation policy copy for this site.',
-    input_schema: { type: 'object', properties: {} },
+    name: "get_reservation_policies",
+    description: "Read the reservation policy copy for this site.",
+    input_schema: { type: "object", properties: {} },
   },
   {
-    name: 'save_reservation_policies',
-    description: 'Update the live reservation policy copy for this site.',
+    name: "save_reservation_policies",
+    description: "Update the live reservation policy copy for this site.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        body: { type: 'string', description: 'Reservation policy HTML or rich text.' },
+        body: {
+          type: "string",
+          description: "Reservation policy HTML or rich text.",
+        },
       },
-      required: ['body'],
+      required: ["body"],
     },
   },
   {
-    name: 'delete_reservation_policies',
-    description: 'Remove the custom reservation policy copy and restore the default. Confirm with the user first.',
-    input_schema: { type: 'object', properties: {} },
+    name: "delete_reservation_policies",
+    description:
+      "Remove the custom reservation policy copy and restore the default. Confirm with the user first.",
+    input_schema: { type: "object", properties: {} },
   },
 
   // ── Site Content ──────────────────────────────────────────────────────────
   {
-    name: 'get_site_content_page',
-    description: 'Read the current live and draft content for a tenant site page.',
+    name: "get_site_content_page",
+    description:
+      "Read the current live and draft content for a tenant site page.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        page: { type: 'string', enum: Object.keys(contentRegistry), description: 'Site page to inspect.' },
-        location_id: { type: 'string', description: 'Optional location scope for location-specific pages.' },
+        page: {
+          type: "string",
+          enum: Object.keys(contentRegistry),
+          description: "Site page to inspect.",
+        },
+        location_id: {
+          type: "string",
+          description: "Optional location scope for location-specific pages.",
+        },
       },
-      required: ['page'],
+      required: ["page"],
     },
   },
   {
-    name: 'save_site_content_field',
-    description: 'Save a draft value for a site page field.',
+    name: "save_site_content_field",
+    description: "Save a draft value for a site page field.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        page: { type: 'string', enum: Object.keys(contentRegistry), description: 'Site page to update.' },
-        field: { type: 'string', description: 'Field key from the content registry.' },
-        value: { type: 'string', description: 'New field value.' },
-        location_id: { type: 'string', description: 'Optional location scope for location-specific pages.' },
+        page: {
+          type: "string",
+          enum: Object.keys(contentRegistry),
+          description: "Site page to update.",
+        },
+        field: {
+          type: "string",
+          description: "Field key from the content registry.",
+        },
+        value: { type: "string", description: "New field value." },
+        location_id: {
+          type: "string",
+          description: "Optional location scope for location-specific pages.",
+        },
       },
-      required: ['page', 'field', 'value'],
+      required: ["page", "field", "value"],
     },
   },
   {
-    name: 'publish_site_content_page',
-    description: 'Publish all draft content for a site page.',
+    name: "publish_site_content_page",
+    description: "Publish all draft content for a site page.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        page: { type: 'string', enum: Object.keys(contentRegistry), description: 'Site page to publish.' },
-        location_id: { type: 'string', description: 'Optional location scope for location-specific pages.' },
+        page: {
+          type: "string",
+          enum: Object.keys(contentRegistry),
+          description: "Site page to publish.",
+        },
+        location_id: {
+          type: "string",
+          description: "Optional location scope for location-specific pages.",
+        },
       },
-      required: ['page'],
+      required: ["page"],
     },
   },
   {
-    name: 'discard_site_content_page',
-    description: 'Discard all draft content for a site page.',
+    name: "discard_site_content_page",
+    description: "Discard all draft content for a site page.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        page: { type: 'string', enum: Object.keys(contentRegistry), description: 'Site page to reset.' },
-        location_id: { type: 'string', description: 'Optional location scope for location-specific pages.' },
+        page: {
+          type: "string",
+          enum: Object.keys(contentRegistry),
+          description: "Site page to reset.",
+        },
+        location_id: {
+          type: "string",
+          description: "Optional location scope for location-specific pages.",
+        },
       },
-      required: ['page'],
+      required: ["page"],
     },
   },
   {
-    name: 'delete_site_content_field',
-    description: 'Delete a site page field from live content and drafts. Confirm with the user first.',
+    name: "delete_site_content_field",
+    description:
+      "Delete a site page field from live content and drafts. Confirm with the user first.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        page: { type: 'string', enum: Object.keys(contentRegistry), description: 'Site page that owns the field.' },
-        field: { type: 'string', description: 'Field key from the content registry.' },
-        location_id: { type: 'string', description: 'Optional location scope for location-specific pages.' },
+        page: {
+          type: "string",
+          enum: Object.keys(contentRegistry),
+          description: "Site page that owns the field.",
+        },
+        field: {
+          type: "string",
+          description: "Field key from the content registry.",
+        },
+        location_id: {
+          type: "string",
+          description: "Optional location scope for location-specific pages.",
+        },
       },
-      required: ['page', 'field'],
+      required: ["page", "field"],
     },
   },
 
   // ── Platform Content ──────────────────────────────────────────────────────
   {
-    name: 'get_platform_content_page',
-    description: 'Read a platform admin content page.',
+    name: "get_platform_content_page",
+    description: "Read a platform admin content page.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        page: { type: 'string', enum: [...PLATFORM_PAGES], description: 'Platform page to inspect.' },
+        page: {
+          type: "string",
+          enum: [...PLATFORM_PAGES],
+          description: "Platform page to inspect.",
+        },
       },
-      required: ['page'],
+      required: ["page"],
     },
   },
   {
-    name: 'save_platform_content_page',
-    description: 'Update a platform admin content page.',
+    name: "save_platform_content_page",
+    description: "Update a platform admin content page.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        page: { type: 'string', enum: [...PLATFORM_PAGES], description: 'Platform page to update.' },
-        content: { type: 'string', description: 'Raw page content.' },
+        page: {
+          type: "string",
+          enum: [...PLATFORM_PAGES],
+          description: "Platform page to update.",
+        },
+        content: { type: "string", description: "Raw page content." },
       },
-      required: ['page', 'content'],
+      required: ["page", "content"],
     },
   },
   {
-    name: 'delete_platform_content_page',
-    description: 'Delete a platform admin content page. Confirm with the user first.',
+    name: "delete_platform_content_page",
+    description:
+      "Delete a platform admin content page. Confirm with the user first.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        page: { type: 'string', enum: [...PLATFORM_PAGES], description: 'Platform page to delete.' },
+        page: {
+          type: "string",
+          enum: [...PLATFORM_PAGES],
+          description: "Platform page to delete.",
+        },
       },
-      required: ['page'],
+      required: ["page"],
     },
   },
 
   // ── Site ───────────────────────────────────────────────────────────────────
   {
-    name: 'get_site_stats',
-    description: 'Summary of site content: posts, menus, menu items, locations, reviews.',
-    input_schema: { type: 'object', properties: {} },
+    name: "get_site_stats",
+    description:
+      "Summary of site content: posts, menus, menu items, locations, reviews.",
+    input_schema: { type: "object", properties: {} },
   },
   {
-    name: 'rename_site',
-    description: 'Update the brand name and subdomain/URL slug of the site.',
+    name: "rename_site",
+    description: "Update the brand name and subdomain/URL slug of the site.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        brand_name: { type: 'string', description: 'New brand name.' },
+        brand_name: { type: "string", description: "New brand name." },
       },
-      required: ['brand_name'],
+      required: ["brand_name"],
     },
   },
   {
-    name: 'set_default_currency',
-    description: 'Set the default menu currency for this site.',
+    name: "set_default_currency",
+    description: "Set the default menu currency for this site.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
+        currency: { type: "string", enum: [...SUPPORTED_CURRENCIES] },
       },
-      required: ['currency'],
+      required: ["currency"],
     },
   },
   {
-    name: 'save_brand_description',
-    description: 'Save a one-line brand description for the site homepage and SEO.',
+    name: "save_brand_description",
+    description:
+      "Save a one-line brand description for the site homepage and SEO.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        description: { type: 'string', description: 'One-line brand description.' },
+        description: {
+          type: "string",
+          description: "One-line brand description.",
+        },
       },
-      required: ['description'],
+      required: ["description"],
     },
   },
   {
-    name: 'update_site_social',
-    description: 'Set site-wide social media links, footer tagline, and brand contact emails. Pass only the fields to change; omit the rest.',
+    name: "update_site_social",
+    description:
+      "Set site-wide social media links, footer tagline, and brand contact emails. Pass only the fields to change; omit the rest.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        facebook_url:        { type: 'string', description: 'Full Facebook page URL. Empty string to clear.' },
-        instagram_url:       { type: 'string', description: 'Full Instagram profile URL. Empty string to clear.' },
-        tiktok_url:          { type: 'string', description: 'Full TikTok profile URL. Empty string to clear.' },
-        footer_tagline:      { type: 'string', description: 'Short tagline shown in the site footer. Empty string to clear.' },
-        press_email:         { type: 'string', description: 'Email for press inquiries. Shown on brand contact page. Empty string to clear.' },
-        partnerships_email:  { type: 'string', description: 'Email for partnership inquiries. Empty string to clear.' },
-        catering_email:      { type: 'string', description: 'Email for catering and events inquiries. Empty string to clear.' },
-        careers_email:       { type: 'string', description: 'Email for careers/job inquiries. Empty string to clear.' },
+        facebook_url: {
+          type: "string",
+          description: "Full Facebook page URL. Empty string to clear.",
+        },
+        instagram_url: {
+          type: "string",
+          description: "Full Instagram profile URL. Empty string to clear.",
+        },
+        tiktok_url: {
+          type: "string",
+          description: "Full TikTok profile URL. Empty string to clear.",
+        },
+        footer_tagline: {
+          type: "string",
+          description:
+            "Short tagline shown in the site footer. Empty string to clear.",
+        },
+        press_email: {
+          type: "string",
+          description:
+            "Email for press inquiries. Shown on brand contact page. Empty string to clear.",
+        },
+        partnerships_email: {
+          type: "string",
+          description:
+            "Email for partnership inquiries. Empty string to clear.",
+        },
+        catering_email: {
+          type: "string",
+          description:
+            "Email for catering and events inquiries. Empty string to clear.",
+        },
+        careers_email: {
+          type: "string",
+          description:
+            "Email for careers/job inquiries. Empty string to clear.",
+        },
       },
     },
   },
   {
-    name: 'list_site_languages',
-    description: 'List the source language and enabled translation languages for this site.',
-    input_schema: { type: 'object', properties: {} },
+    name: "list_site_languages",
+    description:
+      "List the source language and enabled translation languages for this site.",
+    input_schema: { type: "object", properties: {} },
   },
   {
-    name: 'save_site_language',
-    description: 'Create or update a site language. Use this for source language, draft/published/disabled status, display label, and source fallback.',
+    name: "save_site_language",
+    description:
+      "Create or update a site language. Use this for source language, draft/published/disabled status, display label, and source fallback.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        locale: { type: 'string', description: 'BCP-47 locale code, such as en, th, fr, ja, or zh-CN.' },
-        label: { type: 'string', description: 'Optional display label shown in dashboard controls.' },
-        status: { type: 'string', enum: ['draft', 'published', 'disabled'], description: 'Public availability for this locale.' },
-        fallback_enabled: { type: 'boolean', description: 'Whether missing translated content falls back to the source language.' },
-        is_source: { type: 'boolean', description: 'Set true to make this locale the source language.' },
+        locale: {
+          type: "string",
+          description: "BCP-47 locale code, such as en, th, fr, ja, or zh-CN.",
+        },
+        label: {
+          type: "string",
+          description: "Optional display label shown in dashboard controls.",
+        },
+        status: {
+          type: "string",
+          enum: ["draft", "published", "disabled"],
+          description: "Public availability for this locale.",
+        },
+        fallback_enabled: {
+          type: "boolean",
+          description:
+            "Whether missing translated content falls back to the source language.",
+        },
+        is_source: {
+          type: "boolean",
+          description: "Set true to make this locale the source language.",
+        },
       },
-      required: ['locale'],
+      required: ["locale"],
     },
   },
   {
-    name: 'delete_site_language',
-    description: 'Remove a non-source site language. Confirm with the user first.',
+    name: "delete_site_language",
+    description:
+      "Remove a non-source site language. Confirm with the user first.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        locale: { type: 'string', description: 'Locale code to remove.' },
+        locale: { type: "string", description: "Locale code to remove." },
       },
-      required: ['locale'],
+      required: ["locale"],
     },
   },
   {
-    name: 'estimate_site_translation',
-    description: 'Estimate translation scope and AI credits before translating a site language. Use before starting translation work.',
+    name: "estimate_site_translation",
+    description:
+      "Estimate translation scope and AI credits before translating a site language. Use before starting translation work.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        locale: { type: 'string', description: 'Target locale code, such as th or fr.' },
-        scope: { type: 'string', enum: ['site', 'content', 'menus', 'locations', 'posts'], description: 'Which part of the site to estimate.' },
-        include_published: { type: 'boolean', description: 'Include already published translations in the estimate.' },
+        locale: {
+          type: "string",
+          description: "Target locale code, such as th or fr.",
+        },
+        scope: {
+          type: "string",
+          enum: ["site", "content", "menus", "locations", "posts"],
+          description: "Which part of the site to estimate.",
+        },
+        include_published: {
+          type: "boolean",
+          description:
+            "Include already published translations in the estimate.",
+        },
       },
-      required: ['locale'],
+      required: ["locale"],
     },
   },
   {
-    name: 'start_site_translation_job',
-    description: 'Create a queued translation job after the user approves the estimate. This queues work but does not translate immediately.',
+    name: "start_site_translation_job",
+    description:
+      "Create a queued translation job after the user approves the estimate. This queues work but does not translate immediately.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        locale: { type: 'string', description: 'Target locale code, such as th or fr.' },
-        scope: { type: 'string', enum: ['site', 'content', 'menus', 'locations', 'posts'], description: 'Which part of the site to translate.' },
-        include_published: { type: 'boolean', description: 'Include already published translations.' },
+        locale: {
+          type: "string",
+          description: "Target locale code, such as th or fr.",
+        },
+        scope: {
+          type: "string",
+          enum: ["site", "content", "menus", "locations", "posts"],
+          description: "Which part of the site to translate.",
+        },
+        include_published: {
+          type: "boolean",
+          description: "Include already published translations.",
+        },
       },
-      required: ['locale'],
+      required: ["locale"],
     },
   },
   {
-    name: 'list_translation_jobs',
-    description: 'List recent translation jobs for this site.',
-    input_schema: { type: 'object', properties: {} },
+    name: "list_translation_jobs",
+    description: "List recent translation jobs for this site.",
+    input_schema: { type: "object", properties: {} },
   },
   {
-    name: 'get_translation_job',
-    description: 'Inspect a translation job and its queued items.',
+    name: "get_translation_job",
+    description: "Inspect a translation job and its queued items.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        job_id: { type: 'string' },
+        job_id: { type: "string" },
       },
-      required: ['job_id'],
+      required: ["job_id"],
     },
   },
   {
-    name: 'run_translation_job_batch',
-    description: 'Run one batch of an approved queued translation job. This calls AI, charges credits, and saves draft translations. Confirm before using.',
+    name: "run_translation_job_batch",
+    description:
+      "Run one batch of an approved queued translation job. This calls AI, charges credits, and saves draft translations. Confirm before using.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        job_id: { type: 'string' },
+        job_id: { type: "string" },
       },
-      required: ['job_id'],
+      required: ["job_id"],
     },
   },
   {
-    name: 'publish_site_translations',
-    description: 'Publish matching draft translations for a locale and scope so they become visible on the public site. Confirm before using.',
+    name: "publish_site_translations",
+    description:
+      "Publish matching draft translations for a locale and scope so they become visible on the public site. Confirm before using.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        locale: { type: 'string', description: 'Target locale code, such as th or fr.' },
-        scope: { type: 'string', enum: ['site', 'content', 'menus', 'locations', 'posts'], description: 'Which translated drafts to publish.' },
+        locale: {
+          type: "string",
+          description: "Target locale code, such as th or fr.",
+        },
+        scope: {
+          type: "string",
+          enum: ["site", "content", "menus", "locations", "posts"],
+          description: "Which translated drafts to publish.",
+        },
       },
-      required: ['locale'],
+      required: ["locale"],
     },
   },
   // ── Experiences ───────────────────────────────────────────────────────────
   {
-    name: 'list_experiences',
-    description: 'List all experiences for this site.',
-    input_schema: { type: 'object', properties: {} },
+    name: "list_experiences",
+    description: "List all experiences for this site.",
+    input_schema: { type: "object", properties: {} },
   },
   {
-    name: 'create_experience',
-    description: 'Create a new bookable dining experience for this site.',
+    name: "create_experience",
+    description: "Create a new bookable dining experience for this site.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        title: { type: 'string', description: 'Experience name, e.g. "Teppanyaki Night".' },
-        tagline: { type: 'string', description: 'One-line hook shown on the listing card.' },
-        body: { type: 'string', description: 'Rich HTML body — full description, what\'s included, atmosphere, etc.' },
-        price: { type: 'string', description: 'Price string, e.g. "THB 1,500 / person".' },
-        featured: { type: 'boolean', description: 'Whether to feature this experience on the homepage/location pages (when no menu exists).' },
-        featured_sort_order: { type: 'number', description: 'Sort order for featured experiences (lower numbers appear first).' },
-        duration_minutes: { type: 'number', description: 'Duration in minutes, e.g. 90.' },
-        max_capacity: { type: 'number', description: 'Maximum guests per booking.' },
-        time_slots: { type: 'array', items: { type: 'string' }, description: 'Available time slots, e.g. ["17:00","19:00","21:00"].' },
-        available_note: { type: 'string', description: 'Human-readable availability, e.g. "Every Friday & Saturday".' },
-        image_asset_id: { type: 'string', description: 'Media asset ID for hero image.' },
-        location_id: { type: 'string', description: 'Pin to a specific location ID. Omit for site-wide.' },
-        status: { type: 'string', enum: ['active', 'inactive', 'sold_out'], description: 'Default: active.' },
-        seo_title: { type: 'string', description: 'SEO page title override.' },
-        seo_description: { type: 'string', description: 'SEO meta description (150–160 chars).' },
+        title: {
+          type: "string",
+          description: 'Experience name, e.g. "Teppanyaki Night".',
+        },
+        tagline: {
+          type: "string",
+          description: "One-line hook shown on the listing card.",
+        },
+        body: {
+          type: "string",
+          description:
+            "Rich HTML body — full description, what's included, atmosphere, etc.",
+        },
+        price: {
+          type: "string",
+          description: 'Price string, e.g. "THB 1,500 / person".',
+        },
+        featured: {
+          type: "boolean",
+          description:
+            "Whether to feature this experience on the homepage/location pages (when no menu exists).",
+        },
+        featured_sort_order: {
+          type: "number",
+          description:
+            "Sort order for featured experiences (lower numbers appear first).",
+        },
+        duration_minutes: {
+          type: "number",
+          description: "Duration in minutes, e.g. 90.",
+        },
+        max_capacity: {
+          type: "number",
+          description: "Maximum guests per booking.",
+        },
+        time_slots: {
+          type: "array",
+          items: { type: "string" },
+          description: 'Available time slots, e.g. ["17:00","19:00","21:00"].',
+        },
+        available_note: {
+          type: "string",
+          description:
+            'Human-readable availability, e.g. "Every Friday & Saturday".',
+        },
+        image_asset_id: {
+          type: "string",
+          description: "Media asset ID for hero image.",
+        },
+        location_id: {
+          type: "string",
+          description: "Pin to a specific location ID. Omit for site-wide.",
+        },
+        status: {
+          type: "string",
+          enum: ["active", "inactive", "sold_out"],
+          description: "Default: active.",
+        },
+        seo_title: { type: "string", description: "SEO page title override." },
+        seo_description: {
+          type: "string",
+          description: "SEO meta description (150–160 chars).",
+        },
       },
-      required: ['title'],
+      required: ["title"],
     },
   },
   {
-    name: 'update_experience',
-    description: 'Update an existing experience — any combination of fields.',
+    name: "update_experience",
+    description: "Update an existing experience — any combination of fields.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        experience_id: { type: 'string', description: 'ID of the experience to update.' },
-        title: { type: 'string' },
-        tagline: { type: 'string' },
-        body: { type: 'string' },
-        featured: { type: 'boolean', description: 'Whether to feature this experience on the homepage/location pages (when no menu exists).' },
-        featured_sort_order: { type: 'number', description: 'Sort order for featured experiences (lower numbers appear first).' },
-        price: { type: 'string' },
-        duration_minutes: { type: 'number' },
-        max_capacity: { type: 'number' },
-        time_slots: { type: 'array', items: { type: 'string' } },
-        available_note: { type: 'string' },
-        image_asset_id: { type: 'string' },
-        location_id: { type: 'string' },
-        status: { type: 'string', enum: ['active', 'inactive', 'sold_out'] },
-        sort_order: { type: 'number' },
-        seo_title: { type: 'string' },
-        seo_description: { type: 'string' },
+        experience_id: {
+          type: "string",
+          description: "ID of the experience to update.",
+        },
+        title: { type: "string" },
+        tagline: { type: "string" },
+        body: { type: "string" },
+        featured: {
+          type: "boolean",
+          description:
+            "Whether to feature this experience on the homepage/location pages (when no menu exists).",
+        },
+        featured_sort_order: {
+          type: "number",
+          description:
+            "Sort order for featured experiences (lower numbers appear first).",
+        },
+        price: { type: "string" },
+        duration_minutes: { type: "number" },
+        max_capacity: { type: "number" },
+        time_slots: { type: "array", items: { type: "string" } },
+        available_note: { type: "string" },
+        image_asset_id: { type: "string" },
+        location_id: { type: "string" },
+        status: { type: "string", enum: ["active", "inactive", "sold_out"] },
+        sort_order: { type: "number" },
+        seo_title: { type: "string" },
+        seo_description: { type: "string" },
       },
-      required: ['experience_id'],
+      required: ["experience_id"],
     },
   },
   {
-    name: 'delete_experience',
-    description: 'Permanently delete an experience and all its bookings. Confirm with user first.',
+    name: "delete_experience",
+    description:
+      "Permanently delete an experience and all its bookings. Confirm with user first.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        experience_id: { type: 'string', description: 'ID of the experience to delete.' },
+        experience_id: {
+          type: "string",
+          description: "ID of the experience to delete.",
+        },
       },
-      required: ['experience_id'],
+      required: ["experience_id"],
     },
   },
   {
-    name: 'list_experience_bookings',
-    description: 'List booking requests for an experience.',
+    name: "list_experience_bookings",
+    description: "List booking requests for an experience.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        experience_id: { type: 'string', description: 'Experience ID.' },
+        experience_id: { type: "string", description: "Experience ID." },
       },
-      required: ['experience_id'],
+      required: ["experience_id"],
     },
   },
   {
-    name: 'update_experience_booking_status',
-    description: 'Confirm or cancel a guest booking for an experience.',
+    name: "update_experience_booking_status",
+    description: "Confirm or cancel a guest booking for an experience.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        experience_id: { type: 'string' },
-        booking_id: { type: 'string' },
-        status: { type: 'string', enum: ['confirmed', 'cancelled'] },
+        experience_id: { type: "string" },
+        booking_id: { type: "string" },
+        status: { type: "string", enum: ["confirmed", "cancelled"] },
       },
-      required: ['experience_id', 'booking_id', 'status'],
+      required: ["experience_id", "booking_id", "status"],
     },
   },
   // ── Managed service work requests ─────────────────────────────────────────
   {
-    name: 'create_work_request',
-    description: 'Submit a work request to the Paul & Julia managed service queue. Use this when the owner needs something done that requires human attention — content updates, translations, photo work, SEO, Google Business management, seasonal campaigns, or anything beyond automated tools. Always confirm the details with the owner before submitting.',
+    name: "create_work_request",
+    description:
+      "Submit a work request to the Paul & Julia managed service queue. Use this when the owner needs something done that requires human attention — content updates, translations, photo work, SEO, Google Business management, seasonal campaigns, or anything beyond automated tools. Always confirm the details with the owner before submitting.",
     input_schema: {
-      type: 'object',
+      type: "object",
       properties: {
         type: {
-          type: 'string',
-          enum: ['content_update', 'menu_update', 'translation', 'seo', 'google_business', 'seasonal', 'photo_update', 'social_media', 'technical', 'other'],
-          description: 'Category of work needed.',
+          type: "string",
+          enum: [
+            "content_update",
+            "menu_update",
+            "translation",
+            "seo",
+            "google_business",
+            "seasonal",
+            "photo_update",
+            "social_media",
+            "technical",
+            "other",
+          ],
+          description: "Category of work needed.",
         },
-        title: { type: 'string', description: 'Short summary of what needs to be done (max 120 chars).' },
-        description: { type: 'string', description: 'Full details — what, where, any specific requirements or context.' },
+        title: {
+          type: "string",
+          description:
+            "Short summary of what needs to be done (max 120 chars).",
+        },
+        description: {
+          type: "string",
+          description:
+            "Full details — what, where, any specific requirements or context.",
+        },
         priority: {
-          type: 'string',
-          enum: ['low', 'normal', 'high', 'urgent'],
-          description: 'How urgent. Default: normal. Only use high/urgent if the owner specifically says so.',
+          type: "string",
+          enum: ["low", "normal", "high", "urgent"],
+          description:
+            "How urgent. Default: normal. Only use high/urgent if the owner specifically says so.",
         },
       },
-      required: ['type', 'title'],
+      required: ["type", "title"],
     },
   },
-]
+];
 
-const CONFIRM_REQUIRED = new Set(['publish_post', 'publish_menu', 'delete_menu', 'delete_menu_item', 'delete_menu_section', 'delete_location', 'delete_review', 'delete_media_asset', 'delete_qa', 'delete_reservation_policies', 'delete_site_content_field', 'delete_platform_content_page', 'delete_site_language', 'start_site_translation_job', 'run_translation_job_batch', 'publish_site_translations', 'delete_experience'])
+const CONFIRM_REQUIRED = new Set([
+  "publish_post",
+  "publish_menu",
+  "delete_menu",
+  "delete_menu_item",
+  "delete_menu_section",
+  "delete_location",
+  "delete_review",
+  "delete_media_asset",
+  "delete_qa",
+  "delete_reservation_policies",
+  "delete_site_content_field",
+  "delete_platform_content_page",
+  "delete_site_language",
+  "start_site_translation_job",
+  "run_translation_job_batch",
+  "publish_site_translations",
+  "delete_experience",
+]);
 
 function isAllowedGoogleMapsHost(hostname: string): boolean {
-  const host = hostname.toLowerCase()
-  return host === 'maps.app.goo.gl'
-    || host === 'maps.google.com'
-    || host === 'google.com'
-    || host.endsWith('.google.com')
+  const host = hostname.toLowerCase();
+  return (
+    host === "maps.app.goo.gl" ||
+    host === "maps.google.com" ||
+    host === "google.com" ||
+    host.endsWith(".google.com")
+  );
 }
 
-function requiresConfirmation(name: string, recentMessages: AiMessage[]): boolean {
-  if (!CONFIRM_REQUIRED.has(name)) return false
-  const CONFIRM_WORDS = /\b(yes|yea|yeah|yep|yup|ok|okay|go ahead|do it|do that|publish|confirm|proceed|sure|absolutely|fine|sounds good|let'?s go)\b/i
-  const userTurns = recentMessages.filter(m => m.role === 'user').slice(-3)
-    .map(m => (typeof m.content === 'string' ? m.content : ''))
-  return !userTurns.some(t => CONFIRM_WORDS.test(t))
+function requiresConfirmation(
+  name: string,
+  recentMessages: AiMessage[],
+): boolean {
+  if (!CONFIRM_REQUIRED.has(name)) return false;
+  const CONFIRM_WORDS =
+    /\b(yes|yea|yeah|yep|yup|ok|okay|go ahead|do it|do that|publish|confirm|proceed|sure|absolutely|fine|sounds good|let'?s go)\b/i;
+  const userTurns = recentMessages
+    .filter((m) => m.role === "user")
+    .slice(-3)
+    .map((m) => (typeof m.content === "string" ? m.content : ""));
+  return !userTurns.some((t) => CONFIRM_WORDS.test(t));
 }
 
 async function executeTool(
   name: string,
   input: ApiRecord,
   ctx: {
-    db: D1Database
-    env: ApiRecord
-    orgId: string
-    siteId: string
-    userId: string
-    agentMessages?: AiMessage[]
-    locationId?: string | null
-    channel?: 'dashboard' | 'whatsapp'
-    pendingMedia?: { assetId: string; siteId: string }
-  }
+    db: D1Database;
+    env: ApiRecord;
+    orgId: string;
+    siteId: string;
+    userId: string;
+    agentMessages?: AiMessage[];
+    locationId?: string | null;
+    channel?: "dashboard" | "whatsapp";
+    pendingMedia?: { assetId: string; siteId: string };
+  },
 ): Promise<ApiValue> {
-  const { db, env, orgId, siteId, userId } = ctx
+  const { db, env, orgId, siteId, userId } = ctx;
 
   if (requiresConfirmation(name, ctx.agentMessages ?? [])) {
-    return { __requires_confirmation: true, message: `Please confirm you want to ${name.replace(/_/g, ' ')}.` }
+    return {
+      __requires_confirmation: true,
+      message: `Please confirm you want to ${name.replace(/_/g, " ")}.`,
+    };
   }
 
   switch (name) {
-    case 'get_posts': {
-      const posts = await listPosts(db, orgId, siteId, input.status)
+    case "get_posts": {
+      const posts = await listPosts(db, orgId, siteId, input.status);
       const filtered = input.location_id
         ? posts.filter((p) => p.location_id === input.location_id)
-        : posts
+        : posts;
       return filtered.slice(0, 10).map((p) => ({
-        id: p.id, title: p.title,
-        body: p.body.slice(0, 120) + (p.body.length > 120 ? '…' : ''),
-        status: p.status, post_type: p.post_type, location_id: p.location_id, updated_at: p.updated_at,
-      }))
+        id: p.id,
+        title: p.title,
+        body: p.body.slice(0, 120) + (p.body.length > 120 ? "…" : ""),
+        status: p.status,
+        post_type: p.post_type,
+        location_id: p.location_id,
+        updated_at: p.updated_at,
+      }));
     }
 
-    case 'create_post': {
-      const post = await createPost(db, orgId, siteId, {
-        title: input.title, body: input.body, image_asset_id: input.image_asset_id,
-        location_id: input.location_id, post_type: input.post_type,
-        cta_type: input.cta_type, cta_url: input.cta_url,
-        event_title: input.event_title, event_start: input.event_start, event_end: input.event_end,
-        offer_coupon: input.offer_coupon, offer_terms: input.offer_terms,
-      }, userId)
-      return { id: post.id, title: post.title, body: post.body, status: post.status, post_type: post.post_type }
+    case "create_post": {
+      const post = await createPost(
+        db,
+        orgId,
+        siteId,
+        {
+          title: input.title,
+          body: input.body,
+          image_asset_id: input.image_asset_id,
+          location_id: input.location_id,
+          post_type: input.post_type,
+          cta_type: input.cta_type,
+          cta_url: input.cta_url,
+          event_title: input.event_title,
+          event_start: input.event_start,
+          event_end: input.event_end,
+          offer_coupon: input.offer_coupon,
+          offer_terms: input.offer_terms,
+        },
+        userId,
+      );
+      return {
+        id: post.id,
+        title: post.title,
+        body: post.body,
+        status: post.status,
+        post_type: post.post_type,
+      };
     }
 
-    case 'publish_post': {
-      const result = await publishPost(db, orgId, siteId, input.post_id, ['site'])
-      if (!result) return { error: 'Post not found or already published.' }
-      return { id: result.id, title: result.title, status: result.status, published_at: result.published_at }
+    case "publish_post": {
+      const result = await publishPost(db, orgId, siteId, input.post_id, [
+        "site",
+      ]);
+      if (!result) return { error: "Post not found or already published." };
+      return {
+        id: result.id,
+        title: result.title,
+        status: result.status,
+        published_at: result.published_at,
+      };
     }
 
-    case 'get_menu': {
+    case "get_menu": {
       if (input.menu_id) {
-        const menu = await getMenuWithItems(db, orgId, siteId, input.menu_id)
-        if (!menu) return { error: 'Menu not found.' }
-        return menu
+        const menu = await getMenuWithItems(db, orgId, siteId, input.menu_id);
+        if (!menu) return { error: "Menu not found." };
+        return menu;
       }
       // Filter by current location when available so we only see relevant menus
-      const locationFilter = (input.location_id as string | undefined) ?? ctx.locationId ?? undefined
-      const menus = await getMenus(db, orgId, siteId, locationFilter || undefined)
-      if (!menus.length) return { message: 'No menus found for this site.' }
-      return await getMenuWithItems(db, orgId, siteId, menus[0]!.id) ?? { error: 'Failed to load menu.' }
+      const locationFilter =
+        (input.location_id as string | undefined) ??
+        ctx.locationId ??
+        undefined;
+      const menus = await getMenus(
+        db,
+        orgId,
+        siteId,
+        locationFilter || undefined,
+      );
+      if (!menus.length) return { message: "No menus found for this site." };
+      return (
+        (await getMenuWithItems(db, orgId, siteId, menus[0]!.id)) ?? {
+          error: "Failed to load menu.",
+        }
+      );
     }
 
-    case 'create_menu': {
+    case "create_menu": {
       // Use the explicit location from the AI, fall back to the page's current location
-      const effectiveLocationId = (input.location_id as string | undefined) ?? ctx.locationId ?? undefined
+      const effectiveLocationId =
+        (input.location_id as string | undefined) ??
+        ctx.locationId ??
+        undefined;
       if (effectiveLocationId) {
-        const location = await db.prepare(`
+        const location = await db
+          .prepare(
+            `
           SELECT 1 FROM business_locations
           WHERE id = ? AND organization_id = ? AND site_id = ?
           LIMIT 1
-        `).bind(effectiveLocationId, orgId, siteId).first()
-        if (!location) return { error: 'Location not found or access denied' }
+        `,
+          )
+          .bind(effectiveLocationId, orgId, siteId)
+          .first();
+        if (!location) return { error: "Location not found or access denied" };
       }
-      const menu = await createMenu(db, orgId, siteId, { name: input.name, description: input.description, locationId: effectiveLocationId }, userId)
-      return { id: menu.id, name: menu.name, description: menu.description, status: menu.status }
+      const menu = await createMenu(
+        db,
+        orgId,
+        siteId,
+        {
+          name: input.name,
+          description: input.description,
+          locationId: effectiveLocationId,
+        },
+        userId,
+      );
+      return {
+        id: menu.id,
+        name: menu.name,
+        description: menu.description,
+        status: menu.status,
+      };
     }
 
-    case 'rename_menu': {
-      const menu = await updateMenu(db, orgId, siteId, input.menu_id, { name: input.name, description: input.description }, userId)
-      return { id: menu.id, name: menu.name, description: menu.description, status: menu.status }
+    case "rename_menu": {
+      const menu = await updateMenu(
+        db,
+        orgId,
+        siteId,
+        input.menu_id,
+        { name: input.name, description: input.description },
+        userId,
+      );
+      return {
+        id: menu.id,
+        name: menu.name,
+        description: menu.description,
+        status: menu.status,
+      };
     }
 
-    case 'rename_menu_section': {
-      const menuId = toSqlText(input.menu_id)
-      const oldSection = toSqlText(input.old_section)?.trim()
-      const newSection = toSqlText(input.new_section)?.trim()
+    case "rename_menu_section": {
+      const menuId = toSqlText(input.menu_id);
+      const oldSection = toSqlText(input.old_section)?.trim();
+      const newSection = toSqlText(input.new_section)?.trim();
       if (!menuId || !oldSection || !newSection) {
-        return { error: 'menu_id, old_section, and new_section are required.' }
+        return { error: "menu_id, old_section, and new_section are required." };
       }
       if (oldSection === newSection) {
-        return { error: 'New section must be different.' }
+        return { error: "New section must be different." };
       }
 
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId)
-      if (!menu) return { error: 'Menu not found.' }
+      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
+      if (!menu) return { error: "Menu not found." };
       if (!menu.items.some((item) => item.section === oldSection)) {
-        return { error: 'Section not found.' }
+        return { error: "Section not found." };
       }
       if (menu.items.some((item) => item.section === newSection)) {
-        return { error: 'Section already exists.' }
+        return { error: "Section already exists." };
       }
 
-      const updated = await renameMenuSection(db, menuId, oldSection, newSection, userId)
-      return { menu_id: menuId, old_section: oldSection, new_section: newSection, updated }
+      const updated = await renameMenuSection(
+        db,
+        menuId,
+        oldSection,
+        newSection,
+        userId,
+      );
+      return {
+        menu_id: menuId,
+        old_section: oldSection,
+        new_section: newSection,
+        updated,
+      };
     }
 
-    case 'delete_menu_section': {
-      const menuId = toSqlText(input.menu_id)
-      const section = toSqlText(input.section)?.trim()
-      if (!menuId || !section) return { error: 'menu_id and section are required.' }
+    case "delete_menu_section": {
+      const menuId = toSqlText(input.menu_id);
+      const section = toSqlText(input.section)?.trim();
+      if (!menuId || !section)
+        return { error: "menu_id and section are required." };
 
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId)
-      if (!menu) return { error: 'Menu not found.' }
+      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
+      if (!menu) return { error: "Menu not found." };
       if (!menu.items.some((item) => item.section === section)) {
-        return { error: 'Section not found.' }
+        return { error: "Section not found." };
       }
 
-      const deleted = await deleteMenuSection(db, menuId, section)
-      return { menu_id: menuId, section, deleted }
+      const deleted = await deleteMenuSection(db, menuId, section);
+      return { menu_id: menuId, section, deleted };
     }
 
-    case 'add_menu_items_batch': {
-      const menuId = toSqlText(input.menu_id)
-      if (!menuId) return { error: 'menu_id is required.' }
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId)
-      if (!menu) return { error: 'Menu not found.' }
+    case "add_menu_items_batch": {
+      const menuId = toSqlText(input.menu_id);
+      if (!menuId) return { error: "menu_id is required." };
+      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
+      if (!menu) return { error: "Menu not found." };
 
-      const items: unknown[] = Array.isArray(input.items) ? input.items.slice(0, 100) : []
-      const existingKeys = new Set(menu.items.map((item) => item.slug || menuItemLookupKey(item.name)))
-      const inputKeys = new Set<string>()
-      const created: Array<{ id: string; name: string; section: string; price_amount: string | number | null }> = []
-      const skipped: Array<{ name: string; reason: string; existing_item_id?: string }> = []
+      const items: unknown[] = Array.isArray(input.items)
+        ? input.items.slice(0, 100)
+        : [];
+      const existingKeys = new Set(
+        menu.items.map((item) => item.slug || menuItemLookupKey(item.name)),
+      );
+      const inputKeys = new Set<string>();
+      const created: Array<{
+        id: string;
+        name: string;
+        section: string;
+        price_amount: string | number | null;
+      }> = [];
+      const skipped: Array<{
+        name: string;
+        reason: string;
+        existing_item_id?: string;
+      }> = [];
 
       for (const item of items) {
-        const itemRecord = (item && typeof item === 'object') ? item as Record<string, unknown> : null
-        const name = itemRecord ? getToolString(itemRecord, 'name', 200)?.trim() : ''
+        const itemRecord =
+          item && typeof item === "object"
+            ? (item as Record<string, unknown>)
+            : null;
+        const name = itemRecord
+          ? getToolString(itemRecord, "name", 200)?.trim()
+          : "";
         if (!itemRecord || !name) {
-          skipped.push({ name: '', reason: 'missing_name' })
-          continue
+          skipped.push({ name: "", reason: "missing_name" });
+          continue;
         }
-        const section = itemRecord ? getToolString(itemRecord, 'section', 100)?.trim() : ''
+        const section = itemRecord
+          ? getToolString(itemRecord, "section", 100)?.trim()
+          : "";
         if (!section) {
-          skipped.push({ name, reason: 'missing_section' })
-          continue
+          skipped.push({ name, reason: "missing_section" });
+          continue;
         }
 
-        const key = menuItemLookupKey(name)
-        const existing = menu.items.find((menuItem) => menuItem.slug === key || menuItem.name.toLowerCase() === name.toLowerCase())
+        const key = menuItemLookupKey(name);
+        const existing = menu.items.find(
+          (menuItem) =>
+            menuItem.slug === key ||
+            menuItem.name.toLowerCase() === name.toLowerCase(),
+        );
         if (existing || existingKeys.has(key)) {
-          skipped.push({ name, reason: 'already_exists', existing_item_id: existing?.id })
-          continue
+          skipped.push({
+            name,
+            reason: "already_exists",
+            existing_item_id: existing?.id,
+          });
+          continue;
         }
         if (inputKeys.has(key)) {
-          skipped.push({ name, reason: 'duplicate_in_request' })
-          continue
+          skipped.push({ name, reason: "duplicate_in_request" });
+          continue;
         }
 
-        inputKeys.add(key)
+        inputKeys.add(key);
 
         try {
-          const createdItem = await createMenuItem(db, menuId, {
-            section,
-            name,
-            description: getToolString(itemRecord, 'description', 500),
-            price_amount: getToolString(itemRecord, 'price_amount', 50),
-            image_asset_id: getToolString(itemRecord, 'image_asset_id', 120),
-          }, userId)
-          existingKeys.add(createdItem.slug || menuItemLookupKey(createdItem.name))
-          created.push({ id: createdItem.id, name: createdItem.name, section: createdItem.section, price_amount: createdItem.price_amount })
+          const createdItem = await createMenuItem(
+            db,
+            menuId,
+            {
+              section,
+              name,
+              description: getToolString(itemRecord, "description", 500),
+              price_amount: getToolString(itemRecord, "price_amount", 50),
+              image_asset_id: getToolString(itemRecord, "image_asset_id", 120),
+            },
+            userId,
+          );
+          existingKeys.add(
+            createdItem.slug || menuItemLookupKey(createdItem.name),
+          );
+          created.push({
+            id: createdItem.id,
+            name: createdItem.name,
+            section: createdItem.section,
+            price_amount: createdItem.price_amount,
+          });
         } catch (error) {
-          if (!isUniqueConstraintError(error)) throw error
-          skipped.push({ name, reason: 'unique_conflict' })
+          if (!isUniqueConstraintError(error)) throw error;
+          skipped.push({ name, reason: "unique_conflict" });
         }
       }
 
-      return { added: created.length, created, skipped, menu_id: menuId }
+      return { added: created.length, created, skipped, menu_id: menuId };
     }
 
-    case 'sync_menu_items': {
-      const menuId = toSqlText(input.menu_id)
-      if (!menuId) return { error: 'menu_id is required.' }
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId)
-      if (!menu) return { error: 'Menu not found.' }
+    case "sync_menu_items": {
+      const menuId = toSqlText(input.menu_id);
+      if (!menuId) return { error: "menu_id is required." };
+      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
+      if (!menu) return { error: "Menu not found." };
 
-      const items: unknown[] = Array.isArray(input.items) ? input.items.slice(0, 100) : []
-      const workingItems = [...menu.items]
-      const touchedItemIds = new Set<string>()
-      const created: Array<{ id: string; name: string; section: string; price_amount: string | number | null }> = []
-      const updated: Array<{ id: string; name: string; section: string; price_amount: string | number | null; available: boolean }> = []
-      const unchanged: Array<{ id: string; name: string }> = []
-      const skipped: Array<{ name: string; reason: string; item_id?: string }> = []
+      const items: unknown[] = Array.isArray(input.items)
+        ? input.items.slice(0, 100)
+        : [];
+      const workingItems = [...menu.items];
+      const touchedItemIds = new Set<string>();
+      const created: Array<{
+        id: string;
+        name: string;
+        section: string;
+        price_amount: string | number | null;
+      }> = [];
+      const updated: Array<{
+        id: string;
+        name: string;
+        section: string;
+        price_amount: string | number | null;
+        available: boolean;
+      }> = [];
+      const unchanged: Array<{ id: string; name: string }> = [];
+      const skipped: Array<{ name: string; reason: string; item_id?: string }> =
+        [];
 
       for (const item of items) {
-        const itemRecord = (item && typeof item === 'object') ? item as Record<string, unknown> : null
+        const itemRecord =
+          item && typeof item === "object"
+            ? (item as Record<string, unknown>)
+            : null;
         if (!itemRecord) {
-          skipped.push({ name: '', reason: 'invalid_item' })
-          continue
+          skipped.push({ name: "", reason: "invalid_item" });
+          continue;
         }
 
-        const name = getToolString(itemRecord, 'name', 200)?.trim()
-        const match = findMenuItemMatch(itemRecord, workingItems)
+        const name = getToolString(itemRecord, "name", 200)?.trim();
+        const match = findMenuItemMatch(itemRecord, workingItems);
 
         if (match) {
-          const updates = buildMenuItemUpdates(itemRecord, match)
-          touchedItemIds.add(match.id)
+          const updates = buildMenuItemUpdates(itemRecord, match);
+          touchedItemIds.add(match.id);
 
           if (!hasMenuItemUpdates(updates)) {
-            unchanged.push({ id: match.id, name: match.name })
-            continue
+            unchanged.push({ id: match.id, name: match.name });
+            continue;
           }
 
           try {
-            const updatedItem = await updateMenuItem(db, match.id, updates, userId)
-            const index = workingItems.findIndex((menuItem) => menuItem.id === updatedItem.id)
-            if (index >= 0) workingItems[index] = updatedItem
+            const updatedItem = await updateMenuItem(
+              db,
+              match.id,
+              updates,
+              userId,
+            );
+            const index = workingItems.findIndex(
+              (menuItem) => menuItem.id === updatedItem.id,
+            );
+            if (index >= 0) workingItems[index] = updatedItem;
             updated.push({
               id: updatedItem.id,
               name: updatedItem.name,
               section: updatedItem.section,
               price_amount: updatedItem.price_amount,
               available: Boolean(updatedItem.available),
-            })
+            });
           } catch (error) {
-            if (!isUniqueConstraintError(error)) throw error
-            skipped.push({ name: name || match.name, reason: 'unique_conflict', item_id: match.id })
+            if (!isUniqueConstraintError(error)) throw error;
+            skipped.push({
+              name: name || match.name,
+              reason: "unique_conflict",
+              item_id: match.id,
+            });
           }
-          continue
+          continue;
         }
 
         if (!name) {
-          skipped.push({ name: '', reason: 'missing_name' })
-          continue
+          skipped.push({ name: "", reason: "missing_name" });
+          continue;
         }
-        const section = getToolString(itemRecord, 'section', 100)?.trim()
+        const section = getToolString(itemRecord, "section", 100)?.trim();
         if (!section) {
-          skipped.push({ name, reason: 'missing_section' })
-          continue
+          skipped.push({ name, reason: "missing_section" });
+          continue;
         }
 
         try {
-          const createdItem = await createMenuItem(db, menuId, {
-            section,
-            name,
-            description: getToolString(itemRecord, 'description', 500),
-            price_amount: getToolString(itemRecord, 'price_amount', 50),
-            image_asset_id: getToolString(itemRecord, 'image_asset_id', 120),
-            available: getToolBoolean(itemRecord, 'available'),
-          }, userId)
-          workingItems.push(createdItem)
-          touchedItemIds.add(createdItem.id)
-          created.push({ id: createdItem.id, name: createdItem.name, section: createdItem.section, price_amount: createdItem.price_amount })
+          const createdItem = await createMenuItem(
+            db,
+            menuId,
+            {
+              section,
+              name,
+              description: getToolString(itemRecord, "description", 500),
+              price_amount: getToolString(itemRecord, "price_amount", 50),
+              image_asset_id: getToolString(itemRecord, "image_asset_id", 120),
+              available: getToolBoolean(itemRecord, "available"),
+            },
+            userId,
+          );
+          workingItems.push(createdItem);
+          touchedItemIds.add(createdItem.id);
+          created.push({
+            id: createdItem.id,
+            name: createdItem.name,
+            section: createdItem.section,
+            price_amount: createdItem.price_amount,
+          });
         } catch (error) {
-          if (!isUniqueConstraintError(error)) throw error
-          skipped.push({ name, reason: 'unique_conflict' })
+          if (!isUniqueConstraintError(error)) throw error;
+          skipped.push({ name, reason: "unique_conflict" });
         }
       }
 
-      const madeUnavailable: Array<{ id: string; name: string }> = []
+      const madeUnavailable: Array<{ id: string; name: string }> = [];
       if (input.set_missing_unavailable === true) {
         for (const item of workingItems) {
-          if (touchedItemIds.has(item.id) || !item.available) continue
-          const updatedItem = await updateMenuItem(db, item.id, { available: false }, userId)
-          madeUnavailable.push({ id: updatedItem.id, name: updatedItem.name })
+          if (touchedItemIds.has(item.id) || !item.available) continue;
+          const updatedItem = await updateMenuItem(
+            db,
+            item.id,
+            { available: false },
+            userId,
+          );
+          madeUnavailable.push({ id: updatedItem.id, name: updatedItem.name });
         }
       }
 
@@ -1533,23 +2396,50 @@ async function executeTool(
           made_unavailable: madeUnavailable.length,
           skipped: skipped.length,
         },
-      }
+      };
     }
 
-    case 'add_menu_item': {
-      const item = await createMenuItem(db, input.menu_id, {
-        section: input.section, name: input.name,
-        description: input.description, price_amount: input.price_amount, image_asset_id: input.image_asset_id,
-      }, userId)
-      return { id: item.id, name: item.name, section: item.section, price_amount: item.price_amount }
+    case "add_menu_item": {
+      const item = await createMenuItem(
+        db,
+        input.menu_id,
+        {
+          section: input.section,
+          name: input.name,
+          description: input.description,
+          price_amount: input.price_amount,
+          image_asset_id: input.image_asset_id,
+        },
+        userId,
+      );
+      return {
+        id: item.id,
+        name: item.name,
+        section: item.section,
+        price_amount: item.price_amount,
+      };
     }
 
-    case 'update_menu_item': {
-      const updates: Record<string, string | boolean | number | null> = {}
-      for (const f of ['section', 'name', 'description', 'price_amount', 'image_asset_id', 'available', 'featured', 'featured_sort_order', 'allergens', 'ingredients', 'dietary_notes', 'preparation', 'serving_note']) {
-        if (input[f] !== undefined) updates[f] = input[f]
+    case "update_menu_item": {
+      const updates: Record<string, string | boolean | number | null> = {};
+      for (const f of [
+        "section",
+        "name",
+        "description",
+        "price_amount",
+        "image_asset_id",
+        "available",
+        "featured",
+        "featured_sort_order",
+        "allergens",
+        "ingredients",
+        "dietary_notes",
+        "preparation",
+        "serving_note",
+      ]) {
+        if (input[f] !== undefined) updates[f] = input[f];
       }
-      const item = await updateMenuItem(db, input.item_id, updates, userId)
+      const item = await updateMenuItem(db, input.item_id, updates, userId);
       return {
         id: item.id,
         name: item.name,
@@ -1562,339 +2452,473 @@ async function executeTool(
         dietary_notes: item.dietary_notes,
         preparation: item.preparation,
         serving_note: item.serving_note,
-      }
+      };
     }
 
-    case 'delete_menu_item': {
-      const menuId = toSqlText(input.menu_id)
-      const itemId = toSqlText(input.item_id)
-      if (!menuId || !itemId) return { error: 'menu_id and item_id are required.' }
+    case "delete_menu_item": {
+      const menuId = toSqlText(input.menu_id);
+      const itemId = toSqlText(input.item_id);
+      if (!menuId || !itemId)
+        return { error: "menu_id and item_id are required." };
 
-      const menu = await getMenuWithItems(db, orgId, siteId, menuId)
-      if (!menu) return { error: 'Menu not found.' }
-      const item = menu.items.find((menuItem) => menuItem.id === itemId)
-      if (!item) return { error: 'Menu item not found.' }
+      const menu = await getMenuWithItems(db, orgId, siteId, menuId);
+      if (!menu) return { error: "Menu not found." };
+      const item = menu.items.find((menuItem) => menuItem.id === itemId);
+      if (!item) return { error: "Menu item not found." };
 
-      await deleteMenuItem(db, itemId)
-      return { menu_id: menuId, item_id: itemId, name: item.name, deleted: true }
+      await deleteMenuItem(db, itemId);
+      return {
+        menu_id: menuId,
+        item_id: itemId,
+        name: item.name,
+        deleted: true,
+      };
     }
 
-    case 'publish_menu': {
-      const now = new Date().toISOString()
-      const result = await db.prepare(
-        `UPDATE menus SET status = 'published', updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND site_id = ?`
-      ).bind(now, userId, input.menu_id, orgId, siteId).run()
+    case "publish_menu": {
+      const now = new Date().toISOString();
+      const result = await db
+        .prepare(
+          `UPDATE menus SET status = 'published', updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND site_id = ?`,
+        )
+        .bind(now, userId, input.menu_id, orgId, siteId)
+        .run();
       if (!result.meta.changes || result.meta.changes === 0) {
-        return { error: 'Menu not found or access denied.' }
+        return { error: "Menu not found or access denied." };
       }
-      return { menu_id: input.menu_id, status: 'published' }
+      return { menu_id: input.menu_id, status: "published" };
     }
 
-    case 'delete_menu': {
-      await deleteMenu(db, orgId, siteId, input.menu_id)
-      return { menu_id: input.menu_id, deleted: true }
+    case "delete_menu": {
+      await deleteMenu(db, orgId, siteId, input.menu_id);
+      return { menu_id: input.menu_id, deleted: true };
     }
 
-    case 'get_locations': {
-      const rows = await db.prepare(
-        `SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
+    case "get_locations": {
+      const rows = await db
+        .prepare(
+          `SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
                 rating, review_count, description, short_description, price_level,
                 instagram_url, facebook_url, tiktok_url, hero_image_asset_id, hero_video_asset_id,
                 status, is_primary
-         FROM business_locations WHERE organization_id = ? AND site_id = ? ORDER BY is_primary DESC, title ASC`
-      ).bind(orgId, siteId).all()
-      return rows.results ?? []
+         FROM business_locations WHERE organization_id = ? AND site_id = ? ORDER BY is_primary DESC, title ASC`,
+        )
+        .bind(orgId, siteId)
+        .all();
+      return rows.results ?? [];
     }
 
-    case 'create_location': {
-      const id = crypto.randomUUID()
-      const now = new Date().toISOString()
-      const title = toSqlText(input.title)?.trim()
-      if (!title) return { error: 'title is required.' }
-      const baseSlug = toSlug(title)
-      const rating = getToolNumber(input, 'rating')
-      if (rating !== undefined && rating !== null && (rating < 0 || rating > 5)) {
-        return { error: 'rating must be between 0 and 5.' }
+    case "create_location": {
+      const id = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const title = toSqlText(input.title)?.trim();
+      if (!title) return { error: "title is required." };
+      const baseSlug = toSlug(title);
+      const rating = getToolNumber(input, "rating");
+      if (
+        rating !== undefined &&
+        rating !== null &&
+        (rating < 0 || rating > 5)
+      ) {
+        return { error: "rating must be between 0 and 5." };
       }
-      const reviewCount = getToolInteger(input, 'review_count')
-      if (reviewCount !== undefined && reviewCount !== null && reviewCount < 0) {
-        return { error: 'review_count must be a whole number greater than or equal to 0.' }
+      const reviewCount = getToolInteger(input, "review_count");
+      if (
+        reviewCount !== undefined &&
+        reviewCount !== null &&
+        reviewCount < 0
+      ) {
+        return {
+          error:
+            "review_count must be a whole number greater than or equal to 0.",
+        };
       }
-      const isPrimary = getToolBoolean(input, 'is_primary') === true
+      const isPrimary = getToolBoolean(input, "is_primary") === true;
 
       for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
-        const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`
+        const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
 
         try {
-          const statements: D1PreparedStatement[] = []
+          const statements: D1PreparedStatement[] = [];
           if (isPrimary) {
-            statements.push(db.prepare(
-              `UPDATE business_locations SET is_primary = 0, updated_at = ? WHERE organization_id = ? AND site_id = ?`
-            ).bind(now, orgId, siteId))
+            statements.push(
+              db
+                .prepare(
+                  `UPDATE business_locations SET is_primary = 0, updated_at = ? WHERE organization_id = ? AND site_id = ?`,
+                )
+                .bind(now, orgId, siteId),
+            );
           }
-          statements.push(db.prepare(
-            `INSERT INTO business_locations (
+          statements.push(
+            db
+              .prepare(
+                `INSERT INTO business_locations (
               id, organization_id, site_id, title, slug, city, phone, email, website_url, maps_url,
               google_place_id, description, short_description, address, opening_hours, rating,
               review_count, price_level, facebook_url, instagram_url, tiktok_url,
               grab_url, uber_eats_url, foodpanda_url,
               hero_image_asset_id, hero_video_asset_id, is_primary, status, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`
-          ).bind(
-            id,
-            orgId,
-            siteId,
-            title,
-            slug,
-            toSqlText(input.city) ?? null,
-            toSqlText(input.phone) ?? null,
-            toSqlText(input.email) ?? null,
-            toSqlText(input.website_url) ?? null,
-            toSqlText(input.maps_url) ?? null,
-            toSqlText(input.google_place_id) ?? null,
-            toSqlText(input.description) ?? null,
-            toSqlText(input.short_description) ?? null,
-            (() => {
-              const normalizedAddress = toSqlText(input.address)
-              if (normalizedAddress === null || normalizedAddress === undefined) return null
-              const addressLines = normalizeAddressLines(String(normalizedAddress))
-              return addressLines.length ? JSON.stringify({ addressLines }) : null
-            })(),
-            input.opening_hours ? JSON.stringify({ weekdayDescriptions: String(input.opening_hours).split('\n').map(line => line.trim()).filter(Boolean) }) : null,
-            rating ?? null,
-            reviewCount ?? null,
-            toSqlText(input.price_level) ?? null,
-            toSqlText(input.facebook_url) ?? null,
-            toSqlText(input.instagram_url) ?? null,
-            toSqlText(input.tiktok_url) ?? null,
-            normalizeOrderingUrl(input.grab_url, 'grab_url'),
-            normalizeOrderingUrl(input.uber_eats_url, 'uber_eats_url'),
-            normalizeOrderingUrl(input.foodpanda_url, 'foodpanda_url'),
-            toSqlText(input.hero_image_asset_id) ?? null,
-            toSqlText(input.hero_video_asset_id) ?? null,
-            isPrimary ? 1 : 0,
-            now,
-            now
-          ))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
+              )
+              .bind(
+                id,
+                orgId,
+                siteId,
+                title,
+                slug,
+                toSqlText(input.city) ?? null,
+                toSqlText(input.phone) ?? null,
+                toSqlText(input.email) ?? null,
+                toSqlText(input.website_url) ?? null,
+                toSqlText(input.maps_url) ?? null,
+                toSqlText(input.google_place_id) ?? null,
+                toSqlText(input.description) ?? null,
+                toSqlText(input.short_description) ?? null,
+                (() => {
+                  const normalizedAddress = toSqlText(input.address);
+                  if (
+                    normalizedAddress === null ||
+                    normalizedAddress === undefined
+                  )
+                    return null;
+                  const addressLines = normalizeAddressLines(
+                    String(normalizedAddress),
+                  );
+                  return addressLines.length
+                    ? JSON.stringify({ addressLines })
+                    : null;
+                })(),
+                input.opening_hours
+                  ? JSON.stringify({
+                      weekdayDescriptions: String(input.opening_hours)
+                        .split("\n")
+                        .map((line) => line.trim())
+                        .filter(Boolean),
+                    })
+                  : null,
+                rating ?? null,
+                reviewCount ?? null,
+                toSqlText(input.price_level) ?? null,
+                toSqlText(input.facebook_url) ?? null,
+                toSqlText(input.instagram_url) ?? null,
+                toSqlText(input.tiktok_url) ?? null,
+                normalizeOrderingUrl(input.grab_url, "grab_url"),
+                normalizeOrderingUrl(input.uber_eats_url, "uber_eats_url"),
+                normalizeOrderingUrl(input.foodpanda_url, "foodpanda_url"),
+                toSqlText(input.hero_image_asset_id) ?? null,
+                toSqlText(input.hero_video_asset_id) ?? null,
+                isPrimary ? 1 : 0,
+                now,
+                now,
+              ),
+          );
           if (isPrimary) {
-            statements.push(db.prepare(
-              `UPDATE sites SET primary_location_id = ?, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ?`
-            ).bind(id, now, userId, siteId, orgId))
+            statements.push(
+              db
+                .prepare(
+                  `UPDATE sites SET primary_location_id = ?, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ?`,
+                )
+                .bind(id, now, userId, siteId, orgId),
+            );
           }
-          await db.batch(statements)
-          return { id, title, slug, status: 'active' }
+          await db.batch(statements);
+          return { id, title, slug, status: "active" };
         } catch (error) {
-          if (isUniqueConstraintError(error)) continue
-          throw error
+          if (isUniqueConstraintError(error)) continue;
+          throw error;
         }
       }
 
-      throw new Error(`Unable to allocate a unique location slug after ${MAX_SLUG_ATTEMPTS} attempts`)
+      throw new Error(
+        `Unable to allocate a unique location slug after ${MAX_SLUG_ATTEMPTS} attempts`,
+      );
     }
 
-    case 'update_location': {
-      const now = new Date().toISOString()
-      const locationId = toSqlText(input.location_id)
+    case "update_location": {
+      const now = new Date().toISOString();
+      const locationId = toSqlText(input.location_id);
       if (!locationId) {
-        return { error: 'location_id is required.' }
+        return { error: "location_id is required." };
       }
-      const location = await db.prepare(
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
-      ).bind(locationId, orgId, siteId).first()
-      if (!location) return { error: 'Location not found.' }
+      const location = await db
+        .prepare(
+          `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        )
+        .bind(locationId, orgId, siteId)
+        .first();
+      if (!location) return { error: "Location not found." };
 
-      const sets: string[] = ['updated_at = ?']
-      const params: SqlBindValue[] = [now]
-      let slugParamIndex: number | null = null
-      let slugBase: string | null = null
-      const normalizedTitle = toSqlText(input.title)
+      const sets: string[] = ["updated_at = ?"];
+      const params: SqlBindValue[] = [now];
+      let slugParamIndex: number | null = null;
+      let slugBase: string | null = null;
+      const normalizedTitle = toSqlText(input.title);
       if (normalizedTitle !== undefined) {
-        if (!normalizedTitle?.trim()) return { error: 'title cannot be empty.' }
-        sets.push('title = ?', 'slug = ?')
-        slugBase = toSlug(normalizedTitle)
-        params.push(normalizedTitle, slugBase)
-        slugParamIndex = params.length - 1
+        if (!normalizedTitle?.trim())
+          return { error: "title cannot be empty." };
+        sets.push("title = ?", "slug = ?");
+        slugBase = toSlug(normalizedTitle);
+        params.push(normalizedTitle, slugBase);
+        slugParamIndex = params.length - 1;
       }
-      const simpleFields = ['city', 'neighborhood', 'phone', 'email', 'description', 'short_description', 'price_level',
-        'facebook_url', 'instagram_url', 'tiktok_url',
-        'grab_url', 'uber_eats_url', 'foodpanda_url',
-        'website_url', 'maps_url', 'google_place_id',
-        'hero_image_asset_id', 'hero_video_asset_id', 'status'] as const
-      const orderingUrlFields = new Set(['grab_url', 'uber_eats_url', 'foodpanda_url'])
+      const simpleFields = [
+        "city",
+        "neighborhood",
+        "phone",
+        "email",
+        "description",
+        "short_description",
+        "price_level",
+        "facebook_url",
+        "instagram_url",
+        "tiktok_url",
+        "grab_url",
+        "uber_eats_url",
+        "foodpanda_url",
+        "website_url",
+        "maps_url",
+        "google_place_id",
+        "hero_image_asset_id",
+        "hero_video_asset_id",
+        "status",
+      ] as const;
+      const orderingUrlFields = new Set([
+        "grab_url",
+        "uber_eats_url",
+        "foodpanda_url",
+      ]);
       for (const field of simpleFields) {
         if (input[field] !== undefined) {
-          const rawValue = input[field]
-          if (field === 'status' && rawValue && !['active', 'inactive', 'sync_error'].includes(String(rawValue))) {
-            return { error: 'Invalid location status.' }
+          const rawValue = input[field];
+          if (
+            field === "status" &&
+            rawValue &&
+            !["active", "inactive", "sync_error"].includes(String(rawValue))
+          ) {
+            return { error: "Invalid location status." };
           }
           const val = orderingUrlFields.has(field)
             ? normalizeOrderingUrl(rawValue, field)
-            : (toSqlText(rawValue as ApiValue) ?? null)
-          sets.push(`${field} = ?`)
-          params.push(val)
+            : (toSqlText(rawValue as ApiValue) ?? null);
+          sets.push(`${field} = ?`);
+          params.push(val);
         }
       }
       if (input.address !== undefined) {
-        const normalizedAddress = toSqlText(input.address)
-        sets.push('address = ?')
+        const normalizedAddress = toSqlText(input.address);
+        sets.push("address = ?");
         if (normalizedAddress === null) {
-          params.push(null)
+          params.push(null);
         } else {
-          const addressLines = normalizeAddressLines(String(normalizedAddress))
-          params.push(addressLines.length ? JSON.stringify({ addressLines }) : null)
+          const addressLines = normalizeAddressLines(String(normalizedAddress));
+          params.push(
+            addressLines.length ? JSON.stringify({ addressLines }) : null,
+          );
         }
       }
       if (input.opening_hours !== undefined) {
-        const normalizedHours = toSqlText(input.opening_hours)
-        sets.push('opening_hours = ?')
-        params.push(normalizedHours === null ? null : JSON.stringify({ weekdayDescriptions: String(normalizedHours ?? '').split('\n').map(line => line.trim()).filter(Boolean) }))
+        const normalizedHours = toSqlText(input.opening_hours);
+        sets.push("opening_hours = ?");
+        params.push(
+          normalizedHours === null
+            ? null
+            : JSON.stringify({
+                weekdayDescriptions: String(normalizedHours ?? "")
+                  .split("\n")
+                  .map((line) => line.trim())
+                  .filter(Boolean),
+              }),
+        );
       }
       if (input.rating !== undefined) {
-        const rating = getToolNumber(input, 'rating')
-        if (rating === undefined || (rating !== null && (rating < 0 || rating > 5))) return { error: 'rating must be between 0 and 5.' }
-        sets.push('rating = ?')
-        params.push(rating)
+        const rating = getToolNumber(input, "rating");
+        if (
+          rating === undefined ||
+          (rating !== null && (rating < 0 || rating > 5))
+        )
+          return { error: "rating must be between 0 and 5." };
+        sets.push("rating = ?");
+        params.push(rating);
       }
       if (input.review_count !== undefined) {
-        const reviewCount = getToolInteger(input, 'review_count')
-        if (reviewCount === undefined || (reviewCount !== null && reviewCount < 0)) return { error: 'review_count must be a whole number greater than or equal to 0.' }
-        sets.push('review_count = ?')
-        params.push(reviewCount)
+        const reviewCount = getToolInteger(input, "review_count");
+        if (
+          reviewCount === undefined ||
+          (reviewCount !== null && reviewCount < 0)
+        )
+          return {
+            error:
+              "review_count must be a whole number greater than or equal to 0.",
+          };
+        sets.push("review_count = ?");
+        params.push(reviewCount);
       }
-      const isPrimary = getToolBoolean(input, 'is_primary')
+      const isPrimary = getToolBoolean(input, "is_primary");
       if (isPrimary !== undefined) {
-        sets.push('is_primary = ?')
-        params.push(isPrimary ? 1 : 0)
+        sets.push("is_primary = ?");
+        params.push(isPrimary ? 1 : 0);
       }
 
       const runLocationUpdate = async (boundParams: SqlBindValue[]) => {
-        const statements: D1PreparedStatement[] = []
+        const statements: D1PreparedStatement[] = [];
         if (isPrimary === true) {
-          statements.push(db.prepare(
-            `UPDATE business_locations SET is_primary = 0, updated_at = ? WHERE organization_id = ? AND site_id = ?`
-          ).bind(now, orgId, siteId))
-          statements.push(db.prepare(
-            `UPDATE sites SET primary_location_id = ?, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ?`
-          ).bind(locationId, now, userId, siteId, orgId))
+          statements.push(
+            db
+              .prepare(
+                `UPDATE business_locations SET is_primary = 0, updated_at = ? WHERE organization_id = ? AND site_id = ?`,
+              )
+              .bind(now, orgId, siteId),
+          );
+          statements.push(
+            db
+              .prepare(
+                `UPDATE sites SET primary_location_id = ?, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ?`,
+              )
+              .bind(locationId, now, userId, siteId, orgId),
+          );
         } else if (isPrimary === false) {
-          statements.push(db.prepare(
-            `UPDATE sites SET primary_location_id = NULL, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND primary_location_id = ?`
-          ).bind(now, userId, siteId, orgId, locationId))
+          statements.push(
+            db
+              .prepare(
+                `UPDATE sites SET primary_location_id = NULL, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND primary_location_id = ?`,
+              )
+              .bind(now, userId, siteId, orgId, locationId),
+          );
         }
-        statements.push(db.prepare(
-          `UPDATE business_locations SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`
-        ).bind(...boundParams))
-        await db.batch(statements)
-      }
+        statements.push(
+          db
+            .prepare(
+              `UPDATE business_locations SET ${sets.join(", ")} WHERE id = ? AND organization_id = ? AND site_id = ?`,
+            )
+            .bind(...boundParams),
+        );
+        await db.batch(statements);
+      };
 
       if (slugBase) {
-        let updated = false
+        let updated = false;
         for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
-          const slug = attempt === 0 ? slugBase : `${slugBase}-${attempt + 1}`
-          const updateParams = [...params]
+          const slug = attempt === 0 ? slugBase : `${slugBase}-${attempt + 1}`;
+          const updateParams = [...params];
           if (slugParamIndex === null) {
-            return { error: 'Unable to update location slug.' }
+            return { error: "Unable to update location slug." };
           }
-          updateParams[slugParamIndex] = slug
-          updateParams.push(locationId, orgId, siteId)
+          updateParams[slugParamIndex] = slug;
+          updateParams.push(locationId, orgId, siteId);
 
           try {
-            await runLocationUpdate(updateParams)
-            updated = true
-            break
+            await runLocationUpdate(updateParams);
+            updated = true;
+            break;
           } catch (error) {
-            if (isUniqueConstraintError(error)) continue
-            throw error
+            if (isUniqueConstraintError(error)) continue;
+            throw error;
           }
         }
 
         if (!updated) {
-          throw new Error(`Unable to allocate a unique location slug after ${MAX_SLUG_ATTEMPTS} attempts`)
+          throw new Error(
+            `Unable to allocate a unique location slug after ${MAX_SLUG_ATTEMPTS} attempts`,
+          );
         }
       } else {
-        params.push(locationId, orgId, siteId)
-        await runLocationUpdate(params)
+        params.push(locationId, orgId, siteId);
+        await runLocationUpdate(params);
       }
 
-      const updated = await db.prepare(
-        `SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
+      const updated = await db
+        .prepare(
+          `SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
                 rating, review_count, description, short_description, status, is_primary
-         FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
-      ).bind(locationId, orgId, siteId).first()
-      return updated ?? { error: 'Location not found.' }
+         FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        )
+        .bind(locationId, orgId, siteId)
+        .first();
+      return updated ?? { error: "Location not found." };
     }
 
-    case 'delete_location': {
-      const locationId = toSqlText(input.location_id)
-      if (!locationId) return { error: 'location_id is required.' }
-      const result = await db.prepare(
-        `DELETE FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`
-      ).bind(locationId, orgId, siteId).run()
+    case "delete_location": {
+      const locationId = toSqlText(input.location_id);
+      if (!locationId) return { error: "location_id is required." };
+      const result = await db
+        .prepare(
+          `DELETE FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`,
+        )
+        .bind(locationId, orgId, siteId)
+        .run();
       if (!result.meta.changes || result.meta.changes === 0) {
-        return { error: 'Location not found.' }
+        return { error: "Location not found." };
       }
-      await db.prepare(
-        `UPDATE sites SET primary_location_id = NULL, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND primary_location_id = ?`
-      ).bind(new Date().toISOString(), userId, siteId, orgId, locationId).run()
-      return { location_id: locationId, deleted: true }
+      await db
+        .prepare(
+          `UPDATE sites SET primary_location_id = NULL, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND primary_location_id = ?`,
+        )
+        .bind(new Date().toISOString(), userId, siteId, orgId, locationId)
+        .run();
+      return { location_id: locationId, deleted: true };
     }
 
-    case 'lookup_maps_url': {
-      const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
-      if (!apiKey) return { error: 'Google Places API not configured.' }
+    case "lookup_maps_url": {
+      const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined;
+      if (!apiKey) return { error: "Google Places API not configured." };
 
-      const rawUrl = typeof input.url === 'string' ? input.url.trim() : ''
-      if (!rawUrl) return { error: 'url is required.' }
+      const rawUrl = typeof input.url === "string" ? input.url.trim() : "";
+      if (!rawUrl) return { error: "url is required." };
 
-      let parsedRawUrl: URL
+      let parsedRawUrl: URL;
       try {
-        parsedRawUrl = new URL(rawUrl)
+        parsedRawUrl = new URL(rawUrl);
       } catch {
-        return { error: 'Invalid URL format.' }
+        return { error: "Invalid URL format." };
       }
 
       if (!isAllowedGoogleMapsHost(parsedRawUrl.hostname)) {
-        return { error: 'URL does not appear to be a Google Maps link.' }
+        return { error: "URL does not appear to be a Google Maps link." };
       }
 
       // Resolve one redirect hop safely for short URLs.
-      let resolvedUrl = parsedRawUrl.toString()
+      let resolvedUrl = parsedRawUrl.toString();
       try {
-        const probe = await fetch(parsedRawUrl.toString(), { method: 'HEAD', redirect: 'manual' })
-        const location = probe.headers.get('location')
+        const probe = await fetch(parsedRawUrl.toString(), {
+          method: "HEAD",
+          redirect: "manual",
+        });
+        const location = probe.headers.get("location");
         if (location) {
-          const redirected = new URL(location, parsedRawUrl)
+          const redirected = new URL(location, parsedRawUrl);
           if (!isAllowedGoogleMapsHost(redirected.hostname)) {
-            return { error: 'URL redirects to a non-Google host.' }
+            return { error: "URL redirects to a non-Google host." };
           }
-          resolvedUrl = redirected.toString()
+          resolvedUrl = redirected.toString();
         } else {
-          const probeUrl = probe.url || parsedRawUrl.toString()
-          const parsedProbeUrl = new URL(probeUrl)
+          const probeUrl = probe.url || parsedRawUrl.toString();
+          const parsedProbeUrl = new URL(probeUrl);
           if (!isAllowedGoogleMapsHost(parsedProbeUrl.hostname)) {
-            return { error: 'Resolved URL is not a Google Maps host.' }
+            return { error: "Resolved URL is not a Google Maps host." };
           }
-          resolvedUrl = parsedProbeUrl.toString()
-        }
-      } catch { /* keep rawUrl */ }
-
-      try {
-        const resolvedHost = new URL(resolvedUrl).hostname
-        if (!isAllowedGoogleMapsHost(resolvedHost)) {
-          return { error: 'Resolved URL is not a Google Maps host.' }
+          resolvedUrl = parsedProbeUrl.toString();
         }
       } catch {
-        return { error: 'Resolved URL is invalid.' }
+        /* keep rawUrl */
+      }
+
+      try {
+        const resolvedHost = new URL(resolvedUrl).hostname;
+        if (!isAllowedGoogleMapsHost(resolvedHost)) {
+          return { error: "Resolved URL is not a Google Maps host." };
+        }
+      } catch {
+        return { error: "Resolved URL is invalid." };
       }
 
       // Extract place ID from the canonical URL data parameter: !1s{placeId}
-      const placeIdMatch = resolvedUrl.match(/!1s([^!&]+)/)
-      const placeId = placeIdMatch?.[1] ?? null
+      const placeIdMatch = resolvedUrl.match(/!1s([^!&]+)/);
+      const placeId = placeIdMatch?.[1] ?? null;
 
       if (placeId) {
         try {
-          const details = await getPlaceDetails(apiKey, placeId)
+          const details = await getPlaceDetails(apiKey, placeId);
           return {
             found: true,
             name: details.name,
@@ -1907,21 +2931,30 @@ async function executeTool(
             longitude: details.lng,
             rating: details.rating,
             opening_hours: details.openingHours,
-            hint: 'Use update_location with location_id plus the fields above to apply these details.',
-          }
-        } catch { /* fall through to text search */ }
+            hint: "Use update_location with location_id plus the fields above to apply these details.",
+          };
+        } catch {
+          /* fall through to text search */
+        }
       }
 
       // Fallback: extract business name from URL and text-search
-      const nameMatch = resolvedUrl.match(/\/maps\/place\/([^/@]+)/)
-      const placePath = nameMatch?.[1] ?? ''
-      const nameQuery = placePath ? decodeURIComponent(placePath.replace(/\+/g, ' ')) : ''
-      if (!nameQuery) return { error: 'Could not extract a place from that URL. Try sharing the full Google Maps link.' }
+      const nameMatch = resolvedUrl.match(/\/maps\/place\/([^/@]+)/);
+      const placePath = nameMatch?.[1] ?? "";
+      const nameQuery = placePath
+        ? decodeURIComponent(placePath.replace(/\+/g, " "))
+        : "";
+      if (!nameQuery)
+        return {
+          error:
+            "Could not extract a place from that URL. Try sharing the full Google Maps link.",
+        };
 
-      const results = await searchPlaces(apiKey, nameQuery)
-      if (!results.length) return { error: `No places found for "${nameQuery}".` }
+      const results = await searchPlaces(apiKey, nameQuery);
+      if (!results.length)
+        return { error: `No places found for "${nameQuery}".` };
 
-      const top = results[0]!
+      const top = results[0]!;
       return {
         found: true,
         name: top.name,
@@ -1931,167 +2964,214 @@ async function executeTool(
         latitude: top.lat,
         longitude: top.lng,
         rating: top.rating,
-        hint: 'Use update_location with location_id plus the fields above to apply these details.',
-      }
+        hint: "Use update_location with location_id plus the fields above to apply these details.",
+      };
     }
 
-    case 'get_reviews': {
-      const loc = await db.prepare(
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
-      ).bind(input.location_id, orgId, siteId).first()
-      if (!loc) return { error: 'Location not found.' }
-      const { results } = await db.prepare(
-        `SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply,
+    case "get_reviews": {
+      const loc = await db
+        .prepare(
+          `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        )
+        .bind(input.location_id, orgId, siteId)
+        .first();
+      if (!loc) return { error: "Location not found." };
+      const { results } = await db
+        .prepare(
+          `SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply,
                 owner_reply_at, photo_urls, source, status, created_at, updated_at
          FROM reviews
          WHERE site_id = ? AND location_id = ?
-         ORDER BY created_at DESC`
-      ).bind(siteId, input.location_id).all()
-      return results ?? []
+         ORDER BY created_at DESC`,
+        )
+        .bind(siteId, input.location_id)
+        .all();
+      return results ?? [];
     }
 
-    case 'reply_to_review': {
-      const now = new Date().toISOString()
-      const result = await db.prepare(
-        `UPDATE reviews SET owner_reply = ?, owner_reply_at = ?, updated_at = ? WHERE id = ? AND site_id = ? AND organization_id = ?`
-      ).bind(input.reply, now, now, input.review_id, siteId, orgId).run()
+    case "reply_to_review": {
+      const now = new Date().toISOString();
+      const result = await db
+        .prepare(
+          `UPDATE reviews SET owner_reply = ?, owner_reply_at = ?, updated_at = ? WHERE id = ? AND site_id = ? AND organization_id = ?`,
+        )
+        .bind(input.reply, now, now, input.review_id, siteId, orgId)
+        .run();
       if (!result.meta.changes || result.meta.changes === 0) {
-        return { error: 'Review not found.' }
+        return { error: "Review not found." };
       }
-      return { review_id: input.review_id, replied: true }
+      return { review_id: input.review_id, replied: true };
     }
 
-    case 'create_review': {
-      const locationId = toSqlText(input.location_id)
-      const authorName = toSqlText(input.author_name)?.trim()
-      const content = toSqlText(input.content)?.trim()
-      const rating = getToolInteger(input, 'rating')
-      const status = toSqlText(input.status) ?? 'approved'
-      if (!locationId) return { error: 'location_id is required.' }
-      if (!authorName) return { error: 'author_name is required.' }
-      if (!content) return { error: 'content is required.' }
-      if (rating === undefined || rating === null || rating < 1 || rating > 5) return { error: 'rating must be between 1 and 5.' }
-      if (!['pending', 'approved', 'rejected'].includes(status)) return { error: 'Invalid review status.' }
+    case "create_review": {
+      const locationId = toSqlText(input.location_id);
+      const authorName = toSqlText(input.author_name)?.trim();
+      const content = toSqlText(input.content)?.trim();
+      const rating = getToolInteger(input, "rating");
+      const status = toSqlText(input.status) ?? "approved";
+      if (!locationId) return { error: "location_id is required." };
+      if (!authorName) return { error: "author_name is required." };
+      if (!content) return { error: "content is required." };
+      if (rating === undefined || rating === null || rating < 1 || rating > 5)
+        return { error: "rating must be between 1 and 5." };
+      if (!["pending", "approved", "rejected"].includes(status))
+        return { error: "Invalid review status." };
 
-      const loc = await db.prepare(
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
-      ).bind(locationId, orgId, siteId).first()
-      if (!loc) return { error: 'Location not found.' }
+      const loc = await db
+        .prepare(
+          `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        )
+        .bind(locationId, orgId, siteId)
+        .first();
+      if (!loc) return { error: "Location not found." };
 
-      const id = crypto.randomUUID()
-      const now = new Date().toISOString()
-      const createdAt = toSqlText(input.created_at) ?? now
-      await db.prepare(
-        `INSERT INTO reviews (
+      const id = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const createdAt = toSqlText(input.created_at) ?? now;
+      await db
+        .prepare(
+          `INSERT INTO reviews (
           id, organization_id, site_id, location_id, author_name, rating, title, content,
           status, source, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?)`
-      ).bind(
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?)`,
+        )
+        .bind(
+          id,
+          orgId,
+          siteId,
+          locationId,
+          authorName,
+          rating,
+          toSqlText(input.title) ?? null,
+          content,
+          status,
+          createdAt,
+          now,
+        )
+        .run();
+      return {
         id,
-        orgId,
-        siteId,
-        locationId,
-        authorName,
+        location_id: locationId,
+        author_name: authorName,
         rating,
-        toSqlText(input.title) ?? null,
-        content,
         status,
-        createdAt,
-        now
-      ).run()
-      return { id, location_id: locationId, author_name: authorName, rating, status, source: 'manual', created: true }
+        source: "manual",
+        created: true,
+      };
     }
 
-    case 'update_review': {
-      const reviewId = toSqlText(input.review_id)
-      if (!reviewId) return { error: 'review_id is required.' }
-      const sets: string[] = []
-      const params: SqlBindValue[] = []
+    case "update_review": {
+      const reviewId = toSqlText(input.review_id);
+      if (!reviewId) return { error: "review_id is required." };
+      const sets: string[] = [];
+      const params: SqlBindValue[] = [];
 
       if (input.author_name !== undefined) {
-        const authorName = toSqlText(input.author_name)?.trim()
-        if (!authorName) return { error: 'author_name cannot be empty.' }
-        sets.push('author_name = ?')
-        params.push(authorName)
+        const authorName = toSqlText(input.author_name)?.trim();
+        if (!authorName) return { error: "author_name cannot be empty." };
+        sets.push("author_name = ?");
+        params.push(authorName);
       }
       if (input.title !== undefined) {
-        sets.push('title = ?')
-        params.push(toSqlText(input.title) ?? null)
+        sets.push("title = ?");
+        params.push(toSqlText(input.title) ?? null);
       }
       if (input.content !== undefined) {
-        const content = toSqlText(input.content)?.trim()
-        if (!content) return { error: 'content cannot be empty.' }
-        sets.push('content = ?')
-        params.push(content)
+        const content = toSqlText(input.content)?.trim();
+        if (!content) return { error: "content cannot be empty." };
+        sets.push("content = ?");
+        params.push(content);
       }
       if (input.rating !== undefined) {
-        const rating = getToolInteger(input, 'rating')
-        if (rating === undefined || rating === null || rating < 1 || rating > 5) return { error: 'rating must be between 1 and 5.' }
-        sets.push('rating = ?')
-        params.push(rating)
+        const rating = getToolInteger(input, "rating");
+        if (rating === undefined || rating === null || rating < 1 || rating > 5)
+          return { error: "rating must be between 1 and 5." };
+        sets.push("rating = ?");
+        params.push(rating);
       }
       if (input.status !== undefined) {
-        const status = toSqlText(input.status)
-        if (!status || !['pending', 'approved', 'rejected'].includes(status)) return { error: 'Invalid review status.' }
-        sets.push('status = ?')
-        params.push(status)
+        const status = toSqlText(input.status);
+        if (!status || !["pending", "approved", "rejected"].includes(status))
+          return { error: "Invalid review status." };
+        sets.push("status = ?");
+        params.push(status);
       }
       if (input.created_at !== undefined) {
-        sets.push('created_at = ?')
-        params.push(toSqlText(input.created_at) ?? new Date().toISOString())
+        sets.push("created_at = ?");
+        params.push(toSqlText(input.created_at) ?? new Date().toISOString());
       }
-      if (!sets.length) return { error: 'No review fields provided.' }
+      if (!sets.length) return { error: "No review fields provided." };
 
-      const now = new Date().toISOString()
-      sets.push('updated_at = ?')
-      params.push(now, reviewId, orgId, siteId)
-      const result = await db.prepare(
-        `UPDATE reviews SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`
-      ).bind(...params).run()
+      const now = new Date().toISOString();
+      sets.push("updated_at = ?");
+      params.push(now, reviewId, orgId, siteId);
+      const result = await db
+        .prepare(
+          `UPDATE reviews SET ${sets.join(", ")} WHERE id = ? AND organization_id = ? AND site_id = ?`,
+        )
+        .bind(...params)
+        .run();
       if (!result.meta.changes || result.meta.changes === 0) {
-        return { error: 'Review not found.' }
+        return { error: "Review not found." };
       }
-      const updated = await db.prepare(
-        `SELECT id, author_name, rating, title, content, source, status, created_at, updated_at
-         FROM reviews WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
-      ).bind(reviewId, orgId, siteId).first()
-      return updated ?? { error: 'Review not found.' }
+      const updated = await db
+        .prepare(
+          `SELECT id, author_name, rating, title, content, source, status, created_at, updated_at
+         FROM reviews WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        )
+        .bind(reviewId, orgId, siteId)
+        .first();
+      return updated ?? { error: "Review not found." };
     }
 
-    case 'delete_review': {
-      const reviewId = toSqlText(input.review_id)
-      if (!reviewId) return { error: 'review_id is required.' }
-      const result = await db.prepare(
-        `DELETE FROM reviews WHERE id = ? AND organization_id = ? AND site_id = ?`
-      ).bind(reviewId, orgId, siteId).run()
+    case "delete_review": {
+      const reviewId = toSqlText(input.review_id);
+      if (!reviewId) return { error: "review_id is required." };
+      const result = await db
+        .prepare(
+          `DELETE FROM reviews WHERE id = ? AND organization_id = ? AND site_id = ?`,
+        )
+        .bind(reviewId, orgId, siteId)
+        .run();
       if (!result.meta.changes || result.meta.changes === 0) {
-        return { error: 'Review not found.' }
+        return { error: "Review not found." };
       }
-      return { review_id: reviewId, deleted: true }
+      return { review_id: reviewId, deleted: true };
     }
 
-    case 'get_location_media': {
-      const conditions = [`site_id = ?`, `location_id = ?`, `status = 'active'`]
-      const params: SqlBindValue[] = [siteId, input.location_id]
-      if (input.kind) { conditions.push(`kind = ?`); params.push(input.kind) }
-      params.push(50)
-      const { results } = await db.prepare(
-        `SELECT id, kind, provider, public_url, thumbnail_url, alt_text, mime_type, file_name, created_at
-         FROM media_assets WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC LIMIT ?`
-      ).bind(...params).all()
-      return results ?? []
+    case "get_location_media": {
+      const conditions = [
+        `site_id = ?`,
+        `location_id = ?`,
+        `status = 'active'`,
+      ];
+      const params: SqlBindValue[] = [siteId, input.location_id];
+      if (input.kind) {
+        conditions.push(`kind = ?`);
+        params.push(input.kind);
+      }
+      params.push(50);
+      const { results } = await db
+        .prepare(
+          `SELECT id, kind, provider, public_url, thumbnail_url, alt_text, mime_type, file_name, created_at
+         FROM media_assets WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC LIMIT ?`,
+        )
+        .bind(...params)
+        .all();
+      return results ?? [];
     }
 
-    case 'delete_media_asset': {
-      const { deleteMediaAsset } = await import('~/server/utils/media-asset-manager')
-      await deleteMediaAsset(db, env, input.asset_id, siteId)
-      return { asset_id: input.asset_id, deleted: true }
+    case "delete_media_asset": {
+      const { deleteMediaAsset } =
+        await import("~/server/utils/media-asset-manager");
+      await deleteMediaAsset(db, env, input.asset_id, siteId);
+      return { asset_id: input.asset_id, deleted: true };
     }
 
-    case 'import_menu_from_pending_media': {
+    case "import_menu_from_pending_media": {
       if (!ctx.pendingMedia?.assetId || ctx.pendingMedia.siteId !== siteId) {
-        return { error: 'No pending WhatsApp media is available to import.' }
+        return { error: "No pending WhatsApp media is available to import." };
       }
       const result = await extractMenuFromMediaAsset(db, env, {
         organizationId: orgId,
@@ -2099,15 +3179,15 @@ async function executeTool(
         userId,
         assetId: ctx.pendingMedia.assetId,
         menuName: toSqlText(input.menu_name)?.trim() || undefined,
-      })
-      if (ctx.channel === 'whatsapp') {
+      });
+      if (ctx.channel === "whatsapp") {
         await upsertChannelState(db, {
           userId,
-          channel: 'whatsapp',
+          channel: "whatsapp",
           selectedSiteId: siteId,
           pendingMedia: null,
           pendingConfirmation: null,
-        })
+        });
       }
       return {
         asset_id: ctx.pendingMedia.assetId,
@@ -2115,119 +3195,175 @@ async function executeTool(
         imported_items: result.count,
         warning: result.warning,
         credits_remaining: result.creditsRemaining,
-      }
+      };
     }
 
-    case 'resolve_pending_media': {
+    case "resolve_pending_media": {
       if (!ctx.pendingMedia?.assetId || ctx.pendingMedia.siteId !== siteId) {
-        return { error: 'No pending WhatsApp media is available to resolve.' }
+        return { error: "No pending WhatsApp media is available to resolve." };
       }
-      const action = toSqlText(input.action)
-      if (action !== 'save_media' && action !== 'cancel') {
-        return { error: 'action must be save_media or cancel.' }
+      const action = toSqlText(input.action);
+      if (action !== "save_media" && action !== "cancel") {
+        return { error: "action must be save_media or cancel." };
       }
-      if (ctx.channel === 'whatsapp') {
+      if (ctx.channel === "whatsapp") {
         await upsertChannelState(db, {
           userId,
-          channel: 'whatsapp',
+          channel: "whatsapp",
           selectedSiteId: siteId,
           pendingMedia: null,
           pendingConfirmation: null,
-        })
+        });
       }
-      return { asset_id: ctx.pendingMedia.assetId, action, resolved: true }
+      return { asset_id: ctx.pendingMedia.assetId, action, resolved: true };
     }
 
-    case 'generate_image': {
-      const { uploadImageBuffer } = await import('~/server/utils/cloudflare-images')
-      const { createMediaAsset } = await import('~/server/utils/media-asset-manager')
-      const { generateImageViaGateway, IMAGE_MODEL } = await import('~/server/utils/ai-gateway')
-      const generated = await generateImageViaGateway(env, input.prompt)
+    case "generate_image": {
+      const { uploadImageBuffer } =
+        await import("~/server/utils/cloudflare-images");
+      const { createMediaAsset } =
+        await import("~/server/utils/media-asset-manager");
+      const { generateImageViaGateway, IMAGE_MODEL } =
+        await import("~/server/utils/ai-gateway");
+      const generated = await generateImageViaGateway(env, input.prompt);
       const { imageId, publicUrl, thumbnailUrl } = await uploadImageBuffer(
-        env, generated.imageBuffer, `chowbot-${Date.now()}.png`
-      )
-      const assetId = crypto.randomUUID()
+        env,
+        generated.imageBuffer,
+        `chowbot-${Date.now()}.png`,
+      );
+      const assetId = crypto.randomUUID();
       await createMediaAsset(db, {
         id: assetId,
         organization_id: orgId,
         site_id: siteId,
         location_id: input.location_id ?? null,
-        kind: 'image',
-        provider: 'chowbot',
-        source: 'generated',
+        kind: "image",
+        provider: "chowbot",
+        source: "generated",
         cloudflare_image_id: imageId,
         public_url: publicUrl,
         thumbnail_url: thumbnailUrl,
-        mime_type: 'image/png',
-        status: 'active',
+        mime_type: "image/png",
+        status: "active",
         created_by_user_id: userId,
-      })
+      });
       await chargeCredits(db, orgId, {
-        siteId, action: 'generate_image', model: IMAGE_MODEL,
-        inputTokens: generated.inputTokens, outputTokens: generated.outputTokens,
+        siteId,
+        action: "generate_image",
+        model: IMAGE_MODEL,
+        inputTokens: generated.inputTokens,
+        outputTokens: generated.outputTokens,
         cfGatewayLogId: generated.cfLogId,
-      })
-      return { asset_id: assetId, publicUrl, thumbnailUrl }
+      });
+      return { asset_id: assetId, publicUrl, thumbnailUrl };
     }
 
-    case 'get_location_qa': {
-      const loc = await db.prepare(
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
-      ).bind(input.location_id, orgId, siteId).first()
-      if (!loc) return { error: 'Location not found.' }
-      const { results } = await db.prepare(
-        `SELECT * FROM location_qa WHERE location_id = ?`
-      ).bind(input.location_id).all()
-      return results ?? []
+    case "get_location_qa": {
+      const loc = await db
+        .prepare(
+          `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        )
+        .bind(input.location_id, orgId, siteId)
+        .first();
+      if (!loc) return { error: "Location not found." };
+      const { results } = await db
+        .prepare(`SELECT * FROM location_qa WHERE location_id = ?`)
+        .bind(input.location_id)
+        .all();
+      return results ?? [];
     }
 
-    case 'add_qa': {
-      const id = crypto.randomUUID()
-      const now = new Date().toISOString()
-      const loc = await db.prepare(
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
-      ).bind(input.location_id, orgId, siteId).first()
-      if (!loc) return { error: 'Location not found.' }
-      await db.prepare(
-        `INSERT INTO location_qa (id, organization_id, site_id, location_id, question, answer, is_owner_answer, source, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, 'manual', ?, ?)`
-      ).bind(id, orgId, siteId, input.location_id, input.question, input.answer ?? null, now, now).run()
-      return { id, added: true }
+    case "add_qa": {
+      const id = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const loc = await db
+        .prepare(
+          `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        )
+        .bind(input.location_id, orgId, siteId)
+        .first();
+      if (!loc) return { error: "Location not found." };
+      await db
+        .prepare(
+          `INSERT INTO location_qa (id, organization_id, site_id, location_id, question, answer, is_owner_answer, source, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, 'manual', ?, ?)`,
+        )
+        .bind(
+          id,
+          orgId,
+          siteId,
+          input.location_id,
+          input.question,
+          input.answer ?? null,
+          now,
+          now,
+        )
+        .run();
+      return { id, added: true };
     }
 
-    case 'delete_qa': {
-      const loc = await db.prepare(
-        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`
-      ).bind(input.location_id, orgId, siteId).first()
-      if (!loc) return { error: 'Location not found.' }
-      await db.prepare(`DELETE FROM location_qa WHERE id = ? AND location_id = ?`).bind(input.qa_id, input.location_id).run()
-      return { qa_id: input.qa_id, deleted: true }
+    case "delete_qa": {
+      const loc = await db
+        .prepare(
+          `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        )
+        .bind(input.location_id, orgId, siteId)
+        .first();
+      if (!loc) return { error: "Location not found." };
+      await db
+        .prepare(`DELETE FROM location_qa WHERE id = ? AND location_id = ?`)
+        .bind(input.qa_id, input.location_id)
+        .run();
+      return { qa_id: input.qa_id, deleted: true };
     }
 
-    case 'get_contact_submissions': {
-      const { results } = await db.prepare(
-        `SELECT id, name, email, message, created_at FROM contact_submissions WHERE site_id = ? ORDER BY created_at DESC LIMIT 20`
-      ).bind(siteId).all()
-      return results ?? []
+    case "get_contact_submissions": {
+      const { results } = await db
+        .prepare(
+          `SELECT id, name, email, message, created_at FROM contact_submissions WHERE site_id = ? ORDER BY created_at DESC LIMIT 20`,
+        )
+        .bind(siteId)
+        .all();
+      return results ?? [];
     }
 
-    case 'get_reservation_submissions': {
-      const { results } = await db.prepare(
-        `SELECT id, name, email, phone, party_size, requested_date, requested_time, status, created_at
-         FROM reservation_submissions WHERE site_id = ? ORDER BY created_at DESC LIMIT 20`
-      ).bind(siteId).all()
-      return results ?? []
+    case "get_reservation_submissions": {
+      const { results } = await db
+        .prepare(
+          `SELECT id, name, email, phone, party_size, requested_date, requested_time, status, created_at
+         FROM reservation_submissions WHERE site_id = ? ORDER BY created_at DESC LIMIT 20`,
+        )
+        .bind(siteId)
+        .all();
+      return results ?? [];
     }
 
-    case 'get_reservation_policies': {
-      const defaultBody = getFieldDef(RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)?.defaultValue ?? ''
-      const liveRow = await getSiteContentField(db, orgId, siteId, null, RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)
-      const draftRow = await db.prepare(
-        `SELECT content, type, source, updated_at
+    case "get_reservation_policies": {
+      const defaultBody =
+        getFieldDef(RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)
+          ?.defaultValue ?? "";
+      const liveRow = await getSiteContentField(
+        db,
+        orgId,
+        siteId,
+        null,
+        RESERVATIONS_PAGE,
+        RESERVATION_POLICIES_FIELD,
+      );
+      const draftRow = await db
+        .prepare(
+          `SELECT content, type, source, updated_at
          FROM site_content_drafts
          WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ? AND location_id IS NULL
-         LIMIT 1`
-      ).bind(orgId, siteId, RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD).first<{ content: string | null; type: string; source: string; updated_at: string }>()
+         LIMIT 1`,
+        )
+        .bind(orgId, siteId, RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)
+        .first<{
+          content: string | null;
+          type: string;
+          source: string;
+          updated_at: string;
+        }>();
 
       return {
         body: liveRow?.content ?? defaultBody,
@@ -2237,14 +3373,14 @@ async function executeTool(
         has_custom_policy: Boolean(liveRow?.content),
         has_draft_policy: Boolean(draftRow?.content),
         updated_at: draftRow?.updated_at ?? liveRow?.updated_at ?? null,
-      }
+      };
     }
 
-    case 'save_reservation_policies': {
-      const body = getToolString(input, 'body', 20000)?.trim()
-      if (!body) return { error: 'Reservation policy body is required.' }
+    case "save_reservation_policies": {
+      const body = getToolString(input, "body", 20000)?.trim();
+      if (!body) return { error: "Reservation policy body is required." };
 
-      const id = `content::${orgId}::${siteId}::site::${RESERVATIONS_PAGE}::${RESERVATION_POLICIES_FIELD}`
+      const id = `content::${orgId}::${siteId}::site::${RESERVATIONS_PAGE}::${RESERVATION_POLICIES_FIELD}`;
 
       await upsertSiteContent(db, {
         id,
@@ -2254,71 +3390,119 @@ async function executeTool(
         page: RESERVATIONS_PAGE,
         field: RESERVATION_POLICIES_FIELD,
         value: body,
-        type: 'richtext',
-        source: 'manual',
+        type: "richtext",
+        source: "manual",
         content: body,
         hero_title: undefined,
         hero_subtitle: undefined,
         hero_image_asset_id: undefined,
         hero_video_asset_id: undefined,
-      })
+      });
 
-      await deleteDraftContentField(db, orgId, siteId, RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)
+      await deleteDraftContentField(
+        db,
+        orgId,
+        siteId,
+        RESERVATIONS_PAGE,
+        RESERVATION_POLICIES_FIELD,
+      );
 
-      return { body, updated: true }
+      return { body, updated: true };
     }
 
-    case 'delete_reservation_policies': {
-      await deleteSiteContentField(db, orgId, siteId, RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)
-      await deleteDraftContentField(db, orgId, siteId, RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)
-      return { deleted: true, restored_default: true }
+    case "delete_reservation_policies": {
+      await deleteSiteContentField(
+        db,
+        orgId,
+        siteId,
+        RESERVATIONS_PAGE,
+        RESERVATION_POLICIES_FIELD,
+      );
+      await deleteDraftContentField(
+        db,
+        orgId,
+        siteId,
+        RESERVATIONS_PAGE,
+        RESERVATION_POLICIES_FIELD,
+      );
+      return { deleted: true, restored_default: true };
     }
 
-    case 'get_site_content_page': {
-      const page = getToolString(input, 'page', 40)
-      if (!page || !isSiteContentPage(page)) return { error: 'Invalid page.' }
+    case "get_site_content_page": {
+      const page = getToolString(input, "page", 40);
+      if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
 
-      const targetLocationId = typeof input.location_id === 'string' && input.location_id.trim()
-        ? input.location_id.trim()
-        : ctx.locationId ?? undefined
+      const targetLocationId =
+        typeof input.location_id === "string" && input.location_id.trim()
+          ? input.location_id.trim()
+          : (ctx.locationId ?? undefined);
 
-      const live = await getPageContent(db, orgId, siteId, page, targetLocationId)
-      const drafts = await getDraftContent(db, orgId, siteId, page, targetLocationId)
+      const live = await getPageContent(
+        db,
+        orgId,
+        siteId,
+        page,
+        targetLocationId,
+      );
+      const drafts = await getDraftContent(
+        db,
+        orgId,
+        siteId,
+        page,
+        targetLocationId,
+      );
 
       return {
         page,
         location_id: targetLocationId ?? null,
-        fields: (contentRegistry[page]?.fields ? Object.keys(contentRegistry[page].fields) : []).map(field => ({
+        fields: (contentRegistry[page]?.fields
+          ? Object.keys(contentRegistry[page].fields)
+          : []
+        ).map((field) => ({
           field,
           label: getFieldDef(page, field)?.label ?? field,
-          type: getFieldDef(page, field)?.type ?? 'text',
+          type: getFieldDef(page, field)?.type ?? "text",
         })),
         live,
         drafts,
-      }
+      };
     }
 
-    case 'save_site_content_field': {
-      const page = getToolString(input, 'page', 40)
-      const field = getToolString(input, 'field', 80)
-      const value = getToolString(input, 'value', 20000)
-      if (!page || !isSiteContentPage(page)) return { error: 'Invalid page.' }
-      if (!field) return { error: 'Field is required.' }
+    case "save_site_content_field": {
+      const page = getToolString(input, "page", 40);
+      const field = getToolString(input, "field", 80);
+      const value = getToolString(input, "value", 20000);
+      if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
+      if (!field) return { error: "Field is required." };
 
-      const fieldDef = getFieldDef(page, field)
-      if (!fieldDef) return { error: `Unknown field: ${field}` }
+      const fieldDef = getFieldDef(page, field);
+      if (!fieldDef) return { error: `Unknown field: ${field}` };
 
-      const targetLocationId = typeof input.location_id === 'string' && input.location_id.trim()
-        ? input.location_id.trim()
-        : ctx.locationId ?? undefined
+      const targetLocationId =
+        typeof input.location_id === "string" && input.location_id.trim()
+          ? input.location_id.trim()
+          : (ctx.locationId ?? undefined);
 
       if (isHeroField(field)) {
-        const heroState = await readHeroContentState(db, orgId, siteId, page, targetLocationId)
-        const nextState = { ...heroState }
-        nextState[heroColumnForField(field)] = value ?? null
-        await upsertHeroContentState(db, orgId, siteId, page, targetLocationId, nextState)
+        const heroState = await readHeroContentState(
+          db,
+          orgId,
+          siteId,
+          page,
+          targetLocationId,
+        );
+        const nextState = { ...heroState };
+        nextState[heroColumnForField(field)] = value ?? null;
+        await upsertHeroContentState(
+          db,
+          orgId,
+          siteId,
+          page,
+          targetLocationId,
+          nextState,
+        );
       } else {
-        const id = `draft::${orgId}::${siteId}::${targetLocationId ?? 'site'}::${page}::${field}`
+        const id = `draft::${orgId}::${siteId}::${targetLocationId ?? "site"}::${page}::${field}`;
         await upsertDraftContent(db, {
           id,
           organization_id: orgId,
@@ -2328,472 +3512,759 @@ async function executeTool(
           field,
           value: value ?? undefined,
           type: fieldDef.type,
-          source: 'manual',
+          source: "manual",
           content: value ?? undefined,
           hero_title: undefined,
           hero_subtitle: undefined,
           hero_image_asset_id: undefined,
           hero_video_asset_id: undefined,
-        })
+        });
       }
 
-      return { page, field, value, location_id: targetLocationId ?? null, saved: true, draft: true }
+      return {
+        page,
+        field,
+        value,
+        location_id: targetLocationId ?? null,
+        saved: true,
+        draft: true,
+      };
     }
 
-    case 'publish_site_content_page': {
-      const page = getToolString(input, 'page', 40)
-      if (!page || !isSiteContentPage(page)) return { error: 'Invalid page.' }
+    case "publish_site_content_page": {
+      const page = getToolString(input, "page", 40);
+      if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
 
-      const targetLocationId = typeof input.location_id === 'string' && input.location_id.trim()
-        ? input.location_id.trim()
-        : ctx.locationId ?? undefined
+      const targetLocationId =
+        typeof input.location_id === "string" && input.location_id.trim()
+          ? input.location_id.trim()
+          : (ctx.locationId ?? undefined);
 
-      await publishDrafts(db, orgId, siteId, page, targetLocationId)
-      return { page, location_id: targetLocationId ?? null, published: true }
+      await publishDrafts(db, orgId, siteId, page, targetLocationId);
+      return { page, location_id: targetLocationId ?? null, published: true };
     }
 
-    case 'discard_site_content_page': {
-      const page = getToolString(input, 'page', 40)
-      if (!page || !isSiteContentPage(page)) return { error: 'Invalid page.' }
+    case "discard_site_content_page": {
+      const page = getToolString(input, "page", 40);
+      if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
 
-      const targetLocationId = typeof input.location_id === 'string' && input.location_id.trim()
-        ? input.location_id.trim()
-        : ctx.locationId ?? undefined
+      const targetLocationId =
+        typeof input.location_id === "string" && input.location_id.trim()
+          ? input.location_id.trim()
+          : (ctx.locationId ?? undefined);
 
-      await discardDrafts(db, orgId, siteId, page, targetLocationId)
-      return { page, location_id: targetLocationId ?? null, discarded: true }
+      await discardDrafts(db, orgId, siteId, page, targetLocationId);
+      return { page, location_id: targetLocationId ?? null, discarded: true };
     }
 
-    case 'delete_site_content_field': {
-      const page = getToolString(input, 'page', 40)
-      const field = getToolString(input, 'field', 80)
-      if (!page || !isSiteContentPage(page)) return { error: 'Invalid page.' }
-      if (!field) return { error: 'Field is required.' }
+    case "delete_site_content_field": {
+      const page = getToolString(input, "page", 40);
+      const field = getToolString(input, "field", 80);
+      if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
+      if (!field) return { error: "Field is required." };
 
-      const targetLocationId = typeof input.location_id === 'string' && input.location_id.trim()
-        ? input.location_id.trim()
-        : ctx.locationId ?? undefined
+      const targetLocationId =
+        typeof input.location_id === "string" && input.location_id.trim()
+          ? input.location_id.trim()
+          : (ctx.locationId ?? undefined);
 
       if (isHeroField(field)) {
-        const heroState = await readHeroContentState(db, orgId, siteId, page, targetLocationId)
-        const nextState = { ...heroState }
-        nextState[heroColumnForField(field)] = null
+        const heroState = await readHeroContentState(
+          db,
+          orgId,
+          siteId,
+          page,
+          targetLocationId,
+        );
+        const nextState = { ...heroState };
+        nextState[heroColumnForField(field)] = null;
         if (isEmptyHeroState(nextState)) {
-          await deleteSiteContentField(db, orgId, siteId, page, 'hero', targetLocationId)
-          await deleteDraftContentField(db, orgId, siteId, page, 'hero', targetLocationId)
+          await deleteSiteContentField(
+            db,
+            orgId,
+            siteId,
+            page,
+            "hero",
+            targetLocationId,
+          );
+          await deleteDraftContentField(
+            db,
+            orgId,
+            siteId,
+            page,
+            "hero",
+            targetLocationId,
+          );
         } else {
-          await upsertHeroContentState(db, orgId, siteId, page, targetLocationId, nextState)
+          await upsertHeroContentState(
+            db,
+            orgId,
+            siteId,
+            page,
+            targetLocationId,
+            nextState,
+          );
         }
       } else {
-        await deleteSiteContentField(db, orgId, siteId, page, field, targetLocationId)
-        await deleteDraftContentField(db, orgId, siteId, page, field, targetLocationId)
+        await deleteSiteContentField(
+          db,
+          orgId,
+          siteId,
+          page,
+          field,
+          targetLocationId,
+        );
+        await deleteDraftContentField(
+          db,
+          orgId,
+          siteId,
+          page,
+          field,
+          targetLocationId,
+        );
       }
 
-      return { page, field, location_id: targetLocationId ?? null, deleted: true }
+      return {
+        page,
+        field,
+        location_id: targetLocationId ?? null,
+        deleted: true,
+      };
     }
 
-    case 'get_platform_content_page': {
-      const page = getToolString(input, 'page', 40)
-      if (!page || !isPlatformPage(page)) return { error: 'Invalid page.' }
+    case "get_platform_content_page": {
+      const page = getToolString(input, "page", 40);
+      if (!page || !isPlatformPage(page)) return { error: "Invalid page." };
 
-      const row = await db.prepare(
-        `SELECT id, page, content, updated_by, updated_at FROM platform_content WHERE page = ? LIMIT 1`
-      ).bind(page).first<{ id: string; page: string; content: string; updated_by: string | null; updated_at: string }>()
+      const row = await db
+        .prepare(
+          `SELECT id, page, content, updated_by, updated_at FROM platform_content WHERE page = ? LIMIT 1`,
+        )
+        .bind(page)
+        .first<{
+          id: string;
+          page: string;
+          content: string;
+          updated_by: string | null;
+          updated_at: string;
+        }>();
 
       return {
         page,
         exists: Boolean(row),
-        content: row?.content ?? '',
+        content: row?.content ?? "",
         updated_by: row?.updated_by ?? null,
         updated_at: row?.updated_at ?? null,
-      }
+      };
     }
 
-    case 'save_platform_content_page': {
-      const page = getToolString(input, 'page', 40)
-      const content = getToolString(input, 'content', 1_000_000)
-      if (!page || !isPlatformPage(page)) return { error: 'Invalid page.' }
-      if (content === undefined) return { error: 'content is required.' }
+    case "save_platform_content_page": {
+      const page = getToolString(input, "page", 40);
+      const content = getToolString(input, "content", 1_000_000);
+      if (!page || !isPlatformPage(page)) return { error: "Invalid page." };
+      if (content === undefined) return { error: "content is required." };
 
-      const now = new Date().toISOString()
-      const id = crypto.randomUUID()
-      await db.prepare(
-        `INSERT INTO platform_content (id, page, content, updated_by, updated_at)
+      const now = new Date().toISOString();
+      const id = crypto.randomUUID();
+      await db
+        .prepare(
+          `INSERT INTO platform_content (id, page, content, updated_by, updated_at)
          VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(page) DO UPDATE SET content = excluded.content, updated_by = excluded.updated_by, updated_at = excluded.updated_at`
-      ).bind(id, page, content, userId, now).run()
+         ON CONFLICT(page) DO UPDATE SET content = excluded.content, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+        )
+        .bind(id, page, content, userId, now)
+        .run();
 
-      return { page, content, updated_at: now, updated: true }
+      return { page, content, updated_at: now, updated: true };
     }
 
-    case 'delete_platform_content_page': {
-      const page = getToolString(input, 'page', 40)
-      if (!page || !isPlatformPage(page)) return { error: 'Invalid page.' }
+    case "delete_platform_content_page": {
+      const page = getToolString(input, "page", 40);
+      if (!page || !isPlatformPage(page)) return { error: "Invalid page." };
 
-      await db.prepare(`DELETE FROM platform_content WHERE page = ?`).bind(page).run()
-      return { page, deleted: true }
+      await db
+        .prepare(`DELETE FROM platform_content WHERE page = ?`)
+        .bind(page)
+        .run();
+      return { page, deleted: true };
     }
 
-    case 'get_site_stats': {
-      const [postStats, menuCount, itemCount, locationCount, reviewCount] = await Promise.all([
-        db.prepare(`SELECT status, COUNT(*) as count FROM posts WHERE organization_id = ? AND site_id = ? GROUP BY status`).bind(orgId, siteId).all(),
-        db.prepare(`SELECT COUNT(*) as count FROM menus WHERE organization_id = ? AND site_id = ?`).bind(orgId, siteId).first(),
-        db.prepare(`SELECT COUNT(*) as count FROM menu_items mi JOIN menus m ON mi.menu_id = m.id WHERE m.organization_id = ? AND m.site_id = ?`).bind(orgId, siteId).first(),
-        db.prepare(`SELECT COUNT(*) as count FROM business_locations WHERE organization_id = ? AND site_id = ? AND status = 'active'`).bind(orgId, siteId).first(),
-        db.prepare(`SELECT COUNT(*) as count FROM reviews WHERE site_id = ? AND status = 'approved'`).bind(siteId).first(),
-      ])
-      const byStatus = ((postStats.results ?? []) as unknown as StatusCountRow[]).reduce<Record<string, number>>((acc, row) => {
-        acc[row.status] = row.count
-        return acc
-      }, {})
+    case "get_site_stats": {
+      const [postStats, menuCount, itemCount, locationCount, reviewCount] =
+        await Promise.all([
+          db
+            .prepare(
+              `SELECT status, COUNT(*) as count FROM posts WHERE organization_id = ? AND site_id = ? GROUP BY status`,
+            )
+            .bind(orgId, siteId)
+            .all(),
+          db
+            .prepare(
+              `SELECT COUNT(*) as count FROM menus WHERE organization_id = ? AND site_id = ?`,
+            )
+            .bind(orgId, siteId)
+            .first(),
+          db
+            .prepare(
+              `SELECT COUNT(*) as count FROM menu_items mi JOIN menus m ON mi.menu_id = m.id WHERE m.organization_id = ? AND m.site_id = ?`,
+            )
+            .bind(orgId, siteId)
+            .first(),
+          db
+            .prepare(
+              `SELECT COUNT(*) as count FROM business_locations WHERE organization_id = ? AND site_id = ? AND status = 'active'`,
+            )
+            .bind(orgId, siteId)
+            .first(),
+          db
+            .prepare(
+              `SELECT COUNT(*) as count FROM reviews WHERE site_id = ? AND status = 'approved'`,
+            )
+            .bind(siteId)
+            .first(),
+        ]);
+      const byStatus = (
+        (postStats.results ?? []) as unknown as StatusCountRow[]
+      ).reduce<Record<string, number>>((acc, row) => {
+        acc[row.status] = row.count;
+        return acc;
+      }, {});
       return {
-        posts: { draft: byStatus.draft ?? 0, published: byStatus.published ?? 0, archived: byStatus.archived ?? 0 },
-        menus: menuCount?.count ?? 0, menu_items: itemCount?.count ?? 0,
-        locations: locationCount?.count ?? 0, reviews: reviewCount?.count ?? 0,
-      }
+        posts: {
+          draft: byStatus.draft ?? 0,
+          published: byStatus.published ?? 0,
+          archived: byStatus.archived ?? 0,
+        },
+        menus: menuCount?.count ?? 0,
+        menu_items: itemCount?.count ?? 0,
+        locations: locationCount?.count ?? 0,
+        reviews: reviewCount?.count ?? 0,
+      };
     }
 
-    case 'rename_site': {
-      const now = new Date().toISOString()
-      const baseSubdomain = toSlug(input.brand_name)
+    case "rename_site": {
+      const now = new Date().toISOString();
+      const baseSubdomain = toSlug(input.brand_name);
       for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
-        const subdomain = attempt === 0 ? baseSubdomain : `${baseSubdomain}-${attempt + 1}`
+        const subdomain =
+          attempt === 0 ? baseSubdomain : `${baseSubdomain}-${attempt + 1}`;
         try {
-          await db.prepare(
-            `UPDATE sites SET brand_name = ?, subdomain = ?, updated_at = ? WHERE id = ? AND organization_id = ?`
-          ).bind(input.brand_name, subdomain, now, siteId, orgId).run()
-          return { brand_name: input.brand_name, subdomain, updated: true }
+          await db
+            .prepare(
+              `UPDATE sites SET brand_name = ?, subdomain = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+            )
+            .bind(input.brand_name, subdomain, now, siteId, orgId)
+            .run();
+          return { brand_name: input.brand_name, subdomain, updated: true };
         } catch (error) {
-          if (isUniqueConstraintError(error)) continue
-          throw error
+          if (isUniqueConstraintError(error)) continue;
+          throw error;
         }
       }
-      return { error: `Unable to allocate a unique subdomain after ${MAX_SLUG_ATTEMPTS} attempts` }
+      return {
+        error: `Unable to allocate a unique subdomain after ${MAX_SLUG_ATTEMPTS} attempts`,
+      };
     }
 
-    case 'save_brand_description': {
-      const description = toSqlText(input.description)?.trim()
-      if (!description) return { error: 'Description is required.' }
-      await db.prepare(
-        `UPDATE sites SET brand_description = ?, updated_at = ? WHERE id = ? AND organization_id = ?`
-      ).bind(description, new Date().toISOString(), siteId, orgId).run()
-      return { brand_description: description, updated: true }
+    case "save_brand_description": {
+      const description = toSqlText(input.description)?.trim();
+      if (!description) return { error: "Description is required." };
+      await db
+        .prepare(
+          `UPDATE sites SET brand_description = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+        )
+        .bind(description, new Date().toISOString(), siteId, orgId)
+        .run();
+      return { brand_description: description, updated: true };
     }
 
-    case 'set_default_currency': {
-      const currency = toSqlText(input.currency)?.trim().toUpperCase()
-      const supportedCurrencies = new Set<string>(SUPPORTED_CURRENCIES)
+    case "set_default_currency": {
+      const currency = toSqlText(input.currency)?.trim().toUpperCase();
+      const supportedCurrencies = new Set<string>(SUPPORTED_CURRENCIES);
       if (!currency || !supportedCurrencies.has(currency)) {
-        return { error: 'Unsupported currency.' }
+        return { error: "Unsupported currency." };
       }
-      await db.prepare(
-        `UPDATE sites SET default_currency = ?, updated_at = ? WHERE id = ? AND organization_id = ?`
-      ).bind(currency, new Date().toISOString(), siteId, orgId).run()
-      return { default_currency: currency, updated: true }
+      await db
+        .prepare(
+          `UPDATE sites SET default_currency = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+        )
+        .bind(currency, new Date().toISOString(), siteId, orgId)
+        .run();
+      return { default_currency: currency, updated: true };
     }
 
-    case 'update_site_social': {
-      type SocialKey = 'social_facebook' | 'social_instagram' | 'social_tiktok' | 'footer_tagline' | 'press_email' | 'partnerships_email' | 'catering_email' | 'careers_email'
-      const urlKeys = new Set<SocialKey>(['social_facebook', 'social_instagram', 'social_tiktok'])
+    case "update_site_social": {
+      type SocialKey =
+        | "social_facebook"
+        | "social_instagram"
+        | "social_tiktok"
+        | "footer_tagline"
+        | "press_email"
+        | "partnerships_email"
+        | "catering_email"
+        | "careers_email";
+      const urlKeys = new Set<SocialKey>([
+        "social_facebook",
+        "social_instagram",
+        "social_tiktok",
+      ]);
       const map: Array<[SocialKey, string | undefined]> = [
-        ['social_facebook',   toSqlText(input.facebook_url)       ?? undefined],
-        ['social_instagram',  toSqlText(input.instagram_url)      ?? undefined],
-        ['social_tiktok',     toSqlText(input.tiktok_url)         ?? undefined],
-        ['footer_tagline',    toSqlText(input.footer_tagline)     ?? undefined],
-        ['press_email',       toSqlText(input.press_email)        ?? undefined],
-        ['partnerships_email',toSqlText(input.partnerships_email) ?? undefined],
-        ['catering_email',    toSqlText(input.catering_email)     ?? undefined],
-        ['careers_email',     toSqlText(input.careers_email)      ?? undefined],
-      ]
-      const updated: Record<string, string> = {}
-      const invalidFields: string[] = []
-      const normalizedEntries: Array<[SocialKey, string]> = []
+        ["social_facebook", toSqlText(input.facebook_url) ?? undefined],
+        ["social_instagram", toSqlText(input.instagram_url) ?? undefined],
+        ["social_tiktok", toSqlText(input.tiktok_url) ?? undefined],
+        ["footer_tagline", toSqlText(input.footer_tagline) ?? undefined],
+        ["press_email", toSqlText(input.press_email) ?? undefined],
+        [
+          "partnerships_email",
+          toSqlText(input.partnerships_email) ?? undefined,
+        ],
+        ["catering_email", toSqlText(input.catering_email) ?? undefined],
+        ["careers_email", toSqlText(input.careers_email) ?? undefined],
+      ];
+      const updated: Record<string, string> = {};
+      const invalidFields: string[] = [];
+      const normalizedEntries: Array<[SocialKey, string]> = [];
       for (const [key, value] of map) {
-        if (value === undefined) continue
-        const trimmed = value.trim()
+        if (value === undefined) continue;
+        const trimmed = value.trim();
         if (urlKeys.has(key) && trimmed && !isValidHttpUrl(trimmed)) {
-          invalidFields.push(key)
-          continue
+          invalidFields.push(key);
+          continue;
         }
-        normalizedEntries.push([key, trimmed])
+        normalizedEntries.push([key, trimmed]);
       }
-      if (invalidFields.length) return { error: `Invalid URL scheme for: ${invalidFields.join(', ')}. Only http/https are allowed.` }
+      if (invalidFields.length)
+        return {
+          error: `Invalid URL scheme for: ${invalidFields.join(", ")}. Only http/https are allowed.`,
+        };
       for (const [key, value] of normalizedEntries) {
-        await setConfig(db, orgId, siteId, key, value)
-        updated[key] = value
+        await setConfig(db, orgId, siteId, key, value);
+        updated[key] = value;
       }
-      if (Object.keys(updated).length === 0) return { error: 'No fields provided.' }
-      return { updated }
+      if (Object.keys(updated).length === 0)
+        return { error: "No fields provided." };
+      return { updated };
     }
 
-    case 'list_site_languages': {
-      return await listSiteLocales(db, orgId, siteId)
+    case "list_site_languages": {
+      return await listSiteLocales(db, orgId, siteId);
     }
 
-    case 'save_site_language': {
-      const locale = toSqlText(input.locale)?.trim()
-      if (!locale) return { error: 'locale is required.' }
+    case "save_site_language": {
+      const locale = toSqlText(input.locale)?.trim();
+      if (!locale) return { error: "locale is required." };
       const saved = await upsertSiteLocale(db, orgId, siteId, {
         locale,
         label: toSqlText(input.label) ?? undefined,
-        status: input.status === 'published' || input.status === 'disabled' || input.status === 'draft'
-          ? input.status
-          : undefined,
-        fallback_enabled: typeof input.fallback_enabled === 'boolean' ? input.fallback_enabled : undefined,
-        is_source: typeof input.is_source === 'boolean' ? input.is_source : undefined,
-      })
-      return { locale: saved, updated: true }
+        status:
+          input.status === "published" ||
+          input.status === "disabled" ||
+          input.status === "draft"
+            ? input.status
+            : undefined,
+        fallback_enabled:
+          typeof input.fallback_enabled === "boolean"
+            ? input.fallback_enabled
+            : undefined,
+        is_source:
+          typeof input.is_source === "boolean" ? input.is_source : undefined,
+      });
+      return { locale: saved, updated: true };
     }
 
-    case 'delete_site_language': {
-      const locale = toSqlText(input.locale)?.trim()
-      if (!locale) return { error: 'locale is required.' }
-      return await deleteSiteLocale(db, orgId, siteId, locale)
+    case "delete_site_language": {
+      const locale = toSqlText(input.locale)?.trim();
+      if (!locale) return { error: "locale is required." };
+      return await deleteSiteLocale(db, orgId, siteId, locale);
     }
 
-    case 'estimate_site_translation': {
-      const locale = toSqlText(input.locale)?.trim()
-      if (!locale) return { error: 'locale is required.' }
-      const scopeInput = toSqlText(input.scope)?.trim()
-      const scope = scopeInput && TRANSLATION_SCOPES.has(scopeInput) ? scopeInput as 'site' | 'content' | 'menus' | 'locations' | 'posts' : 'site'
+    case "estimate_site_translation": {
+      const locale = toSqlText(input.locale)?.trim();
+      if (!locale) return { error: "locale is required." };
+      const scopeInput = toSqlText(input.scope)?.trim();
+      const scope =
+        scopeInput && TRANSLATION_SCOPES.has(scopeInput)
+          ? (scopeInput as "site" | "content" | "menus" | "locations" | "posts")
+          : "site";
       const inventory = await buildTranslationInventory(db, orgId, siteId, {
         targetLocale: locale,
         scope,
         includePublished: input.include_published === true,
-      })
+      });
       return {
         estimate: inventory.estimate,
-        sample: inventory.items.slice(0, 12).map(item => ({
+        sample: inventory.items.slice(0, 12).map((item) => ({
           entity_type: item.entity_type,
           label: item.label,
           chars: item.source_chars,
           status: item.translation_status,
         })),
-      }
+      };
     }
 
-    case 'start_site_translation_job': {
-      const locale = toSqlText(input.locale)?.trim()
-      if (!locale) return { error: 'locale is required.' }
-      const scopeInput = toSqlText(input.scope)?.trim()
-      const scope = scopeInput && TRANSLATION_SCOPES.has(scopeInput) ? scopeInput as 'site' | 'content' | 'menus' | 'locations' | 'posts' : 'site'
+    case "start_site_translation_job": {
+      const locale = toSqlText(input.locale)?.trim();
+      if (!locale) return { error: "locale is required." };
+      const scopeInput = toSqlText(input.scope)?.trim();
+      const scope =
+        scopeInput && TRANSLATION_SCOPES.has(scopeInput)
+          ? (scopeInput as "site" | "content" | "menus" | "locations" | "posts")
+          : "site";
       return await createTranslationJob(db, orgId, siteId, userId, {
         targetLocale: locale,
         scope,
         includePublished: input.include_published === true,
-      })
+      });
     }
 
-    case 'list_translation_jobs': {
-      const { results } = await db.prepare(`
+    case "list_translation_jobs": {
+      const { results } = await db
+        .prepare(
+          `
         SELECT id, source_locale, target_locale, scope, status, total_items, total_chars,
                estimated_credits, actual_credits, processed_items, failed_items, created_at, updated_at
         FROM translation_jobs
         WHERE organization_id = ? AND site_id = ?
         ORDER BY created_at DESC
         LIMIT 10
-      `).bind(orgId, siteId).all()
-      return results ?? []
+      `,
+        )
+        .bind(orgId, siteId)
+        .all();
+      return results ?? [];
     }
 
-    case 'get_translation_job': {
-      const jobId = toSqlText(input.job_id)?.trim()
-      if (!jobId) return { error: 'job_id is required.' }
-      const job = await db.prepare(`
+    case "get_translation_job": {
+      const jobId = toSqlText(input.job_id)?.trim();
+      if (!jobId) return { error: "job_id is required." };
+      const job = await db
+        .prepare(
+          `
         SELECT *
         FROM translation_jobs
         WHERE id = ? AND organization_id = ? AND site_id = ?
         LIMIT 1
-      `).bind(jobId, orgId, siteId).first()
-      if (!job) return { error: 'Translation job not found.' }
-      const { results } = await db.prepare(`
+      `,
+        )
+        .bind(jobId, orgId, siteId)
+        .first();
+      if (!job) return { error: "Translation job not found." };
+      const { results } = await db
+        .prepare(
+          `
         SELECT entity_type, entity_id, location_id, page, field, source_chars, status, error
         FROM translation_job_items
         WHERE job_id = ? AND organization_id = ? AND site_id = ?
         ORDER BY entity_type, page, field
         LIMIT 100
-      `).bind(jobId, orgId, siteId).all()
-      return { job, items: results ?? [] }
+      `,
+        )
+        .bind(jobId, orgId, siteId)
+        .all();
+      return { job, items: results ?? [] };
     }
 
-    case 'run_translation_job_batch': {
-      const jobId = toSqlText(input.job_id)?.trim()
-      if (!jobId) return { error: 'job_id is required.' }
-      return await processTranslationJobBatch(db, env, orgId, siteId, jobId)
+    case "run_translation_job_batch": {
+      const jobId = toSqlText(input.job_id)?.trim();
+      if (!jobId) return { error: "job_id is required." };
+      return await processTranslationJobBatch(db, env, orgId, siteId, jobId);
     }
 
-    case 'publish_site_translations': {
-      const locale = toSqlText(input.locale)?.trim()
-      if (!locale) return { error: 'locale is required.' }
-      const scopeInput = toSqlText(input.scope)?.trim()
-      const scope = scopeInput && TRANSLATION_SCOPES.has(scopeInput) ? scopeInput as 'site' | 'content' | 'menus' | 'locations' | 'posts' : 'site'
-      const result = await publishTranslationDrafts(db, orgId, siteId, locale, scope, userId)
+    case "publish_site_translations": {
+      const locale = toSqlText(input.locale)?.trim();
+      if (!locale) return { error: "locale is required." };
+      const scopeInput = toSqlText(input.scope)?.trim();
+      const scope =
+        scopeInput && TRANSLATION_SCOPES.has(scopeInput)
+          ? (scopeInput as "site" | "content" | "menus" | "locations" | "posts")
+          : "site";
+      const result = await publishTranslationDrafts(
+        db,
+        orgId,
+        siteId,
+        locale,
+        scope,
+        userId,
+      );
       await upsertSiteLocale(db, orgId, siteId, {
         locale: result.target_locale,
-        status: 'published',
+        status: "published",
         fallback_enabled: true,
-      })
-      return result
+      });
+      return result;
     }
 
     // ── Experiences ────────────────────────────────────────────────────────
-    case 'list_experiences': {
-      const { listExperiences } = await import('~/server/utils/experiences')
-      const experiences = await listExperiences(db, siteId)
-      return { experiences }
+    case "list_experiences": {
+      const { listExperiences } = await import("~/server/utils/experiences");
+      const experiences = await listExperiences(db, siteId);
+      return { experiences };
     }
 
-    case 'create_experience': {
-      const { createExperience } = await import('~/server/utils/experiences')
-      const title = toSqlText(input.title)
-      if (!title) return { error: 'title is required' }
-      const slots = Array.isArray(input.time_slots) ? input.time_slots.map(String) : null
-      const experience = await createExperience(db, orgId, siteId, {
-        title,
-        tagline: toSqlText(input.tagline) ?? null,
-        body: toSqlText(input.body) ?? null,
-        price: toSqlText(input.price) ?? null,
-        duration_minutes: typeof input.duration_minutes === 'number' ? Math.round(input.duration_minutes) : null,
-        max_capacity: typeof input.max_capacity === 'number' ? Math.round(input.max_capacity) : null,
-        time_slots: slots,
-        available_note: toSqlText(input.available_note) ?? null,
-        image_asset_id: toSqlText(input.image_asset_id) ?? null,
-        location_id: toSqlText(input.location_id) ?? null,
-        status: (['active', 'inactive', 'sold_out'].includes(String(input.status ?? '')) ? String(input.status) : 'active') as 'active' | 'inactive' | 'sold_out',
-        sort_order: typeof input.sort_order === 'number' ? Math.round(input.sort_order) : 0,
-        featured: typeof input.featured === 'boolean' ? input.featured : false,
-        featured_sort_order: typeof input.featured_sort_order === 'number' ? Math.round(input.featured_sort_order) : 0,
-        seo_title: toSqlText(input.seo_title) ?? null,
-        seo_description: toSqlText(input.seo_description) ?? null,
-      }, userId)
-      return { experience_id: experience.id, slug: experience.slug, title: experience.title }
+    case "create_experience": {
+      const { createExperience } = await import("~/server/utils/experiences");
+      const title = toSqlText(input.title);
+      if (!title) return { error: "title is required" };
+      const slots = Array.isArray(input.time_slots)
+        ? input.time_slots.map(String)
+        : null;
+      const experience = await createExperience(
+        db,
+        orgId,
+        siteId,
+        {
+          title,
+          tagline: toSqlText(input.tagline) ?? null,
+          body: toSqlText(input.body) ?? null,
+          price: toSqlText(input.price) ?? null,
+          duration_minutes:
+            typeof input.duration_minutes === "number"
+              ? Math.round(input.duration_minutes)
+              : null,
+          max_capacity:
+            typeof input.max_capacity === "number"
+              ? Math.round(input.max_capacity)
+              : null,
+          time_slots: slots,
+          available_note: toSqlText(input.available_note) ?? null,
+          image_asset_id: toSqlText(input.image_asset_id) ?? null,
+          location_id: toSqlText(input.location_id) ?? null,
+          status: (["active", "inactive", "sold_out"].includes(
+            String(input.status ?? ""),
+          )
+            ? String(input.status)
+            : "active") as "active" | "inactive" | "sold_out",
+          sort_order:
+            typeof input.sort_order === "number"
+              ? Math.round(input.sort_order)
+              : 0,
+          featured:
+            typeof input.featured === "boolean" ? input.featured : false,
+          featured_sort_order:
+            typeof input.featured_sort_order === "number"
+              ? Math.round(input.featured_sort_order)
+              : 0,
+          seo_title: toSqlText(input.seo_title) ?? null,
+          seo_description: toSqlText(input.seo_description) ?? null,
+        },
+        userId,
+      );
+      return {
+        experience_id: experience.id,
+        slug: experience.slug,
+        title: experience.title,
+      };
     }
 
-    case 'update_experience': {
-      const { updateExperience } = await import('~/server/utils/experiences')
-      const id = toSqlText(input.experience_id)
-      if (!id) return { error: 'experience_id is required' }
-      const updates: Record<string, ApiValue> = {}
-      if (input.title !== undefined) updates.title = toSqlText(input.title)
-      if (input.tagline !== undefined) updates.tagline = toSqlText(input.tagline) ?? null
-      if (input.body !== undefined) updates.body = toSqlText(input.body) ?? null
-      if (input.price !== undefined) updates.price = toSqlText(input.price) ?? null
-      if (input.duration_minutes !== undefined) updates.duration_minutes = typeof input.duration_minutes === 'number' ? Math.round(input.duration_minutes) : null
-      if (input.max_capacity !== undefined) updates.max_capacity = typeof input.max_capacity === 'number' ? Math.round(input.max_capacity) : null
-      if (input.time_slots !== undefined) updates.time_slots = Array.isArray(input.time_slots) ? input.time_slots.map(String) : null
-      if (input.available_note !== undefined) updates.available_note = toSqlText(input.available_note) ?? null
-      if (input.image_asset_id !== undefined) updates.image_asset_id = toSqlText(input.image_asset_id) ?? null
-      if (input.location_id !== undefined) updates.location_id = toSqlText(input.location_id) ?? null
-      if (input.status !== undefined && ['active', 'inactive', 'sold_out'].includes(String(input.status))) updates.status = String(input.status)
-      if (input.sort_order !== undefined) updates.sort_order = Number(input.sort_order)
+    case "update_experience": {
+      const { updateExperience } = await import("~/server/utils/experiences");
+      const id = toSqlText(input.experience_id);
+      if (!id) return { error: "experience_id is required" };
+      const updates: Record<string, ApiValue> = {};
+      if (input.title !== undefined) updates.title = toSqlText(input.title);
+      if (input.tagline !== undefined)
+        updates.tagline = toSqlText(input.tagline) ?? null;
+      if (input.body !== undefined)
+        updates.body = toSqlText(input.body) ?? null;
+      if (input.price !== undefined)
+        updates.price = toSqlText(input.price) ?? null;
+      if (input.duration_minutes !== undefined)
+        updates.duration_minutes =
+          typeof input.duration_minutes === "number"
+            ? Math.round(input.duration_minutes)
+            : null;
+      if (input.max_capacity !== undefined)
+        updates.max_capacity =
+          typeof input.max_capacity === "number"
+            ? Math.round(input.max_capacity)
+            : null;
+      if (input.time_slots !== undefined)
+        updates.time_slots = Array.isArray(input.time_slots)
+          ? input.time_slots.map(String)
+          : null;
+      if (input.available_note !== undefined)
+        updates.available_note = toSqlText(input.available_note) ?? null;
+      if (input.image_asset_id !== undefined)
+        updates.image_asset_id = toSqlText(input.image_asset_id) ?? null;
+      if (input.location_id !== undefined)
+        updates.location_id = toSqlText(input.location_id) ?? null;
+      if (
+        input.status !== undefined &&
+        ["active", "inactive", "sold_out"].includes(String(input.status))
+      )
+        updates.status = String(input.status);
+      if (input.sort_order !== undefined)
+        updates.sort_order = Number(input.sort_order);
       if (input.featured !== undefined) {
-        if (typeof input.featured !== 'boolean') return { error: 'featured must be a boolean' }
-        updates.featured = input.featured
+        if (typeof input.featured !== "boolean")
+          return { error: "featured must be a boolean" };
+        updates.featured = input.featured;
       }
       if (input.featured_sort_order !== undefined) {
-        const parsed = Number(input.featured_sort_order)
-        if (!Number.isFinite(parsed)) return { error: 'featured_sort_order must be a number' }
-        updates.featured_sort_order = parsed
+        const parsed = Number(input.featured_sort_order);
+        if (!Number.isFinite(parsed))
+          return { error: "featured_sort_order must be a number" };
+        updates.featured_sort_order = parsed;
       }
-      if (input.seo_title !== undefined) updates.seo_title = toSqlText(input.seo_title) ?? null
-      if (input.seo_description !== undefined) updates.seo_description = toSqlText(input.seo_description) ?? null
-      const updated = await updateExperience(db, siteId, id, updates as ApiValue)
-      if (!updated) return { error: 'Experience not found' }
-      return { updated: true, experience_id: updated.id, slug: updated.slug }
+      if (input.seo_title !== undefined)
+        updates.seo_title = toSqlText(input.seo_title) ?? null;
+      if (input.seo_description !== undefined)
+        updates.seo_description = toSqlText(input.seo_description) ?? null;
+      const updated = await updateExperience(
+        db,
+        siteId,
+        id,
+        updates as ApiValue,
+      );
+      if (!updated) return { error: "Experience not found" };
+      return { updated: true, experience_id: updated.id, slug: updated.slug };
     }
 
-    case 'delete_experience': {
-      const { deleteExperience } = await import('~/server/utils/experiences')
-      const id = toSqlText(input.experience_id)
-      if (!id) return { error: 'experience_id is required' }
-      const deleted = await deleteExperience(db, siteId, id)
-      if (!deleted) return { error: 'Experience not found' }
-      return { deleted: true }
+    case "delete_experience": {
+      const { deleteExperience } = await import("~/server/utils/experiences");
+      const id = toSqlText(input.experience_id);
+      if (!id) return { error: "experience_id is required" };
+      const deleted = await deleteExperience(db, siteId, id);
+      if (!deleted) return { error: "Experience not found" };
+      return { deleted: true };
     }
 
-    case 'list_experience_bookings': {
-      const { listExperienceBookings } = await import('~/server/utils/experiences')
-      const id = toSqlText(input.experience_id)
-      if (!id) return { error: 'experience_id is required' }
-      const bookings = await listExperienceBookings(db, siteId, id)
-      return { bookings }
+    case "list_experience_bookings": {
+      const { listExperienceBookings } =
+        await import("~/server/utils/experiences");
+      const id = toSqlText(input.experience_id);
+      if (!id) return { error: "experience_id is required" };
+      const bookings = await listExperienceBookings(db, siteId, id);
+      return { bookings };
     }
 
-    case 'update_experience_booking_status': {
-      const { updateBookingStatus } = await import('~/server/utils/experiences')
-      const expId = toSqlText(input.experience_id)
-      const bookingId = toSqlText(input.booking_id)
-      const status = toSqlText(input.status)
-      if (!expId || !bookingId || !status) return { error: 'experience_id, booking_id, and status are required' }
-      if (!['confirmed', 'cancelled'].includes(status)) return { error: 'status must be confirmed or cancelled' }
-      const ok = await updateBookingStatus(db, siteId, expId, bookingId, status as 'confirmed' | 'cancelled')
-      if (!ok) return { error: 'Booking not found' }
-      return { updated: true }
+    case "update_experience_booking_status": {
+      const { updateBookingStatus } =
+        await import("~/server/utils/experiences");
+      const expId = toSqlText(input.experience_id);
+      const bookingId = toSqlText(input.booking_id);
+      const status = toSqlText(input.status);
+      if (!expId || !bookingId || !status)
+        return { error: "experience_id, booking_id, and status are required" };
+      if (!["confirmed", "cancelled"].includes(status))
+        return { error: "status must be confirmed or cancelled" };
+      const ok = await updateBookingStatus(
+        db,
+        siteId,
+        expId,
+        bookingId,
+        status as "confirmed" | "cancelled",
+      );
+      if (!ok) return { error: "Booking not found" };
+      return { updated: true };
     }
 
-    case 'create_work_request': {
-      const type = toSqlText(input.type)
-      let title = toSqlText(input.title)
-      const description = toSqlText(input.description) ?? null
-      const priority = toSqlText(input.priority) ?? 'normal'
+    case "create_work_request": {
+      const type = toSqlText(input.type);
+      let title = toSqlText(input.title);
+      const description = toSqlText(input.description) ?? null;
+      const priority = toSqlText(input.priority) ?? "normal";
 
-      const validTypes = ['content_update', 'menu_update', 'translation', 'seo', 'google_business', 'seasonal', 'photo_update', 'social_media', 'technical', 'other']
-      const validPriorities = ['low', 'normal', 'high', 'urgent']
+      const validTypes = [
+        "content_update",
+        "menu_update",
+        "translation",
+        "seo",
+        "google_business",
+        "seasonal",
+        "photo_update",
+        "social_media",
+        "technical",
+        "other",
+      ];
+      const validPriorities = ["low", "normal", "high", "urgent"];
 
-      if (!type || !validTypes.includes(type)) return { error: `type must be one of: ${validTypes.join(', ')}` }
-      title = title?.trim()
-      if (!title) return { error: 'title is required' }
-      if (title.length > 120) return { error: 'title must be at most 120 characters' }
-      if (!validPriorities.includes(priority)) return { error: 'priority must be low, normal, high, or urgent' }
+      if (!type || !validTypes.includes(type))
+        return { error: `type must be one of: ${validTypes.join(", ")}` };
+      title = title?.trim();
+      if (!title) return { error: "title is required" };
+      if (title.length > 120)
+        return { error: "title must be at most 120 characters" };
+      if (!validPriorities.includes(priority))
+        return { error: "priority must be low, normal, high, or urgent" };
 
       // Check org entitlement before insert
-      const entitlementsRow = await db.prepare('SELECT entitlements FROM organization WHERE id = ?').bind(orgId).first<{ entitlements: string }>()
-      let entitlements: any = {}
-      try { entitlements = entitlementsRow?.entitlements ? JSON.parse(entitlementsRow.entitlements) : {} } catch {}
-      if (!entitlements.work_requests) return { error: 'Work requests require a Growth plan or above.' }
+      const entitlementsRow = await db
+        .prepare("SELECT entitlements FROM organization WHERE id = ?")
+        .bind(orgId)
+        .first<{ entitlements: string }>();
+      let entitlements: Record<string, unknown> = {};
+      try {
+        entitlements = entitlementsRow?.entitlements
+          ? JSON.parse(entitlementsRow.entitlements)
+          : {};
+      } catch (_) {
+        // malformed JSON — treat as empty entitlements
+      }
+      if (!entitlements.work_requests)
+        return { error: "Work requests require a Growth plan or above." };
 
-      const id = crypto.randomUUID()
-      const now = new Date().toISOString()
-      await db.prepare(`
+      const id = crypto.randomUUID();
+      const now = new Date().toISOString();
+      await db
+        .prepare(
+          `
         INSERT INTO work_requests (id, organization_id, site_id, type, title, description, priority, source, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'chowbot', ?, ?)
-      `).bind(id, orgId, siteId, type, title, description, priority, now, now).run()
+      `,
+        )
+        .bind(id, orgId, siteId, type, title, description, priority, now, now)
+        .run();
 
-      return { created: true, id, message: "Work request submitted to the Paul & Julia queue. They'll take care of it." }
+      return {
+        created: true,
+        id,
+        message:
+          "Work request submitted to the Paul & Julia queue. They'll take care of it.",
+      };
     }
 
     default:
-      return { error: `Unknown tool: ${name}` }
+      return { error: `Unknown tool: ${name}` };
   }
 }
 
-export async function runChowBot(opts: RunChowBotOptions): Promise<RunChowBotResult> {
-  const { db, env, orgId, siteId, userId } = opts
+export async function runChowBot(
+  opts: RunChowBotOptions,
+): Promise<RunChowBotResult> {
+  const { db, env, orgId, siteId, userId } = opts;
 
-  const creditOk = await hasCredits(db, orgId)
-  if (!creditOk) throw new Error('No AI credits remaining.')
+  const creditOk = await hasCredits(db, orgId);
+  if (!creditOk) throw new Error("No AI credits remaining.");
 
   if (!Array.isArray(opts.messages) || !opts.messages.length) {
-    throw new Error('messages array required')
+    throw new Error("messages array required");
   }
 
-  const siteName = opts.siteName
-  const currentPage = opts.currentPage ?? 'dashboard'
-  const locationId = typeof opts.locationId === 'string' && opts.locationId ? opts.locationId : null
-  const channel = opts.channel ?? 'dashboard'
+  const siteName = opts.siteName;
+  const currentPage = opts.currentPage ?? "dashboard";
+  const locationId =
+    typeof opts.locationId === "string" && opts.locationId
+      ? opts.locationId
+      : null;
+  const channel = opts.channel ?? "dashboard";
 
   // Resolve current location name for richer context
-  let locationName: string | null = null
+  let locationName: string | null = null;
   if (locationId) {
-    const loc = await db.prepare(
-      `SELECT title FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`
-    ).bind(locationId, siteId).first<{ title: string }>()
-    locationName = loc?.title ?? null
+    const loc = await db
+      .prepare(
+        `SELECT title FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`,
+      )
+      .bind(locationId, siteId)
+      .first<{ title: string }>();
+    locationName = loc?.title ?? null;
   }
 
-  const isSetup = currentPage === 'setup'
+  const isSetup = currentPage === "setup";
 
-  const SETUP_PREAMBLE = isSetup ? `
+  const SETUP_PREAMBLE = isSetup
+    ? `
 You are in SETUP MODE. Your job is to guide the restaurant owner through a structured setup interview to get their site live.
 
 Setup order (ask one topic at a time, save each answer immediately using tools before moving on):
@@ -2812,15 +4283,16 @@ Rules in setup mode:
 - If they paste a menu list, call create_menu then add_menu_items_batch then publish_menu immediately.
 - Never ask for information already visible from the site context above.
 - If the owner skips a step, acknowledge it and move forward.
-` : ''
+`
+    : "";
 
   const SYSTEM = `You are ChowBot, an AI assistant for restaurant website owners using Kikuzuki.
 Help manage all site content with concise, action-oriented responses.
 ${SETUP_PREAMBLE}
 Site: ${siteName}
 Default menu currency: ${opts.defaultCurrency}
-Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ''}
-${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Use this asset_id directly in any tool that accepts image/media — update_menu_item (image_asset_id), add_menu_item (image_asset_id), add_menu_items_batch (image_asset_id), update_location or create_location (hero_image_asset_id / hero_video_asset_id), create_post (image_asset_id). If the user wants to import/extract menu items from it, call import_menu_from_pending_media. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call, also call resolve_pending_media with action=save_media to clear the pending state. If the user's intent is unclear, ask one short clarifying question.` : ''}
+Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ""}
+${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Use this asset_id directly in any tool that accepts image/media — update_menu_item (image_asset_id), add_menu_item (image_asset_id), add_menu_items_batch (image_asset_id), update_location or create_location (hero_image_asset_id / hero_video_asset_id), create_post (image_asset_id). If the user wants to import/extract menu items from it, call import_menu_from_pending_media. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call, also call resolve_pending_media with action=save_media to clear the pending state. If the user's intent is unclear, ask one short clarifying question.` : ""}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create (standard/offer/event/update with CTA), publish — optionally location-scoped
@@ -2855,129 +4327,183 @@ Guidelines:
 - Use get_platform_content_page, save_platform_content_page, and delete_platform_content_page for platform admin pages about, contact, and help
 - Before publish_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_review, delete_media_asset, delete_qa, delete_site_language, start_site_translation_job, run_translation_job_batch, publish_site_translations — confirm first
 - Menus are DRAFT by default — publish_menu makes them live
-- Keep responses short — this is a chat panel`
+- Keep responses short — this is a chat panel`;
 
-  const MAX_MSG_CHARS = 20000
-  let initialMessages = opts.messages.slice(-8)
-  while (initialMessages.length > 0 && initialMessages[0]?.role !== 'user') {
-    initialMessages = initialMessages.slice(1)
+  const MAX_MSG_CHARS = 20000;
+  let initialMessages = opts.messages.slice(-8);
+  while (initialMessages.length > 0 && initialMessages[0]?.role !== "user") {
+    initialMessages = initialMessages.slice(1);
   }
   if (!initialMessages.length) {
-    throw new Error('Conversation must contain at least one user message')
+    throw new Error("Conversation must contain at least one user message");
   }
   const agentMessages: AiMessage[] = initialMessages.map((m) => {
-    const raw = typeof m.content === 'string' ? m.content : String(m.content ?? '')
+    const raw =
+      typeof m.content === "string" ? m.content : String(m.content ?? "");
     return {
-      role: m.role as 'user' | 'assistant',
-      content: raw.length > MAX_MSG_CHARS ? raw.slice(0, MAX_MSG_CHARS) + '\n…[truncated]' : raw,
-    }
-  })
+      role: m.role as "user" | "assistant",
+      content:
+        raw.length > MAX_MSG_CHARS
+          ? raw.slice(0, MAX_MSG_CHARS) + "\n…[truncated]"
+          : raw,
+    };
+  });
 
   const emit = async (event: ChowBotRunEvent) => {
-    if (opts.onEvent) await opts.onEvent(event)
-  }
+    if (opts.onEvent) await opts.onEvent(event);
+  };
 
-  const ctx = { db, env, orgId, siteId, userId, agentMessages, locationId, channel, pendingMedia: opts.pendingMedia }
-  const toolCalls: ChowBotToolCall[] = []
-  let totalInput = 0, totalOutput = 0, cfLogId: string | null = null
-  let responseText = ''
+  const ctx = {
+    db,
+    env,
+    orgId,
+    siteId,
+    userId,
+    agentMessages,
+    locationId,
+    channel,
+    pendingMedia: opts.pendingMedia,
+  };
+  const toolCalls: ChowBotToolCall[] = [];
+  let totalInput = 0,
+    totalOutput = 0,
+    cfLogId: string | null = null;
+  let responseText = "";
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    let aiResponse
+    let aiResponse;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         aiResponse = await callAiGateway(env, agentMessages, {
-          system: SYSTEM, tools: TOOLS, maxTokens: 8192,
-          metadata: { org_id: orgId, site_id: siteId, action: 'chowbot' },
-        })
-        break
+          system: SYSTEM,
+          tools: TOOLS,
+          maxTokens: 8192,
+          metadata: { org_id: orgId, site_id: siteId, action: "chowbot" },
+        });
+        break;
       } catch (err) {
-        const errorMessage = getErrorMessage(err, '')
-        const is429 = errorMessage.includes('429') || errorMessage.includes('rate_limit')
-        if (is429 && attempt === 0) { await new Promise(r => setTimeout(r, 8000)); continue }
-        const message = is429 ? 'Rate limit hit — please wait a moment.' : getErrorMessage(err, 'AI generation failed.')
-        await emit({ type: 'error', message })
-        throw new Error(message)
+        const errorMessage = getErrorMessage(err, "");
+        const is429 =
+          errorMessage.includes("429") || errorMessage.includes("rate_limit");
+        if (is429 && attempt === 0) {
+          await new Promise((r) => setTimeout(r, 8000));
+          continue;
+        }
+        const message = is429
+          ? "Rate limit hit — please wait a moment."
+          : getErrorMessage(err, "AI generation failed.");
+        await emit({ type: "error", message });
+        throw new Error(message);
       }
     }
     if (!aiResponse) {
-      const message = 'AI generation failed after retry.'
-      await emit({ type: 'error', message })
-      throw new Error(message)
+      const message = "AI generation failed after retry.";
+      await emit({ type: "error", message });
+      throw new Error(message);
     }
 
-    totalInput += aiResponse.usage.input_tokens
-    totalOutput += aiResponse.usage.output_tokens
-    cfLogId = aiResponse.cfLogId
+    totalInput += aiResponse.usage.input_tokens;
+    totalOutput += aiResponse.usage.output_tokens;
+    cfLogId = aiResponse.cfLogId;
 
-    if (aiResponse.stop_reason === 'end_turn') {
-      responseText = aiResponse.content.find((b) => b.type === 'text')?.text ?? ''
-      await emit({ type: 'text', content: responseText })
-      break
+    if (aiResponse.stop_reason === "end_turn") {
+      responseText =
+        aiResponse.content.find((b) => b.type === "text")?.text ?? "";
+      await emit({ type: "text", content: responseText });
+      break;
     }
 
-    if (aiResponse.stop_reason === 'tool_use') {
-      agentMessages.push({ role: 'assistant', content: aiResponse.content })
-      const results: Array<{ type: 'tool_result'; tool_use_id?: string; content: string }> = []
+    if (aiResponse.stop_reason === "tool_use") {
+      agentMessages.push({ role: "assistant", content: aiResponse.content });
+      const results: Array<{
+        type: "tool_result";
+        tool_use_id?: string;
+        content: string;
+      }> = [];
       for (const block of aiResponse.content) {
-        if (block.type !== 'tool_use') continue
-        await emit({ type: 'tool_start', name: block.name })
-        const result = await executeTool(block.name || '', block.input ?? {}, ctx)
-        toolCalls.push({ name: block.name || '', input: block.input, result })
-        results.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) })
-        await emit({ type: 'tool_done', name: block.name })
+        if (block.type !== "tool_use") continue;
+        await emit({ type: "tool_start", name: block.name });
+        const result = await executeTool(
+          block.name || "",
+          block.input ?? {},
+          ctx,
+        );
+        toolCalls.push({ name: block.name || "", input: block.input, result });
+        results.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify(result),
+        });
+        await emit({ type: "tool_done", name: block.name });
       }
-      agentMessages.push({ role: 'user', content: results })
-      continue
+      agentMessages.push({ role: "user", content: results });
+      continue;
     }
 
-    responseText = aiResponse.stop_reason === 'max_tokens'
-      ? 'Response too large. Try adding items section by section.'
-      : aiResponse.content.find((b) => b.type === 'text')?.text ?? ''
-    await emit({ type: 'text', content: responseText })
-    break
+    responseText =
+      aiResponse.stop_reason === "max_tokens"
+        ? "Response too large. Try adding items section by section."
+        : (aiResponse.content.find((b) => b.type === "text")?.text ?? "");
+    await emit({ type: "text", content: responseText });
+    break;
   }
 
   // If we exhausted iterations without getting a final response
   if (!responseText) {
-    responseText = 'I ran into complexity limits. Please try a simpler request or break it into steps.'
-    await emit({ type: 'text', content: responseText })
+    responseText =
+      "I ran into complexity limits. Please try a simpler request or break it into steps.";
+    await emit({ type: "text", content: responseText });
   }
 
   const charged = await chargeCredits(db, orgId, {
-    siteId, action: 'chowbot', model: CHOWBOT_MODEL,
-    inputTokens: totalInput, outputTokens: totalOutput, cfGatewayLogId: cfLogId,
-  })
+    siteId,
+    action: "chowbot",
+    model: CHOWBOT_MODEL,
+    inputTokens: totalInput,
+    outputTokens: totalOutput,
+    cfGatewayLogId: cfLogId,
+  });
 
-  const result = { responseText, toolCalls, creditsRemaining: charged.newBalance }
-  await emit({ type: 'done', toolCalls, creditsRemaining: charged.newBalance })
-  return result
+  const result = {
+    responseText,
+    toolCalls,
+    creditsRemaining: charged.newBalance,
+  };
+  await emit({ type: "done", toolCalls, creditsRemaining: charged.newBalance });
+  return result;
 }
 
 export function createChowBotStream(
-  run: (_onEvent: (_event: ChowBotRunEvent) => Promise<void>) => Promise<void>
+  run: (_onEvent: (_event: ChowBotRunEvent) => Promise<void>) => Promise<void>,
 ) {
-  const { readable, writable } = new TransformStream()
-  const writer = writable.getWriter()
-  const enc = new TextEncoder()
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const enc = new TextEncoder();
 
   const push = async (data: ChowBotRunEvent) => {
-    try { await writer.write(enc.encode(`data: ${JSON.stringify(data)}\n\n`)) } catch {
+    try {
+      await writer.write(enc.encode(`data: ${JSON.stringify(data)}\n\n`));
+    } catch {
       // Client disconnected while streaming.
     }
-  }
+  };
 
-  ;(async () => {
+  (async () => {
     try {
-      await run(push)
+      await run(push);
     } catch (err) {
-      await push({ type: 'error', message: getErrorMessage(err, 'Something went wrong.') })
+      await push({
+        type: "error",
+        message: getErrorMessage(err, "Something went wrong."),
+      });
     } finally {
-      try { await writer.close() } catch {
+      try {
+        await writer.close();
+      } catch {
         // Stream may already be closed after client disconnect.
       }
     }
-  })()
+  })();
 
-  return readable
+  return readable;
 }

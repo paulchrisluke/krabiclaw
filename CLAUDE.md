@@ -2,25 +2,15 @@
 
 When an internal API returns errors, nulls, or malformed data, fix the API contract/source of truth first. Do not add frontend fallbacks, guards, or workaround logic unless the API behavior is intentionally nullable and documented.
 
-
 ## Stack
-
-
 
 ## Critical Wrangler Rules
 
-
-
 ## Auth
-
 
 ### Auth/App Naming Boundary
 
-
-
 ## ChowBot Ownership Boundary
-
-
 
 ## Database Schema Workflow
 
@@ -114,15 +104,14 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 ## Design System Enforcement
 
-<<<<<<< HEAD
+
 - Never bypass Nuxt UI layout components (`UCard`, `UPage`, `UPageBody`) to write custom Tailwind `div` wrappers
 - UCard `:ui` prop only accepts: `root`, `header`, `title`, `description`, `body`, `footer` — use `class` on the element for all other styling (border, background, rounded, shadow)
 - Dashboard pages do NOT use `UPageHeader` — content goes directly in `UPageBody`
 - Admin nav uses `i-lucide-*` icons; keep consistent with the rest of the dashboard nav
-- Do not introduce custom `border` or `bg` classes that break the global theme inheritance
-=======
-- Never bypass Nuxt UI layout components (`UCard`, `UPage`, `UPageHeader`) to write custom Tailwind `div` wrappers, even when matching external design references. 
-- If a specific visual layout (like a flat Vercel card) is needed, you must use the Nuxt UI component and override its specific tokens via the `:ui` prop (e.g., `<UCard :ui="{ shadow: '', rounded: 'rounded-xl', body: { padding: 'p-0' } }">`). 
+- # Do not introduce custom `border` or `bg` classes that break the global theme inheritance
+- Never bypass Nuxt UI layout components (`UCard`, `UPage`, `UPageHeader`) to write custom Tailwind `div` wrappers, even when matching external design references.
+- If a specific visual layout (like a flat Vercel card) is needed, you must use the Nuxt UI component and override its specific tokens via the `:ui` prop (e.g., `<UCard :ui="{ shadow: '', rounded: 'rounded-xl', body: { padding: 'p-0' } }">`).
 - Do not introduce custom `border` or `bg` classes that break the global theme inheritance.
 
 ---
@@ -169,6 +158,7 @@ notes: |
 **Never** manually seed, patch D1, invent client data, use stock images, or claim deployment success for a client site. A site is not complete until `client:verify` passes and `client-handoff.md` is generated.
 
 The required pipeline is:
+
 1. `client:import --dry-run` — fetch real data, scan real images, generate reviewable manifests
 2. Human review of `client-imports/<slug>/`
 3. `client:import --approve` — sign the manifest hash
@@ -200,4 +190,5 @@ yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-ho
 ### Custom Domains
 
 Subdomains (`<slug>.krabiclaw.com`) are provisioned automatically. Customer-owned domains require a separate Cloudflare for SaaS custom hostname — this is not yet automated in the onboarding pipeline. Do not attempt to configure custom hostnames manually in `wrangler.toml` or via the API; document the requirement and escalate.
->>>>>>> origin/main
+
+>

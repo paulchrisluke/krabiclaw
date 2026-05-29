@@ -95,7 +95,7 @@
           </UCard>
 
           <!-- Request history -->
-          <UCard v-if="requests.length > 0">
+          <UCard v-if="requests && requests.length > 0">
             <template #header>
               <h2 class="font-semibold text-highlighted">Your requests</h2>
             </template>
@@ -193,7 +193,7 @@ interface WorkRequest {
   notes: string | null; created_at: string
 }
 
-const { data, error, pending, refresh } = await useFetch<{ requests: WorkRequest[] }>('/api/dashboard/work-requests')
+const { data, refresh } = await useFetch<{ requests: WorkRequest[] }>('/api/dashboard/work-requests')
 const requests = computed(() => data.value?.requests)
 
 async function submitRequest() {

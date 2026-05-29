@@ -18,11 +18,7 @@
           </h1>
 
           <p class="text-lg leading-relaxed text-muted m-0 max-w-lg">
-<<<<<<< HEAD
             The Shopify for local businesses. Beautiful sites, AI-powered content, Google Business sync — in one tidy little dashboard.
-=======
-            The Shopify for local businesses. Beautiful sites, AI-powered content, Google Business sync — in one tidy little dashboard.
->>>>>>> origin/main
           </p>
 
           <!-- CTAs -->
@@ -501,7 +497,6 @@ const features = [
   { icon: 'i-heroicons-shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
   { icon: 'i-heroicons-chart-bar', title: 'Real-time insights', body: 'See visits, top items, busy hours — all in one dashboard.' },
 ]
-]
 const { isAuthenticated } = useAuth()
 
 // Validate tenant context ONLY for tenant sites
@@ -593,7 +588,6 @@ if (isPlatform) {
     description: 'Build your business website in minutes with AI. No coding required.',
     ogTitle: 'KrabiClaw | AI Website Builder for Local Businesses',
     ogDescription: 'Professional business websites with AI content and Google Business integration.',
->>>>>>> origin/main
     ogImage: sharedOgImage,
     ogUrl: currentPageUrl,
     ogType: 'website'
