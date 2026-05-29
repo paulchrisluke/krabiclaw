@@ -124,7 +124,7 @@ const props = defineProps({
   showEmptyState: { type: Boolean, default: true }
 })
 
-const { locale } = useI18n()
+const { formatDate } = useLocaleDate()
 
 const displayedPosts = computed(() => {
   return props.limit ? props.posts.slice(0, props.limit) : props.posts
@@ -136,17 +136,6 @@ const layoutClass = computed(() => {
   if (!props.limit) return 'md:grid-cols-2 lg:grid-cols-3'
   return 'grid-cols-1'
 })
-
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  const d = new Date(dateString)
-  if (isNaN(d.getTime()) || !isFinite(d.getTime())) return ''
-  return new Intl.DateTimeFormat(locale.value, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  }).format(d)
-}
 
 // Helper to extract a safe slug from post.name (last path segment, no slashes)
 function getPostSlug(name) {

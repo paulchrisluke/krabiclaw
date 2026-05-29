@@ -9,7 +9,7 @@
   },
   "saya": {
     "hero": {
-      "established_prefix": "EST."
+      "established": "EST. {year}"
     },
     "header": {
       "menu": "Menu",

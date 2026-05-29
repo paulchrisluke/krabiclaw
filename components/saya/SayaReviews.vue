@@ -117,7 +117,8 @@ const props = defineProps({
   }
 })
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const { formatDate } = useLocaleDate()
 
 const starRatingMap = {
   ONE: 1,
@@ -155,13 +156,4 @@ const layoutClass = computed(() => {
   return 'md:grid-cols-2'
 })
 
-const formatDate = value => {
-  const date = new Date(value)
-  if (isNaN(date.getTime())) return ''
-  return new Intl.DateTimeFormat(locale.value, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  }).format(date)
-}
 </script>

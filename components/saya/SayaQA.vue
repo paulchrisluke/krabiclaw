@@ -100,20 +100,9 @@ const props = defineProps({
   }
 })
 
-const { locale } = useI18n()
+const { formatDate } = useLocaleDate()
 
 const displayedQA = computed(() => {
   return props.limit ? props.qa.slice(0, props.limit) : props.qa
 })
-
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  if (isNaN(date.getTime())) return ''
-  return new Intl.DateTimeFormat(locale.value, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  }).format(date)
-}
 </script>
