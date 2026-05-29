@@ -494,21 +494,13 @@ const avatars = [
   { color: '#1F2547', letter: 'A' },
 ]
 const features = [
-<<<<<<< HEAD
-  { icon: 'i-heroicons-paint-brush', title: 'Beautiful themes', body: 'Conversion-optimized themes built for restaurants. Pick one, swap a color, you\'re live.' },
-  { icon: 'i-heroicons-sparkles', title: 'AI-powered content', body: 'Mouth-watering descriptions, allergens, translations — generated in one click.' },
-  { icon: 'i-heroicons-globe-alt', title: 'Google Business sync', body: 'Hours, photos, menu — pushed to Google so guests find the right info every time.' },
-  { icon: 'i-heroicons-calendar-days', title: 'Reservations + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.', dark: true },
-  { icon: 'i-heroicons-shopping-bag', title: 'Delivery links', body: 'Connect Grab, Uber Eats, and FoodPanda so guests order from the platform they already use.' },
-  { icon: 'i-heroicons-chart-bar', title: 'Real-time insights', body: 'See covers, top dishes, busy hours — all in one dashboard.' },
-=======
   { icon: 'i-heroicons-paint-brush', title: 'Beautiful themes', body: 'Conversion-optimized themes for local businesses. Pick one, swap a color, you\'re live.' },
   { icon: 'i-heroicons-sparkles', title: 'AI-powered content', body: 'Compelling descriptions, details, translations — generated in one click.' },
   { icon: 'i-heroicons-globe-alt', title: 'Google Business sync', body: 'Hours, photos, offerings — pushed to Google so guests find the right info every time.' },
   { icon: 'i-heroicons-calendar-days', title: 'Bookings + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.', dark: true },
   { icon: 'i-heroicons-shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
   { icon: 'i-heroicons-chart-bar', title: 'Real-time insights', body: 'See visits, top items, busy hours — all in one dashboard.' },
->>>>>>> origin/main
+]
 ]
 const { isAuthenticated } = useAuth()
 

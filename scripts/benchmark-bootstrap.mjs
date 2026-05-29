@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import autocannon from "autocannon";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -58,7 +57,6 @@ function readPercentileValue(stats, percentileLabel) {
 
 async function runAutocannon(url, options) {
   return new Promise((resolve, reject) => {
-=======
 import autocannon from "autocannon";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -117,7 +115,7 @@ function readPercentileValue(stats, percentileLabel) {
 }
 
 async function runAutocannon(url, options) {
->>>>>>> origin/main
+  return new Promise((resolve, reject) => {
   return new Promise((resolve, reject) => {
     autocannon(
       {
