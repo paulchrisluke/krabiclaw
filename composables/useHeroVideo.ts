@@ -16,24 +16,33 @@
 export function useHeroVideo(srcFn: () => string | null | undefined) {
   const showVideo = ref(false)
   const videoEl = ref<HTMLVideoElement | null>(null)
+  let timerId: ReturnType<typeof setTimeout> | null = null
+  let unmounted = false
 
   onMounted(async () => {
     // Fixed 3s delay from mount, safely post-LCP without depending on window.load
     // (window.load waits for lazy images and fires unpredictably late on Slow 4G).
-    await new Promise(resolve => setTimeout(resolve, 3000))
+    timerId = setTimeout(async () => {
+      if (unmounted) return
 
-    const src = srcFn()
-    if (!src) return
+      const src = srcFn()
+      if (!src || unmounted) return
 
-    showVideo.value = true
-    await nextTick()
+      showVideo.value = true
+      await nextTick()
 
-    const video = videoEl.value
-    if (!video) return
+      const video = videoEl.value
+      if (!video || unmounted) return
 
-    video.src = src
-    video.autoplay = true
-    try { await video.play() } catch { /* autoplay blocked — browser will play on interaction */ }
+      video.src = src
+      video.autoplay = true
+      try { await video.play() } catch { /* autoplay blocked — browser will play on interaction */ }
+    }, 3000)
+  })
+
+  onBeforeUnmount(() => {
+    unmounted = true
+    if (timerId) clearTimeout(timerId)
   })
 
   return { showVideo, videoEl }

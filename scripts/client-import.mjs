@@ -546,7 +546,8 @@ INSERT INTO business_locations (
     .slice(0, 3)
     .map((f, i) => {
       const assetId = `asset-${SLUG}-${i}`;
-      const ext = (f.original_name ? extname(f.original_name) : extname(f.normalized_name ?? "")).toLowerCase() || ".jpg";
+      const name = f.original_name ?? f.normalized_name ?? "";
+      const ext = (extname(name) || ".jpg").toLowerCase();
       const provider = f.cloudflare_image_id ? "cloudflare_images" : "cloudflare_r2";
       const cfId = f.cloudflare_image_id ? `'${f.cloudflare_image_id}'` : "NULL";
       const thumb = f.thumbnail_url ? `'${f.thumbnail_url.replace(/'/g, "''")}'` : "NULL";

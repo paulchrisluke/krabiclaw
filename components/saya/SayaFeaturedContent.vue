@@ -30,7 +30,6 @@
             :src="clientReady ? item.image : undefined"
             :autoplay="i === 0"
             :preload="i === 0 ? 'auto' : 'none'"
-            :loading="i === 0 ? undefined : 'lazy'"
             muted
             loop
             playsinline

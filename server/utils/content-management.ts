@@ -453,23 +453,25 @@ export const publishAllDrafts = async (db: D1Database) => {
 
   if (!drafts || drafts.length === 0) return
 
-  // Perform upserts in manageable batches to avoid oversized batch payloads
-  // and run inside a transaction-like sequence. D1's `db.batch` can fail on
-  // very large arrays — chunking keeps memory and request size bounded.
+  // Perform upserts in manageable batches to avoid oversized batch payloads.
+  // D1's `db.batch` is atomic per batch, but we need all-or-nothing across chunks.
+  // Strategy: only delete drafts after all chunks succeed. If any chunk fails,
+  // drafts remain untouched for retry, and site_content may have partial updates
+  // from earlier chunks - operator can retry to complete the operation.
   const CHUNK_SIZE = 200
   try {
     for (let i = 0; i < drafts.length; i += CHUNK_SIZE) {
       const chunk = drafts.slice(i, i + CHUNK_SIZE)
       const stmts = chunk.map(draft => buildUpsertSiteStmt(db, draft))
-      // Execute this chunk
       await db.batch(stmts)
     }
 
-    // After successful upserts, remove published drafts.
+    // Only delete drafts after all upserts succeed
     await db.prepare(`DELETE FROM site_content_drafts`).run()
   } catch (err) {
     // Bubble up with context for easier debugging in deploy logs
     console.error('[content-management] publishAllDrafts failed during batch upsert:', err)
+    console.error('[content-management] Drafts were NOT deleted - retry the operation to complete')
     throw err
   }
 }

@@ -8,9 +8,14 @@
  */
 export function useVideoDefer() {
   const ready = ref(false)
+  let timerId: ReturnType<typeof setTimeout> | null = null
 
   onMounted(() => {
-    setTimeout(() => { ready.value = true }, 2500)
+    timerId = setTimeout(() => { ready.value = true }, 2500)
+  })
+
+  onUnmounted(() => {
+    if (timerId) clearTimeout(timerId)
   })
 
   return ready

@@ -173,7 +173,7 @@ async function main() {
   console.log('=== KrabiClaw Stripe Seeder ===')
   console.log(`Mode: ${STRIPE_SECRET_KEY.startsWith('sk_test') ? 'TEST' : 'LIVE'} — ${dryRun ? 'DRY-RUN' : 'APPLY'}`)
 
-  await archiveOldPlans()
+  if (!dryRun) await archiveOldPlans()
 
   // Recurring plans
   const fixtures = { recurring: {}, oneTime: {} }
@@ -237,21 +237,21 @@ async function main() {
     amountCents: 4500,
     priceKey: 'translation',
   }, { dryRun })
-  fixtures.oneTime.translation = { priceId: translationPrice.id, productId: translationPrice.product?.id ?? null }
+  fixtures.oneTime.translation = { priceId: translationPrice.id, productId: typeof translationPrice.product === 'string' ? translationPrice.product : translationPrice.product?.id ?? null }
 
   const { price: seasonalPrice } = await createOneTimePrice({
     productName: 'Seasonal Relaunch Package',
     amountCents: 9900,
     priceKey: 'seasonal',
   }, { dryRun })
-  fixtures.oneTime.seasonal = { priceId: seasonalPrice.id, productId: seasonalPrice.product?.id ?? null }
+  fixtures.oneTime.seasonal = { priceId: seasonalPrice.id, productId: typeof seasonalPrice.product === 'string' ? seasonalPrice.product : seasonalPrice.product?.id ?? null }
 
   const { price: gbpPrice } = await createOneTimePrice({
     productName: 'Google Business Optimization',
     amountCents: 4900,
     priceKey: 'gbp_setup',
   }, { dryRun })
-  fixtures.oneTime.gbp_setup = { priceId: gbpPrice.id, productId: gbpPrice.product?.id ?? null }
+  fixtures.oneTime.gbp_setup = { priceId: gbpPrice.id, productId: typeof gbpPrice.product === 'string' ? gbpPrice.product : gbpPrice.product?.id ?? null }
 
   // Write fixtures file if requested
   if (fixtureSlug) {

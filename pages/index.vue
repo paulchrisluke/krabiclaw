@@ -140,7 +140,7 @@
             class="w-full h-full object-cover opacity-50"
           >
           <ClientOnly>
-            <video v-if="heroVideoShow" ref="heroVideoEl" muted loop playsinline preload="none" aria-hidden="true" role="presentation" class="absolute inset-0 w-full h-full object-cover opacity-50" />
+            <video v-if="heroVideoShow" ref="heroVideoEl" :src="hero.value?.video" muted loop playsinline preload="none" aria-hidden="true" role="presentation" class="absolute inset-0 w-full h-full object-cover opacity-50" />
           </ClientOnly>
         </div>
         <!-- Background photo: media asset takes precedence, then Google Business photo -->
@@ -241,7 +241,7 @@
           <NuxtLink
             v-for="(loc, locIdx) in locations"
             :key="loc.id"
-            :ref="el => { const node = el && (el.$el || el); if (node) locCardRefs[locIdx] = node }"
+            :ref="el => { const node = el && (el.$el || el); if (node) { const arr = [...locCardRefs.value]; arr[locIdx] = node; locCardRefs.value = arr } }"
             :to="`/locations/${loc.slug}`"
             class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
           >

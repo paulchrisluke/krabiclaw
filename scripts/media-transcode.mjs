@@ -177,6 +177,7 @@ function extractThumbnail(inputPath, outputPath, seekSeconds = 0.1) {
 }
 
 function r2Put(localPath, r2Key, contentType = 'video/mp4') {
+  requireBin('yarn')
   const result = spawnSync('yarn', [
     'wrangler', 'r2', 'object', 'put',
     `${R2_BUCKET}/${r2Key}`,
@@ -188,6 +189,7 @@ function r2Put(localPath, r2Key, contentType = 'video/mp4') {
 }
 
 function r2Get(r2Key, localPath) {
+  requireBin('yarn')
   const result = spawnSync('yarn', [
     'wrangler', 'r2', 'object', 'get',
     `${R2_BUCKET}/${r2Key}`,
@@ -198,6 +200,7 @@ function r2Get(r2Key, localPath) {
 }
 
 function d1Query(sql) {
+  requireBin('yarn')
   const result = spawnSync('yarn', [
     'wrangler', 'd1', 'execute', 'DB',
     D1_FLAG, '--command', sql, '--json',
@@ -214,6 +217,7 @@ function d1Query(sql) {
 }
 
 function d1Execute(sql) {
+  requireBin('yarn')
   const result = spawnSync('yarn', [
     'wrangler', 'd1', 'execute', 'DB',
     D1_FLAG, '--command', sql,
@@ -324,14 +328,14 @@ async function transcodeDir() {
 
 async function transcodeAsset() {
   // Validate asset-id safe for SQL
-  if (!SLUG_SAFE.test(ASSET_ID.replace(/-/g, '').replace(/\./g, ''))) {
+  if (!SLUG_SAFE.test(ASSET_ID)) {
     console.error('Error: --asset-id contains invalid characters')
     process.exit(1)
   }
 
   console.log(`\n→ Looking up asset '${ASSET_ID}'...`)
   const rows = d1Query(
-    `SELECT id, r2_key, public_url, file_name, file_size FROM media_assets WHERE id = '${ASSET_ID}' LIMIT 1`
+    `SELECT id, r2_key, public_url, file_name, file_size FROM media_assets WHERE id = '${ASSET_ID.replace(/'/g, "''")}' LIMIT 1`
   )
   if (!rows?.length) {
     console.error(`Error: asset '${ASSET_ID}' not found in ${REMOTE ? 'remote' : 'local'} D1`)
@@ -443,12 +447,12 @@ async function thumbnailOnlyAsset() {
 
   let thumbPublicUrl
   if (asset.provider === 'cloudflare_r2') {
-  const thumbR2Key = asset.r2_key.replace(/\.mp4$/, '-thumb.webp')
-  thumbPublicUrl = `https://media.krabiclaw.com/${thumbR2Key}`
-  r2Put(thumbPath, thumbR2Key, 'image/webp')
+    const thumbR2Key = asset.r2_key.replace(/\.mp4$/, '-thumb.webp')
+    thumbPublicUrl = `https://media.krabiclaw.com/${thumbR2Key}`
+    r2Put(thumbPath, thumbR2Key, 'image/webp')
   } else {
     // Store alongside the source in public/
-  const rel = asset.public_url.replace(/^\//, '').replace(/\.mp4$/, '-thumb.webp')
+    const rel = asset.public_url.replace(/^\//, '').replace(/\.mp4$/, '-thumb.webp')
     const destPath = join(process.cwd(), 'public', rel)
     const { copyFile } = await import('node:fs/promises')
     await copyFile(thumbPath, destPath)

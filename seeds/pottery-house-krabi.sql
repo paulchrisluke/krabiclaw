@@ -205,13 +205,13 @@ VALUES
    'video', 'cloudflare_r2', 'uploaded',
    'sites/site-pottery-house/media/media-ph-hero-video.mp4',
    'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-hero-video.mp4',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-hero-video-thumb-v2.jpg',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-hero-video-thumb.webp',
    'video/mp4', 'pottery-house-hero.mp4', 'Pottery House Krabi studio hero video', 'exterior', 'active'),
   ('media-ph-beach-hero-video', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-beachfront',
    'video', 'cloudflare_r2', 'uploaded',
    'sites/site-pottery-house/media/media-ph-beach-hero-video.mp4',
    'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-beach-hero-video.mp4',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-beach-hero-video-thumb-v2.jpg',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-beach-hero-video-thumb.webp',
    'video/mp4', 'pottery-house-beach-hero.mp4', 'Beachfront pottery session hero video at Klong Muang', 'exterior', 'active');
 
 -- Set hero images and videos
