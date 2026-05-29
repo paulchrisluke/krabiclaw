@@ -94,9 +94,9 @@ const expCopy = getVerticalCopy((site as ApiValue)?.vertical)
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
-const { experiencesList, data: bootstrapData, getField } = useBootstrap()
+const { experiencesList, pending: bootstrapPending, getField } = useBootstrap()
 
-const pending = computed(() => !isPlatform && !bootstrapData.value)
+const pending = computed(() => !isPlatform && bootstrapPending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
 const currentPageUrl = useSeoUrl('/experiences')
 const ogImage = useSharedOgImage(() => experiences.value[0]?.image_url)

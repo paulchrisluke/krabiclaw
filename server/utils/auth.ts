@@ -32,6 +32,7 @@ export interface CloudflareEnv {
   FACEBOOK_APP_SECRET?: string
   FACEBOOK_REDIRECT_URI?: string
   FACEBOOK_CONFIG_ID?: string
+  MEDIA_BUCKET?: R2Bucket
   [key: string]: ApiValue
 }
 

@@ -107,7 +107,7 @@ async function probeResponse(url) {
 }
 
 function buildDefaultCases(params) {
-  const { siteId, locationSlug, experienceSlug } = params;
+  const { siteId, locationSlug, experienceSlug, apiOnly } = params;
   const pageCases = [
     { name: "home", relativePath: "/" },
     { name: "about", relativePath: "/about" },
@@ -171,7 +171,7 @@ function buildDefaultCases(params) {
       ]
     : [];
 
-  return [...pageCases, ...apiCases];
+  return apiOnly ? apiCases : [...pageCases, ...apiCases];
 }
 
 function toAbsoluteUrl(baseUrl, relativePath) {
@@ -187,20 +187,15 @@ async function main() {
 
   if (args.help === "true" || args.h === "true") {
     console.log(
-      `Usage: yarn benchmark:bootstrap --base-url https://pottery-house.krabiclaw.com --site-id <siteId> [options]\n\nOptions:\n  --base-url            Base URL to benchmark (required)\n  --site-id             Site ID for bootstrap API test cases (optional but recommended)\n  --location-slug       Location slug used for route/API cases (default: ao-nang)\n  --experience-slug     Experience slug used for route/API cases (default: wheel-throwing-workshop)\n  --runs                Number of autocannon runs per case (default: 5)\n  --warmup-runs         Warmup runs per case, excluded from metrics (default: 1)\n  --connections         Concurrent connections for autocannon (default: 10)\n  --duration            Duration in seconds per run (default: 10)\n  --amount              Fixed number of requests per run (optional; overrides duration when set)\n  --timeout             Request timeout in seconds (default: 15)\n  --output-dir          Output directory (default: test-results/bootstrap-benchmarks)\n`,
+      `Usage: yarn benchmark [options]\n\nDefaults to https://demo.krabiclaw.com. Override for other tenants:\n  yarn benchmark --base-url https://pottery-house.krabiclaw.com --site-id site-pottery-house --location-slug ao-nang\n\nOptions:\n  --base-url            Target URL (default: https://demo.krabiclaw.com)\n  --site-id             Site ID for api-bootstrap-* cases (default: site-demo)\n  --location-slug       Location slug (default: brooklyn)\n  --experience-slug     Experience slug (default: wheel-throwing-workshop)\n  --runs                Number of autocannon runs per case (default: 5)\n  --warmup-runs         Warmup runs per case, excluded from metrics (default: 1)\n  --connections         Concurrent connections for autocannon (default: 10)\n  --duration            Duration in seconds per run (default: 10)\n  --amount              Fixed number of requests per run (optional; overrides duration when set)\n  --timeout             Request timeout in seconds (default: 15)\n  --output-dir          Output directory (default: test-results/bootstrap-benchmarks)\n  --api-only            Skip page routes; benchmark only api-bootstrap-* endpoints (uses --site-id, default: site-demo)\n`,
     );
     return;
   }
 
-  const baseUrl = args["base-url"];
-  if (!baseUrl) {
-    throw new Error("Missing required --base-url. Run with --help for usage.");
-  }
-
   const config = {
-    baseUrl,
-    siteId: args["site-id"] || "",
-    locationSlug: args["location-slug"] || "ao-nang",
+    baseUrl: args["base-url"] || "https://demo.krabiclaw.com",
+    siteId: args["site-id"] || "site-demo",
+    locationSlug: args["location-slug"] || "brooklyn",
     experienceSlug: args["experience-slug"] || "wheel-throwing-workshop",
     runs: Math.max(1, toNumber(args.runs, 5)),
     warmupRuns: Math.max(0, toNumber(args["warmup-runs"], 1)),
@@ -209,12 +204,14 @@ async function main() {
     amount: args.amount ? Math.max(1, toNumber(args.amount, 0)) : undefined,
     timeoutSeconds: Math.max(1, toNumber(args.timeout, 15)),
     outputDir: args["output-dir"] || "test-results/bootstrap-benchmarks",
+    apiOnly: args["api-only"] === "true",
   };
 
   const cases = buildDefaultCases({
     siteId: config.siteId,
     locationSlug: config.locationSlug,
     experienceSlug: config.experienceSlug,
+    apiOnly: config.apiOnly,
   });
 
   const startedAtIso = new Date().toISOString();
