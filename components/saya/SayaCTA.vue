@@ -14,7 +14,7 @@
         </div>
       </div>
       <div class="flex flex-wrap gap-4">
-        <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">Order Now</UButton>
+        <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">{{ $t('saya.cta.order_now') }}</UButton>
         <UButton
           :to="ctaRoute"
           color="primary"
@@ -22,7 +22,7 @@
           size="xl"
           class="rounded-full"
         >
-          {{ reserveCta }}
+          {{ reserveCta || $t('saya.cta.reserve') }}
         </UButton>
       </div>
     </div>

@@ -14,18 +14,18 @@
         </NuxtLink>
 
         <!-- Desktop nav -->
-        <nav class="hidden items-center gap-1 lg:flex" aria-label="Saya navigation">
+        <nav class="hidden items-center gap-1 lg:flex" :aria-label="$t('saya.header.nav_aria')">
           <NuxtLink
             v-if="locations.length === 1 && hasMenu"
             to="/menu"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
-            Menu
+            {{ $t('saya.header.menu') }}
           </NuxtLink>
 
           <UDropdownMenu v-else-if="locations.length > 1" :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
             <button class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default">
-              Locations
+              {{ $t('saya.header.locations') }}
               <UIcon name="i-heroicons-chevron-down" class="size-3 opacity-60" />
             </button>
           </UDropdownMenu>
@@ -34,14 +34,14 @@
             to="/reservations"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
-            Reservations
+            {{ $t('saya.header.reservations') }}
           </NuxtLink>
           <NuxtLink
             v-if="hasExperiences"
             to="/experiences"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
-            Experiences
+            {{ $t('saya.header.experiences') }}
           </NuxtLink>
         </nav>
 
@@ -75,7 +75,7 @@
             variant="ghost"
             size="sm"
             class="lg:hidden"
-            :aria-label="mobileMenuOpen ? 'Close navigation' : 'Open navigation'"
+            :aria-label="mobileMenuOpen ? $t('saya.header.close_navigation') : $t('saya.header.open_navigation')"
             @click="mobileMenuOpen = !mobileMenuOpen"
           />
         </div>
@@ -86,18 +86,18 @@
         v-if="mobileMenuOpen"
         class="absolute inset-x-0 top-16 border-b border-default bg-default p-4 shadow-sm lg:hidden"
       >
-        <nav class="grid gap-1" aria-label="Saya mobile navigation">
+        <nav class="grid gap-1" :aria-label="$t('saya.header.mobile_nav_aria')">
           <NuxtLink
             v-if="locations.length === 1 && hasMenu"
             to="/menu"
             class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
-            Menu
+            {{ $t('saya.header.menu') }}
           </NuxtLink>
           <template v-else-if="locations.length > 1">
             <div class="pb-2 pt-1">
-              <p class="px-4 text-xs font-medium uppercase tracking-widest text-muted">Locations</p>
+              <p class="px-4 text-xs font-medium uppercase tracking-widest text-muted">{{ $t('saya.header.locations') }}</p>
             </div>
             <NuxtLink
               v-for="loc in locations"
@@ -116,14 +116,14 @@
             class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
-            Order Now
+            {{ $t('saya.header.order_now') }}
           </NuxtLink>
           <NuxtLink
             to="/reservations"
             class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
-            Reservations
+            {{ $t('saya.header.reservations') }}
           </NuxtLink>
           <NuxtLink
             v-if="hasExperiences"
@@ -131,14 +131,14 @@
             class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
-            Experiences
+            {{ $t('saya.header.experiences') }}
           </NuxtLink>
           <NuxtLink
             to="/contact"
             class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
-            Contact
+            {{ $t('saya.header.contact') }}
           </NuxtLink>
         </nav>
       </div>
@@ -157,6 +157,7 @@ interface I18nComposable {
   locale: Ref<string>
   locales: Ref<Array<{ code: string; name: string }>>
   setLocale: (_code: string) => void
+  t: (_key: string, _named?: Record<string, unknown>) => string
 }
 
 
@@ -228,7 +229,7 @@ const primaryCtaPath = computed(() => {
 })
 
 const primaryCtaLabel = computed(() => {
-  if (hasOrderLinks.value) return 'Order Now'
+  if (hasOrderLinks.value) return i18n.t('saya.header.order_now')
   return verticalCopy.reserveCta
 })
 

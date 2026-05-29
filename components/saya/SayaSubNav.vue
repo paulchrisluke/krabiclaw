@@ -32,6 +32,7 @@ const props = defineProps<{
 }>()
 
 const { menu } = useBootstrap()
+const { t } = useI18n()
 
 const hasMenu = computed(() => {
   const m = menu.value as { items?: unknown[] } | null
@@ -40,16 +41,16 @@ const hasMenu = computed(() => {
 
 const items = computed(() => {
   const list = [
-    { key: 'overview', label: 'Overview', href: `/locations/${props.locationSlug}` }
+    { key: 'overview', label: t('saya.subnav.overview'), href: `/locations/${props.locationSlug}` }
   ]
   if (hasMenu.value) {
-    list.push({ key: 'menu', label: 'Menu', href: `/locations/${props.locationSlug}/menu` })
+    list.push({ key: 'menu', label: t('saya.subnav.menu'), href: `/locations/${props.locationSlug}/menu` })
   }
   list.push(
-    { key: 'reviews',  label: 'Reviews',  href: `/locations/${props.locationSlug}/reviews` },
-    { key: 'photos',   label: 'Photos',   href: `/locations/${props.locationSlug}/photos` },
-    { key: 'qa',       label: 'Q&A',      href: `/locations/${props.locationSlug}/qa` },
-    { key: 'contact',  label: 'Visit',    href: `/locations/${props.locationSlug}/contact` }
+    { key: 'reviews',  label: t('saya.subnav.reviews'), href: `/locations/${props.locationSlug}/reviews` },
+    { key: 'photos',   label: t('saya.subnav.photos'),  href: `/locations/${props.locationSlug}/photos` },
+    { key: 'qa',       label: t('saya.subnav.qa'),      href: `/locations/${props.locationSlug}/qa` },
+    { key: 'contact',  label: t('saya.subnav.visit'),   href: `/locations/${props.locationSlug}/contact` }
   )
   return list
 })

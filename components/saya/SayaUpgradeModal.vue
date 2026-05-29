@@ -8,7 +8,7 @@
               <UIcon name="i-heroicons-sparkles" class="size-5" />
             </div>
             <div class="min-w-0">
-              <p class="text-xs font-semibold uppercase tracking-wide text-muted">Pro feature</p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted">{{ $t('saya.upgrade.pro_feature') }}</p>
               <h2 class="mt-1 text-lg font-semibold text-highlighted">
                 {{ featureTitle }}
               </h2>
@@ -19,7 +19,7 @@
             color="neutral"
             variant="ghost"
             size="sm"
-            aria-label="Close modal"
+            :aria-label="$t('saya.upgrade.close_modal')"
             @click="close"
           />
         </div>
@@ -35,7 +35,7 @@
 
         <div class="mt-6">
           <UButton :to="orgSettings.billing.value" color="primary" block @click="close">
-            Get Pro
+            {{ $t('saya.upgrade.get_pro') }}
           </UButton>
         </div>
       </div>
@@ -46,57 +46,46 @@
 <script setup lang="ts">
 const { isOpen, feature, close } = useUpgradeModal()
 const orgSettings = useOrgSettings()
+const { t } = useI18n()
 
-const featureMap: Record<string, { title: string; description: string }> = {
-  'qa-writeback': {
-    title: 'Ask a question',
-    description: 'Let guests submit questions directly from your site, synced back to Google Business Q&A. Included in Pro.'
-  },
-  'custom-domain': {
-    title: 'Custom domain',
-    description: 'Connect your own domain (yourdomain.com) instead of a krabiclaw.com subdomain. Included in Pro.'
-  },
-  'add-location': {
-    title: 'Add a second location',
-    description: 'Manage multiple locations under one brand site, each with their own menu, reviews, and hours. Included in Pro.'
-  },
-  'connect-gmb': {
-    title: 'Connect Google Business',
-    description: 'Sync hours, reviews, photos, and posts automatically from your Google Business Profile. Included in Pro.'
-  },
-  'google-business-sync': {
-    title: 'Google Business sync',
-    description: 'Auto-sync Google Business fields while keeping manual edits available in the site editor. Included in Pro.'
-  },
-  'remove-branding': {
-    title: 'Remove KrabiClaw branding',
-    description: 'Remove the "Powered by krabiclaw.com" footer strip from your tenant site. Included in Pro.'
-  }
-}
+const knownFeatures = [
+  'qa-writeback',
+  'custom-domain',
+  'add-location',
+  'connect-gmb',
+  'google-business-sync',
+  'remove-branding'
+]
 
-const featureTitle = computed(() => featureMap[feature.value]?.title ?? 'Pro feature')
-const featureDescription = computed(
-  () => featureMap[feature.value]?.description ?? 'This feature is available on the Pro plan.'
+const featureTitle = computed(() =>
+  knownFeatures.includes(feature.value)
+    ? t(`saya.upgrade.features.${feature.value}.title`)
+    : t('saya.upgrade.pro_feature')
+)
+const featureDescription = computed(() =>
+  knownFeatures.includes(feature.value)
+    ? t(`saya.upgrade.features.${feature.value}.description`)
+    : t('saya.upgrade.default_description')
 )
 const featureBullets = computed(() => {
   if (feature.value === 'google-business-sync' || feature.value === 'connect-gmb') {
     return [
-      'Auto-fill Google Business fields when connected',
-      'Keep manual edits available in the content editor',
-      'Sync business details, hours, photos, reviews, and posts'
+      t('saya.upgrade.bullets.gmb_1'),
+      t('saya.upgrade.bullets.gmb_2'),
+      t('saya.upgrade.bullets.gmb_3')
     ]
   }
   if (feature.value === 'custom-domain') {
     return [
-      'Connect your own domain',
-      'Use managed HTTPS certificates',
-      'Keep your krabiclaw.com subdomain available'
+      t('saya.upgrade.bullets.domain_1'),
+      t('saya.upgrade.bullets.domain_2'),
+      t('saya.upgrade.bullets.domain_3')
     ]
   }
   return [
-    'Unlock this Pro workflow',
-    'Manage it from the dashboard',
-    'Keep the rest of your current site setup'
+    t('saya.upgrade.bullets.default_1'),
+    t('saya.upgrade.bullets.default_2'),
+    t('saya.upgrade.bullets.default_3')
   ]
 })
 </script>
