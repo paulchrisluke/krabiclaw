@@ -13,7 +13,7 @@
             Get in <em class="saya-italic">touch</em>.
           </h1>
           <p class="mt-5 max-w-xl text-sm leading-relaxed text-muted">
-            For a reservation or visit, head to your nearest location — for press, partnerships, catering or anything else, use the form below.
+            {{ vertCopy.contactSubtitle }}
           </p>
         </header>
 
@@ -93,7 +93,7 @@
                 <dd class="m-0 font-['Instrument_Serif',serif] italic"><a :href="`mailto:${siteConfig.partnerships_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.partnerships_email }}</a></dd>
               </div>
               <div v-if="siteConfig.catering_email" class="flex justify-between gap-4 border-b border-inverted/10 py-4">
-                <dt class="saya-eyebrow text-inverted/60">Catering</dt>
+                <dt class="saya-eyebrow text-inverted/60">{{ vertCopy.contactSubjectCatering }}</dt>
                 <dd class="m-0 font-['Instrument_Serif',serif] italic"><a :href="`mailto:${siteConfig.catering_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.catering_email }}</a></dd>
               </div>
               <div v-if="siteConfig.careers_email" class="flex justify-between gap-4 border-b border-inverted/10 py-4">
@@ -127,8 +127,12 @@
           <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
             <div class="mb-12 max-w-2xl">
               <p class="saya-kicker mb-6">By location</p>
-              <h2 class="saya-display-md text-default">Hours, address, phone — for each room.</h2>
-              <p class="mt-5 text-sm leading-relaxed text-muted">For full parking, accessibility and policy details, follow the "Plan a visit" link on each card.</p>
+              <h2 class="saya-display-md text-default">
+                {{ vertCopy.contactLocationsByHeading }}
+              </h2>
+              <p class="mt-5 text-sm leading-relaxed text-muted">
+                {{ vertCopy.contactLocationsByNote }}
+              </p>
             </div>
 
             <div class="flex flex-col gap-6">
@@ -199,10 +203,10 @@
                       Directions
                     </NuxtLink>
                     <NuxtLink
-                      :to="`/locations/${loc.slug}/menu`"
+                      :to="vertCopy.ctaRoute"
                       class="inline-flex items-center rounded-full border border-default px-5 py-2.5 text-[11px] font-medium uppercase tracking-widest text-default no-underline transition hover:bg-muted"
                     >
-                      Menu
+                      {{ vertCopy.reservationExploreLabel }}
                     </NuxtLink>
                   </div>
                 </div>
@@ -269,6 +273,7 @@ definePageMeta({ layout: false })
 import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
 const { isPlatform, siteId, site } = useTenantSite()
+const vertCopy = getVerticalCopy(site?.vertical)
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 const route = useRoute()
@@ -277,7 +282,7 @@ const toast = useToast()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const sharedOgImage = useSharedOgImage()
 
-const restaurantName = computed(() => site?.brand_name || 'Our Restaurant')
+const businessName = computed(() => site?.brand_name || 'Our Business')
 
 // ── Bootstrap: locations + config in one call ─────────────
 const { locations, config: siteConfig } = useBootstrap()
@@ -313,7 +318,7 @@ const subjectOptions = [
   { key: 'general', label: 'General' },
   { key: 'press', label: 'Press' },
   { key: 'partnerships', label: 'Partnerships' },
-  { key: 'catering', label: 'Catering & events' },
+  { key: 'catering', label: vertCopy.contactSubjectCatering },
   { key: 'careers', label: 'Careers' }
 ]
 
@@ -392,8 +397,8 @@ useSeoMeta(isPlatform
       ogUrl: `${siteUrl}/contact`
     }
   : {
-      title: computed(() => `Contact | ${restaurantName.value}`),
-      description: 'Get in touch with our restaurant.',
+      title: computed(() => `Contact | ${businessName.value}`),
+      description: 'Get in touch with our business.',
       ogImage: sharedOgImage,
       ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
     }

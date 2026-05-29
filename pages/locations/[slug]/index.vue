@@ -70,18 +70,19 @@
             </div>
             <div class="mt-10 flex flex-wrap gap-3">
               <UButton
-                to="/reservations"
+                :to="primaryCtaPath"
                 size="lg"
                 color="primary"
                 class="rounded-full bg-white! text-black! hover:bg-zinc-100!"
               >
-                Reserve a table
+                {{ primaryCtaLabel }}
               </UButton>
               <NuxtLink
-                :to="`/locations/${slug}/menu`"
+                v-if="secondaryCtaPath"
+                :to="secondaryCtaPath"
                 class="inline-flex items-center rounded-full border border-white/50 px-6 py-2.5 text-sm font-medium uppercase tracking-widest text-white transition hover:bg-white/10"
               >
-                View menu
+                {{ secondaryCtaLabel }}
               </NuxtLink>
             </div>
           </div>
@@ -229,7 +230,7 @@
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div class="mb-12 flex flex-wrap items-end justify-between gap-8">
             <div>
-              <p class="saya-kicker mb-6 text-inverted/60">Sister rooms</p>
+              <p class="saya-kicker mb-6">{{ locationIndexCopy.otherLocationsHeading }}</p>
               <h2 class="saya-display-md text-inverted">
                 Also part of <em class="saya-italic">{{ siteName }}</em>.
               </h2>
@@ -278,13 +279,13 @@
           <h2 class="saya-display-md saya-italic text-default">See you soon.</h2>
           <div class="flex flex-wrap gap-3">
             <UButton
-              to="/reservations"
+              :to="primaryCtaPath"
               color="primary"
               variant="solid"
               size="xl"
               class="rounded-full"
             >
-              Reserve a table
+              {{ primaryCtaLabel }}
             </UButton>
             <NuxtLink
               :to="`/locations/${slug}/contact`"
@@ -317,10 +318,11 @@ definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
 const { siteId, site } = useTenantSite()
+const locationIndexCopy = getVerticalCopy((site as ApiValue)?.vertical)
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.title || 'KrabiClaw')
 
 // Bootstrap: location + all locations + page content + menu + reviews — 1 SSR call
 const {
@@ -331,9 +333,31 @@ const {
   menu: bootstrapMenu,
   locationReviews,
   data: bootstrapData,
+  hasExperiences,
+  experiencesList,
 } = useBootstrap()
 
 const pending = computed(() => !bootstrapData.value)
+
+const hasMenu = computed(() => {
+  const m = bootstrapMenu.value as { items?: unknown[] } | null
+  return !!(m && m.items && m.items.length > 0)
+})
+
+const primaryCtaPath = computed(() => locationIndexCopy.ctaRoute)
+const primaryCtaLabel = computed(() => locationIndexCopy.reserveCta)
+
+const secondaryCtaPath = computed(() => {
+  if (hasMenu.value) return `/locations/${slug.value}/menu`
+  if (hasExperiences.value) return '/experiences'
+  return null
+})
+
+const secondaryCtaLabel = computed(() => {
+  if (hasMenu.value) return 'View menu'
+  if (hasExperiences.value) return 'View experiences'
+  return null
+})
 
 // Contact fallbacks
 const displayPhone = computed(() => {
@@ -359,16 +383,19 @@ const heroBackgroundStyle = computed(() => {
   const raw = String(heroMedia.value?.url || '').trim()
   if (!raw) return {}
 
-  let parsed: URL
+  let safeHref = ''
   try {
-    parsed = new URL(raw)
+    if (raw.startsWith('/')) {
+      safeHref = encodeURI(raw)
+    } else {
+      const parsed = new URL(raw)
+      if (!['http:', 'https:'].includes(parsed.protocol)) return {}
+      safeHref = encodeURI(parsed.href)
+    }
   } catch {
     return {}
   }
 
-  if (!['http:', 'https:'].includes(parsed.protocol)) return {}
-
-  const safeHref = encodeURI(parsed.href)
   if (/["'\\);]/.test(safeHref) || safeHref.includes('/*') || safeHref.includes('*/')) {
     return {}
   }
@@ -376,10 +403,46 @@ const heroBackgroundStyle = computed(() => {
   return { backgroundImage: `url("${safeHref}")` }
 })
 
-// Featured items from bootstrap menu
+// Featured items from bootstrap menu or experiences (if no menu)
 const featuredItems = computed(() => {
-  const items = (bootstrapMenu.value as { items?: ApiRecord[] } | null)?.items ?? []
-  return items.filter((i: ApiRecord) => i.featured || i.available !== false).slice(0, 3)
+  if (hasMenu.value) {
+    // Use featured menu items
+    const items = (bootstrapMenu.value as { items?: ApiRecord[] } | null)?.items ?? []
+    return items.filter((i: ApiRecord) => i.featured || i.available !== false).slice(0, 3)
+  } else {
+    // Use featured experiences, normalized to menu item shape
+    const experiences = experiencesList.value || []
+    function safeNum(val: unknown) {
+      const n = Number(val);
+      return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+    }
+    const featured = experiences
+      .filter(exp => exp.status === 'active' && exp.featured)
+      .sort((a, b) => {
+        const fa = safeNum(a.featured_sort_order);
+        const fb = safeNum(b.featured_sort_order);
+        if (fa !== fb) return fa - fb;
+        const sa = safeNum(a.sort_order);
+        const sb = safeNum(b.sort_order);
+        if (sa !== sb) return sa - sb;
+        return String(a.title ?? '').localeCompare(String(b.title ?? ''));
+      })
+    const toUse = featured.length > 0 ? featured : experiences.filter(exp => exp.status === 'active')
+    // Normalize experience objects to match menu item shape expected by template
+    return toUse.slice(0, 3).map(exp => ({
+      id: exp.id,
+      name: exp.title,
+      description: exp.tagline || '',
+      public_url: exp.image_url || null,
+      price_amount: typeof exp.price === 'number' ? exp.price : null,
+      price_display: exp.price,
+      kind: 'image',
+      featured: exp.featured,
+      available: exp.status === 'active',
+      source: 'experience',
+      isExperience: true,
+    }))
+  }
 })
 
 const defaultCurrency = computed(() => bootstrapData.value?.config?.default_currency || 'THB')

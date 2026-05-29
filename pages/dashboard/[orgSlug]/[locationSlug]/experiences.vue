@@ -77,6 +77,12 @@
                 class="w-full"
               />
             </UFormField>
+            <UFormField label="Featured" help="Show on homepage/location pages when no menu exists">
+              <UCheckbox v-model="form.featured" />
+            </UFormField>
+            <UFormField label="Featured sort order" help="Lower numbers appear first">
+              <UInput v-model="form.featured_sort_order" type="number" min="0" class="w-full" />
+            </UFormField>
           </div>
           <UFormField label="Time slots" help="Comma-separated times, e.g. 18:00, 20:30">
             <UInput v-model="timeSlotsInput" placeholder="18:00, 20:30" class="w-full" />
@@ -168,6 +174,8 @@ const emptyForm = () => ({
   max_capacity: '',
   available_note: '',
   status: 'active' as 'active' | 'inactive' | 'sold_out',
+  featured: false,
+  featured_sort_order: 0,
 })
 
 const form = reactive(emptyForm())
@@ -190,6 +198,8 @@ function openEdit(exp: ApiRecord) {
     max_capacity: exp.max_capacity != null ? String(exp.max_capacity) : '',
     available_note: exp.available_note ?? '',
     status: exp.status ?? 'active',
+    featured: exp.featured ?? false,
+    featured_sort_order: exp.featured_sort_order != null ? String(exp.featured_sort_order) : '0',
   })
   timeSlotsInput.value = Array.isArray(exp.time_slots) ? exp.time_slots.join(', ') : (exp.time_slots ?? '')
   sliderOpen.value = true
@@ -202,15 +212,17 @@ async function save() {
   }
   saving.value = true
   try {
-    const parseNumber = (value: string): number | null => {
-      if (!value.trim()) return null
-      const parsed = Number(value)
+    const parseNumber = (value: string | number): number | null => {
+      const str = String(value)
+      if (!str.trim()) return null
+      const parsed = Number(str)
       return Number.isFinite(parsed) ? parsed : null
     }
     const payload = {
       ...form,
       duration_minutes: parseNumber(form.duration_minutes),
       max_capacity: parseNumber(form.max_capacity),
+      featured_sort_order: parseNumber(form.featured_sort_order),
       time_slots: timeSlotsInput.value
         ? timeSlotsInput.value.split(',').map(s => s.trim()).filter(Boolean)
         : null,

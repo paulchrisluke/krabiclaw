@@ -79,9 +79,10 @@
         <div>
           <h4 class="saya-eyebrow mb-5 text-inverted/50">Experience</h4>
           <ul class="space-y-3 text-sm">
-            <li><NuxtLink to="/menu" class="text-inverted/60 no-underline transition hover:text-inverted">Menu</NuxtLink></li>
-            <li><NuxtLink to="/reservations" class="text-inverted/60 no-underline transition hover:text-inverted">Reservations</NuxtLink></li>
-            <li><NuxtLink to="/photos" class="text-inverted/60 no-underline transition hover:text-inverted">Gallery</NuxtLink></li>
+            <li v-if="hasMenu"><NuxtLink to="/menu" class="text-inverted/60 no-underline transition hover:text-inverted">Menu</NuxtLink></li>
+            <li v-if="hasExperiences"><NuxtLink to="/experiences" class="text-inverted/60 no-underline transition hover:text-inverted">Experiences</NuxtLink></li>
+            <li><NuxtLink to="/reservations" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
+            <li v-if="!hasExperiences"><NuxtLink to="/photos" class="text-inverted/60 no-underline transition hover:text-inverted">Gallery</NuxtLink></li>
             <li><NuxtLink to="/about" class="text-inverted/60 no-underline transition hover:text-inverted">Our Story</NuxtLink></li>
           </ul>
         </div>
@@ -102,8 +103,8 @@
         </div>
       </div>
 
-      <!-- Delivery partners row — only rendered when at least one link is configured -->
-      <div v-if="orderLinks.length" class="flex flex-wrap items-center gap-8 border-b border-inverted/10 py-10">
+      <!-- Delivery partners row — only rendered when at least one link is configured AND not an experiences site -->
+      <div v-if="orderLinks.length && !hasExperiences" class="flex flex-wrap items-center gap-8 border-b border-inverted/10 py-10">
         <span class="saya-eyebrow text-inverted/50">Order online</span>
         <a
           v-for="link in orderLinks"
@@ -130,7 +131,7 @@
             rel="noopener noreferrer"
             class="transition hover:text-inverted/70"
           >
-            Powered by krabiclaw.com, restaurant sites that run themselves
+            Powered by krabiclaw.com, {{ copy.poweredByTagline }}
           </a>
         </div>
       </div>
@@ -141,12 +142,19 @@
 <script setup lang="ts">
 import { DEFAULT_RESTAURANT_NAME } from '~/config/constants'
 import { getTodayGoogleHours } from '~/utils/formatters'
+import { getVerticalCopy } from '~/utils/vertical-copy'
 
 const { isPlatform, site } = useTenantSite()
+const copy = computed(() => getVerticalCopy((site as { vertical?: string } | null)?.vertical))
 
 // Shared bootstrap — same key as the page → zero extra SSR requests
-const { locations: bootstrapLocations, error: bootstrapError, config: siteConfig } = useBootstrap()
+const { locations: bootstrapLocations, error: bootstrapError, config: siteConfig, menu, hasExperiences } = useBootstrap()
 const locationsError = computed(() => bootstrapError.value)
+
+const hasMenu = computed(() => {
+  const m = menu.value as { items?: unknown[] } | null
+  return !!(m && m.items && m.items.length > 0)
+})
 const year = new Date().getFullYear()
 const logoUrl = computed(() => (site as { logo_url?: string | null } | null)?.logo_url || null)
 const restaurantName = computed(() => {

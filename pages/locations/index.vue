@@ -5,8 +5,7 @@
     <header class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
       <p class="saya-kicker mb-6">Find us</p>
       <h1 class="saya-display-md text-default">
-        {{ locations.length }} location{{ locations.length === 1 ? '' : 's' }},
-        one kitchen philosophy.
+        {{ locationsCopy.locationGroupLine(locations.length) }}
       </h1>
     </header>
 
@@ -120,6 +119,7 @@ type AddressInput = string | { addressLines?: string[]; locality?: string; admin
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 const { isAuthenticated } = useAuth()
+const locationsCopy = getVerticalCopy(unref(site)?.vertical)
 
 const { locations, data: bootstrapData } = useBootstrap()
 const pending = computed(() => !bootstrapData.value)
@@ -135,7 +135,7 @@ const placeholders = [
   { title: 'Second Location', city: 'Coming Soon', address: 'Additional locations appear here when added.' }
 ]
 
-const siteName = computed(() => unref(site)?.name || 'Saya')
+const siteName = computed(() => unref(site)?.title || 'KrabiClaw')
 
 useSeoMeta({
   title: () => `Locations · ${siteName.value}`,

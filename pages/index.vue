@@ -9,16 +9,20 @@
           <!-- Eyebrow -->
           <span class="self-start inline-flex items-center gap-2 text-[11px] font-bold tracking-[0.3em] uppercase text-(--kc-teal-600) bg-(--kc-teal-100) px-3.5 py-1.5 rounded-full">
             <span class="w-1.5 h-1.5 rounded-full bg-(--kc-teal) shrink-0" />
-            New · AI menu translator
+            New · AI content translator
           </span>
 
           <!-- Headline -->
           <h1 class="text-[clamp(40px,5vw,64px)] font-extrabold leading-[1.02] tracking-tight text-default text-balance m-0">
-            Build, grow, and manage your <span class="text-(--kc-coral)">restaurant</span> online.
+            Build, grow, and manage your <span class="text-(--kc-coral)">business</span> online.
           </h1>
 
           <p class="text-lg leading-relaxed text-muted m-0 max-w-lg">
-            AI-built restaurant websites, live in minutes. On paid plans (Growth+), send us a WhatsApp and we’ll handle menu updates, translations, and your Google presence.
+<<<<<<< HEAD
+            The Shopify for local businesses. Beautiful sites, AI-powered content, Google Business sync — in one tidy little dashboard.
+=======
+            The Shopify for local businesses. Beautiful sites, AI-powered content, Google Business sync — in one tidy little dashboard.
+>>>>>>> origin/main
           </p>
 
           <!-- CTAs -->
@@ -49,7 +53,7 @@
               >{{ av.letter }}</div>
             </div>
             <p class="text-[13px] text-muted m-0">
-              Trusted by <strong class="text-default">1,200+ restaurants</strong> across SE Asia
+              Trusted by <strong class="text-default">1,200+ businesses</strong> across SE Asia
             </p>
           </div>
         </div>
@@ -70,7 +74,7 @@
       <section id="features" class="bg-elevated border-y border-default py-20">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="text-center max-w-2xl mx-auto mb-12 flex flex-col items-center gap-4">
-            <span class="kc-eyebrow text-muted">Everything your restaurant needs</span>
+            <span class="kc-eyebrow text-muted">Everything your business needs</span>
             <h2 class="text-[44px] font-extrabold tracking-tight leading-[1.05] text-default m-0">One platform. No plugins. No fuss.</h2>
           </div>
           <div class="grid md:grid-cols-3 gap-5">
@@ -163,7 +167,16 @@
           </div>
           <div v-else class="mt-12 flex flex-wrap gap-4">
             <UButton v-if="hasOrderLinks" to="/order" color="neutral" variant="solid" size="xl" class="rounded-full bg-white! text-black! hover:bg-zinc-100!">Order Now</UButton>
-            <UButton :to="hasOrderLinks ? '/reservations' : '/reservations'" color="neutral" :variant="hasOrderLinks ? 'outline' : 'solid'" size="xl" class="rounded-full" :class="hasOrderLinks ? 'border-white/50 text-white hover:bg-white/10' : 'bg-white! text-black! hover:bg-zinc-100!'">Reserve a table</UButton>
+            <UButton
+              :to="homeCopy.ctaRoute"
+              color="neutral"
+              :variant="hasOrderLinks ? 'outline' : 'solid'"
+              size="xl"
+              class="rounded-full"
+              :class="hasOrderLinks ? 'border-white/50 text-white hover:bg-white/10' : 'bg-white! text-black! hover:bg-zinc-100!'"
+            >
+              {{ homeCopy.reserveCta }}
+            </UButton>
           </div>
         </div>
       </section>
@@ -173,7 +186,7 @@
         <div class="mb-16 max-w-2xl">
           <p class="saya-kicker mb-6">Find us</p>
           <h2 class="saya-display-md text-default">
-            {{ locations.length }} location{{ locations.length === 1 ? '' : 's' }}, one kitchen philosophy.
+            {{ homeCopy.locationGroupLine(locations.length) }}
           </h2>
         </div>
         <!-- Real locations -->
@@ -448,26 +461,15 @@
         </div>
       </section>
 
-      <!-- ── CTA strip ───────────────────────────────────────── -->
-      <section id="section-cta" class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-20 pb-28 sm:px-6 lg:px-8">
-        <div class="max-w-3xl">
-          <h3 v-if="getField('cta.title')" data-field="cta.title" class="saya-display saya-italic text-5xl text-default leading-none">
-            {{ getField('cta.title') }}
-          </h3>
-          <!-- eslint-disable vue/no-v-html -->
-          <div
-            v-if="getField('cta.description')"
-            data-field="cta.description"
-            class="mt-5 max-w-2xl text-sm leading-7 text-muted"
-            v-html="DOMPurify.sanitize(getField('cta.description') || '')"
-          />
-          <!-- eslint-enable vue/no-v-html -->
-        </div>
-        <div class="flex flex-wrap gap-4">
-          <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">Order Now</UButton>
-          <UButton to="/reservations" color="primary" :variant="hasOrderLinks ? 'outline' : 'solid'" size="xl" class="rounded-full">Reserve a table</UButton>
-        </div>
-      </section>
+      <!-- ── CTA strip (strict component) ───────────────────── -->
+      <SayaCTA
+        :title="getField('cta.title')"
+        :description="getField('cta.description')"
+        :cta-route="homeCopy.ctaRoute"
+        :reserve-cta="homeCopy.reserveCta"
+        :bg="'default'"
+        :padding="'lg'"
+      />
     </div>
   </NuxtLayout>
 </template>
@@ -476,11 +478,13 @@
 import { useAuth } from '~/composables/useAuth'
 import { useOrganizationSchema } from '~/composables/useSchemaOrg'
 import { formatMoneyAmount } from '~/shared/money'
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
+
+import SayaCTA from '~/components/saya/SayaCTA.vue'
 
 definePageMeta({ layout: false })
 
 const { isPlatform, siteId, site } = useTenantSite()
+const homeCopy = getVerticalCopy(site?.vertical)
 
 // Platform homepage data
 const avatars = [
@@ -490,12 +494,21 @@ const avatars = [
   { color: '#1F2547', letter: 'A' },
 ]
 const features = [
+<<<<<<< HEAD
   { icon: 'i-heroicons-paint-brush', title: 'Beautiful themes', body: 'Conversion-optimized themes built for restaurants. Pick one, swap a color, you\'re live.' },
   { icon: 'i-heroicons-sparkles', title: 'AI-powered content', body: 'Mouth-watering descriptions, allergens, translations — generated in one click.' },
   { icon: 'i-heroicons-globe-alt', title: 'Google Business sync', body: 'Hours, photos, menu — pushed to Google so guests find the right info every time.' },
   { icon: 'i-heroicons-calendar-days', title: 'Reservations + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.', dark: true },
   { icon: 'i-heroicons-shopping-bag', title: 'Delivery links', body: 'Connect Grab, Uber Eats, and FoodPanda so guests order from the platform they already use.' },
   { icon: 'i-heroicons-chart-bar', title: 'Real-time insights', body: 'See covers, top dishes, busy hours — all in one dashboard.' },
+=======
+  { icon: 'i-heroicons-paint-brush', title: 'Beautiful themes', body: 'Conversion-optimized themes for local businesses. Pick one, swap a color, you\'re live.' },
+  { icon: 'i-heroicons-sparkles', title: 'AI-powered content', body: 'Compelling descriptions, details, translations — generated in one click.' },
+  { icon: 'i-heroicons-globe-alt', title: 'Google Business sync', body: 'Hours, photos, offerings — pushed to Google so guests find the right info every time.' },
+  { icon: 'i-heroicons-calendar-days', title: 'Bookings + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.', dark: true },
+  { icon: 'i-heroicons-shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
+  { icon: 'i-heroicons-chart-bar', title: 'Real-time insights', body: 'See visits, top items, busy hours — all in one dashboard.' },
+>>>>>>> origin/main
 ]
 const { isAuthenticated } = useAuth()
 
@@ -517,6 +530,7 @@ const {
   getHero,
   config: bootstrapConfig,
   menuItemsBySection,
+  experiencesList,
 } = useBootstrap()
 
 const locations = computed(() => bootstrapLocations.value)
@@ -524,6 +538,12 @@ const hasLocations = computed(() => locations.value.length > 0)
 const hasOrderLinks = computed(() =>
   locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
+
+// Check if there's a menu
+const hasMenu = computed(() => {
+  const allItems = Object.values(menuItemsBySection.value).flat()
+  return allItems.length > 0
+})
 
 const googleBusiness = computed(() => {
   const gb = bootstrapGB.value
@@ -577,10 +597,17 @@ if (isPlatform) {
   useOrganizationSchema()
   
   useSeoMeta({
+<<<<<<< HEAD
     title: 'KrabiClaw | AI Restaurant Website Builder',
     description: 'Your restaurant online in minutes — AI-built, with reservations, menus, multi-language support, Google Business sync, and optional WhatsApp integrations. Managed service available on paid plans.',
     ogTitle: 'KrabiClaw | AI Restaurant Website Builder',
     ogDescription: 'AI-built restaurant site with reservations, menus, multi-language, Google Business sync, and optional WhatsApp integrations. Managed service available on Growth+ plans.',
+=======
+    title: 'KrabiClaw | AI Website Builder for Local Businesses',
+    description: 'Build your business website in minutes with AI. No coding required.',
+    ogTitle: 'KrabiClaw | AI Website Builder for Local Businesses',
+    ogDescription: 'Professional business websites with AI content and Google Business integration.',
+>>>>>>> origin/main
     ogImage: sharedOgImage,
     ogUrl: currentPageUrl,
     ogType: 'website'
@@ -612,6 +639,23 @@ const featuredMenuItems = computed(() => {
     })
   return (featured.length > 0 ? featured : allItems.filter(item => item.available !== false)).slice(0, 6)
 })
+
+// Featured experiences (used when no menu exists)
+const featuredExperiences = computed(() => {
+  const allExperiences = experiencesList.value || []
+  const featured = allExperiences
+    .filter(exp => exp.status === 'active' && exp.featured)
+    .sort((a, b) => {
+      const fa = Number(a.featured_sort_order ?? Infinity)
+      const fb = Number(b.featured_sort_order ?? Infinity)
+      if (fa !== fb) return fa - fb
+      const sa = Number(a.sort_order ?? Infinity)
+      const sb = Number(b.sort_order ?? Infinity)
+      if (sa !== sb) return sa - sb
+      return String(a.title ?? '').localeCompare(String(b.title ?? ''))
+    })
+  return (featured.length > 0 ? featured : allExperiences.filter(exp => exp.status === 'active')).slice(0, 6)
+})
 const defaultCurrency = computed(() => bootstrapConfig.value.default_currency || 'THB')
 
 // Review location filter
@@ -620,7 +664,7 @@ const reviewFilter = ref('all')
 const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
 const featuredReviews = computed(() => googleReviews.value.slice(0, 3))
 
-// Aggregated highlights — mix posts, dishes, review quotes (max 7 tiles)
+// Aggregated highlights — mix posts, dishes/experiences, review quotes (max 7 tiles)
 const highlights = computed(() => {
   const tiles = []
 
@@ -640,17 +684,29 @@ const highlights = computed(() => {
     })
   }
 
-  // Up to 3 featured dishes
-  for (let i = 0; i < Math.min(3, featuredMenuItems.value.length); i++) {
-    const item = featuredMenuItems.value[i]
-    tiles.push({
-      type: 'dish',
-      name: item.name,
-      price: formatMoneyAmount(item.price_amount, defaultCurrency.value, ''),
-      image: item.public_url || null,
-      imageKind: item.kind || 'image',
-      alt: item.name ? `${item.name} dish` : 'Featured dish image'
-    })
+  // Up to 3 featured dishes (or featured experiences if no menu)
+  const featuredItems = hasMenu.value ? featuredMenuItems.value : featuredExperiences.value
+  for (let i = 0; i < Math.min(3, featuredItems.length); i++) {
+    const item = featuredItems[i]
+    if (hasMenu.value) {
+      tiles.push({
+        type: 'dish',
+        name: item.name,
+        price: formatMoneyAmount(item.price_amount, defaultCurrency.value, ''),
+        image: item.public_url || null,
+        imageKind: item.kind || 'image',
+        alt: item.name ? `${item.name} dish` : 'Featured dish image'
+      })
+    } else {
+      tiles.push({
+        type: 'dish',
+        name: item.title,
+        price: item.price || '',
+        image: item.image_url || null,
+        imageKind: 'image',
+        alt: item.title ? `${item.title} experience` : 'Featured experience image'
+      })
+    }
   }
 
   // Up to 2 review quotes

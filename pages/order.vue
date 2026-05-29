@@ -8,7 +8,7 @@
           <h1 class="text-2xl font-bold text-default">Online ordering not available</h1>
           <p class="mt-2 text-muted">We'd love to see you in person.</p>
         </div>
-        <UButton to="/reservations" size="lg" color="primary" class="rounded-full">Reserve a Table</UButton>
+        <UButton :to="orderCopy.ctaRoute" size="lg" color="primary" class="rounded-full">{{ orderCopy.reserveCta }}</UButton>
       </div>
 
       <template v-else>
@@ -64,8 +64,8 @@
           </div>
 
           <p class="mt-16 text-sm text-muted">
-            Prefer to dine in?
-            <NuxtLink to="/reservations" class="font-medium text-default underline-offset-4 hover:underline">Reserve a table →</NuxtLink>
+            Prefer to {{ orderCopy.reservationWord }}?
+            <NuxtLink :to="orderCopy.ctaRoute" class="font-medium text-default underline-offset-4 hover:underline">{{ orderCopy.reserveCta }} →</NuxtLink>
           </p>
         </section>
       </template>
@@ -76,7 +76,8 @@
 <script setup>
 definePageMeta({ layout: false })
 
-const { isPlatform } = useTenantSite()
+const { isPlatform, site } = useTenantSite()
+const orderCopy = getVerticalCopy(site?.vertical)
 const { getField, locations } = useBootstrap()
 
 const allLocations = computed(() => locations.value)

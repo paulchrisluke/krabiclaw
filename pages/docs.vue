@@ -2,7 +2,7 @@
   <div class="container mx-auto px-4 py-16">
     <div class="max-w-4xl mx-auto">
       <h1 class="text-4xl font-bold text-default mb-6">Documentation</h1>
-      <p class="text-lg text-muted mb-12">Learn how to use KrabiClaw to build your restaurant website</p>
+      <p class="text-lg text-muted mb-12">Learn how to use KrabiClaw to build your business website</p>
 
       <div v-if="pending" class="text-center py-12">
         <p class="text-muted">Loading documentation...</p>
@@ -71,7 +71,7 @@ const docs = computed(() => data.value?.docs || [])
 
 useSeoMeta({
   title: 'Documentation | KrabiClaw',
-  description: 'Documentation for KrabiClaw restaurant website builder. Learn how to use all features.',
+  description: 'Documentation for KrabiClaw website builder for local businesses. Learn how to use all features.',
   ogImage: `${siteUrl}/og-image.png`,
   ogUrl: `${siteUrl}/docs`
 })

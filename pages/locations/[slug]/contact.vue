@@ -148,7 +148,7 @@
       <section class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-24 sm:px-6 lg:px-8">
         <h3 class="saya-display-md saya-italic text-default">See you soon.</h3>
         <div class="flex flex-wrap gap-3">
-          <UButton to="/reservations" color="primary" variant="solid" size="xl" class="rounded-full">Reserve a table</UButton>
+          <UButton :to="locationCopy.ctaRoute" color="primary" variant="solid" size="xl" class="rounded-full">{{ locationCopy.reserveCta }}</UButton>
           <a
             v-if="location.phone"
             :href="`tel:${location.phone}`"
@@ -176,6 +176,7 @@ definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
 const { siteId, site } = useTenantSite()
+const locationCopy = getVerticalCopy((site as ApiValue)?.vertical)
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
@@ -234,7 +235,7 @@ const extraNotes = computed(() => getContentField('extra.notes', '') ?? '')
 const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value))
 const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
-const siteName = computed(() => (site as ApiValue)?.name || 'Saya')
+const siteName = computed(() => (site as ApiValue)?.title || 'KrabiClaw')
 
 useSeoMeta({
   title: () => `Plan a visit · ${location.value?.title || slug.value}`,

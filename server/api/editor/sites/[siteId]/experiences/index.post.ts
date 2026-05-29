@@ -36,6 +36,15 @@ export default defineEventHandler(async (event) => {
   const title = String(body.title ?? '').trim()
   if (!title) return jsonResponse({ error: 'title is required' }, { status: 400 })
 
+  // Validate featured and featured_sort_order when explicitly provided
+  if ('featured' in body && typeof body.featured !== 'boolean') {
+    return jsonResponse({ error: 'featured must be a boolean' }, { status: 400 })
+  }
+  if ('featured_sort_order' in body) {
+    const parsed = optionalInteger(body.featured_sort_order)
+    if (parsed === null) return jsonResponse({ error: 'featured_sort_order must be an integer' }, { status: 400 })
+  }
+
   const experience = await createExperience(db, site.organization_id, siteId, {
     title,
     tagline: body.tagline ? String(body.tagline).trim() : null,
@@ -48,6 +57,8 @@ export default defineEventHandler(async (event) => {
     available_note: body.available_note ? String(body.available_note).trim() : null,
     status: (['active', 'inactive', 'sold_out'].includes(String(body.status)) ? String(body.status) : 'active') as 'active' | 'inactive' | 'sold_out',
     sort_order: optionalInteger(body.sort_order) ?? 0,
+    featured: typeof body.featured === 'boolean' ? body.featured : false,
+    featured_sort_order: optionalInteger(body.featured_sort_order) ?? 0,
     location_id: body.location_id ? String(body.location_id) : null,
     seo_title: body.seo_title ? String(body.seo_title).trim() : null,
     seo_description: body.seo_description ? String(body.seo_description).trim() : null,

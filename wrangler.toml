@@ -1,17 +1,33 @@
 name = "kikuzuki-thailand-marketing"
+main = ".output/server/index.mjs"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat_v2"]
-pages_build_output_dir = "dist"
+
+[assets]
+directory = ".output/public"
+
+[triggers]
+# Matches scheduledTasks in nuxt.config.ts
+crons = ["*/5 * * * *", "*/10 * * * *", "0 3 * * *"]
+
+[[routes]]
+pattern = "*.krabiclaw.com/*"
+zone_name = "krabiclaw.com"
+
+[[routes]]
+pattern = "krabiclaw.com/*"
+zone_name = "krabiclaw.com"
 
 [vars]
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
 # Internal cron/API endpoints use CRON_SECRET:
-#   yarn wrangler pages secret put CRON_SECRET
+#   yarn wrangler secret put CRON_SECRET
 
 [[d1_databases]]
 binding = "DB"
 database_name = "krabiclaw-db"
 database_id = "0d0cd133-1914-48b1-b010-8fe574fede0c"
+migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"

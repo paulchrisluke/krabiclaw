@@ -1,0 +1,49 @@
+name: Pottery House Fixture
+
+# Run the canonical regression fixture against any live or preview URL.
+# Required before merging PRs that touch: scripts/, components/saya/,
+# utils/vertical-copy.ts, or pages/
+#
+# Trigger manually after seeding and deploying:
+#   1. Seed: yarn client:import --slug pottery-house-krabi --apply [--remote]
+#   2. Deploy: yarn deploy (if remote)
+#   3. Trigger this workflow with the live URL
+
+on:
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: "Site URL (e.g. https://pottery-house-krabi.krabiclaw.com or http://staging...)"
+        required: true
+      site_id:
+        description: "Site ID (default: site-pottery-house-krabi)"
+        required: false
+        default: site-pottery-house-krabi
+      slug:
+        description: "Client slug (default: pottery-house-krabi)"
+        required: false
+        default: pottery-house-krabi
+
+jobs:
+  fixture:
+    name: Pottery House Krabi regression fixture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Run Pottery House fixture
+        env:
+          SITE_URL: ${{ inputs.site_url }}
+          SITE_ID: ${{ inputs.site_id }}
+          SLUG: ${{ inputs.slug }}
+        run: |
+          node scripts/fixtures/pottery-house-krabi.fixture.mjs \
+            --url "$SITE_URL" \
+            --site-id "$SITE_ID" \
+            --slug "$SLUG"

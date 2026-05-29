@@ -12,11 +12,16 @@
           The Ultimate Platform
         </span>
         <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[1.05] text-default m-0 text-balance">
-          Supercharge Your Restaurant. <br class="hidden sm:inline" />
-          <span class="bg-linear-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">Zero Middlemen.</span>
+<<<<<<< HEAD
+          Supercharge Your Business. <br class="hidden sm:inline" />
+          <span class="bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">Zero Middlemen.</span>
+=======
+          Supercharge Your Business. <br class="hidden sm:inline" />
+          <span class="bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">Zero Middlemen.</span>
+>>>>>>> origin/main
         </h1>
         <p class="text-lg sm:text-xl text-muted leading-relaxed m-0 text-balance">
-          Say goodbye to expensive agencies, 30% delivery commissions, and buggy plugins. KrabiClaw gives your restaurant a high-converting storefront, direct reservations, and automated local SEO in one simple system.
+          Say goodbye to expensive agencies, 30% commissions, and buggy plugins. KrabiClaw gives your business a high-converting storefront, direct bookings, and automated local SEO in one simple system.
         </p>
         <div class="flex flex-wrap items-center justify-center gap-4 mt-2">
           <UButton to="/signup" size="lg" class="font-semibold bg-primary text-inverted rounded-[9px] hover:bg-primary/90 shadow-sm transition-transform hover:-translate-y-0.5">

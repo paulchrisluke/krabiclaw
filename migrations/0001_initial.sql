@@ -1,5 +1,5 @@
 -- KrabiClaw canonical D1 schema. v2 (media assets + domain overhaul).
--- Edit this file directly when the database shape changes.
+-- DO NOT modify this file once applied. Add schema changes as new migrations: wrangler d1 migrations create DB <description>
 
 PRAGMA foreign_keys = ON;
 
@@ -134,6 +134,9 @@ CREATE TABLE IF NOT EXISTS sites (
   plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'enterprise')),
   onboarding_status TEXT DEFAULT 'pending' CHECK (onboarding_status IN ('pending', 'active', 'failed')),
   url_structure TEXT NOT NULL DEFAULT 'location_subdirectories' CHECK (url_structure IN ('location_subdirectories', 'brand_pages')),
+  vertical TEXT NOT NULL DEFAULT 'restaurant' CHECK (vertical IN ('restaurant', 'experience', 'retail', 'wellness', 'service')),
+  content_source TEXT CHECK (content_source IN ('google_maps', 'client_supplied', 'generated')),
+  media_source TEXT CHECK (media_source IN ('client_photos', 'stock', 'mixed')),
   settings TEXT,
   last_published_at TEXT,
   created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -297,6 +300,7 @@ CREATE TABLE IF NOT EXISTS business_locations (
   last_synced_at TEXT,
   description TEXT,
   short_description TEXT,
+  description_provenance TEXT CHECK (description_provenance IN ('google_maps','client_supplied','llm_generated','manual_override')),
   special_hours TEXT,
   price_level TEXT,
   attributes TEXT,
@@ -746,7 +750,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   photo_urls TEXT,                    -- JSON array
   helpful_count INTEGER DEFAULT 0,
   status TEXT DEFAULT 'pending',
-  source TEXT DEFAULT 'direct',
+  source TEXT DEFAULT 'direct' CHECK (source IN ('direct','google','google_maps','llm_generated','manual_override')),
   ip_hash TEXT,
   user_agent TEXT,
   created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -1168,7 +1172,7 @@ CREATE TABLE IF NOT EXISTS location_qa (
   answer_date TEXT,
   is_owner_answer INTEGER NOT NULL DEFAULT 0,
   upvote_count INTEGER NOT NULL DEFAULT 0,
-  source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('gmb','manual')),
+  source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('gmb','google_maps','manual','llm_generated','manual_override')),
   status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('published','hidden')),
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -1354,6 +1358,8 @@ CREATE TABLE IF NOT EXISTS experiences (
   available_note TEXT,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'sold_out')),
   sort_order INTEGER NOT NULL DEFAULT 0,
+  featured BOOLEAN NOT NULL DEFAULT false,
+  featured_sort_order INTEGER NOT NULL DEFAULT 0,
   seo_title TEXT,
   seo_description TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -1439,6 +1445,29 @@ CREATE TABLE IF NOT EXISTS service_addon_purchases (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE
 );
+
+--------------------------------------------------------------------------------
+-- Google Place Snapshots
+-- Raw Place API responses stored at import time for repeatability and audit.
+--------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS google_place_snapshots (
+  id TEXT PRIMARY KEY,
+  site_id TEXT NOT NULL,
+  location_id TEXT,
+  place_id TEXT NOT NULL,
+  source_url TEXT,
+  snapshot_json TEXT NOT NULL,
+  fetched_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_google_place_snapshots_site
+  ON google_place_snapshots(site_id);
+
+CREATE INDEX IF NOT EXISTS idx_google_place_snapshots_place_id
+  ON google_place_snapshots(place_id);
 
 CREATE INDEX IF NOT EXISTS idx_service_addon_purchases_org
   ON service_addon_purchases(organization_id, created_at DESC);
