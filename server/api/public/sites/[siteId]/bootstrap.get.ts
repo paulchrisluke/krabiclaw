@@ -130,11 +130,11 @@ export default defineEventHandler(async (event) => {
   idxLoc = push(
     needsLocationHeroMedia
       ? db.prepare(`
-          SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
+          SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
                  bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
-                 bl.description, bl.last_synced_at,
+                 bl.description, bl.short_description, bl.last_synced_at,
                  ma_img.public_url AS hero_image_public_url,
                  ma_vid.public_url AS hero_video_public_url
           FROM business_locations bl
@@ -144,11 +144,11 @@ export default defineEventHandler(async (event) => {
           ORDER BY bl.is_primary DESC, bl.title ASC
         `).bind(orgId, siteId)
       : db.prepare(`
-          SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
+          SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
                  bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
-                 bl.description, bl.last_synced_at,
+                 bl.description, bl.short_description, bl.last_synced_at,
                  NULL AS hero_image_public_url, NULL AS hero_video_public_url
           FROM business_locations bl
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
@@ -213,7 +213,7 @@ export default defineEventHandler(async (event) => {
     idxLocReviews = push(
       db
         .prepare(
-          `SELECT author_name, rating, content, created_at
+          `SELECT id, author_name, rating, content, created_at
            FROM reviews WHERE location_id = ? AND site_id = ? AND status = 'approved'
            ORDER BY created_at DESC LIMIT 3`,
         )

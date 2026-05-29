@@ -174,6 +174,7 @@
               {{ homeCopy.reserveCta }}
             </UButton>
             <UButton
+              v-if="!hasOrderLinks"
               to="/menu"
               color="neutral"
               variant="outline"

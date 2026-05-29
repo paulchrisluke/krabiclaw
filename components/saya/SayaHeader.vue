@@ -16,7 +16,7 @@
         <!-- Desktop nav -->
         <nav class="hidden items-center gap-1 lg:flex" aria-label="Saya navigation">
           <NuxtLink
-            v-if="locations.length === 1"
+            v-if="locations.length === 1 && hasMenu"
             to="/menu"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
@@ -88,7 +88,7 @@
       >
         <nav class="grid gap-1" aria-label="Saya mobile navigation">
           <NuxtLink
-            v-if="locations.length === 1"
+            v-if="locations.length === 1 && hasMenu"
             to="/menu"
             class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
