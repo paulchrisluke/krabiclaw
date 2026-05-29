@@ -48,8 +48,13 @@
       </div>
       <div class="shrink-0 flex flex-col items-start sm:items-end gap-3">
         <p class="text-3xl font-bold text-highlighted">
-          ${{ (seoAcceleratorPlan.prices[0]?.amount ?? 34900) / 100 }}
-          <span class="text-base font-normal text-muted">/mo</span>
+          <template v-if="seoAcceleratorMonthlyPrice">
+            ${{ seoAcceleratorMonthlyPrice.amount / 100 }}
+            <span class="text-base font-normal text-muted">/mo</span>
+          </template>
+          <template v-else>
+            <span class="text-error">No monthly price configured</span>
+          </template>
         </p>
         <UButton
           size="lg"
@@ -145,6 +150,11 @@ const { plans } = usePlans()
 const MAIN_PLAN_IDS = ['free', 'growth', 'managed']
 const mainPlans = computed(() => (plans.value ?? []).filter(p => MAIN_PLAN_IDS.includes(p.id)))
 const seoAcceleratorPlan = computed(() => (plans.value ?? []).find(p => p.id === 'seo_accelerator') ?? null)
+const seoAcceleratorMonthlyPrice = computed(() => {
+  const plan = seoAcceleratorPlan.value
+  if (!plan) return null
+  return plan.prices.find(p => p.interval === 'month') || null
+})
 const { isAuthenticated } = useAuth()
 const orgSettings = useOrgSettings()
 const upgrading = ref<string | null>(null)

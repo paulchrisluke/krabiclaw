@@ -499,6 +499,7 @@ const mainNavigation = computed(() => [
   ],
   [
     { label: 'Translations', icon: 'i-lucide-languages', to: orgBase.value ? `${orgBase.value}/translations` : '/dashboard' },
+    { label: 'Support', icon: 'i-lucide-headphones', to: orgBase.value ? `${orgBase.value}/support` : '/dashboard' },
   ],
   [
     { label: 'Settings', icon: 'i-lucide-settings', to: orgSettingsBase.value ? `${orgSettingsBase.value}/general` : '/dashboard' },
@@ -533,7 +534,8 @@ const locationNavigation = computed(() => {
 
 const adminTab = computed(() => String(route.query.tab || 'queue'))
 const adminNavigation = computed(() => [[
-  { label: 'Queue',     icon: 'i-lucide-inbox',           to: '/admin?tab=queue',     active: adminTab.value === 'queue' },
+  { label: 'Work Queue', icon: 'i-lucide-list-todo',       to: '/admin?tab=work',      active: adminTab.value === 'work' },
+  { label: 'Add-ons',  icon: 'i-lucide-inbox',           to: '/admin?tab=queue',     active: adminTab.value === 'queue' },
   { label: 'Clients',  icon: 'i-lucide-building-2',       to: '/admin?tab=clients',   active: adminTab.value === 'clients' },
   { label: 'Members',  icon: 'i-lucide-user-plus',        to: '/admin?tab=members',   active: adminTab.value === 'members' },
   { label: 'Analytics',icon: 'i-lucide-bar-chart-2',      to: '/admin?tab=analytics', active: adminTab.value === 'analytics' },

@@ -2,62 +2,15 @@
 
 When an internal API returns errors, nulls, or malformed data, fix the API contract/source of truth first. Do not add frontend fallbacks, guards, or workaround logic unless the API behavior is intentionally nullable and documented.
 
----
-
 ## Stack
-
-- **Nuxt 4** + **Nitro** with `cloudflare-module` preset
-- **D1** (SQLite) via `@atinux/kysely-d1` — single binding: `DB`
-- **Better Auth 1.6+** — Google OAuth + `organization` plugin; `phoneNumber` plugin for WhatsApp OTP
-- **Stripe** — subscriptions, entitlements
-- **Cloudflare Workers** — serverless runtime
-- **Package manager: yarn only** — never npm or pnpm
-- Commands: `yarn dev` (local, port 3000), `yarn build`, `yarn deploy`
-
----
 
 ## Critical Wrangler Rules
 
-- Always use `nodejs_compat_v2` (not `nodejs_compat`) in `wrangler.toml` — Better Auth 1.6+ requires it
-- `yarn dev` runs `nuxt dev` — secrets are read from `.env`. `.dev.vars` is only used by `wrangler dev` (not the default dev command here)
-- Never rely on `process.env` alone in server code — always merge with `event.context.cloudflare?.env` via `cloudflareEnv()` in `server/utils/api-response.ts`
-- Schema migrations: `yarn schema:local` (local) / `yarn schema:remote` (remote) — run automatically on `yarn deploy`
-- Deploys require patching the generated Nitro/Cloudflare process shim — always use `yarn deploy`, never `wrangler deploy` directly
-- Secrets: managed via `wrangler secret put <KEY>` or `wrangler secret bulk <file.json>` — never `wrangler pages secret`
-- Wildcard subdomains (`*.krabiclaw.com`) are handled automatically via Worker route — no per-tenant DNS setup needed
-- New tenants get `<slug>.krabiclaw.com` for free; custom domains use Cloudflare for SaaS (fallback origin: `customers.krabiclaw.com`)
-
----
-
 ## Auth
-
-- Single catch-all handler: `server/api/auth/[...].ts`
-- Auth factory: `server/utils/auth.ts` — `createAuth(env: CloudflareEnv)` — takes full CF env
-- WeakMap cache keyed on D1 binding — safe for Worker lifecycle
-- Client: `lib/auth-client.ts` — `authClient` is auto-imported via Nuxt plugin
-- Platform admin: `user.role = 'admin'`; org/site access: Better Auth `member.role`
-- Admin emails: `PLATFORM_ADMIN_EMAILS` env var
 
 ### Auth/App Naming Boundary
 
-- Better Auth physical columns are vendor-owned and must not be renamed (`userId`, `organizationId`, etc.)
-- App-owned tables use snake_case — do not introduce new camelCase app columns
-- Standard membership access: `sites.organization_id = member.organizationId` and `member.userId = session.user.id`
-- Remove unnecessary joins through `organization` when membership alone proves access
-
----
-
 ## ChowBot Ownership Boundary
-
-- ChowBot owns AI conversations, messages, tool calls, media context, and channel state in D1
-- `chowbot_conversations`, `chowbot_messages`, `chowbot_channel_state` are canonical — do not reintroduce localStorage or channel-specific shadow history
-- Dashboard and WhatsApp are clients of the same ChowBot backend — route owner intent through `runChowBot(...)`
-- WhatsApp webhooks are transport only: verify Meta, identify sender, select site, dedupe message IDs, download/persist media, call ChowBot, send reply
-- WhatsApp must not own product workflows (menu import, post creation, publish, delete, media decisions) — those belong in ChowBot tools
-- Tool calls/results must be stored on ChowBot assistant messages so dashboard and WhatsApp see the same conversation truth
-- Do not hide ChowBot API failures by fabricating conversations or empty histories
-
----
 
 ## Database Schema Workflow
 
@@ -77,8 +30,10 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 ## Multi-Tenancy
 
-- Organizations map 1:1 with restaurant owners (Better Auth `organization` plugin)
+- Organizations map 1:1 with restaurant brands/workspaces (Better Auth `organization` plugin)
 - One site per org — enforced by unique index on `sites(organization_id)`
+- Multiple physical locations live under `business_locations` (not separate orgs)
+- Dashboard route shape: `/dashboard/{orgSlug}` (restaurant workspace), `/dashboard/{orgSlug}/{locationSlug}` (location workspace), `/dashboard/{orgSlug}/~/settings/*` (org settings), `/dashboard/account/settings` (personal)
 - Tenant resolution: `server/middleware/tenant-resolution.ts`
   - `localhost` / `krabiclaw.com` = platform routes
   - `*.krabiclaw.com` or custom domains = tenant sites
@@ -111,10 +66,52 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 ---
 
+## Plan System
+
+- Plans: `free` (Starter), `growth` ($49/mo), `managed` ($149/mo), `seo_accelerator` ($349/mo)
+- Stripe is the source of truth for plan names, prices, and `marketing_features` (feature bullets)
+- `server/utils/billing.ts` → `getPlanEntitlements(plan)` defines what each plan unlocks in D1
+- Entitlements stored per-org in `organization_entitlements` table, checked at API level
+- Key entitlement keys: `custom_domains`, `google_business`, `translation`, `translation_languages`, `ai_credits`, `managed_service`, `seo_accelerator`
+- `managed_service = true` on Managed and SEO Accelerator — gates Facebook sync (auth/publish/sync endpoints)
+- `plans.get.ts` — only Starter has a static definition; all paid plans come from Stripe exclusively. Returns 503 if `STRIPE_SECRET_KEY` not set.
+- `PLAN_CTA` map in `plans.get.ts` holds CTA labels/hrefs (app config, not Stripe data)
+- Seeder: `node scripts/seed-stripe.mjs` — idempotent, upserts products and updates `marketing_features`
+
+---
+
+## Managed Service Queue
+
+- `work_requests` table: type, title, description, status, priority, source (dashboard/whatsapp/chowbot/admin), notes, assigned_to
+- `POST /api/dashboard/work-requests` — restaurant owners submit requests
+- `GET /api/admin/work-requests` + `PATCH /api/admin/work-requests/[id]` — admin manages queue
+- ChowBot has `create_work_request` tool — routes managed service intents to Paul & Julia instead of handling autonomously
+- Admin Work Queue tab shows all requests with type icons, priority badges, inline status dropdown
+- Dashboard Support page (`/dashboard/[orgSlug]/support`) — free plan sees upsell, paid plans see request form + history
+
+---
+
+## Admin Workspace
+
+- `/admin` route — gated by `middleware/admin.ts` which calls `GET /api/auth/get-session` using `useRequestFetch()` to forward cookies during SSR
+- Access: `user.role = 'admin'` in DB, AND checked server-side via `isPlatformOwner()` against `PLATFORM_OWNER_EMAILS` env var
+- Admin navigation defined in `adminNavigation` computed in `layouts/dashboard.vue` — uses `i-lucide-*` icons and `?tab=` query params with explicit `active` computed
+- Tabs: Work Queue, Add-ons (service_addon_purchases), Clients, Members, Analytics, Domains, Users, Content, Blog
+- Post-login routing: `GET /api/post-login` — `isPlatformOwner` → `/admin`, else → `/dashboard/[orgSlug]`
+- Dev login: `GET /api/dev/login` → redirects to `/api/post-login`
+
+---
+
 ## Design System Enforcement
 
-- Never bypass Nuxt UI layout components (`UCard`, `UPage`, `UPageHeader`) to write custom Tailwind `div` wrappers, even when matching external design references. 
-- If a specific visual layout (like a flat Vercel card) is needed, you must use the Nuxt UI component and override its specific tokens via the `:ui` prop (e.g., `<UCard :ui="{ shadow: '', rounded: 'rounded-xl', body: { padding: 'p-0' } }">`). 
+
+- Never bypass Nuxt UI layout components (`UCard`, `UPage`, `UPageBody`) to write custom Tailwind `div` wrappers
+- UCard `:ui` prop only accepts: `root`, `header`, `title`, `description`, `body`, `footer` — use `class` on the element for all other styling (border, background, rounded, shadow)
+- Dashboard pages do NOT use `UPageHeader` — content goes directly in `UPageBody`
+- Admin nav uses `i-lucide-*` icons; keep consistent with the rest of the dashboard nav
+- # Do not introduce custom `border` or `bg` classes that break the global theme inheritance
+- Never bypass Nuxt UI layout components (`UCard`, `UPage`, `UPageHeader`) to write custom Tailwind `div` wrappers, even when matching external design references.
+- If a specific visual layout (like a flat Vercel card) is needed, you must use the Nuxt UI component and override its specific tokens via the `:ui` prop (e.g., `<UCard :ui="{ shadow: '', rounded: 'rounded-xl', body: { padding: 'p-0' } }">`).
 - Do not introduce custom `border` or `bg` classes that break the global theme inheritance.
 
 ---
@@ -161,6 +158,7 @@ notes: |
 **Never** manually seed, patch D1, invent client data, use stock images, or claim deployment success for a client site. A site is not complete until `client:verify` passes and `client-handoff.md` is generated.
 
 The required pipeline is:
+
 1. `client:import --dry-run` — fetch real data, scan real images, generate reviewable manifests
 2. Human review of `client-imports/<slug>/`
 3. `client:import --approve` — sign the manifest hash
@@ -192,3 +190,5 @@ yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-ho
 ### Custom Domains
 
 Subdomains (`<slug>.krabiclaw.com`) are provisioned automatically. Customer-owned domains require a separate Cloudflare for SaaS custom hostname — this is not yet automated in the onboarding pipeline. Do not attempt to configure custom hostnames manually in `wrangler.toml` or via the API; document the requirement and escalate.
+
+>

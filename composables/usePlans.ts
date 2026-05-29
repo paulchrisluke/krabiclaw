@@ -3,7 +3,7 @@ import type { Plan } from '~/server/api/billing/plans.get'
 export type { Plan, PlanPrice, PlanLimits } from '~/server/api/billing/plans.get'
 
 export const usePlans = () => {
-  const { data, status } = useFetch<Plan[]>('/api/billing/plans', {
+  const { data, status, error } = useFetch<Plan[]>('/api/billing/plans', {
     key: 'billing-plans',
   })
 
@@ -35,5 +35,5 @@ export const usePlans = () => {
     return cents !== null ? formatPrice(cents) : '$0'
   }
 
-  return { plans, freePlan, growthPlan, managedPlan, seoAcceleratorPlan, monthlyPrice, annualPrice, formatPrice, displayPrice, status }
+  return { plans, freePlan, growthPlan, managedPlan, seoAcceleratorPlan, monthlyPrice, annualPrice, formatPrice, displayPrice, status, error }
 }

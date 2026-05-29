@@ -1476,3 +1476,36 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_service_addon_purchases_stripe_payment_int
   ON service_addon_purchases(stripe_payment_intent_id)
   WHERE stripe_payment_intent_id IS NOT NULL;
 
+--------------------------------------------------------------------------------
+-- Work Requests (managed service task queue)
+--------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS work_requests (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT,
+  type TEXT NOT NULL CHECK (type IN (
+    'content_update', 'menu_update', 'translation', 'seo', 'google_business',
+    'seasonal', 'photo_update', 'social_media', 'technical', 'other'
+  )),
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'done', 'cancelled')),
+  priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+  source TEXT NOT NULL DEFAULT 'dashboard' CHECK (source IN ('dashboard', 'whatsapp', 'chowbot', 'admin')),
+  notes TEXT,
+  assigned_to TEXT,
+  completed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL,
+  FOREIGN KEY (assigned_to) REFERENCES user(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_work_requests_org
+  ON work_requests(organization_id, status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_work_requests_status
+  ON work_requests(status, priority, created_at DESC);
+

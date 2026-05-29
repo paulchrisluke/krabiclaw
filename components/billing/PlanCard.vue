@@ -117,28 +117,17 @@ const isHighlighted = computed(() => props.highlighted ?? props.plan.highlighted
 
 const currentPrice = computed(() => displayPrice(props.plan, props.annual ?? false))
 
-const billingPeriodLabel = computed(() => {
-  const annual = props.annual ?? false
-  if (annual && props.plan.id === 'enterprise') return '/year'
-  if (annual && props.plan.id !== 'enterprise') return '/location/year'
-  if (!annual && props.plan.id === 'enterprise') return '/month'
-  return '/location/month'
-})
+const billingPeriodLabel = computed(() => (props.annual ?? false) ? '/year' : '/mo')
 
 const savingsNote = computed(() => {
   if (!props.annual) return null
   const monthly = monthlyPrice(props.plan)
   const annual = annualPrice(props.plan)
   if (!monthly || !annual) return null
-  const annualAsMonthly = Math.round(annual / 12)
-  if (props.plan.id === 'pro') {
-    const savedPerYear = monthly * 12 - annual
-    const basePrice = `≈ $${(annualAsMonthly / 100).toFixed(2)}/month`
-    if (savedPerYear > 0) {
-      return `${basePrice} — save $${(savedPerYear / 100).toFixed(0)}/year per location`
-    }
-    return basePrice
+  const savedPerYear = monthly * 12 - annual
+  if (savedPerYear > 0) {
+    return `Save $${(savedPerYear / 100).toFixed(0)}/year`
   }
-  return '2 months free'
+  return null
 })
 </script>

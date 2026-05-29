@@ -2,7 +2,7 @@
   <div class="relative overflow-hidden py-16 sm:py-24">
     <!-- Mesh Background Accents -->
     <div class="absolute top-0 left-1/4 -z-10 w-96 h-96 bg-primary/10 rounded-full blur-3xl opacity-60"></div>
-    <div class="absolute bottom-1/4 right-1/4 -z-10 w-[450px] h-[450px] bg-(--kc-teal)/10 rounded-full blur-3xl opacity-50"></div>
+    <div class="absolute bottom-1/4 right-1/4 -z-10 w-112.5 h-112.5 bg-(--kc-teal)/10 rounded-full blur-3xl opacity-50"></div>
 
     <div class="container mx-auto px-4 max-w-7xl">
       <!-- Hero Section -->
@@ -36,7 +36,7 @@
           class="group relative rounded-[22px] p-8 border border-default bg-elevated/40 backdrop-blur-md hover:bg-elevated/70 hover:border-primary/40 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 flex flex-col justify-between overflow-hidden"
         >
           <!-- Subtle Glow Effect on Hover -->
-          <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full group-hover:from-primary/10 transition-all duration-300"></div>
+          <div class="absolute top-0 right-0 w-24 h-24 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full group-hover:from-primary/10 transition-all duration-300"></div>
 
           <div>
             <!-- Icon Wrapper -->
@@ -142,7 +142,7 @@
                   <span class="text-(--kc-teal) font-semibold">Page 1 (#2)</span>
                 </div>
                 <div class="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                  <div class="h-full bg-gradient-to-r from-primary to-(--kc-teal) w-4/5 rounded-full"></div>
+                  <div class="h-full bg-linear-to-r from-primary to-(--kc-teal) w-4/5 rounded-full"></div>
                 </div>
               </div>
             </div>
@@ -200,7 +200,7 @@ const currentPageUrl = useSeoUrl('/features')
 
 useSeoMeta({
   title: 'Platform Features | KrabiClaw',
-  description: 'Explore KrabiClaw\'s comprehensive platform features: gorgeous responsive templates, Google Business Profile sync, commission-free reservations and ordering, automated SEO, and powerful dashboard analytics.',
+  description: 'KrabiClaw features: AI-built restaurant websites, reservations with notifications, Google Business sync, multi-language support, delivery link integration, and optional WhatsApp integration for ChowBot conversations.',
   ogImage: sharedOgImage,
   ogUrl: currentPageUrl,
   ogType: 'website',
@@ -261,15 +261,15 @@ const detailedFeatures = [
   },
   {
     icon: 'i-heroicons-shopping-bag',
-    title: 'Commission-Free Ordering',
-    description: 'Drive pickup and delivery sales directly on your site. Keep all your profits by bypassing middleman aggregators.',
+    title: 'Delivery & Order Links',
+    description: 'Connect your Grab, Uber Eats, and FoodPanda pages so guests can order from the platform they already use — without leaving your site.',
     badgeColor: 'bg-emerald-600',
     docLink: '/docs/launch-your-restaurant-website',
     specs: [
-      'Direct Stripe payment integration with 100% payouts',
-      'Flexible prep times & operating slot controls',
-      'Custom delivery areas & variable pricing radii',
-      'Sleek modern checkout interface'
+      'Grab, Uber Eats, and FoodPanda link integration',
+      'Order links visible on menu and location pages',
+      'One-tap ordering for mobile guests',
+      'No setup fees or platform lock-in'
     ]
   },
   {
@@ -298,11 +298,11 @@ const faqItems = [
   },
   {
     q: 'How does the Google Business Profile sync work?',
-    a: 'Our integration matches your store location. When you update your restaurant hours, photos, or menu in the KrabiClaw dashboard, it syncs instantly to Google Search and Maps.'
+    a: 'Connect your Google Business account and KrabiClaw pulls in your verified hours, photos, reviews, and business details automatically. On Managed plans, we keep your Google Business profile up to date for you.'
   },
   {
     q: 'Is there a contract or setup fee?',
-    a: 'No contracts, no setup fees. You can get started on our free tier, and upgrade to paid per-location plans on a month-to-month basis. Cancel anytime.'
+    a: 'No contracts, no setup fees. Start free, and upgrade to Growth ($49/mo) or Managed ($149/mo) month-to-month. Cancel anytime.'
   }
 ]
 </script>

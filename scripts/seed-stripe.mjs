@@ -57,15 +57,25 @@ async function archiveOldPlans() {
   }
 }
 
-// --- Create recurring subscription plans ---
+// --- Create or update recurring subscription plans ---
 async function createSubscriptionPlan({ name, description, planId, amountCents, highlighted, badge, features }) {
-  console.log(`\nCreating plan: ${name} ($${amountCents / 100}/mo)`)
+  console.log(`\nUpserting plan: ${name} ($${amountCents / 100}/mo)`)
 
-  // Check if already exists
   const existing = await stripe.products.list({ active: true, limit: 100 })
   const match = existing.data.find(p => p.metadata?.plan_id === planId)
+
   if (match) {
-    console.log(`  Already exists: ${match.id} — skipping`)
+    // Update description and marketing_features on existing product
+    await stripe.products.update(match.id, {
+      description,
+      marketing_features: features.map(f => ({ name: f })),
+      metadata: {
+        plan_id: planId,
+        highlighted: highlighted ? 'true' : 'false',
+        ...(badge ? { badge } : {}),
+      },
+    })
+    console.log(`  Updated: ${match.id}`)
     return match
   }
 
@@ -77,7 +87,7 @@ async function createSubscriptionPlan({ name, description, planId, amountCents, 
       highlighted: highlighted ? 'true' : 'false',
       ...(badge ? { badge } : {}),
     },
-    marketing_features: features.map(name => ({ name })),
+    marketing_features: features.map(f => ({ name: f })),
   })
 
   await stripe.prices.create({
@@ -87,7 +97,7 @@ async function createSubscriptionPlan({ name, description, planId, amountCents, 
     recurring: { interval: 'month' },
   })
 
-  console.log(`  Created product: ${product.id}`)
+  console.log(`  Created: ${product.id}`)
   return product
 }
 
@@ -148,49 +158,51 @@ async function main() {
   // Recurring plans
   await createSubscriptionPlan({
     name: 'Growth',
-    description: 'We handle translations & updates — you focus on cooking.',
+    description: 'Your site, your domain — we handle updates so you can focus on the food.',
     planId: 'growth',
     amountCents: 4900,
     highlighted: false,
     features: [
-      'One language translation (EN, ZH, or DE)',
-      'AI-assisted menu updates via WhatsApp',
-      'Monthly traffic & performance snapshot',
+      'AI-built site live in minutes',
+      'Your own domain (yourrestaurant.com)',
+      'WhatsApp menu & hours updates — we handle it',
+      'Reservations, experiences & delivery links',
+      'Booking notifications via WhatsApp or email',
+      '1 language translation by our team',
       'Google Business profile basics',
-      '2,000 AI credits / month',
     ],
   })
 
   await createSubscriptionPlan({
     name: 'Managed',
-    description: 'Paul & Julia run your restaurant online — send a voice note, we handle the rest.',
+    description: 'Send us a WhatsApp. We run your restaurant online — no dashboard login needed.',
     planId: 'managed',
     amountCents: 14900,
     highlighted: true,
     badge: 'Best Value',
     features: [
       'Everything in Growth, plus:',
+      'We manage all content — no login needed',
       'Unlimited language translations',
-      'Menu, posts & seasonal content managed for you',
+      'Facebook auto-sync for posts and content',
       'Full Google Business profile management',
-      'Monthly marketing report',
       'Priority WhatsApp support from Paul & Julia',
     ],
   })
 
   await createSubscriptionPlan({
     name: 'SEO Accelerator',
-    description: "Julia's 1M impressions/day playbook applied to your restaurant.",
+    description: "Active SEO strategy from Julia — get found by tourists and recommended by AI.",
     planId: 'seo_accelerator',
     amountCents: 34900,
     highlighted: false,
     features: [
       'Everything in Managed, plus:',
-      'Local & travel keyword targeting',
+      'Active keyword strategy for local & travel searches',
+      'Monthly content cadence — blog, photos, seasonal',
       'Google Maps authority building',
-      'Monthly content cadence (blog, photos, posts)',
-      'Competitive analysis & reporting',
-      'The same playbook behind tiffycooks.com — 1M daily impressions',
+      'Get recommended by ChatGPT, Claude & Perplexity',
+      "Julia's playbook — tiffycooks.com 1M+ daily impressions",
     ],
   })
 
