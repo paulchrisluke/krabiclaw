@@ -95,6 +95,7 @@ interface Props {
       city?: string
       public_url?: string
       kind?: string
+      hero_video_thumbnail_url?: string
     }>
     heading?: string
     isAuthenticated?: boolean

@@ -1,5 +1,5 @@
 <template>
-  <UCard :ui="{ root: 'rounded-lg', body: { padding: 'p-0' } }" class="border-dashed border-default bg-muted/50">
+  <UCard :ui="{ root: 'rounded-lg' }" class="border-dashed border-default bg-muted/50">
     <div class="p-6">
       <div class="flex items-start gap-3">
         <UIcon name="i-heroicons-exclamation-triangle" class="size-5 text-muted mt-0.5" />

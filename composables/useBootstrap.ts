@@ -269,11 +269,11 @@ export const useBootstrap = () => {
     for (const row of rows) {
       const section = (row.field && row.field.split('.')[0]) || row.field || 'unknown'
       if (!groups[section]) {
-        groups[section] = { field: section, content: null, component: row.component || null } as any
+        groups[section] = { field: section, content: null, component: row.component || null } as ContentRow & { component?: string | null }
       }
       // Merge keys from row into the group if not already set
       for (const key of Object.keys(row)) {
-        if (groups[section][key] == null) groups[section][key] = (row as any)[key]
+        if (groups[section][key] == null) groups[section][key] = row[key as keyof ContentRow]
       }
       // Prefer any explicit component value when present
       if (row.component) groups[section].component = row.component
@@ -282,7 +282,7 @@ export const useBootstrap = () => {
     return Object.keys(groups).map((section, index) => ({
       ...groups[section],
       _uid: `${section}::${index}`,
-      component: groups[section].component || null,
+      component: groups[section]?.component || null,
     }))
   });
 

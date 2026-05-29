@@ -77,7 +77,7 @@ export default defineEventHandler(async (event) => {
   const cached = await env.SITE_CACHE.get(cacheKey, 'json');
   let site: { id: string; organization_id: string; default_currency: string | null } | null = null;
 
-  if (cached && typeof cached === 'object' && 'id' in cached && 'default_currency' in cached && typeof cached.id === 'string' && (typeof cached.default_currency === 'string' || cached.default_currency === null) && typeof cached.organization_id === 'string') {
+  if (cached && typeof cached === 'object' && 'id' in cached && 'default_currency' in cached && 'organization_id' in cached && typeof cached.id === 'string' && (typeof cached.default_currency === 'string' || cached.default_currency === null) && typeof cached.organization_id === 'string') {
     site = cached as { id: string; organization_id: string; default_currency: string | null };
   } else {
     // Cache miss — query D1 and write back to KV
