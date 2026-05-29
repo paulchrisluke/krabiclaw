@@ -2717,7 +2717,7 @@ async function executeTool(
 
     case 'create_work_request': {
       const type = toSqlText(input.type)
-      const title = toSqlText(input.title)
+      let title = toSqlText(input.title)
       const description = toSqlText(input.description) ?? null
       const priority = toSqlText(input.priority) ?? 'normal'
 
@@ -2725,8 +2725,16 @@ async function executeTool(
       const validPriorities = ['low', 'normal', 'high', 'urgent']
 
       if (!type || !validTypes.includes(type)) return { error: `type must be one of: ${validTypes.join(', ')}` }
+      title = title?.trim()
       if (!title) return { error: 'title is required' }
+      if (title.length > 120) return { error: 'title must be at most 120 characters' }
       if (!validPriorities.includes(priority)) return { error: 'priority must be low, normal, high, or urgent' }
+
+      // Check org entitlement before insert
+      const entitlementsRow = await db.prepare('SELECT entitlements FROM organization WHERE id = ?').bind(orgId).first<{ entitlements: string }>()
+      let entitlements: any = {}
+      try { entitlements = entitlementsRow?.entitlements ? JSON.parse(entitlementsRow.entitlements) : {} } catch {}
+      if (!entitlements.work_requests) return { error: 'Work requests require a Growth plan or above.' }
 
       const id = crypto.randomUUID()
       const now = new Date().toISOString()

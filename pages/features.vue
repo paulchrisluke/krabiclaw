@@ -2,7 +2,7 @@
   <div class="relative overflow-hidden py-16 sm:py-24">
     <!-- Mesh Background Accents -->
     <div class="absolute top-0 left-1/4 -z-10 w-96 h-96 bg-primary/10 rounded-full blur-3xl opacity-60"></div>
-    <div class="absolute bottom-1/4 right-1/4 -z-10 w-[450px] h-[450px] bg-(--kc-teal)/10 rounded-full blur-3xl opacity-50"></div>
+    <div class="absolute bottom-1/4 right-1/4 -z-10 w-112.5 h-112.5 bg-(--kc-teal)/10 rounded-full blur-3xl opacity-50"></div>
 
     <div class="container mx-auto px-4 max-w-7xl">
       <!-- Hero Section -->
@@ -13,7 +13,7 @@
         </span>
         <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[1.05] text-default m-0 text-balance">
           Supercharge Your Restaurant. <br class="hidden sm:inline" />
-          <span class="bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">Zero Middlemen.</span>
+          <span class="bg-linear-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">Zero Middlemen.</span>
         </h1>
         <p class="text-lg sm:text-xl text-muted leading-relaxed m-0 text-balance">
           Say goodbye to expensive agencies, 30% delivery commissions, and buggy plugins. KrabiClaw gives your restaurant a high-converting storefront, direct reservations, and automated local SEO in one simple system.
@@ -36,7 +36,7 @@
           class="group relative rounded-[22px] p-8 border border-default bg-elevated/40 backdrop-blur-md hover:bg-elevated/70 hover:border-primary/40 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 flex flex-col justify-between overflow-hidden"
         >
           <!-- Subtle Glow Effect on Hover -->
-          <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full group-hover:from-primary/10 transition-all duration-300"></div>
+          <div class="absolute top-0 right-0 w-24 h-24 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full group-hover:from-primary/10 transition-all duration-300"></div>
 
           <div>
             <!-- Icon Wrapper -->
@@ -142,7 +142,7 @@
                   <span class="text-(--kc-teal) font-semibold">Page 1 (#2)</span>
                 </div>
                 <div class="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                  <div class="h-full bg-gradient-to-r from-primary to-(--kc-teal) w-4/5 rounded-full"></div>
+                  <div class="h-full bg-linear-to-r from-primary to-(--kc-teal) w-4/5 rounded-full"></div>
                 </div>
               </div>
             </div>
@@ -200,7 +200,7 @@ const currentPageUrl = useSeoUrl('/features')
 
 useSeoMeta({
   title: 'Platform Features | KrabiClaw',
-  description: 'KrabiClaw features: AI-built restaurant websites, WhatsApp menu updates, reservations with notifications, Google Business sync, multi-language support, and delivery link integration.',
+  description: 'KrabiClaw features: AI-built restaurant websites, reservations with notifications, Google Business sync, multi-language support, delivery link integration, and optional WhatsApp integration for ChowBot conversations.',
   ogImage: sharedOgImage,
   ogUrl: currentPageUrl,
   ogType: 'website',

@@ -74,20 +74,35 @@ function parseOptionalInt(value?: string): number | undefined {
 }
 
 function parseLimits(metadata: Record<string, string>): Partial<PlanLimits> {
-  const loc = metadata.max_locations
-  const sit = metadata.max_sites
-  const credits = metadata.ai_credits
-  return {
-    locations: loc === 'unlimited' ? 'unlimited' : parseOptionalInt(loc),
-    sites: sit === 'unlimited' ? 'unlimited' : parseOptionalInt(sit),
-    aiCredits: credits === 'unlimited' || credits === '-1' ? 'unlimited' : parseOptionalInt(credits),
-    customDomain: metadata.custom_domain === 'true' || metadata.custom_domains === 'true',
-    googleBusiness: metadata.google_business === 'true',
-    advancedSeo: metadata.advanced_seo === 'true',
-    whiteLabel: metadata.white_label === 'true',
-    apiAccess: metadata.api_access === 'true',
-    support: metadata.support,
+  const result: Partial<PlanLimits> = {}
+  if ('max_locations' in metadata) {
+    result.locations = metadata.max_locations === 'unlimited' ? 'unlimited' : parseOptionalInt(metadata.max_locations)
   }
+  if ('max_sites' in metadata) {
+    result.sites = metadata.max_sites === 'unlimited' ? 'unlimited' : parseOptionalInt(metadata.max_sites)
+  }
+  if ('ai_credits' in metadata) {
+    result.aiCredits = metadata.ai_credits === 'unlimited' || metadata.ai_credits === '-1' ? 'unlimited' : parseOptionalInt(metadata.ai_credits)
+  }
+  if ('custom_domain' in metadata || 'custom_domains' in metadata) {
+    result.customDomain = metadata.custom_domain === 'true' || metadata.custom_domains === 'true'
+  }
+  if ('google_business' in metadata) {
+    result.googleBusiness = metadata.google_business === 'true'
+  }
+  if ('advanced_seo' in metadata) {
+    result.advancedSeo = metadata.advanced_seo === 'true'
+  }
+  if ('white_label' in metadata) {
+    result.whiteLabel = metadata.white_label === 'true'
+  }
+  if ('api_access' in metadata) {
+    result.apiAccess = metadata.api_access === 'true'
+  }
+  if ('support' in metadata) {
+    result.support = metadata.support
+  }
+  return result
 }
 
 function isMarketingFeatureArray(value: ApiValue): value is MarketingFeature[] {
@@ -98,11 +113,18 @@ function isMarketingFeatureArray(value: ApiValue): value is MarketingFeature[] {
 async function fetchStripeProducts(env: Record<string, string | undefined>): Promise<Plan[]> {
   const stripe = new Stripe(env.STRIPE_SECRET_KEY!)
 
-  const products = await stripe.products.list({ active: true, expand: ['data.default_price'] })
+  // Paginate all products
+  let products: Stripe.Product[] = []
+  let prodStartingAfter: string | undefined
+  do {
+    const page = await stripe.products.list({ active: true, limit: 100, expand: ['data.default_price'], ...(prodStartingAfter ? { starting_after: prodStartingAfter } : {}) })
+    products = products.concat(page.data)
+    prodStartingAfter = page.has_more && page.data.length > 0 ? page.data[page.data.length - 1].id : undefined
+  } while (prodStartingAfter)
 
+  // Paginate all prices
   const priceLookup: Record<string, PlanPrice[]> = {}
   let startingAfter: string | undefined
-
   while (true) {
     const prices = await stripe.prices.list({ active: true, limit: 100, ...(startingAfter ? { starting_after: startingAfter } : {}) })
     for (const price of prices.data) {
@@ -119,7 +141,7 @@ async function fetchStripeProducts(env: Record<string, string | undefined>): Pro
 
   const plans: Plan[] = []
 
-  for (const product of products.data) {
+  for (const product of products) {
     const meta = (product.metadata ?? {}) as Record<string, string>
     const planId = meta.plan_id
     if (!planId || planId === 'free') continue

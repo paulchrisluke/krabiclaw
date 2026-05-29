@@ -23,7 +23,8 @@
     "seed:local": "yarn wrangler d1 execute DB --local --file seeds/demo.sql",
     "seed:remote": "node scripts/seed-remote-guard.mjs",
     "secret:cron": "yarn wrangler pages secret put CRON_SECRET",
-    "stripe:listen": "stripe listen --forward-to localhost:3000/api/billing/webhook"
+    "stripe:listen": "stripe listen --forward-to localhost:3000/api/billing/webhook",
+    "benchmark": "node scripts/benchmark-bootstrap.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260503.1",

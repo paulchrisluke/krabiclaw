@@ -193,8 +193,8 @@ interface WorkRequest {
   notes: string | null; created_at: string
 }
 
-const { data, refresh } = await useFetch<{ requests: WorkRequest[] }>('/api/dashboard/work-requests')
-const requests = computed(() => data.value?.requests ?? [])
+const { data, error, pending, refresh } = await useFetch<{ requests: WorkRequest[] }>('/api/dashboard/work-requests')
+const requests = computed(() => data.value?.requests)
 
 async function submitRequest() {
   if (!form.title.trim()) { submitError.value = 'Please enter a summary.'; return }

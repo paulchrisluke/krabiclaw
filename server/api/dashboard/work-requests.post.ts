@@ -1,5 +1,5 @@
 // POST /api/dashboard/work-requests — managed client submits a work request
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 
 type WorkRequestType = 'content_update' | 'menu_update' | 'translation' | 'seo' | 'google_business' | 'seasonal' | 'photo_update' | 'social_media' | 'technical' | 'other'
@@ -11,8 +11,10 @@ const VALID_PRIORITIES: Priority[] = ['low', 'normal', 'high', 'urgent']
 export default defineEventHandler(async (event) => {
   const { db, organization, restaurant } = await getDashboardContext(event, { requireRestaurant: false })
 
-  const plan = restaurant?.plan ?? 'free'
-  if (plan === 'free') {
+
+  // Canonical entitlement check
+  const orgEntitlements = organization?.entitlements ?? {}
+  if (!orgEntitlements.work_requests) {
     return jsonResponse({ error: 'Work requests require a Growth plan or above.' }, { status: 403 })
   }
 

@@ -8,18 +8,40 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
+
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   if (!isPlatformOwner(session.user.email, env)) return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
+  // Require DB user role 'admin'
+  const userRow = await db.prepare('SELECT role FROM user WHERE lower(email) = lower(?) LIMIT 1').bind(session.user.email).first<{ role: string }>()
+  if (!userRow || userRow.role !== 'admin') return jsonResponse({ error: 'Admin role required' }, { status: 403 })
 
   const id = getRouterParam(event, 'id')
   if (!id) return jsonResponse({ error: 'ID required' }, { status: 400 })
 
-  const body = await readBody(event).catch(() => ({})) as {
+  let body: {
     status?: string
     priority?: string
     notes?: string
     assigned_to?: string | null
+  }
+  try {
+    body = await readBody(event)
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  if (!body || (typeof body !== 'object') || (!('status' in body) && !('priority' in body) && !('notes' in body) && !('assigned_to' in body))) {
+    return jsonResponse({ error: 'At least one updatable field required' }, { status: 400 })
+  }
+
+  const VALID_STATUSES = ['pending', 'in_progress', 'done', 'cancelled']
+  const VALID_PRIORITIES = ['low', 'normal', 'high', 'urgent']
+  if ('status' in body && body.status && !VALID_STATUSES.includes(body.status)) {
+    return jsonResponse({ error: 'Invalid status' }, { status: 400 })
+  }
+  if ('priority' in body && body.priority && !VALID_PRIORITIES.includes(body.priority)) {
+    return jsonResponse({ error: 'Invalid priority' }, { status: 400 })
   }
 
   const now = new Date().toISOString()

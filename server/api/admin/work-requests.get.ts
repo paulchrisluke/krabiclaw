@@ -8,9 +8,14 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
+
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   if (!isPlatformOwner(session.user.email, env)) return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
+
+  // Require DB user role 'admin'
+  const userRow = await db.prepare('SELECT role FROM user WHERE lower(email) = lower(?) LIMIT 1').bind(session.user.email).first<{ role: string }>()
+  if (!userRow || userRow.role !== 'admin') return jsonResponse({ error: 'Admin role required' }, { status: 403 })
 
   const query = getQuery(event)
   const statusFilter = query.status ? String(query.status) : null

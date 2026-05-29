@@ -18,7 +18,7 @@
           </h1>
 
           <p class="text-lg leading-relaxed text-muted m-0 max-w-lg">
-            AI-built restaurant websites, live in minutes. Send us a WhatsApp — we handle menu updates, translations, and your Google presence.
+            AI-built restaurant websites, live in minutes. On paid plans (Growth+), send us a WhatsApp and we’ll handle menu updates, translations, and your Google presence.
           </p>
 
           <!-- CTAs -->
@@ -578,9 +578,9 @@ if (isPlatform) {
   
   useSeoMeta({
     title: 'KrabiClaw | AI Restaurant Website Builder',
-    description: 'Your restaurant online in minutes — AI-built, WhatsApp-managed, found by tourists. Reservations, menus, and Google Business included.',
+    description: 'Your restaurant online in minutes — AI-built, with reservations, menus, multi-language support, Google Business sync, and optional WhatsApp integrations. Managed service available on paid plans.',
     ogTitle: 'KrabiClaw | AI Restaurant Website Builder',
-    ogDescription: 'Your restaurant online in minutes. AI-built site, WhatsApp updates, reservations, multi-language. No tech skills needed.',
+    ogDescription: 'AI-built restaurant site with reservations, menus, multi-language, Google Business sync, and optional WhatsApp integrations. Managed service available on Growth+ plans.',
     ogImage: sharedOgImage,
     ogUrl: currentPageUrl,
     ogType: 'website'

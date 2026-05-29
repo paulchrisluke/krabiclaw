@@ -482,7 +482,7 @@ const toast = useToast()
 
 // ── Routing ──────────────────────────────────────────────────────────────────
 const route = useRoute()
-const activeTab = computed(() => String(route.query.tab || 'queue'))
+const activeTab = computed(() => String(route.query.tab || 'work'))
 
 // ── Shared helpers ──────────────────────────────────────────────────────────
 function formatDate(dateString: string | null | undefined) {
