@@ -1,15 +1,21 @@
 <template>
   <div class="relative flex w-full items-center overflow-hidden bg-inverted text-inverted" :style="heroStyle">
-    <!-- Background video slot (takes precedence over image) -->
+    <!-- Background video: img is the LCP element (SSR); video deferred to client -->
     <div v-if="video" class="absolute inset-0">
-      <video
-        :src="video"
-        autoplay
-        muted
-        loop
-        playsinline
+      <img
+        v-if="poster"
+        :src="poster"
+        alt="" aria-hidden="true" fetchpriority="high"
         class="w-full h-full object-cover"
-      />
+      >
+      <ClientOnly>
+        <video
+          v-if="showVideo"
+          ref="videoEl"
+          muted loop playsinline preload="none" aria-hidden="true"
+          class="absolute inset-0 w-full h-full object-cover"
+        />
+      </ClientOnly>
     </div>
 
     <!-- Background image slot (only rendered if no video) -->
@@ -63,6 +69,7 @@ const props = defineProps({
   subtitle: { type: String, default: null },
   image: { type: String, default: null },
   video: { type: String, default: null },
+  poster: { type: String, default: null },
   height: { type: String, default: null },
   size: {
     type: String,
@@ -74,6 +81,8 @@ const props = defineProps({
 })
 
 defineEmits(['update:title', 'update:subtitle'])
+
+const { showVideo, videoEl } = useHeroVideo(() => props.video)
 
 // Warn if both image and video are provided (video takes precedence)
 if (props.image && props.video) {

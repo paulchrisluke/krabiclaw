@@ -29,15 +29,18 @@
     "client:override": "node scripts/client-override.mjs",
     "client:verify": "node scripts/client-verify.mjs",
     "client:deploy": "node scripts/client-deploy.mjs",
+    "media:transcode": "node scripts/media-transcode.mjs",
     "fixture:pottery-house": "node scripts/fixtures/pottery-house-krabi.fixture.mjs",
     "lint:seeds": "node scripts/lint-seeds.mjs",
     "secret:cron": "yarn wrangler secret put CRON_SECRET",
     "stripe:listen": "stripe listen --forward-to localhost:3000/api/billing/webhook",
-    "benchmark": "node scripts/benchmark-bootstrap.mjs",
-    "benchmark:bootstrap": "node scripts/benchmark-bootstrap.mjs"
+    "lhci": "lhci collect && lhci upload && lhci assert",
+    "lhci:collect": "lhci collect",
+    "lhci:assert": "lhci assert"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260503.1",
+    "@lhci/cli": "^0.15.1",
     "@nuxt/eslint": "^1.15.2",
     "@nuxt/eslint-config": "^1.15.2",
     "@nuxt/fonts": "^0.14.0",
@@ -47,7 +50,6 @@
     "@tailwindcss/typography": "^0.5.19",
     "@types/dompurify": "^3.2.0",
     "@types/node": "^25.6.0",
-    "autocannon": "^8.0.0",
     "autoprefixer": "^10.5.0",
     "eslint": "^10.3.0",
     "nitro-cloudflare-dev": "^0.2.2",

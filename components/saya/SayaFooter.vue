@@ -121,7 +121,9 @@
       <!-- Legal bar -->
       <div class="flex flex-wrap items-center justify-between gap-4 pt-6 text-xs text-inverted/40">
         <div>© {{ year }} {{ restaurantName }}</div>
-        <div class="flex gap-6">
+        <div class="flex items-center gap-6">
+          <!-- Dark mode toggle -->
+          <UColorModeButton variant="ghost" color="neutral" size="sm" class="text-inverted/40 hover:text-inverted/70" />
           <NuxtLink to="/privacy" class="transition hover:text-inverted/70">Privacy</NuxtLink>
           <NuxtLink to="/terms" class="transition hover:text-inverted/70">Terms</NuxtLink>
           <a

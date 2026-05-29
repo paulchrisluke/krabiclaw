@@ -17,6 +17,9 @@ logs
 test-results/
 playwright-report/
 
+# Lighthouse CI run artifacts (reports, assertion results — ephemeral)
+.lighthouseci/
+
 # Misc
 .DS_Store
 .fleet

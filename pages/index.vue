@@ -121,35 +121,45 @@
     <div v-else class="saya-restaurant-theme">
 
       <!-- ── Brand hero ─────────────────────────────────────── -->
-      <SayaHomeHero
-        v-if="contentBlocks.find(b => b.component === 'SayaHomeHero')"
-        :data="{
-          hero: getHero(),
-          locations: bootstrapLocations,
-          businessTitle: googleBusiness?.title,
-          businessSubtitle: googleBusiness?.profile?.description,
-          businessCity: googleBusiness?.storefrontAddress?.locality,
-          businessPrimaryPhoto: googleBusiness?.media?.[0],
-          hasOrderLinks: hasOrderLinks,
-          ctaRoute: homeCopy.ctaRoute,
-          reserveCta: homeCopy.reserveCta
-        }"
+      <SayaHero
+        v-if="contentBlocks.find(b => b.component === 'SayaHero')"
+        :title="hero.title || businessTitle"
+        :subtitle="hero.subtitle || businessSubtitle"
+        :image="hero.image || businessPrimaryPhoto?.googleUrl"
+        :video="hero.video"
+        :poster="hero.videoThumbnail"
+        size="home"
       />
       <section v-else id="section-hero" class="relative min-h-160 overflow-hidden flex items-center">
-        <!-- Background video (takes precedence over photo) -->
+        <!-- Background video: img is the LCP element (SSR); video has no src until after window.load -->
         <div v-if="hero.video && hero.videoKind === 'video'" data-field="hero.video" class="absolute inset-0">
-          <video :src="hero.video" autoplay muted loop playsinline aria-hidden="true" role="presentation" class="w-full h-full object-cover opacity-50" />
+          <img
+            v-if="hero.videoThumbnail"
+            :src="hero.videoThumbnail"
+            alt="" aria-hidden="true" fetchpriority="high" decoding="async"
+            class="w-full h-full object-cover opacity-50"
+          >
+          <ClientOnly>
+            <video v-if="heroVideoShow" ref="heroVideoEl" muted loop playsinline preload="none" aria-hidden="true" role="presentation" class="absolute inset-0 w-full h-full object-cover opacity-50" />
+          </ClientOnly>
         </div>
         <!-- Background photo: media asset takes precedence, then Google Business photo -->
         <div
           v-else-if="(hero.image && hero.imageKind === 'image') || businessPrimaryPhoto"
           data-field="hero.image"
-          class="absolute inset-0 bg-cover bg-center opacity-50"
-          :style="`background-image: url(${hero.image || businessPrimaryPhoto?.googleUrl})`"
-        />
+          class="absolute inset-0"
+        >
+          <img
+            :src="hero.image || businessPrimaryPhoto?.googleUrl"
+            alt=""
+            aria-hidden="true"
+            fetchpriority="high"
+            class="w-full h-full object-cover opacity-50"
+          >
+        </div>
         <!-- Fallback if hero.image is actually a video -->
         <div v-else-if="hero.image && hero.imageKind === 'video'" class="absolute inset-0">
-          <video :src="hero.image" autoplay muted loop playsinline aria-hidden="true" role="presentation" class="w-full h-full object-cover opacity-50" />
+          <video :src="hero.image" autoplay muted loop playsinline preload="none" aria-hidden="true" role="presentation" class="w-full h-full object-cover opacity-50" />
         </div>
 
         <div class="absolute inset-0 bg-zinc-950" :class="(hero.image || businessPrimaryPhoto || hero.video) ? 'opacity-50' : ''" />
@@ -203,47 +213,12 @@
 
       <!-- ── Featured content (dishes / experiences) ─────────── -->
       <LazySayaFeaturedContent
-        v-if="contentBlocks.find(b => b.component === 'SayaFeaturedContent')"
         :data="{
           items: featuredContent,
-          hasMenu: hasMenu
+          hasMenu: hasMenu,
+          vertical: site?.vertical
         }"
       />
-      <section v-else-if="featuredContent.length" class="mx-auto max-w-7xl px-4 pt-16 pb-8 sm:px-6 lg:px-8">
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <NuxtLink
-            v-for="(item, i) in featuredContent"
-            :key="i"
-            :to="item.href"
-            class="group block overflow-hidden bg-elevated no-underline text-default transition hover:opacity-90"
-          >
-            <div class="aspect-square overflow-hidden bg-muted">
-              <video
-                v-if="item.imageKind === 'video' && item.image"
-                :src="item.image"
-                autoplay
-                muted
-                loop
-                playsinline
-                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              />
-              <img
-                v-else-if="item.image"
-                :src="item.image"
-                :alt="item.alt"
-                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              >
-              <div v-else class="flex h-full w-full items-center justify-center">
-                <UIcon name="i-heroicons-sparkles" class="size-8 text-muted" />
-              </div>
-            </div>
-            <div class="p-3 pt-2">
-              <p class="saya-display saya-italic text-base text-default leading-snug line-clamp-2">{{ item.name }}</p>
-              <p v-if="item.price" class="mt-0.5 text-xs tabular-nums text-muted">{{ item.price }}</p>
-            </div>
-          </NuxtLink>
-        </div>
-      </section>
 
       <!-- ── Locations grid ─────────────────────────────────── -->
       <LazySayaLocationsGrid
@@ -264,25 +239,26 @@
         <!-- Real locations -->
         <div v-if="hasLocations" :class="['grid gap-8', locations.length > 1 ? 'md:grid-cols-2' : '']">
           <NuxtLink
-            v-for="loc in locations"
+            v-for="(loc, locIdx) in locations"
             :key="loc.id"
+            :ref="el => { if (el) locCardRefs[locIdx] = el }"
             :to="`/locations/${loc.slug}`"
             class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
           >
             <div class="aspect-video overflow-hidden bg-muted">
-              <video
-                v-if="loc.public_url && loc.kind === 'video'"
-                :src="loc.public_url"
-                class="aspect-video w-full object-cover"
-                autoplay
-                muted
-                loop
-                playsinline
-              />
+              <ClientOnly v-if="loc.public_url && loc.kind === 'video'">
+                <video
+                  v-if="visibleLocCards.has(locIdx)"
+                  :src="loc.public_url"
+                  class="aspect-video w-full object-cover"
+                  autoplay muted loop playsinline preload="none"
+                />
+              </ClientOnly>
               <img
                 v-else-if="loc.public_url"
                 :src="loc.public_url"
                 :alt="loc.title"
+                loading="lazy"
                 class="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105"
               >
               <div v-else class="flex h-full w-full items-center justify-center">
@@ -355,12 +331,15 @@
                     muted
                     loop
                     playsinline
+                    preload="none"
+                    loading="lazy"
                     class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                   <img
                     v-else
                     :src="post.image"
                     :alt="post.alt"
+                    loading="lazy"
                     class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   >
                 </div>
@@ -381,6 +360,8 @@
                     muted
                     loop
                     playsinline
+                    preload="none"
+                    loading="lazy"
                     class="w-full aspect-video object-cover"
                   />
                   <img
@@ -399,14 +380,12 @@
       </section>
 
       <!-- ── Brand story ─────────────────────────────────────── -->
-      <LazySayaBrandStory
-        v-if="contentBlocks.find(b => b.component === 'SayaBrandStory')"
-        :data="{
-          headline: getField('story.headline', businessTitle),
-          body: getField('story.body', businessSubtitle),
-          image: getField('story.image'),
-          isAuthenticated: isAuthenticated
-        }"
+      <LazySayaAbout
+        v-if="contentBlocks.find(b => b.component === 'SayaAbout')"
+        :title="getField('story.headline', businessTitle)"
+        :description="getField('story.body', businessSubtitle)"
+        :image="getField('story.image')"
+        :is-teaser="false"
       />
       <section v-else class="bg-inverted text-inverted">
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
@@ -541,14 +520,14 @@
         :description="getField('cta.description')"
         :cta-route="homeCopy.ctaRoute"
         :reserve-cta="homeCopy.reserveCta"
-        :bg="'default'"
-        :padding="'lg'"
+        bg="default"
+        padding="lg"
       />
 
       <!-- ── Dynamic content blocks ───────────────────────────── -->
       <template v-if="contentBlocks.length > 0">
         <component
-          v-for="block in contentBlocks.filter(b => b.component)"
+          v-for="block in contentBlocks.filter(b => b.component && !['hero', 'featured', 'locations', 'story', 'cta'].includes(b.field))"
           :key="block._uid || block.field"
           :is="resolveComponent(block.component)"
           :data="block"
@@ -570,6 +549,26 @@ definePageMeta({ layout: false })
 const { isPlatform, siteId, site } = useTenantSite()
 const homeCopy = getVerticalCopy(site?.vertical)
 const { resolveComponent } = useDynamicComponent()
+const { showVideo: heroVideoShow, videoEl: heroVideoEl } = useHeroVideo(() => hero.value?.video)
+
+// Inline location grid — load videos via IntersectionObserver when cards scroll into view
+const locCardRefs = ref([])
+const visibleLocCards = ref(new Set())
+onMounted(() => {
+  if (!('IntersectionObserver' in window)) {
+    setTimeout(() => { locations.value.forEach((_, i) => visibleLocCards.value.add(i)) }, 2000)
+    return
+  }
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return
+      const i = locCardRefs.value.indexOf(entry.target)
+      if (i >= 0) { visibleLocCards.value = new Set([...visibleLocCards.value, i]); obs.unobserve(entry.target) }
+    })
+  }, { rootMargin: '200px' })
+  watch(locCardRefs, refs => refs.forEach(el => el && obs.observe(el)), { immediate: true })
+  onUnmounted(() => obs.disconnect())
+})
 
 // Platform homepage data
 const avatars = [
@@ -681,6 +680,18 @@ if (isPlatform) {
     ogImage: sharedOgImage,
     ogUrl: currentPageUrl,
     ogType: 'website'
+  })
+}
+
+// Preload the LCP image on tenant sites: video poster when there's a video, hero image otherwise.
+if (!isPlatform) {
+  useHead({
+    link: computed(() => {
+      const src = hero.value.video
+        ? hero.value.videoThumbnail
+        : (hero.value.image || businessPrimaryPhoto.value?.googleUrl)
+      return src ? [{ rel: 'preload', as: 'image', href: src, fetchpriority: 'high' }] : []
+    })
   })
 }
 

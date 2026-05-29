@@ -72,9 +72,16 @@ export default defineEventHandler(async (event) => {
   const includeMenu = query.menu === "1" || query.menu === "true";
   const dataType = typeof query.data === "string" ? query.data : null; // 'reviews' | 'photos' | 'qa'
 
-  // Parallelize site auth + location slug resolution — both only need siteId
-  const [site, locationRow] = await Promise.all([
-    db
+  // KV cache for site metadata (orgId, default_currency) — 5-minute TTL
+  const cacheKey = `site:${siteId}`;
+  const cached = await env.SITE_CACHE.get(cacheKey, 'json');
+  let site: { id: string; organization_id: string; default_currency: string | null } | null = null;
+
+  if (cached && typeof cached === 'object' && 'id' in cached && 'default_currency' in cached && typeof cached.id === 'string' && (typeof cached.default_currency === 'string' || cached.default_currency === null) && typeof cached.organization_id === 'string') {
+    site = cached as { id: string; organization_id: string; default_currency: string | null };
+  } else {
+    // Cache miss — query D1 and write back to KV
+    const dbSite = await db
       .prepare(
         `SELECT id, organization_id, default_currency FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`,
       )
@@ -83,16 +90,24 @@ export default defineEventHandler(async (event) => {
         id: string;
         organization_id: string;
         default_currency: string | null;
-      }>(),
-    locationSlug
-      ? db
-          .prepare(
-            `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`,
-          )
-          .bind(siteId, locationSlug)
-          .first<{ id: string }>()
-      : Promise.resolve(null),
-  ]);
+      }>();
+
+    if (dbSite) {
+      site = dbSite;
+      // Cache for 5 minutes (300 seconds)
+      await env.SITE_CACHE.put(cacheKey, JSON.stringify(dbSite), { expirationTtl: 300 });
+    }
+  }
+
+  // Parallelize location slug resolution (only needs siteId)
+  const locationRow = await (locationSlug
+    ? db
+        .prepare(
+          `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`,
+        )
+        .bind(siteId, locationSlug)
+        .first<{ id: string }>()
+    : Promise.resolve(null));
 
   if (!site) return jsonResponse({ error: "Site not found" }, { status: 404 });
   const orgId = site.organization_id;
@@ -136,7 +151,8 @@ export default defineEventHandler(async (event) => {
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
                  ma_img.public_url AS hero_image_public_url,
-                 ma_vid.public_url AS hero_video_public_url
+                 ma_vid.public_url AS hero_video_public_url,
+                 ma_vid.thumbnail_url AS hero_video_thumbnail_url
           FROM business_locations bl
           LEFT JOIN media_assets ma_img ON bl.hero_image_asset_id = ma_img.id AND ma_img.status = 'active'
           LEFT JOIN media_assets ma_vid ON bl.hero_video_asset_id = ma_vid.id AND ma_vid.status = 'active'
@@ -149,7 +165,8 @@ export default defineEventHandler(async (event) => {
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
-                 NULL AS hero_image_public_url, NULL AS hero_video_public_url
+                 NULL AS hero_image_public_url, NULL AS hero_video_public_url,
+                 NULL AS hero_video_thumbnail_url
           FROM business_locations bl
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
           ORDER BY bl.is_primary DESC, bl.title ASC
@@ -335,6 +352,7 @@ export default defineEventHandler(async (event) => {
   const locations = (locRows.results ?? []).map((loc) => {
     const heroVideoUrl = loc.hero_video_public_url as string | null;
     const heroImageUrl = loc.hero_image_public_url as string | null;
+    const heroVideoThumbnailUrl = loc.hero_video_thumbnail_url as string | null;
     const publicUrl = heroVideoUrl || heroImageUrl || null;
 
     return {
@@ -364,6 +382,7 @@ export default defineEventHandler(async (event) => {
       kind: publicUrl ? (heroVideoUrl ? "video" : "image") : null,
       hero_image_public_url: heroImageUrl,
       hero_video_public_url: heroVideoUrl,
+      hero_video_thumbnail_url: heroVideoThumbnailUrl,
       city: loc.city,
       neighborhood: loc.neighborhood || null,
       grab_url: loc.grab_url || null,

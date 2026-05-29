@@ -33,5 +33,9 @@ migrations_dir = "migrations"
 binding = "MEDIA_BUCKET"
 bucket_name = "krabiclaw-media"
 
+[[kv_namespaces]]
+binding = "SITE_CACHE"
+id = "7fadf142e35745d6bec16b260eaab2f2"
+
 [ai]
 binding = "AI"

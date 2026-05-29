@@ -546,10 +546,19 @@ INSERT INTO business_locations (
     .slice(0, 3)
     .map((f, i) => {
       const assetId = `asset-${SLUG}-${i}`;
-      return `INSERT INTO media_assets (id, site_id, organization_id, public_url, alt_text, kind, provider, source, status)
-VALUES ('${assetId}', '${siteId}', '${orgId}', '${f.public_url}', '${brandName}', 'image', 'local', 'import', 'active')
+      const ext = (f.original_name ? extname(f.original_name) : extname(f.normalized_name ?? "")).toLowerCase() || ".jpg";
+      const provider = f.cloudflare_image_id ? "cloudflare_images" : "cloudflare_r2";
+      const cfId = f.cloudflare_image_id ? `'${f.cloudflare_image_id}'` : "NULL";
+      const thumb = f.thumbnail_url ? `'${f.thumbnail_url.replace(/'/g, "''")}'` : "NULL";
+      const publicUrl = f.cloudflare_image_id
+        ? f.public_url
+        : `https://media.krabiclaw.com/sites/${siteId}/media/${assetId}${ext}`;
+      return `INSERT INTO media_assets (id, site_id, organization_id, cloudflare_image_id, public_url, thumbnail_url, alt_text, kind, provider, source, status)
+VALUES ('${assetId}', '${siteId}', '${orgId}', ${cfId}, '${publicUrl}', ${thumb}, '${brandName}', 'image', '${provider}', 'uploaded', 'active')
 ON CONFLICT(id) DO UPDATE SET
+  cloudflare_image_id = excluded.cloudflare_image_id,
   public_url = excluded.public_url,
+  thumbnail_url = excluded.thumbnail_url,
   alt_text = excluded.alt_text,
   updated_at = CURRENT_TIMESTAMP;`;
     })
@@ -632,6 +641,72 @@ function generateRouteManifest(places) {
   }
 
   return manifest;
+}
+
+// ── Cloudflare Images upload ──────────────────────────────────────────────────
+
+async function uploadImagesToCloudflare(files) {
+  const accountId = process.env.CF_ACCOUNT_ID;
+  const token = process.env.CLOUDFLARE_IMAGES_API_TOKEN;
+  const variantBase = process.env.CLOUDFLARE_IMAGES_VARIANT_BASE;
+
+  if (!accountId || !token || !variantBase) return false;
+
+  const MIME = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" };
+  let uploaded = 0;
+
+  for (const file of files) {
+    if (file.cloudflare_image_id) {
+      console.log(`  ✓ Already uploaded: ${file.original_name} (${file.cloudflare_image_id})`);
+      continue;
+    }
+    if (!file.source_file || !existsSync(file.source_file)) {
+      console.log(`  ⚠ Source file not found, skipping: ${file.original_name}`);
+      continue;
+    }
+
+    const ext = extname(file.original_name ?? "").toLowerCase();
+    const mime = MIME[ext] ?? "image/jpeg";
+    const bytes = await readFile(file.source_file);
+    const form = new FormData();
+    form.append("file", new Blob([bytes], { type: mime }), file.normalized_name);
+
+    const controller = new AbortController();
+    const uploadTimeout = setTimeout(() => controller.abort(), 30000);
+    let res;
+    try {
+      res = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${accountId}/images/v1`,
+        { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form, signal: controller.signal }
+      );
+    } catch (err) {
+      clearTimeout(uploadTimeout);
+      if (err.name === "AbortError") {
+        throw new Error(`CF Images upload timed out: ${file.original_name}`);
+      }
+      throw err;
+    }
+    clearTimeout(uploadTimeout);
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(`  ✗ Upload failed for ${file.original_name}: ${res.status} ${body}`);
+      throw new Error(`CF Images upload failed: ${file.original_name}`);
+    }
+
+    const data = await res.json();
+    const imageId = data?.result?.id;
+    if (!imageId) throw new Error(`CF Images malformed response for ${file.original_name}: ${JSON.stringify(data)}`);
+
+    file.cloudflare_image_id = imageId;
+    file.public_url = `${variantBase}/${imageId}/public`;
+    file.thumbnail_url = `${variantBase}/${imageId}/thumbnail`;
+    file.uploaded_at = new Date().toISOString();
+    uploaded++;
+    console.log(`  ✓ ${file.original_name} → ${imageId}`);
+  }
+
+  return uploaded;
 }
 
 // ── D1 row-count query (best-effort, for overwrite visibility) ────────────────
@@ -869,6 +944,65 @@ if (MODE === "apply") {
     `  Approved by: ${approvedRaw.approved_by} at ${approvedRaw.approved_at}`,
   );
 
+  // ── CF Images upload ───────────────────────────────────────────────────────
+  const mediaManifestApplyPath = join(OUT_DIR, "media-manifest.json");
+  let cfImagesPatchPath = null;
+
+  if (existsSync(mediaManifestApplyPath)) {
+    const mediaApply = JSON.parse(await readFile(mediaManifestApplyPath, "utf8"));
+    const pending = (mediaApply.files ?? []).filter((f) => !f.cloudflare_image_id);
+
+    if (pending.length > 0) {
+      const hasCreds =
+        process.env.CF_ACCOUNT_ID &&
+        process.env.CLOUDFLARE_IMAGES_API_TOKEN &&
+        process.env.CLOUDFLARE_IMAGES_VARIANT_BASE;
+
+      if (hasCreds) {
+        console.log(`\n→ Uploading ${pending.length} image(s) to Cloudflare Images...`);
+        const uploaded = await uploadImagesToCloudflare(mediaApply.files);
+        if (uploaded > 0) {
+          await writeFile(mediaManifestApplyPath, JSON.stringify(mediaApply, null, 2), "utf8");
+
+          // Generate UPDATE patch SQL for the rows the seed is about to create
+          const siteIdForPatch = `site-${SLUG}`;
+          const variantBase = process.env.CLOUDFLARE_IMAGES_VARIANT_BASE;
+          const patchStatements = mediaApply.files
+            .slice(0, 3)
+            .map((f, i) => {
+              if (!f.cloudflare_image_id) return null;
+              const assetId = `asset-${SLUG}-${i}`;
+              return `UPDATE media_assets SET
+  cloudflare_image_id = '${f.cloudflare_image_id}',
+  public_url = '${variantBase}/${f.cloudflare_image_id}/public',
+  thumbnail_url = '${variantBase}/${f.cloudflare_image_id}/thumbnail',
+  provider = 'cloudflare_images'
+WHERE id = '${assetId}' AND site_id = '${siteIdForPatch}';`;
+            })
+            .filter(Boolean)
+            .join("\n");
+
+          if (patchStatements) {
+            cfImagesPatchPath = join(OUT_DIR, "seed-cf-images.sql");
+            await writeFile(
+              cfImagesPatchPath,
+              `-- CF Images patch — applied after seed-preview.sql\n${patchStatements}\n`,
+              "utf8",
+            );
+            console.log(`  ✓ Patch SQL written: ${cfImagesPatchPath}`);
+          }
+        }
+      } else {
+        console.log(
+          "\n⚠ CF Images credentials not set — images seeded with placeholder R2 URLs.",
+        );
+        console.log(
+          "  Set CF_ACCOUNT_ID, CLOUDFLARE_IMAGES_API_TOKEN, CLOUDFLARE_IMAGES_VARIANT_BASE to upload automatically.",
+        );
+      }
+    }
+  }
+
   // Overwrite visibility — query row counts before apply
   const siteId = `site-${SLUG}`;
   const TRACKED = [
@@ -897,6 +1031,21 @@ if (MODE === "apply") {
   } catch {
     console.error("\n✗ Seed execution failed — check wrangler output above.");
     process.exit(1);
+  }
+
+  // Apply CF Images patch if one was generated
+  if (cfImagesPatchPath && existsSync(cfImagesPatchPath)) {
+    console.log("\n→ Applying CF Images URL patch...");
+    try {
+      spawnSync(
+        "yarn",
+        ["wrangler", "d1", "execute", "DB", d1Flag, "--file", cfImagesPatchPath],
+        { stdio: "inherit", cwd: process.cwd() },
+      );
+      console.log("  ✓ CF Images URLs applied");
+    } catch {
+      console.error("  ✗ CF Images patch failed — run manually: wrangler d1 execute DB --file " + cfImagesPatchPath);
+    }
   }
 
   // Overwrite visibility — query after

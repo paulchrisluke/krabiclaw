@@ -1,83 +1,82 @@
 <template>
   <div>
     <header ref="headerRef" class="sticky top-0 z-50 border-b border-default bg-default/80 backdrop-blur-md">
-      <div class="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
-        <!-- Brand logo / name -->
-        <NuxtLink to="/" class="shrink-0 no-underline">
-          <img
-            v-if="logoUrl"
-            :src="logoUrl"
-            :alt="restaurantName"
-            class="h-10 w-auto max-w-35 object-contain"
-          />
-          <span v-else class="saya-display text-2xl text-default">{{ restaurantName }}</span>
-        </NuxtLink>
-
-        <!-- Desktop nav -->
-        <nav class="hidden items-center gap-1 lg:flex" aria-label="Saya navigation">
-          <NuxtLink
-            v-if="locations.length === 1 && hasMenu"
-            to="/menu"
-            class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
-          >
-            Menu
+      <div class="mx-auto h-16 max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="flex h-full items-center justify-between lg:grid lg:grid-cols-[1fr_auto_1fr]">
+          <!-- Brand logo / name -->
+          <NuxtLink to="/" class="shrink-0 no-underline">
+            <img
+              v-if="logoUrl"
+              :src="logoUrl"
+              :alt="restaurantName"
+              class="h-10 w-auto max-w-35 object-contain"
+            />
+            <span v-else class="saya-display text-2xl text-default">{{ restaurantName }}</span>
           </NuxtLink>
 
-          <UDropdownMenu v-else-if="locations.length > 1" :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
-            <button class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default">
-              Locations
-              <UIcon name="i-heroicons-chevron-down" class="size-3 opacity-60" />
-            </button>
-          </UDropdownMenu>
+          <!-- Desktop nav -->
+          <nav class="hidden items-center gap-1 lg:flex" aria-label="Saya navigation">
+            <NuxtLink
+              v-if="locations.length === 1 && hasMenu"
+              to="/menu"
+              class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
+            >
+              Menu
+            </NuxtLink>
 
-          <NuxtLink
-            to="/reservations"
-            class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
-          >
-            Reservations
-          </NuxtLink>
-          <NuxtLink
-            v-if="hasExperiences"
-            to="/experiences"
-            class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
-          >
-            Experiences
-          </NuxtLink>
-        </nav>
+            <UDropdownMenu v-else-if="locations.length > 1" :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
+              <button class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default">
+                Locations
+                <UIcon name="i-heroicons-chevron-down" class="size-3 opacity-60" />
+              </button>
+            </UDropdownMenu>
 
-        <div class="flex items-center justify-end gap-2">
-          <!-- Language switcher -->
-          <UDropdownMenu :items="languageItems" :ui="{ content: 'saya-theme' }">
-            <UButton variant="ghost" color="neutral" size="sm">
-              <span>{{ getCurrentLocaleFlag() }}</span>
-              <span class="hidden sm:inline">{{ currentLocale }}</span>
+            <NuxtLink
+              to="/reservations"
+              class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
+            >
+              Reservations
+            </NuxtLink>
+            <NuxtLink
+              v-if="hasExperiences"
+              to="/experiences"
+              class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
+            >
+              Experiences
+            </NuxtLink>
+          </nav>
+
+          <div class="flex items-center justify-end gap-2">
+            <!-- Language switcher -->
+            <UDropdownMenu :items="languageItems" :ui="{ content: 'saya-theme' }">
+              <UButton variant="ghost" color="neutral" size="sm">
+                <span>{{ getCurrentLocaleFlag() }}</span>
+                <span class="hidden sm:inline">{{ currentLocale }}</span>
+              </UButton>
+            </UDropdownMenu>
+
+            <!-- Primary CTA: Order Now if delivery links exist, otherwise dynamic Reserve/Book -->
+            <UButton
+              :to="primaryCtaPath"
+              color="primary"
+              variant="solid"
+              size="sm"
+              class="rounded-full"
+            >
+              {{ primaryCtaLabel }}
             </UButton>
-          </UDropdownMenu>
 
-          <!-- Dark mode toggle -->
-          <UColorModeButton variant="ghost" color="neutral" size="sm" />
-
-          <!-- Primary CTA: Order Now if delivery links exist, otherwise dynamic Reserve/Book -->
-          <UButton
-            :to="primaryCtaPath"
-            color="primary"
-            variant="solid"
-            size="sm"
-            class="rounded-full"
-          >
-            {{ primaryCtaLabel }}
-          </UButton>
-
-          <!-- Mobile menu toggle -->
-          <UButton
-            icon="i-heroicons-bars-3"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            class="lg:hidden"
-            :aria-label="mobileMenuOpen ? 'Close navigation' : 'Open navigation'"
-            @click="mobileMenuOpen = !mobileMenuOpen"
-          />
+            <!-- Mobile menu toggle -->
+            <UButton
+              icon="i-heroicons-bars-3"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              class="lg:hidden"
+              :aria-label="mobileMenuOpen ? 'Close navigation' : 'Open navigation'"
+              @click="mobileMenuOpen = !mobileMenuOpen"
+            />
+          </div>
         </div>
       </div>
 

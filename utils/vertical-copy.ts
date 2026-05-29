@@ -32,6 +32,10 @@ const registry = {
     otherLocationsHeading: "Sister rooms",
     highlightsSectionHeading: "Posts, reviews & dishes from across the brand.",
     seoReservationDescription: (name: string) => `Reserve a table at ${name}.`,
+    featuredEyebrow: "Our Kitchen",
+    featuredHeading: "Featured dishes",
+    featuredSubtitle: "Thoughtfully crafted. Beautifully served.",
+    featuredViewAll: "View full menu",
   },
   experience: {
     poweredByTagline: "experience booking sites that run themselves",
@@ -59,6 +63,10 @@ const registry = {
     otherLocationsHeading: "Other spaces",
     highlightsSectionHeading: "Posts, reviews & classes from across the studio.",
     seoReservationDescription: (name: string) => `Book a class at ${name}.`,
+    featuredEyebrow: "What we offer",
+    featuredHeading: "Featured experiences",
+    featuredSubtitle: "Something to discover and remember.",
+    featuredViewAll: "View all experiences",
   },
   retail: {
     poweredByTagline: "retail sites that run themselves",
@@ -87,6 +95,10 @@ const registry = {
     otherLocationsHeading: "Other locations",
     highlightsSectionHeading: "Posts, reviews & picks from across the brand.",
     seoReservationDescription: (name: string) => `Visit ${name}.`,
+    featuredEyebrow: "Our Collection",
+    featuredHeading: "Featured picks",
+    featuredSubtitle: "Curated with care. Ready to take home.",
+    featuredViewAll: "Browse the collection",
   },
   wellness: {
     poweredByTagline: "wellness sites that run themselves",
@@ -114,6 +126,10 @@ const registry = {
     otherLocationsHeading: "Other studios",
     highlightsSectionHeading: "Posts, reviews & sessions from across the studio.",
     seoReservationDescription: (name: string) => `Book a session at ${name}.`,
+    featuredEyebrow: "What we offer",
+    featuredHeading: "Featured sessions",
+    featuredSubtitle: "Find your practice. Feel the difference.",
+    featuredViewAll: "View all sessions",
   },
   service: {
     poweredByTagline: "service sites that run themselves",
@@ -142,6 +158,10 @@ const registry = {
     highlightsSectionHeading: "Posts, reviews & work from across the team.",
     seoReservationDescription: (name: string) =>
       `Book an appointment at ${name}.`,
+    featuredEyebrow: "What we offer",
+    featuredHeading: "Featured services",
+    featuredSubtitle: "Expert work. Honest results.",
+    featuredViewAll: "View all services",
   },
 } as const satisfies Record<SiteVertical, object>;
 

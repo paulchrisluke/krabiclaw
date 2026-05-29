@@ -24,6 +24,7 @@
           muted
           loop
           playsinline
+          preload="none"
           class="absolute inset-0 h-full w-full object-cover opacity-50"
         />
         <div

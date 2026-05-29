@@ -9,21 +9,22 @@
     <!-- Real locations -->
     <div v-if="locations.length > 0" :class="['grid gap-8', locations.length > 1 ? 'md:grid-cols-2' : '']">
       <NuxtLink
-        v-for="loc in locations"
+        v-for="(loc, i) in locations"
         :key="loc.id"
+        :ref="el => { if (el) cardRefs[i] = el as HTMLElement }"
         :to="`/locations/${loc.slug}`"
         class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
       >
         <div class="aspect-video overflow-hidden bg-muted">
-          <video
-            v-if="loc.public_url && loc.kind === 'video'"
-            :src="loc.public_url"
-            class="aspect-video w-full object-cover"
-            autoplay
-            muted
-            loop
-            playsinline
-          />
+          <ClientOnly v-if="loc.public_url && loc.kind === 'video'">
+            <video
+              v-if="visibleCards.has(i)"
+              :src="loc.public_url"
+              class="aspect-video w-full object-cover"
+              :autoplay="i === 0"
+              muted loop playsinline preload="none"
+            />
+          </ClientOnly>
           <img
             v-else-if="loc.public_url"
             :src="loc.public_url"
@@ -97,4 +98,32 @@ const props = withDefaults(defineProps<Props>(), {
 const locations = computed(() => props.data?.locations || [])
 const heading = computed(() => props.data?.heading || 'Our Locations')
 const isAuthenticated = computed(() => props.data?.isAuthenticated || false)
+
+const cardRefs = ref<HTMLElement[]>([])
+const visibleCards = ref(new Set<number>())
+
+onMounted(() => {
+  if (!('IntersectionObserver' in window)) {
+    // Fallback for old browsers: show all after 2s
+    setTimeout(() => locations.value.forEach((_, i) => visibleCards.value.add(i)), 2000)
+    return
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return
+      const i = cardRefs.value.indexOf(entry.target as HTMLElement)
+      if (i >= 0) {
+        visibleCards.value = new Set([...visibleCards.value, i])
+        observer.unobserve(entry.target)
+      }
+    })
+  }, { rootMargin: '200px' })
+
+  watch(cardRefs, (refs) => {
+    refs.forEach(el => el && observer.observe(el))
+  }, { immediate: true })
+
+  onUnmounted(() => observer.disconnect())
+})
 </script>

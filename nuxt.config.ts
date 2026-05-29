@@ -28,6 +28,8 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#1F2547' }
       ],
       link: [
+        { rel: 'preconnect', href: 'https://media.krabiclaw.com' },
+        { rel: 'dns-prefetch', href: 'https://media.krabiclaw.com' },
         { rel: 'icon', type: 'image/png', href: '/favicon-96x96.png', sizes: '96x96' },
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
         { rel: 'shortcut icon', href: '/favicon.ico' },
@@ -60,7 +62,10 @@ export default defineNuxtConfig({
       watch: {
         ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       }
-    }
+    },
+    build: {
+      cssCodeSplit: false,
+    },
   },
 
   // SEO Configuration
@@ -138,7 +143,7 @@ export default defineNuxtConfig({
     defaultLocale: 'en',
     strategy: 'prefix_except_default',
     detectBrowserLanguage: {
-      useCookie: true,
+      useCookie: false,
       fallbackLocale: 'en',
       redirectOn: 'root'
     }
@@ -200,10 +205,30 @@ export default defineNuxtConfig({
   },
 
   // Caching Rules
+  // NOTE: swr is NOT safe for multi-tenant — Nitro keys the cache by path only,
+  // not by full URL+hostname. All page routes serve different content per subdomain
+  // so swr would cross-contaminate tenants. Static assets are safe (same file for all hosts).
   routeRules: {
-    '/': { swr: 3600 },
-    '/assets/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } }
+    // Immutable versioned static assets
+    '/assets/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+    '/_nuxt/**':  { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+    '/videos/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+    '/images/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+
+    // Never cache authenticated or API routes
+    '/api/**':       { headers: { 'cache-control': 'no-store' } },
+    '/dashboard/**': { headers: { 'cache-control': 'no-store' } },
+    '/admin/**':     { headers: { 'cache-control': 'no-store' } },
+    '/auth/**':      { headers: { 'cache-control': 'no-store' } },
+    '/signup':       { headers: { 'cache-control': 'no-store' } },
+    '/login':        { headers: { 'cache-control': 'no-store' } },
+
+    // Public marketing pages — cache at Cloudflare edge for 5 minutes
+    // Requires a Cloudflare Cache Rule set to "Cache Everything" for *.krabiclaw.com/*
+    // to override the default Set-Cookie bypass behavior
+    '/**': { headers: { 'cache-control': 'public, s-maxage=300, stale-while-revalidate=3600, max-age=0' } },
   },
+
 
   // Nitro configuration for Cloudflare deployment
   nitro: {

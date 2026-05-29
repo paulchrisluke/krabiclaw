@@ -7,7 +7,7 @@
         <p class="text-xs text-muted">
           Component "{{ componentName }}" is not registered. Please check the component name or add it to the registry.
         </p>
-        <p v-if="import.meta.dev" class="mt-2 text-xs text-muted/60">
+        <p v-if="isDev" class="mt-2 text-xs text-muted/60">
           Field: {{ data?.field }} | Page: {{ data?.page }}
         </p>
       </div>
@@ -16,6 +16,8 @@
 </template>
 
 <script setup lang="ts">
+const isDev = import.meta.dev
+
 interface Props {
   componentName: string
   data?: {

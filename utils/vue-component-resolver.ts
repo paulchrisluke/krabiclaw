@@ -6,7 +6,6 @@
 const COMPONENT_REGISTRY: Record<string, string> = {
   // Above the fold - load immediately
   'SayaHero': 'SayaHero',
-  'SayaHomeHero': 'SayaHomeHero',
   'SayaHeader': 'SayaHeader',
   'SayaLogoMark': 'SayaLogoMark',
   'SayaContentBlockFallback': 'SayaContentBlockFallback',
@@ -23,7 +22,6 @@ const COMPONENT_REGISTRY: Record<string, string> = {
   'SayaFooter': 'LazySayaFooter',
   'SayaUpgradeModal': 'LazySayaUpgradeModal',
   'SayaFeaturedContent': 'LazySayaFeaturedContent',
-  'SayaBrandStory': 'LazySayaBrandStory',
 
   // Generic content blocks (Below the fold)
   'ContentText': 'LazyContentText',

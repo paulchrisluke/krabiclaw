@@ -121,12 +121,12 @@ INSERT OR REPLACE INTO media_assets
    public_url, thumbnail_url,
    mime_type, file_name, alt_text, category, status)
 VALUES
-  -- Hero: studio exterior with Pottery House sign and hanging greenery
+  -- Hero: hands on pottery wheel (Unsplash, Earl Wilcox, free license)
   ('media-ph-hero', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
    'image', 'external_url', 'external',
-   '/images/pottery-house/705340249_1010726131467629_3263381692626801997_n.png',
-   '/images/pottery-house/705340249_1010726131467629_3263381692626801997_n.png',
-   'image/png', 'pottery-house-hero.png', 'Pottery House Krabi studio exterior with hanging greenery and warm lights', 'exterior', 'active'),
+   'https://images.unsplash.com/photo-1607556671927-78a6605e290b?w=1280&q=80&fm=webp',
+   'https://images.unsplash.com/photo-1607556671927-78a6605e290b?w=600&q=70&fm=webp',
+   'image/webp', 'pottery-house-hero.webp', 'Hands shaping clay on a pottery wheel', 'exterior', 'active'),
 
   -- Studio interior: dark walls, hanging plants, shelves of pottery
   ('media-ph-studio', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
@@ -198,18 +198,20 @@ VALUES
 INSERT OR REPLACE INTO media_assets
   (id, organization_id, site_id, location_id,
    kind, provider, source,
-   r2_key, public_url,
+   r2_key, public_url, thumbnail_url,
    mime_type, file_name, alt_text, category, status)
 VALUES
   ('media-ph-hero-video', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
    'video', 'cloudflare_r2', 'uploaded',
    'sites/site-pottery-house/media/media-ph-hero-video.mp4',
    'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-hero-video.mp4',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-hero-video-thumb-v2.jpg',
    'video/mp4', 'pottery-house-hero.mp4', 'Pottery House Krabi studio hero video', 'exterior', 'active'),
   ('media-ph-beach-hero-video', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-beachfront',
    'video', 'cloudflare_r2', 'uploaded',
    'sites/site-pottery-house/media/media-ph-beach-hero-video.mp4',
    'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-beach-hero-video.mp4',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-beach-hero-video-thumb-v2.jpg',
    'video/mp4', 'pottery-house-beach-hero.mp4', 'Beachfront pottery session hero video at Klong Muang', 'exterior', 'active');
 
 -- Set hero images and videos
@@ -509,6 +511,8 @@ All firing happens on site in our Skutt kiln. Bisque and glaze firing are always
 Nothing makes our team happier than happy students.',
    NULL, NULL, NULL,
    'textarea', 'manual');
+
+UPDATE site_content SET hero_video_asset_id = 'media-ph-hero-video' WHERE id = 'sc-ph-home-hero';
 
 -- Thai translations
 INSERT INTO site_content_translations

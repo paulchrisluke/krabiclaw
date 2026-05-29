@@ -33,6 +33,7 @@ export interface CloudflareEnv {
   FACEBOOK_REDIRECT_URI?: string
   FACEBOOK_CONFIG_ID?: string
   MEDIA_BUCKET?: R2Bucket
+  SITE_CACHE: KVNamespace
   [key: string]: ApiValue
 }
 

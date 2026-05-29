@@ -330,20 +330,20 @@ function isPlatformPage(page: string): page is (typeof PLATFORM_PAGES)[number] {
 function getComponentFromField(field: string): string | null {
   // Direct mapping for specific fields
   const fieldToComponentMap: Record<string, string> = {
-    'hero': 'SayaHomeHero',
-    'hero.title': 'SayaHomeHero',
-    'hero.subtitle': 'SayaHomeHero',
-    'hero.eyebrow': 'SayaHomeHero',
-    'hero.image': 'SayaHomeHero',
-    'hero.video': 'SayaHomeHero',
-    'story.headline': 'SayaBrandStory',
-    'story.body': 'SayaBrandStory',
-    'story.image': 'SayaBrandStory',
-    'story.title': 'SayaBrandStory',
-    'journey.title': 'SayaBrandStory',
-    'journey.body': 'SayaBrandStory',
-    'experience.body': 'SayaBrandStory',
-    'experience.title': 'SayaBrandStory',
+    'hero': 'SayaHero',
+    'hero.title': 'SayaHero',
+    'hero.subtitle': 'SayaHero',
+    'hero.eyebrow': 'SayaHero',
+    'hero.image': 'SayaHero',
+    'hero.video': 'SayaHero',
+    'story.headline': 'SayaAbout',
+    'story.body': 'SayaAbout',
+    'story.image': 'SayaAbout',
+    'story.title': 'SayaAbout',
+    'journey.title': 'SayaAbout',
+    'journey.body': 'SayaAbout',
+    'experience.body': 'SayaAbout',
+    'experience.title': 'SayaAbout',
     'cta.title': 'SayaCTA',
     'cta.description': 'SayaCTA',
     'reviews.heading': 'SayaReviews',
@@ -359,10 +359,10 @@ function getComponentFromField(field: string): string | null {
   }
 
   // Pattern matching
-  if (field.startsWith('hero.')) return 'SayaHomeHero';
-  if (field.startsWith('story.')) return 'SayaBrandStory';
-  if (field.startsWith('journey.')) return 'SayaBrandStory';
-  if (field.startsWith('experience.')) return 'SayaBrandStory';
+  if (field.startsWith('hero.')) return 'SayaHero';
+  if (field.startsWith('story.')) return 'SayaAbout';
+  if (field.startsWith('journey.')) return 'SayaAbout';
+  if (field.startsWith('experience.')) return 'SayaAbout';
   if (field.startsWith('cta.')) return 'SayaCTA';
   if (field.startsWith('reviews.')) return 'SayaReviews';
   if (field.startsWith('posts.')) return 'SayaPosts';

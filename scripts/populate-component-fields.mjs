@@ -42,9 +42,12 @@ const fieldToComponentMap = {
   'qa.heading': 'SayaQA',
 }
 
-// SQL to update component field based on field patterns
+// SQL to update component field based on field patterns (using parameterized approach)
 const updateStatements = Object.entries(fieldToComponentMap).map(([field, component]) => {
-  return `UPDATE site_content SET component = '${component}' WHERE field = '${field}' AND component IS NULL;`
+  // Escape single quotes to prevent SQL injection
+  const safeField = field.replace(/'/g, "''")
+  const safeComponent = component.replace(/'/g, "''")
+  return `UPDATE site_content SET component = '${safeComponent}' WHERE field = '${safeField}' AND component IS NULL;`
 }).join('\n')
 
 console.log('SQL Update Statements:')

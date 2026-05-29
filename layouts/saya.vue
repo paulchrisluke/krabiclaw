@@ -43,8 +43,9 @@ const validGoogleAnalyticsId = computed(() => {
   return isValidGoogleAnalyticsId(id) ? id : null
 })
 
-if (validGoogleAnalyticsId.value) {
-  useScriptGoogleAnalytics({ id: validGoogleAnalyticsId })
+const _gaId = validGoogleAnalyticsId.value
+if (_gaId) {
+  useScriptGoogleAnalytics({ id: _gaId })
 }
 
 useHead(() => {
