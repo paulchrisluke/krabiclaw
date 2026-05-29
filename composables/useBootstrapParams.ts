@@ -142,6 +142,14 @@ export const useBootstrapParams = (): BootstrapParams => {
       menu: false,
       data: null,
     };
+  if (path === "/menu" || path.startsWith("/menu/"))
+    return {
+      page: "menu",
+      location: null,
+      experience: null,
+      menu: true,
+      data: null,
+    };
 
   return {
     page: null,

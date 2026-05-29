@@ -173,6 +173,16 @@
             >
               {{ homeCopy.reserveCta }}
             </UButton>
+            <UButton
+              v-if="!hasOrderLinks"
+              to="/menu"
+              color="neutral"
+              variant="outline"
+              size="xl"
+              class="rounded-full border-white/50 text-white hover:bg-white/10"
+            >
+              View Menu
+            </UButton>
           </div>
         </div>
       </section>
@@ -259,7 +269,7 @@
           <div class="mb-16 max-w-2xl">
             <p class="saya-kicker mb-6">Lately</p>
             <h2 class="saya-display-md text-default">Posts, reviews &amp; dishes from across the brand.</h2>
-            <p class="mt-6 text-sm leading-relaxed text-muted">Updates automatically from Google Business across every location.</p>
+            <p class="mt-6 text-sm leading-relaxed text-muted">{{ $t('home.highlights') }}</p>
           </div>
           <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <template v-for="(tile, i) in highlights" :key="i">
@@ -393,7 +403,7 @@
               {{ googleReviewSummary.average }}
               <span v-if="googleReviewSummary.count" class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
             </h2>
-            <p class="mt-6 text-sm text-muted">Synced live from Google Business across every location.</p>
+            <p class="mt-6 text-sm text-muted">{{ $t('home.reviews') }}</p>
           </template>
           <template v-else-if="isAuthenticated">
             <h2 class="saya-display-md text-default opacity-30">What your guests say.</h2>

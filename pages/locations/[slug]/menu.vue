@@ -156,8 +156,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.title || 'KrabiClaw')
 
-const { location, menu: bootstrapMenu, menuItemsBySection, data: bootstrapData, hasExperiences } = useBootstrap()
-const menuLoading = computed(() => !bootstrapData.value)
+const { location, menu: bootstrapMenu, menuItemsBySection, pending: menuLoading, config: bootstrapConfig, hasExperiences } = useBootstrap()
 const hasMenu = computed(() => ((bootstrapMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
 
 const menuUpdated = computed(() => {
@@ -234,7 +233,7 @@ useSeoMeta({
 const locationCurrency = computed(() => {
   const loc = location.value as ApiValue
   if (loc?.currency && typeof loc.currency === 'string') return loc.currency
-  const currency = (bootstrapData.value?.config as Record<string, string> | undefined)?.default_currency
+  const currency = (bootstrapConfig.value as Record<string, string> | undefined)?.default_currency
   if (currency) return currency
   return 'THB'
 })

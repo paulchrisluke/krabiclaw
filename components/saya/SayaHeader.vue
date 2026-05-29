@@ -1,7 +1,7 @@
 <template>
   <div>
     <header ref="headerRef" class="sticky top-0 z-50 border-b border-default bg-default/80 backdrop-blur-md">
-      <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
         <!-- Brand logo / name -->
         <NuxtLink to="/" class="shrink-0 no-underline">
           <img
@@ -16,26 +16,20 @@
         <!-- Desktop nav -->
         <nav class="hidden items-center gap-1 lg:flex" aria-label="Saya navigation">
           <NuxtLink
-            v-if="singleLocationMenuPath"
-            :to="singleLocationMenuPath"
+            v-if="locations.length === 1 && hasMenu"
+            to="/menu"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
             Menu
           </NuxtLink>
 
-          <UDropdownMenu v-else :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
+          <UDropdownMenu v-else-if="locations.length > 1" :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
             <button class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default">
               Locations
               <UIcon name="i-heroicons-chevron-down" class="size-3 opacity-60" />
             </button>
           </UDropdownMenu>
 
-          <NuxtLink
-            to="/about"
-            class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
-          >
-            Story
-          </NuxtLink>
           <NuxtLink
             to="/reservations"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
@@ -49,15 +43,9 @@
           >
             Experiences
           </NuxtLink>
-          <NuxtLink
-            to="/contact"
-            class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
-          >
-            Contact
-          </NuxtLink>
         </nav>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center justify-end gap-2">
           <!-- Language switcher -->
           <UDropdownMenu :items="languageItems" :ui="{ content: 'saya-theme' }">
             <UButton variant="ghost" color="neutral" size="sm">
@@ -100,14 +88,14 @@
       >
         <nav class="grid gap-1" aria-label="Saya mobile navigation">
           <NuxtLink
-            v-if="singleLocationMenuPath"
-            :to="singleLocationMenuPath"
+            v-if="locations.length === 1 && hasMenu"
+            to="/menu"
             class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
             Menu
           </NuxtLink>
-          <template v-else>
+          <template v-else-if="locations.length > 1">
             <div class="pb-2 pt-1">
               <p class="px-4 text-xs font-medium uppercase tracking-widest text-muted">Locations</p>
             </div>
@@ -122,13 +110,6 @@
             </NuxtLink>
           </template>
           <div class="my-1 border-t border-default" />
-          <NuxtLink
-            to="/about"
-            class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
-            @click="mobileMenuOpen = false"
-          >
-            Story
-          </NuxtLink>
           <NuxtLink
             v-if="hasOrderLinks"
             to="/order"
@@ -179,7 +160,10 @@ interface I18nComposable {
 }
 
 
+import { getVerticalCopy } from '~/utils/vertical-copy'
+
 const { site } = useTenantSite()
+const verticalCopy = getVerticalCopy((site as { vertical?: string } | null)?.vertical)
 const i18n = useI18n() as ApiValue as I18nComposable
 const mobileMenuOpen = ref(false)
 const headerRef = ref<HTMLElement | null>(null)
@@ -234,24 +218,18 @@ const languageItems = computed(() =>
 )
 
 const locations = computed(() => bootstrapLocations.value)
-const singleLocation = computed(() => locations.value.length === 1 ? locations.value[0] : null)
-const singleLocationMenuPath = computed(() =>
-  (singleLocation.value?.slug && hasMenu.value) ? `/locations/${singleLocation.value.slug}/menu` : ''
-)
 const hasOrderLinks = computed(() =>
   locations.value.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
 
 const primaryCtaPath = computed(() => {
   if (hasOrderLinks.value) return '/order'
-  if (hasExperiences.value && !hasMenu.value) return '/experiences'
-  return '/reservations'
+  return verticalCopy.ctaRoute
 })
 
 const primaryCtaLabel = computed(() => {
   if (hasOrderLinks.value) return 'Order Now'
-  if (hasExperiences.value && !hasMenu.value) return 'Book Class'
-  return 'Reserve'
+  return verticalCopy.reserveCta
 })
 
 const locationDropdownItems = computed(() => [

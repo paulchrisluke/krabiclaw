@@ -121,8 +121,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const { isAuthenticated } = useAuth()
 const locationsCopy = getVerticalCopy(unref(site)?.vertical)
 
-const { locations, data: bootstrapData } = useBootstrap()
-const pending = computed(() => !bootstrapData.value)
+const { locations, pending } = useBootstrap()
 
 function formatAddress(address: AddressInput) {
   if (!address) return ''

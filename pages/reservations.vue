@@ -35,13 +35,18 @@
                 <UInput v-model="reservationForm.phone" size="lg" type="tel" placeholder="+66 81 234 5678" class="w-full" />
               </UFormField>
 
-              <!-- Date — Calendar -->
+              <!-- Date — Calendar (client-only: skips SSR of the full date grid) -->
               <UFormField label="Date" name="date" required>
                 <div class="space-y-3">
-                  <UCalendar
-                    v-model="selectedDate"
-                    class="w-full rounded-xl"
-                  />
+                  <ClientOnly>
+                    <UCalendar
+                      v-model="selectedDate"
+                      class="w-full rounded-xl"
+                    />
+                    <template #fallback>
+                      <div class="h-64 w-full rounded-xl bg-muted/40 animate-pulse" />
+                    </template>
+                  </ClientOnly>
                   <p v-if="reservationForm.date" class="text-sm font-medium text-default">
                     Selected: <span class="text-primary">{{ readableDate }}</span>
                   </p>

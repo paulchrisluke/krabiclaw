@@ -332,12 +332,11 @@ const {
   getHero: getContentHero,
   menu: bootstrapMenu,
   locationReviews,
-  data: bootstrapData,
+  pending,
+  config: bootstrapConfig,
   hasExperiences,
   experiencesList,
 } = useBootstrap()
-
-const pending = computed(() => !bootstrapData.value)
 
 const hasMenu = computed(() => {
   const m = bootstrapMenu.value as { items?: unknown[] } | null
@@ -445,7 +444,7 @@ const featuredItems = computed(() => {
   }
 })
 
-const defaultCurrency = computed(() => bootstrapData.value?.config?.default_currency || 'THB')
+const defaultCurrency = computed(() => bootstrapConfig.value?.default_currency || 'THB')
 const formatFeaturedPrice = (amount: unknown) => formatMoneyAmount(amount, defaultCurrency.value, '')
 
 // Content hero fields take precedence; fall back to Google Business primary photo

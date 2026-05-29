@@ -199,8 +199,7 @@ const siteName = computed(() => (site as ApiValue)?.name || 'KrabiClaw')
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
-const { experienceDetail: experience, data: bootstrapData } = useBootstrap()
-const pending = computed(() => !bootstrapData.value)
+const { experienceDetail: experience, pending } = useBootstrap()
 const currentPageUrl = useSeoUrl(() => `/experiences/${slug}`)
 const ogImage = useSharedOgImage(() => experience.value?.image_url)
 
