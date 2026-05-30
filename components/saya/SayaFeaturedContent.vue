@@ -9,12 +9,13 @@
       >
         <div class="aspect-square overflow-hidden bg-muted">
           <video
-            v-if="item.imageKind === 'video' && item.image"
+            v-if="item.imageKind === 'video' && item.image && clientReady"
             :src="item.image"
             autoplay
             muted
             loop
             playsinline
+            preload="none"
             class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
           <img
@@ -57,4 +58,7 @@ const props = withDefaults(defineProps<Props>(), {
 const items = computed(() => props.data?.items || [])
 const hasMenu = computed(() => props.data?.hasMenu || false)
 const linkTarget = computed(() => hasMenu.value ? '/menu' : '/experiences')
+
+const clientReady = ref(false)
+onMounted(() => { clientReady.value = true })
 </script>

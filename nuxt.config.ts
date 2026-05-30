@@ -226,9 +226,9 @@ export default defineNuxtConfig({
       subsets: ['latin'],
     },
     families: [
-      { name: 'Instrument Serif', weights: [400], styles: ['normal', 'italic'] },
-      { name: 'Poppins', weights: [400, 500, 600, 700] },
-      { name: 'Fredoka', weights: [400, 500, 600, 700] },
+      { name: 'Instrument Serif', weights: [400], styles: ['normal', 'italic'], display: 'swap' },
+      { name: 'Poppins', weights: [400, 500, 600, 700], display: 'swap' },
+      { name: 'Fredoka', weights: [400, 500, 600, 700], display: 'swap' },
     ],
   },
 
