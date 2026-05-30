@@ -60,6 +60,19 @@ export default defineNuxtConfig({
       watch: {
         ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       }
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            // Keep dashboard and admin code out of the shared entry chunk.
+            // Public tenant pages never need these modules.
+            if (id.includes('/pages/dashboard') || id.includes('/pages/admin')) {
+              return 'dashboard'
+            }
+          }
+        }
+      }
     }
   },
 
@@ -73,67 +86,19 @@ export default defineNuxtConfig({
 
   // i18n Configuration
   i18n: {
+    langDir: 'locales',
+    lazy: true,
     locales: [
-      {
-        code: 'en',
-        name: 'English',
-        language: 'en-US',
-        dir: 'ltr'
-      },
-      {
-        code: 'th',
-        name: 'ไทย',
-        language: 'th-TH',
-        dir: 'ltr'
-      },
-      {
-        code: 'fr',
-        name: 'Français',
-        language: 'fr-FR',
-        dir: 'ltr'
-      },
-      {
-        code: 'ja',
-        name: '日本語',
-        language: 'ja-JP',
-        dir: 'ltr'
-      },
-      {
-        code: 'zh-CN',
-        name: '简体中文',
-        language: 'zh-CN',
-        dir: 'ltr'
-      },
-      {
-        code: 'ko',
-        name: '한국어',
-        language: 'ko-KR',
-        dir: 'ltr'
-      },
-      {
-        code: 'es',
-        name: 'Español',
-        language: 'es-ES',
-        dir: 'ltr'
-      },
-      {
-        code: 'de',
-        name: 'Deutsch',
-        language: 'de-DE',
-        dir: 'ltr'
-      },
-      {
-        code: 'it',
-        name: 'Italiano',
-        language: 'it-IT',
-        dir: 'ltr'
-      },
-      {
-        code: 'ar',
-        name: 'العربية',
-        language: 'ar-SA',
-        dir: 'rtl'
-      }
+      { code: 'en',    name: 'English',    language: 'en-US', dir: 'ltr', file: 'en.json' },
+      { code: 'th',    name: 'ไทย',        language: 'th-TH', dir: 'ltr', file: 'th.json' },
+      { code: 'fr',    name: 'Français',   language: 'fr-FR', dir: 'ltr', file: 'fr.json' },
+      { code: 'ja',    name: '日本語',      language: 'ja-JP', dir: 'ltr', file: 'ja.json' },
+      { code: 'zh-CN', name: '简体中文',    language: 'zh-CN', dir: 'ltr', file: 'zh-CN.json' },
+      { code: 'ko',    name: '한국어',      language: 'ko-KR', dir: 'ltr', file: 'ko.json' },
+      { code: 'es',    name: 'Español',    language: 'es-ES', dir: 'ltr', file: 'es.json' },
+      { code: 'de',    name: 'Deutsch',    language: 'de-DE', dir: 'ltr', file: 'de.json' },
+      { code: 'it',    name: 'Italiano',   language: 'it-IT', dir: 'ltr', file: 'it.json' },
+      { code: 'ar',    name: 'العربية',    language: 'ar-SA', dir: 'rtl', file: 'ar.json' },
     ],
     defaultLocale: 'en',
     strategy: 'prefix_except_default',
