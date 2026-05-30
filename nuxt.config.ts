@@ -205,6 +205,24 @@ export default defineNuxtConfig({
     '/assets/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } }
   },
 
+  // Font configuration — @nuxt/fonts downloads, subsets, and self-hosts these.
+  // Do NOT add @import from fonts.googleapis.com in main.css; that would double-load
+  // and block rendering on a separate render-blocking external request.
+  //
+  // Poppins: only the weights actually used in CSS (NOT all 18 variants).
+  // Instrument Serif: italic is the LCP font on tenant hero pages — kept minimal.
+  // Fredoka: platform wordmark / display, all 4 weights used.
+  fonts: {
+    defaults: {
+      subsets: ['latin'],
+    },
+    families: [
+      { name: 'Instrument Serif', weights: [400], styles: ['normal', 'italic'] },
+      { name: 'Poppins', weights: [400, 500, 600, 700] },
+      { name: 'Fredoka', weights: [400, 500, 600, 700] },
+    ],
+  },
+
   // Nitro configuration for Cloudflare deployment
   nitro: {
     preset: 'cloudflare-module',
