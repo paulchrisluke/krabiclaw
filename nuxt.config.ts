@@ -208,7 +208,9 @@ export default defineNuxtConfig({
     '/signup':       { headers: { 'cache-control': 'no-store' } },
     '/login':        { headers: { 'cache-control': 'no-store' } },
 
-    // Public pages — browser language detection is disabled so / is safe to cache
+    // Public pages — detectBrowserLanguage is disabled so / is safe to cache.
+    // Explicit '/' rule overrides any cache-control the i18n module injects internally.
+    '/':   { headers: { 'cache-control': 'public, s-maxage=60, stale-while-revalidate=300, max-age=0' } },
     '/**': { headers: { 'cache-control': 'public, s-maxage=60, stale-while-revalidate=300, max-age=0' } },
   },
 

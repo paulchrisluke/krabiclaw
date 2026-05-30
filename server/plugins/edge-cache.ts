@@ -42,9 +42,12 @@ export default defineNitroPlugin((nitroApp) => {
     if (event.path.includes('?')) return
     if (SKIP_PREFIXES.some(p => event.path.startsWith(p))) return
 
-    // Don't cache if the response sets a cookie (auth/session response)
+    // Don't cache if the response sets an auth/session cookie.
+    // Locale preference cookies (i18n_redirected) are the same value for all visitors
+    // and must not prevent caching.
     const sc = response.headers['set-cookie'] ?? response.headers['Set-Cookie']
-    if (sc && (Array.isArray(sc) ? sc.length > 0 : sc)) return
+    const scArr = Array.isArray(sc) ? sc : (sc ? [String(sc)] : [])
+    if (scArr.some(c => c.includes(SESSION_COOKIE))) return
 
     // Don't cache if the request carries a session cookie (personalised response)
     if ((getHeader(event, 'cookie') ?? '').includes(SESSION_COOKIE)) return
