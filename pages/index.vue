@@ -136,23 +136,40 @@
         }"
       />
       <section v-else id="section-hero" class="relative min-h-160 overflow-hidden flex items-center">
-        <!-- Background video (takes precedence over photo) -->
-        <div v-if="hero.video && hero.videoKind === 'video'" data-field="hero.video" class="absolute inset-0">
-          <video :src="hero.video" autoplay muted loop playsinline aria-hidden="true" role="presentation" class="w-full h-full object-cover opacity-50" />
-        </div>
-        <!-- Background photo: media asset takes precedence, then Google Business photo -->
-        <div
-          v-else-if="(hero.image && hero.imageKind === 'image') || businessPrimaryPhoto"
-          data-field="hero.image"
-          class="absolute inset-0 bg-cover bg-center opacity-50"
-          :style="`background-image: url(${hero.image || businessPrimaryPhoto?.googleUrl})`"
-        />
-        <!-- Fallback if hero.image is actually a video -->
-        <div v-else-if="hero.image && hero.imageKind === 'video'" class="absolute inset-0">
-          <video :src="hero.image" autoplay muted loop playsinline aria-hidden="true" role="presentation" class="w-full h-full object-cover opacity-50" />
-        </div>
+        <!-- Background media — poster is always in SSR HTML (LCP candidate).
+             Video deferred until window.load + idle, fades in after canplay. -->
+        <div class="absolute inset-0">
+          <!-- Poster image: present in SSR, fetchpriority high — this is the LCP element -->
+          <img
+            v-if="hero.videoThumbnail"
+            :src="hero.videoThumbnail"
+            alt="" aria-hidden="true" fetchpriority="high" decoding="async"
+            class="absolute inset-0 h-full w-full object-cover"
+          />
+          <img
+            v-else-if="hero.image && hero.imageKind === 'image'"
+            :src="hero.image"
+            alt="" aria-hidden="true" fetchpriority="high" decoding="async"
+            class="absolute inset-0 h-full w-full object-cover"
+          />
+          <img
+            v-else-if="businessPrimaryPhoto?.googleUrl"
+            :src="businessPrimaryPhoto.googleUrl"
+            alt="" aria-hidden="true" fetchpriority="high" decoding="async"
+            class="absolute inset-0 h-full w-full object-cover"
+          />
 
-        <div class="absolute inset-0 bg-zinc-950" :class="(hero.image || businessPrimaryPhoto || hero.video) ? 'opacity-50' : ''" />
+          <!-- Deferred video: not in SSR, starts opacity-0, fades in after canplay -->
+          <ClientOnly v-if="hero.video && hero.videoKind === 'video'">
+            <video
+              v-if="heroVideoShow"
+              ref="heroVideoEl"
+              muted loop playsinline preload="none"
+              aria-hidden="true" role="presentation"
+              class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-700"
+            />
+          </ClientOnly>
+        </div>
         <div class="relative mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">
           <p v-if="getField('hero.eyebrow', businessCity)" data-field="hero.eyebrow" class="saya-eyebrow mb-8 text-white/70">
             {{ getField('hero.eyebrow', businessCity) }}
@@ -659,6 +676,8 @@ const hero = computed(() => getHero({
   image: '',
   video: ''
 }))
+
+const { videoEl: heroVideoEl, showVideo: heroVideoShow } = useHeroVideo(() => hero.value?.video)
 
 const currentPageUrl = useSeoUrl('/')
 const sharedOgImage = useSharedOgImage()

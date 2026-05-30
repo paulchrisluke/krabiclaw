@@ -1,22 +1,44 @@
 <template>
   <section class="relative min-h-160 overflow-hidden flex items-center">
-    <!-- Background video (takes precedence over photo) -->
-    <div v-if="hero.video && hero.videoKind === 'video'" class="absolute inset-0">
-      <video :src="hero.video" autoplay muted loop playsinline aria-hidden="true" role="presentation" class="w-full h-full object-cover opacity-50" />
-    </div>
-    <!-- Background photo: media asset takes precedence, then Google Business photo -->
-    <div
-      v-else-if="(hero.image && hero.imageKind === 'image') || businessPrimaryPhoto"
-      class="absolute inset-0 bg-cover bg-center opacity-50"
-      :style="`background-image: url(${hero.image || businessPrimaryPhoto?.googleUrl})`"
-    />
-    <!-- Fallback if hero.image is actually a video -->
-    <div v-else-if="hero.image && hero.imageKind === 'video'" class="absolute inset-0">
-      <video :src="hero.image" autoplay muted loop playsinline aria-hidden="true" role="presentation" class="w-full h-full object-cover opacity-50" />
+    <!-- Background media layer -->
+    <div class="absolute inset-0">
+      <!-- Poster image: always in SSR HTML, fetchpriority high — this is the LCP element.
+           Video fades in on top after window.load + idle; poster remains painted. -->
+      <img
+        v-if="hero.videoThumbnail && hero.video"
+        :src="hero.videoThumbnail"
+        alt="" aria-hidden="true" fetchpriority="high" decoding="async"
+        class="absolute inset-0 h-full w-full object-cover"
+      />
+      <!-- Image-only hero (no video) -->
+      <img
+        v-else-if="hero.image && hero.imageKind === 'image'"
+        :src="hero.image"
+        alt="" aria-hidden="true" fetchpriority="high" decoding="async"
+        class="absolute inset-0 h-full w-full object-cover"
+      />
+      <img
+        v-else-if="businessPrimaryPhoto"
+        :src="businessPrimaryPhoto.googleUrl"
+        alt="" aria-hidden="true" fetchpriority="high" decoding="async"
+        class="absolute inset-0 h-full w-full object-cover"
+      />
+
+      <!-- Deferred video: opacity-0 in DOM, fades to opacity-100 after canplay.
+           Never in SSR HTML (ClientOnly), never an LCP candidate until it's visible. -->
+      <ClientOnly v-if="hero.video && hero.videoKind === 'video'">
+        <video
+          v-if="showVideo"
+          ref="videoEl"
+          muted loop playsinline preload="none"
+          aria-hidden="true" role="presentation"
+          class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-700"
+        />
+      </ClientOnly>
     </div>
 
-    <div class="absolute inset-0 bg-zinc-950" :class="(hero.image || businessPrimaryPhoto || hero.video) ? 'opacity-50' : ''" />
-    <div class="relative mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">
+    <!-- Content -->
+    <div class="relative z-10 mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">
       <p v-if="hero.eyebrow || businessCity" class="saya-eyebrow mb-8 text-white/70">
         {{ hero.eyebrow || businessCity }}
       </p>
@@ -66,37 +88,32 @@
 </template>
 
 <script setup lang="ts">
+interface HeroData {
+  title?: string
+  subtitle?: string
+  eyebrow?: string
+  image?: string
+  imageKind?: string
+  video?: string
+  videoKind?: string
+  videoThumbnail?: string | null
+}
+
 interface Props {
   data?: {
-    hero?: {
-      title?: string
-      subtitle?: string
-      eyebrow?: string
-      image?: string
-      imageKind?: string
-      video?: string
-      videoKind?: string
-    }
-    locations?: Array<{
-      id: string
-      slug: string
-      title: string
-    }>
+    hero?: HeroData
+    locations?: Array<{ id: string; slug: string; title: string }>
     businessTitle?: string
     businessSubtitle?: string
     businessCity?: string
-    businessPrimaryPhoto?: {
-      googleUrl?: string
-    }
+    businessPrimaryPhoto?: { googleUrl?: string }
     hasOrderLinks?: boolean
     ctaRoute?: string
     reserveCta?: string
   }
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  data: () => ({})
-})
+const props = withDefaults(defineProps<Props>(), { data: () => ({}) })
 
 const hero = computed(() => props.data?.hero || {})
 const locations = computed(() => props.data?.locations || [])
@@ -108,4 +125,6 @@ const businessPrimaryPhoto = computed(() => props.data?.businessPrimaryPhoto)
 const hasOrderLinks = computed(() => props.data?.hasOrderLinks || false)
 const ctaRoute = computed(() => props.data?.ctaRoute || '')
 const reserveCta = computed(() => props.data?.reserveCta || '')
+
+const { videoEl, showVideo } = useHeroVideo(() => hero.value?.video)
 </script>
