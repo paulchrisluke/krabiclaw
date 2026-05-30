@@ -7,12 +7,28 @@
 // All inline D1 queries run in a single db.batch() call alongside helper functions.
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-business";
-import { getPageContent } from "~/server/utils/content-management";
+import { getPageContent, type SiteContent } from "~/server/utils/content-management";
 import { getActiveMenu } from "~/server/utils/menu-management";
 import {
   getExperienceBySlug,
   listExperiences,
 } from "~/server/utils/experiences";
+
+function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
+  const groups: Record<string, SiteContent & { _section: string }> = {}
+  for (const row of rows) {
+    const section = row.field?.split('.')[0] || 'unknown'
+    if (!groups[section]) {
+      groups[section] = { ...row, field: section, _section: section }
+    } else {
+      if (row.component) groups[section].component = row.component
+      for (const key of Object.keys(row) as Array<keyof SiteContent>) {
+        if (groups[section][key] == null) (groups[section] as unknown as Record<string, unknown>)[key] = row[key]
+      }
+    }
+  }
+  return Object.values(groups)
+}
 
 const PUBLIC_PHOTO_CATEGORY: Record<string, string> = {
   exterior: "EXTERIOR",
@@ -76,13 +92,14 @@ export default defineEventHandler(async (event) => {
   const [site, locationRow] = await Promise.all([
     db
       .prepare(
-        `SELECT id, organization_id, default_currency FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`,
+        `SELECT id, organization_id, default_currency, contact_email FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`,
       )
       .bind(siteId)
       .first<{
         id: string;
         organization_id: string;
         default_currency: string | null;
+        contact_email: string | null;
       }>(),
     locationSlug
       ? db
@@ -136,7 +153,8 @@ export default defineEventHandler(async (event) => {
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
                  ma_img.public_url AS hero_image_public_url,
-                 ma_vid.public_url AS hero_video_public_url
+                 ma_vid.public_url AS hero_video_public_url,
+                 ma_vid.thumbnail_url
           FROM business_locations bl
           LEFT JOIN media_assets ma_img ON bl.hero_image_asset_id = ma_img.id AND ma_img.status = 'active'
           LEFT JOIN media_assets ma_vid ON bl.hero_video_asset_id = ma_vid.id AND ma_vid.status = 'active'
@@ -149,7 +167,8 @@ export default defineEventHandler(async (event) => {
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
-                 NULL AS hero_image_public_url, NULL AS hero_video_public_url
+                 NULL AS hero_image_public_url, NULL AS hero_video_public_url,
+                 NULL AS thumbnail_url
           FROM business_locations bl
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
           ORDER BY bl.is_primary DESC, bl.title ASC
@@ -335,6 +354,7 @@ export default defineEventHandler(async (event) => {
   const locations = (locRows.results ?? []).map((loc) => {
     const heroVideoUrl = loc.hero_video_public_url as string | null;
     const heroImageUrl = loc.hero_image_public_url as string | null;
+    const thumbnailUrl = loc.thumbnail_url as string | null;
     const publicUrl = heroVideoUrl || heroImageUrl || null;
 
     return {
@@ -364,6 +384,7 @@ export default defineEventHandler(async (event) => {
       kind: publicUrl ? (heroVideoUrl ? "video" : "image") : null,
       hero_image_public_url: heroImageUrl,
       hero_video_public_url: heroVideoUrl,
+      thumbnail_url: thumbnailUrl,
       city: loc.city,
       neighborhood: loc.neighborhood || null,
       grab_url: loc.grab_url || null,
@@ -376,6 +397,7 @@ export default defineEventHandler(async (event) => {
     (configRows.results ?? []).map(({ key, value }) => [key, value]),
   );
   config.default_currency = site.default_currency || "THB";
+  if (site.contact_email) config.contact_email = site.contact_email;
 
   const primary =
     (locRows.results ?? []).find((l) => l.is_primary) ??
@@ -453,6 +475,7 @@ export default defineEventHandler(async (event) => {
     config,
     googleBusiness,
     content: contentRows,
+    content_blocks: groupContentBlocks(contentRows),
     menu: menuData,
     locationReviews: locationReviewRows?.results ?? [],
     count: locations.length,

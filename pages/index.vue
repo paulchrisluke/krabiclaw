@@ -290,8 +290,8 @@
             <div class="aspect-video overflow-hidden bg-muted">
               <!-- Homepage card always shows a static image — video plays on the location page. -->
               <img
-                v-if="loc.hero_video_thumbnail_url || loc.public_url"
-                :src="loc.hero_video_thumbnail_url || (loc.kind !== 'video' ? loc.public_url : null)"
+                v-if="loc.thumbnail_url || loc.public_url"
+                :src="loc.thumbnail_url || (loc.kind !== 'video' ? loc.public_url : null)"
                 :alt="loc.title"
                 loading="lazy"
                 class="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105"
