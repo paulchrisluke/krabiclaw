@@ -752,11 +752,15 @@ const featuredContent = computed(() => {
   const featuredItems = hasMenu.value ? featuredMenuItems.value : featuredExperiences.value
   return featuredItems.slice(0, 4).map(item => {
     if (hasMenu.value) {
+      // For video assets use the extracted WebP thumbnail, not the MP4 URL.
+      // Featured cards are small grid tiles — loading a video here wastes bandwidth
+      // and causes a 300-500KB download before the card is even visible.
+      const isVideo = item.kind === 'video'
       return {
         name: item.name,
         price: formatMoneyAmount(item.price_amount, defaultCurrency.value, ''),
-        image: item.public_url || null,
-        imageKind: item.kind || 'image',
+        image: isVideo ? (item.thumbnail_url || null) : (item.public_url || null),
+        imageKind: 'image',
         alt: item.name ? `${item.name} dish` : 'Featured dish image',
         href: item.slug ? `/menu/${item.slug}` : '/menu',
       }

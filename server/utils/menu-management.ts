@@ -306,7 +306,7 @@ export async function getMenuWithItems(
   // Get menu items
   const items = await db.prepare(`
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
-           mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
@@ -343,7 +343,7 @@ export async function getActiveMenu(
       const mappedMenu = mapMenu(locationMenu)
       const items = await db.prepare(`
         SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
-               mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+               mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
                mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
                mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
         FROM menu_items mi
@@ -374,7 +374,7 @@ export async function getActiveMenu(
 
   const items = await db.prepare(`
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
-           mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
@@ -398,7 +398,7 @@ export async function getPublicMenuItem(
 ): Promise<MenuItem | null> {
   const item = await db.prepare(`
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
-           mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
@@ -584,7 +584,7 @@ export async function createMenuItem(
 
   const createdItem = await db.prepare(`
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
-           mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
@@ -704,7 +704,7 @@ export async function updateMenuItem(
 
   const updatedItem = await db.prepare(`
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
-           mi.image_asset_id, ma.public_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
