@@ -30,6 +30,7 @@
         <video
           v-if="showVideo"
           ref="videoEl"
+          :poster="hero.thumbnail_url ?? undefined"
           muted loop playsinline preload="none"
           aria-hidden="true" role="presentation"
           class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-700"
