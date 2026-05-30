@@ -270,19 +270,13 @@
             class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
           >
             <div class="aspect-video overflow-hidden bg-muted">
-              <video
-                v-if="loc.public_url && loc.kind === 'video'"
-                :src="loc.public_url"
-                class="aspect-video w-full object-cover"
-                autoplay
-                muted
-                loop
-                playsinline
-              />
+              <!-- Homepage card always shows a static image — video plays on the location page.
+                   For video locations use hero_video_thumbnail_url (extracted WebP first-frame). -->
               <img
-                v-else-if="loc.public_url"
-                :src="loc.public_url"
+                v-if="loc.hero_video_thumbnail_url || loc.public_url"
+                :src="loc.hero_video_thumbnail_url || (loc.kind !== 'video' ? loc.public_url : null)"
                 :alt="loc.title"
+                loading="lazy"
                 class="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105"
               >
               <div v-else class="flex h-full w-full items-center justify-center">
