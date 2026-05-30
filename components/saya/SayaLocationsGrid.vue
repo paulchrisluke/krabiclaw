@@ -102,7 +102,7 @@ interface Props {
   }
 }
 
-const props = defineProps<Props>()
+defineProps<Props>()
 
 const cardRefs = ref<HTMLElement[]>([])
 const visibleCards = ref(new Set<number>())
