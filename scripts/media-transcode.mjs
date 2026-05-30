@@ -20,7 +20,6 @@ import { parseArgs } from 'node:util'
 import { readdir, stat, mkdir, unlink } from 'node:fs/promises'
 import { join, extname } from 'node:path'
 import { existsSync } from 'node:fs'
-import { createHash } from 'node:crypto'
 import { spawnSync, execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 
@@ -95,10 +94,7 @@ requireBin('ffprobe')
 const VIDEO_EXTS = new Set(['.mp4', '.mov', '.webm', '.avi', '.mkv', '.m4v'])
 
 function uid() {
-  return createHash('sha256')
-    .update(SLUG + Date.now() + Math.random())
-    .digest('hex')
-    .slice(0, 12)
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 }
 
 function probeDuration(filePath) {

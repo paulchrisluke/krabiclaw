@@ -3,13 +3,13 @@
     <div class="mb-16 max-w-2xl">
       <p class="saya-kicker mb-6">Find us</p>
       <h2 class="saya-display-md text-default">
-        {{ heading }}
+        {{ data.heading }}
       </h2>
     </div>
     <!-- Real locations -->
-    <div v-if="locations.length > 0" :class="['grid gap-8', locations.length > 1 ? 'md:grid-cols-2' : '']">
+    <div v-if="data.locations.length > 0" :class="['grid gap-8', data.locations.length > 1 ? 'md:grid-cols-2' : '']">
       <NuxtLink
-        v-for="(loc, i) in locations"
+        v-for="(loc, i) in data.locations"
         :key="loc.id"
         :ref="el => { if (el) cardRefs[i] = el as HTMLElement }"
         :to="`/locations/${loc.slug}`"
@@ -76,7 +76,7 @@
           </p>
         </div>
       </div>
-      <div v-if="isAuthenticated" class="md:col-span-2 text-center pt-2">
+      <div v-if="data.isAuthenticated" class="md:col-span-2 text-center pt-2">
         <UButton to="/dashboard" color="neutral" variant="outline" size="sm" class="rounded-full">
           Connect Google Business →
         </UButton>
@@ -87,8 +87,8 @@
 
 <script setup lang="ts">
 interface Props {
-  data?: {
-    locations?: Array<{
+  data: {
+    locations: Array<{
       id: string
       slug: string
       title: string
@@ -97,28 +97,18 @@ interface Props {
       kind?: string
       hero_video_thumbnail_url?: string
     }>
-    heading?: string
-    isAuthenticated?: boolean
+    heading: string
+    isAuthenticated: boolean
   }
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  data: () => ({})
-})
-
-const locations = computed(() => props.data?.locations || [])
-const heading = computed(() => props.data?.heading || 'Our Locations')
-const isAuthenticated = computed(() => props.data?.isAuthenticated || false)
+const props = defineProps<Props>()
 
 const cardRefs = ref<HTMLElement[]>([])
 const visibleCards = ref(new Set<number>())
 
 onMounted(() => {
-  if (!('IntersectionObserver' in window)) {
-    // Fallback for old browsers: show all after 2s
-    setTimeout(() => locations.value.forEach((_, i) => visibleCards.value.add(i)), 2000)
-    return
-  }
+  if (!('IntersectionObserver' in window)) return
 
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {

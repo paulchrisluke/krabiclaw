@@ -448,16 +448,15 @@ export const publishDrafts = async (db: D1Database, organizationId: string, site
 
 export const publishAllDrafts = async (db: D1Database) => {
   const { results: drafts } = await db.prepare(
-    `SELECT id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component, updated_at FROM site_content_drafts ORDER BY organization_id, site_id, location_id, page, field`
+    `SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component, updated_at FROM site_content_drafts ORDER BY organization_id, site_id, location_id, page, field`
   ).all<SiteContent>()
 
   if (!drafts || drafts.length === 0) return
 
-  // Perform upserts in manageable batches to avoid oversized batch payloads.
-  // D1's `db.batch` is atomic per batch, but we need all-or-nothing across chunks.
-  // Strategy: only delete drafts after all chunks succeed. If any chunk fails,
-  // drafts remain untouched for retry, and site_content may have partial updates
-  // from earlier chunks - operator can retry to complete the operation.
+  // Snapshot IDs now so the DELETE only removes what we read, not drafts
+  // created while chunks are processing.
+  const snapshotIds = drafts.map(d => d.id)
+
   const CHUNK_SIZE = 200
   try {
     for (let i = 0; i < drafts.length; i += CHUNK_SIZE) {
@@ -466,10 +465,14 @@ export const publishAllDrafts = async (db: D1Database) => {
       await db.batch(stmts)
     }
 
-    // Only delete drafts after all upserts succeed
-    await db.prepare(`DELETE FROM site_content_drafts`).run()
+    // Delete only the snapshotted IDs — drafts written during processing survive.
+    // Chunk to stay within D1/SQLite's parameter limit (~100 is safe for WHERE IN).
+    for (let i = 0; i < snapshotIds.length; i += CHUNK_SIZE) {
+      const chunk = snapshotIds.slice(i, i + CHUNK_SIZE)
+      const placeholders = chunk.map(() => '?').join(',')
+      await db.prepare(`DELETE FROM site_content_drafts WHERE id IN (${placeholders})`).bind(...chunk).run()
+    }
   } catch (err) {
-    // Bubble up with context for easier debugging in deploy logs
     console.error('[content-management] publishAllDrafts failed during batch upsert:', err)
     console.error('[content-management] Drafts were NOT deleted - retry the operation to complete')
     throw err

@@ -37,6 +37,7 @@ interface BootstrapPayload {
   config: Record<string, string>;
   googleBusiness: ApiRecord;
   content: ContentRow[];
+  content_blocks: ContentRow[];
   menu: ApiRecord | null;
   locationReviews: ApiRecord[];
   reviewsAggregate: ApiRecord | null;
@@ -60,6 +61,7 @@ const emptyBootstrap = (): BootstrapPayload => ({
     syncedAt: null,
   },
   content: [],
+  content_blocks: [],
   menu: null,
   locationReviews: [],
   reviewsAggregate: null,
@@ -261,30 +263,7 @@ export const useBootstrap = () => {
     }, {});
   });
 
-  // ── Content Blocks for Dynamic Rendering ───────────────────
-  const contentBlocks = computed(() => {
-    const rows = (data.value?.content ?? []) as ContentRow[];
-    // Group rows by section prefix (e.g., 'hero.title' => 'hero') and merge rows
-    const groups: Record<string, ContentRow & { component?: string | null }> = {}
-    for (const row of rows) {
-      const section = (row.field && row.field.split('.')[0]) || row.field || 'unknown'
-      if (!groups[section]) {
-        groups[section] = { field: section, content: null, component: row.component || null } as ContentRow & { component?: string | null }
-      }
-      // Merge keys from row into the group if not already set
-      for (const key of Object.keys(row)) {
-        if (groups[section][key] == null) groups[section][key] = row[key as keyof ContentRow]
-      }
-      // Prefer any explicit component value when present
-      if (row.component) groups[section].component = row.component
-    }
-
-    return Object.keys(groups).map((section, index) => ({
-      ...groups[section],
-      _uid: `${section}::${index}`,
-      component: groups[section]?.component || null,
-    }))
-  });
+  const contentBlocks = computed(() => (data.value?.content_blocks ?? []) as ContentRow[]);
 
   return {
     data,

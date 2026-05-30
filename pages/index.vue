@@ -140,7 +140,7 @@
             class="w-full h-full object-cover opacity-50"
           >
           <ClientOnly>
-            <video v-if="heroVideoShow" ref="heroVideoEl" :src="hero.value?.video" muted loop playsinline preload="none" aria-hidden="true" role="presentation" class="absolute inset-0 w-full h-full object-cover opacity-50" />
+            <video v-if="heroVideoShow" ref="heroVideoEl" :src="hero.video" muted loop playsinline preload="none" aria-hidden="true" role="presentation" class="absolute inset-0 w-full h-full object-cover opacity-50" />
           </ClientOnly>
         </div>
         <!-- Background photo: media asset takes precedence, then Google Business photo -->
@@ -213,10 +213,11 @@
 
       <!-- ── Featured content (dishes / experiences) ─────────── -->
       <LazySayaFeaturedContent
+        v-if="site?.vertical && featuredContent.length"
         :data="{
           items: featuredContent,
           hasMenu: hasMenu,
-          vertical: site?.vertical
+          vertical: site.vertical
         }"
       />
 
@@ -527,9 +528,9 @@
       <!-- ── Dynamic content blocks ───────────────────────────── -->
       <template v-if="contentBlocks.length > 0">
         <component
-          v-for="block in contentBlocks.filter(b => b.component && !['hero', 'featured', 'locations', 'story', 'cta'].includes(b.field))"
-          :key="block._uid || block.field"
-          :is="resolveComponent(block.component) || 'SayaContentBlockFallback'"
+          v-for="block in contentBlocks.filter(b => b.component && resolveComponent(b.component) && !['hero', 'featured', 'locations', 'story', 'cta'].includes(b.field))"
+          :key="block.field"
+          :is="resolveComponent(block.component)"
           :data="block"
           class="content-block"
         />

@@ -1,5 +1,5 @@
 <template>
-  <section v-if="items.length" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+  <section v-if="data.items.length" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
     <!-- Section header -->
     <div class="mb-10 flex flex-col gap-3 border-b border-default pb-8 md:flex-row md:items-end md:justify-between">
       <div>
@@ -19,7 +19,7 @@
     <!-- Cards -->
     <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
       <NuxtLink
-        v-for="(item, i) in items"
+        v-for="(item, i) in data.items"
         :key="i"
         :to="item.href || linkTarget"
         class="group flex flex-col overflow-hidden rounded-2xl border border-default bg-elevated no-underline text-default transition duration-300 hover:shadow-xl"
@@ -73,24 +73,18 @@ interface FeaturedItem {
 }
 
 interface Props {
-  data?: {
-    items?: FeaturedItem[]
-    hasMenu?: boolean
-    vertical?: string
+  data: {
+    items: FeaturedItem[]
+    hasMenu: boolean
+    vertical: string
   }
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  data: () => ({})
-})
-
-const items = computed(() => props.data?.items ?? [])
-const hasMenu = computed(() => props.data?.hasMenu ?? false)
-const vertical = computed(() => props.data?.vertical ?? 'restaurant')
+const props = defineProps<Props>()
 
 const clientReady = ref(false)
 onMounted(() => { clientReady.value = true })
 
-const copy = computed(() => getVerticalCopy(vertical.value))
-const linkTarget = computed(() => hasMenu.value ? '/menu' : '/experiences')
+const copy = computed(() => getVerticalCopy(props.data.vertical))
+const linkTarget = computed(() => props.data.hasMenu ? '/menu' : '/experiences')
 </script>

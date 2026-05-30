@@ -7,12 +7,28 @@
 // All inline D1 queries run in a single db.batch() call alongside helper functions.
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-business";
-import { getPageContent } from "~/server/utils/content-management";
+import { getPageContent, type SiteContent } from "~/server/utils/content-management";
 import { getActiveMenu } from "~/server/utils/menu-management";
 import {
   getExperienceBySlug,
   listExperiences,
 } from "~/server/utils/experiences";
+
+function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
+  const groups: Record<string, SiteContent & { _section: string }> = {}
+  for (const row of rows) {
+    const section = row.field?.split('.')[0] || 'unknown'
+    if (!groups[section]) {
+      groups[section] = { ...row, field: section, _section: section }
+    } else {
+      if (row.component) groups[section].component = row.component
+      for (const key of Object.keys(row) as Array<keyof SiteContent>) {
+        if (groups[section][key] == null) (groups[section] as unknown as Record<string, unknown>)[key] = row[key]
+      }
+    }
+  }
+  return Object.values(groups)
+}
 
 const PUBLIC_PHOTO_CATEGORY: Record<string, string> = {
   exterior: "EXTERIOR",
@@ -473,6 +489,7 @@ export default defineEventHandler(async (event) => {
     config,
     googleBusiness,
     content: contentRows,
+    content_blocks: groupContentBlocks(contentRows),
     menu: menuData,
     locationReviews: locationReviewRows?.results ?? [],
     count: locations.length,

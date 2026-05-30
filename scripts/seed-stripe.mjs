@@ -45,7 +45,7 @@ const fixtureSlug = fixturesArg ? fixturesArg.split('=')[1] : null
 
 // Safety: prevent accidental live modifications. If a live key is used,
 // require explicit confirmation via `--yes` CLI flag or --apply.
-if (STRIPE_SECRET_KEY.startsWith('sk_live') && !force && !apply) {
+if (STRIPE_SECRET_KEY.startsWith('sk_live') && (!force || !apply)) {
   console.error('\nERROR: Detected a LIVE Stripe key. To proceed, re-run with --yes (or -y) AND --apply.')
   console.error('This script will modify Stripe products and prices. Aborting for safety.')
   process.exit(2)
@@ -75,7 +75,7 @@ async function archiveOldPlans() {
 
 // --- Create or update recurring subscription plans ---
 function makePlaceholderId(prefix) {
-  return `${prefix}_${crypto.randomUUID()}`
+  return `${prefix}_${Date.now().toString(36)}`
 }
 
 async function createSubscriptionPlan({ name, description, planId, amountCents, highlighted, badge, features }, options = { dryRun: false }) {
