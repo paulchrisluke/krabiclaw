@@ -241,6 +241,7 @@ export const useBootstrap = () => {
       video:
         getField("hero.video", row?.hero_video_public_url ?? defaults.video) ??
         defaults.video,
+      videoThumbnail: row?.hero_video_thumbnail_url || null,
       imageKind: row?.hero_kind || "image",
       videoKind: row?.hero_video_kind || "video",
     };
