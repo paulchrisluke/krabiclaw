@@ -22,6 +22,8 @@
             v-else-if="item.image"
             :src="item.image"
             :alt="item.alt"
+            loading="lazy"
+            sizes="(max-width:640px) 50vw, 25vw"
             class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           >
           <div v-else class="flex h-full w-full items-center justify-center">
