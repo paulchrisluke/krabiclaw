@@ -137,11 +137,7 @@ export default defineNuxtConfig({
     ],
     defaultLocale: 'en',
     strategy: 'prefix_except_default',
-    detectBrowserLanguage: {
-      useCookie: true,
-      fallbackLocale: 'en',
-      redirectOn: 'root'
-    }
+    detectBrowserLanguage: false,
   },
 
   // Robots.txt configuration
@@ -199,10 +195,21 @@ export default defineNuxtConfig({
     }
   },
 
-  // Caching Rules
   routeRules: {
-    '/': { swr: 3600 },
-    '/assets/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } }
+    // Versioned static assets — immutable forever
+    '/assets/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+    '/_nuxt/**':  { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+
+    // Auth/API/dashboard — never cache
+    '/api/**':       { headers: { 'cache-control': 'no-store' } },
+    '/dashboard/**': { headers: { 'cache-control': 'no-store' } },
+    '/admin/**':     { headers: { 'cache-control': 'no-store' } },
+    '/auth/**':      { headers: { 'cache-control': 'no-store' } },
+    '/signup':       { headers: { 'cache-control': 'no-store' } },
+    '/login':        { headers: { 'cache-control': 'no-store' } },
+
+    // Public pages — browser language detection is disabled so / is safe to cache
+    '/**': { headers: { 'cache-control': 'public, s-maxage=60, stale-while-revalidate=300, max-age=0' } },
   },
 
   // Font configuration — @nuxt/fonts downloads, subsets, and self-hosts these.

@@ -26,9 +26,6 @@ const SESSION_COOKIE = 'better-auth.session_token'
 export default defineEventHandler(async (event) => {
   if (event.method !== 'GET') return
 
-  // i18n: root "/" varies by Accept-Language → never serve from cache
-  if (event.path === '/' || event.path === '') return
-
   if (SKIP_PREFIXES.some(p => event.path.startsWith(p))) return
 
   // Authenticated session — response may be personalised

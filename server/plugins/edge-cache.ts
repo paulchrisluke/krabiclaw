@@ -39,7 +39,6 @@ export default defineNitroPlugin((nitroApp) => {
   ) => {
     if (response.statusCode !== 200) return
     if (event.method !== 'GET') return
-    if (event.path === '/' || event.path === '') return
     if (event.path.includes('?')) return
     if (SKIP_PREFIXES.some(p => event.path.startsWith(p))) return
 
