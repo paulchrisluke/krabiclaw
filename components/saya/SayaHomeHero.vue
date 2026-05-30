@@ -5,8 +5,8 @@
       <!-- Poster image: always in SSR HTML, fetchpriority high — this is the LCP element.
            Video fades in on top after window.load + idle; poster remains painted. -->
       <img
-        v-if="hero.videoThumbnail && hero.video"
-        :src="hero.videoThumbnail"
+        v-if="hero.thumbnail_url && hero.video"
+        :src="hero.thumbnail_url"
         alt="" aria-hidden="true" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
       />
@@ -96,7 +96,7 @@ interface HeroData {
   imageKind?: string
   video?: string
   videoKind?: string
-  videoThumbnail?: string | null
+  thumbnail_url?: string | null
 }
 
 interface Props {

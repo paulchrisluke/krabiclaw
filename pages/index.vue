@@ -141,8 +141,8 @@
         <div class="absolute inset-0">
           <!-- Poster image: present in SSR, fetchpriority high — this is the LCP element -->
           <img
-            v-if="hero.videoThumbnail"
-            :src="hero.videoThumbnail"
+            v-if="hero.thumbnail_url"
+            :src="hero.thumbnail_url"
             alt="" aria-hidden="true" fetchpriority="high" decoding="async"
             class="absolute inset-0 h-full w-full object-cover"
           />
@@ -287,8 +287,7 @@
             class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
           >
             <div class="aspect-video overflow-hidden bg-muted">
-              <!-- Homepage card always shows a static image — video plays on the location page.
-                   For video locations use hero_video_thumbnail_url (extracted WebP first-frame). -->
+              <!-- Homepage card always shows a static image — video plays on the location page. -->
               <img
                 v-if="loc.hero_video_thumbnail_url || loc.public_url"
                 :src="loc.hero_video_thumbnail_url || (loc.kind !== 'video' ? loc.public_url : null)"

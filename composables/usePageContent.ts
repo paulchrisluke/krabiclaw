@@ -13,7 +13,7 @@ interface ContentRow {
   hero_kind: string | null
   hero_video_public_url: string | null
   hero_video_kind: string | null
-  hero_video_thumbnail_url: string | null
+  thumbnail_url: string | null
   updated_at: string
 }
 
@@ -177,7 +177,7 @@ export const usePageContent = (pageName?: string) => {
       subtitle: getField('hero.subtitle', row?.hero_subtitle ?? defaults.subtitle) ?? defaults.subtitle,
       image: getField('hero.image', row?.hero_public_url ?? defaults.image) ?? defaults.image,
       video: getField('hero.video', row?.hero_video_public_url ?? defaults.video) ?? defaults.video,
-      videoThumbnail: row?.hero_video_thumbnail_url || null,
+      thumbnail_url: row?.thumbnail_url || null,
       imageKind: row?.hero_kind || 'image',
       videoKind: row?.hero_video_kind || 'video',
     }
