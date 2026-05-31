@@ -95,6 +95,8 @@
               </BillingPlanCard>
             </div>
 
+          </div><!-- /details -->
+
           <!-- Auth section -->
           <div class="mt-8 space-y-3">
 
