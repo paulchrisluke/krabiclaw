@@ -7,13 +7,12 @@
         <!-- Brand column -->
         <div>
           <NuxtLink to="/" class="block no-underline leading-none">
-            <img
-              v-if="logoUrl"
-              :src="logoUrl"
-              :alt="restaurantName"
-              class="h-12 w-auto max-w-48 object-contain"
-            />
-            <span v-else class="saya-display text-5xl text-inverted">{{ restaurantName }}</span>
+            <div v-if="logoUrl" class="size-14 rounded-full overflow-hidden">
+              <img :src="logoUrl" :alt="restaurantName" class="h-full w-full object-cover" />
+            </div>
+            <div v-else class="flex size-14 items-center justify-center rounded-full bg-inverted/10 text-inverted font-bold text-2xl">
+              {{ restaurantName.charAt(0).toUpperCase() }}
+            </div>
           </NuxtLink>
           <p class="mt-4 max-w-xs text-sm leading-relaxed text-inverted/60">
             {{ tagline }}
