@@ -35,6 +35,16 @@ interface ContactNotificationInput extends SiteContext {
   message: string
 }
 
+interface ExperienceBookingNotificationInput extends SiteContext {
+  bookingId: string
+  guestName: string
+  email: string
+  experienceTitle: string
+  bookingDate: string
+  timeSlot: string
+  partySize: number
+}
+
 interface EmailTemplate {
   subject: string
   html: string
@@ -445,6 +455,102 @@ export async function notifyContactSubmitted(
         task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
         contactId: opts.contactId,
         error: result.reason instanceof Error ? result.reason.message : String(result.reason)
+      })
+    }
+  })
+}
+
+export async function notifyExperienceBookingCreated(
+  env: NotificationEnv,
+  db: D1Database,
+  opts: ExperienceBookingNotificationInput
+) {
+  const studio = siteName(opts)
+  const payload = {
+    booking_id: opts.bookingId,
+    guest_name: opts.guestName,
+    email: opts.email,
+    experience: opts.experienceTitle,
+    date: opts.bookingDate,
+    time: opts.timeSlot,
+    party_size: String(opts.partySize),
+    site_name: studio,
+  }
+
+  const ownerEmailHtml = `
+    <p>New experience booking for ${escapeHtml(studio)}.</p>
+    <p>
+      <strong>${escapeHtml(opts.guestName)}</strong><br>
+      ${escapeHtml(opts.experienceTitle)}<br>
+      ${escapeHtml(opts.bookingDate)} at ${escapeHtml(opts.timeSlot)}<br>
+      Party of ${opts.partySize}
+    </p>
+  `
+
+  const results = await Promise.allSettled([
+    notifyOwner(env, db, {
+      ...opts,
+      template: 'new_reservation',
+      title: `New booking from ${opts.guestName}`,
+      payload,
+      email: {
+        subject: `New booking from ${opts.guestName}`,
+        html: ownerEmailHtml,
+        text: `New booking for ${studio}\n${opts.guestName}\n${opts.experienceTitle}\n${opts.bookingDate} at ${opts.timeSlot}\nParty of ${opts.partySize}`,
+      },
+      whatsapp: {
+        template: 'new_reservation',
+        vars: {
+          guest_name: opts.guestName,
+          date: opts.bookingDate,
+          time: opts.timeSlot,
+          guests: String(opts.partySize),
+          phone: opts.email,
+        },
+      },
+    }),
+    sendEmailNotification(env, db, {
+      ...opts,
+      to: opts.email,
+      template: 'experience_booking_customer_received',
+      title: `Booking request received — ${opts.experienceTitle}`,
+      payload,
+      email: {
+        subject: `Booking request received — ${opts.experienceTitle}`,
+        html: `
+          <p>Hi ${escapeHtml(opts.guestName)},</p>
+          <p>We received your booking request for <strong>${escapeHtml(opts.experienceTitle)}</strong> at ${escapeHtml(studio)}.</p>
+          <div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px;margin:16px 0">
+            <p style="margin:0"><strong>Experience:</strong> ${escapeHtml(opts.experienceTitle)}</p>
+            <p style="margin:8px 0 0"><strong>Date:</strong> ${escapeHtml(opts.bookingDate)}</p>
+            <p style="margin:4px 0 0"><strong>Time:</strong> ${escapeHtml(opts.timeSlot)}</p>
+            <p style="margin:4px 0 0"><strong>Party size:</strong> ${opts.partySize}</p>
+          </div>
+          <p>We will confirm your booking shortly.</p>
+          <p style="color:#71717a;font-size:12px">The team at ${escapeHtml(studio)}</p>
+        `,
+        text: [
+          `Hi ${opts.guestName},`,
+          `We received your booking request for ${opts.experienceTitle} at ${studio}.`,
+          '',
+          `Experience: ${opts.experienceTitle}`,
+          `Date: ${opts.bookingDate}`,
+          `Time: ${opts.timeSlot}`,
+          `Party size: ${opts.partySize}`,
+          '',
+          'We will confirm your booking shortly.',
+          `The team at ${studio}`,
+        ].join('\n'),
+      },
+    }),
+  ])
+
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      console.error('notifyExperienceBookingCreated_failed', {
+        task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
+        bookingId: opts.bookingId,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
       })
     }
   })

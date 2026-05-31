@@ -63,8 +63,9 @@ test.describe('pottery house public site', () => {
     await expect(page).not.toHaveTitle(/^Experiences \| Pottery House Krabi$/)
     await expect(page).toHaveTitle(/Pottery Wheel Class/)
 
-    // Breadcrumb shows the experience name (detail rendered the breadcrumb, index does not)
-    await expect(page.locator('nav')).toContainText('Pottery Wheel Class')
+    // Breadcrumb shows the experience name (detail rendered the breadcrumb, index does not).
+    // Use last() — breadcrumb is always the last nav on the page (primary nav comes first in DOM).
+    await expect(page.locator('nav').last()).toContainText('Pottery Wheel Class')
 
     // Tagline is detail-page-only content
     await expect(page.locator('body')).toContainText('Shape something beautiful')
