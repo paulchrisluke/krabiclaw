@@ -1,7 +1,8 @@
 import { expect, type Page } from '@playwright/test'
-import { tenantTestBaseUrl } from './test-env'
+import { tenantTestBaseUrl, potteryHouseTestBaseUrl } from './test-env'
 
 export const tenantBaseURL = tenantTestBaseUrl()
+export const potteryHouseBaseURL = potteryHouseTestBaseUrl()
 
 export function collectPageErrors(page: Page) {
   const errors: string[] = []
