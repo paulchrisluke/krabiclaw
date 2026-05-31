@@ -242,7 +242,7 @@ test.describe('notification records — experience booking (pottery house)', () 
     const since = new Date().toISOString()
     const futureDate = new Date(Date.now() + 32 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
 
-    await request.post(
+    const bookingRes = await request.post(
       `${potteryHouseBaseURL}/api/public/sites/site-pottery-house/experiences/pottery-wheel-class/book`,
       {
         data: {
@@ -254,6 +254,9 @@ test.describe('notification records — experience booking (pottery house)', () 
         },
       },
     )
+    expect(bookingRes.status()).toBe(201)
+    const bookingBody = await bookingRes.json() as { booking_id?: string }
+    expect(bookingBody.booking_id).toEqual(expect.any(String))
 
     await new Promise(r => setTimeout(r, 2000))
 

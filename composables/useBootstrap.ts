@@ -75,8 +75,7 @@ const emptyBootstrap = (): BootstrapPayload => ({
 export const useBootstrap = () => {
   const { isPlatform, siteId } = useTenantSite();
   const route = useRoute();
-
-  const params = computed(() => useBootstrapParams());
+  const params = useBootstrapParams();
   const key = computed(() => useBootstrapKey(siteId, params.value));
 
   const url = computed(() => {

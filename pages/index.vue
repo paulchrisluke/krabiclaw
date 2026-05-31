@@ -738,8 +738,17 @@ if (isPlatform) {
 
 // SEO for tenant sites: set ogUrl to the actual request URL so custom domains share correctly.
 if (!isPlatform && siteId) {
+  const seoTitle = computed(() => {
+    const primary = (restaurantName.value || '').trim()
+    const secondary = (businessTitle.value || 'Business').trim() || 'Business'
+    if (!primary || primary.toLowerCase() === secondary.toLowerCase()) {
+      return secondary
+    }
+    return `${primary} | ${secondary}`
+  })
+
   useSeoMeta({
-    title: computed(() => `${restaurantName.value} | ${businessTitle.value || 'Business'}`),
+    title: seoTitle,
     description: computed(() => businessSubtitle.value || 'Professional business website with photos, updates and reviews.'),
     ogImage: useSharedOgImage(() => hero.value.image),
     ogUrl: currentPageUrl,

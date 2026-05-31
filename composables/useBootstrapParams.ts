@@ -18,12 +18,7 @@ export interface BootstrapParams {
   locale: string | null;
 }
 
-export const useBootstrapParams = (): BootstrapParams => {
-  const route = useRoute();
-  const { locale } = useI18n();
-
-  const getParams = (): Omit<BootstrapParams, 'locale'> => {
-    const path = route.path;
+function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"> {
 
   // Location sub-pages: /locations/[slug]/*
   const locationMatch = path.match(/^\/locations\/([^/]+)/);
@@ -161,9 +156,16 @@ export const useBootstrapParams = (): BootstrapParams => {
       menu: false,
       data: null,
     };
-  };
+}
 
-  return { ...getParams(), locale: locale.value };
+export const useBootstrapParams = () => {
+  const route = useRoute();
+  const { locale } = useI18n();
+
+  return computed<BootstrapParams>(() => ({
+    ...getBootstrapParams(route.path),
+    locale: locale.value,
+  }));
 };
 
 export const useBootstrapKey = (
