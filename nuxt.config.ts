@@ -2,11 +2,9 @@
 import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
 
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
-const useCloudflareDevBindings = process.env.NUXT_DISABLE_CF_DEV_BINDINGS !== '1'
 
 export default defineNuxtConfig({
   modules: [
-    ...(useCloudflareDevBindings ? ['nitro-cloudflare-dev'] : []),
     '@nuxt/scripts',
     '@nuxtjs/robots',
     '@nuxtjs/sitemap',

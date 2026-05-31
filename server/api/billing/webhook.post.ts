@@ -21,49 +21,53 @@ interface SubscriptionTimingFields {
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
+
+  // Check Stripe configuration before touching the body
+  if (!env.STRIPE_WEBHOOK_SECRET) {
+    return jsonResponse({
+      error: 'Stripe webhook secret not configured'
+    }, { status: 503 })
+  }
+
+  // Validate raw body and signature before any DB access
+  let body: string | Buffer | undefined
+  try {
+    body = await readRawBody(event)
+  } catch {
+    return jsonResponse({ error: 'Invalid webhook request' }, { status: 400 })
+  }
+  const signature = getHeader(event, 'stripe-signature') || ''
+
+  if (!body || !signature) {
+    return jsonResponse({
+      error: 'Invalid webhook request'
+    }, { status: 400 })
+  }
+
+  if (!verifyStripeWebhook(env, body.toString(), signature)) {
+    return jsonResponse({
+      error: 'Invalid webhook signature'
+    }, { status: 401 })
+  }
+
   const db = env.DB
-  
   if (!db) {
-    return jsonResponse({ 
-      error: 'Database not available' 
+    return jsonResponse({
+      error: 'Database not available'
     }, { status: 500 })
   }
 
-  // Check Stripe configuration
-  if (!env.STRIPE_WEBHOOK_SECRET) {
-    return jsonResponse({ 
-      error: 'Stripe webhook secret not configured' 
+  // Validate Stripe secret key
+  if (!env.STRIPE_SECRET_KEY) {
+    return jsonResponse({
+      error: 'Stripe secret key not configured'
     }, { status: 503 })
   }
 
   try {
-    // Get raw body and signature
-    const body = await readRawBody(event)
-    const signature = getHeader(event, 'stripe-signature') || ''
-    
-    if (!body || !signature) {
-      return jsonResponse({ 
-        error: 'Invalid webhook request' 
-      }, { status: 400 })
-    }
-
-    // Verify webhook signature
-    if (!verifyStripeWebhook(env, body.toString(), signature)) {
-      return jsonResponse({ 
-        error: 'Invalid webhook signature' 
-      }, { status: 401 })
-    }
-
-    // Validate Stripe secret key
-    if (!env.STRIPE_SECRET_KEY) {
-      return jsonResponse({ 
-        error: 'Stripe secret key not configured' 
-      }, { status: 503 })
-    }
-
     // Parse webhook event
     const stripe = new Stripe(env.STRIPE_SECRET_KEY)
-    
+
     const webhookEvent = stripe.webhooks.constructEvent(
       body.toString(),
       signature,
