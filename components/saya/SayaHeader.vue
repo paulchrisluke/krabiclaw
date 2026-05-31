@@ -54,9 +54,6 @@
             </UButton>
           </UDropdownMenu>
 
-          <!-- Dark mode toggle -->
-          <UColorModeButton variant="ghost" color="neutral" size="sm" />
-
           <!-- Primary CTA: Order Now if delivery links exist, otherwise dynamic Reserve/Book -->
           <UButton
             :to="primaryCtaPath"
