@@ -205,7 +205,7 @@ export default defineNuxtConfig({
       '*/5 * * * *': ['translation-jobs-process'],
       '*/10 * * * *': ['domain-reconciliation'],
       '0 3 * * *': ['domain-reconciliation-daily'],
-      '0 * * * *': ['instagram-sync-process']
+      '0 * * * *': ['instagram-sync-process', 'google-business-sync']
     },
     devServer: {
       watch: ['server']
