@@ -170,9 +170,8 @@ const steps = ['Link Social Media', 'Verify Site', 'Complete']
 const _queryHandled = ref(false)
 
 const liveSiteUrl = computed(() => {
-  if (!dashboard.restaurant.value) return '#'
-  const slug = dashboard.restaurant.value.slug
-  return `https://${slug}.krabiclaw.com`
+  const subdomain = dashboard.restaurant.value?.subdomain
+  return subdomain ? `https://${subdomain}.krabiclaw.com` : '#'
 })
 
 const goToSettings = () => {
@@ -215,19 +214,11 @@ onMounted(async () => {
   // Surface payment or transfer query notifications from redirect flows
   try {
     if (String(route.query.payment) === 'cancelled') {
-      if (typeof toast.addToast === 'function') {
-        toast.addToast('Payment cancelled — your subscription was not completed. Retry from Billing.', 'info')
-      } else if (typeof toast.add === 'function') {
-        toast.add({ title: 'Payment cancelled', description: 'Your subscription was not completed. You can retry from the billing page when ready.', color: 'warning' })
-      }
+      toast.add({ title: 'Payment cancelled', description: 'Your subscription was not completed. You can retry from the billing page when ready.', color: 'warning' })
     }
 
     if (String(route.query.new) === 'true') {
-      if (typeof toast.addToast === 'function') {
-        toast.addToast('Welcome — your site has been created. Complete onboarding to publish content.', 'success')
-      } else if (typeof toast.add === 'function') {
-        toast.add({ title: 'Welcome', description: 'Your site has been created. Complete onboarding to publish content.', color: 'success' })
-      }
+      toast.add({ title: 'Welcome', description: 'Your site has been created. Complete onboarding to publish content.', color: 'success' })
     }
   } finally {
     _queryHandled.value = true

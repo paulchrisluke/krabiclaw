@@ -65,8 +65,8 @@
             </UCarousel>
             <div v-else-if="mediaItems.length === 1" class="relative aspect-4/3 lg:aspect-auto lg:h-120 overflow-hidden">
               <video
-                v-if="mediaItems[0].kind === 'video'"
-                :src="mediaItems[0].url"
+                v-if="mediaItems[0]?.kind === 'video'"
+                :src="mediaItems[0]?.url"
                 autoplay
                 muted
                 loop
@@ -75,7 +75,7 @@
               />
               <img
                 v-else
-                :src="mediaItems[0].url"
+                :src="mediaItems[0]?.url"
                 :alt="experience.title"
                 class="h-full w-full object-contain"
               />
