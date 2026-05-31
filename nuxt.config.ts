@@ -61,19 +61,6 @@ export default defineNuxtConfig({
         ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       }
     },
-    build: {
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            // Keep dashboard and admin code out of the shared entry chunk.
-            // Public tenant pages never need these modules.
-            if (id.includes('/pages/dashboard') || id.includes('/pages/admin')) {
-              return 'dashboard'
-            }
-          }
-        }
-      }
-    }
   },
 
   // SEO Configuration
