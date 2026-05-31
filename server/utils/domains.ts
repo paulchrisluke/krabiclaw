@@ -65,6 +65,10 @@ interface CloudflareCustomHostname {
       type?: string
       value?: string
     }>
+    dcv_delegation_records?: Array<{
+      cname?: string
+      cname_target?: string
+    }>
   }
   verification_errors?: string[]
   created_at?: string
@@ -460,7 +464,10 @@ async function persistCloudflareState(
     retryCount,
     activatedAt,
     errors,
-    JSON.stringify({ cloudflare_created_at: hostname.created_at ?? null }),
+    JSON.stringify({
+      cloudflare_created_at: hostname.created_at ?? null,
+      dcv_cname: hostname.ssl?.dcv_delegation_records?.[0]?.cname_target ?? null,
+    }),
     now,
     domainId
   ).run()
@@ -856,12 +863,16 @@ export function domainInstructions(domain: DomainRecord) {
   const target = domain.dns_target || ''
   const sslName = domain.ssl_validation_name || ''
   const sslValue = domain.ssl_validation_value || ''
+  const meta = domain.metadata ? (() => { try { return JSON.parse(domain.metadata as string) } catch { return {} } })() : {}
+  const dcvCname: string | null = meta?.dcv_cname ?? null
 
   return {
     dns: isApex
       ? { type: 'CNAME flattening or ALIAS', name: '@', value: target }
       : { type: 'CNAME', name: domain.domain.replace(`.${root}`, '') || 'www', value: target },
-    ssl: sslName && sslValue ? { type: domain.ssl_validation_type || 'TXT', name: sslName, value: sslValue } : null,
+    ssl: dcvCname
+      ? { type: 'CNAME', name: `_acme-challenge.${domain.domain}`, value: dcvCname }
+      : sslName && sslValue ? { type: domain.ssl_validation_type || 'TXT', name: sslName, value: sslValue } : null,
     ownership: domain.ownership_validation_name && domain.ownership_validation_value
       ? { type: domain.ownership_validation_type || 'TXT', name: domain.ownership_validation_name, value: domain.ownership_validation_value }
       : null,
