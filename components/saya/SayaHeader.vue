@@ -8,9 +8,11 @@
             v-if="logoUrl"
             :src="logoUrl"
             :alt="restaurantName"
-            class="h-10 w-auto max-w-35 object-contain"
+            class="h-10 w-auto max-w-35 object-contain rounded-full"
           />
-          <span v-else class="saya-display whitespace-nowrap text-lg sm:text-2xl text-default">{{ restaurantName }}</span>
+          <div v-else class="flex size-10 items-center justify-center rounded-full bg-(--kc-navy) text-white font-bold text-base shrink-0">
+            {{ restaurantName.charAt(0).toUpperCase() }}
+          </div>
         </NuxtLink>
 
         <!-- Desktop nav -->
