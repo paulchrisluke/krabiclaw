@@ -12,7 +12,7 @@
  *
  * Options:
  *   --max-duration <s>   Trim if video is longer than N seconds (default: 15)
- *   --crf <n>            H.264 CRF, 0–51, lower = better quality (default: 26)
+ *   --crf <n>            H.264 CRF, 0–51, lower = better quality (default: 30)
  *   --remote             Use remote D1/R2 (default: local)
  */
 
@@ -70,6 +70,10 @@ if (DIR && ASSET_ID) {
 const SLUG_SAFE = /^[a-zA-Z0-9_-]+$/
 if (!SLUG_SAFE.test(SLUG)) {
   console.error('Error: --slug contains invalid characters')
+  process.exit(1)
+}
+if (ASSET_ID && !SLUG_SAFE.test(ASSET_ID.replace(/-/g, '').replace(/\./g, ''))) {
+  console.error('Error: --asset-id contains invalid characters')
   process.exit(1)
 }
 
@@ -151,7 +155,6 @@ function transcode(inputPath, outputPath, duration) {
 }
 
 function extractThumbnail(inputPath, outputPath, seekSeconds = 0.1) {
-  // 640×360 WebP poster — sized for largest mobile viewport at 2x DPR, ~40KB
   const result = spawnSync('ffmpeg', [
     '-y',
     '-ss', String(seekSeconds),
@@ -159,8 +162,8 @@ function extractThumbnail(inputPath, outputPath, seekSeconds = 0.1) {
     '-vframes', '1',
     '-update', '1',
     '-vf', 'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720',
-    '-c:v', 'libwebp',
-    '-quality', '72',
+    '-c:v', 'mjpeg',
+    '-q:v', '3',
     outputPath,
   ], { stdio: 'inherit' })
   if (result.status !== 0) {
@@ -314,12 +317,6 @@ async function transcodeDir() {
 // ── Mode 2: re-transcode an existing R2 asset ─────────────────────────────────
 
 async function transcodeAsset() {
-  // Validate asset-id safe for SQL
-  if (!SLUG_SAFE.test(ASSET_ID.replace(/-/g, '').replace(/\./g, ''))) {
-    console.error('Error: --asset-id contains invalid characters')
-    process.exit(1)
-  }
-
   console.log(`\n→ Looking up asset '${ASSET_ID}'...`)
   const rows = d1Query(
     `SELECT id, r2_key, public_url, file_name, file_size FROM media_assets WHERE id = '${ASSET_ID}' LIMIT 1`

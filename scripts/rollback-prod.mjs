@@ -29,7 +29,7 @@ function d1Exec(sql) {
 }
 
 function sqlEscape(value) {
-  return String(value).replace(/'/g, "''")
+  return String(value).replace(/\\/g, '\\\\').replace(/'/g, "''")
 }
 
 async function smokePublic() {

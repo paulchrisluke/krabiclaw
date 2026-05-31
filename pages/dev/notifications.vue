@@ -158,7 +158,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'platform', auth: false })
+definePageMeta({ layout: 'platform', auth: true })
 
 type Preview = {
   id: string
@@ -219,19 +219,20 @@ const statusOptions = [
   { label: 'All statuses', value: 'all' },
 ]
 
+const OWNER_TEMPLATES = new Set([
+  'draft_published',
+  'ai_action_complete',
+  'low_credits',
+  'new_contact_msg',
+  'new_reservation',
+  'reservation_cancelled',
+  'domain_update',
+  'new_review',
+])
+
 function audienceOf(template: string) {
   if (template.includes('customer_')) return 'guest'
-  const ownerTemplates = new Set([
-    'draft_published',
-    'ai_action_complete',
-    'low_credits',
-    'new_contact_msg',
-    'new_reservation',
-    'reservation_cancelled',
-    'domain_update',
-    'new_review',
-  ])
-  if (ownerTemplates.has(template)) return 'owner'
+  if (OWNER_TEMPLATES.has(template)) return 'owner'
   return 'system'
 }
 
@@ -240,7 +241,7 @@ function isGuestTemplate(template: string) {
 }
 
 function isOwnerTemplate(template: string) {
-  return !isGuestTemplate(template)
+  return OWNER_TEMPLATES.has(template)
 }
 
 function statusColor(status: string) {
@@ -349,6 +350,8 @@ watchEffect(() => {
   previews.value = previewData.value?.previews || []
   if (previewError.value) {
     error.value = previewError.value.message || 'Failed to load template previews'
+  } else {
+    error.value = ''
   }
 })
 

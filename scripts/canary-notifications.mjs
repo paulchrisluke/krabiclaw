@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 
 const nowIso = () => new Date().toISOString()
 
@@ -17,12 +17,13 @@ function sqlEscape(value) {
 }
 
 function d1Raw(sql) {
-  const escaped = sql.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-  const raw = execSync(`yarn -s wrangler d1 execute DB --remote --json --command \"${escaped}\"`, {
+  const res = spawnSync('yarn', ['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
     stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
   })
-  return JSON.parse(raw)?.[0]
+  if (res.error) throw res.error
+  if (res.status !== 0) throw new Error(res.stderr || `d1Raw exited ${res.status}`)
+  return JSON.parse(res.stdout)?.[0]
 }
 
 function d1Query(sql) {

@@ -61,6 +61,7 @@ export default defineTask({
         AND oe.key = 'managed_service'
         AND oe.value = 'true'
       WHERE fpc.status = 'active'
+        OR (fpc.status = 'error' AND fpc.updated_at < datetime('now', '-1 hour'))
       ORDER BY fpc.organization_id
     `).all()
 
@@ -108,10 +109,11 @@ export default defineTask({
         connResult.error = err instanceof Error ? err.message : String(err)
         console.error(`[instagram-sync-process] failed for connection ${conn.id}:`, connResult.error)
 
-        // Surface the error in the dashboard connection status
+        // Surface the error in the dashboard connection status; retry after 1h via updated_at
         await db.prepare(`
           UPDATE facebook_pages_connections SET status = 'error', updated_at = ? WHERE id = ?
-        `).bind(new Date().toISOString(), conn.id).run().catch(() => {})
+        `).bind(new Date().toISOString(), conn.id).run()
+          .catch(updateErr => console.error(`[instagram-sync-process] failed to persist error status for connection ${conn.id}:`, updateErr))
       }
 
       syncResults.push(connResult)

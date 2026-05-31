@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { chromium } from 'playwright'
-import { execSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 
 const nowIso = () => new Date().toISOString()
 
@@ -14,13 +14,13 @@ function env(name, opts = {}) {
 }
 
 function d1Query(sql) {
-  const escaped = sql.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-  const raw = execSync(`yarn -s wrangler d1 execute DB --remote --json --command \"${escaped}\"`, {
+  const res = spawnSync('yarn', ['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
     stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
   })
-  const parsed = JSON.parse(raw)
-  return parsed?.[0]?.results ?? []
+  if (res.error) throw res.error
+  if (res.status !== 0) throw new Error(res.stderr || `d1Query exited ${res.status}`)
+  return JSON.parse(res.stdout)?.[0]?.results ?? []
 }
 
 function sqlEscape(value) {
@@ -28,11 +28,12 @@ function sqlEscape(value) {
 }
 
 function d1Exec(sql) {
-  const escaped = sql.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-  execSync(`yarn -s wrangler d1 execute DB --remote --json --command \"${escaped}\"`, {
+  const res = spawnSync('yarn', ['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
     stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
   })
+  if (res.error) throw res.error
+  if (res.status !== 0) throw new Error(res.stderr || `d1Exec exited ${res.status}`)
 }
 
 async function fetchJson(request, url, options = {}) {
