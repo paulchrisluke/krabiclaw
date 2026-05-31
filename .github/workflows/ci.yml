@@ -99,6 +99,11 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: yarn ${{ matrix.cmd }}
         if: ${{ matrix.suite != 'full' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        env:
+          NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
+          NUXT_PUBLIC_FREE_SITE_DOMAIN: http://localhost:3000
+          NUXT_PUBLIC_APP_NAME: KrabiClaw
+          NUXT_PUBLIC_TURNSTILE_ENABLED: "false"
 
   prod-smoke:
     name: Production smoke
