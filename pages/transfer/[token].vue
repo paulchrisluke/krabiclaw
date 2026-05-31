@@ -50,11 +50,14 @@
         <div class="flex flex-col justify-center px-8 py-12 lg:px-12 max-w-lg mx-auto w-full lg:order-1 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto bg-default border-r border-default">
 
           <!-- Kicker -->
-          <p class="text-xs font-bold uppercase tracking-widest text-muted mb-3">Your new website</p>
+          <span class="self-start inline-flex items-center gap-2 text-[11px] font-bold tracking-[0.3em] uppercase text-(--kc-teal-600) bg-(--kc-teal-100) px-3.5 py-1.5 rounded-full mb-6">
+            <span class="w-1.5 h-1.5 rounded-full bg-(--kc-teal) shrink-0" />
+            Your new website
+          </span>
 
           <!-- Site name + builder -->
-          <h1 class="text-3xl font-bold text-highlighted leading-tight">{{ transfer.site_name }}</h1>
-          <p class="mt-2 text-sm text-muted">Built by <strong class="text-default">{{ transfer.initiated_by_name }}</strong> · claim within {{ expiresIn }}</p>
+          <h1 class="text-[clamp(32px,4vw,48px)] font-extrabold leading-[1.02] tracking-tight text-default text-balance m-0">{{ transfer.site_name }}</h1>
+          <p class="mt-4 text-base text-muted">Created by <strong class="text-default">{{ transfer.initiated_by_name }}</strong> • Link expires in {{ expiresIn }}</p>
 
           <!-- Personal note -->
           <p v-if="transfer.message" class="mt-5 text-sm italic text-muted border-l-2 border-default pl-3">
@@ -65,12 +68,25 @@
           <div class="mt-6 space-y-3">
             <div v-if="transfer.invited_domain" class="flex items-start gap-3 text-sm">
               <UIcon name="i-heroicons-globe-alt" class="size-4 text-muted mt-0.5 shrink-0" />
-              <span class="text-muted">Will be live at <strong class="text-default">{{ transfer.invited_domain }}</strong> — no extra hosting needed.</span>
+              <span class="text-muted">Ready to launch at <strong class="text-default">{{ transfer.invited_domain }}</strong> (hosting included).</span>
             </div>
 
             <!-- Pricing block -->
-            <div v-if="transfer.invited_plan" class="rounded-xl border border-default bg-elevated p-4">
-              <p class="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{{ planName }} plan</p>
+            <div v-if="transfer.invited_plan" class="relative overflow-hidden rounded-[24px] border border-default/70 bg-elevated/70 backdrop-blur-md p-6 shadow-sm mt-8">
+              <div class="absolute -top-12 -right-12 w-32 h-32 bg-primary/10 rounded-full blur-2xl opacity-60 pointer-events-none"></div>
+              <div class="absolute -bottom-12 -left-12 w-32 h-32 bg-(--kc-teal)/10 rounded-full blur-2xl opacity-40 pointer-events-none"></div>
+              
+              <div class="relative z-10">
+                <p class="text-[11px] font-black tracking-widest uppercase text-primary mb-4">{{ planName }} plan</p>
+              
+              <!-- Features -->
+              <ul v-if="matchedPlan?.features?.length" class="mb-6 space-y-2.5">
+                <li v-for="feat in matchedPlan.features" :key="feat" class="flex items-start gap-2.5 text-sm text-default">
+                  <UIcon name="i-heroicons-check-circle" class="size-4 text-primary mt-0.5 shrink-0" />
+                  <span>{{ feat }}</span>
+                </li>
+              </ul>
+
               <template v-if="transfer.pricing">
                 <!-- Discounted price -->
                 <template v-if="transfer.pricing.discounted_cents !== null">
@@ -89,20 +105,28 @@
                   <span class="text-2xl font-bold text-highlighted">${{ (transfer.pricing.base_cents / 100).toFixed(0) }}<span class="text-base font-normal text-muted">/mo</span></span>
                 </template>
               </template>
-              <p class="text-xs text-muted mt-2">No charge today — subscribe when you're happy with it.</p>
+                  <p class="text-xs text-muted mt-3">
+                    <template v-if="transfer.invited_domain">
+                      Review your site today. An active plan is required to keep your custom domain live.
+                    </template>
+                    <template v-else>
+                      Review your site today. Subscribe when you're ready to launch.
+                    </template>
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
 
           <!-- Auth section -->
           <div class="mt-8 space-y-3">
 
             <!-- Not logged in -->
             <template v-if="!isAuthenticated && !sessionLoading">
-              <UButton block color="primary" size="xl" @click="signInWithGoogle">
+              <UButton block color="primary" size="xl" class="rounded-[10px] font-semibold text-[15px] shadow-sm hover:scale-[1.01] transition-all duration-300" @click="signInWithGoogle">
                 <UIcon name="i-simple-icons-google" class="mr-2" />
                 Continue with Google
               </UButton>
-              <UButton block variant="outline" size="xl" :to="`/login?next=/transfer/${token}`">
+              <UButton block variant="outline" size="xl" class="rounded-[10px] font-semibold text-[15px]" :to="`/login?next=/transfer/${token}`">
                 Sign in with email
               </UButton>
               <p class="text-xs text-center text-muted">Sign in or create a free account to claim this site.</p>
@@ -129,7 +153,7 @@
                 :description="`Signed in as ${user?.email}`"
               />
               <UAlert v-if="acceptError" color="error" variant="soft" :description="acceptError" />
-              <UButton block color="primary" size="xl" :loading="accepting" @click="acceptTransfer">
+              <UButton block color="primary" size="xl" class="rounded-[10px] font-semibold text-[15px] shadow-sm hover:scale-[1.01] transition-all duration-300" :loading="accepting" @click="acceptTransfer">
                 Claim {{ transfer.site_name }}
               </UButton>
             </template>
@@ -254,6 +278,12 @@ const expiresIn = computed(() => {
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
   if (days <= 0) return 'a few hours'
   return days === 1 ? '1 day' : `${days} days`
+})
+
+const { plans } = usePlans()
+const matchedPlan = computed(() => {
+  if (!transfer.value?.invited_plan || !plans.value) return null
+  return plans.value.find(p => p.id === transfer.value?.invited_plan) || null
 })
 
 onMounted(async () => {
