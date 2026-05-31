@@ -14,7 +14,6 @@
 //   - No Host header
 
 import { defineEventHandler, setResponseHeaders, getHeader } from 'h3'
-import { cloudflareEnv } from '~/server/utils/api-response'
 
 const SKIP_PREFIXES = [
   '/api/', '/dashboard', '/admin', '/auth/',
@@ -32,8 +31,9 @@ export default defineEventHandler(async (event) => {
   const host = getHeader(event, 'host') || getHeader(event, 'x-forwarded-host')
   if (!host) return
 
-  const env = cloudflareEnv(event)
-  const kv = (env as Record<string, unknown>).SITE_CACHE as KVNamespace | undefined
+  // Access KV directly from the Cloudflare event context
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const kv = (event.context.cloudflare?.env as any)?.SITE_CACHE as KVNamespace | undefined
   if (!kv) return
 
   const key = `html:${host}:${event.path}`
