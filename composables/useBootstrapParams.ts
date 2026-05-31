@@ -15,12 +15,10 @@ export interface BootstrapParams {
   experience: string | null;
   menu: boolean;
   data: string | null; // 'reviews' | 'photos' | 'qa' — triggers full dataset in bootstrap
+  locale: string | null;
 }
 
-export const useBootstrapParams = (): BootstrapParams => {
-  const route = useRoute();
-
-  const path = route.path;
+function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"> {
 
   // Location sub-pages: /locations/[slug]/*
   const locationMatch = path.match(/^\/locations\/([^/]+)/);
@@ -151,20 +149,30 @@ export const useBootstrapParams = (): BootstrapParams => {
       data: null,
     };
 
-  return {
-    page: null,
-    location: null,
-    experience: null,
-    menu: false,
-    data: null,
-  };
+    return {
+      page: null,
+      location: null,
+      experience: null,
+      menu: false,
+      data: null,
+    };
+}
+
+export const useBootstrapParams = () => {
+  const route = useRoute();
+  const { locale } = useI18n();
+
+  return computed<BootstrapParams>(() => ({
+    ...getBootstrapParams(route.path),
+    locale: locale.value,
+  }));
 };
 
 export const useBootstrapKey = (
   siteId: string | null | undefined,
   params: BootstrapParams,
 ) =>
-  `bs-${siteId ?? "none"}-${params.page ?? ""}-${params.location ?? ""}-${params.experience ?? ""}-${params.menu ? "m" : ""}-${params.data ?? ""}`;
+  `bs-${siteId ?? "none"}-${params.page ?? ""}-${params.location ?? ""}-${params.experience ?? ""}-${params.menu ? "m" : ""}-${params.data ?? ""}-${params.locale ?? ""}`;
 
 export const useBootstrapUrl = (
   siteId: string | null | undefined,
@@ -176,6 +184,7 @@ export const useBootstrapUrl = (
   if (params.experience) qs.set("experience", params.experience);
   if (params.menu) qs.set("menu", "1");
   if (params.data) qs.set("data", params.data);
+  if (params.locale) qs.set("locale", params.locale);
   const q = qs.toString();
   return `/api/public/sites/${siteId}/bootstrap${q ? `?${q}` : ""}`;
 };

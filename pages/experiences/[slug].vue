@@ -267,9 +267,11 @@ const mediaItems = computed(() => {
 
   // Add additional images/videos if they exist in the data
   if (exp.images && Array.isArray(exp.images)) {
-    exp.images.forEach((img: any) => {
-      if (img.url && !items.find(i => i.url === img.url)) {
-        items.push({ url: img.url, kind: img.kind === 'video' ? 'video' : 'image' })
+    type ExperienceMedia = { url?: string; kind?: string }
+    exp.images.forEach((img) => {
+      const media = img as ExperienceMedia
+      if (media.url && !items.find(i => i.url === media.url)) {
+        items.push({ url: media.url, kind: media.kind === 'video' ? 'video' : 'image' })
       }
     })
   }
@@ -303,7 +305,7 @@ const form = reactive({
   guest_phone: '',
   party_size: '1',
   booking_date: '',
-  time_slot: experience.value?.time_slots?.[0] ?? '',
+  time_slot: '',
   notes: '',
 })
 
@@ -311,7 +313,13 @@ watch(experience, (newExp) => {
   if (newExp?.time_slots?.length && !form.time_slot) {
     form.time_slot = newExp.time_slots[0] || ''
   }
-}, { immediate: true })
+})
+
+onMounted(() => {
+  if (experience.value?.time_slots?.length && !form.time_slot) {
+    form.time_slot = experience.value.time_slots[0] || ''
+  }
+})
 
 const submitting = ref(false)
 const bookingSuccess = ref(false)

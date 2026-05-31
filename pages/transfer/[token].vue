@@ -223,12 +223,6 @@ interface TransferInfo {
   initiated_by_domain: string
 }
 
-const PLAN_NAMES: Record<string, string> = {
-  growth: 'Growth',
-  managed: 'Managed',
-  seo_accelerator: 'SEO Accelerator',
-}
-
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const transfer = ref<TransferInfo | null>(null)
@@ -240,11 +234,6 @@ const redirectingToCheckout = ref(false)
 const emailMatches = computed(() => {
   if (!transfer.value || !user.value) return false
   return user.value.email?.toLowerCase() === transfer.value.to_email.toLowerCase()
-})
-
-const planName = computed(() => {
-  if (!transfer.value?.invited_plan) return ''
-  return PLAN_NAMES[transfer.value.invited_plan] ?? transfer.value.invited_plan
 })
 
 const iframeUrl = computed(() => {

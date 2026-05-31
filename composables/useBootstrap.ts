@@ -75,10 +75,12 @@ const emptyBootstrap = (): BootstrapPayload => ({
 export const useBootstrap = () => {
   const { isPlatform, siteId } = useTenantSite();
   const route = useRoute();
-
   const params = useBootstrapParams();
-  const key = useBootstrapKey(siteId, params);
-  const url = useBootstrapUrl(siteId, params);
+  const key = computed(() => useBootstrapKey(siteId, params.value));
+
+  const url = computed(() => {
+    return useBootstrapUrl(siteId, params.value);
+  });
 
   const empty = emptyBootstrap();
 
@@ -88,10 +90,11 @@ export const useBootstrap = () => {
       ? { data: ref<BootstrapPayload>(empty), error: ref<Error | null>(null), pending: ref(false) }
       : useAsyncData<BootstrapPayload>(
           key,
-          () => $fetch<BootstrapPayload>(url),
+          () => $fetch<BootstrapPayload>(url.value),
           {
             default: emptyBootstrap,
             server: true,
+            watch: [url],
             // Return payload data if already fetched this key — prevents re-fetch across
             // header/footer/page calling the same key in the same render cycle.
             getCachedData(k) {
@@ -107,8 +110,8 @@ export const useBootstrap = () => {
 
   // ── Single location (for /locations/[slug]/* pages) ───────
   const location = computed(() => {
-    if (!params.location) return null;
-    return locations.value.find((l) => l.slug === params.location) ?? null;
+    if (!params.value.location) return null;
+    return locations.value.find((l) => l.slug === params.value.location) ?? null;
   });
 
   // ── Config ────────────────────────────────────────────────

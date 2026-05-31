@@ -393,6 +393,7 @@ const chowBot = useChowBot()
 const chowBotHistory = useChowBotHistory()
 const billingStatus = ref<{ billing: { plan: string } } | null>(null)
 const platformStatus = ref<'normal' | 'loading' | 'error'>('loading')
+const dashboardContextError = ref<unknown>(null)
 
 async function checkPlatformStatus() {
   try {
@@ -624,8 +625,19 @@ watch(activeSiteId, (siteId) => {
   chowBotHistory.load(siteId).catch(console.error)
 }, { immediate: true })
 
+// Load dashboard context during SSR so nav links render stable org-scoped routes.
+if (route.path.startsWith('/dashboard') && !dashboard.state.value) {
+  try {
+    await dashboard.refresh()
+  } catch (error) {
+    dashboardContextError.value = error
+  }
+}
+
 onMounted(async () => {
-  await dashboard.refresh()
+  if (route.path.startsWith('/dashboard') && !dashboard.state.value && !dashboardContextError.value) {
+    await dashboard.refresh()
+  }
   checkPlatformStatus().catch(console.error)
   try {
     billingStatus.value = await $fetch<{ billing: { plan: string } }>('/api/billing/status')

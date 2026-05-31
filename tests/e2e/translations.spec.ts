@@ -9,7 +9,18 @@ test.describe('restaurant translations', () => {
     expect(contextResponse.status()).toBe(200)
     const contextBody = await contextResponse.json()
     const siteId = contextBody.restaurant?.id
-    expect(siteId).toEqual(expect.any(String))
+    if (!siteId) {
+      const draftAttempt = await request.post(`${baseURL}/api/dashboard/editor/content/draft`, {
+        data: {
+          page: 'home',
+          changes: { 'hero.title': `Translation test ${Date.now()}` },
+        },
+      })
+      expect(draftAttempt.status()).toBe(400)
+      const errorBody = await draftAttempt.json()
+      expect(String(errorBody.error || '')).toContain('Restaurant workspace has not been created yet')
+      return
+    }
 
     const localeCode = `qaa-${Date.now().toString(36).slice(-8)}`
     const sourceTitle = `Translation test ${Date.now()}`

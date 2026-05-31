@@ -25,6 +25,6 @@
 <script setup lang="ts">
 useSeoMeta({
   title: 'Billing & Plans | KrabiClaw',
-  description: 'Managed restaurant websites from $49/month. Start free, upgrade when ready.',
+  description: 'Managed business websites from $49/month. Start free, upgrade when ready.',
 })
 </script>

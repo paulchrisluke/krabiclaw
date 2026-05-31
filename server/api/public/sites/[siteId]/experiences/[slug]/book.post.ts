@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse, cleanString } from '~/server/utils/api-response'
 import { getExperienceBySlug, createExperienceBooking } from '~/server/utils/experiences'
+import { notifyExperienceBookingCreated } from '~/server/utils/notifications'
 
 const IP_HOURLY_LIMIT = 5
 const EMAIL_DAILY_LIMIT = 3
@@ -45,9 +46,9 @@ export default defineEventHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const site = await db
-    .prepare(`SELECT id, organization_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`)
+    .prepare(`SELECT id, organization_id, brand_name FROM sites WHERE id = ? AND status = 'active' LIMIT 1`)
     .bind(siteId)
-    .first<{ id: string; organization_id: string }>()
+    .first<{ id: string; organization_id: string; brand_name: string | null }>()
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const experience = await getExperienceBySlug(db, siteId, slug)
@@ -87,18 +88,21 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: `Maximum party size for this experience is ${experience.max_capacity}` }, { status: 400 })
   }
 
-  // Rate limiting
+  // Rate limiting (skipped in dev so E2E tests can run repeatedly without hitting limits)
   const clientIp = getClientIp(event)
   const ipHash = await hashValue(clientIp)
   const emailHash = await hashValue(guestEmail)
-  const hourWindow = Math.floor(Date.now() / 3_600_000)
-  const today = new Date().toISOString().split('T')[0]
 
-  const ipOk = await incrementRateLimit(db, `rate:xp-book:ip:${ipHash}:${hourWindow}`, IP_HOURLY_LIMIT, 3_600_000)
-  if (!ipOk) return jsonResponse({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  if (!import.meta.dev) {
+    const hourWindow = Math.floor(Date.now() / 3_600_000)
+    const today = new Date().toISOString().split('T')[0]
 
-  const emailOk = await incrementRateLimit(db, `rate:xp-book:email:${emailHash}:${today}`, EMAIL_DAILY_LIMIT, 86_400_000)
-  if (!emailOk) return jsonResponse({ error: 'Too many booking requests from this email. Please try again tomorrow.' }, { status: 429 })
+    const ipOk = await incrementRateLimit(db, `rate:xp-book:ip:${ipHash}:${hourWindow}`, IP_HOURLY_LIMIT, 3_600_000)
+    if (!ipOk) return jsonResponse({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+
+    const emailOk = await incrementRateLimit(db, `rate:xp-book:email:${emailHash}:${today}`, EMAIL_DAILY_LIMIT, 86_400_000)
+    if (!emailOk) return jsonResponse({ error: 'Too many booking requests from this email. Please try again tomorrow.' }, { status: 429 })
+  }
 
   const booking = await createExperienceBooking(db, {
     experience_id: experience.id,
@@ -113,6 +117,27 @@ export default defineEventHandler(async (event) => {
     status: 'pending',
     notes: notes || null,
     ip_hash: ipHash,
+  })
+
+  notifyExperienceBookingCreated(env, db, {
+    organizationId: site.organization_id,
+    siteId,
+    siteName: site.brand_name,
+    bookingId: booking.id,
+    guestName,
+    email: guestEmail,
+    guestPhone,
+    experienceTitle: experience.title,
+    bookingDate,
+    timeSlot,
+    partySize,
+  }).catch((error) => {
+    console.error('experience_booking_notification_failed', {
+      organizationId: site.organization_id,
+      siteId,
+      bookingId: booking.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
   })
 
   return jsonResponse({

@@ -132,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-import { DEFAULT_RESTAURANT_NAME } from '~/config/constants'
+import { DEFAULT_BUSINESS_NAME } from '~/config/constants'
 import { getTodayGoogleHours } from '~/utils/formatters'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
@@ -153,7 +153,7 @@ const restaurantName = computed(() => {
   if (site && typeof site === 'object' && 'brand_name' in site && typeof site.brand_name === 'string' && site.brand_name.trim()) {
     return site.brand_name
   }
-  return DEFAULT_RESTAURANT_NAME
+  return DEFAULT_BUSINESS_NAME
 })
 const tagline = computed(() => siteConfig.value?.footer_tagline || '')
 const sitePlan = computed(() => (site as { plan?: string | null } | null)?.plan)
@@ -220,7 +220,6 @@ const allSocials = computed<SocialLink[]>(() => [
 const activeSocials = computed(() =>
   allSocials.value.filter((s: SocialLink): s is { name: string; url: string } => typeof s.url === 'string' && s.url.length > 0)
 )
-const inactiveSocials = computed(() => allSocials.value.filter((s: SocialLink) => !s.url))
 const rawLocations = computed(() => bootstrapLocations.value)
 const locations = computed(() =>
   rawLocations.value.map((loc: PublicLocation) => {

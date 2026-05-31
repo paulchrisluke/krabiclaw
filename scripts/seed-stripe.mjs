@@ -1,14 +1,9 @@
 // Stripe product/price seeder for managed service plans.
 // Run: node scripts/seed-stripe.mjs
 // Requires STRIPE_SECRET_KEY in .env (reads via dotenv-style manual parse).
-import { readFileSync, createReadStream, existsSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { resolve, extname, basename } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import Stripe from 'stripe'
-
-const SCRIPT_DIR = fileURLToPath(new URL('.', import.meta.url))
-// Override with STRIPE_IMAGES_DIR env var; default is scripts/images/ inside the repo.
-const IMAGES_DIR = process.env.STRIPE_IMAGES_DIR || resolve(SCRIPT_DIR, 'images')
 
 // --- Parse .env manually (no dotenv dependency needed) ---
 function loadEnv() {
@@ -61,8 +56,6 @@ async function archiveOldPlans() {
     startingAfter = products.data[products.data.length - 1]?.id
   }
 }
-
-const MIME_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' }
 
 // --- Upload local image to Stripe ---
 async function uploadProductImage(localPath) {

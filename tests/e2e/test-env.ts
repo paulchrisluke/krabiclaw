@@ -56,3 +56,15 @@ export function tenantTestBaseUrl() {
   }
   return base.toString().replace(/\/$/, '')
 }
+
+export function potteryHouseTestBaseUrl() {
+  const base = new URL(testBaseUrl())
+  if (['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) {
+    base.hostname = 'pottery-house.localhost'
+    return base.toString().replace(/\/$/, '')
+  }
+  if (!base.hostname.startsWith('pottery-house.')) {
+    base.hostname = `pottery-house.${base.hostname}`
+  }
+  return base.toString().replace(/\/$/, '')
+}

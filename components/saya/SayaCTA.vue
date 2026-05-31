@@ -39,7 +39,7 @@ defineProps({
   description: String,
   ctaRoute: String,
   reserveCta: String,
-  bg: { type: String, default: 'default' },
+  bg: { type: String, default: 'white' },
   padding: { type: String, default: 'lg' }
 })
 

@@ -1,2 +1,2 @@
-// Shared default for multi-tenant restaurant name
-export const DEFAULT_RESTAURANT_NAME = 'Restaurant'
+// Shared default for multi-tenant business name
+export const DEFAULT_BUSINESS_NAME = 'Business'

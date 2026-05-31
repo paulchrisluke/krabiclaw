@@ -226,13 +226,13 @@ if (isPlatform) {
 useSeoMeta(isPlatform
   ? {
       title: 'About | KrabiClaw',
-      description: 'KrabiClaw is a premium, AI-powered website builder designed for independent restaurants globally.',
+      description: 'KrabiClaw is a premium, AI-powered website builder designed for independent businesses globally.',
       ogImage: sharedOgImage,
       ogUrl: `${siteUrl}/about`
     }
   : {
-      title: computed(() => `About | ${getField('restaurant.name', 'Our Restaurant')}`),
-      description: computed(() => getField('seo.description', 'Learn about our restaurant and our story.')),
+      title: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
+      description: computed(() => getField('seo.description', 'Learn about our business and our story.')),
       ogImage: sharedOgImage,
       ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
     }

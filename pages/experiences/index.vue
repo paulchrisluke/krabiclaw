@@ -89,7 +89,7 @@
 import type { Experience } from '~/server/utils/experiences'
 
 const { isPlatform, site } = useTenantSite()
-const siteName = computed(() => (site as ApiValue)?.name || 'KrabiClaw')
+const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 const expCopy = getVerticalCopy((site as ApiValue)?.vertical)
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl

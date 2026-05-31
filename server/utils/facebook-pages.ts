@@ -1,6 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { encryptSecret, decryptSecret, encryptionEnv } from './encryption'
-import { createMediaAsset } from './media-asset-manager'
 import { uploadToR2, buildR2Key } from './cloudflare-r2'
 
 const GRAPH_API_VERSION = 'v25.0'

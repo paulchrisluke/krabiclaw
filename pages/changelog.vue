@@ -95,7 +95,7 @@ const siteUrl = config.public.siteUrl
 
 useSeoMeta({
   title: 'Changelog | KrabiClaw',
-  description: 'Latest updates and improvements to KrabiClaw restaurant website builder.',
+  description: 'Latest updates and improvements to KrabiClaw business website builder.',
   ogImage: `${siteUrl}/og-image.png`,
   ogUrl: `${siteUrl}/changelog`
 })

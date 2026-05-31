@@ -706,7 +706,7 @@ const googleReviewSummary = computed(() => {
   return { average: average.toFixed(1), count: summary.totalReviewCount }
 })
 
-const restaurantName = computed(() => site?.brand_name || businessTitle.value || 'Restaurant')
+const restaurantName = computed(() => site?.brand_name || businessTitle.value || 'Business')
 
 // Hero from CMS with Google Business fallbacks
 const hero = computed(() => getHero({
@@ -738,9 +738,18 @@ if (isPlatform) {
 
 // SEO for tenant sites: set ogUrl to the actual request URL so custom domains share correctly.
 if (!isPlatform && siteId) {
+  const seoTitle = computed(() => {
+    const primary = (restaurantName.value || '').trim()
+    const secondary = (businessTitle.value || 'Business').trim() || 'Business'
+    if (!primary || primary.toLowerCase() === secondary.toLowerCase()) {
+      return secondary
+    }
+    return `${primary} | ${secondary}`
+  })
+
   useSeoMeta({
-    title: computed(() => `${restaurantName.value} | ${businessTitle.value || 'Restaurant'}`),
-    description: computed(() => businessSubtitle.value || 'Professional restaurant website with menus, reservations, photos and reviews.'),
+    title: seoTitle,
+    description: computed(() => businessSubtitle.value || 'Professional business website with photos, updates and reviews.'),
     ogImage: useSharedOgImage(() => hero.value.image),
     ogUrl: currentPageUrl,
     ogType: 'website'

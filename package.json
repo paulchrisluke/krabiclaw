@@ -13,6 +13,8 @@
     "quality": "yarn typecheck && yarn lint",
     "test": "yarn test:e2e",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test tests/e2e/public.spec.ts tests/e2e/pottery-house.spec.ts tests/e2e/dashboard.spec.ts tests/e2e/billing.spec.ts tests/e2e/billing-webhook.spec.ts",
+    "test:e2e:full": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "deploy": "yarn build && wrangler d1 migrations apply DB --remote && wrangler deploy",
     "dev": "nuxt dev",

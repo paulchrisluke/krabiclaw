@@ -7,7 +7,7 @@
 // All inline D1 queries run in a single db.batch() call alongside helper functions.
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-business";
-import { getPageContent, type SiteContent } from "~/server/utils/content-management";
+import { getPublishedPageContentForLocale, type SiteContent } from "~/server/utils/content-management";
 import { getActiveMenu } from "~/server/utils/menu-management";
 import {
   getExperienceBySlug,
@@ -87,6 +87,7 @@ export default defineEventHandler(async (event) => {
     typeof query.experience === "string" ? query.experience : null;
   const includeMenu = query.menu === "1" || query.menu === "true";
   const dataType = typeof query.data === "string" ? query.data : null; // 'reviews' | 'photos' | 'qa'
+  const locale = typeof query.locale === "string" ? query.locale : undefined;
 
   // Parallelize site auth + location slug resolution — both only need siteId
   const [site, locationRow] = await Promise.all([
@@ -294,10 +295,10 @@ export default defineEventHandler(async (event) => {
     await Promise.all([
       db.batch(batchStmts),
       page
-        ? getPageContent(db, orgId, siteId, page, locationId)
+        ? getPublishedPageContentForLocale(db, orgId, siteId, page, { locale, locationId })
         : Promise.resolve([]),
       includeMenu
-        ? getActiveMenu(db, orgId, siteId, locationId)
+        ? getActiveMenu(db, orgId, siteId, locationId, locale)
         : Promise.resolve(null),
       (page === "experiences" && !experienceSlug) ||
       page === "home" ||

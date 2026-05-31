@@ -14,8 +14,15 @@ const SKIP_PREFIXES = [
 const SESSION_COOKIE = 'better-auth.session_token'
 const CACHE_TTL_SECONDS = 60
 
+type CloudflareRequestContext = {
+  request?: Request
+}
+
+type CloudflareEnvContext = {
+  SITE_CACHE?: KVNamespace
+}
+
 export default defineNitroPlugin((nitroApp) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nitroApp.hooks.hook('afterResponse', async (event: H3Event, response?: { body?: unknown }) => {
     const body = response?.body
     if (!body || typeof body !== 'string') return
@@ -29,8 +36,7 @@ export default defineNitroPlugin((nitroApp) => {
     if (SKIP_PREFIXES.some(p => event.path.startsWith(p))) return
 
     // Use Cloudflare runtime request headers for cookies and host (more reliable on cloudflare_module)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cfRequest = (event.context.cloudflare as any)?.request as Request | undefined
+    const cfRequest = (event.context.cloudflare as CloudflareRequestContext | undefined)?.request
     const cookieHeader = cfRequest?.headers.get('cookie') ?? getHeader(event, 'cookie') ?? ''
     if (cookieHeader.includes(SESSION_COOKIE)) return
 
@@ -47,8 +53,7 @@ export default defineNitroPlugin((nitroApp) => {
     const key = buildHtmlCacheKey(event)
     if (!key) return
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const kv = (event.context.cloudflare?.env as any)?.SITE_CACHE as KVNamespace | undefined
+    const kv = (event.context.cloudflare?.env as CloudflareEnvContext | undefined)?.SITE_CACHE
     if (!kv) {
       console.warn('[edge-cache] SITE_CACHE KV not available')
       return

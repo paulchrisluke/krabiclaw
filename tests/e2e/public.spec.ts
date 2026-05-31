@@ -13,7 +13,7 @@ const tenantRoutes = [
   { path: '/locations/brooklyn/contact', title: /Plan a visit .* Ember & Slice Brooklyn/, text: 'Visit' },
   { path: '/about', title: /About|Story|Ember/, text: 'Ember' },
   { path: '/posts', title: /Updates|Posts|Ember/, text: 'Ember' },
-  { path: '/reservations', title: /Reserve a Table/, text: 'Make a Reservation' },
+  { path: '/reservations', title: /Reserve a [Tt]able/, text: 'Make a Reservation' },
   { path: '/contact', title: /Contact/, text: 'Send a message' }
 ]
 
@@ -93,7 +93,7 @@ test.describe('platform public site', () => {
     const blog = await page.goto(`${baseURL}/blog`, { waitUntil: 'domcontentloaded' })
     expect(blog?.status()).toBeLessThan(400)
     await expect(page).toHaveTitle(/Blog/)
-    await expect(page.locator('body')).toContainText('Restaurant Blog')
+    await expect(page.locator('body')).toContainText('Business Blog')
 
     await expectHealthyPage(page, errors)
   })
