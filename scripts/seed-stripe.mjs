@@ -83,7 +83,7 @@ async function uploadProductImage(localPath) {
     // Create a file link with a long expiry (5 years) to reduce accidental expiration.
     const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365 * 5
     const fileLink = await stripe.fileLinks.create({
-      file: file.id
+      file: file.id,
       expires_at: expiresAt,
     });
     return fileLink.url;
