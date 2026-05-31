@@ -92,7 +92,7 @@ export default defineEventHandler(async (event) => {
   const [site, locationRow] = await Promise.all([
     db
       .prepare(
-        `SELECT id, organization_id, default_currency, contact_email FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`,
+        `SELECT id, organization_id, default_currency, contact_email, contact_phone, brand_name, logo_url FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`,
       )
       .bind(siteId)
       .first<{
@@ -100,6 +100,9 @@ export default defineEventHandler(async (event) => {
         organization_id: string;
         default_currency: string | null;
         contact_email: string | null;
+        contact_phone: string | null;
+        brand_name: string | null;
+        logo_url: string | null;
       }>(),
     locationSlug
       ? db
@@ -398,6 +401,7 @@ export default defineEventHandler(async (event) => {
   );
   config.default_currency = site.default_currency || "THB";
   if (site.contact_email) config.contact_email = site.contact_email;
+  if (site.contact_phone) config.contact_phone = site.contact_phone;
 
   const primary =
     (locRows.results ?? []).find((l) => l.is_primary) ??

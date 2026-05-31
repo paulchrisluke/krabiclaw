@@ -1,5 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { encryptSecret, decryptSecret, encryptionEnv } from './encryption'
+import { createMediaAsset } from './media-asset-manager'
+import { uploadToR2, buildR2Key } from './cloudflare-r2'
 
 const GRAPH_API_VERSION = 'v25.0'
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
@@ -68,6 +70,16 @@ export interface FacebookPost {
   created_time: string
   full_picture?: string
   permalink_url?: string
+}
+
+export interface InstagramMedia {
+  id: string
+  caption?: string
+  media_type: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM'
+  media_url?: string
+  thumbnail_url?: string
+  permalink: string
+  timestamp: string
 }
 
 const GRAPH_TIMEOUT_MS = 10_000
@@ -320,6 +332,23 @@ export const getLinkedInstagramAccount = async (
   return data.instagram_business_account?.id ?? null
 }
 
+// Fetch recent media from an Instagram Business Account
+export const getInstagramMedia = async (
+  pageToken: string,
+  igUserId: string,
+  limit = 20
+): Promise<InstagramMedia[]> => {
+  const params = new URLSearchParams({
+    access_token: pageToken,
+    fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp',
+    limit: String(limit),
+  })
+  const data = await graphFetch<{ data: InstagramMedia[] }>(
+    `${GRAPH_BASE}/${igUserId}/media?${params.toString()}`
+  )
+  return data.data ?? []
+}
+
 // Publish a photo post to an Instagram Business Account (two-step container → publish).
 // imageUrl must be a publicly accessible HTTPS URL.
 // If imageUrl is omitted the post is skipped — Instagram requires an image.
@@ -383,4 +412,233 @@ export const syncPageInfoToLocation = async (
     SET ${updates.join(', ')}
     WHERE organization_id = ? AND site_id = ? AND id = ?
   `).bind(...values).run()
+}
+
+// Sync Instagram media to posts table
+export const syncInstagramPosts = async (
+  env: FacebookEnv,
+  organizationId: string,
+  siteId: string,
+  pageToken: string,
+  igUserId: string,
+  limit = 20
+): Promise<{ success: number; errors: number; skipped: number }> => {
+  if (!env.DB) throw new Error('Database not available')
+
+  const media = await getInstagramMedia(pageToken, igUserId, limit)
+  let success = 0
+  let errors = 0
+  let skipped = 0
+
+  for (const item of media) {
+    try {
+      // Check if post already exists
+      const existing = await env.DB.prepare(
+        `SELECT id FROM posts WHERE google_post_id = ? AND site_id = ? LIMIT 1`
+      ).bind(`ig-${item.id}`, siteId).first()
+
+      if (existing) {
+        skipped++
+        continue
+      }
+
+      // Download image from Instagram
+      const imageUrl = item.media_type === 'VIDEO' ? item.thumbnail_url : item.media_url
+      if (!imageUrl) {
+        skipped++
+        continue
+      }
+
+      const imageResponse = await fetch(imageUrl)
+      if (!imageResponse.ok) {
+        errors++
+        continue
+      }
+
+      const imageBuffer = await imageResponse.arrayBuffer()
+      const assetId = `ig-asset-${item.id}`
+      const r2Key = buildR2Key(siteId, assetId, `instagram-${item.id}.jpg`)
+      const publicUrl = await uploadToR2(env, r2Key, imageBuffer, 'image/jpeg')
+
+      // Extract title from caption (first line or default)
+      const captionLines = item.caption?.split('\n').filter(Boolean) ?? []
+      const title = captionLines[0] || 'Instagram Update'
+      const body = item.caption || ''
+
+      // Create post record
+      const postId = `ig-post-${item.id}`
+      const now = new Date().toISOString()
+
+      // Use D1 batch to make asset creation and post insert atomic
+      await env.DB.batch([
+        env.DB.prepare(`
+          INSERT INTO media_assets (
+            id, organization_id, site_id, location_id, kind, provider, source,
+            r2_key, public_url, mime_type, file_name, file_size, status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          assetId,
+          organizationId,
+          siteId,
+          null,
+          'image',
+          'cloudflare_r2',
+          'external',
+          r2Key,
+          publicUrl,
+          'image/jpeg',
+          `instagram-${item.id}.jpg`,
+          imageBuffer.byteLength,
+          'active',
+          now,
+          now
+        ),
+        env.DB.prepare(`
+          INSERT INTO posts (
+            id, organization_id, site_id, location_id, google_post_id, post_type,
+            title, body, image_asset_id, cta_url, status, published_at,
+            created_by, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          postId,
+          organizationId,
+          siteId,
+          null,
+          `ig-${item.id}`,
+          'standard',
+          title,
+          body,
+          assetId,
+          item.permalink,
+          'published',
+          item.timestamp,
+          'instagram-sync',
+          now,
+          now
+        )
+      ])
+
+      success++
+    } catch (err) {
+      console.error('Instagram sync failed for item:', item.id, err)
+      errors++
+    }
+  }
+
+  return { success, errors, skipped }
+}
+
+// Sync Facebook posts to posts table
+export const syncFacebookPosts = async (
+  env: FacebookEnv,
+  organizationId: string,
+  siteId: string,
+  pageToken: string,
+  pageId: string,
+  limit = 20
+): Promise<{ success: number; errors: number; skipped: number }> => {
+  if (!env.DB) throw new Error('Database not available')
+
+  const posts = await getPagePosts(pageToken, pageId, limit)
+  let success = 0
+  let errors = 0
+  let skipped = 0
+
+  for (const item of posts) {
+    try {
+      // Check if post already exists
+      const existing = await env.DB.prepare(
+        `SELECT id FROM posts WHERE google_post_id = ? AND site_id = ? LIMIT 1`
+      ).bind(`fb-${item.id}`, siteId).first()
+
+      if (existing) {
+        skipped++
+        continue
+      }
+
+      // Download image from Facebook
+      const imageUrl = item.full_picture
+      if (!imageUrl) {
+        skipped++
+        continue
+      }
+
+      const imageResponse = await fetch(imageUrl)
+      if (!imageResponse.ok) {
+        errors++
+        continue
+      }
+
+      const imageBuffer = await imageResponse.arrayBuffer()
+      const assetId = `fb-asset-${item.id}`
+      const r2Key = buildR2Key(siteId, assetId, `facebook-${item.id}.jpg`)
+      const publicUrl = await uploadToR2(env, r2Key, imageBuffer, 'image/jpeg')
+
+      // Extract title from message/story (first line or default)
+      const content = item.message || item.story || ''
+      const contentLines = content.split('\n').filter(Boolean)
+      const title = contentLines[0] || 'Facebook Update'
+      const body = content
+
+      // Create post record
+      const postId = `fb-post-${item.id}`
+      const now = new Date().toISOString()
+
+      // Use D1 batch to make asset creation and post insert atomic
+      await env.DB.batch([
+        env.DB.prepare(`
+          INSERT INTO media_assets (
+            id, organization_id, site_id, location_id, kind, provider, source,
+            r2_key, public_url, mime_type, file_name, file_size, status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          assetId,
+          organizationId,
+          siteId,
+          null,
+          'image',
+          'cloudflare_r2',
+          'external',
+          r2Key,
+          publicUrl,
+          'image/jpeg',
+          `facebook-${item.id}.jpg`,
+          imageBuffer.byteLength,
+          'active',
+          now,
+          now
+        ),
+        env.DB.prepare(`
+          INSERT INTO posts (
+            id, organization_id, site_id, location_id, google_post_id, post_type,
+            title, body, image_asset_id, cta_url, status, published_at,
+            created_by, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          postId,
+          organizationId,
+          siteId,
+          null,
+          `fb-${item.id}`,
+          'standard',
+          title,
+          body,
+          assetId,
+          item.permalink_url,
+          'published',
+          item.created_time,
+          'facebook-sync',
+          now,
+          now
+        )
+      ])
+
+      success++
+    } catch (err) {
+      console.error('Facebook sync failed for item:', item.id, err)
+      errors++
+    }
+  }
+
+  return { success, errors, skipped }
 }

@@ -32,14 +32,6 @@
             >
               <UIcon :name="`i-simple-icons-${social.name.toLowerCase()}`" class="size-4" />
             </a>
-            <span
-              v-for="social in inactiveSocials"
-              :key="social.name"
-              aria-hidden="true"
-              class="flex size-9 cursor-default items-center justify-center rounded-full border border-inverted/8 text-inverted/30"
-            >
-              <UIcon :name="`i-simple-icons-${social.name.toLowerCase()}`" class="size-4" />
-            </span>
           </div>
         </div>
 

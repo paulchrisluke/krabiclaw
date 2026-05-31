@@ -1,10 +1,22 @@
 <template>
-  <section v-if="items.length" class="mx-auto max-w-7xl px-4 pt-16 pb-8 sm:px-6 lg:px-8">
+  <section v-if="items.length" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+    <div class="mb-12 flex flex-wrap items-end justify-between gap-4">
+      <div class="max-w-2xl">
+        <p class="saya-kicker mb-6">{{ sectionKicker }}</p>
+        <h2 class="saya-display-md text-default">{{ sectionHeading }}</h2>
+      </div>
+      <NuxtLink
+        :to="linkTarget"
+        class="border-b border-default pb-1 text-xs uppercase tracking-widest text-default no-underline transition hover:opacity-60"
+      >
+        View all →
+      </NuxtLink>
+    </div>
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
       <NuxtLink
         v-for="(item, i) in items"
         :key="i"
-        :to="linkTarget"
+        :to="item.href || linkTarget"
         class="group block overflow-hidden bg-elevated no-underline text-default transition hover:opacity-90"
       >
         <div class="aspect-square overflow-hidden bg-muted">
@@ -48,8 +60,10 @@ interface Props {
       imageKind?: string
       alt?: string
       price?: string
+      href?: string
     }>
     hasMenu?: boolean
+    vertical?: string
   }
 }
 
@@ -57,9 +71,19 @@ const props = withDefaults(defineProps<Props>(), {
   data: () => ({})
 })
 
+const { site } = useTenantSite()
+
 const items = computed(() => props.data?.items || [])
 const hasMenu = computed(() => props.data?.hasMenu || false)
 const linkTarget = computed(() => hasMenu.value ? '/menu' : '/experiences')
+
+const sectionKicker = computed(() => hasMenu.value ? 'The menu' : 'Experiences')
+const sectionHeading = computed(() => {
+  if (hasMenu.value) {
+    return `What we're cooking at ${(site as Record<string, any>)?.title || 'our kitchen'}.`
+  }
+  return `What we're offering at ${(site as Record<string, any>)?.title || 'our studio'}.`
+})
 
 const clientReady = ref(false)
 onMounted(() => { clientReady.value = true })

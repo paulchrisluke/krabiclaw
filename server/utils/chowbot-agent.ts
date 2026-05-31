@@ -4060,6 +4060,12 @@ async function executeTool(
       const slots = Array.isArray(input.time_slots)
         ? input.time_slots.map(String)
         : null;
+      const images = Array.isArray(input.images)
+        ? input.images.map((img: any) => ({
+            url: toSqlText(img.url) ?? "",
+            kind: img.kind === "video" ? "video" : "image",
+          }))
+        : undefined;
       const experience = await createExperience(
         db,
         orgId,
@@ -4080,6 +4086,8 @@ async function executeTool(
           time_slots: slots,
           available_note: toSqlText(input.available_note) ?? null,
           image_asset_id: toSqlText(input.image_asset_id) ?? null,
+          video_asset_id: toSqlText(input.video_asset_id) ?? null,
+          images,
           location_id: toSqlText(input.location_id) ?? null,
           status: (["active", "inactive", "sold_out"].includes(
             String(input.status ?? ""),
@@ -4138,6 +4146,15 @@ async function executeTool(
         updates.available_note = toSqlText(input.available_note) ?? null;
       if (input.image_asset_id !== undefined)
         updates.image_asset_id = toSqlText(input.image_asset_id) ?? null;
+      if (input.video_asset_id !== undefined)
+        updates.video_asset_id = toSqlText(input.video_asset_id) ?? null;
+      if (input.images !== undefined)
+        updates.images = Array.isArray(input.images)
+          ? input.images.map((img: any) => ({
+              url: toSqlText(img.url) ?? "",
+              kind: img.kind === "video" ? "video" : "image",
+            }))
+          : null;
       if (input.location_id !== undefined)
         updates.location_id = toSqlText(input.location_id) ?? null;
       if (

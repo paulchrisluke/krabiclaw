@@ -37,6 +37,7 @@
         />
       </ClientOnly>
     </div>
+    <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
 
     <!-- Content -->
     <div class="relative z-10 mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">

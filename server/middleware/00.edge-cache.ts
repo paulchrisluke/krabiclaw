@@ -2,7 +2,7 @@
 // Replaces the previous caches.default approach which was per-datacenter only.
 //
 // Cache key: html:<host>:<pathname>
-// Stored in SITE_CACHE KV namespace with a 60s TTL.
+// Stored in SITE_CACHE KV namespace with CACHE_TTL_SECONDS TTL.
 // On a hit: D1 tenant lookup and Vue SSR are skipped entirely.
 // On a miss: falls through to SSR; server/plugins/edge-cache.ts populates KV.
 //
@@ -14,6 +14,9 @@
 //   - No Host header
 
 import { defineEventHandler, setResponseHeaders, getHeader } from 'h3'
+import { buildHtmlCacheKey } from '~/server/utils/edge-cache'
+
+const CACHE_TTL_SECONDS = 60
 
 const SKIP_PREFIXES = [
   '/api/', '/dashboard', '/admin', '/auth/',
@@ -28,15 +31,13 @@ export default defineEventHandler(async (event) => {
   if ((getHeader(event, 'cookie') ?? '').includes(SESSION_COOKIE)) return
   if (event.path.includes('?')) return
 
-  const host = getHeader(event, 'host') || getHeader(event, 'x-forwarded-host')
-  if (!host) return
+  const key = buildHtmlCacheKey(event)
+  if (!key) return
 
   // Access KV directly from the Cloudflare event context
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const kv = (event.context.cloudflare?.env as any)?.SITE_CACHE as KVNamespace | undefined
   if (!kv) return
-
-  const key = `html:${host}:${event.path}`
 
   try {
     const hit = await kv.get(key, 'text')
@@ -44,7 +45,7 @@ export default defineEventHandler(async (event) => {
 
     setResponseHeaders(event, {
       'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'public, s-maxage=60, stale-while-revalidate=300, max-age=0',
+      'cache-control': `public, s-maxage=${CACHE_TTL_SECONDS}, stale-while-revalidate=${CACHE_TTL_SECONDS}, max-age=0`,
       'x-edge-cache': 'HIT',
     })
     return hit

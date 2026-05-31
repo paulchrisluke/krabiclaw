@@ -13,7 +13,8 @@
         v-for="(post, index) in displayedPosts"
         :id="getPostSlug(post.name) || `post-${index}`"
         :key="getPostSlug(post.name) || `post-${index}`"
-        class="flex flex-col bg-default border border-default rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group"
+        class="flex flex-col bg-default border border-default rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group cursor-pointer"
+        @click="openModal(post)"
       >
         <div class="aspect-4/5 overflow-hidden bg-muted relative">
           <template v-if="post.media?.[0]">
@@ -65,25 +66,10 @@
             </div>
           </div>
 
-          <NuxtLink
-            v-if="limit"
-            :to="'/posts#' + getPostSlug(post.name)"
-            class="inline-flex items-center gap-2 text-sm font-bold text-default group/link"
-          >
+          <div class="inline-flex items-center gap-2 text-sm font-bold text-default group/link">
             <span>Read Full Story</span>
-            <span class="transition-transform group-hover/link:translate-x-1">→</span>
-          </NuxtLink>
-
-          <UButton
-            v-else-if="post.callToAction"
-            :to="post.callToAction.url"
-            variant="solid"
-            color="neutral"
-            size="xl"
-            class="self-start rounded-full"
-          >
-            {{ (post.callToAction.actionType ?? '').replaceAll('_', ' ') }}
-          </UButton>
+            <span class="transition-transform group-hover:translate-x-1">→</span>
+          </div>
         </div>
       </article>
 
@@ -109,6 +95,56 @@
         View All Updates
       </UButton>
     </div>
+
+    <!-- Full-screen modal for post details -->
+    <UModal v-model:open="modalOpen" fullscreen>
+      <template #body v-if="selectedPost">
+        <div class="flex h-full flex-col">
+          <div v-if="selectedPost.media?.[0]" class="flex-1 overflow-hidden bg-muted">
+            <video
+              v-if="selectedPost.media[0].mediaFormat === 'VIDEO'"
+              :src="selectedPost.media[0].googleUrl"
+              autoplay
+              muted
+              loop
+              playsinline
+              class="h-full w-full object-contain"
+            />
+            <img
+              v-else
+              :src="selectedPost.media[0].googleUrl"
+              :alt="selectedPost.title || 'Post image'"
+              class="h-full w-full object-contain"
+            >
+          </div>
+          <div class="p-6 sm:p-8">
+            <time :datetime="selectedPost.createTime" class="text-[10px] text-muted font-bold uppercase tracking-widest mb-3 block">
+              {{ formatDate(selectedPost.createTime) }}
+            </time>
+            <h3 class="text-2xl font-bold text-default mb-4 leading-tight">{{ selectedPost.title || 'Business Update' }}</h3>
+            <div class="text-muted text-base leading-relaxed whitespace-pre-line">{{ selectedPost.summary }}</div>
+            <div v-if="selectedPost.event" class="mt-6 rounded-xl border border-default bg-muted p-4 text-sm">
+              <p class="mb-1 font-bold text-default">Event Details:</p>
+              <p class="text-default">{{ selectedPost.event.title }} • {{ formatDate(selectedPost.event.startDate) }}</p>
+            </div>
+            <div v-if="selectedPost.offer" class="mt-6 rounded-xl border border-default bg-muted p-4 text-sm">
+              <p class="mb-1 font-bold text-default">Special Offer:</p>
+              <p class="text-default">{{ selectedPost.offer.title }} <span v-if="selectedPost.offer.couponCode">• Code: {{ selectedPost.offer.couponCode }}</span></p>
+            </div>
+            <UButton
+              v-if="selectedPost.callToAction"
+              :to="selectedPost.callToAction.url"
+              variant="solid"
+              color="neutral"
+              size="xl"
+              class="mt-6 rounded-full"
+            >
+              {{ (selectedPost.callToAction.actionType ?? '').replaceAll('_', ' ') }}
+            </UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
   </AppSection>
 </template>
 
@@ -123,6 +159,14 @@ const props = defineProps({
   showViewMore: { type: Boolean, default: false },
   showEmptyState: { type: Boolean, default: true }
 })
+
+const modalOpen = ref(false)
+const selectedPost = ref(null)
+
+function openModal(post) {
+  selectedPost.value = post
+  modalOpen.value = true
+}
 
 const displayedPosts = computed(() => {
   return props.limit ? props.posts.slice(0, props.limit) : props.posts

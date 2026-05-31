@@ -9,6 +9,9 @@ export interface Experience {
   body: string | null
   image_asset_id: string | null
   image_url: string | null
+  video_asset_id: string | null
+  video_url: string | null
+  images: Array<{ url: string; kind: 'image' | 'video' }>
   price: string | null
   duration_minutes: number | null
   max_capacity: number | null
@@ -35,6 +38,9 @@ interface ExperienceRow {
   body: string | null
   image_asset_id: string | null
   image_url: string | null
+  video_asset_id: string | null
+  video_url: string | null
+  images: string | null
   price: string | null
   duration_minutes: number | null
   max_capacity: number | null
@@ -55,10 +61,21 @@ function parseRow(row: ExperienceRow): Experience {
   if (row.time_slots) {
     try { time_slots = JSON.parse(row.time_slots) } catch { time_slots = null }
   }
+  let images: Array<{ url: string; kind: 'image' | 'video' }> = []
+  if (row.images) {
+    try { 
+      const parsed = JSON.parse(row.images) 
+      if (Array.isArray(parsed)) {
+        images = parsed.filter(item => typeof item === 'object' && item !== null && typeof item.url === 'string' && (item.kind === 'image' || item.kind === 'video'))
+      }
+    } catch { images = [] }
+  }
+  // NOTE: Ensure the same validation/normalization is applied in the create/update handlers that write Experience.images so malformed shapes are rejected at source.
   return { 
     ...row, 
     status: row.status as Experience['status'], 
     time_slots,
+    images,
     featured: Boolean(row.featured)
   }
 }
@@ -66,13 +83,16 @@ function parseRow(row: ExperienceRow): Experience {
 const SELECT = `
   SELECT e.id, e.organization_id, e.site_id, e.location_id,
          e.title, e.slug, e.tagline, e.body, e.image_asset_id,
+         e.video_asset_id, e.images,
          e.price, e.duration_minutes, e.max_capacity, e.time_slots,
          e.available_note, e.status, e.sort_order,
          e.featured, e.featured_sort_order,
          e.seo_title, e.seo_description, e.created_at, e.updated_at,
-         img.public_url AS image_url
+         img.public_url AS image_url,
+         vid.public_url AS video_url
   FROM experiences e
   LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
+  LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
 `
 
 export async function listExperiences(
@@ -145,6 +165,8 @@ export interface CreateExperienceInput {
   tagline?: string | null
   body?: string | null
   image_asset_id?: string | null
+  video_asset_id?: string | null
+  images?: Array<{ url: string; kind: 'image' | 'video' }>
   price?: string | null
   duration_minutes?: number | null
   max_capacity?: number | null
@@ -170,15 +192,16 @@ export async function createExperience(
   const slug = await uniqueSlug(db, siteId, slugify(input.title))
   const now = new Date().toISOString()
   const slotsJson = input.time_slots?.length ? JSON.stringify(input.time_slots) : null
+  const imagesJson = input.images?.length ? JSON.stringify(input.images) : null
 
   const result = await db
     .prepare(
       `INSERT INTO experiences
        (id, organization_id, site_id, location_id, title, slug, tagline, body,
-        image_asset_id, price, duration_minutes, max_capacity, time_slots,
+        image_asset_id, video_asset_id, images, price, duration_minutes, max_capacity, time_slots,
         available_note, status, sort_order, featured, featured_sort_order,
         seo_title, seo_description, created_at, updated_at, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
     .bind(
       id, organizationId, siteId,
@@ -188,6 +211,8 @@ export async function createExperience(
       input.tagline ?? null,
       input.body ?? null,
       input.image_asset_id ?? null,
+      input.video_asset_id ?? null,
+      imagesJson,
       input.price ?? null,
       input.duration_minutes ?? null,
       input.max_capacity ?? null,
@@ -238,6 +263,11 @@ export async function updateExperience(
   if (input.tagline !== undefined) { sets.push('tagline = ?'); params.push(input.tagline ?? null) }
   if (input.body !== undefined) { sets.push('body = ?'); params.push(input.body ?? null) }
   if (input.image_asset_id !== undefined) { sets.push('image_asset_id = ?'); params.push(input.image_asset_id ?? null) }
+  if (input.video_asset_id !== undefined) { sets.push('video_asset_id = ?'); params.push(input.video_asset_id ?? null) }
+  if (input.images !== undefined) {
+    sets.push('images = ?')
+    params.push(input.images?.length ? JSON.stringify(input.images) : null)
+  }
   if (input.price !== undefined) { sets.push('price = ?'); params.push(input.price ?? null) }
   if (input.duration_minutes !== undefined) { sets.push('duration_minutes = ?'); params.push(input.duration_minutes ?? null) }
   if (input.max_capacity !== undefined) { sets.push('max_capacity = ?'); params.push(input.max_capacity ?? null) }

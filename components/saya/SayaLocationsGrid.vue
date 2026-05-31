@@ -18,7 +18,7 @@
           <video
             v-if="loc.public_url && loc.kind === 'video'"
             :src="loc.public_url"
-            class="aspect-video w-full object-cover"
+            class="aspect-video w-full object-contain"
             autoplay
             muted
             loop
@@ -28,7 +28,7 @@
             v-else-if="loc.public_url"
             :src="loc.public_url"
             :alt="loc.title"
-            class="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
           >
           <div v-else class="flex h-full w-full items-center justify-center">
             <UIcon name="i-heroicons-map-pin" class="size-10 text-muted" />

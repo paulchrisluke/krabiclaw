@@ -333,6 +333,14 @@ async function resolvePlace(rawUrl) {
 
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 
+const MIME_MAP = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+};
+
 function normalizeFilename(name) {
   return name
     .toLowerCase()
@@ -384,12 +392,14 @@ async function scanImages(dir) {
     const hash = createHash("sha256").update(contents).digest("hex");
 
     const assignedTo = files.length === 0 ? "hero" : `gallery-${files.length}`;
+    const r2Key = `sites/site-${SLUG}/media/${normalName}`;
 
     files.push({
       source_file: fullPath,
       original_name: entry,
       normalized_name: normalName,
-      public_url: `/images/${SLUG}/${normalName}`,
+      r2_key: r2Key,
+      public_url: `https://media.krabiclaw.com/${r2Key}`,
       assigned_to: assignedTo,
       alt_text: brandLabel,
       hash: `sha256:${hash}`,
@@ -546,10 +556,17 @@ INSERT INTO business_locations (
     .slice(0, 3)
     .map((f, i) => {
       const assetId = `asset-${SLUG}-${i}`;
-      return `INSERT INTO media_assets (id, site_id, organization_id, public_url, alt_text, kind, provider, source, status)
-VALUES ('${assetId}', '${siteId}', '${orgId}', '${f.public_url}', '${brandName}', 'image', 'local', 'import', 'active')
+      const r2Key = `sites/${siteId}/media/${f.normalized_name}`;
+      const publicUrl = `https://media.krabiclaw.com/${r2Key}`;
+      const ext = f.normalized_name.split(".").pop()?.toLowerCase() ?? "";
+      const mimeType = MIME_MAP[ext] ?? "application/octet-stream";
+      return `INSERT INTO media_assets (id, site_id, organization_id, r2_key, public_url, file_name, mime_type, alt_text, kind, provider, source, status)
+VALUES ('${assetId}', '${siteId}', '${orgId}', '${r2Key}', '${publicUrl}', '${f.normalized_name}', '${mimeType}', '${brandName}', 'image', 'cloudflare_r2', 'import', 'active')
 ON CONFLICT(id) DO UPDATE SET
+  r2_key = excluded.r2_key,
   public_url = excluded.public_url,
+  file_name = excluded.file_name,
+  mime_type = excluded.mime_type,
   alt_text = excluded.alt_text,
   updated_at = CURRENT_TIMESTAMP;`;
     })

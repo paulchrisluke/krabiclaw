@@ -79,13 +79,13 @@
                           <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs" @click="copy(domain.instructions.cname.value)" />
                         </td>
                       </tr>
-                      <!-- SSL TXT row -->
-                      <tr v-if="domain.instructions?.ssl">
-                        <td class="py-1.5 font-mono text-highlighted">{{ domain.instructions.ssl.type }}</td>
-                        <td class="py-1.5 pl-4 font-mono text-highlighted">{{ domain.instructions.ssl.name }}</td>
-                        <td class="py-1.5 pl-4 font-mono text-muted max-w-48 truncate">{{ domain.instructions.ssl.value }}</td>
+                      <!-- SSL TXT rows (Cloudflare requires two values at the same name) -->
+                      <tr v-for="(rec, i) in (domain.instructions?.ssl_records ?? (domain.instructions?.ssl ? [domain.instructions.ssl] : []))" :key="i">
+                        <td class="py-1.5 font-mono text-highlighted">{{ rec.type }}</td>
+                        <td class="py-1.5 pl-4 font-mono text-highlighted">{{ rec.name }}</td>
+                        <td class="py-1.5 pl-4 font-mono text-muted max-w-48 truncate">{{ rec.value }}</td>
                         <td class="py-1.5 pl-4">
-                          <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs" @click="copy(domain.instructions.ssl.value)" />
+                          <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs" @click="copy(rec.value)" />
                         </td>
                       </tr>
                       <!-- Ownership TXT row -->
@@ -100,7 +100,8 @@
                     </tbody>
                   </table>
                 </div>
-                <p class="text-xs text-muted">{{ domain.instructions?.note?.cloudflare ?? 'DNS changes can take up to 24 hours to propagate.' }}</p>
+                <p class="text-xs text-muted">{{ domain.instructions?.apex_note ?? `For the bare domain (no www), use your registrar's forwarding/redirect to https://www.${domain.domain.replace(/^www\./, '')}` }}</p>
+                <p class="text-xs text-muted">SSL certificate issues automatically once all records resolve. Do not add any other records at <code>_acme-challenge.www</code> — multiple conflicting records will block validation.</p>
               </div>
             </div>
           </div>
@@ -148,8 +149,9 @@ definePageMeta({ layout: 'dashboard' })
 interface DomainInstructions {
   cname?: { type: string; name: string; value: string }
   ssl?: { type: string; name: string; value: string }
+  ssl_records?: Array<{ type: string; name: string; value: string }>
   ownership?: { type: string; name: string; value: string }
-  note?: { cloudflare?: string }
+  apex_note?: string
 }
 
 interface Domain {

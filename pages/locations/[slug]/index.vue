@@ -148,49 +148,15 @@
         </div>
       </section>
 
-      <!-- Menu preview -->
-      <section v-if="featuredItems.length" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-        <div class="mb-16 max-w-2xl">
-          <p class="saya-kicker mb-6">The menu</p>
-          <h2 class="saya-display-md text-default">What we're cooking at {{ location.title }}.</h2>
-        </div>
-        <div class="grid gap-12 sm:grid-cols-2 lg:grid-cols-3">
-          <article v-for="item in featuredItems" :key="item.id">
-            <div
-              v-if="item.public_url"
-              class="mb-5 aspect-4/3 overflow-hidden bg-muted"
-            >
-              <video
-                v-if="item.kind === 'video'"
-                :src="item.public_url"
-                autoplay
-                muted
-                loop
-                playsinline
-                class="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
-              />
-              <img
-                v-else
-                :src="item.public_url"
-                :alt="item.name"
-                class="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
-              >
-            </div>
-            <div v-else class="mb-5 aspect-4/3 bg-muted" />
-            <div class="saya-display saya-italic text-2xl text-default">{{ item.name }}</div>
-            <div v-if="item.description" class="mt-2 text-sm leading-relaxed text-muted">{{ item.description }}</div>
-            <div v-if="item.price_amount" class="mt-3 text-sm tabular-nums text-default">{{ formatFeaturedPrice(item.price_amount) }}</div>
-          </article>
-        </div>
-        <div class="mt-12 text-center">
-          <NuxtLink
-            :to="`/locations/${slug}/menu`"
-            class="border-b border-default pb-1 text-xs uppercase tracking-widest text-default no-underline transition hover:opacity-60"
-          >
-            View the full menu →
-          </NuxtLink>
-        </div>
-      </section>
+      <!-- Featured content (menu items / experiences) -->
+      <LazySayaFeaturedContent
+        v-if="featuredItems.length"
+        :data="{
+          items: featuredItems,
+          hasMenu: hasMenu,
+          vertical: (site as ApiValue)?.vertical
+        }"
+      />
 
       <!-- Reviews preview -->
       <section v-if="reviewsPreview.length" class="bg-elevated">
@@ -253,14 +219,14 @@
                 <video
                   v-if="loc.public_url && loc.kind === 'video'"
                   :src="loc.public_url"
-                  class="h-full w-full object-cover"
+                  class="h-full w-full object-contain"
                   autoplay muted loop playsinline
                 />
                 <img
                   v-else-if="loc.public_url"
                   :src="loc.public_url"
                   :alt="loc.title"
-                  class="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                  class="h-full w-full object-contain transition-transform duration-500 hover:scale-105"
                 >
               </div>
               <div class="p-7">
@@ -418,12 +384,21 @@ const heroBackgroundStyle = computed(() => {
 
 // Featured items from bootstrap menu or experiences (if no menu)
 const featuredItems = computed(() => {
+  const defaultCurrency = bootstrapConfig.value?.default_currency || 'THB'
+  
   if (hasMenu.value) {
     // Use featured menu items
     const items = (bootstrapMenu.value as { items?: ApiRecord[] } | null)?.items ?? []
-    return items.filter((i: ApiRecord) => i.featured || i.available !== false).slice(0, 3)
+    return items.filter((i: ApiRecord) => i.featured || i.available !== false).slice(0, 4).map((item: ApiRecord) => ({
+      name: item.name,
+      price: formatMoneyAmount(item.price_amount, defaultCurrency, ''),
+      image: item.kind === 'video' ? (item.thumbnail_url || null) : (item.public_url || null),
+      imageKind: item.kind === 'video' ? 'video' : 'image',
+      alt: item.name ? `${item.name} dish` : 'Featured dish image',
+      href: item.slug ? `/menu/${item.slug}` : `/locations/${slug.value}/menu`,
+    }))
   } else {
-    // Use featured experiences, normalized to menu item shape
+    // Use featured experiences
     const experiences = experiencesList.value || []
     function safeNum(val: unknown) {
       const n = Number(val);
@@ -441,25 +416,16 @@ const featuredItems = computed(() => {
         return String(a.title ?? '').localeCompare(String(b.title ?? ''));
       })
     const toUse = featured.length > 0 ? featured : experiences.filter(exp => exp.status === 'active')
-    // Normalize experience objects to match menu item shape expected by template
-    return toUse.slice(0, 3).map(exp => ({
-      id: exp.id,
+    return toUse.slice(0, 4).map(exp => ({
       name: exp.title,
-      description: exp.tagline || '',
-      public_url: exp.image_url || null,
-      price_amount: typeof exp.price === 'number' ? exp.price : null,
-      price_display: exp.price,
-      kind: 'image',
-      featured: exp.featured,
-      available: exp.status === 'active',
-      source: 'experience',
-      isExperience: true,
+      price: exp.price && isFinite(parseFloat(String(exp.price))) ? formatMoneyAmount(Number(parseFloat(String(exp.price))), defaultCurrency, '') : (exp.price || ''),
+      image: exp.image_url || null,
+      imageKind: 'image',
+      alt: exp.title ? `${exp.title} experience` : 'Featured experience image',
+      href: exp.slug ? `/experiences/${exp.slug}` : '/experiences',
     }))
   }
 })
-
-const defaultCurrency = computed(() => bootstrapConfig.value?.default_currency || 'THB')
-const formatFeaturedPrice = (amount: unknown) => formatMoneyAmount(amount, defaultCurrency.value, '')
 
 // Content hero fields take precedence; fall back to Google Business primary photo
 const contentHero = computed(() => getContentHero({ title: '', subtitle: '', image: '', video: '' }))

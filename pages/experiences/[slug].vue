@@ -33,15 +33,54 @@
         </nav>
 
         <div class="grid gap-10 lg:grid-cols-[1fr_400px] lg:items-start">
-          <!-- Image -->
-          <div class="aspect-4/3 overflow-hidden rounded-xl bg-muted lg:h-120 lg:aspect-auto">
-            <img
-              v-if="experience.image_url"
-              :src="experience.image_url"
-              :alt="experience.title"
-              class="h-full w-full object-cover"
-            />
-            <div v-else class="flex h-full items-center justify-center">
+          <!-- Media gallery -->
+          <div class="rounded-xl bg-muted overflow-hidden">
+            <UCarousel
+              v-if="mediaItems.length > 1"
+              :items="mediaItems"
+              arrows
+              dots
+              class="lg:h-120"
+              :ui="{ item: 'min-h-0 basis-full' }"
+            >
+              <template #default="{ item }">
+                <div class="relative aspect-4/3 lg:aspect-auto lg:h-120 overflow-hidden">
+                  <video
+                    v-if="item.kind === 'video'"
+                    :src="item.url"
+                    autoplay
+                    muted
+                    loop
+                    playsinline
+                    class="h-full w-full object-contain"
+                  />
+                  <img
+                    v-else
+                    :src="item.url"
+                    :alt="experience.title"
+                    class="h-full w-full object-contain"
+                  />
+                </div>
+              </template>
+            </UCarousel>
+            <div v-else-if="mediaItems.length === 1" class="relative aspect-4/3 lg:aspect-auto lg:h-120 overflow-hidden">
+              <video
+                v-if="mediaItems[0].kind === 'video'"
+                :src="mediaItems[0].url"
+                autoplay
+                muted
+                loop
+                playsinline
+                class="h-full w-full object-contain"
+              />
+              <img
+                v-else
+                :src="mediaItems[0].url"
+                :alt="experience.title"
+                class="h-full w-full object-contain"
+              />
+            </div>
+            <div v-else class="flex aspect-4/3 lg:h-120 items-center justify-center">
               <UIcon name="i-heroicons-sparkles" class="size-16 text-dimmed" />
             </div>
           </div>
@@ -195,18 +234,45 @@ const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).de
 const route = useRoute()
 const slug = route.params.slug as string
 const { siteId, site } = useTenantSite()
-const siteName = computed(() => (site as ApiValue)?.name || 'KrabiClaw')
+const siteName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.name || 'KrabiClaw')
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
 const { experienceDetail: experience, pending } = useBootstrap()
 const currentPageUrl = useSeoUrl(() => `/experiences/${slug}`)
-const ogImage = useSharedOgImage(() => experience.value?.image_url)
+const ogImage = useSharedOgImage(() => experience.value?.image_url || (site as ApiValue)?.logo_url)
 
 const sanitizedBody = computed(() => {
   const raw = experience.value?.body
   if (!raw) return ''
   return DOMPurify.sanitize(raw)
+})
+
+// Media items for carousel - supports both images and videos
+const mediaItems = computed(() => {
+  const exp = experience.value
+  if (!exp) return []
+
+  const items: Array<{ url: string; kind: 'image' | 'video' }> = []
+
+  // Add primary image/video
+  if (exp.image_url) {
+    items.push({ url: exp.image_url, kind: 'image' })
+  }
+  if (exp.video_url) {
+    items.push({ url: exp.video_url, kind: 'video' })
+  }
+
+  // Add additional images/videos if they exist in the data
+  if (exp.images && Array.isArray(exp.images)) {
+    exp.images.forEach((img: any) => {
+      if (img.url && !items.find(i => i.url === img.url)) {
+        items.push({ url: img.url, kind: img.kind === 'video' ? 'video' : 'image' })
+      }
+    })
+  }
+
+  return items
 })
 
 function formatDuration(minutes: number): string {

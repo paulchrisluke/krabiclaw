@@ -4,6 +4,7 @@
 
 import { getHeader, getResponseStatus, getResponseHeader } from 'h3'
 import type { H3Event } from 'h3'
+import { buildHtmlCacheKey } from '~/server/utils/edge-cache'
 
 const SKIP_PREFIXES = [
   '/api/', '/dashboard', '/admin', '/auth/',
@@ -26,13 +27,25 @@ export default defineNitroPlugin((nitroApp) => {
 
     if (event.path.includes('?')) return
     if (SKIP_PREFIXES.some(p => event.path.startsWith(p))) return
-    if ((getHeader(event, 'cookie') ?? '').includes(SESSION_COOKIE)) return
+
+    // Use Cloudflare runtime request headers for cookies and host (more reliable on cloudflare_module)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cfRequest = (event.context.cloudflare as any)?.request as Request | undefined
+    const cookieHeader = cfRequest?.headers.get('cookie') ?? getHeader(event, 'cookie') ?? ''
+    if (cookieHeader.includes(SESSION_COOKIE)) return
+
+    // Check response Set-Cookie header - skip caching if present
+    const setCookieHeader = getResponseHeader(event, 'set-cookie')
+    if (setCookieHeader) return
+
+    // Check for CSRF tokens or nonce markers in HTML body
+    if (/csrf|nonce=|random\/nonce/i.test(body)) return
 
     const ct = String(getResponseHeader(event, 'content-type') ?? '')
     if (!ct.includes('text/html')) return
 
-    const host = getHeader(event, 'host') || getHeader(event, 'x-forwarded-host')
-    if (!host) return
+    const key = buildHtmlCacheKey(event)
+    if (!key) return
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const kv = (event.context.cloudflare?.env as any)?.SITE_CACHE as KVNamespace | undefined
@@ -40,8 +53,6 @@ export default defineNitroPlugin((nitroApp) => {
       console.warn('[edge-cache] SITE_CACHE KV not available')
       return
     }
-
-    const key = `html:${host}:${event.path}`
 
     try {
       await kv.put(key, body, { expirationTtl: CACHE_TTL_SECONDS })

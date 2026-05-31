@@ -171,6 +171,7 @@
             />
           </ClientOnly>
         </div>
+        <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
         <div class="relative mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">
           <p v-if="getField('hero.eyebrow', businessCity)" data-field="hero.eyebrow" class="saya-eyebrow mb-8 text-white/70">
             {{ getField('hero.eyebrow', businessCity) }}
@@ -224,7 +225,8 @@
         v-if="contentBlocks.find(b => b.component === 'SayaFeaturedContent')"
         :data="{
           items: featuredContent,
-          hasMenu: hasMenu
+          hasMenu: hasMenu,
+          vertical: site?.vertical
         }"
       />
       <section v-else-if="featuredContent.length" class="mx-auto max-w-7xl px-4 pt-16 pb-8 sm:px-6 lg:px-8">
@@ -368,7 +370,7 @@
             <UModal
               v-for="post in recentPosts"
               :key="post.id"
-              :ui="{ content: 'max-w-2xl' }"
+              fullscreen
             >
               <!-- Trigger tile -->
               <article
@@ -401,25 +403,29 @@
 
               <!-- Modal: full post -->
               <template #body>
-                <div v-if="post.image" class="-mx-6 -mt-6 mb-6 overflow-hidden bg-muted">
-                  <video
-                    v-if="post.imageKind === 'video'"
-                    :src="post.image"
-                    autoplay
-                    muted
-                    loop
-                    playsinline
-                    class="w-full aspect-video object-cover"
-                  />
-                  <img
-                    v-else
-                    :src="post.image"
-                    :alt="post.alt"
-                    class="w-full aspect-video object-cover"
-                  >
+                <div class="flex h-full flex-col">
+                  <div v-if="post.image" class="flex-1 overflow-hidden bg-muted">
+                    <video
+                      v-if="post.imageKind === 'video'"
+                      :src="post.image"
+                      autoplay
+                      muted
+                      loop
+                      playsinline
+                      class="h-full w-full object-contain"
+                    />
+                    <img
+                      v-else
+                      :src="post.image"
+                      :alt="post.alt"
+                      class="h-full w-full object-contain"
+                    >
+                  </div>
+                  <div class="p-6 sm:p-8">
+                    <p class="saya-eyebrow mb-4 text-muted">{{ homeCopy.postsEyebrow }}</p>
+                    <p class="text-base leading-relaxed text-default whitespace-pre-line">{{ post.text }}</p>
+                  </div>
                 </div>
-                <p class="saya-eyebrow mb-4 text-muted">{{ homeCopy.postsEyebrow }}</p>
-                <p class="text-base leading-relaxed text-default whitespace-pre-line">{{ post.text }}</p>
               </template>
             </UModal>
           </div>
@@ -610,7 +616,7 @@ onMounted(() => {
       if (i >= 0) { visibleLocCards.value = new Set([...visibleLocCards.value, i]); obs.unobserve(entry.target) }
     })
   }, { rootMargin: '200px' })
-  watch(locCardRefs, refs => refs.forEach(el => el && obs.observe(el)), { immediate: true })
+  watch(() => locations.value.length, () => { nextTick(() => locCardRefs.value.forEach(el => el && obs.observe(el))) }, { immediate: true })
   onUnmounted(() => obs.disconnect())
 })
 const { resolveComponent } = useDynamicComponent()

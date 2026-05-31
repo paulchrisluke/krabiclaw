@@ -193,7 +193,8 @@ export default defineNuxtConfig({
     scheduledTasks: {
       '*/5 * * * *': ['translation-jobs-process'],
       '*/10 * * * *': ['domain-reconciliation'],
-      '0 3 * * *': ['domain-reconciliation-daily']
+      '0 3 * * *': ['domain-reconciliation-daily'],
+      '0 * * * *': ['instagram-sync-process']
     },
     devServer: {
       watch: ['server']
