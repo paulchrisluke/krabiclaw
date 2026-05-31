@@ -81,6 +81,17 @@
           </UButton>
         </div>
       </section>
+
+      <!-- ── Dynamic content blocks ───────────────────────────── -->
+      <template v-if="contentBlocks.length > 0">
+        <component
+          v-for="block in contentBlocks.filter(b => b.component)"
+          :key="block._uid || block.field"
+          :is="resolveComponent(block.component)"
+          :data="block"
+          class="content-block"
+        />
+      </template>
     </div>
 
     <!-- ── PLATFORM: KrabiClaw about page ────────────────── -->
@@ -173,11 +184,13 @@ definePageMeta({ layout: false })
 
 import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 import { getVerticalCopy } from '~/utils/vertical-copy'
+import { useDynamicComponent } from '~/composables/useDynamicComponent'
 
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
 
 const { isPlatform, site } = useTenantSite()
-const { getField, locations } = useBootstrap()
+const { getField, locations, contentBlocks } = useBootstrap()
+const { resolveComponent } = useDynamicComponent()
 const copy = getVerticalCopy(site?.vertical)
 
 const storyBody = computed(() => DOMPurify.sanitize(getField('story.body', '') || ''))

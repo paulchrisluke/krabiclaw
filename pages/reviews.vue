@@ -15,7 +15,7 @@
     </header>
 
     <!-- Reviews grid -->
-    <SayaReviews :reviews="visibleReviews" :rating-summary="googleReviewSummary" :show-title="false" />
+    <LazySayaReviews :reviews="visibleReviews" :rating-summary="googleReviewSummary" :show-title="false" />
 
     <!-- Load more -->
     <div v-if="hasMore" class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8 text-center">

@@ -2,8 +2,8 @@
   <AppSection :bg="bg" :padding="padding">
     <div v-if="showTitle" class="flex flex-col gap-4 mb-12 md:flex-row md:items-end md:justify-between border-b border-default pb-8">
       <div>
-        <h2 class="text-base font-semibold text-default tracking-wide uppercase">{{ $t('saya.posts.title') }}</h2>
-        <p class="mt-2 text-4xl font-bold text-default italic">{{ $t('saya.posts.subtitle') }}</p>
+        <h2 class="text-base font-semibold text-default tracking-wide uppercase">Latest Updates</h2>
+        <p class="mt-2 text-4xl font-bold text-default italic">News & Events</p>
       </div>
       <p v-if="description" class="text-muted max-w-md md:text-right">{{ description }}</p>
     </div>
@@ -13,7 +13,8 @@
         v-for="(post, index) in displayedPosts"
         :id="getPostSlug(post.name) || `post-${index}`"
         :key="getPostSlug(post.name) || `post-${index}`"
-        class="flex flex-col bg-default border border-default rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group"
+        class="flex flex-col bg-default border border-default rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group cursor-pointer"
+        @click="openModal(post)"
       >
         <div class="aspect-4/5 overflow-hidden bg-muted relative">
           <template v-if="post.media?.[0]">
@@ -29,18 +30,18 @@
             <img
               v-else
               :src="post.media[0].googleUrl"
-              :alt="post.title || $t('saya.posts.image_alt')"
+              :alt="post.title || 'Restaurant update'"
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             >
           </template>
           <div v-else class="w-full h-full flex items-center justify-center text-muted italic text-xs">
-            {{ $t('saya.posts.no_preview') }}
+            No preview available
           </div>
 
           <div class="absolute top-4 left-4 flex gap-2">
-            <UBadge v-if="post.event" color="neutral" variant="solid" size="xs" class="bg-black/80 backdrop-blur shadow-sm text-white">{{ $t('saya.posts.badge.event') }}</UBadge>
-            <UBadge v-else-if="post.offer" color="neutral" variant="solid" size="xs" class="bg-black/80 backdrop-blur shadow-sm text-white">{{ $t('saya.posts.badge.offer') }}</UBadge>
-            <UBadge v-else color="neutral" variant="solid" size="xs" class="bg-black/80 backdrop-blur shadow-sm text-white">{{ $t('saya.posts.badge.update') }}</UBadge>
+            <UBadge v-if="post.event" color="neutral" variant="solid" size="xs" class="bg-black/80 backdrop-blur shadow-sm text-white">Event</UBadge>
+            <UBadge v-else-if="post.offer" color="neutral" variant="solid" size="xs" class="bg-black/80 backdrop-blur shadow-sm text-white">Offer</UBadge>
+            <UBadge v-else color="neutral" variant="solid" size="xs" class="bg-black/80 backdrop-blur shadow-sm text-white">Update</UBadge>
           </div>
         </div>
 
@@ -48,7 +49,7 @@
           <time :datetime="post.createTime" class="text-[10px] text-muted font-bold uppercase tracking-widest mb-3">
             {{ formatDate(post.createTime) }}
           </time>
-          <h3 class="text-xl font-bold text-default mb-3 leading-tight">{{ post.title || $t('saya.posts.business_update') }}</h3>
+          <h3 class="text-xl font-bold text-default mb-3 leading-tight">{{ post.title || 'Business Update' }}</h3>
 
           <div :class="['text-muted text-sm leading-relaxed mb-6 grow', { 'line-clamp-3': limit }]">
             {{ post.summary }}
@@ -56,34 +57,19 @@
 
           <div v-if="!limit" class="space-y-4 mb-6">
             <div v-if="post.event" class="rounded-xl border border-default bg-muted p-4 text-xs">
-              <p class="mb-1 font-bold text-default">{{ $t('saya.posts.event_details_label') }}</p>
+              <p class="mb-1 font-bold text-default">Event Details:</p>
               <p class="text-default">{{ post.event.title }} • {{ formatDate(post.event.startDate) }}</p>
             </div>
             <div v-if="post.offer" class="rounded-xl border border-default bg-muted p-4 text-xs">
-              <p class="mb-1 font-bold text-default">{{ $t('saya.posts.special_offer_label') }}</p>
-              <p class="text-default">{{ post.offer.title }} <span v-if="post.offer.couponCode">• {{ $t('saya.posts.code_label') }} {{ post.offer.couponCode }}</span></p>
+              <p class="mb-1 font-bold text-default">Special Offer:</p>
+              <p class="text-default">{{ post.offer.title }} <span v-if="post.offer.couponCode">• Code: {{ post.offer.couponCode }}</span></p>
             </div>
           </div>
 
-          <NuxtLink
-            v-if="limit"
-            :to="'/posts#' + getPostSlug(post.name)"
-            class="inline-flex items-center gap-2 text-sm font-bold text-default group/link"
-          >
-            <span>{{ $t('saya.posts.read_full_story') }}</span>
-            <span class="transition-transform group-hover/link:translate-x-1">→</span>
-          </NuxtLink>
-
-          <UButton
-            v-else-if="post.callToAction"
-            :to="post.callToAction.url"
-            variant="solid"
-            color="neutral"
-            size="xl"
-            class="self-start rounded-full"
-          >
-            {{ (post.callToAction.actionType ?? '').replaceAll('_', ' ') }}
-          </UButton>
+          <div class="inline-flex items-center gap-2 text-sm font-bold text-default group/link">
+            <span>Read Full Story</span>
+            <span class="transition-transform group-hover:translate-x-1">→</span>
+          </div>
         </div>
       </article>
 
@@ -106,9 +92,59 @@
 
     <div v-if="showViewMore && limit && posts.length > 0" class="mt-12 text-center">
       <UButton to="/posts" color="primary" variant="outline" size="xl">
-        {{ $t('saya.posts.view_all') }}
+        View All Updates
       </UButton>
     </div>
+
+    <!-- Full-screen modal for post details -->
+    <UModal v-model:open="modalOpen" fullscreen>
+      <template #body v-if="selectedPost">
+        <div class="flex h-full flex-col">
+          <div v-if="selectedPost.media?.[0]" class="flex-1 overflow-hidden bg-muted">
+            <video
+              v-if="selectedPost.media[0].mediaFormat === 'VIDEO'"
+              :src="selectedPost.media[0].googleUrl"
+              autoplay
+              muted
+              loop
+              playsinline
+              class="h-full w-full object-contain"
+            />
+            <img
+              v-else
+              :src="selectedPost.media[0].googleUrl"
+              :alt="selectedPost.title || 'Post image'"
+              class="h-full w-full object-contain"
+            >
+          </div>
+          <div class="p-6 sm:p-8">
+            <time :datetime="selectedPost.createTime" class="text-[10px] text-muted font-bold uppercase tracking-widest mb-3 block">
+              {{ formatDate(selectedPost.createTime) }}
+            </time>
+            <h3 class="text-2xl font-bold text-default mb-4 leading-tight">{{ selectedPost.title || 'Business Update' }}</h3>
+            <div class="text-muted text-base leading-relaxed whitespace-pre-line">{{ selectedPost.summary }}</div>
+            <div v-if="selectedPost.event" class="mt-6 rounded-xl border border-default bg-muted p-4 text-sm">
+              <p class="mb-1 font-bold text-default">Event Details:</p>
+              <p class="text-default">{{ selectedPost.event.title }} • {{ formatDate(selectedPost.event.startDate) }}</p>
+            </div>
+            <div v-if="selectedPost.offer" class="mt-6 rounded-xl border border-default bg-muted p-4 text-sm">
+              <p class="mb-1 font-bold text-default">Special Offer:</p>
+              <p class="text-default">{{ selectedPost.offer.title }} <span v-if="selectedPost.offer.couponCode">• Code: {{ selectedPost.offer.couponCode }}</span></p>
+            </div>
+            <UButton
+              v-if="selectedPost.callToAction"
+              :to="selectedPost.callToAction.url"
+              variant="solid"
+              color="neutral"
+              size="xl"
+              class="mt-6 rounded-full"
+            >
+              {{ (selectedPost.callToAction.actionType ?? '').replaceAll('_', ' ') }}
+            </UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
   </AppSection>
 </template>
 
@@ -124,7 +160,13 @@ const props = defineProps({
   showEmptyState: { type: Boolean, default: true }
 })
 
-const { formatDate } = useLocaleDate()
+const modalOpen = ref(false)
+const selectedPost = ref(null)
+
+function openModal(post) {
+  selectedPost.value = post
+  modalOpen.value = true
+}
 
 const displayedPosts = computed(() => {
   return props.limit ? props.posts.slice(0, props.limit) : props.posts
@@ -136,6 +178,17 @@ const layoutClass = computed(() => {
   if (!props.limit) return 'md:grid-cols-2 lg:grid-cols-3'
   return 'grid-cols-1'
 })
+
+const formatDate = (dateString) => {
+  if (!dateString) return ''
+  const d = new Date(dateString)
+  if (isNaN(d.getTime()) || !isFinite(d.getTime())) return ''
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
 
 // Helper to extract a safe slug from post.name (last path segment, no slashes)
 function getPostSlug(name) {

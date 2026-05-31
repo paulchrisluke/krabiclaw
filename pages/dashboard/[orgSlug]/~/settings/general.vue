@@ -86,6 +86,13 @@
             <USkeleton class="h-9 rounded-lg" />
           </div>
           <div v-else class="space-y-4">
+            <UAlert
+              color="info"
+              variant="soft"
+              icon="i-heroicons-light-bulb"
+              description="Link your Facebook Page and Instagram Business Account to automatically sync posts to your website. Just post to Facebook or Instagram and we'll handle the rest."
+            />
+
             <div v-if="facebookConnection?.connected" class="space-y-3 text-sm">
               <div class="flex items-center justify-between gap-4">
                 <span class="text-muted">Page</span>

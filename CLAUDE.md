@@ -189,6 +189,19 @@ yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-ho
 
 ### Custom Domains
 
-Subdomains (`<slug>.krabiclaw.com`) are provisioned automatically. Customer-owned domains require a separate Cloudflare for SaaS custom hostname — this is not yet automated in the onboarding pipeline. Do not attempt to configure custom hostnames manually in `wrangler.toml` or via the API; document the requirement and escalate.
+Custom domain onboarding is automated via `POST /api/sites/[siteId]/domains`. The dashboard exposes this at `/dashboard/[orgSlug]/~/settings/domains`.
 
->
+**Architecture (Cloudflare for SaaS + Workers):**
+- `customers.krabiclaw.com` — SaaS fallback origin, must be `A 192.0.2.1` proxied. Never a CNAME to `pages.dev` or `workers.dev` (causes error 1014). Never a Worker Custom Domain (causes Host header 403).
+- `*/*` Worker route in `wrangler.toml` — required for custom hostname traffic to hit the Worker. Without it, all custom hostname requests get 522. This route MUST stay in wrangler.toml or wrangler deploy will wipe it.
+- SSL validation — use direct TXT records at `_acme-challenge.www`. Do NOT use the DCV delegation CNAME (`*.dcv.cloudflare.com`) — that target times out.
+- After provisioning, set `site_domains.role = 'canonical'` for the custom domain and `'secondary'` for the krabiclaw subdomain. The tenant-routing middleware redirects to canonical; if the krabiclaw subdomain stays canonical the custom domain bounces back.
+
+**DNS instructions for clients (GoDaddy or any external registrar):**
+1. `CNAME www → customers.krabiclaw.com`
+2. `TXT _acme-challenge.www → <value1>` (from Cloudflare for SaaS API response)
+3. `TXT _acme-challenge.www → <value2>` (second value, same name)
+4. Apex (no www): use registrar HTTP forwarding `potteryhousekrabi.com → https://www.potteryhousekrabi.com` — registrar forwarding only works over HTTP; the browser handles the HTTPS hop after following the redirect.
+- Do NOT add a CNAME at the apex — most registrars block it.
+- Do NOT use the DCV delegation CNAME for SSL — it doesn't work.
+- After adding TXT records, do not touch DNS again until the cert issues. Every PATCH to the custom hostname rotates the ACME tokens.

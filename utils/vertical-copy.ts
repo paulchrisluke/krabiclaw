@@ -30,6 +30,7 @@ const registry = {
     contactLocationsByNote:
       'For full parking, accessibility and policy details, follow the "Plan a visit" link on each card.',
     otherLocationsHeading: "Sister rooms",
+    highlightsSectionHeading: "Posts, reviews & dishes from across the brand.",
     seoReservationDescription: (name: string) => `Reserve a table at ${name}.`,
   },
   experience: {
@@ -56,6 +57,7 @@ const registry = {
     contactLocationsByNote:
       'For full parking, accessibility and booking policies, follow the "Plan a visit" link on each card.',
     otherLocationsHeading: "Other spaces",
+    highlightsSectionHeading: "Posts, reviews & classes from across the studio.",
     seoReservationDescription: (name: string) => `Book a class at ${name}.`,
   },
   retail: {
@@ -83,6 +85,7 @@ const registry = {
     contactLocationsByNote:
       'For full parking, accessibility and policy details, follow the "Plan a visit" link on each card.',
     otherLocationsHeading: "Other locations",
+    highlightsSectionHeading: "Posts, reviews & picks from across the brand.",
     seoReservationDescription: (name: string) => `Visit ${name}.`,
   },
   wellness: {
@@ -109,6 +112,7 @@ const registry = {
     contactLocationsByNote:
       'For full parking, accessibility and booking policies, follow the "Plan a visit" link on each card.',
     otherLocationsHeading: "Other studios",
+    highlightsSectionHeading: "Posts, reviews & sessions from across the studio.",
     seoReservationDescription: (name: string) => `Book a session at ${name}.`,
   },
   service: {
@@ -135,6 +139,7 @@ const registry = {
     contactLocationsByNote:
       'For full parking, accessibility and policy details, follow the "Plan a visit" link on each card.',
     otherLocationsHeading: "Other locations",
+    highlightsSectionHeading: "Posts, reviews & work from across the team.",
     seoReservationDescription: (name: string) =>
       `Book an appointment at ${name}.`,
   },

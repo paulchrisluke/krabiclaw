@@ -82,9 +82,9 @@
 <script setup lang="ts">
 import type { UpsellType } from '~/composables/useServiceUpsell'
 
-// --- Team photo placeholders — swap these for real Cloudflare Images URLs ---
-const PAUL_PHOTO_URL = '/team/paul.jpg'
-const JULIA_PHOTO_URL = '/team/julia.jpg'
+// --- Team photo URLs ---
+const PAUL_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v1714697364/PCL-Labs/1_qjKv1vv3WC6ckf3eTM0hZQ_1_nf3uuk.png'
+const JULIA_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v1714706641/PCL-Labs/1682091954266_vrcx3n.webp'
 // Paul's WhatsApp number (international format, no +)
 const config = useRuntimeConfig()
 const rawWhatsapp = config.public?.whatsappNumber

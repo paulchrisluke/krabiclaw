@@ -33,9 +33,12 @@ export default defineEventHandler(async (event) => {
       case 'failed':
         return sendRedirect(event, '/tenant-setup-incomplete')
       
-      case 'active':
+      case 'active': {
+        const freeDomain = (cloudflareEnv(event).NUXT_PUBLIC_FREE_SITE_DOMAIN || 'krabiclaw.com')
+          .replace(/^https?:\/\//, '').replace(/\/$/, '')
+        const canonicalIsCustom = event.context.canonicalDomain && !event.context.canonicalDomain.endsWith(`.${freeDomain}`)
         if (
-          event.context.canonicalDomain &&
+          canonicalIsCustom &&
           event.context.tenantHost &&
           event.context.tenantHost !== event.context.canonicalDomain &&
           !pathname.startsWith('/api/')
@@ -58,6 +61,7 @@ export default defineEventHandler(async (event) => {
         }
         // Let the request continue to render the Saya site
         return
+      }
       
       default:
         // Unknown status, treat as 404

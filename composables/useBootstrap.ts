@@ -27,6 +27,8 @@ interface ContentRow {
   hero_kind: string | null;
   hero_video_public_url: string | null;
   hero_video_kind: string | null;
+  thumbnail_url: string | null;
+  component: string | null;
   [key: string]: unknown;
 }
 
@@ -240,6 +242,7 @@ export const useBootstrap = () => {
       video:
         getField("hero.video", row?.hero_video_public_url ?? defaults.video) ??
         defaults.video,
+      thumbnail_url: row?.thumbnail_url || null,
       imageKind: row?.hero_kind || "image",
       videoKind: row?.hero_video_kind || "video",
     };
@@ -256,6 +259,16 @@ export const useBootstrap = () => {
       acc[section].push(item);
       return acc;
     }, {});
+  });
+
+  // ── Content Blocks for Dynamic Rendering ───────────────────
+  const contentBlocks = computed(() => {
+    const rows = (data.value?.content ?? []) as ContentRow[];
+    return rows.map((row) => ({
+      ...row,
+      _uid: row.field, // Use field as unique identifier for now
+      component: row.component || null,
+    }));
   });
 
   return {
@@ -278,6 +291,7 @@ export const useBootstrap = () => {
     getFieldStr,
     getHero,
     contentMap,
+    contentBlocks,
     menu: menuData,
     menuItemsBySection,
     error,

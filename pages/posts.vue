@@ -8,7 +8,7 @@
     </header>
 
     <!-- Post grid -->
-    <SayaPosts :posts="visiblePosts" :show-title="false" />
+    <LazySayaPosts :posts="visiblePosts" :show-title="false" />
 
     <!-- Load more -->
     <div v-if="hasMore" class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8 text-center">

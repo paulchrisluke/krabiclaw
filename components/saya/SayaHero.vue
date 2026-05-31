@@ -1,31 +1,42 @@
 <template>
   <div class="relative flex w-full items-center overflow-hidden bg-inverted text-inverted" :style="heroStyle">
-    <!-- Background video slot (takes precedence over image) -->
-    <div v-if="video" class="absolute inset-0">
-      <video
-        :src="video"
-        autoplay
-        muted
-        loop
-        playsinline
-        class="w-full h-full object-cover"
+    <!-- Background media -->
+    <div v-if="video || image" class="absolute inset-0">
+      <!-- Poster / image: always in SSR — LCP candidate -->
+      <img
+        v-if="poster"
+        :src="poster"
+        :alt="title" fetchpriority="high" decoding="async"
+        class="absolute inset-0 h-full w-full object-cover"
       />
-    </div>
+      <NuxtImg
+        v-else-if="image"
+        :src="image" :alt="title"
+        class="absolute inset-0 h-full w-full object-cover"
+        fetchpriority="high" preload format="webp"
+      />
 
-    <!-- Background image slot (only rendered if no video) -->
-    <div v-else-if="image" class="absolute inset-0">
-      <img :src="image" :alt="title" class="w-full h-full object-cover" />
+      <!-- Deferred video: not in SSR, opacity-0 until canplay -->
+      <ClientOnly v-if="video">
+        <video
+          v-if="showVideo"
+          ref="videoEl"
+          :poster="poster"
+          muted loop playsinline preload="none"
+          aria-hidden="true" role="presentation"
+          class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-700"
+        />
+      </ClientOnly>
     </div>
 
     <!-- Content -->
     <div class="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center justify-center px-4 py-12 text-center">
-      <!-- Establishment Year -->
       <div v-if="establishmentYear" class="inline-flex items-center gap-2 mb-6">
-        <span class="w-8 h-px bg-inverted-muted opacity-30"></span>
+        <span class="w-8 h-px bg-inverted-muted opacity-30" />
         <span class="text-[10px] font-bold uppercase tracking-[0.3em] text-inverted opacity-60 italic">
           {{ $t('saya.hero.established', { year: establishmentYear }) }}
         </span>
-        <span class="w-8 h-px bg-inverted-muted opacity-30"></span>
+        <span class="w-8 h-px bg-inverted-muted opacity-30" />
       </div>
 
       <EditableField
@@ -63,6 +74,7 @@ const props = defineProps({
   subtitle: { type: String, default: null },
   image: { type: String, default: null },
   video: { type: String, default: null },
+  poster: { type: String, default: null },
   height: { type: String, default: null },
   size: {
     type: String,
@@ -75,17 +87,7 @@ const props = defineProps({
 
 defineEmits(['update:title', 'update:subtitle'])
 
-// Warn if both image and video are provided (video takes precedence)
-if (props.image && props.video) {
-  console.warn('[SayaHero] Both image and video props provided. Video will take precedence over image.')
-}
-
-const heights = {
-  home: '100vh',
-  page: '40vh',
-  compact: '24vh'
-}
-
+const heights = { home: '100vh', page: '40vh', compact: '24vh' }
 const heroStyle = computed(() => ({ minHeight: props.height ?? heights[props.size] }))
 
 const titleClass = computed(() => [
@@ -101,14 +103,6 @@ const subtitleClass = computed(() => [
     ? 'text-lg md:text-2xl'
     : 'text-base md:text-lg'
 ])
-</script>
 
-<style scoped>
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in {
-  animation: fade-in 1s ease-out;
-}
-</style>
+const { videoEl, showVideo } = useHeroVideo(() => props.video)
+</script>

@@ -456,7 +456,19 @@ async function handleSetupMessage(text: string) {
     currentPageOverride.value = 'setup'
     updateSetupLastMessage('Workspace created. I will keep going here.', false)
     await nextTick()
-    await sendMessage(setupPromptForSource())
+    
+    // Add social linking guidance for Facebook/Instagram source
+    if (setupSource.value === 'facebook') {
+      messages.value = [
+        ...messages.value,
+        {
+          role: 'assistant',
+          content: 'Great! Next, let\'s connect your Facebook Page and Instagram Business Account. This will automatically sync your Facebook and Instagram posts to your website - no need to manually create content. Go to **Settings → General** and click **Connect Facebook**. Once connected, your posts will appear on your site within an hour.',
+        },
+      ]
+    } else {
+      await sendMessage(setupPromptForSource())
+    }
   } catch (error) {
     updateSetupLastMessage(error instanceof Error ? error.message : 'Could not create the restaurant workspace.', true)
   } finally {

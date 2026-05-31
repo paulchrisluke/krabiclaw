@@ -4,13 +4,12 @@
       <div class="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
         <!-- Brand logo / name -->
         <NuxtLink to="/" class="shrink-0 no-underline">
-          <img
-            v-if="logoUrl"
-            :src="logoUrl"
-            :alt="restaurantName"
-            class="h-10 w-auto max-w-35 object-contain"
-          />
-          <span v-else class="saya-display text-2xl text-default">{{ restaurantName }}</span>
+          <div v-if="logoUrl" class="size-10 shrink-0 rounded-full overflow-hidden">
+            <img :src="logoUrl" :alt="restaurantName" class="h-full w-full object-cover" />
+          </div>
+          <div v-else class="flex size-10 items-center justify-center rounded-full bg-(--kc-navy) text-white font-bold text-base shrink-0">
+            {{ restaurantName.charAt(0).toUpperCase() }}
+          </div>
         </NuxtLink>
 
         <!-- Desktop nav -->
@@ -45,7 +44,7 @@
           </NuxtLink>
         </nav>
 
-        <div class="flex items-center justify-end gap-2">
+        <div class="flex items-center justify-end gap-2 col-start-3">
           <!-- Language switcher -->
           <UDropdownMenu :items="languageItems" :ui="{ content: 'saya-theme' }">
             <UButton variant="ghost" color="neutral" size="sm">
@@ -53,9 +52,6 @@
               <span class="hidden sm:inline">{{ currentLocale }}</span>
             </UButton>
           </UDropdownMenu>
-
-          <!-- Dark mode toggle -->
-          <UColorModeButton variant="ghost" color="neutral" size="sm" />
 
           <!-- Primary CTA: Order Now if delivery links exist, otherwise dynamic Reserve/Book -->
           <UButton

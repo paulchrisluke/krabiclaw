@@ -65,6 +65,12 @@ interface CloudflareCustomHostname {
       type?: string
       value?: string
     }>
+    // DCV delegation CNAMEs (*.dcv.cloudflare.com) must NOT be used for SSL validation — they time out.
+    // This field mirrors the upstream API shape only and must not be consumed or wired into client instructions.
+    dcv_delegation_records?: Array<{
+      cname?: string
+      cname_target?: string
+    }>
   }
   verification_errors?: string[]
   created_at?: string
@@ -460,7 +466,10 @@ async function persistCloudflareState(
     retryCount,
     activatedAt,
     errors,
-    JSON.stringify({ cloudflare_created_at: hostname.created_at ?? null }),
+    JSON.stringify({
+      cloudflare_created_at: hostname.created_at ?? null,
+      ssl_validation_value2: hostname.ssl?.validation_records?.[1]?.value ?? hostname.ssl?.validation_records?.[1]?.txt_value ?? null,
+    }),
     now,
     domainId
   ).run()
@@ -854,23 +863,31 @@ export function domainInstructions(domain: DomainRecord) {
   const root = rootDomainForPair(domain.domain)
   const isApex = domain.domain === root
   const target = domain.dns_target || ''
-  const sslName = domain.ssl_validation_name || ''
-  const sslValue = domain.ssl_validation_value || ''
+  const meta = domain.metadata ? (() => { try { return JSON.parse(domain.metadata as string) } catch { return {} } })() : {}
+  // ssl_records holds both TXT values Cloudflare requires for DV validation
+  const sslRecords: Array<{ type: string; name: string; value: string }> = []
+  if (domain.ssl_validation_name && domain.ssl_validation_value) {
+    sslRecords.push({ type: 'TXT', name: domain.ssl_validation_name, value: domain.ssl_validation_value })
+  }
+  if (meta?.ssl_validation_value2 && domain.ssl_validation_name) {
+    sslRecords.push({ type: 'TXT', name: domain.ssl_validation_name, value: meta.ssl_validation_value2 })
+  }
 
   return {
     dns: isApex
       ? { type: 'CNAME flattening or ALIAS', name: '@', value: target }
       : { type: 'CNAME', name: domain.domain.replace(`.${root}`, '') || 'www', value: target },
-    ssl: sslName && sslValue ? { type: domain.ssl_validation_type || 'TXT', name: sslName, value: sslValue } : null,
+    ssl: sslRecords.length ? sslRecords[0] : null,
+    ssl_records: sslRecords,
+    apex_note: isApex ? `For the bare domain (no www), use your registrar's HTTP forwarding/redirect to https://www.${root} — do not add a CNAME at the apex.` : null,
     ownership: domain.ownership_validation_name && domain.ownership_validation_value
       ? { type: domain.ownership_validation_type || 'TXT', name: domain.ownership_validation_name, value: domain.ownership_validation_value }
       : null,
     registrar_guides: {
-      cloudflare: 'Add a proxied or DNS-only CNAME for www. For apex, use CNAME flattening at @.',
-      godaddy: 'Create a CNAME for www. For apex, use domain forwarding to www or ALIAS support if your plan offers it.',
-      namecheap: 'Create a CNAME for www. For apex, use ALIAS at @ when available.',
-      google_squarespace: 'Create a CNAME for www. For apex, use forwarding to www if ALIAS is unavailable.',
-      generic: 'Point the hostname at the KrabiClaw SaaS target, then return here and sync.'
+      cloudflare: 'Add a proxied CNAME for www pointing to customers.krabiclaw.com. For apex, use Page Rules to forward to www.',
+      godaddy: 'Edit the www CNAME to point to customers.krabiclaw.com. For apex, use Forwarding under domain settings.',
+      namecheap: 'Create a CNAME for www pointing to customers.krabiclaw.com. For apex, use URL Redirect Record.',
+      generic: 'Point www CNAME at customers.krabiclaw.com. For apex, use your registrar\'s URL forwarding to redirect to www. (Or point the hostname at the KrabiClaw SaaS target, then return here and sync.)'
     }
   }
 }

@@ -60,6 +60,43 @@
           <UFormField label="Description">
             <UTextarea v-model="form.body" :rows="5" placeholder="Describe the experience in detail." class="w-full" />
           </UFormField>
+          <UFormField label="Primary image">
+            <MediaPicker
+              v-model="form.image_asset_id"
+              :site-id="siteId"
+              accept="image"
+              title="Select experience image"
+              @change="handleImageChange"
+            />
+          </UFormField>
+          <UFormField label="Video (optional)">
+            <MediaPicker
+              v-model="form.video_asset_id"
+              :site-id="siteId"
+              accept="video"
+              title="Select experience video"
+              @change="handleVideoChange"
+            />
+          </UFormField>
+          <UFormField label="Additional media gallery" help="Add more images or videos to show in a carousel.">
+            <div class="space-y-3">
+              <div v-for="(media, index) in form.images" :key="index" class="flex items-center gap-3">
+                <div class="flex-1">
+                  <MediaPicker
+                    v-model="media.asset_id"
+                    :site-id="siteId"
+                    accept="image,video"
+                    title="Select media"
+                    @change="(asset) => handleGalleryMediaChange(index, asset)"
+                  />
+                </div>
+                <UButton size="sm" color="error" variant="ghost" icon="i-heroicons-x-mark" @click="removeGalleryMedia(index)" />
+              </div>
+              <UButton size="sm" color="neutral" variant="soft" icon="i-heroicons-plus" @click="addGalleryMedia">
+                Add media
+              </UButton>
+            </div>
+          </UFormField>
           <div class="grid gap-5 sm:grid-cols-2">
             <UFormField label="Price" help="Display string, e.g. ฿ 1,500 per person.">
               <UInput v-model="form.price" placeholder="฿ 1,500" class="w-full" />
@@ -169,6 +206,11 @@ const emptyForm = () => ({
   title: '',
   tagline: '',
   body: '',
+  image_asset_id: null as string | null,
+  image_url: null as string | null,
+  video_asset_id: null as string | null,
+  video_url: null as string | null,
+  images: [] as Array<{ asset_id: string | null; url: string | null; kind: 'image' | 'video' }>,
   price: '',
   duration_minutes: '',
   max_capacity: '',
@@ -187,12 +229,39 @@ function openCreate() {
   sliderOpen.value = true
 }
 
+function handleImageChange(asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
+  form.image_url = asset?.publicUrl ?? asset?.thumbnailUrl ?? null
+}
+
+function handleVideoChange(asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
+  form.video_url = asset?.publicUrl ?? null
+}
+
+function addGalleryMedia() {
+  form.images.push({ asset_id: null, url: null, kind: 'image' })
+}
+
+function removeGalleryMedia(index: number) {
+  form.images.splice(index, 1)
+}
+
+function handleGalleryMediaChange(index: number, asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
+  form.images[index].asset_id = asset?.id ?? null
+  form.images[index].url = asset?.publicUrl ?? asset?.thumbnailUrl ?? null
+  form.images[index].kind = asset?.kind === 'video' ? 'video' : 'image'
+}
+
 function openEdit(exp: ApiRecord) {
   editing.value = exp
   Object.assign(form, {
     title: exp.title ?? '',
     tagline: exp.tagline ?? '',
     body: exp.body ?? '',
+    image_asset_id: exp.image_asset_id ?? null,
+    image_url: exp.image_url ?? null,
+    video_asset_id: exp.video_asset_id ?? null,
+    video_url: exp.video_url ?? null,
+    images: Array.isArray(exp.images) ? [...exp.images] : [],
     price: exp.price ?? '',
     duration_minutes: exp.duration_minutes != null ? String(exp.duration_minutes) : '',
     max_capacity: exp.max_capacity != null ? String(exp.max_capacity) : '',
@@ -226,6 +295,10 @@ async function save() {
       time_slots: timeSlotsInput.value
         ? timeSlotsInput.value.split(',').map(s => s.trim()).filter(Boolean)
         : null,
+      images: form.images.filter(img => img.url).map(img => ({
+        url: img.url,
+        kind: img.kind,
+      })),
     }
     if (editing.value) {
       await $fetch(`/api/dashboard/editor/experiences/${editing.value.id}`, { method: 'PATCH', body: payload })

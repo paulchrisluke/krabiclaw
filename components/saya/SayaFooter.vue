@@ -7,13 +7,12 @@
         <!-- Brand column -->
         <div>
           <NuxtLink to="/" class="block no-underline leading-none">
-            <img
-              v-if="logoUrl"
-              :src="logoUrl"
-              :alt="restaurantName"
-              class="h-12 w-auto max-w-48 object-contain"
-            />
-            <span v-else class="saya-display text-5xl text-inverted">{{ restaurantName }}</span>
+            <div v-if="logoUrl" class="size-14 rounded-full overflow-hidden">
+              <img :src="logoUrl" :alt="restaurantName" class="h-full w-full object-cover" />
+            </div>
+            <div v-else class="flex size-14 items-center justify-center rounded-full bg-inverted/10 text-inverted font-bold text-2xl">
+              {{ restaurantName.charAt(0).toUpperCase() }}
+            </div>
           </NuxtLink>
           <p class="mt-4 max-w-xs text-sm leading-relaxed text-inverted/60">
             {{ tagline }}
@@ -32,14 +31,6 @@
             >
               <UIcon :name="`i-simple-icons-${social.name.toLowerCase()}`" class="size-4" />
             </a>
-            <span
-              v-for="social in inactiveSocials"
-              :key="social.name"
-              aria-hidden="true"
-              class="flex size-9 cursor-default items-center justify-center rounded-full border border-inverted/8 text-inverted/30"
-            >
-              <UIcon :name="`i-simple-icons-${social.name.toLowerCase()}`" class="size-4" />
-            </span>
           </div>
         </div>
 
@@ -50,7 +41,7 @@
           role="status"
           aria-live="polite"
         >
-          {{ $t('saya.footer.locations_error') }}
+          We could not load locations right now. Please try again in a moment.
         </div>
         <div
           v-else
@@ -68,7 +59,7 @@
               :to="`/locations/${loc.slug}`"
               class="mt-3 inline-block border-b border-inverted pb-0.5 text-xs uppercase tracking-widest text-inverted transition hover:opacity-70"
             >
-              {{ $t('saya.footer.visit_page') }}
+              Visit page →
             </NuxtLink>
           </div>
         </div>
@@ -77,35 +68,35 @@
       <!-- Navigation links -->
       <div class="grid gap-8 border-b border-inverted/10 py-12 sm:grid-cols-3">
         <div>
-          <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ $t('saya.footer.heading_experience') }}</h4>
+          <h4 class="saya-eyebrow mb-5 text-inverted/50">Experience</h4>
           <ul class="space-y-3 text-sm">
-            <li v-if="hasMenu"><NuxtLink to="/menu" class="text-inverted/60 no-underline transition hover:text-inverted">{{ $t('saya.footer.menu') }}</NuxtLink></li>
-            <li v-if="hasExperiences"><NuxtLink to="/experiences" class="text-inverted/60 no-underline transition hover:text-inverted">{{ $t('saya.footer.experiences') }}</NuxtLink></li>
+            <li v-if="hasMenu"><NuxtLink to="/menu" class="text-inverted/60 no-underline transition hover:text-inverted">Menu</NuxtLink></li>
+            <li v-if="hasExperiences"><NuxtLink to="/experiences" class="text-inverted/60 no-underline transition hover:text-inverted">Experiences</NuxtLink></li>
             <li><NuxtLink to="/reservations" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
-            <li v-if="!hasExperiences"><NuxtLink to="/photos" class="text-inverted/60 no-underline transition hover:text-inverted">{{ $t('saya.footer.gallery') }}</NuxtLink></li>
-            <li><NuxtLink to="/about" class="text-inverted/60 no-underline transition hover:text-inverted">{{ $t('saya.footer.our_story') }}</NuxtLink></li>
+            <li v-if="!hasExperiences"><NuxtLink to="/photos" class="text-inverted/60 no-underline transition hover:text-inverted">Gallery</NuxtLink></li>
+            <li><NuxtLink to="/about" class="text-inverted/60 no-underline transition hover:text-inverted">Our Story</NuxtLink></li>
           </ul>
         </div>
         <div>
-          <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ $t('saya.footer.heading_discover') }}</h4>
+          <h4 class="saya-eyebrow mb-5 text-inverted/50">Discover</h4>
           <ul class="space-y-3 text-sm">
-            <li><NuxtLink to="/reviews" class="text-inverted/60 no-underline transition hover:text-inverted">{{ $t('saya.footer.reviews') }}</NuxtLink></li>
-            <li><NuxtLink to="/posts" class="text-inverted/60 no-underline transition hover:text-inverted">{{ $t('saya.footer.latest_updates') }}</NuxtLink></li>
-            <li><NuxtLink to="/qa" class="text-inverted/60 no-underline transition hover:text-inverted">{{ $t('saya.footer.qa') }}</NuxtLink></li>
+            <li><NuxtLink to="/reviews" class="text-inverted/60 no-underline transition hover:text-inverted">Reviews</NuxtLink></li>
+            <li><NuxtLink to="/posts" class="text-inverted/60 no-underline transition hover:text-inverted">Latest Updates</NuxtLink></li>
+            <li><NuxtLink to="/qa" class="text-inverted/60 no-underline transition hover:text-inverted">Q&amp;A</NuxtLink></li>
           </ul>
         </div>
         <div>
-          <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ $t('saya.footer.heading_connect') }}</h4>
+          <h4 class="saya-eyebrow mb-5 text-inverted/50">Connect</h4>
           <ul class="space-y-3 text-sm">
-            <li><NuxtLink to="/locations" class="text-inverted/60 no-underline transition hover:text-inverted">{{ $t('saya.footer.all_locations') }}</NuxtLink></li>
-            <li><NuxtLink to="/contact" class="text-inverted/60 no-underline transition hover:text-inverted">{{ $t('saya.footer.contact_us') }}</NuxtLink></li>
+            <li><NuxtLink to="/locations" class="text-inverted/60 no-underline transition hover:text-inverted">All Locations</NuxtLink></li>
+            <li><NuxtLink to="/contact" class="text-inverted/60 no-underline transition hover:text-inverted">Contact Us</NuxtLink></li>
           </ul>
         </div>
       </div>
 
       <!-- Delivery partners row — only rendered when at least one link is configured AND not an experiences site -->
       <div v-if="orderLinks.length && !hasExperiences" class="flex flex-wrap items-center gap-8 border-b border-inverted/10 py-10">
-        <span class="saya-eyebrow text-inverted/50">{{ $t('saya.footer.order_online') }}</span>
+        <span class="saya-eyebrow text-inverted/50">Order online</span>
         <a
           v-for="link in orderLinks"
           :key="link.label"
@@ -121,9 +112,10 @@
       <!-- Legal bar -->
       <div class="flex flex-wrap items-center justify-between gap-4 pt-6 text-xs text-inverted/40">
         <div>© {{ year }} {{ restaurantName }}</div>
-        <div class="flex gap-6">
-          <NuxtLink to="/privacy" class="transition hover:text-inverted/70">{{ $t('legal.privacy') }}</NuxtLink>
-          <NuxtLink to="/terms" class="transition hover:text-inverted/70">{{ $t('legal.terms') }}</NuxtLink>
+        <div class="flex items-center gap-6">
+          <UColorModeButton variant="ghost" color="neutral" size="sm" />
+          <NuxtLink to="/privacy" class="transition hover:text-inverted/70">Privacy</NuxtLink>
+          <NuxtLink to="/terms" class="transition hover:text-inverted/70">Terms</NuxtLink>
           <a
             v-if="showBrandingCredit"
             href="https://krabiclaw.com"
@@ -131,7 +123,7 @@
             rel="noopener noreferrer"
             class="transition hover:text-inverted/70"
           >
-            {{ $t('saya.footer.powered_by') }}, {{ copy.poweredByTagline }}
+            Powered by krabiclaw.com, {{ copy.poweredByTagline }}
           </a>
         </div>
       </div>

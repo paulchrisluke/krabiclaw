@@ -15,7 +15,7 @@
 
       <UCard class="relative bg-elevated/20 backdrop-blur-md shadow-2xl border-default/50 rounded-4xl">
         <div class="p-6 sm:p-10">
-          <BillingPricingTable />
+          <LazyBillingPricingTable />
         </div>
       </UCard>
     </UPageBody>

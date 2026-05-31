@@ -561,6 +561,7 @@ const orgSettingsNavigation = computed(() => {
   if (!org) return [[]]
   return [[
     { label: 'General', icon: 'i-lucide-sliders', to: `${org}/general` },
+    { label: 'Domains', icon: 'i-lucide-globe', to: `${org}/domains` },
     { label: 'Billing', icon: 'i-lucide-credit-card', to: `${org}/billing` },
     { label: 'Members', icon: 'i-lucide-users', to: `${org}/members` },
   ]]
