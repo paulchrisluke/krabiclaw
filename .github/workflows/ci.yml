@@ -5,6 +5,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+  schedule:
+    - cron: "15 3 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,6 +15,7 @@ permissions:
 jobs:
   typecheck:
     name: Type check
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -26,6 +30,7 @@ jobs:
 
   lint-seeds:
     name: Seed schema lint
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -40,6 +45,7 @@ jobs:
 
   lint-scripts:
     name: Script syntax check
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -56,6 +62,9 @@ jobs:
             scripts/client-onboard.mjs \
             scripts/client-override.mjs \
             scripts/client-deploy.mjs \
+            scripts/canary-prod.mjs \
+            scripts/canary-notifications.mjs \
+            scripts/rollback-prod.mjs \
             scripts/lint-seeds.mjs \
             scripts/fixtures/pottery-house-krabi.fixture.mjs; do
             node --check "$f" && echo "✓ $f" || exit 1
@@ -63,7 +72,7 @@ jobs:
 
   e2e:
     name: E2E ${{ matrix.suite }}
-    if: matrix.suite != 'full' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -89,6 +98,7 @@ jobs:
           yarn seed:pottery-local
       - run: npx playwright install --with-deps chromium
       - run: yarn ${{ matrix.cmd }}
+        if: ${{ matrix.suite != 'full' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
 
   prod-smoke:
     name: Production smoke
@@ -120,6 +130,112 @@ jobs:
             echo "${url} -> ${code} | ${title:-<no-title>}"
             [[ "${code}" -lt 400 ]] || (echo "Route failed: ${url}" && exit 1)
           done
+
+  prod-auth-canary:
+    name: Production auth canary
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: [prod-smoke]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Run production auth canary
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CANARY_BASE_URL: ${{ secrets.CANARY_BASE_URL }}
+          CANARY_PHONE_E164: ${{ secrets.CANARY_PHONE_E164 }}
+          CANARY_SITE_ID: ${{ secrets.CANARY_SITE_ID }}
+          CANARY_ORG_ID: ${{ secrets.CANARY_ORG_ID }}
+        run: |
+          set -euo pipefail
+          yarn canary:prod | tee canary-auth.log
+      - name: Upload auth canary log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prod-auth-canary-log
+          path: canary-auth.log
+          if-no-files-found: ignore
+
+  prod-notification-canary:
+    name: Production notification canary
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: [prod-auth-canary]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Run production notification canary
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CANARY_BASE_URL: ${{ secrets.CANARY_BASE_URL }}
+          CANARY_SITE_ID: ${{ secrets.CANARY_SITE_ID }}
+          CANARY_ORG_ID: ${{ secrets.CANARY_ORG_ID }}
+          CANARY_NOTIFICATION_EMAIL: ${{ secrets.CANARY_NOTIFICATION_EMAIL }}
+          CANARY_NOTIFICATION_PHONE_E164: ${{ secrets.CANARY_NOTIFICATION_PHONE_E164 }}
+        run: |
+          set -euo pipefail
+          yarn canary:notifications | tee canary-notifications.log
+      - name: Upload notification canary log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prod-notification-canary-log
+          path: canary-notifications.log
+          if-no-files-found: ignore
+
+  prod-daily-canary:
+    name: Production daily canary
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Run daily auth and notification canaries
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CANARY_BASE_URL: ${{ secrets.CANARY_BASE_URL }}
+          CANARY_PHONE_E164: ${{ secrets.CANARY_PHONE_E164 }}
+          CANARY_SITE_ID: ${{ secrets.CANARY_SITE_ID }}
+          CANARY_ORG_ID: ${{ secrets.CANARY_ORG_ID }}
+          CANARY_NOTIFICATION_EMAIL: ${{ secrets.CANARY_NOTIFICATION_EMAIL }}
+          CANARY_NOTIFICATION_PHONE_E164: ${{ secrets.CANARY_NOTIFICATION_PHONE_E164 }}
+        run: |
+          set -euo pipefail
+          yarn canary:prod | tee canary-auth.log
+          yarn canary:notifications | tee canary-notifications.log
+      - name: Upload daily canary logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prod-daily-canary-logs
+          path: |
+            canary-auth.log
+            canary-notifications.log
+          if-no-files-found: ignore
 
 # ── Pottery House fixture ─────────────────────────────────────────────────────
 # The fixture (yarn fixture:pottery-house) requires a running site — it cannot

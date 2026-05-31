@@ -17,6 +17,9 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 | `yarn schema:remote` | Apply `schema.sql` to production D1 |
 | `yarn seed:local` | Seed demo data locally |
 | `yarn stripe:listen` | Forward Stripe webhooks to localhost (local dev only) |
+| `yarn canary:prod` | Production-safe authenticated browser canary (read-only checks). |
+| `yarn canary:notifications` | Production provider-level email/WhatsApp notification canary. |
+| `yarn rollback:prod` | Roll back Worker to previous version, then run smoke + auth canary checks. |
 
 ---
 
@@ -81,6 +84,8 @@ yarn wrangler pages secret put CRON_SECRET
 ```
 
 `CRON_SECRET` protects internal endpoints such as `/api/internal/translation-jobs/process`. Local `yarn dev` reads it from `.env`; `wrangler pages dev` reads it from `.dev.vars`.
+
+Production canary/rollback setup and secret requirements are documented in [docs/prod-canary-and-rollback.md](docs/prod-canary-and-rollback.md).
 
 ---
 

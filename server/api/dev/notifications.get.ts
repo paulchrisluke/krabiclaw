@@ -16,13 +16,11 @@ export default defineEventHandler(async (event) => {
   const organizationId = query.organization_id as string | undefined
   const template = query.template as string | undefined
   const channel = query.channel as string | undefined
+  const status = query.status as string | undefined
   const since = query.since as string | undefined
+  const limit = Math.min(Math.max(Number.parseInt(String(query.limit ?? '200'), 10) || 200, 1), 500)
 
-  if (!siteId && !organizationId) {
-    return jsonResponse({ error: 'site_id or organization_id required' }, { status: 400 })
-  }
-
-  let sql = `SELECT id, organization_id, site_id, channel, template, title, recipient, status, error, sent_at, created_at
+  let sql = `SELECT id, organization_id, site_id, channel, template, title, recipient, payload, provider_message_id, status, error, sent_at, created_at
              FROM notifications WHERE 1=1`
   const binds: string[] = []
 
@@ -30,9 +28,11 @@ export default defineEventHandler(async (event) => {
   if (organizationId) { sql += ' AND organization_id = ?'; binds.push(organizationId) }
   if (template) { sql += ' AND template = ?'; binds.push(template) }
   if (channel) { sql += ' AND channel = ?'; binds.push(channel) }
+  if (status) { sql += ' AND status = ?'; binds.push(status) }
   if (since) { sql += ' AND created_at >= ?'; binds.push(since) }
 
-  sql += ' ORDER BY created_at DESC LIMIT 50'
+  sql += ' ORDER BY created_at DESC LIMIT ?'
+  binds.push(String(limit))
 
   const rows = await db.prepare(sql).bind(...binds).all()
   return jsonResponse({ notifications: rows.results ?? [] })
