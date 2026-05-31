@@ -577,8 +577,8 @@ INSERT INTO organization_billing (id, organization_id, status, plan)
 VALUES ('billing-pottery-house', 'org-pottery-house', 'free', 'free');
 
 -- Entitlements (Pottery House is on a managed plan)
-INSERT OR REPLACE INTO organization_entitlements (organization_id, key, value)
+INSERT OR REPLACE INTO organization_entitlements (id, organization_id, key, value, source)
 VALUES
-  ('org-pottery-house', 'managed_service', 'true'),
-  ('org-pottery-house', 'custom_domains', 'true'),
-  ('org-pottery-house', 'google_business', 'true');
+  ('ent-org-pottery-house-managed_service',  'org-pottery-house', 'managed_service', 'true', 'system'),
+  ('ent-org-pottery-house-custom_domains',   'org-pottery-house', 'custom_domains',  'true', 'system'),
+  ('ent-org-pottery-house-google_business',  'org-pottery-house', 'google_business', 'true', 'system');

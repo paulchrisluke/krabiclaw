@@ -57,13 +57,17 @@ export default defineTask({
       return { result: emptyResult }
     }
 
-    // Sync every location that has a Google Place ID, across all orgs
+    // Sync locations for orgs with google_business entitlement that have a Place ID
     const { results } = await db.prepare(`
-      SELECT id, organization_id, site_id, title, google_place_id
-      FROM business_locations
-      WHERE google_place_id IS NOT NULL
-        AND status = 'active'
-      ORDER BY organization_id, site_id
+      SELECT bl.id, bl.organization_id, bl.site_id, bl.title, bl.google_place_id
+      FROM business_locations bl
+      INNER JOIN organization_entitlements oe
+        ON oe.organization_id = bl.organization_id
+        AND oe.key = 'google_business'
+        AND oe.value = 'true'
+      WHERE bl.google_place_id IS NOT NULL
+        AND bl.status = 'active'
+      ORDER BY bl.organization_id, bl.site_id
     `).all()
 
     const locations = (results ?? []) as unknown as PlaceLocationRow[]

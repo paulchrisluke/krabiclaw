@@ -104,6 +104,8 @@ jobs:
           NUXT_PUBLIC_FREE_SITE_DOMAIN: http://localhost:3000
           NUXT_PUBLIC_APP_NAME: KrabiClaw
           NUXT_PUBLIC_TURNSTILE_ENABLED: "false"
+          BETTER_AUTH_SECRET: ci-e2e-test-secret-not-used-in-production
+          BETTER_AUTH_URL: http://localhost:3000
 
   prod-smoke:
     name: Production smoke

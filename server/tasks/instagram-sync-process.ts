@@ -97,7 +97,9 @@ export default defineTask({
           pageId = pages[0]?.id ?? null
         }
 
-        if (pageId) {
+        if (!pageId) {
+          connResult.error = 'no_resolvable_page'
+        } else if (pageId) {
           connResult.facebook = await syncFacebookPosts(env, conn.organization_id, conn.site_id, activeToken, pageId)
 
           const igUserId = await getLinkedInstagramAccount(activeToken, pageId)

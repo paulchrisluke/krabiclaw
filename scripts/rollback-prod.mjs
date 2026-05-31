@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execSync, spawnSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 
 function env(name, opts = {}) {
   const value = process.env[name]
@@ -99,7 +100,7 @@ function main() {
       d1Exec(`
         INSERT INTO canary_runs (id, run_type, environment, status, details_json, created_at)
         VALUES (
-          'canary-rollback-${sqlEscape(crypto.randomUUID())}',
+          'canary-rollback-${sqlEscape(randomUUID())}',
           'rollback',
           'production',
           'pass',
@@ -120,7 +121,7 @@ main()
       d1Exec(`
         INSERT INTO canary_runs (id, run_type, environment, status, details_json, created_at)
         VALUES (
-          'canary-rollback-${sqlEscape(crypto.randomUUID())}',
+          'canary-rollback-${sqlEscape(randomUUID())}',
           'rollback',
           'production',
           'fail',

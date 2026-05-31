@@ -134,8 +134,8 @@ function transcode(inputPath, outputPath, duration) {
   if (duration && duration > MAX_DURATION) {
     ffmpegArgs.push('-t', String(MAX_DURATION))
   }
-  // Scale so the shorter dimension is ≤ MAX_HEIGHT; never upscale
-  const scaleFilter = `scale='if(gt(ih,iw),min(iw\\,${MAX_HEIGHT}),trunc(iw/2)*2)':'if(gt(ih,iw),trunc(ih/2)*2,min(ih\\,${MAX_HEIGHT}))':flags=lanczos`
+  // Scale shorter dimension to ≤ MAX_HEIGHT; let ffmpeg compute the other axis (-2 = preserve AR, round to even)
+  const scaleFilter = `scale='if(gt(ih,iw),min(iw\\,${MAX_HEIGHT}),-2)':'if(gt(ih,iw),-2,min(ih\\,${MAX_HEIGHT}))':flags=lanczos`
   ffmpegArgs.push(
     '-c:v', 'libx264',
     '-crf', String(CRF),
@@ -317,9 +317,10 @@ async function transcodeDir() {
 // ── Mode 2: re-transcode an existing R2 asset ─────────────────────────────────
 
 async function transcodeAsset() {
+  const { siteId } = lookupSite(SLUG)
   console.log(`\n→ Looking up asset '${ASSET_ID}'...`)
   const rows = d1Query(
-    `SELECT id, r2_key, public_url, file_name, file_size FROM media_assets WHERE id = '${ASSET_ID}' LIMIT 1`
+    `SELECT id, r2_key, public_url, file_name, file_size FROM media_assets WHERE id = '${ASSET_ID}' AND site_id = '${siteId}' LIMIT 1`
   )
   if (!rows?.length) {
     console.error(`Error: asset '${ASSET_ID}' not found in ${REMOTE ? 'remote' : 'local'} D1`)
@@ -363,7 +364,7 @@ async function transcodeAsset() {
   console.log(`\n→ Re-uploading to R2 (same key)...`)
   r2Put(outputPath, asset.r2_key)
 
-  const thumbR2Key = asset.r2_key.replace(/\.mp4$/, '-thumb.jpg')
+  const thumbR2Key = asset.r2_key.replace(/\.[^/.]+$/, '') + '-thumb.jpg'
   const thumbPublicUrl = `https://media.krabiclaw.com/${thumbR2Key}`
   const thumbPath = join(tmpDir, 'thumb.jpg')
   console.log(`\n→ Extracting thumbnail at ${THUMBNAIL_AT}s...`)
@@ -372,7 +373,7 @@ async function transcodeAsset() {
   await unlink(thumbPath)
 
   console.log(`\n→ Updating file_size + thumbnail_url in D1...`)
-  d1Execute(`UPDATE media_assets SET file_size = ${outputSize}, thumbnail_url = '${thumbPublicUrl}' WHERE id = '${ASSET_ID}'`)
+  d1Execute(`UPDATE media_assets SET file_size = ${outputSize}, thumbnail_url = '${thumbPublicUrl}' WHERE id = '${ASSET_ID}' AND site_id = '${siteId}'`)
 
   await unlink(downloadPath)
   await unlink(outputPath)
@@ -385,9 +386,10 @@ async function transcodeAsset() {
 // ── Mode 3: thumbnail-only for a single asset ─────────────────────────────────
 
 async function thumbnailOnlyAsset() {
+  const { siteId } = lookupSite(SLUG)
   console.log(`\n→ Looking up asset '${ASSET_ID}'...`)
   const rows = d1Query(
-    `SELECT id, site_id, provider, r2_key, public_url FROM media_assets WHERE id = '${ASSET_ID}' LIMIT 1`
+    `SELECT id, site_id, provider, r2_key, public_url FROM media_assets WHERE id = '${ASSET_ID}' AND site_id = '${siteId}' LIMIT 1`
   )
   if (!rows?.length) {
     console.error(`Error: asset '${ASSET_ID}' not found`)
@@ -431,12 +433,12 @@ async function thumbnailOnlyAsset() {
 
   let thumbPublicUrl
   if (asset.provider === 'cloudflare_r2') {
-    const thumbR2Key = asset.r2_key.replace(/\.mp4$/, '-thumb.jpg')
+    const thumbR2Key = asset.r2_key.replace(/\.[^/.]+$/, '') + '-thumb.jpg'
     thumbPublicUrl = `https://media.krabiclaw.com/${thumbR2Key}`
     r2Put(thumbPath, thumbR2Key, 'image/jpeg')
   } else {
     // Store alongside the source in public/
-    const rel = asset.public_url.replace(/^\//, '').replace(/\.mp4$/, '-thumb.jpg')
+    const rel = asset.public_url.replace(/^\//, '').replace(/\.[^/.]+$/, '') + '-thumb.jpg'
     const destPath = join(process.cwd(), 'public', rel)
     const { copyFile } = await import('node:fs/promises')
     await copyFile(thumbPath, destPath)
@@ -444,7 +446,7 @@ async function thumbnailOnlyAsset() {
     console.log(`→ Saved thumbnail to: ${destPath}`)
   }
 
-  d1Execute(`UPDATE media_assets SET thumbnail_url = '${thumbPublicUrl}' WHERE id = '${ASSET_ID}'`)
+  d1Execute(`UPDATE media_assets SET thumbnail_url = '${thumbPublicUrl}' WHERE id = '${ASSET_ID}' AND site_id = '${siteId}'`)
   if (cleanup) await unlink(sourcePath)
   await unlink(thumbPath)
 
