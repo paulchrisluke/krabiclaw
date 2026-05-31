@@ -12,8 +12,8 @@
     <div v-if="isHighlighted" class="absolute -bottom-24 -left-24 w-48 h-48 bg-(--kc-teal)/20 rounded-full blur-3xl opacity-40"></div>
 
     <!-- Plan image -->
-    <div v-if="plan.image" class="mb-6 rounded-2xl overflow-hidden aspect-square w-16 border border-default bg-elevated/50 p-2 flex items-center justify-center">
-      <img :src="plan.image" :alt="plan.name" class="w-full h-full object-contain" />
+    <div v-if="plan.image" class="mb-5 rounded-2xl overflow-hidden w-20 h-20 border border-default/50 bg-elevated/50 shadow-sm">
+      <img :src="plan.image" :alt="plan.name" class="w-full h-full object-cover" />
     </div>
 
     <!-- Header -->

@@ -166,9 +166,13 @@ export default defineEventHandler(async (event) => {
     })
     
   } catch (error) {
-    console.error('Failed to create checkout session:', error)
-    return jsonResponse({ 
-      error: 'Failed to create checkout session' 
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('Failed to create checkout session:', message, error)
+    if (message.startsWith('Access denied')) {
+      return jsonResponse({ error: message }, { status: 403 })
+    }
+    return jsonResponse({
+      error: 'Failed to create checkout session', detail: message
     }, { status: 500 })
   }
 })
