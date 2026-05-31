@@ -85,7 +85,7 @@
                   <MediaPicker
                     v-model="media.asset_id"
                     :site-id="siteId"
-                    accept="image,video"
+                    accept="any"
                     title="Select media"
                     @change="(asset) => handleGalleryMediaChange(index, asset)"
                   />
@@ -246,9 +246,11 @@ function removeGalleryMedia(index: number) {
 }
 
 function handleGalleryMediaChange(index: number, asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
-  form.images[index].asset_id = asset?.id ?? null
-  form.images[index].url = asset?.publicUrl ?? asset?.thumbnailUrl ?? null
-  form.images[index].kind = asset?.kind === 'video' ? 'video' : 'image'
+  const item = form.images[index]
+  if (!item) return
+  item.asset_id = asset?.id ?? null
+  item.url = asset?.publicUrl ?? asset?.thumbnailUrl ?? null
+  item.kind = asset?.kind === 'video' ? 'video' : 'image'
 }
 
 function openEdit(exp: ApiRecord) {

@@ -34,7 +34,7 @@
       <div v-if="establishmentYear" class="inline-flex items-center gap-2 mb-6">
         <span class="w-8 h-px bg-inverted-muted opacity-30" />
         <span class="text-[10px] font-bold uppercase tracking-[0.3em] text-inverted opacity-60 italic">
-          EST. {{ establishmentYear }}
+          {{ $t('saya.hero.established', { year: establishmentYear }) }}
         </span>
         <span class="w-8 h-px bg-inverted-muted opacity-30" />
       </div>

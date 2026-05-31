@@ -1,9 +1,14 @@
 // Stripe product/price seeder for managed service plans.
 // Run: node scripts/seed-stripe.mjs
 // Requires STRIPE_SECRET_KEY in .env (reads via dotenv-style manual parse).
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readFileSync, createReadStream, existsSync } from 'node:fs'
+import { resolve, extname, basename } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import Stripe from 'stripe'
+
+const SCRIPT_DIR = fileURLToPath(new URL('.', import.meta.url))
+// Override with STRIPE_IMAGES_DIR env var; default is scripts/images/ inside the repo.
+const IMAGES_DIR = process.env.STRIPE_IMAGES_DIR || resolve(SCRIPT_DIR, 'images')
 
 // --- Parse .env manually (no dotenv dependency needed) ---
 function loadEnv() {
@@ -57,37 +62,74 @@ async function archiveOldPlans() {
   }
 }
 
+const MIME_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' }
+
+// --- Upload local image to Stripe ---
+async function uploadProductImage(localPath) {
+  if (!localPath || !existsSync(localPath)) {
+    if (localPath) console.warn(`  Image not found at path: ${localPath}`);
+    return null;
+  }
+  console.log(`  Uploading image: ${localPath}`);
+  try {
+    const file = await stripe.files.create({
+      purpose: 'product_image',
+      file: {
+        data: createReadStream(localPath),
+        name: basename(localPath),
+        type: MIME_TYPES[extname(localPath).toLowerCase()] ?? 'application/octet-stream',
+      }
+    });
+    // Create a file link with a long expiry (5 years) to reduce accidental expiration.
+    const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365 * 5
+    const fileLink = await stripe.fileLinks.create({
+      file: file.id,
+      expires_at: expiresAt,
+    });
+    return fileLink.url;
+  } catch (err) {
+    console.error('  Failed to upload image:', err.message);
+    return null;
+  }
+}
+
 // --- Create or update recurring subscription plans ---
-async function createSubscriptionPlan({ name, description, planId, amountCents, highlighted, badge, features }) {
+async function createSubscriptionPlan({ name, description, planId, amountCents, highlighted, badge, features, imagePath }) {
   console.log(`\nUpserting plan: ${name} ($${amountCents / 100}/mo)`)
 
+  // Check for existing product first to avoid unnecessary file uploads on every update.
   const existing = await stripe.products.list({ active: true, limit: 100 })
   const match = existing.data.find(p => p.metadata?.plan_id === planId)
 
+  // Reuse existing product image; only upload when creating a new product.
+  let imageUrl = match?.images?.[0] ?? null
+  if (!match && imagePath) {
+    imageUrl = await uploadProductImage(imagePath)
+  }
+
+  const updateData = {
+    description,
+    marketing_features: features.map(f => ({ name: f })),
+    metadata: {
+      plan_id: planId,
+      highlighted: highlighted ? 'true' : 'false',
+      ...(badge ? { badge } : {}),
+    },
+  }
+  if (imageUrl) {
+    updateData.images = [imageUrl]
+  }
+
   if (match) {
     // Update description and marketing_features on existing product
-    await stripe.products.update(match.id, {
-      description,
-      marketing_features: features.map(f => ({ name: f })),
-      metadata: {
-        plan_id: planId,
-        highlighted: highlighted ? 'true' : 'false',
-        ...(badge ? { badge } : {}),
-      },
-    })
+    await stripe.products.update(match.id, updateData)
     console.log(`  Updated: ${match.id}`)
     return match
   }
 
   const product = await stripe.products.create({
     name,
-    description,
-    metadata: {
-      plan_id: planId,
-      highlighted: highlighted ? 'true' : 'false',
-      ...(badge ? { badge } : {}),
-    },
-    marketing_features: features.map(f => ({ name: f })),
+    ...updateData
   })
 
   await stripe.prices.create({
@@ -162,6 +204,7 @@ async function main() {
     planId: 'growth',
     amountCents: 4900,
     highlighted: false,
+    imagePath: resolve(IMAGES_DIR, 'growth.png'),
     features: [
       'AI-built site live in minutes',
       'Your own domain (yourbusiness.com)',
@@ -180,6 +223,7 @@ async function main() {
     amountCents: 14900,
     highlighted: true,
     badge: 'Best Value',
+    imagePath: resolve(IMAGES_DIR, 'managed.png'),
     features: [
       'Everything in Growth, plus:',
       'We manage all content — no login needed',

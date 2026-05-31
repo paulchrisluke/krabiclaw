@@ -5,11 +5,11 @@
         <img
           v-if="image"
           :src="image"
-          :alt="imageAlt || title || 'About our restaurant'"
+          :alt="imageAlt || title || $t('saya.about.image_alt')"
           class="w-full h-full object-cover hover:scale-105 transition-transform duration-1000"
         >
         <div v-else class="w-full h-full bg-muted flex items-center justify-center border-2 border-dashed border-default">
-          <span class="text-muted italic">Authentic Experience</span>
+          <span class="text-muted italic">{{ $t('saya.about.placeholder') }}</span>
         </div>
       </div>
 
@@ -18,19 +18,19 @@
           v-if="showTitle"
           :class="['font-bold mb-8', isTeaser ? 'text-3xl text-inverted' : 'text-5xl md:text-6xl text-default italic tracking-tighter leading-none']"
         >
-          {{ title || 'Our Story' }}
+          {{ title || $t('saya.about.our_story') }}
         </h2>
 
         <div :class="['prose prose-lg max-w-none', isTeaser ? 'text-inverted' : 'text-default mx-auto']">
           <slot>
             <p :class="['leading-relaxed mb-8', isTeaser ? 'text-lg' : 'text-xl font-medium text-default leading-relaxed']">
-              {{ description || 'Experience the essence of Japanese culinary tradition in the heart of Krabi.' }}
+              {{ description || $t('saya.about.default_description') }}
             </p>
           </slot>
 
           <div v-if="!isTeaser" class="mt-16 pt-12 border-t border-default text-center">
             <p class="font-bold italic text-3xl text-default tracking-tight">
-              "Happy Guest, Happy Restaurant"
+              "{{ $t('saya.about.quote') }}"
             </p>
           </div>
         </div>
@@ -43,7 +43,7 @@
             size="xl"
             class="rounded-full"
           >
-            Our Full Story
+            {{ $t('saya.about.cta') }}
           </UButton>
         </div>
       </div>

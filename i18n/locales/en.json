@@ -2,5 +2,146 @@
   "home": {
     "highlights": "Latest posts & photos.",
     "reviews": "Guest reviews & ratings."
+  },
+  "legal": {
+    "privacy": "Privacy",
+    "terms": "Terms"
+  },
+  "saya": {
+    "hero": {
+      "established": "EST. {year}"
+    },
+    "header": {
+      "menu": "Menu",
+      "locations": "Locations",
+      "reservations": "Reservations",
+      "experiences": "Experiences",
+      "contact": "Contact",
+      "order_now": "Order Now",
+      "open_navigation": "Open navigation",
+      "close_navigation": "Close navigation",
+      "nav_aria": "Primary navigation",
+      "mobile_nav_aria": "Mobile navigation"
+    },
+    "footer": {
+      "locations_error": "We could not load locations right now. Please try again in a moment.",
+      "visit_page": "Visit page →",
+      "heading_experience": "Experience",
+      "heading_discover": "Discover",
+      "heading_connect": "Connect",
+      "menu": "Menu",
+      "experiences": "Experiences",
+      "gallery": "Gallery",
+      "our_story": "Our Story",
+      "reviews": "Reviews",
+      "latest_updates": "Latest Updates",
+      "qa": "Q&A",
+      "all_locations": "All Locations",
+      "contact_us": "Contact Us",
+      "order_online": "Order online",
+      "powered_by": "Powered by krabiclaw.com"
+    },
+    "posts": {
+      "title": "Latest Updates",
+      "subtitle": "News & Events",
+      "no_preview": "No preview available",
+      "badge": {
+        "event": "Event",
+        "offer": "Offer",
+        "update": "Update"
+      },
+      "image_alt": "Restaurant update",
+      "business_update": "Business Update",
+      "event_details_label": "Event Details:",
+      "special_offer_label": "Special Offer:",
+      "code_label": "Code:",
+      "read_full_story": "Read Full Story",
+      "view_all": "View All Updates"
+    },
+    "reviews": {
+      "title": "Guest Experience",
+      "subtitle": "What Our Guests Say",
+      "stars_aria": "{rating} out of 5 stars",
+      "rating_summary": "{average} / 5.0 from {count} reviews",
+      "response_label": "Restaurant Response:",
+      "empty_title": "No reviews yet.",
+      "empty_desc": "Be the first to share your experience with us.",
+      "view_all": "View All Reviews",
+      "anonymous": "Anonymous"
+    },
+    "subnav": {
+      "overview": "Overview",
+      "menu": "Menu",
+      "reviews": "Reviews",
+      "photos": "Photos",
+      "qa": "Q&A",
+      "visit": "Visit"
+    },
+    "cta": {
+      "order_now": "Order Now",
+      "reserve": "Reserve"
+    },
+    "upgrade": {
+      "pro_feature": "Paid feature",
+      "default_description": "This feature requires a paid plan.",
+      "close_modal": "Close modal",
+      "get_pro": "Upgrade",
+      "features": {
+        "qa-writeback": {
+          "title": "Ask a question",
+          "description": "Let guests submit questions directly from your site, synced back to Google Business Q&A. Included in Growth."
+        },
+        "custom-domain": {
+          "title": "Custom domain",
+          "description": "Connect your own domain (yourdomain.com) instead of a krabiclaw.com subdomain. Included in Growth."
+        },
+        "add-location": {
+          "title": "Add a second location",
+          "description": "Manage multiple locations under one brand site, each with their own menu, reviews, and hours. Included in Managed."
+        },
+        "connect-gmb": {
+          "title": "Connect Google Business",
+          "description": "Sync hours, reviews, photos, and posts automatically from your Google Business Profile. Included in Growth."
+        },
+        "google-business-sync": {
+          "title": "Google Business sync",
+          "description": "Auto-sync Google Business fields while keeping manual edits available in the site editor. Included in Growth."
+        },
+        "remove-branding": {
+          "title": "Remove KrabiClaw branding",
+          "description": "Remove the \"Powered by krabiclaw.com\" footer strip from your tenant site. Included in Managed."
+        }
+      },
+      "bullets": {
+        "gmb_1": "Auto-fill Google Business fields when connected",
+        "gmb_2": "Keep manual edits available in the content editor",
+        "gmb_3": "Sync business details, hours, photos, reviews, and posts",
+        "domain_1": "Connect your own domain",
+        "domain_2": "Use managed HTTPS certificates",
+        "domain_3": "Keep your krabiclaw.com subdomain available",
+        "default_1": "Unlock this feature",
+        "default_2": "Manage it from the dashboard",
+        "default_3": "Keep the rest of your current site setup"
+      }
+    },
+    "about": {
+      "our_story": "Our Story",
+      "placeholder": "Authentic Experience",
+      "default_description": "Discover what makes us unique and come experience it for yourself.",
+      "image_alt": "About our restaurant",
+      "quote": "Happy Guest, Happy Restaurant",
+      "cta": "Our Full Story"
+    },
+    "qa": {
+      "title": "Questions & Answers",
+      "subtitle": "Common Inquiries",
+      "google_guest": "Google Guest",
+      "asked_by": "Asked by {author} • {date}",
+      "response_from_restaurant": "Response from Restaurant • {date}",
+      "no_answer": "No answer yet.",
+      "empty_title": "No questions yet.",
+      "empty_prompt": "Got a question? Ask us anything and we'll be happy to help.",
+      "view_all": "View All Q&A"
+    }
   }
 }

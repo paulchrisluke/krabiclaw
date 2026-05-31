@@ -2,13 +2,13 @@
   <AppSection :bg="bg" :padding="padding">
     <div v-if="showTitle" class="flex flex-col gap-4 mb-12 md:flex-row md:items-end md:justify-between border-b border-default pb-8">
       <div>
-        <h2 class="text-base font-semibold text-default tracking-wide uppercase">Guest Experience</h2>
-        <p class="mt-2 text-4xl font-bold text-default italic">What Our Guests Say</p>
+        <h2 class="text-base font-semibold text-default tracking-wide uppercase">{{ $t('saya.reviews.title') }}</h2>
+        <p class="mt-2 text-4xl font-bold text-default italic">{{ $t('saya.reviews.subtitle') }}</p>
       </div>
       <div v-if="ratingSummary" class="flex flex-col items-start md:items-end gap-1">
         <div
           class="flex text-yellow-400"
-          :aria-label="ratingSummary ? `${Math.round(Number(ratingSummary.average))} out of 5 stars` : undefined"
+          :aria-label="ratingSummary ? $t('saya.reviews.stars_aria', { rating: Math.round(Number(ratingSummary.average)) }) : undefined"
           role="img"
         >
           <span v-for="i in 5" :key="i" class="text-xl" aria-hidden="true">
@@ -16,7 +16,7 @@
           </span>
         </div>
         <p class="text-sm font-medium text-muted">
-          {{ ratingSummary.average }} / 5.0 from {{ ratingSummary.count }} reviews
+          {{ $t('saya.reviews.rating_summary', { average: ratingSummary.average, count: ratingSummary.count }) }}
         </p>
       </div>
     </div>
@@ -30,7 +30,7 @@
       >
         <div
           class="flex items-center gap-1 text-yellow-400 mb-4"
-          :aria-label="`${reviewRating(review)} out of 5 stars`"
+          :aria-label="$t('saya.reviews.stars_aria', { rating: reviewRating(review) })"
           role="img"
         >
           <span v-for="i in 5" :key="i" class="text-sm" aria-hidden="true">
@@ -46,7 +46,7 @@
 
         <!-- Review Reply -->
         <div v-if="review.reviewReply?.comment" class="mt-4 bg-muted border border-default rounded-xl p-4 text-xs">
-          <p class="font-bold text-default mb-1">Restaurant Response:</p>
+          <p class="font-bold text-default mb-1">{{ $t('saya.reviews.response_label') }}</p>
           <p class="text-muted">{{ typeof review.reviewReply.comment === 'string' ? review.reviewReply.comment : review.reviewReply.comment?.text || '' }}</p>
         </div>
 
@@ -70,13 +70,13 @@
       <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
         <UIcon name="i-heroicons-chat-bubble-bottom-center-text" class="size-7" />
       </div>
-      <h3 class="mt-6 saya-display saya-italic text-3xl text-default">No reviews yet.</h3>
-      <p class="mt-2 max-w-sm text-sm text-muted">Be the first to share your experience with us.</p>
+      <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ $t('saya.reviews.empty_title') }}</h3>
+      <p class="mt-2 max-w-sm text-sm text-muted">{{ $t('saya.reviews.empty_desc') }}</p>
     </div>
     
     <div v-if="showViewMore && reviews.length > 0" class="mt-12 text-center">
       <UButton to="/reviews" color="primary" variant="outline" size="xl">
-        View All Reviews
+        {{ $t('saya.reviews.view_all') }}
       </UButton>
     </div>
   </AppSection>
@@ -117,6 +117,9 @@ const props = defineProps({
   }
 })
 
+const { t } = useI18n()
+const { formatDate } = useLocaleDate()
+
 const starRatingMap = {
   ONE: 1,
   TWO: 2,
@@ -126,7 +129,7 @@ const starRatingMap = {
 }
 
 const reviewAuthor = review => {
-  return review.reviewer?.displayName?.trim() || review.author_name?.trim() || 'Anonymous'
+  return review.reviewer?.displayName?.trim() || review.author_name?.trim() || t('saya.reviews.anonymous')
 }
 const reviewText = review => {
   const text = typeof review.comment === 'string' ? review.comment : review.comment?.text ?? review.content ?? ''
@@ -153,13 +156,4 @@ const layoutClass = computed(() => {
   return 'md:grid-cols-2'
 })
 
-const formatDate = value => {
-  const date = new Date(value)
-  if (isNaN(date.getTime())) return ''
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  }).format(date)
-}
 </script>
