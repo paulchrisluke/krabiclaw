@@ -49,6 +49,7 @@ export function useHeroVideo(getSrc: () => string | null | undefined) {
       v.src = src
       v.load()
       v.addEventListener('canplay', () => {
+        v.play().catch(() => {})  // muted inline video — catches autoplay policy blocks
         v.classList.remove('opacity-0')
         v.classList.add('opacity-100')
       }, { once: true })
