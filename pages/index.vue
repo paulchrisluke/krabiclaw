@@ -282,16 +282,33 @@
         <!-- Real locations -->
         <div v-if="hasLocations" :class="['grid gap-8', locations.length > 1 ? 'md:grid-cols-2' : '']">
           <NuxtLink
-            v-for="loc in locations"
+            v-for="(loc, locIdx) in locations"
             :key="loc.id"
+            :ref="el => { const node = el && (el.$el || el); if (node) locCardRefs[locIdx] = node }"
             :to="`/locations/${loc.slug}`"
             class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
           >
             <div class="aspect-video overflow-hidden bg-muted">
-              <!-- Homepage card always shows a static image — video plays on the location page. -->
+              <!-- Poster image: always present for LCP. Video swaps in when card enters viewport. -->
+              <ClientOnly v-if="loc.kind === 'video' && loc.public_url">
+                <video
+                  v-if="visibleLocCards.has(locIdx)"
+                  :src="loc.public_url"
+                  :poster="loc.thumbnail_url || undefined"
+                  autoplay muted loop playsinline preload="none"
+                  class="aspect-video w-full object-cover"
+                />
+                <img
+                  v-else-if="loc.thumbnail_url"
+                  :src="loc.thumbnail_url"
+                  :alt="loc.title"
+                  loading="lazy"
+                  class="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                >
+              </ClientOnly>
               <img
-                v-if="loc.thumbnail_url || loc.public_url"
-                :src="loc.thumbnail_url || (loc.kind !== 'video' ? loc.public_url : null)"
+                v-else-if="loc.public_url"
+                :src="loc.public_url"
                 :alt="loc.title"
                 loading="lazy"
                 class="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -580,6 +597,22 @@ definePageMeta({ layout: false })
 
 const { isPlatform, siteId, site } = useTenantSite()
 const homeCopy = getVerticalCopy(site?.vertical)
+
+// Inline location grid — load videos via IntersectionObserver when cards scroll into view
+const locCardRefs = ref([])
+const visibleLocCards = ref(new Set())
+onMounted(() => {
+  if (!('IntersectionObserver' in window)) return
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return
+      const i = locCardRefs.value.indexOf(entry.target)
+      if (i >= 0) { visibleLocCards.value = new Set([...visibleLocCards.value, i]); obs.unobserve(entry.target) }
+    })
+  }, { rootMargin: '200px' })
+  watch(locCardRefs, refs => refs.forEach(el => el && obs.observe(el)), { immediate: true })
+  onUnmounted(() => obs.disconnect())
+})
 const { resolveComponent } = useDynamicComponent()
 
 // Platform homepage data
