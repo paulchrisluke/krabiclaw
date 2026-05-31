@@ -86,7 +86,7 @@ export default defineNuxtConfig({
 
   // i18n Configuration
   i18n: {
-    langDir: 'locales',
+    langDir: 'locales',  // relative to i18n/ (module default is restructureDir: 'i18n')
     lazy: true,
     locales: [
       { code: 'en',    name: 'English',    language: 'en-US', dir: 'ltr', file: 'en.json' },

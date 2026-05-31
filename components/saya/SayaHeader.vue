@@ -10,7 +10,7 @@
             :alt="restaurantName"
             class="h-10 w-auto max-w-35 object-contain"
           />
-          <span v-else class="saya-display text-2xl text-default">{{ restaurantName }}</span>
+          <span v-else class="saya-display whitespace-nowrap text-lg sm:text-2xl text-default">{{ restaurantName }}</span>
         </NuxtLink>
 
         <!-- Desktop nav -->

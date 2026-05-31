@@ -15,6 +15,8 @@
 </template>
 
 <script setup>
+if (import.meta.dev) useDebugLCP()
+
 const { config } = useBootstrap()
 
 const brandColor = computed(() => config.value?.brand_color || null)
