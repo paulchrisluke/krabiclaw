@@ -1,20 +1,20 @@
-// Cloudflare Cache API — serve SSR HTML cache hits before any middleware runs.
-// On a hit: the D1 tenant lookup, Vue SSR render, and all downstream middleware are skipped.
-// On a miss: falls through to the normal Nitro pipeline, which populates the cache via
-// the edge-cache Nitro plugin (server/plugins/edge-cache.ts).
+// KV-based SSR HTML cache — globally replicated, ~4ms read latency from any edge.
+// Replaces the previous caches.default approach which was per-datacenter only.
 //
-// Cache key: https://<host><pathname>  (real zone URL — CF Cache API rejects off-zone keys)
-// Including the host prevents cross-tenant cache contamination.
+// Cache key: html:<host>:<pathname>
+// Stored in SITE_CACHE KV namespace with a 60s TTL.
+// On a hit: D1 tenant lookup and Vue SSR are skipped entirely.
+// On a miss: falls through to SSR; server/plugins/edge-cache.ts populates KV.
 //
 // NEVER cached:
-//   - Root "/" — i18n browser-language detection redirects vary by Accept-Language
-//   - /api/**, /dashboard/**, /admin/**, /auth/** — auth-gated or API responses
-//   - Requests with a session cookie — content may be personalised
-//   - Paths with query strings — we don't vary the cache key on QS params
+//   - /api/**, /dashboard/**, /admin/**, /auth/** — auth-gated
+//   - Requests with session cookie — personalised
+//   - Paths with query strings
 //   - Non-GET requests
-//   - Requests without a Host header — can't build a per-tenant key
+//   - No Host header
 
-import { defineEventHandler, sendWebResponse, getHeader } from 'h3'
+import { defineEventHandler, setResponseHeaders, getHeader } from 'h3'
+import { cloudflareEnv } from '~/server/utils/api-response'
 
 const SKIP_PREFIXES = [
   '/api/', '/dashboard', '/admin', '/auth/',
@@ -25,44 +25,30 @@ const SESSION_COOKIE = 'better-auth.session_token'
 
 export default defineEventHandler(async (event) => {
   if (event.method !== 'GET') return
-
   if (SKIP_PREFIXES.some(p => event.path.startsWith(p))) return
-
-  // Authenticated session — response may be personalised
   if ((getHeader(event, 'cookie') ?? '').includes(SESSION_COOKIE)) return
-
-  // Query strings: we don't vary on them so skip caching when present
   if (event.path.includes('?')) return
 
-  // No Host header → can't build a safe per-tenant cache key
   const host = getHeader(event, 'host') || getHeader(event, 'x-forwarded-host')
   if (!host) return
 
-  // CF Cache API only available in Cloudflare Workers runtime
-  // Cast through unknown: browser's CacheStorage type lacks .default (CF-specific)
-  const cfCaches = typeof caches !== 'undefined'
-    ? (caches as unknown as { default: Cache })
-    : null
-  if (!cfCaches?.default) return
+  const env = cloudflareEnv(event)
+  const kv = (env as Record<string, unknown>).SITE_CACHE as KVNamespace | undefined
+  if (!kv) return
 
-  // Cache key must be on the zone (krabiclaw.com) — CF rejects off-zone URLs
-  const cacheKey = `https://${host}${event.path}`
+  const key = `html:${host}:${event.path}`
 
   try {
-    const hit = await cfCaches.default.match(new Request(cacheKey))
+    const hit = await kv.get(key, 'text')
     if (!hit) return
 
-    return sendWebResponse(
-      event,
-      new Response(hit.body, {
-        status: hit.status,
-        headers: new Headers({
-          ...Object.fromEntries(hit.headers.entries()),
-          'x-edge-cache': 'HIT',
-        }),
-      }),
-    )
+    setResponseHeaders(event, {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'public, s-maxage=60, stale-while-revalidate=300, max-age=0',
+      'x-edge-cache': 'HIT',
+    })
+    return hit
   } catch {
-    // Cache errors are non-fatal — fall through to SSR
+    // KV errors are non-fatal — fall through to SSR
   }
 })

@@ -1,13 +1,15 @@
-// Cloudflare Cache API — populate cache after each SSR render.
-// Fires via Nuxt's render:response hook (Vue SSR pages only — never API routes).
+// KV-based SSR HTML cache — populate after each SSR render.
+// Fires via Nuxt's render:response hook (Vue SSR pages only).
 //
-// The middleware at server/middleware/00.edge-cache.ts serves subsequent requests
-// from cache, skipping SSR + D1 tenant lookup entirely (~0ms TTFB on cache hit).
+// Stores rendered HTML in SITE_CACHE KV with a 60s TTL.
+// KV is globally replicated: the next request from any Cloudflare datacenter
+// will get a KV hit (~4ms) instead of running SSR (~300-800ms).
 //
-// TTL: 60s fresh, 300s stale-while-revalidate. Content updates propagate ≤60s.
+// The middleware at server/middleware/00.edge-cache.ts serves KV hits.
 
 import { getHeader } from 'h3'
 import type { H3Event } from 'h3'
+import { cloudflareEnv } from '~/server/utils/api-response'
 
 const SKIP_PREFIXES = [
   '/api/', '/dashboard', '/admin', '/auth/',
@@ -15,8 +17,7 @@ const SKIP_PREFIXES = [
 ]
 
 const SESSION_COOKIE = 'better-auth.session_token'
-const CACHE_TTL = 60
-const CACHE_SWR = 300
+const CACHE_TTL_SECONDS = 60
 
 interface RenderResponse {
   body: string
@@ -25,13 +26,6 @@ interface RenderResponse {
 }
 
 export default defineNitroPlugin((nitroApp) => {
-  // Cast through unknown: browser's CacheStorage type lacks .default (CF-specific)
-  const cfCaches = typeof caches !== 'undefined'
-    ? (caches as unknown as { default: Cache })
-    : null
-  if (!cfCaches?.default) return
-
-  // render:response fires after Vue SSR completes — body is a string, safe to cache
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nitroApp.hooks.hook('render:response' as any, async (
     response: RenderResponse,
@@ -41,38 +35,23 @@ export default defineNitroPlugin((nitroApp) => {
     if (event.method !== 'GET') return
     if (event.path.includes('?')) return
     if (SKIP_PREFIXES.some(p => event.path.startsWith(p))) return
+    if ((getHeader(event, 'cookie') ?? '').includes(SESSION_COOKIE)) return
 
-    // Don't cache if the response sets an auth/session cookie.
-    // Locale preference cookies (i18n_redirected) are the same value for all visitors
-    // and must not prevent caching.
     const sc = response.headers['set-cookie'] ?? response.headers['Set-Cookie']
     const scArr = Array.isArray(sc) ? sc : (sc ? [String(sc)] : [])
     if (scArr.some(c => c.includes(SESSION_COOKIE))) return
 
-    // Don't cache if the request carries a session cookie (personalised response)
-    if ((getHeader(event, 'cookie') ?? '').includes(SESSION_COOKIE)) return
-
-    // No Host header → can't build a safe per-tenant cache key
     const host = getHeader(event, 'host') || getHeader(event, 'x-forwarded-host')
     if (!host) return
 
-    // Cache key must be on the zone (krabiclaw.com) — CF rejects off-zone URLs
-    const cacheKey = `https://${host}${event.path}`
+    const env = cloudflareEnv(event)
+    const kv = (env as Record<string, unknown>).SITE_CACHE as KVNamespace | undefined
+    if (!kv) return
+
+    const key = `html:${host}:${event.path}`
 
     try {
-      const contentType = (response.headers['content-type'] as string | undefined)
-        ?? 'text/html; charset=utf-8'
-
-      const headers = new Headers({
-        'content-type': contentType,
-        'cache-control': `public, max-age=${CACHE_TTL}, stale-while-revalidate=${CACHE_SWR}`,
-        'x-edge-cache': 'MISS',
-      })
-
-      await cfCaches.default.put(
-        new Request(cacheKey),
-        new Response(response.body, { status: 200, headers }),
-      )
+      await kv.put(key, response.body, { expirationTtl: CACHE_TTL_SECONDS })
     } catch {
       // Non-fatal — response already sent to the client
     }

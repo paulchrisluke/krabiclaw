@@ -74,7 +74,7 @@ export default defineNuxtConfig({
   // i18n Configuration
   i18n: {
     langDir: 'locales',  // relative to i18n/ (module default is restructureDir: 'i18n')
-    lazy: true,
+    // lazy: true,  // not supported in this @nuxtjs/i18n version — locale files still split by route
     locales: [
       { code: 'en',    name: 'English',    language: 'en-US', dir: 'ltr', file: 'en.json' },
       { code: 'th',    name: 'ไทย',        language: 'th-TH', dir: 'ltr', file: 'th.json' },
