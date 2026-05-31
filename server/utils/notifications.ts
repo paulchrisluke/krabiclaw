@@ -39,6 +39,7 @@ interface ExperienceBookingNotificationInput extends SiteContext {
   bookingId: string
   guestName: string
   email: string
+  guestPhone?: string | null
   experienceTitle: string
   bookingDate: string
   timeSlot: string
@@ -60,8 +61,8 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
-function siteName(opts: SiteContext): string {
-  return opts.siteName || 'the restaurant'
+function siteName(opts: SiteContext, fallback = 'the restaurant'): string {
+  return opts.siteName || fallback
 }
 
 function ownerEmailQuery() {
@@ -465,7 +466,7 @@ export async function notifyExperienceBookingCreated(
   db: D1Database,
   opts: ExperienceBookingNotificationInput
 ) {
-  const studio = siteName(opts)
+  const studio = siteName(opts, 'the business')
   const payload = {
     booking_id: opts.bookingId,
     guest_name: opts.guestName,
@@ -505,7 +506,7 @@ export async function notifyExperienceBookingCreated(
           date: opts.bookingDate,
           time: opts.timeSlot,
           guests: String(opts.partySize),
-          phone: opts.email,
+          ...(opts.guestPhone ? { phone: opts.guestPhone } : {}),
         },
       },
     }),

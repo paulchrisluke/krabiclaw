@@ -46,9 +46,9 @@ export default defineEventHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const site = await db
-    .prepare(`SELECT id, organization_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`)
+    .prepare(`SELECT id, organization_id, brand_name FROM sites WHERE id = ? AND status = 'active' LIMIT 1`)
     .bind(siteId)
-    .first<{ id: string; organization_id: string }>()
+    .first<{ id: string; organization_id: string; brand_name: string | null }>()
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const experience = await getExperienceBySlug(db, siteId, slug)
@@ -126,6 +126,7 @@ export default defineEventHandler(async (event) => {
     bookingId: booking.id,
     guestName,
     email: guestEmail,
+    guestPhone,
     experienceTitle: experience.title,
     bookingDate,
     timeSlot,

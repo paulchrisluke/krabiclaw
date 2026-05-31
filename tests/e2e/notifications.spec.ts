@@ -102,18 +102,33 @@ test.describe('notification records — restaurant reservation (demo site)', () 
     const { notifications } = await notifRes.json() as { notifications: NotificationRow[] }
 
     // Dashboard in-app notification
-    const dashboard = notifications.find(n => n.channel === 'dashboard' && n.template === 'new_reservation')
+    const dashboard = notifications.find(
+      n =>
+        n.channel === 'dashboard'
+        && n.template === 'new_reservation'
+        && n.title.includes('Playwright Reservation Test'),
+    )
     expect(dashboard).toBeDefined()
     expect(dashboard?.status).toBe('sent')
     expect(dashboard?.title).toContain('Playwright Reservation Test')
 
     // Owner email
-    const ownerEmail = notifications.find(n => n.channel === 'email' && n.template === 'new_reservation')
+    const ownerEmail = notifications.find(
+      n =>
+        n.channel === 'email'
+        && n.template === 'new_reservation'
+        && n.title.includes('Playwright Reservation Test'),
+    )
     expect(ownerEmail).toBeDefined()
     expect(['sent', 'failed']).toContain(ownerEmail?.status)
 
     // Guest confirmation email
-    const guestConfirm = notifications.find(n => n.channel === 'email' && n.template === 'reservation_customer_received')
+    const guestConfirm = notifications.find(
+      n =>
+        n.channel === 'email'
+        && n.template === 'reservation_customer_received'
+        && n.recipient === guestEmail,
+    )
     expect(guestConfirm).toBeDefined()
     expect(guestConfirm?.recipient).toBe(guestEmail)
     expect(['sent', 'failed']).toContain(guestConfirm?.status)
@@ -164,6 +179,8 @@ test.describe('notification records — restaurant reservation (demo site)', () 
 })
 
 test.describe('notification records — experience booking (pottery house)', () => {
+  test.describe.configure({ mode: 'serial' })
+
   test('experience booking creates dashboard + email notification records', async ({ request }) => {
     const since = new Date().toISOString()
     const guestEmail = `test-booking-${Date.now()}@playwright.example`
@@ -194,13 +211,23 @@ test.describe('notification records — experience booking (pottery house)', () 
     const { notifications } = await notifRes.json() as { notifications: NotificationRow[] }
 
     // Dashboard in-app notification (uses new_reservation slot)
-    const dashboard = notifications.find(n => n.channel === 'dashboard' && n.template === 'new_reservation')
+    const dashboard = notifications.find(
+      n =>
+        n.channel === 'dashboard'
+        && n.template === 'new_reservation'
+        && n.title.includes('Playwright Booking Test'),
+    )
     expect(dashboard).toBeDefined()
     expect(dashboard?.status).toBe('sent')
     expect(dashboard?.title).toContain('Playwright Booking Test')
 
     // Owner email
-    const ownerEmail = notifications.find(n => n.channel === 'email' && n.template === 'new_reservation')
+    const ownerEmail = notifications.find(
+      n =>
+        n.channel === 'email'
+        && n.template === 'new_reservation'
+        && n.title.includes('Playwright Booking Test'),
+    )
     expect(ownerEmail).toBeDefined()
     expect(['sent', 'failed']).toContain(ownerEmail?.status)
 

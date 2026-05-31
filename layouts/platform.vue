@@ -15,7 +15,7 @@ import PlatformHeader from '~/components/platform/PlatformHeader.vue'
 
 
 useHead({
-  titleTemplate: (title) => title ? `${title} | KrabiClaw` : 'KrabiClaw | AI Restaurant Platform'
+  titleTemplate: (title) => title ? `${title} | KrabiClaw` : 'KrabiClaw | AI Website Platform'
 })
 </script>
 

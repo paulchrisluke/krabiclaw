@@ -1,5 +1,9 @@
+<template>
+  <div class="min-h-[20vh]" />
+</template>
+
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard', ssr: false })
+definePageMeta({ layout: 'dashboard' })
 
 const dashboard = useDashboardRestaurant()
 const dashboardError = ref<string | null>(null)

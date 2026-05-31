@@ -63,11 +63,10 @@ export default defineNuxtConfig({
     },
   },
 
-  // SEO Configuration
   site: {
     url: 'https://krabiclaw.com',
-    name: 'KrabiClaw - Restaurant Website Builder',
-    description: 'Beautiful restaurant websites powered by AI. Build your restaurant website in minutes with our SaaS platform.',
+    name: 'KrabiClaw - AI Website Builder',
+    description: 'Beautiful websites powered by AI. Build your business website in minutes with our SaaS platform.',
     defaultLocale: 'en',
   },
 

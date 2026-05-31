@@ -14,7 +14,7 @@
             </span>
           </NuxtLink>
           <p class="text-[13px] leading-relaxed text-inverted/60 max-w-75">
-            The Shopify for restaurants. Empowering independent eateries globally. 🦀
+            The Shopify for local businesses. Empowering independent businesses globally. 🦀
           </p>
         </div>
 
@@ -57,7 +57,7 @@
 
       <!-- Bottom bar -->
       <div class="border-t border-inverted/10 pt-6 text-center text-[12px] text-inverted/50">
-        &copy; {{ new Date().getFullYear() }} KrabiClaw. All rights reserved. Built for independent restaurants globally.
+        &copy; {{ new Date().getFullYear() }} KrabiClaw. All rights reserved. Built for independent businesses globally.
       </div>
     </div>
   </footer>

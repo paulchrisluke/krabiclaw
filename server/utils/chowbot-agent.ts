@@ -4061,7 +4061,7 @@ async function executeTool(
         ? input.time_slots.map(String)
         : null;
       const images = Array.isArray(input.images)
-        ? input.images.map((img: any) => ({
+        ? input.images.map((img: { url?: ApiValue; kind?: ApiValue }) => ({
             url: toSqlText(img.url) ?? "",
             kind: img.kind === "video" ? "video" : "image",
           }))
@@ -4150,7 +4150,7 @@ async function executeTool(
         updates.video_asset_id = toSqlText(input.video_asset_id) ?? null;
       if (input.images !== undefined)
         updates.images = Array.isArray(input.images)
-          ? input.images.map((img: any) => ({
+          ? input.images.map((img: { url?: ApiValue; kind?: ApiValue }) => ({
               url: toSqlText(img.url) ?? "",
               kind: img.kind === "video" ? "video" : "image",
             }))

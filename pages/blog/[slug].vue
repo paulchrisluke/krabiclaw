@@ -227,7 +227,7 @@ const ogImage = useSharedOgImage(() => postMedia.value.thumb)
 
 useSeoMeta({
   title: computed(() => post.value ? `${post.value.title} | KrabiClaw Blog` : 'Blog | KrabiClaw'),
-  description: computed(() => post.value?.excerpt ?? 'Restaurant tips and insights from KrabiClaw.'),
+  description: computed(() => post.value?.excerpt ?? 'Business tips and insights from KrabiClaw.'),
   ogUrl: computed(() => `${siteUrl}/blog/${route.params.slug}`),
   ogType: 'article',
   ogImage
