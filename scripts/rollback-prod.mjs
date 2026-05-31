@@ -25,8 +25,7 @@ function runSafe(executable, args) {
 }
 
 function d1Exec(sql) {
-  const escaped = sql.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-  run(`yarn -s wrangler d1 execute DB --remote --json --command \"${escaped}\"`)
+  runSafe('wrangler', ['d1', 'execute', 'DB', '--remote', '--json', '--command', sql])
 }
 
 function sqlEscape(value) {
@@ -44,7 +43,16 @@ async function smokePublic() {
   ]
 
   for (const url of urls) {
-    const res = await fetch(url, { redirect: 'follow' })
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8000)
+    let res
+    try {
+      res = await fetch(url, { redirect: 'follow', signal: controller.signal })
+    } catch (err) {
+      throw new Error(`Public smoke timed out or failed for ${url}: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      clearTimeout(timer)
+    }
     if (!res.ok) {
       throw new Error(`Public smoke failed for ${url} (status ${res.status})`)
     }
@@ -120,7 +128,9 @@ main()
           '${sqlEscape(new Date().toISOString())}'
         )
       `)
-    } catch {}
+    } catch (err) {
+      console.error('Canary audit write failed:', err)
+    }
     console.error('rollback:prod failed')
     console.error(error instanceof Error ? error.message : String(error))
     process.exit(1)

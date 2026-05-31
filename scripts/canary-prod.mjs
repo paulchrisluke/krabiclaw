@@ -24,7 +24,7 @@ function d1Query(sql) {
 }
 
 function sqlEscape(value) {
-  return String(value).replace(/'/g, "''")
+  return String(value).replace(/\\/g, '\\\\').replace(/'/g, "''")
 }
 
 function d1Exec(sql) {
@@ -206,7 +206,7 @@ main().catch((error) => {
         )
       `)
     }
-  } catch {}
+  } catch (_err) { /* best-effort failure audit write; do not mask the original canary error */ }
 
   console.error('canary:prod failed')
   console.error(error instanceof Error ? error.message : String(error))
