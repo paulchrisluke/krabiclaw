@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- Primary 3 plans -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 items-stretch">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
       <div
         v-for="plan in mainPlans"
         :key="plan.id"
