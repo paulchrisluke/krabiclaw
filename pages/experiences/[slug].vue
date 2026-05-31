@@ -229,6 +229,8 @@
 
 <script setup lang="ts">
 
+definePageMeta({ key: (route) => route.fullPath })
+
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 
 const route = useRoute()

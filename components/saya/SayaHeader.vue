@@ -45,7 +45,7 @@
           </NuxtLink>
         </nav>
 
-        <div class="flex items-center justify-end gap-2">
+        <div class="flex items-center justify-end gap-2 col-start-3">
           <!-- Language switcher -->
           <UDropdownMenu :items="languageItems" :ui="{ content: 'saya-theme' }">
             <UButton variant="ghost" color="neutral" size="sm">

@@ -1,7 +1,7 @@
 <template>
-  <section class="relative min-h-160 overflow-hidden flex items-center">
-    <!-- Background media layer -->
-    <div class="absolute inset-0">
+  <section class="relative min-h-160 overflow-hidden flex items-center bg-zinc-900">
+    <!-- Background media layer — wrapper opacity-50 matches location page style -->
+    <div class="absolute inset-0 opacity-50">
       <!-- Poster image: always in SSR HTML, fetchpriority high — this is the LCP element.
            Video fades in on top after window.load + idle; poster remains painted. -->
       <img
@@ -25,7 +25,7 @@
       />
 
       <!-- Deferred video: opacity-0 in DOM, fades to opacity-100 after canplay.
-           Never in SSR HTML (ClientOnly), never an LCP candidate until it's visible. -->
+           Parent opacity-50 applies, so final rendered opacity is 0.5. -->
       <ClientOnly v-if="hero.video && hero.videoKind === 'video'">
         <video
           v-if="showVideo"
