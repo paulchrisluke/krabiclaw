@@ -2,8 +2,13 @@
 // Run: node scripts/seed-stripe.mjs
 // Requires STRIPE_SECRET_KEY in .env (reads via dotenv-style manual parse).
 import { readFileSync, createReadStream, existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { resolve, extname, basename } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import Stripe from 'stripe'
+
+const SCRIPT_DIR = fileURLToPath(new URL('.', import.meta.url))
+// Override with STRIPE_IMAGES_DIR env var; default is scripts/images/ inside the repo.
+const IMAGES_DIR = process.env.STRIPE_IMAGES_DIR || resolve(SCRIPT_DIR, 'images')
 
 // --- Parse .env manually (no dotenv dependency needed) ---
 function loadEnv() {
@@ -57,6 +62,8 @@ async function archiveOldPlans() {
   }
 }
 
+const MIME_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' }
+
 // --- Upload local image to Stripe ---
 async function uploadProductImage(localPath) {
   if (!localPath || !existsSync(localPath)) {
@@ -69,12 +76,15 @@ async function uploadProductImage(localPath) {
       purpose: 'product_image',
       file: {
         data: createReadStream(localPath),
-        name: localPath.split('/').pop(),
-        type: 'application/octet-stream'
+        name: basename(localPath),
+        type: MIME_TYPES[extname(localPath).toLowerCase()] ?? 'application/octet-stream',
       }
     });
+    // Create a file link with a long expiry (5 years) to reduce accidental expiration.
+    const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365 * 5
     const fileLink = await stripe.fileLinks.create({
       file: file.id
+      expires_at: expiresAt,
     });
     return fileLink.url;
   } catch (err) {
@@ -87,13 +97,15 @@ async function uploadProductImage(localPath) {
 async function createSubscriptionPlan({ name, description, planId, amountCents, highlighted, badge, features, imagePath }) {
   console.log(`\nUpserting plan: ${name} ($${amountCents / 100}/mo)`)
 
-  let imageUrl = null;
-  if (imagePath) {
-    imageUrl = await uploadProductImage(imagePath);
-  }
-
+  // Check for existing product first to avoid unnecessary file uploads on every update.
   const existing = await stripe.products.list({ active: true, limit: 100 })
   const match = existing.data.find(p => p.metadata?.plan_id === planId)
+
+  // Reuse existing product image; only upload when creating a new product.
+  let imageUrl = match?.images?.[0] ?? null
+  if (!match && imagePath) {
+    imageUrl = await uploadProductImage(imagePath)
+  }
 
   const updateData = {
     description,
@@ -192,7 +204,7 @@ async function main() {
     planId: 'growth',
     amountCents: 4900,
     highlighted: false,
-    imagePath: '/Users/paulchrisluke/Downloads/growth.png',
+    imagePath: resolve(IMAGES_DIR, 'growth.png'),
     features: [
       'AI-built site live in minutes',
       'Your own domain (yourbusiness.com)',
@@ -211,7 +223,7 @@ async function main() {
     amountCents: 14900,
     highlighted: true,
     badge: 'Best Value',
-    imagePath: '/Users/paulchrisluke/Downloads/managed.png',
+    imagePath: resolve(IMAGES_DIR, 'managed.png'),
     features: [
       'Everything in Growth, plus:',
       'We manage all content — no login needed',
