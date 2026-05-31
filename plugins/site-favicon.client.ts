@@ -2,8 +2,8 @@ export default defineNuxtPlugin(() => {
   const { site } = useTenantSite()
 
   useHead(computed(() => {
-    const logoUrl = (site.value as { logo_url?: string | null; brand_name?: string | null } | undefined)?.logo_url
-    const brandName = (site.value as { brand_name?: string | null } | undefined)?.brand_name ?? ''
+    const logoUrl = (site as { logo_url?: string | null; brand_name?: string | null } | null | undefined)?.logo_url
+    const brandName = (site as { brand_name?: string | null } | null | undefined)?.brand_name ?? ''
     const letter = brandName.charAt(0).toUpperCase() || 'K'
 
     if (logoUrl) {
