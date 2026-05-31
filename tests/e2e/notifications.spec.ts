@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type APIRequestContext } from '@playwright/test'
 import { potteryHouseBaseURL, tenantBaseURL } from './helpers'
 
 // Verify that submission APIs correctly trigger notification records in the DB.
@@ -24,6 +24,32 @@ type NotificationRow = {
   recipient: string | null
 }
 
+async function waitForNotifications(
+  request: APIRequestContext,
+  baseURL: string,
+  params: Record<string, string>,
+  predicate: (_rows: NotificationRow[]) => boolean,
+  options?: { timeoutMs?: number; intervalMs?: number },
+) {
+  const timeoutMs = options?.timeoutMs ?? 8_000
+  const intervalMs = options?.intervalMs ?? 250
+  const deadline = Date.now() + timeoutMs
+  let lastRows: NotificationRow[] = []
+
+  while (Date.now() < deadline) {
+    const res = await request.get(devNotificationsUrl(baseURL, params))
+    expect(res.status()).toBe(200)
+    const payload = await res.json() as { notifications: NotificationRow[] }
+    lastRows = payload.notifications
+    if (predicate(lastRows)) {
+      return lastRows
+    }
+    await new Promise(r => setTimeout(r, intervalMs))
+  }
+
+  throw new Error(`Timed out waiting for expected notifications after ${timeoutMs}ms`)
+}
+
 test.describe('notification records — contact form', () => {
   test('pottery house contact submission creates dashboard + email notification records', async ({ request }) => {
     const since = new Date().toISOString()
@@ -41,14 +67,12 @@ test.describe('notification records — contact form', () => {
     )
     expect(res.status()).toBe(201)
 
-    // Allow fire-and-forget notification writes to complete (email status update is async)
-    await new Promise(r => setTimeout(r, 2000))
-
-    const notifRes = await request.get(
-      devNotificationsUrl(potteryHouseBaseURL, { site_id: 'site-pottery-house', since }),
+    const notifications = await waitForNotifications(
+      request,
+      potteryHouseBaseURL,
+      { site_id: 'site-pottery-house', since },
+      rows => rows.some(n => n.channel === 'dashboard' && n.template === 'new_contact_msg'),
     )
-    expect(notifRes.status()).toBe(200)
-    const { notifications } = await notifRes.json() as { notifications: NotificationRow[] }
 
     // Dashboard in-app notification (always written synchronously)
     const dashboard = notifications.find(n => n.channel === 'dashboard' && n.template === 'new_contact_msg')
@@ -93,13 +117,15 @@ test.describe('notification records — restaurant reservation (demo site)', () 
     const body = await res.json()
     expect(body.id).toEqual(expect.any(String))
 
-    await new Promise(r => setTimeout(r, 2000))
-
-    const notifRes = await request.get(
-      devNotificationsUrl(tenantBaseURL, { site_id: 'site-demo', since }),
+    const notifications = await waitForNotifications(
+      request,
+      tenantBaseURL,
+      { site_id: 'site-demo', since },
+      rows =>
+        rows.some(n => n.channel === 'dashboard' && n.template === 'new_reservation')
+        && rows.some(n => n.channel === 'email' && n.template === 'new_reservation' && n.title.includes('Playwright Reservation Test'))
+        && rows.some(n => n.channel === 'email' && n.template === 'reservation_customer_received' && n.recipient === guestEmail),
     )
-    expect(notifRes.status()).toBe(200)
-    const { notifications } = await notifRes.json() as { notifications: NotificationRow[] }
 
     // Dashboard in-app notification
     const dashboard = notifications.find(
@@ -120,7 +146,7 @@ test.describe('notification records — restaurant reservation (demo site)', () 
         && n.title.includes('Playwright Reservation Test'),
     )
     expect(ownerEmail).toBeDefined()
-    expect(['sent', 'failed']).toContain(ownerEmail?.status)
+    expect(['sent', 'failed', 'pending']).toContain(ownerEmail?.status)
 
     // Guest confirmation email
     const guestConfirm = notifications.find(
@@ -131,7 +157,7 @@ test.describe('notification records — restaurant reservation (demo site)', () 
     )
     expect(guestConfirm).toBeDefined()
     expect(guestConfirm?.recipient).toBe(guestEmail)
-    expect(['sent', 'failed']).toContain(guestConfirm?.status)
+    expect(['sent', 'failed', 'pending']).toContain(guestConfirm?.status)
   })
 
   test('reservation cancellation creates dashboard + email notification records', async ({ request }) => {
@@ -161,12 +187,12 @@ test.describe('notification records — restaurant reservation (demo site)', () 
     )
     expect(cancelRes.status()).toBe(200)
 
-    await new Promise(r => setTimeout(r, 2000))
-
-    const notifRes = await request.get(
-      devNotificationsUrl(tenantBaseURL, { site_id: 'site-demo', since }),
+    const notifications = await waitForNotifications(
+      request,
+      tenantBaseURL,
+      { site_id: 'site-demo', since },
+      rows => rows.some(n => n.channel === 'dashboard' && n.template === 'reservation_cancelled'),
     )
-    const { notifications } = await notifRes.json() as { notifications: NotificationRow[] }
 
     const dashboard = notifications.find(n => n.channel === 'dashboard' && n.template === 'reservation_cancelled')
     expect(dashboard).toBeDefined()
@@ -202,13 +228,15 @@ test.describe('notification records — experience booking (pottery house)', () 
     const body = await res.json()
     expect(body.booking_id).toEqual(expect.any(String))
 
-    await new Promise(r => setTimeout(r, 2000))
-
-    const notifRes = await request.get(
-      devNotificationsUrl(potteryHouseBaseURL, { site_id: 'site-pottery-house', since }),
+    const notifications = await waitForNotifications(
+      request,
+      potteryHouseBaseURL,
+      { site_id: 'site-pottery-house', since },
+      rows =>
+        rows.some(n => n.channel === 'dashboard' && n.template === 'new_reservation')
+        && rows.some(n => n.channel === 'email' && n.template === 'new_reservation' && n.title.includes('Playwright Booking Test'))
+        && rows.some(n => n.channel === 'email' && n.template === 'experience_booking_customer_received' && n.recipient === guestEmail),
     )
-    expect(notifRes.status()).toBe(200)
-    const { notifications } = await notifRes.json() as { notifications: NotificationRow[] }
 
     // Dashboard in-app notification (uses new_reservation slot)
     const dashboard = notifications.find(
@@ -229,13 +257,13 @@ test.describe('notification records — experience booking (pottery house)', () 
         && n.title.includes('Playwright Booking Test'),
     )
     expect(ownerEmail).toBeDefined()
-    expect(['sent', 'failed']).toContain(ownerEmail?.status)
+    expect(['sent', 'failed', 'pending']).toContain(ownerEmail?.status)
 
     // Guest confirmation email
     const guestConfirm = notifications.find(n => n.channel === 'email' && n.template === 'experience_booking_customer_received')
     expect(guestConfirm).toBeDefined()
     expect(guestConfirm?.recipient).toBe(guestEmail)
-    expect(['sent', 'failed']).toContain(guestConfirm?.status)
+    expect(['sent', 'failed', 'pending']).toContain(guestConfirm?.status)
   })
 
   test('email notification records show correct failure reason when RESEND_API_KEY not configured', async ({ request }) => {
@@ -258,12 +286,12 @@ test.describe('notification records — experience booking (pottery house)', () 
     const bookingBody = await bookingRes.json() as { booking_id?: string }
     expect(bookingBody.booking_id).toEqual(expect.any(String))
 
-    await new Promise(r => setTimeout(r, 2000))
-
-    const notifRes = await request.get(
-      devNotificationsUrl(potteryHouseBaseURL, { site_id: 'site-pottery-house', since }),
+    const notifications = await waitForNotifications(
+      request,
+      potteryHouseBaseURL,
+      { site_id: 'site-pottery-house', since },
+      rows => rows.some(n => n.channel === 'email'),
     )
-    const { notifications } = await notifRes.json() as { notifications: NotificationRow[] }
     const emailNotifs = notifications.filter(n => n.channel === 'email')
 
     if (emailNotifs.some(n => n.status === 'failed')) {

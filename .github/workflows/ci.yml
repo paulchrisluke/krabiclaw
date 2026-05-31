@@ -61,9 +61,18 @@ jobs:
             node --check "$f" && echo "✓ $f" || exit 1
           done
 
-  e2e-smoke:
-    name: E2E smoke
+  e2e:
+    name: E2E ${{ matrix.suite }}
+    if: matrix.suite != 'full' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: smoke
+            cmd: test:e2e:smoke
+          - suite: full
+            cmd: test:e2e:full
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -79,28 +88,38 @@ jobs:
           yarn seed:local
           yarn seed:pottery-local
       - run: npx playwright install --with-deps chromium
-      - run: yarn test:e2e:smoke
+      - run: yarn ${{ matrix.cmd }}
 
-  e2e-full:
-    name: E2E full
+  prod-smoke:
+    name: Production smoke
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    needs: [e2e]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - name: Prepare local D1 fixture data
+      - name: Check Pottery House + platform public routes
+        shell: bash
         run: |
-          yarn schema:local
-          yarn seed:local
-          yarn seed:pottery-local
-      - run: npx playwright install --with-deps chromium
-      - run: yarn test:e2e:full
+          set -euo pipefail
+          pottery_hosts=("https://www.potteryhousekrabi.com" "https://pottery-house.krabiclaw.com")
+          pottery_routes=("/" "/experiences" "/experiences/pottery-wheel-class" "/about" "/contact")
+
+          for host in "${pottery_hosts[@]}"; do
+            echo "== ${host} =="
+            for route in "${pottery_routes[@]}"; do
+              url="${host}${route}"
+              code=$(curl -L -s -o /tmp/page.html -w "%{http_code}" "${url}")
+              title=$(grep -o '<title>.*</title>' /tmp/page.html | head -n1 | sed -E 's#</?title>##g' || true)
+              echo "${route} -> ${code} | ${title:-<no-title>}"
+              [[ "${code}" -lt 400 ]] || (echo "Route failed: ${url}" && exit 1)
+            done
+          done
+
+          for url in "https://krabiclaw.com/" "https://krabiclaw.com/blog"; do
+            code=$(curl -L -s -o /tmp/page.html -w "%{http_code}" "${url}")
+            title=$(grep -o '<title>.*</title>' /tmp/page.html | head -n1 | sed -E 's#</?title>##g' || true)
+            echo "${url} -> ${code} | ${title:-<no-title>}"
+            [[ "${code}" -lt 400 ]] || (echo "Route failed: ${url}" && exit 1)
+          done
 
 # ── Pottery House fixture ─────────────────────────────────────────────────────
 # The fixture (yarn fixture:pottery-house) requires a running site — it cannot
