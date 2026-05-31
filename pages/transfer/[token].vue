@@ -69,27 +69,32 @@
             </div>
 
             <!-- Pricing block -->
-            <div v-if="transfer.invited_plan" class="rounded-xl border border-default bg-elevated p-4">
-              <p class="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{{ planName }} plan</p>
-              <template v-if="transfer.pricing">
-                <!-- Discounted price -->
-                <template v-if="transfer.pricing.discounted_cents !== null">
-                  <div class="flex items-baseline gap-2">
-                    <span class="text-2xl font-bold text-highlighted">${{ (transfer.pricing.discounted_cents / 100).toFixed(2) }}<span class="text-base font-normal text-muted">/mo</span></span>
-                    <span class="text-sm text-muted line-through">${{ (transfer.pricing.base_cents / 100).toFixed(0) }}</span>
-                  </div>
-                  <p class="text-xs text-muted mt-1">
-                    <template v-if="transfer.pricing.coupon_duration === 'forever'">locked in forever</template>
-                    <template v-else-if="transfer.pricing.coupon_duration === 'repeating' && transfer.pricing.coupon_duration_months">for {{ transfer.pricing.coupon_duration_months }} months, then ${{ (transfer.pricing.base_cents / 100).toFixed(0) }}/mo</template>
-                    <template v-else>first month, then ${{ (transfer.pricing.base_cents / 100).toFixed(0) }}/mo</template>
+            <div v-if="matchedPlan" class="mt-8">
+              <BillingPlanCard :plan="matchedPlan" :annual="false">
+                <template #cta>
+                  <template v-if="transfer.pricing && transfer.pricing.discounted_cents !== null">
+                    <div class="bg-primary/5 border border-primary/20 rounded-xl px-4 py-3 mb-4 text-center">
+                      <div class="flex items-baseline justify-center gap-2">
+                        <span class="text-xl font-bold text-highlighted">${{ (transfer.pricing.discounted_cents / 100).toFixed(2) }}<span class="text-sm font-normal text-muted">/mo</span></span>
+                        <span class="text-xs text-muted line-through">${{ (transfer.pricing.base_cents / 100).toFixed(0) }}</span>
+                      </div>
+                      <p class="text-[11px] text-primary mt-1 font-semibold uppercase tracking-wide">
+                        <template v-if="transfer.pricing.coupon_duration === 'forever'">locked in forever</template>
+                        <template v-else-if="transfer.pricing.coupon_duration === 'repeating' && transfer.pricing.coupon_duration_months">for {{ transfer.pricing.coupon_duration_months }} months</template>
+                        <template v-else>first month</template>
+                      </p>
+                    </div>
+                  </template>
+                  <p class="text-center text-xs text-muted mt-2">
+                    <template v-if="transfer.invited_domain">
+                      Review your site today. An active plan is required to keep your custom domain live.
+                    </template>
+                    <template v-else>
+                      Review your site today. Subscribe when you're ready to launch.
+                    </template>
                   </p>
                 </template>
-                <!-- Full price, no coupon -->
-                <template v-else>
-                  <span class="text-2xl font-bold text-highlighted">${{ (transfer.pricing.base_cents / 100).toFixed(0) }}<span class="text-base font-normal text-muted">/mo</span></span>
-                </template>
-              </template>
-              <p class="text-xs text-muted mt-2">No charge today — subscribe when you're happy with it.</p>
+              </BillingPlanCard>
             </div>
           </div>
 
@@ -241,6 +246,12 @@ const emailMatches = computed(() => {
 const planName = computed(() => {
   if (!transfer.value?.invited_plan) return ''
   return PLAN_NAMES[transfer.value.invited_plan] ?? transfer.value.invited_plan
+})
+
+const { plans } = usePlans()
+const matchedPlan = computed(() => {
+  if (!transfer.value?.invited_plan || !plans.value) return null
+  return plans.value.find(p => p.id === transfer.value?.invited_plan) || null
 })
 
 const iframeUrl = computed(() => {

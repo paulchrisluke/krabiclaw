@@ -1,0 +1,147 @@
+{
+  "home": {
+    "highlights": "โพสต์และรูปภาพล่าสุด",
+    "reviews": "รีวิวและคะแนนจากแขก"
+  },
+  "legal": {
+    "privacy": "นโยบายความเป็นส่วนตัว",
+    "terms": "ข้อกำหนดการใช้งาน"
+  },
+  "saya": {
+    "hero": {
+      "established": "ก่อตั้งปี {year}"
+    },
+    "header": {
+      "menu": "เมนู",
+      "locations": "สาขา",
+      "reservations": "จองโต๊ะ",
+      "experiences": "กิจกรรม",
+      "contact": "ติดต่อ",
+      "order_now": "สั่งเลย",
+      "open_navigation": "เปิดเมนูนำทาง",
+      "close_navigation": "ปิดเมนูนำทาง",
+      "nav_aria": "การนำทางหลัก",
+      "mobile_nav_aria": "การนำทางบนมือถือ"
+    },
+    "footer": {
+      "locations_error": "ไม่สามารถโหลดข้อมูลสาขาได้ กรุณาลองใหม่อีกครั้ง",
+      "visit_page": "ดูหน้าสาขา →",
+      "heading_experience": "ประสบการณ์",
+      "heading_discover": "ค้นพบ",
+      "heading_connect": "ติดต่อ",
+      "menu": "เมนู",
+      "experiences": "กิจกรรม",
+      "gallery": "แกลเลอรี",
+      "our_story": "เรื่องราวของเรา",
+      "reviews": "รีวิว",
+      "latest_updates": "อัปเดตล่าสุด",
+      "qa": "ถาม-ตอบ",
+      "all_locations": "ทุกสาขา",
+      "contact_us": "ติดต่อเรา",
+      "order_online": "สั่งออนไลน์",
+      "powered_by": "ขับเคลื่อนโดย krabiclaw.com"
+    },
+    "posts": {
+      "title": "อัปเดตล่าสุด",
+      "subtitle": "ข่าวสารและกิจกรรม",
+      "no_preview": "ไม่มีตัวอย่าง",
+      "badge": {
+        "event": "กิจกรรม",
+        "offer": "โปรโมชั่น",
+        "update": "อัปเดต"
+      },
+      "image_alt": "อัปเดตจากเรา",
+      "business_update": "อัปเดตธุรกิจ",
+      "event_details_label": "รายละเอียดกิจกรรม:",
+      "special_offer_label": "โปรโมชั่นพิเศษ:",
+      "code_label": "รหัส:",
+      "read_full_story": "อ่านเพิ่มเติม",
+      "view_all": "ดูอัปเดตทั้งหมด"
+    },
+    "reviews": {
+      "title": "ประสบการณ์ของแขก",
+      "subtitle": "แขกของเราพูดว่าอะไร",
+      "stars_aria": "{rating} จาก 5 ดาว",
+      "rating_summary": "{average} / 5.0 จาก {count} รีวิว",
+      "response_label": "การตอบกลับจากเรา:",
+      "empty_title": "ยังไม่มีรีวิว",
+      "empty_desc": "เป็นคนแรกที่แบ่งปันประสบการณ์ของคุณกับเรา",
+      "view_all": "ดูรีวิวทั้งหมด",
+      "anonymous": "ไม่ระบุชื่อ"
+    },
+    "subnav": {
+      "overview": "ภาพรวม",
+      "menu": "เมนู",
+      "reviews": "รีวิว",
+      "photos": "รูปภาพ",
+      "qa": "ถาม-ตอบ",
+      "visit": "เยี่ยมชม"
+    },
+    "cta": {
+      "order_now": "สั่งเลย",
+      "reserve": "จองเลย"
+    },
+    "upgrade": {
+      "pro_feature": "ฟีเจอร์พิเศษ",
+      "default_description": "ฟีเจอร์นี้ต้องการแผนแบบชำระเงิน",
+      "close_modal": "ปิด",
+      "get_pro": "อัปเกรด",
+      "features": {
+        "qa-writeback": {
+          "title": "ส่งคำถาม",
+          "description": "ให้แขกส่งคำถามโดยตรงจากเว็บไซต์ของคุณ ซิงก์กลับไปยัง Google Business Q&A รวมอยู่ในแผน Growth"
+        },
+        "custom-domain": {
+          "title": "โดเมนของคุณเอง",
+          "description": "เชื่อมต่อโดเมนของคุณเอง (yourdomain.com) แทนโดเมน krabiclaw.com รวมอยู่ในแผน Growth"
+        },
+        "add-location": {
+          "title": "เพิ่มสาขาที่สอง",
+          "description": "จัดการหลายสาขาภายใต้แบรนด์เดียว แต่ละสาขามีเมนู รีวิว และเวลาทำการของตนเอง รวมอยู่ในแผน Managed"
+        },
+        "connect-gmb": {
+          "title": "เชื่อมต่อ Google Business",
+          "description": "ซิงก์เวลาทำการ รีวิว รูปภาพ และโพสต์โดยอัตโนมัติจาก Google Business Profile รวมอยู่ในแผน Growth"
+        },
+        "google-business-sync": {
+          "title": "ซิงก์ Google Business",
+          "description": "ซิงก์ข้อมูล Google Business โดยอัตโนมัติพร้อมยังคงสามารถแก้ไขด้วยตัวเองได้ รวมอยู่ในแผน Growth"
+        },
+        "remove-branding": {
+          "title": "ลบโลโก้ KrabiClaw",
+          "description": "ลบแถบ \"ขับเคลื่อนโดย krabiclaw.com\" ออกจากเว็บไซต์ของคุณ รวมอยู่ในแผน Managed"
+        }
+      },
+      "bullets": {
+        "gmb_1": "เติมข้อมูล Google Business โดยอัตโนมัติเมื่อเชื่อมต่อ",
+        "gmb_2": "ยังคงสามารถแก้ไขด้วยตัวเองได้ในตัวแก้ไขเนื้อหา",
+        "gmb_3": "ซิงก์รายละเอียดธุรกิจ เวลาทำการ รูปภาพ รีวิว และโพสต์",
+        "domain_1": "เชื่อมต่อโดเมนของคุณเอง",
+        "domain_2": "ใช้ใบรับรอง HTTPS ที่จัดการให้",
+        "domain_3": "คง krabiclaw.com subdomain ของคุณไว้",
+        "default_1": "ปลดล็อกฟีเจอร์นี้",
+        "default_2": "จัดการได้จากแดชบอร์ด",
+        "default_3": "คงการตั้งค่าเว็บไซต์ปัจจุบันของคุณ"
+      }
+    },
+    "about": {
+      "our_story": "เรื่องราวของเรา",
+      "placeholder": "ประสบการณ์แท้จริง",
+      "default_description": "ค้นพบสิ่งที่ทำให้เราแตกต่างและมาสัมผัสด้วยตัวเอง",
+      "image_alt": "เกี่ยวกับเรา",
+      "quote": "แขกมีความสุข เราก็มีความสุข",
+      "cta": "อ่านเรื่องราวของเรา"
+    },
+    "qa": {
+      "title": "ถาม-ตอบ",
+      "subtitle": "คำถามที่พบบ่อย",
+      "google_guest": "แขก Google",
+      "asked_by": "ถามโดย {author} • {date}",
+      "response_from_restaurant": "การตอบกลับ • {date}",
+      "no_answer": "ยังไม่มีคำตอบ",
+      "empty_title": "ยังไม่มีคำถาม",
+      "empty_prompt": "มีคำถามไหม? ถามเราได้เลย เรายินดีช่วยเสมอ",
+      "view_all": "ดูคำถามทั้งหมด"
+    }
+  }
+}

@@ -38,3 +38,4 @@ archive/
 
 # Client import manifests and generated seed previews (review locally, don't commit)
 client-imports/
+.lighthouseci/*

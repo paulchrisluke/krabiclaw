@@ -82,34 +82,34 @@
       "reserve": "Reserve"
     },
     "upgrade": {
-      "pro_feature": "Pro feature",
-      "default_description": "This feature is available on the Pro plan.",
+      "pro_feature": "Paid feature",
+      "default_description": "This feature requires a paid plan.",
       "close_modal": "Close modal",
-      "get_pro": "Get Pro",
+      "get_pro": "Upgrade",
       "features": {
         "qa-writeback": {
           "title": "Ask a question",
-          "description": "Let guests submit questions directly from your site, synced back to Google Business Q&A. Included in Pro."
+          "description": "Let guests submit questions directly from your site, synced back to Google Business Q&A. Included in Growth."
         },
         "custom-domain": {
           "title": "Custom domain",
-          "description": "Connect your own domain (yourdomain.com) instead of a krabiclaw.com subdomain. Included in Pro."
+          "description": "Connect your own domain (yourdomain.com) instead of a krabiclaw.com subdomain. Included in Growth."
         },
         "add-location": {
           "title": "Add a second location",
-          "description": "Manage multiple locations under one brand site, each with their own menu, reviews, and hours. Included in Pro."
+          "description": "Manage multiple locations under one brand site, each with their own menu, reviews, and hours. Included in Managed."
         },
         "connect-gmb": {
           "title": "Connect Google Business",
-          "description": "Sync hours, reviews, photos, and posts automatically from your Google Business Profile. Included in Pro."
+          "description": "Sync hours, reviews, photos, and posts automatically from your Google Business Profile. Included in Growth."
         },
         "google-business-sync": {
           "title": "Google Business sync",
-          "description": "Auto-sync Google Business fields while keeping manual edits available in the site editor. Included in Pro."
+          "description": "Auto-sync Google Business fields while keeping manual edits available in the site editor. Included in Growth."
         },
         "remove-branding": {
           "title": "Remove KrabiClaw branding",
-          "description": "Remove the \"Powered by krabiclaw.com\" footer strip from your tenant site. Included in Pro."
+          "description": "Remove the \"Powered by krabiclaw.com\" footer strip from your tenant site. Included in Managed."
         }
       },
       "bullets": {
@@ -119,7 +119,7 @@
         "domain_1": "Connect your own domain",
         "domain_2": "Use managed HTTPS certificates",
         "domain_3": "Keep your krabiclaw.com subdomain available",
-        "default_1": "Unlock this Pro workflow",
+        "default_1": "Unlock this feature",
         "default_2": "Manage it from the dashboard",
         "default_3": "Keep the rest of your current site setup"
       }
@@ -127,7 +127,7 @@
     "about": {
       "our_story": "Our Story",
       "placeholder": "Authentic Experience",
-      "default_description": "Experience the essence of Japanese culinary tradition in the heart of Krabi.",
+      "default_description": "Discover what makes us unique and come experience it for yourself.",
       "image_alt": "About our restaurant",
       "quote": "Happy Guest, Happy Restaurant",
       "cta": "Our Full Story"
@@ -140,7 +140,7 @@
       "response_from_restaurant": "Response from Restaurant • {date}",
       "no_answer": "No answer yet.",
       "empty_title": "No questions yet.",
-      "empty_prompt": "Got a question? Ask us anything about our menu or service.",
+      "empty_prompt": "Got a question? Ask us anything and we'll be happy to help.",
       "view_all": "View All Q&A"
     }
   }

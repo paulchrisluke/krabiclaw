@@ -1,7 +1,7 @@
 // Stripe product/price seeder for managed service plans.
 // Run: node scripts/seed-stripe.mjs
 // Requires STRIPE_SECRET_KEY in .env (reads via dotenv-style manual parse).
-import { readFileSync } from 'node:fs'
+import { readFileSync, createReadStream, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import Stripe from 'stripe'
 
@@ -57,37 +57,67 @@ async function archiveOldPlans() {
   }
 }
 
+// --- Upload local image to Stripe ---
+async function uploadProductImage(localPath) {
+  if (!localPath || !existsSync(localPath)) {
+    if (localPath) console.warn(`  Image not found at path: ${localPath}`);
+    return null;
+  }
+  console.log(`  Uploading image: ${localPath}`);
+  try {
+    const file = await stripe.files.create({
+      purpose: 'product_image',
+      file: {
+        data: createReadStream(localPath),
+        name: localPath.split('/').pop(),
+        type: 'application/octet-stream'
+      }
+    });
+    const fileLink = await stripe.fileLinks.create({
+      file: file.id
+    });
+    return fileLink.url;
+  } catch (err) {
+    console.error('  Failed to upload image:', err.message);
+    return null;
+  }
+}
+
 // --- Create or update recurring subscription plans ---
-async function createSubscriptionPlan({ name, description, planId, amountCents, highlighted, badge, features }) {
+async function createSubscriptionPlan({ name, description, planId, amountCents, highlighted, badge, features, imagePath }) {
   console.log(`\nUpserting plan: ${name} ($${amountCents / 100}/mo)`)
+
+  let imageUrl = null;
+  if (imagePath) {
+    imageUrl = await uploadProductImage(imagePath);
+  }
 
   const existing = await stripe.products.list({ active: true, limit: 100 })
   const match = existing.data.find(p => p.metadata?.plan_id === planId)
 
+  const updateData = {
+    description,
+    marketing_features: features.map(f => ({ name: f })),
+    metadata: {
+      plan_id: planId,
+      highlighted: highlighted ? 'true' : 'false',
+      ...(badge ? { badge } : {}),
+    },
+  }
+  if (imageUrl) {
+    updateData.images = [imageUrl]
+  }
+
   if (match) {
     // Update description and marketing_features on existing product
-    await stripe.products.update(match.id, {
-      description,
-      marketing_features: features.map(f => ({ name: f })),
-      metadata: {
-        plan_id: planId,
-        highlighted: highlighted ? 'true' : 'false',
-        ...(badge ? { badge } : {}),
-      },
-    })
+    await stripe.products.update(match.id, updateData)
     console.log(`  Updated: ${match.id}`)
     return match
   }
 
   const product = await stripe.products.create({
     name,
-    description,
-    metadata: {
-      plan_id: planId,
-      highlighted: highlighted ? 'true' : 'false',
-      ...(badge ? { badge } : {}),
-    },
-    marketing_features: features.map(f => ({ name: f })),
+    ...updateData
   })
 
   await stripe.prices.create({
@@ -162,6 +192,7 @@ async function main() {
     planId: 'growth',
     amountCents: 4900,
     highlighted: false,
+    imagePath: '/Users/paulchrisluke/Downloads/growth.png',
     features: [
       'AI-built site live in minutes',
       'Your own domain (yourrestaurant.com)',
@@ -180,6 +211,7 @@ async function main() {
     amountCents: 14900,
     highlighted: true,
     badge: 'Best Value',
+    imagePath: '/Users/paulchrisluke/Downloads/managed.png',
     features: [
       'Everything in Growth, plus:',
       'We manage all content — no login needed',
