@@ -67,29 +67,50 @@ const MIME_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/
 // --- Upload local image to Stripe ---
 async function uploadProductImage(localPath) {
   if (!localPath || !existsSync(localPath)) {
-    if (localPath) console.warn(`  Image not found at path: ${localPath}`);
-    return null;
+    if (localPath) console.warn(`  Image not found at path: ${localPath}`)
+    return null
   }
-  console.log(`  Uploading image: ${localPath}`);
+  console.log(`  Uploading image: ${localPath}`)
   try {
-    const file = await stripe.files.create({
-      purpose: 'product_image',
-      file: {
-        data: createReadStream(localPath),
-        name: basename(localPath),
-        type: MIME_TYPES[extname(localPath).toLowerCase()] ?? 'application/octet-stream',
-      }
-    });
-    // Create a file link with a long expiry (5 years) to reduce accidental expiration.
-    const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365 * 5
-    const fileLink = await stripe.fileLinks.create({
-      file: file.id,
-      expires_at: expiresAt,
-    });
-    return fileLink.url;
+    const ext = extname(localPath).toLowerCase()
+    const mimeTypes = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' }
+    const mimeType = mimeTypes[ext] ?? 'image/png'
+    const fileData = readFileSync(localPath)
+    const filename = basename(localPath)
+
+    const form = new FormData()
+    form.append('purpose', 'product_image')
+    form.append('file', new Blob([fileData], { type: mimeType }), filename)
+
+    const response = await fetch('https://files.stripe.com/v1/files', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
+      body: form,
+    })
+    const result = await response.json()
+    if (!response.ok) {
+      console.error('  Failed to upload image:', result?.error?.message ?? JSON.stringify(result))
+      return null
+    }
+    // Create a public file link
+    const linkResponse = await fetch('https://api.stripe.com/v1/file_links', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: `file=${result.id}`,
+    })
+    const link = await linkResponse.json()
+    if (!linkResponse.ok) {
+      console.error('  Failed to create file link:', link?.error?.message ?? JSON.stringify(link))
+      return null
+    }
+    console.log(`  Uploaded image: ${link.url}`)
+    return link.url
   } catch (err) {
-    console.error('  Failed to upload image:', err.message);
-    return null;
+    console.error('  Failed to upload image:', err.message)
+    return null
   }
 }
 
@@ -97,13 +118,9 @@ async function uploadProductImage(localPath) {
 async function createSubscriptionPlan({ name, description, planId, amountCents, highlighted, badge, features, imagePath }) {
   console.log(`\nUpserting plan: ${name} ($${amountCents / 100}/mo)`)
 
-  // Check for existing product first to avoid unnecessary file uploads on every update.
-  const existing = await stripe.products.list({ active: true, limit: 100 })
-  const match = existing.data.find(p => p.metadata?.plan_id === planId)
-
-  // Reuse existing product image; only upload when creating a new product.
-  let imageUrl = match?.images?.[0] ?? null
-  if (!match && imagePath) {
+  // Always upload the image so products get updated images even if they already exist.
+  let imageUrl = null
+  if (imagePath) {
     imageUrl = await uploadProductImage(imagePath)
   }
 
@@ -119,6 +136,9 @@ async function createSubscriptionPlan({ name, description, planId, amountCents, 
   if (imageUrl) {
     updateData.images = [imageUrl]
   }
+
+  const existing = await stripe.products.list({ active: true, limit: 100 })
+  const match = existing.data.find(p => p.metadata?.plan_id === planId)
 
   if (match) {
     // Update description and marketing_features on existing product
@@ -204,11 +224,12 @@ async function main() {
     planId: 'growth',
     amountCents: 4900,
     highlighted: false,
-    imagePath: resolve(IMAGES_DIR, 'growth.png'),
+    imagePath: '/Users/paulchrisluke/Downloads/growth.png',
     features: [
       'AI-built site live in minutes',
       'Your own domain (yourbusiness.com)',
       'WhatsApp content & hours updates — we handle it',
+      'Auto-sync from Facebook, Google & Instagram',
       'Bookings, experiences & ordering links',
       'Booking notifications via WhatsApp or email',
       '1 language translation by our team',
@@ -223,12 +244,12 @@ async function main() {
     amountCents: 14900,
     highlighted: true,
     badge: 'Best Value',
-    imagePath: resolve(IMAGES_DIR, 'managed.png'),
+    imagePath: '/Users/paulchrisluke/Downloads/managed.png',
     features: [
       'Everything in Growth, plus:',
       'We manage all content — no login needed',
       'Unlimited language translations',
-      'Facebook auto-sync for posts and content',
+      'Auto-sync content from all your social channels',
       'Full Google Business profile management',
       'Priority WhatsApp support from Paul & Julia',
     ],

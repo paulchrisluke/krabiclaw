@@ -47,7 +47,7 @@
       <div class="lg:grid lg:grid-cols-2 lg:min-h-screen">
 
         <!-- Left: claim panel -->
-        <div class="flex flex-col justify-center px-8 py-12 lg:px-12 max-w-lg mx-auto w-full lg:order-1 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto bg-default border-r border-default">
+        <div class="flex flex-col px-8 py-12 lg:px-12 max-w-lg mx-auto w-full lg:order-1 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto bg-default border-r border-default">
 
           <!-- Kicker -->
           <span class="self-start inline-flex items-center gap-2 text-[11px] font-bold tracking-[0.3em] uppercase text-(--kc-teal-600) bg-(--kc-teal-100) px-3.5 py-1.5 rounded-full mb-6">
@@ -72,49 +72,27 @@
             </div>
 
             <!-- Pricing block -->
-            <div v-if="transfer.invited_plan" class="relative overflow-hidden rounded-[24px] border border-default/70 bg-elevated/70 backdrop-blur-md p-6 shadow-sm mt-8">
-              <div class="absolute -top-12 -right-12 w-32 h-32 bg-primary/10 rounded-full blur-2xl opacity-60 pointer-events-none"></div>
-              <div class="absolute -bottom-12 -left-12 w-32 h-32 bg-(--kc-teal)/10 rounded-full blur-2xl opacity-40 pointer-events-none"></div>
-              
-              <div class="relative z-10">
-                <p class="text-[11px] font-black tracking-widest uppercase text-primary mb-4">{{ planName }} plan</p>
-              
-              <!-- Features -->
-              <ul v-if="matchedPlan?.features?.length" class="mb-6 space-y-2.5">
-                <li v-for="feat in matchedPlan.features" :key="feat" class="flex items-start gap-2.5 text-sm text-default">
-                  <UIcon name="i-heroicons-check-circle" class="size-4 text-primary mt-0.5 shrink-0" />
-                  <span>{{ feat }}</span>
-                </li>
-              </ul>
-
-              <template v-if="transfer.pricing">
-                <!-- Discounted price -->
-                <template v-if="transfer.pricing.discounted_cents !== null">
-                  <div class="flex items-baseline gap-2">
-                    <span class="text-2xl font-bold text-highlighted">${{ (transfer.pricing.discounted_cents / 100).toFixed(2) }}<span class="text-base font-normal text-muted">/mo</span></span>
-                    <span class="text-sm text-muted line-through">${{ (transfer.pricing.base_cents / 100).toFixed(0) }}</span>
+            <div v-if="matchedPlan" class="mt-8">
+              <BillingPlanCard :plan="matchedPlan" :annual="false">
+                <template #cta>
+                  <!-- Custom discount callout if applicable -->
+                  <div v-if="transfer.pricing && transfer.pricing.discounted_cents !== null" class="mb-4 bg-primary/5 border border-primary/20 rounded-xl px-4 py-3 text-center">
+                    <div class="flex items-baseline justify-center gap-2">
+                      <span class="text-xl font-bold text-highlighted">${{ (transfer.pricing.discounted_cents / 100).toFixed(2) }}<span class="text-sm font-normal text-muted">/mo</span></span>
+                      <span class="text-xs text-muted line-through">${{ (transfer.pricing.base_cents / 100).toFixed(0) }}</span>
+                    </div>
+                    <p class="text-[11px] text-primary mt-1 font-semibold uppercase tracking-wide">
+                      <template v-if="transfer.pricing.coupon_duration === 'forever'">locked in forever</template>
+                      <template v-else-if="transfer.pricing.coupon_duration === 'repeating' && transfer.pricing.coupon_duration_months">for {{ transfer.pricing.coupon_duration_months }} months</template>
+                      <template v-else>first month</template>
+                    </p>
                   </div>
-                  <p class="text-xs text-muted mt-1">
-                    <template v-if="transfer.pricing.coupon_duration === 'forever'">locked in forever</template>
-                    <template v-else-if="transfer.pricing.coupon_duration === 'repeating' && transfer.pricing.coupon_duration_months">for {{ transfer.pricing.coupon_duration_months }} months, then ${{ (transfer.pricing.base_cents / 100).toFixed(0) }}/mo</template>
-                    <template v-else>first month, then ${{ (transfer.pricing.base_cents / 100).toFixed(0) }}/mo</template>
+                  <p class="text-center text-xs text-muted mt-2">
+                    <template v-if="transfer.invited_domain">An active plan is required to keep your custom domain live.</template>
+                    <template v-else>Subscribe when you're ready to launch.</template>
                   </p>
                 </template>
-                <!-- Full price, no coupon -->
-                <template v-else>
-                  <span class="text-2xl font-bold text-highlighted">${{ (transfer.pricing.base_cents / 100).toFixed(0) }}<span class="text-base font-normal text-muted">/mo</span></span>
-                </template>
-              </template>
-                  <p class="text-xs text-muted mt-3">
-                    <template v-if="transfer.invited_domain">
-                      Review your site today. An active plan is required to keep your custom domain live.
-                    </template>
-                    <template v-else>
-                      Review your site today. Subscribe when you're ready to launch.
-                    </template>
-                  </p>
-                </div>
-              </div>
+              </BillingPlanCard>
             </div>
 
           <!-- Auth section -->
