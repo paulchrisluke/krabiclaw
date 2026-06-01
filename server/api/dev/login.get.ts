@@ -16,7 +16,8 @@ async function hmacSign(value: string, secret: string): Promise<string> {
 }
 
 export default defineEventHandler(async (event) => {
-  if (!import.meta.dev) {
+  const allowDevRoute = import.meta.dev || process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  if (!allowDevRoute) {
     throw createError({ statusCode: 404, statusMessage: 'Not found' })
   }
 
