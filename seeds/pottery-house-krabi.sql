@@ -76,14 +76,13 @@ INSERT INTO business_locations (
   rating, review_count,
   price_level, categories,
   instagram_url, facebook_url,
-  google_place_id,
   is_primary, status
 ) VALUES (
   'loc-pottery-house', 'org-pottery-house', 'site-pottery-house', 'krabi', 'Pottery House Krabi', 'Krabi',
-  '{"addressLines":["157 Moo 3, Ban Khlong Muang"],"locality":"Krabi","administrativeArea":"Krabi","postalCode":"81000","country":"TH"}',
+  '{"addressLines":[""],"locality":"Krabi","administrativeArea":"Krabi","postalCode":"81000","country":"TH"}',
   '+66626505890',
   'bamboo.chow@gmail.com',
-  'https://maps.google.com/?q=place_id:ChIJ74PDozK_UTAR0bOE2r4Epr4',
+  'https://maps.app.goo.gl/pottery-house-krabi',
   8.0557285, 98.7504791,
   'Pottery House is a creative studio in Krabi where you can throw on the wheel, build by hand, glaze your pieces, and take something real home with you. All materials and firing are included. Whether you are a first-timer, a returning traveller, or someone looking for a slow creative routine while staying in Krabi, you are welcome here.',
   'Wheel throwing, handbuilding, and glazing classes in the heart of Krabi. All materials and firing included.',
@@ -93,14 +92,13 @@ INSERT INTO business_locations (
   '["Pottery Studio","Pottery Classes","Ceramic Workshop","Art Experience"]',
   'https://instagram.com/potteryclasseskrabi',
   NULL,
-  'ChIJ74PDozK_UTAR0bOE2r4Epr4',
   1, 'active'
 ), (
   'loc-pottery-beachfront', 'org-pottery-house', 'site-pottery-house', 'klong-muang-beach', 'Pottery House — Beachfront at Klong Muang', 'Krabi',
-  '{"addressLines":["49 Moo 3, Ban Nong Thale, Sea View, Klong Muang"],"locality":"Krabi","administrativeArea":"Krabi","postalCode":"81000","country":"TH"}',
+  '{"addressLines":["Sea View, Klong Muang"],"locality":"Krabi","administrativeArea":"Krabi","postalCode":"81000","country":"TH"}',
   '+66626505890',
   'bamboo.chow@gmail.com',
-  'https://www.google.com/maps/place/Beachfront+Pottery+Krabi/@8.0556415,98.7476018,17z/data=!4m7!3m6!1s0x3051bf001b03f635:0xafb40b8ba3d4f053!8m2!3d8.057425!4d98.7486163!15sCgdwb3R0ZXJ5WgkiB3BvdHRlcnmSAQ9wb3R0ZXJ5X2NsYXNzZXOaAURDaTlEUVVsUlFVTnZaRU5vZEhsalJqbHZUMnQwZEdJeWNHaFRNRFI1VkZaV2ExWlZXakZWYkVJeFUxZHdURTVYWXhBQuABAPoBBAhYEDg!16s%2Fg%2F11yfvr97vw',
+  'https://www.google.com/maps/place/Beachfront+Pottery+Krabi/@8.0556415,98.7476018,17z/data=!4m7!3m6!1s0x3051bf001b03f635:0xafb40b8ba3d4f053!8m2!3d8.057425!4d98.7486163!15sCgdwb3R0ZXJ5WgkiB3BvdHRlcnmSAQ9wb3R0ZXJ5X2NsYXNzZXOaAURDaTlEUVVsUlFVTnZaRU5vZEhsalJqbHZUMnQwZEdJeWNHaFRNRFI1VkZaV2ExWlZXakZWYkVJeFUxZHdURTVYWXhBQuABAPoBBAhYEDg!16s%2Fg%2F11yfvr97vw?entry=tts&g_ep=EgoyMDI2MDUyNS4wIPu8ASoASAFQAw%3D%3D&skid=1d6266f5-0075-4577-a084-27409b012140',
   8.057425, 98.7486163,
   'A pop-up beachfront pottery session at Sea View, Klong Muang. Throw on the wheel with the Gulf of Thailand in front of you. Limited seats, unforgettable setting.',
   'Beachfront wheel throwing sessions at Klong Muang beach. Limited seats.',
@@ -109,7 +107,6 @@ INSERT INTO business_locations (
   '฿฿',
   '["Pottery Studio","Beachfront Experience","Pottery Classes"]',
   'https://instagram.com/potteryclasseskrabi',
-  NULL,
   'ChIJNfYDGwC_UTARU_DUo4sLtK8',
   0, 'active'
 );
@@ -575,10 +572,3 @@ VALUES ('org-pottery-house', 500, 0, '2026-05-28T00:00:00.000Z');
 
 INSERT INTO organization_billing (id, organization_id, status, plan)
 VALUES ('billing-pottery-house', 'org-pottery-house', 'free', 'free');
-
--- Entitlements (Pottery House is on a managed plan)
-INSERT OR REPLACE INTO organization_entitlements (id, organization_id, key, value, source)
-VALUES
-  ('ent-org-pottery-house-managed_service',  'org-pottery-house', 'managed_service', 'true', 'system'),
-  ('ent-org-pottery-house-custom_domains',   'org-pottery-house', 'custom_domains',  'true', 'system'),
-  ('ent-org-pottery-house-google_business',  'org-pottery-house', 'google_business', 'true', 'system');
