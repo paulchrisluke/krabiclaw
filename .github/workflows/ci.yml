@@ -82,6 +82,7 @@ jobs:
       BETTER_AUTH_SECRET: test-secret-for-ci
       BETTER_AUTH_URL: http://localhost:3000
       E2E_ALLOW_DEV_ROUTES: "true"
+      E2E_DEV_ROUTE_SECRET: ci-dev-route-secret
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -111,6 +112,7 @@ jobs:
       BETTER_AUTH_SECRET: test-secret-for-ci
       BETTER_AUTH_URL: http://localhost:3000
       E2E_ALLOW_DEV_ROUTES: "true"
+      E2E_DEV_ROUTE_SECRET: ci-dev-route-secret
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:

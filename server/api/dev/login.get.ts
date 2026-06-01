@@ -3,6 +3,24 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 
+const textEncoder = new TextEncoder()
+
+function timingSafeEqualText(a: string, b: string): boolean {
+  const left = textEncoder.encode(a)
+  const right = textEncoder.encode(b)
+  if (left.length !== right.length) {
+    // Dummy pass to keep roughly consistent execution when lengths differ.
+    let noop = 0
+    for (let i = 0; i < left.length; i += 1) noop |= left[i]!
+    return false
+  }
+  let diff = 0
+  for (let i = 0; i < left.length; i += 1) {
+    diff |= left[i]! ^ right[i]!
+  }
+  return diff === 0
+}
+
 async function hmacSign(value: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
@@ -16,9 +34,21 @@ async function hmacSign(value: string, secret: string): Promise<string> {
 }
 
 export default defineEventHandler(async (event) => {
-  const allowDevRoute = import.meta.dev || process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const devMode = import.meta.dev
+  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const allowDevRoute = devMode || e2eOverride
   if (!allowDevRoute) {
     throw createError({ statusCode: 404, statusMessage: 'Not found' })
+  }
+  const query = getQuery(event)
+
+  // CI/E2E override must be explicitly authorized with a shared secret.
+  if (!devMode && e2eOverride) {
+    const expectedSecret = process.env.E2E_DEV_ROUTE_SECRET || ''
+    const providedSecret = getHeader(event, 'x-dev-route-secret') || String(query.secret || '')
+    if (!expectedSecret || !providedSecret || !timingSafeEqualText(providedSecret, expectedSecret)) {
+      throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
+    }
   }
 
   const env = cloudflareEnv(event)
@@ -28,7 +58,6 @@ export default defineEventHandler(async (event) => {
   const auth = createAuth(env)
   const ctx = await auth.$context
 
-  const query = getQuery(event)
   const userId = query.userId as string | undefined
 
   const user = userId

@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test'
+import { devLoginUrl } from './test-env'
 
 test.describe('pottery house dashboard', () => {
   test('workspace routes are healthy for owner, otherwise site access is denied', async ({ page, request, baseURL }) => {
-    const login = await request.get(`${baseURL}/api/dev/login`)
+    const login = await request.get(devLoginUrl(baseURL!))
     expect(login.status()).toBeLessThan(400)
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)

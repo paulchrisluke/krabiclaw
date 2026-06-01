@@ -68,3 +68,11 @@ export function potteryHouseTestBaseUrl() {
   }
   return base.toString().replace(/\/$/, '')
 }
+
+export function devLoginUrl(baseURL: string, userId?: string) {
+  const url = new URL('/api/dev/login', baseURL)
+  const secret = testEnv('E2E_DEV_ROUTE_SECRET')
+  if (secret) url.searchParams.set('secret', secret)
+  if (userId) url.searchParams.set('userId', userId)
+  return url.toString()
+}
