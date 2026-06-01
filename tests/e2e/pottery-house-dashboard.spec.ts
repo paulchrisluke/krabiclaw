@@ -2,11 +2,12 @@ import { expect, test } from '@playwright/test'
 import { devLoginHeaders, devLoginUrl } from './test-env'
 
 test.describe('pottery house dashboard', () => {
-  test('workspace routes are healthy for owner, otherwise site access is denied', async ({ page, request, baseURL }) => {
-    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
-    expect(login.status()).toBeLessThan(400)
+  test('workspace routes are healthy for owner, otherwise site access is denied', async ({ page, baseURL }) => {
+    await page.context().setExtraHTTPHeaders(devLoginHeaders() || {})
+    const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'networkidle' })
+    expect(login?.status()).toBeLessThan(400)
 
-    const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
+    const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json() as {
       organization?: { slug?: string | null }
@@ -33,7 +34,7 @@ test.describe('pottery house dashboard', () => {
     }
 
     // Otherwise, assert tenant isolation: this logged-in user cannot write to Pottery House directly.
-    const draftRes = await request.post(`${baseURL}/api/editor/sites/site-pottery-house/content/draft`, {
+    const draftRes = await page.request.post(`${baseURL}/api/editor/sites/site-pottery-house/content/draft`, {
       data: {
         page: 'home',
         changes: { 'hero.title': `Unauthorized test ${Date.now()}` },
