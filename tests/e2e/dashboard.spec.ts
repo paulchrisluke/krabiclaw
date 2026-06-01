@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { collectPageErrors } from './helpers'
+import { devLoginHeaders, devLoginUrl } from './test-env'
 
 function extractOrgSlug(url: string) {
   const pathname = new URL(url).pathname
@@ -12,8 +13,8 @@ function extractOrgSlug(url: string) {
 test.describe('dashboard functional smoke', () => {
   test('dev login opens the owner dashboard', async ({ page, baseURL }) => {
     const errors = collectPageErrors(page)
-
-    const login = await page.goto(`${baseURL}/api/dev/login`, { waitUntil: 'networkidle' })
+    await page.context().setExtraHTTPHeaders(devLoginHeaders() || {})
+    const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'networkidle' })
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
     await expect(page.locator('body')).toContainText(/Overview|Create your restaurant workspace/)
@@ -27,8 +28,8 @@ test.describe('dashboard functional smoke', () => {
 
   test('owner can open core dashboard pages for their org', async ({ page, baseURL }) => {
     const errors = collectPageErrors(page)
-
-    const login = await page.goto(`${baseURL}/api/dev/login`, { waitUntil: 'networkidle' })
+    await page.context().setExtraHTTPHeaders(devLoginHeaders() || {})
+    const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'networkidle' })
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
 
@@ -54,7 +55,7 @@ test.describe('dashboard functional smoke', () => {
   })
 
   test('dashboard APIs work after dev login', async ({ request, baseURL }) => {
-    const login = await request.get(`${baseURL}/api/dev/login`)
+    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
     expect(login.status()).toBeLessThan(400)
 
     const contextResponse = await request.get(`${baseURL}/api/dashboard/context`)
@@ -69,7 +70,7 @@ test.describe('dashboard functional smoke', () => {
   })
 
   test('owner can draft and publish content via dashboard API', async ({ request, baseURL }) => {
-    const login = await request.get(`${baseURL}/api/dev/login`)
+    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
     expect(login.status()).toBeLessThan(400)
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
@@ -108,7 +109,7 @@ test.describe('dashboard functional smoke', () => {
   })
 
   test('support work-request submission is enforced by plan entitlement', async ({ request, baseURL }) => {
-    const login = await request.get(`${baseURL}/api/dev/login`)
+    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
     expect(login.status()).toBeLessThan(400)
 
     const title = `E2E Work Request ${Date.now()}`

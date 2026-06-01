@@ -12,7 +12,27 @@ export const cleanString = (value: ApiValue, maxLength: number) =>
 
 export const cloudflareEnv = (event: H3Event): CloudflareEnv => ({
   ...process.env,
-  ...(event.context.cloudflare?.env ?? {})
+  ...(() => {
+    const env = event.context.cloudflare?.env as Record<string, unknown> | undefined
+    const requiredBindings = ['DB', 'MEDIA_BUCKET', 'SITE_CACHE', 'AI'] as const
+    const missing = requiredBindings.filter((key) => !env?.[key])
+
+    if (missing.length > 0) {
+      console.error(
+        `[cloudflareEnv] FATAL: Missing bindings: ${missing.join(', ')}. ` +
+        'Ensure wrangler.toml sets remote = false and Cloudflare dev bindings are active.'
+      )
+
+      if (process.env.CI === 'true') {
+        throw createError({
+          statusCode: 503,
+          statusMessage: `Cloudflare bindings missing: ${missing.join(', ')}`
+        })
+      }
+    }
+
+    return env ?? {}
+  })()
 } as CloudflareEnv)
-import type { H3Event } from 'h3'
+import { createError, type H3Event } from 'h3'
 import type { CloudflareEnv } from './auth'

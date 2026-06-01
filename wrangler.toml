@@ -34,14 +34,17 @@ binding = "DB"
 database_name = "krabiclaw-db"
 database_id = "0d0cd133-1914-48b1-b010-8fe574fede0c"
 migrations_dir = "migrations"
+remote = false
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "krabiclaw-media"
+remote = false
 
 [[kv_namespaces]]
 binding = "SITE_CACHE"
 id = "7fadf142e35745d6bec16b260eaab2f2"
+remote = false
 
 [ai]
 binding = "AI"

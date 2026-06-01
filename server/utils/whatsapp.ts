@@ -12,6 +12,7 @@ interface WhatsAppEnv {
 }
 
 const DEFAULT_MAX_WHATSAPP_MEDIA_BYTES = 20 * 1024 * 1024
+const DEFAULT_DASHBOARD_URL = 'https://krabiclaw.com/dashboard'
 
 interface MetaGraphErrorPayload {
   message?: string
@@ -60,6 +61,22 @@ interface TemplateButtonComponent {
 
 type TemplateComponent = TemplateBodyComponent | TemplateButtonComponent
 
+function cleanTemplateText(value: string | undefined, fallback: string, maxLen = 120): string {
+  const raw = String(value ?? '').replace(/\s+/g, ' ').trim()
+  if (raw) return raw.slice(0, maxLen)
+  // Process fallback the same way so returned string respects maxLen
+  const fb = String(fallback ?? '').replace(/\s+/g, ' ').trim()
+  return fb.slice(0, maxLen)
+}
+
+function normalizeTemplateVars(vars: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [key, val] of Object.entries(vars)) {
+    out[key] = String(val ?? '').replace(/\s+/g, ' ').trim()
+  }
+  return out
+}
+
 // Map our template names to Meta template names + variable builders.
 // Meta template names must match exactly what was approved in Business Manager.
 const TEMPLATES: Record<
@@ -73,7 +90,7 @@ const TEMPLATES: Record<
       type: 'body',
       parameters: [
         { type: 'text', text: v.site_name ?? 'your site' },
-        { type: 'text', text: v.url ?? '' },
+        { type: 'text', text: cleanTemplateText(v.url, DEFAULT_DASHBOARD_URL, 200) },
       ],
     }],
   }),
@@ -85,7 +102,7 @@ const TEMPLATES: Record<
       parameters: [
         { type: 'text', text: v.rating ?? '5' },
         { type: 'text', text: v.site_name ?? 'your site' },
-        { type: 'text', text: (v.excerpt ?? '').slice(0, 100) },
+        { type: 'text', text: cleanTemplateText(v.excerpt, 'Open dashboard for full review.', 100) },
       ],
     }],
   }),
@@ -95,8 +112,8 @@ const TEMPLATES: Record<
     components: [{
       type: 'body',
       parameters: [
-        { type: 'text', text: v.action_summary ?? 'AI task' },
-        { type: 'text', text: v.preview_url ?? '' },
+        { type: 'text', text: cleanTemplateText(v.action_summary, 'AI task completed') },
+        { type: 'text', text: cleanTemplateText(v.preview_url, DEFAULT_DASHBOARD_URL, 200) },
       ],
     }],
   }),
@@ -106,8 +123,8 @@ const TEMPLATES: Record<
     components: [{
       type: 'body',
       parameters: [
-        { type: 'text', text: v.credits_remaining ?? '0' },
-        { type: 'text', text: v.upgrade_url ?? 'https://krabiclaw.com/dashboard' },
+        { type: 'text', text: cleanTemplateText(v.credits_remaining, '0', 32) },
+        { type: 'text', text: cleanTemplateText(v.upgrade_url, DEFAULT_DASHBOARD_URL, 200) },
       ],
     }],
   }),
@@ -117,9 +134,9 @@ const TEMPLATES: Record<
     components: [{
       type: 'body',
       parameters: [
-        { type: 'text', text: v.guest_name ?? 'A guest' },
-        { type: 'text', text: v.email ?? '' },
-        { type: 'text', text: (v.message_preview ?? '').slice(0, 100) },
+        { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
+        { type: 'text', text: cleanTemplateText(v.email, 'No email provided', 120) },
+        { type: 'text', text: cleanTemplateText(v.message_preview, 'No message preview', 100) },
       ],
     }],
   }),
@@ -129,11 +146,11 @@ const TEMPLATES: Record<
     components: [{
       type: 'body',
       parameters: [
-        { type: 'text', text: v.guest_name ?? 'A guest' },
-        { type: 'text', text: v.date ?? '' },
-        { type: 'text', text: v.time ?? '' },
-        { type: 'text', text: v.guests ?? '?' },
-        { type: 'text', text: v.phone ?? '' },
+        { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
+        { type: 'text', text: cleanTemplateText(v.date, 'Date pending', 40) },
+        { type: 'text', text: cleanTemplateText(v.time, 'Time pending', 40) },
+        { type: 'text', text: cleanTemplateText(v.guests, 'Unknown', 24) },
+        { type: 'text', text: cleanTemplateText(v.phone, 'No phone provided', 40) },
       ],
     }],
   }),
@@ -143,11 +160,11 @@ const TEMPLATES: Record<
     components: [{
       type: 'body',
       parameters: [
-        { type: 'text', text: v.guest_name ?? 'A guest' },
-        { type: 'text', text: v.date ?? '' },
-        { type: 'text', text: v.time ?? '' },
-        { type: 'text', text: v.guests ?? '?' },
-        { type: 'text', text: v.phone ?? '' },
+        { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
+        { type: 'text', text: cleanTemplateText(v.date, 'Date pending', 40) },
+        { type: 'text', text: cleanTemplateText(v.time, 'Time pending', 40) },
+        { type: 'text', text: cleanTemplateText(v.guests, 'Unknown', 24) },
+        { type: 'text', text: cleanTemplateText(v.phone, 'No phone provided', 40) },
       ],
     }],
   }),
@@ -157,9 +174,9 @@ const TEMPLATES: Record<
     components: [{
       type: 'body',
       parameters: [
-        { type: 'text', text: v.domain ?? 'your domain' },
-        { type: 'text', text: v.status ?? 'updated' },
-        { type: 'text', text: v.dashboard_url ?? 'https://krabiclaw.com/dashboard' },
+        { type: 'text', text: cleanTemplateText(v.domain, 'your domain', 120) },
+        { type: 'text', text: cleanTemplateText(v.status, 'updated', 40) },
+        { type: 'text', text: cleanTemplateText(v.dashboard_url, DEFAULT_DASHBOARD_URL, 200) },
       ],
     }],
   }),
@@ -170,7 +187,7 @@ const TEMPLATES: Record<
       {
         type: 'body',
         parameters: [
-          { type: 'text', text: v.code ?? '' },
+          { type: 'text', text: cleanTemplateText(v.code, '', 12) },
         ],
       },
       {
@@ -178,7 +195,7 @@ const TEMPLATES: Record<
         sub_type: 'url',
         index: '0',
         parameters: [
-          { type: 'text', text: v.code ?? '' },
+          { type: 'text', text: cleanTemplateText(v.code, '', 12) },
         ],
       },
     ],
@@ -221,7 +238,7 @@ export async function sendWhatsAppNotification(
   const notificationId = crypto.randomUUID()
   const now = new Date().toISOString()
   const normalizedPhone = normalizePhone(opts.toPhone)
-  const vars = opts.vars ?? {}
+  const vars = normalizeTemplateVars(opts.vars ?? {})
 
   // Insert pending row first so we always have a record even if the send fails
   await db.prepare(`

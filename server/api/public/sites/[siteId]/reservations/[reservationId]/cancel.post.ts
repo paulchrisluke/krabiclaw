@@ -58,6 +58,32 @@ export default defineEventHandler(async (event) => {
 
   const tokenHash = await hashReservationCancelToken(token)
   const now = new Date().toISOString()
+  const cancellable = await db.prepare(`
+    SELECT organization_id, site_id, name, email, phone, date, time, guests, status
+    FROM reservation_submissions
+    WHERE id = ?
+      AND site_id = ?
+      AND cancellation_token_hash = ?
+      AND cancellation_token_used_at IS NULL
+      AND cancellation_token_expires_at > ?
+      AND status IN ('new', 'confirmed')
+    LIMIT 1
+  `).bind(reservationId, siteId, tokenHash, now).first<{
+    organization_id: string
+    site_id: string
+    name: string
+    email: string
+    phone: string
+    date: string
+    time: string
+    guests: string
+    status: 'new' | 'confirmed'
+  }>()
+
+  if (!cancellable) {
+    return jsonResponse({ error: 'Reservation not found or already cancelled' }, { status: 404 })
+  }
+
   const reservation = await db.prepare(`
     UPDATE reservation_submissions
     SET status = 'cancelled', cancellation_token_used_at = ?
@@ -97,7 +123,8 @@ export default defineEventHandler(async (event) => {
     phone: reservation.phone,
     date: reservation.date,
     time: reservation.time,
-    guests: reservation.guests
+    guests: reservation.guests,
+    wasConfirmed: cancellable.status === 'confirmed'
   }).catch((error) => {
     console.error('reservation_cancellation_notification_failed', {
       organizationId: reservation.organization_id,

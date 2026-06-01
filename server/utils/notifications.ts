@@ -23,6 +23,7 @@ interface ReservationNotificationInput extends SiteContext {
   date: string
   time: string
   guests: string
+  wasConfirmed?: boolean
   cancelUrl?: string | null
   contactPhone?: string | null
   contactEmail?: string | null
@@ -52,6 +53,47 @@ interface EmailTemplate {
   text: string
 }
 
+export interface NotificationCopyPreview {
+  id: string
+  audience: 'owner' | 'guest'
+  channel: 'email' | 'whatsapp'
+  template: string
+  title: string
+  subject?: string
+  html?: string
+  text: string
+}
+
+const BRAND_LOGO_URL = 'https://krabiclaw.com/krabi-claw-logo.png'
+
+function emailShell(opts: {
+  title: string
+  preheader?: string
+  siteName?: string | null
+  bodyHtml: string
+}): string {
+  const preheader = escapeHtml(opts.preheader || opts.title)
+  const title = escapeHtml(opts.title)
+  const signature = escapeHtml(siteName({ organizationId: '', siteId: '', siteName: opts.siteName }, 'KrabiClaw'))
+
+  return `
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${preheader}</div>
+  <div style="margin:0;padding:24px;background:#f7f7f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#18181b">
+    <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e4e4e7;border-radius:12px;overflow:hidden">
+      <div style="padding:18px 24px;border-bottom:1px solid #e4e4e7;background:#fafafa">
+        <img src="${BRAND_LOGO_URL}" alt="KrabiClaw" width="164" style="display:block;height:auto;border:0;outline:none;text-decoration:none">
+      </div>
+      <div style="padding:24px">
+        <h2 style="margin:0 0 14px;font-size:20px;line-height:1.3;color:#111827">${title}</h2>
+        ${opts.bodyHtml}
+      </div>
+      <div style="padding:16px 24px;border-top:1px solid #e4e4e7;background:#fafafa;color:#71717a;font-size:12px;line-height:1.6">
+        Sent by ${signature} via KrabiClaw.
+      </div>
+    </div>
+  </div>`
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -61,8 +103,39 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
-function siteName(opts: SiteContext, fallback = 'the restaurant'): string {
+function siteName(opts: SiteContext, fallback = 'the business'): string {
   return opts.siteName || fallback
+}
+
+function formatDateHuman(dateValue: string): string {
+  const value = String(dateValue || '').trim()
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!isoMatch) return value
+  const [, y, m, d] = isoMatch
+  const dt = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)))
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(dt)
+}
+
+function formatTimeHuman(timeValue: string): string {
+  const value = String(timeValue || '').trim()
+  const match = /^(\d{1,2}):(\d{2})/.exec(value)
+  if (!match) return value
+  const h = Number(match[1])
+  const m = Number(match[2])
+  if (Number.isNaN(h) || Number.isNaN(m)) return value
+  const dt = new Date(Date.UTC(2000, 0, 1, h, m))
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'UTC',
+  }).format(dt)
 }
 
 function ownerEmailQuery() {
@@ -152,6 +225,12 @@ async function sendEmailNotification(
 ) {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
+  const payloadWithPreview = {
+    ...opts.payload,
+    email_subject: opts.email.subject,
+    email_html: opts.email.html,
+    email_text: opts.email.text,
+  }
   await db.prepare(`
     INSERT INTO notifications
     (id, organization_id, site_id, channel, template, recipient, title, payload, status, created_at)
@@ -163,7 +242,7 @@ async function sendEmailNotification(
     opts.template,
     opts.to,
     opts.title,
-    JSON.stringify(opts.payload),
+    JSON.stringify(payloadWithPreview),
     now
   ).run()
 
@@ -177,7 +256,7 @@ async function sendEmailNotification(
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10000)
 
-  const fromValue = env.EMAIL_FROM || (opts.siteName ? `${opts.siteName} <hello@krabiclaw.com>` : 'KrabiClaw <hello@krabiclaw.com>')
+  const fromValue = env.EMAIL_FROM || 'KrabiClaw <hello@krabiclaw.com>'
 
   let response: Response
   try {
@@ -258,9 +337,11 @@ async function notifyOwner(
 
 function reservationEmail(opts: ReservationNotificationInput, title: string, intro: string): EmailTemplate {
   const restaurant = siteName(opts)
+  const prettyDate = formatDateHuman(opts.date)
+  const prettyTime = formatTimeHuman(opts.time)
 
   const contactBlock = (opts.contactPhone || opts.contactEmail)
-    ? `<p style="margin-top:16px"><strong>Questions? Contact us:</strong><br>
+    ? `<p style="margin-top:16px"><strong>Questions? Contact ${escapeHtml(restaurant)}:</strong><br>
        ${opts.contactPhone ? `📞 ${escapeHtml(opts.contactPhone)}<br>` : ''}
        ${opts.contactEmail ? `✉️ ${escapeHtml(opts.contactEmail)}` : ''}</p>`
     : ''
@@ -269,29 +350,34 @@ function reservationEmail(opts: ReservationNotificationInput, title: string, int
     ? `<p style="margin-top:16px;font-size:12px;color:#71717a">Need to cancel? <a href="${escapeHtml(opts.cancelUrl)}" style="color:#8F1D21">Cancel your reservation here</a> (link valid for 30 days).</p>`
     : ''
 
-  const html = `
+  const bodyHtml = `
     <p>Hi ${escapeHtml(opts.guestName)},</p>
     <p>${escapeHtml(intro)}</p>
     <div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px;margin:16px 0">
       <p style="margin:0"><strong>Restaurant:</strong> ${escapeHtml(restaurant)}</p>
-      <p style="margin:8px 0 0"><strong>Date:</strong> ${escapeHtml(opts.date)}</p>
-      <p style="margin:4px 0 0"><strong>Time:</strong> ${escapeHtml(opts.time)}</p>
-      <p style="margin:4px 0 0"><strong>Guests:</strong> ${escapeHtml(opts.guests)}</p>
+      <p style="margin:8px 0 0"><strong>Date:</strong> ${escapeHtml(prettyDate)}</p>
+      <p style="margin:4px 0 0"><strong>Time:</strong> ${escapeHtml(prettyTime)}</p>
+      <p style="margin:4px 0 0"><strong>Party size:</strong> ${escapeHtml(opts.guests)}</p>
     </div>
     ${contactBlock}
     ${cancelBlock}
-    <p>We look forward to welcoming you!</p>
     <p style="color:#71717a;font-size:12px">The team at ${escapeHtml(restaurant)}</p>
   `
+  const html = emailShell({
+    title,
+    preheader: `${title} — ${restaurant}`,
+    siteName: restaurant,
+    bodyHtml
+  })
 
   const textParts = [
     `Hi ${opts.guestName},`,
     intro,
     '',
     `Restaurant: ${restaurant}`,
-    `Date: ${opts.date}`,
-    `Time: ${opts.time}`,
-    `Guests: ${opts.guests}`,
+    `Date: ${prettyDate}`,
+    `Time: ${prettyTime}`,
+    `Party size: ${opts.guests}`,
   ]
   if (opts.contactPhone) textParts.push(`Phone: ${opts.contactPhone}`)
   if (opts.contactEmail) textParts.push(`Email: ${opts.contactEmail}`)
@@ -321,25 +407,30 @@ export async function notifyReservationCreated(
     notifyOwner(env, db, {
       ...opts,
       template: 'new_reservation',
-      title: `New reservation from ${opts.guestName}`,
+      title: `New reservation request from ${opts.guestName}`,
       payload,
       email: {
-        subject: `New reservation from ${opts.guestName}`,
-        html: `<p>New reservation for ${escapeHtml(siteName(opts))}.</p><p><strong>${escapeHtml(opts.guestName)}</strong><br>${escapeHtml(opts.date)} at ${escapeHtml(opts.time)}<br>${escapeHtml(opts.guests)} guests<br>${escapeHtml(opts.phone)}</p>`,
-        text: `New reservation for ${siteName(opts)}\n${opts.guestName}\n${opts.date} at ${opts.time}\n${opts.guests} guests\n${opts.phone}`
+        subject: `New reservation request from ${opts.guestName}`,
+        html: emailShell({
+          title: `New reservation request from ${opts.guestName}`,
+          preheader: `New reservation request for ${siteName(opts)}`,
+          siteName: opts.siteName,
+          bodyHtml: `<p>New reservation request from your website.</p><div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px;margin:16px 0"><p style="margin:0"><strong>Customer:</strong> ${escapeHtml(opts.guestName)}</p><p style="margin:8px 0 0"><strong>Date:</strong> ${escapeHtml(formatDateHuman(opts.date))}</p><p style="margin:4px 0 0"><strong>Time:</strong> ${escapeHtml(formatTimeHuman(opts.time))}</p><p style="margin:4px 0 0"><strong>Party size:</strong> ${escapeHtml(opts.guests)}</p><p style="margin:4px 0 0"><strong>Phone:</strong> ${escapeHtml(opts.phone)}</p></div><p>Reply or contact the customer to confirm the reservation.</p>`
+        }),
+        text: `New reservation request from your website.\n\nCustomer: ${opts.guestName}\nDate: ${formatDateHuman(opts.date)}\nTime: ${formatTimeHuman(opts.time)}\nParty size: ${opts.guests}\nPhone: ${opts.phone}\n\nReply or contact the customer to confirm the reservation.`
       },
       whatsapp: {
         template: 'new_reservation',
-        vars: { guest_name: opts.guestName, date: opts.date, time: opts.time, guests: opts.guests, phone: opts.phone }
+        vars: { guest_name: opts.guestName, date: formatDateHuman(opts.date), time: formatTimeHuman(opts.time), guests: opts.guests, phone: opts.phone }
       }
     }),
     sendEmailNotification(env, db, {
       ...opts,
       to: opts.email,
       template: 'reservation_customer_received',
-      title: 'Reservation request received',
+      title: 'Your reservation request was sent',
       payload,
-      email: reservationEmail(opts, 'Reservation request received', 'We received your reservation request. The restaurant will confirm shortly.')
+      email: reservationEmail(opts, 'Your reservation request was sent', `Thanks, ${opts.guestName}. Your reservation request has been sent to ${siteName(opts)}.`)
     })
   ])
 
@@ -359,6 +450,17 @@ export async function notifyReservationCancelled(
   db: D1Database,
   opts: ReservationNotificationInput
 ) {
+  const confirmed = Boolean(opts.wasConfirmed)
+  const ownerCancelTitle = confirmed
+    ? `Reservation cancelled for ${opts.guestName}`
+    : `Reservation request cancelled by ${opts.guestName}`
+  const guestCancelTitle = confirmed
+    ? 'Your reservation was cancelled'
+    : 'Your reservation request was cancelled'
+  const guestCancelIntro = confirmed
+    ? 'Your reservation has been cancelled.'
+    : 'Your reservation request has been cancelled.'
+
   const payload = {
     reservation_id: opts.reservationId,
     guest_name: opts.guestName,
@@ -367,6 +469,7 @@ export async function notifyReservationCancelled(
     date: opts.date,
     time: opts.time,
     guests: opts.guests,
+    reservation_was_confirmed: confirmed ? 'true' : 'false',
     site_name: siteName(opts)
   }
 
@@ -374,11 +477,16 @@ export async function notifyReservationCancelled(
     notifyOwner(env, db, {
       ...opts,
       template: 'reservation_cancelled',
-      title: `Reservation cancelled by ${opts.guestName}`,
+      title: ownerCancelTitle,
       payload,
       email: {
-        subject: `Reservation cancelled by ${opts.guestName}`,
-        html: `<p>A reservation was cancelled for ${escapeHtml(siteName(opts))}.</p><p><strong>${escapeHtml(opts.guestName)}</strong><br>${escapeHtml(opts.date)} at ${escapeHtml(opts.time)}<br>${escapeHtml(opts.guests)} guests</p>`,
+        subject: ownerCancelTitle,
+        html: emailShell({
+          title: ownerCancelTitle,
+          preheader: `Cancellation for ${siteName(opts)}`,
+          siteName: opts.siteName,
+          bodyHtml: `<p>A reservation was cancelled for ${escapeHtml(siteName(opts))}.</p><p><strong>${escapeHtml(opts.guestName)}</strong><br>${escapeHtml(opts.date)} at ${escapeHtml(opts.time)}<br>${escapeHtml(opts.guests)} guests</p><p style="color:#71717a;font-size:12px;margin-top:14px">No action is required unless you need to follow up with the guest.</p>`
+        }),
         text: `Reservation cancelled for ${siteName(opts)}\n${opts.guestName}\n${opts.date} at ${opts.time}\n${opts.guests} guests`
       },
       whatsapp: {
@@ -390,9 +498,9 @@ export async function notifyReservationCancelled(
       ...opts,
       to: opts.email,
       template: 'reservation_customer_cancelled',
-      title: 'Reservation cancelled',
+      title: guestCancelTitle,
       payload,
-      email: reservationEmail(opts, 'Reservation cancelled', 'Your reservation has been cancelled.')
+      email: reservationEmail(opts, guestCancelTitle, guestCancelIntro)
     })
   ])
 
@@ -424,12 +532,17 @@ export async function notifyContactSubmitted(
     notifyOwner(env, db, {
       ...opts,
       template: 'new_contact_msg',
-      title: `New message from ${opts.guestName}`,
+      title: `New website message from ${opts.guestName}`,
       payload,
       email: {
-        subject: `New message from ${opts.guestName}`,
-        html: `<p>New contact message for ${escapeHtml(siteName(opts))}.</p><p><strong>${escapeHtml(opts.guestName)}</strong><br>${escapeHtml(opts.email)}</p><p>${escapeHtml(opts.message)}</p>`,
-        text: `New contact message for ${siteName(opts)}\n${opts.guestName}\n${opts.email}\n\n${opts.message}`
+        subject: `New website message from ${opts.guestName}`,
+        html: emailShell({
+          title: `New website message from ${opts.guestName}`,
+          preheader: `New contact message for ${siteName(opts)}`,
+          siteName: opts.siteName,
+          bodyHtml: `<p>New website message from ${escapeHtml(opts.guestName)}.</p><p><strong>From:</strong> ${escapeHtml(opts.guestName)}<br><strong>Email:</strong> ${escapeHtml(opts.email)}</p><p><strong>Message:</strong><br>${escapeHtml(opts.message)}</p><p>Reply to the customer directly.</p>`
+        }),
+        text: `New website message from ${opts.guestName}.\n\nFrom: ${opts.guestName}\nEmail: ${opts.email}\n\nMessage:\n${opts.message}\n\nReply to the customer directly.`
       },
       whatsapp: {
         template: 'new_contact_msg',
@@ -440,12 +553,17 @@ export async function notifyContactSubmitted(
       ...opts,
       to: opts.email,
       template: 'contact_customer_received',
-      title: 'Message received',
+      title: 'Your message was sent',
       payload,
       email: {
-        subject: 'Message received',
-        html: `<p>Hi ${escapeHtml(opts.guestName)},</p><p>Thanks for contacting ${escapeHtml(siteName(opts))}. The restaurant will reply soon.</p>`,
-        text: `Hi ${opts.guestName},\nThanks for contacting ${siteName(opts)}. The restaurant will reply soon.`
+        subject: 'Your message was sent',
+        html: emailShell({
+          title: 'Your message was sent',
+          preheader: `Your message to ${siteName(opts)} was received`,
+          siteName: opts.siteName,
+          bodyHtml: `<p>Thanks, ${escapeHtml(opts.guestName)}. Your message has been sent to ${escapeHtml(siteName(opts))}.</p><p>They will reply using the contact details you provided.</p>`
+        }),
+        text: `Thanks, ${opts.guestName}. Your message has been sent to ${siteName(opts)}.\n\nThey will reply using the contact details you provided.`
       }
     })
   ])
@@ -478,33 +596,40 @@ export async function notifyExperienceBookingCreated(
     site_name: studio,
   }
 
-  const ownerEmailHtml = `
-    <p>New experience booking for ${escapeHtml(studio)}.</p>
+  const ownerEmailHtml = emailShell({
+    title: `New booking request from ${opts.guestName}`,
+    preheader: `New experience booking for ${studio}`,
+    siteName: opts.siteName,
+    bodyHtml: `
+    <p>New experience booking request from ${escapeHtml(opts.guestName)}.</p>
     <p>
-      <strong>${escapeHtml(opts.guestName)}</strong><br>
-      ${escapeHtml(opts.experienceTitle)}<br>
-      ${escapeHtml(opts.bookingDate)} at ${escapeHtml(opts.timeSlot)}<br>
-      Party of ${opts.partySize}
+      <strong>Business:</strong> ${escapeHtml(studio)}<br>
+      <strong>Experience:</strong> ${escapeHtml(opts.experienceTitle)}<br>
+      <strong>Customer:</strong> ${escapeHtml(opts.guestName)}<br>
+      <strong>Date:</strong> ${escapeHtml(formatDateHuman(opts.bookingDate))}<br>
+      <strong>Time:</strong> ${escapeHtml(formatTimeHuman(opts.timeSlot))}
     </p>
+    <p>Contact the customer to confirm the booking.</p>
   `
+  })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
       ...opts,
       template: 'new_reservation',
-      title: `New booking from ${opts.guestName}`,
+      title: `New booking request from ${opts.guestName}`,
       payload,
       email: {
-        subject: `New booking from ${opts.guestName}`,
+        subject: `New booking request from ${opts.guestName}`,
         html: ownerEmailHtml,
-        text: `New booking for ${studio}\n${opts.guestName}\n${opts.experienceTitle}\n${opts.bookingDate} at ${opts.timeSlot}\nParty of ${opts.partySize}`,
+        text: `New experience booking request from ${opts.guestName}.\n\nBusiness: ${studio}\nExperience: ${opts.experienceTitle}\nCustomer: ${opts.guestName}\nDate: ${formatDateHuman(opts.bookingDate)}\nTime: ${formatTimeHuman(opts.timeSlot)}\n\nContact the customer to confirm the booking.`,
       },
       whatsapp: {
         template: 'new_reservation',
         vars: {
           guest_name: opts.guestName,
-          date: opts.bookingDate,
-          time: opts.timeSlot,
+          date: formatDateHuman(opts.bookingDate),
+          time: formatTimeHuman(opts.timeSlot),
           guests: String(opts.partySize),
           ...(opts.guestPhone ? { phone: opts.guestPhone } : {}),
         },
@@ -514,33 +639,35 @@ export async function notifyExperienceBookingCreated(
       ...opts,
       to: opts.email,
       template: 'experience_booking_customer_received',
-      title: `Booking request received — ${opts.experienceTitle}`,
+      title: `Your booking request was sent — ${opts.experienceTitle}`,
       payload,
       email: {
-        subject: `Booking request received — ${opts.experienceTitle}`,
-        html: `
-          <p>Hi ${escapeHtml(opts.guestName)},</p>
-          <p>We received your booking request for <strong>${escapeHtml(opts.experienceTitle)}</strong> at ${escapeHtml(studio)}.</p>
+        subject: `Your booking request was sent — ${opts.experienceTitle}`,
+        html: emailShell({
+          title: `Your booking request was sent — ${opts.experienceTitle}`,
+          preheader: `We received your booking request`,
+          siteName: opts.siteName,
+          bodyHtml: `
+          <p>Thanks, ${escapeHtml(opts.guestName)}. Your booking request has been sent to ${escapeHtml(studio)}.</p>
           <div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px;margin:16px 0">
             <p style="margin:0"><strong>Experience:</strong> ${escapeHtml(opts.experienceTitle)}</p>
-            <p style="margin:8px 0 0"><strong>Date:</strong> ${escapeHtml(opts.bookingDate)}</p>
-            <p style="margin:4px 0 0"><strong>Time:</strong> ${escapeHtml(opts.timeSlot)}</p>
+            <p style="margin:8px 0 0"><strong>Date:</strong> ${escapeHtml(formatDateHuman(opts.bookingDate))}</p>
+            <p style="margin:4px 0 0"><strong>Time:</strong> ${escapeHtml(formatTimeHuman(opts.timeSlot))}</p>
             <p style="margin:4px 0 0"><strong>Party size:</strong> ${opts.partySize}</p>
           </div>
-          <p>We will confirm your booking shortly.</p>
+          <p>${escapeHtml(studio)} will contact you to confirm availability.</p>
           <p style="color:#71717a;font-size:12px">The team at ${escapeHtml(studio)}</p>
-        `,
+        `
+        }),
         text: [
-          `Hi ${opts.guestName},`,
-          `We received your booking request for ${opts.experienceTitle} at ${studio}.`,
+          `Thanks, ${opts.guestName}. Your booking request has been sent to ${studio}.`,
           '',
           `Experience: ${opts.experienceTitle}`,
-          `Date: ${opts.bookingDate}`,
-          `Time: ${opts.timeSlot}`,
+          `Date: ${formatDateHuman(opts.bookingDate)}`,
+          `Time: ${formatTimeHuman(opts.timeSlot)}`,
           `Party size: ${opts.partySize}`,
           '',
-          'We will confirm your booking shortly.',
-          `The team at ${studio}`,
+          `${studio} will contact you to confirm availability.`,
         ].join('\n'),
       },
     }),
@@ -555,4 +682,189 @@ export async function notifyExperienceBookingCreated(
       })
     }
   })
+}
+
+export function getNotificationCopyPreviews(): NotificationCopyPreview[] {
+  const reservationSample: ReservationNotificationInput = {
+    organizationId: 'org-demo',
+    siteId: 'site-demo',
+    siteName: 'Ember & Slice',
+    reservationId: 'res-preview-1',
+    guestName: 'Alex Carter',
+    email: 'alex@example.com',
+    phone: '+1 555 123 4567',
+    date: '2026-07-14',
+    time: '19:00',
+    guests: '2',
+    cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1',
+    contactPhone: '+1 555 000 0000',
+    contactEmail: 'hello@emberslice.example',
+  }
+
+  const contactSample: ContactNotificationInput = {
+    organizationId: 'org-demo',
+    siteId: 'site-demo',
+    siteName: 'Ember & Slice',
+    contactId: 'contact-preview-1',
+    guestName: 'Jordan Lee',
+    email: 'jordan@example.com',
+    message: 'Hi, do you have vegan options and parking nearby?',
+  }
+
+  const bookingSample: ExperienceBookingNotificationInput = {
+    organizationId: 'org-demo',
+    siteId: 'site-demo',
+    siteName: 'Pottery House Krabi',
+    bookingId: 'booking-preview-1',
+    guestName: 'Mina Park',
+    email: 'mina@example.com',
+    guestPhone: '+66 94 623 0215',
+    experienceTitle: 'Pottery Wheel Class',
+    bookingDate: '2026-07-20',
+    timeSlot: '10:00',
+    partySize: 2,
+  }
+
+  const guestReservationReceived = reservationEmail(
+    reservationSample,
+    'Your reservation request was sent',
+    `Thanks, ${reservationSample.guestName}. Your reservation request has been sent to ${siteName(reservationSample)}.`
+  )
+  const guestReservationCancelled = reservationEmail(
+    reservationSample,
+    'Your reservation request was cancelled',
+    'Your reservation request has been cancelled.'
+  )
+
+  const ownerReservationHtml = emailShell({
+    title: `New reservation request from ${reservationSample.guestName}`,
+    preheader: `New reservation request for ${siteName(reservationSample)}`,
+    siteName: reservationSample.siteName,
+    bodyHtml: `<p>New reservation request from your website.</p><div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px;margin:16px 0"><p style="margin:0"><strong>Customer:</strong> ${escapeHtml(reservationSample.guestName)}</p><p style="margin:8px 0 0"><strong>Date:</strong> ${escapeHtml(formatDateHuman(reservationSample.date))}</p><p style="margin:4px 0 0"><strong>Time:</strong> ${escapeHtml(formatTimeHuman(reservationSample.time))}</p><p style="margin:4px 0 0"><strong>Party size:</strong> ${escapeHtml(reservationSample.guests)}</p><p style="margin:4px 0 0"><strong>Phone:</strong> ${escapeHtml(reservationSample.phone)}</p></div><p>Reply or contact the customer to confirm the reservation.</p>`
+  })
+
+  const ownerContactHtml = emailShell({
+    title: `New website message from ${contactSample.guestName}`,
+    preheader: `New contact message for ${siteName(contactSample)}`,
+    siteName: contactSample.siteName,
+    bodyHtml: `<p>New website message from ${escapeHtml(contactSample.guestName)}.</p><p><strong>From:</strong> ${escapeHtml(contactSample.guestName)}<br><strong>Email:</strong> ${escapeHtml(contactSample.email)}</p><p><strong>Message:</strong><br>${escapeHtml(contactSample.message)}</p><p>Reply to the customer directly.</p>`
+  })
+
+  const guestContactReceived: EmailTemplate = {
+    subject: 'Your message was sent',
+    html: emailShell({
+      title: 'Your message was sent',
+      preheader: `Your message to ${siteName(contactSample)} was received`,
+      siteName: contactSample.siteName,
+      bodyHtml: `<p>Thanks, ${escapeHtml(contactSample.guestName)}. Your message has been sent to ${escapeHtml(siteName(contactSample))}.</p><p>They will reply using the contact details you provided.</p>`
+    }),
+    text: `Thanks, ${contactSample.guestName}. Your message has been sent to ${siteName(contactSample)}.\n\nThey will reply using the contact details you provided.`
+  }
+
+  const ownerExperienceHtml = emailShell({
+    title: `New booking request from ${bookingSample.guestName}`,
+    preheader: `New experience booking for ${siteName(bookingSample)}`,
+    siteName: bookingSample.siteName,
+    bodyHtml: `<p>New experience booking request from ${escapeHtml(bookingSample.guestName)}.</p><p><strong>Business:</strong> ${escapeHtml(siteName(bookingSample))}<br><strong>Experience:</strong> ${escapeHtml(bookingSample.experienceTitle)}<br><strong>Customer:</strong> ${escapeHtml(bookingSample.guestName)}<br><strong>Date:</strong> ${escapeHtml(formatDateHuman(bookingSample.bookingDate))}<br><strong>Time:</strong> ${escapeHtml(formatTimeHuman(bookingSample.timeSlot))}</p><p>Contact the customer to confirm the booking.</p>`
+  })
+
+  const guestExperienceHtml: EmailTemplate = {
+    subject: `Your booking request was sent — ${bookingSample.experienceTitle}`,
+    html: emailShell({
+      title: `Your booking request was sent — ${bookingSample.experienceTitle}`,
+      preheader: 'We received your booking request',
+      siteName: bookingSample.siteName,
+      bodyHtml: `<p>Thanks, ${escapeHtml(bookingSample.guestName)}. Your booking request has been sent to ${escapeHtml(siteName(bookingSample))}.</p><div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px;margin:16px 0"><p style="margin:0"><strong>Experience:</strong> ${escapeHtml(bookingSample.experienceTitle)}</p><p style="margin:8px 0 0"><strong>Date:</strong> ${escapeHtml(formatDateHuman(bookingSample.bookingDate))}</p><p style="margin:4px 0 0"><strong>Time:</strong> ${escapeHtml(formatTimeHuman(bookingSample.timeSlot))}</p><p style="margin:4px 0 0"><strong>Party size:</strong> ${bookingSample.partySize}</p></div><p>${escapeHtml(siteName(bookingSample))} will contact you to confirm availability.</p><p style="color:#71717a;font-size:12px">The team at ${escapeHtml(siteName(bookingSample))}</p>`
+    }),
+    text: `Thanks, ${bookingSample.guestName}. Your booking request has been sent to ${siteName(bookingSample)}.\n\nExperience: ${bookingSample.experienceTitle}\nDate: ${formatDateHuman(bookingSample.bookingDate)}\nTime: ${formatTimeHuman(bookingSample.timeSlot)}\nParty size: ${bookingSample.partySize}\n\n${siteName(bookingSample)} will contact you to confirm availability.`
+  }
+
+  return [
+    {
+      id: 'owner-new-reservation-email',
+      audience: 'owner',
+      channel: 'email',
+      template: 'new_reservation',
+      title: 'Owner alert — new reservation',
+      subject: `New reservation request from ${reservationSample.guestName}`,
+      html: ownerReservationHtml,
+      text: `New reservation request from your website.\n\nCustomer: ${reservationSample.guestName}\nDate: ${formatDateHuman(reservationSample.date)}\nTime: ${formatTimeHuman(reservationSample.time)}\nParty size: ${reservationSample.guests}\nPhone: ${reservationSample.phone}\n\nReply or contact the customer to confirm the reservation.`,
+    },
+    {
+      id: 'guest-reservation-received-email',
+      audience: 'guest',
+      channel: 'email',
+      template: 'reservation_customer_received',
+      title: 'Guest confirmation — reservation request sent',
+      subject: guestReservationReceived.subject,
+      html: guestReservationReceived.html,
+      text: guestReservationReceived.text,
+    },
+    {
+      id: 'guest-reservation-cancelled-email',
+      audience: 'guest',
+      channel: 'email',
+      template: 'reservation_customer_cancelled',
+      title: 'Guest confirmation — reservation request cancelled',
+      subject: guestReservationCancelled.subject,
+      html: guestReservationCancelled.html,
+      text: guestReservationCancelled.text,
+    },
+    {
+      id: 'owner-new-contact-email',
+      audience: 'owner',
+      channel: 'email',
+      template: 'new_contact_msg',
+      title: 'Owner alert — new contact message',
+      subject: `New website message from ${contactSample.guestName}`,
+      html: ownerContactHtml,
+      text: `New website message from ${contactSample.guestName}.\n\nFrom: ${contactSample.guestName}\nEmail: ${contactSample.email}\n\nMessage:\n${contactSample.message}\n\nReply to the customer directly.`,
+    },
+    {
+      id: 'guest-contact-received-email',
+      audience: 'guest',
+      channel: 'email',
+      template: 'contact_customer_received',
+      title: 'Guest confirmation — message sent',
+      subject: guestContactReceived.subject,
+      html: guestContactReceived.html,
+      text: guestContactReceived.text,
+    },
+    {
+      id: 'owner-new-experience-booking-email',
+      audience: 'owner',
+      channel: 'email',
+      template: 'new_reservation',
+      title: 'Owner alert — new experience booking',
+      subject: `New booking request from ${bookingSample.guestName}`,
+      html: ownerExperienceHtml,
+      text: `New experience booking request from ${bookingSample.guestName}.\n\nBusiness: ${siteName(bookingSample)}\nExperience: ${bookingSample.experienceTitle}\nCustomer: ${bookingSample.guestName}\nDate: ${formatDateHuman(bookingSample.bookingDate)}\nTime: ${formatTimeHuman(bookingSample.timeSlot)}\n\nContact the customer to confirm the booking.`,
+    },
+    {
+      id: 'guest-experience-booking-received-email',
+      audience: 'guest',
+      channel: 'email',
+      template: 'experience_booking_customer_received',
+      title: 'Guest confirmation — experience booking request sent',
+      subject: guestExperienceHtml.subject,
+      html: guestExperienceHtml.html,
+      text: guestExperienceHtml.text,
+    },
+    {
+      id: 'owner-new-contact-whatsapp',
+      audience: 'owner',
+      channel: 'whatsapp',
+      template: 'new_contact_msg',
+      title: 'Owner WhatsApp — new contact message',
+      text: `New website message from ${contactSample.guestName}: "${contactSample.message}" Reply: ${contactSample.email}`,
+    },
+    {
+      id: 'owner-new-reservation-whatsapp',
+      audience: 'owner',
+      channel: 'whatsapp',
+      template: 'new_reservation',
+      title: 'Owner WhatsApp — new reservation',
+      text: `New reservation request: ${reservationSample.guestName}, ${formatDateHuman(reservationSample.date)} at ${formatTimeHuman(reservationSample.time)}, ${reservationSample.guests} guests. Phone: ${reservationSample.phone}.`,
+    },
+  ]
 }
