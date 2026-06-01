@@ -2,6 +2,8 @@
 import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
 
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
+const isCi = process.env.CI === 'true'
+const enableNitroTasks = !isCi && process.env.NUXT_DISABLE_NITRO_TASKS !== 'true'
 
 export default defineNuxtConfig({
   modules: [
@@ -198,14 +200,16 @@ export default defineNuxtConfig({
   nitro: {
     preset: 'cloudflare-module',
     experimental: {
-      tasks: true
+      tasks: enableNitroTasks
     },
-    scheduledTasks: {
+    // Keep task modules out of CI/dev E2E boot to avoid optional task import side-effects
+    // from breaking nitro-cloudflare-dev D1 proxy binding.
+    scheduledTasks: enableNitroTasks ? {
       '*/5 * * * *': ['translation-jobs-process'],
       '*/10 * * * *': ['domain-reconciliation'],
       '0 3 * * *': ['domain-reconciliation-daily'],
       '0 * * * *': ['instagram-sync-process', 'google-business-sync']
-    },
+    } : {},
     devServer: {
       watch: ['server']
     },
