@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: http://localhost:3000
       NUXT_PUBLIC_APP_NAME: KrabiClaw
       NUXT_PUBLIC_TURNSTILE_ENABLED: "false"
       BETTER_AUTH_SECRET: test-secret-for-ci
@@ -106,7 +106,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: http://localhost:3000
       NUXT_PUBLIC_APP_NAME: KrabiClaw
       NUXT_PUBLIC_TURNSTILE_ENABLED: "false"
       BETTER_AUTH_SECRET: test-secret-for-ci
