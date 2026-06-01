@@ -70,18 +70,10 @@ jobs:
             node --check "$f" && echo "✓ $f" || exit 1
           done
 
-  e2e:
-    name: E2E ${{ matrix.suite }}
-    if: matrix.suite != 'full' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+  e2e-smoke:
+    name: E2E smoke
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - suite: smoke
-            cmd: test:e2e:smoke
-          - suite: full
-            cmd: test:e2e:full
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -97,13 +89,34 @@ jobs:
           yarn seed:local
           yarn seed:pottery-local
       - run: npx playwright install --with-deps chromium
-      - run: yarn ${{ matrix.cmd }}
+      - run: yarn test:e2e:smoke
+
+  e2e-full:
+    name: E2E full
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Prepare local D1 fixture data
+        run: |
+          yarn schema:local
+          yarn seed:local
+          yarn seed:pottery-local
+      - run: npx playwright install --with-deps chromium
+      - run: yarn test:e2e:full
 
   prod-smoke:
     name: Production smoke
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs: [e2e]
+    needs: [e2e-smoke]
     steps:
       - name: Check Pottery House + platform public routes
         shell: bash
