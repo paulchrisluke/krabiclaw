@@ -24,12 +24,15 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => ({
       )
 
       if (process.env.CI === 'true') {
-        throw new Error(`Cloudflare bindings missing: ${missing.join(', ')}`)
+        throw createError({
+          statusCode: 503,
+          statusMessage: `Cloudflare bindings missing: ${missing.join(', ')}`
+        })
       }
     }
 
     return env ?? {}
   })()
 } as CloudflareEnv)
-import type { H3Event } from 'h3'
+import { createError, type H3Event } from 'h3'
 import type { CloudflareEnv } from './auth'
