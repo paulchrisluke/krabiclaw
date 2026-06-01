@@ -5,6 +5,7 @@ const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
 
 export default defineNuxtConfig({
   modules: [
+    'nitro-cloudflare-dev',
     '@nuxt/scripts',
     '@nuxtjs/robots',
     '@nuxtjs/sitemap',

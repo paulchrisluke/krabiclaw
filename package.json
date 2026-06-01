@@ -55,6 +55,7 @@
     "autocannon": "^8.0.0",
     "autoprefixer": "^10.5.0",
     "eslint": "^10.3.0",
+    "nitro-cloudflare-dev": "^0.2.2",
     "nuxt": "^4.4.2",
     "postcss": "^8.5.13",
     "tailwindcss": "^4.2.4",
