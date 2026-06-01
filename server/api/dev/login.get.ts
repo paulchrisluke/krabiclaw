@@ -2,6 +2,7 @@
 // Throws 404 in production (import.meta.dev is false at build time)
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
+import { isPlatformOwner } from '~/server/utils/platform-auth'
 
 const textEncoder = new TextEncoder()
 
@@ -10,8 +11,8 @@ function timingSafeEqualText(a: string, b: string): boolean {
   const right = textEncoder.encode(b)
   if (left.length !== right.length) {
     // Dummy pass to keep roughly consistent execution when lengths differ.
-    let noop = 0
-    for (let i = 0; i < left.length; i += 1) noop |= left[i]!
+    let _noop = 0
+    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
     return false
   }
   let diff = 0
@@ -60,9 +61,28 @@ export default defineEventHandler(async (event) => {
 
   const userId = query.userId as string | undefined
 
-  const user = userId
-    ? await db.prepare('SELECT id, email FROM user WHERE id = ? LIMIT 1').bind(userId).first() as { id: string; email: string } | null
-    : await db.prepare('SELECT id, email FROM user LIMIT 1').first() as { id: string; email: string } | null
+  let user: { id: string; email: string; role?: string | null } | null = null
+  if (userId) {
+    user = await db.prepare('SELECT id, email, role FROM user WHERE id = ? LIMIT 1').bind(userId).first() as {
+      id: string
+      email: string
+      role?: string | null
+    } | null
+  } else {
+    const { results } = await db.prepare(`
+      SELECT u.id, u.email, u.role,
+             EXISTS(SELECT 1 FROM member m WHERE m.userId = u.id) AS has_org
+      FROM user u
+      ORDER BY has_org DESC, u.createdAt ASC
+      LIMIT 50
+    `).all<{ id: string; email: string; role?: string | null; has_org: number }>()
+    const rows = results || []
+    user = rows.find((row) =>
+      row.has_org === 1 &&
+      String(row.role || '').toLowerCase() !== 'admin' &&
+      !isPlatformOwner(row.email, env)
+    ) || rows[0] || null
+  }
   if (!user) throw createError({ statusCode: 500, statusMessage: 'No users in database' })
 
   const session = await ctx.internalAdapter.createSession(user.id)
