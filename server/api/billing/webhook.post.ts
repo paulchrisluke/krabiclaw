@@ -44,6 +44,12 @@ export default defineEventHandler(async (event) => {
     }, { status: 400 })
   }
 
+  if (!env.STRIPE_SECRET_KEY) {
+    return jsonResponse({
+      error: 'Stripe secret key not configured'
+    }, { status: 503 })
+  }
+
   if (!verifyStripeWebhook(env, body.toString(), signature)) {
     return jsonResponse({
       error: 'Invalid webhook signature'
@@ -55,13 +61,6 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({
       error: 'Database not available'
     }, { status: 500 })
-  }
-
-  // Validate Stripe secret key
-  if (!env.STRIPE_SECRET_KEY) {
-    return jsonResponse({
-      error: 'Stripe secret key not configured'
-    }, { status: 503 })
   }
 
   try {
