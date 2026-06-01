@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { devLoginUrl } from './test-env'
+import { devLoginHeaders, devLoginUrl } from './test-env'
 
 type RoleUser = {
   id: string
@@ -10,7 +10,7 @@ test.describe('role permission matrix', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('content + billing permissions by role', async ({ request, baseURL }) => {
-    const ownerLogin = await request.get(devLoginUrl(baseURL!))
+    const ownerLogin = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
     expect(ownerLogin.status()).toBeLessThan(400)
     const sessionRes = await request.get(`${baseURL}/api/auth/get-session`)
     expect(sessionRes.status()).toBe(200)
@@ -43,7 +43,7 @@ test.describe('role permission matrix', () => {
     const member = await createUser('member')
 
     const asUser = async (userId: string) => {
-      const login = await request.get(devLoginUrl(baseURL!, userId))
+      const login = await request.get(devLoginUrl(baseURL!, userId), { headers: devLoginHeaders() })
       expect(login.status()).toBeLessThan(400)
     }
 

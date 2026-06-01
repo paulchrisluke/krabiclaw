@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test'
-import { devLoginUrl } from './test-env'
+import { devLoginHeaders, devLoginUrl } from './test-env'
 
 test.describe('restaurant translations', () => {
   test('owner can draft and publish a locale translation without breaking public content reads', async ({ request, baseURL }) => {
-    const login = await request.get(devLoginUrl(baseURL!))
+    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
     expect(login.status()).toBeLessThan(400)
 
     const contextResponse = await request.get(`${baseURL}/api/dashboard/context`)

@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
   // CI/E2E override must be explicitly authorized with a shared secret.
   if (!devMode && e2eOverride) {
     const expectedSecret = process.env.E2E_DEV_ROUTE_SECRET || ''
-    const providedSecret = getHeader(event, 'x-dev-route-secret') || String(query.secret || '')
+    const providedSecret = getHeader(event, 'x-dev-route-secret') || ''
     if (!expectedSecret || !providedSecret || !timingSafeEqualText(providedSecret, expectedSecret)) {
       throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
     }
@@ -81,7 +81,10 @@ export default defineEventHandler(async (event) => {
       row.has_org === 1 &&
       String(row.role || '').toLowerCase() !== 'admin' &&
       !isPlatformOwner(row.email, env)
-    ) || rows[0] || null
+    ) || null
+    if (!user) {
+      throw createError({ statusCode: 500, statusMessage: 'No suitable dev user (has_org=1, role!=admin, !isPlatformOwner)' })
+    }
   }
   if (!user) throw createError({ statusCode: 500, statusMessage: 'No users in database' })
 

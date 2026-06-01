@@ -71,8 +71,11 @@ export function potteryHouseTestBaseUrl() {
 
 export function devLoginUrl(baseURL: string, userId?: string) {
   const url = new URL('/api/dev/login', baseURL)
-  const secret = testEnv('E2E_DEV_ROUTE_SECRET')
-  if (secret) url.searchParams.set('secret', secret)
   if (userId) url.searchParams.set('userId', userId)
   return url.toString()
+}
+
+export function devLoginHeaders(): Record<string, string> | undefined {
+  const secret = testEnv('E2E_DEV_ROUTE_SECRET')
+  return secret ? { 'x-dev-route-secret': secret } : undefined
 }

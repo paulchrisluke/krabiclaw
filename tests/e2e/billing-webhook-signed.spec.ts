@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto'
 import { expect, test } from '@playwright/test'
-import { devLoginUrl, testEnv } from './test-env'
+import { devLoginHeaders, devLoginUrl, testEnv } from './test-env'
 
 function stripeSignature(payload: string, secret: string, timestamp = Math.floor(Date.now() / 1000)) {
   const signedPayload = `${timestamp}.${payload}`
@@ -10,7 +10,7 @@ function stripeSignature(payload: string, secret: string, timestamp = Math.floor
 
 test.describe('billing webhook signed flow', () => {
   test('accepts valid signed checkout webhook and is idempotent on replay', async ({ request, baseURL }) => {
-    const login = await request.get(devLoginUrl(baseURL!))
+    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
     expect(login.status()).toBeLessThan(400)
 
     const context = await request.get(`${baseURL}/api/dashboard/context`)

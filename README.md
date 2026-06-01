@@ -85,7 +85,7 @@ yarn wrangler pages secret put CRON_SECRET
 
 `CRON_SECRET` protects internal endpoints such as `/api/internal/translation-jobs/process`. Local `yarn dev` reads it from `.env`; `wrangler pages dev` reads it from `.dev.vars`.
 
-Production canary/rollback setup and secret requirements are documented in [docs/prod-canary-and-rollback.md](docs/prod-canary-and-rollback.md).
+CI + E2E auth/billing parity and dev-login safety rules are documented in [docs/ci-e2e-guardrails.md](docs/ci-e2e-guardrails.md).
 
 ---
 
