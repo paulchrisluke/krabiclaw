@@ -199,6 +199,13 @@ export default defineNuxtConfig({
   // Nitro configuration for Cloudflare deployment
   nitro: {
     preset: 'cloudflare-module',
+    cloudflareDev: {
+      // Force deterministic binding discovery in CI/dev; avoids fallback stub env {}
+      // when wrangler config auto-discovery fails from an unexpected cwd.
+      configPath: './wrangler.toml',
+      persistDir: '.wrangler/state/v3',
+      silent: true,
+    },
     experimental: {
       tasks: enableNitroTasks
     },
