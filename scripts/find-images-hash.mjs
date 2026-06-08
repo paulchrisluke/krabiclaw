@@ -1,7 +1,7 @@
 import { fetch } from 'undici';
 
 const ACCOUNT_ID = process.env.CF_ACCOUNT_ID;
-const TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+const TOKEN = process.env.CLOUDFLARE_IMAGES_API_TOKEN;
 
 async function main() {
   try {
@@ -10,7 +10,7 @@ async function main() {
       process.exit(1);
     }
     if (!TOKEN) {
-      console.error('CLOUDFLARE_API_TOKEN not set');
+      console.error('CLOUDFLARE_IMAGES_API_TOKEN not set');
       process.exit(1);
     }
 
