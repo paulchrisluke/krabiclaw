@@ -105,6 +105,17 @@ jobs:
           yarn seed:local
           yarn seed:pottery-local
       - run: npx playwright install --with-deps chromium
+      - name: Print E2E CI context
+        run: |
+          node -v
+          yarn -v
+          npx playwright --version
+          echo "CI=$CI"
+          echo "NODE_ENV=$NODE_ENV"
+          echo "NUXT_HOST=$NUXT_HOST"
+          echo "NUXT_PUBLIC_SITE_URL=$NUXT_PUBLIC_SITE_URL"
+          echo "NUXT_PUBLIC_FREE_SITE_DOMAIN=$NUXT_PUBLIC_FREE_SITE_DOMAIN"
+          echo "PORT=$PORT"
       - run: yarn test:e2e:smoke
 
   e2e-full:
@@ -141,6 +152,17 @@ jobs:
           yarn seed:local
           yarn seed:pottery-local
       - run: npx playwright install --with-deps chromium
+      - name: Print E2E CI context
+        run: |
+          node -v
+          yarn -v
+          npx playwright --version
+          echo "CI=$CI"
+          echo "NODE_ENV=$NODE_ENV"
+          echo "NUXT_HOST=$NUXT_HOST"
+          echo "NUXT_PUBLIC_SITE_URL=$NUXT_PUBLIC_SITE_URL"
+          echo "NUXT_PUBLIC_FREE_SITE_DOMAIN=$NUXT_PUBLIC_FREE_SITE_DOMAIN"
+          echo "PORT=$PORT"
       - run: yarn test:e2e:full
 
   prod-smoke:

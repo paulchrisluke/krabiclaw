@@ -25,7 +25,9 @@ export default defineConfig({
     command: `PORT=${port} yarn dev`,
     url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
-    timeout: 180_000
+    timeout: 180_000,
+    stdout: process.env.CI ? 'pipe' : 'ignore',
+    stderr: process.env.CI ? 'pipe' : 'pipe'
   },
   projects: [
     {
