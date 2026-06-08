@@ -27,6 +27,7 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: yarn typecheck
+      - run: yarn test:unit
 
   lint-seeds:
     name: Seed schema lint

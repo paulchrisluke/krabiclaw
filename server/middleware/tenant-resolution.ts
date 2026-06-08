@@ -3,10 +3,12 @@
 
 import { defineEventHandler, getRequestURL, getHeader } from 'h3'
 import { cloudflareEnv } from '../utils/api-response'
+import { deriveSubdomain, getFreeSiteDomain, hostnameOf, isPlatformHost } from '../utils/tenant-hosts'
 
 interface TenantResolutionEnv {
   DB?: D1Database
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
+  NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
 interface TenantSiteRow {
@@ -19,15 +21,6 @@ interface TenantSiteRow {
   brand_name: string | null
   logo_url: string | null
   vertical: string | null
-}
-
-// Get platform domain from runtime config
-function getPlatformDomain(env: TenantResolutionEnv): string {
-  const domain = env.NUXT_PUBLIC_FREE_SITE_DOMAIN
-  // Return empty string if domain is not defined
-  if (!domain) return ''
-  // Remove protocol if present
-  return domain.replace(/^https?:\/\//, '')
 }
 
 export default defineEventHandler(async (event) => {
@@ -68,21 +61,6 @@ export default defineEventHandler(async (event) => {
   event.context.siteId = null
 })
 
-function isPlatformHost(host: string, env: TenantResolutionEnv): boolean {
-  const hostname = host?.split(':')[0] || ''
-  const platformDomain = getPlatformDomain(env)
-  if (hostname === 'kikuzuki-thailand-marketing.pages.dev' || hostname.endsWith('.kikuzuki-thailand-marketing.pages.dev')) {
-    return true
-  }
-  const platformHosts = [
-    'localhost',
-    '127.0.0.1',
-    platformDomain,
-    `www.${platformDomain}`
-  ]
-  return platformHosts.includes(hostname)
-}
-
 function isPlatformRoute(pathname: string): boolean {
   const exactOrTrailingSlashRoutes = ['/privacy', '/terms']
   const prefixRoutes = [
@@ -111,8 +89,8 @@ function isPlatformRoute(pathname: string): boolean {
 async function resolveTenantSite(host: string, event: Parameters<typeof cloudflareEnv>[0]): Promise<TenantSiteRow | null> {
   const env = cloudflareEnv(event) as TenantResolutionEnv
   const db = env.DB
-  const hostname = host?.split(':')[0] || ''
-  
+  const hostname = hostnameOf(host)
+
   if (!db || !hostname) return null
 
   // Local development support (e.g., demo.localhost)
@@ -147,11 +125,9 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
   if (customDomainSite) return customDomainSite
 
   // Try subdomains
-  const platformDomain = getPlatformDomain(env)
-  const subdomain = platformDomain && hostname.endsWith(`.${platformDomain}`)
-    ? hostname.replace(`.${platformDomain}`, '')
-    : hostname.split('.')[0]
-  if (subdomain && subdomain !== 'www' && subdomain !== hostname) {
+  const platformDomain = getFreeSiteDomain(env)
+  const subdomain = deriveSubdomain(hostname, platformDomain)
+  if (subdomain) {
     const subdomainSite = await db.prepare(`
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
              COALESCE(canonical.domain, sd.domain) AS canonical_domain,
