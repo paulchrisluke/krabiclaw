@@ -4,7 +4,6 @@ import { devLoginHeaders, devLoginUrl, testEnv } from './test-env'
 
 const POTTERY_OWNER_USER_ID = 'user-pottery-house'
 const RECIPIENT_USER_ID = 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re'
-const RECIPIENT_EMAIL = 'tankyspankyx@gmail.com'
 const SITE_ID = 'site-pottery-house'
 
 function stripeSignature(payload: string, secret: string, timestamp = Math.floor(Date.now() / 1000)) {
@@ -15,7 +14,24 @@ function stripeSignature(payload: string, secret: string, timestamp = Math.floor
 
 test.describe('site transfer handoff flow', () => {
   test('paid handoff stays pending until checkout completes and reminders can be forced', async ({ request, baseURL }) => {
+    test.skip(
+      !testEnv('STRIPE_SECRET_KEY') || !testEnv('STRIPE_WEBHOOK_SECRET') || !testEnv('NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'),
+      'Stripe must be configured for the paid handoff flow test.',
+    )
+
     const since = new Date().toISOString()
+
+    const recipientLogin = await request.get(devLoginUrl(baseURL!, RECIPIENT_USER_ID), {
+      headers: devLoginHeaders(),
+      maxRedirects: 0,
+    })
+    expect(recipientLogin.status()).toBe(302)
+
+    const recipientSession = await request.get(`${baseURL}/api/auth/get-session`)
+    expect(recipientSession.status()).toBe(200)
+    const recipientSessionBody = await recipientSession.json() as { user?: { email?: string } }
+    const recipientEmail = recipientSessionBody.user?.email
+    expect(recipientEmail).toEqual(expect.any(String))
 
     const adminLogin = await request.get(devLoginUrl(baseURL!, POTTERY_OWNER_USER_ID), {
       headers: devLoginHeaders(),
@@ -28,9 +44,8 @@ test.describe('site transfer handoff flow', () => {
 
     const create = await request.post(`${baseURL}/api/admin/sites/${SITE_ID}/transfer`, {
       data: {
-        email: RECIPIENT_EMAIL,
+        email: recipientEmail,
         plan: 'growth',
-        domain: 'www.potteryhousekrabi.com',
         message: 'Your studio site is ready to claim.',
       },
     })
@@ -63,17 +78,6 @@ test.describe('site transfer handoff flow', () => {
     expect(targetOrgId).toEqual(expect.any(String))
 
     const accept = await request.post(`${baseURL}/api/site-transfer/${created.token}/accept`)
-    if (accept.status() === 503) {
-      const body = await accept.json()
-      expect(String(body.error || '')).toContain('Stripe secret key not configured')
-      return
-    }
-    if (accept.status() === 500) {
-      const body = await accept.json()
-      expect(String(body.error || '')).toContain('Failed to start checkout')
-      return
-    }
-
     expect(accept.status()).toBe(200)
     const acceptBody = await accept.json() as { checkout_url?: string | null }
     expect(String(acceptBody.checkout_url || '')).toContain('http')
@@ -90,7 +94,6 @@ test.describe('site transfer handoff flow', () => {
     expect(pendingState.site.organization_id).toBe('org-pottery-house')
 
     const webhookSecret = testEnv('STRIPE_WEBHOOK_SECRET')
-    if (!webhookSecret) return
 
     const eventId = `evt_transfer_${Date.now()}`
     const now = Math.floor(Date.now() / 1000)

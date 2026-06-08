@@ -1,6 +1,7 @@
 // POST /api/admin/sites/[siteId]/transfer — initiate a site transfer to a new owner
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { rootDomainForPair } from '~/server/utils/domains'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
 import {
   buildTransferDomainSnapshot,
@@ -98,9 +99,20 @@ export default defineEventHandler(async (event) => {
   const id = crypto.randomUUID()
   const token = generateToken()
   const now = new Date()
+  const domainSnapshot = requiresPayment
+    ? await buildTransferDomainSnapshot(db, siteId)
+    : []
   const customDomainsSnapshot = requiresPayment
-    ? serializeTransferDomainSnapshot(await buildTransferDomainSnapshot(db, siteId))
+    ? serializeTransferDomainSnapshot(domainSnapshot)
     : null
+
+  if (invitedDomain) {
+    const invitedDomainRoot = rootDomainForPair(invitedDomain)
+    const hasInvitedDomain = domainSnapshot.some((entry) => rootDomainForPair(entry.domain) === invitedDomainRoot)
+    if (!hasInvitedDomain) {
+      return jsonResponse({ error: 'This site is not currently configured for that custom domain handoff.' }, { status: 400 })
+    }
+  }
 
   const cancelStmt = db.prepare(
     `UPDATE site_transfer_requests SET status = 'cancelled'

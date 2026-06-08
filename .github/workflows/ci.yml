@@ -105,6 +105,25 @@ jobs:
           yarn seed:pottery-local
       - run: npx playwright install --with-deps chromium
       - run: yarn test:e2e:smoke
+      - name: Dump E2E smoke server log tail
+        if: failure()
+        run: |
+          if [ -f .artifacts/e2e/web-server.log ]; then
+            echo "== .artifacts/e2e/web-server.log (tail) =="
+            tail -n 200 .artifacts/e2e/web-server.log
+          else
+            echo "No E2E web server log was produced."
+          fi
+      - name: Upload E2E smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: e2e-smoke-diagnostics
+          path: |
+            .artifacts/e2e/
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
 
   e2e-full:
     name: E2E full
@@ -141,6 +160,25 @@ jobs:
           yarn seed:pottery-local
       - run: npx playwright install --with-deps chromium
       - run: yarn test:e2e:full
+      - name: Dump E2E full server log tail
+        if: failure()
+        run: |
+          if [ -f .artifacts/e2e/web-server.log ]; then
+            echo "== .artifacts/e2e/web-server.log (tail) =="
+            tail -n 200 .artifacts/e2e/web-server.log
+          else
+            echo "No E2E web server log was produced."
+          fi
+      - name: Upload E2E full diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: e2e-full-diagnostics
+          path: |
+            .artifacts/e2e/
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
 
   prod-smoke:
     name: Production smoke

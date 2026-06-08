@@ -45,6 +45,8 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Transfer is no longer active', status: row.status }, { status: 410 })
   }
 
+  const requiresPayment = row.requires_payment === 1 || Boolean(row.invited_plan)
+
   // Fetch plan price + coupon discount from Stripe (best-effort)
   interface PricingInfo {
     base_cents: number
@@ -98,7 +100,7 @@ export default defineEventHandler(async (event) => {
     invited_coupon: row.invited_coupon,
     pricing,
     invited_domain: row.invited_domain,
-    requires_payment: row.requires_payment === 1,
+    requires_payment: requiresPayment,
     never_expires: true,
     site_subdomain: row.subdomain,
     initiated_by_name: row.initiated_by_name,

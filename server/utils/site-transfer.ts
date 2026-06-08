@@ -63,6 +63,7 @@ interface TransferCleanupRow {
   requires_payment: number
   custom_domains_snapshot: string | null
   custom_domains_removed_at: string | null
+  claiming_organization_id: string | null
 }
 
 interface TransferCompletionRow {
@@ -74,6 +75,7 @@ interface TransferCompletionRow {
   claiming_organization_id: string | null
   custom_domains_snapshot: string | null
   custom_domains_removed_at: string | null
+  payment_completed_at: string | null
 }
 
 interface TransferReminderRow {
@@ -145,7 +147,7 @@ export async function deleteSiteCustomDomains(
   siteId: string,
   actorType: 'owner' | 'admin' | 'system',
   actorId?: string | null,
-): Promise<number> {
+): Promise<{ deletedCount: number; failedDomainIds: string[] }> {
   const domains = await db.prepare(`
     SELECT id
     FROM site_domains
@@ -153,12 +155,26 @@ export async function deleteSiteCustomDomains(
     ORDER BY created_at ASC
   `).bind(siteId).all<{ id: string }>()
 
-  let deleted = 0
+  let deletedCount = 0
+  const failedDomainIds: string[] = []
+
   for (const domain of domains.results || []) {
-    await deleteCustomDomain(env, db, domain.id, actorType, actorId)
-    deleted += 1
+    try {
+      await deleteCustomDomain(env, db, domain.id, actorType, actorId)
+      deletedCount += 1
+    } catch (error) {
+      failedDomainIds.push(domain.id)
+      console.error('delete_site_custom_domain_failed', {
+        siteId,
+        domainId: domain.id,
+        actorType,
+        actorId,
+        error,
+      })
+    }
   }
-  return deleted
+
+  return { deletedCount, failedDomainIds }
 }
 
 export async function restoreSiteCustomDomains(
@@ -244,7 +260,7 @@ export async function cancelPendingSiteTransfer(
 ): Promise<{ cancelled: boolean; customDomainsDeleted: number }> {
   const transfer = await db.prepare(`
     SELECT id, site_id, from_organization_id, status, requires_payment,
-           custom_domains_snapshot, custom_domains_removed_at
+           custom_domains_snapshot, custom_domains_removed_at, claiming_organization_id
     FROM site_transfer_requests
     WHERE id = ?
     LIMIT 1
@@ -254,18 +270,22 @@ export async function cancelPendingSiteTransfer(
     return { cancelled: false, customDomainsDeleted: 0 }
   }
 
-  const now = new Date().toISOString()
   let snapshotRaw = transfer.custom_domains_snapshot
   let customDomainsDeleted = 0
-  let removedAt = transfer.custom_domains_removed_at
 
   if (transfer.requires_payment) {
     if (!snapshotRaw) {
       snapshotRaw = serializeTransferDomainSnapshot(await buildTransferDomainSnapshot(db, transfer.site_id))
     }
-    if (!removedAt) {
-      customDomainsDeleted = await deleteSiteCustomDomains(env, db, transfer.site_id, 'system')
-      removedAt = now
+    if (transfer.custom_domains_removed_at && transfer.claiming_organization_id) {
+      customDomainsDeleted = (await restoreSiteCustomDomains(
+        env,
+        db,
+        transfer.site_id,
+        transfer.claiming_organization_id,
+        snapshotRaw,
+        'system',
+      ))
     }
   }
 
@@ -273,9 +293,9 @@ export async function cancelPendingSiteTransfer(
     UPDATE site_transfer_requests
     SET status = 'cancelled',
         custom_domains_snapshot = ?,
-        custom_domains_removed_at = ?
+        custom_domains_removed_at = NULL
     WHERE id = ?
-  `).bind(snapshotRaw ?? null, removedAt ?? null, transferId).run()
+  `).bind(snapshotRaw ?? null, transferId).run()
 
   return { cancelled: true, customDomainsDeleted }
 }
@@ -288,13 +308,13 @@ export async function completePaidSiteTransfer(
   const transfer = await db.prepare(`
     SELECT id, site_id, from_organization_id, status,
            claiming_user_id, claiming_organization_id,
-           custom_domains_snapshot, custom_domains_removed_at
+           custom_domains_snapshot, custom_domains_removed_at, payment_completed_at
     FROM site_transfer_requests
     WHERE id = ?
     LIMIT 1
   `).bind(transferId).first<TransferCompletionRow>()
 
-  if (!transfer || transfer.status !== 'pending') {
+  if (!transfer) {
     return { completed: false, restoredDomains: 0 }
   }
 
@@ -302,14 +322,18 @@ export async function completePaidSiteTransfer(
     throw new Error('Transfer is missing claiming user or organization')
   }
 
-  await executeSiteTransfer(
-    db,
-    transfer.site_id,
-    transfer.from_organization_id,
-    transfer.claiming_organization_id,
-    transfer.id,
-    transfer.claiming_user_id,
-  )
+  if (transfer.status === 'pending') {
+    await executeSiteTransfer(
+      db,
+      transfer.site_id,
+      transfer.from_organization_id,
+      transfer.claiming_organization_id,
+      transfer.id,
+      transfer.claiming_user_id,
+    )
+  } else if (transfer.status !== 'accepted' || transfer.payment_completed_at) {
+    return { completed: false, restoredDomains: 0 }
+  }
 
   let restoredDomains = 0
   if (transfer.custom_domains_removed_at && transfer.custom_domains_snapshot) {
@@ -378,14 +402,35 @@ export async function processSiteTransferReminders(
     ) {
       const snapshotRaw = transfer.custom_domains_snapshot
         || serializeTransferDomainSnapshot(await buildTransferDomainSnapshot(db, transfer.site_id))
-      const deleted = await deleteSiteCustomDomains(env, db, transfer.site_id, 'system')
+
       await db.prepare(`
         UPDATE site_transfer_requests
-        SET custom_domains_snapshot = ?,
-            custom_domains_removed_at = ?
+        SET custom_domains_snapshot = ?
         WHERE id = ?
-      `).bind(snapshotRaw, nowIso, transfer.id).run()
-      pausedDomains += deleted
+      `).bind(snapshotRaw, transfer.id).run()
+
+      const deleted = await deleteSiteCustomDomains(env, db, transfer.site_id, 'system')
+      if (deleted.failedDomainIds.length === 0) {
+        await db.prepare(`
+          UPDATE site_transfer_requests
+          SET custom_domains_removed_at = ?
+          WHERE id = ?
+        `).bind(nowIso, transfer.id).run()
+      }
+
+      if (deleted.failedDomainIds.length > 0) {
+        console.error('site_transfer_domain_pause_incomplete', {
+          transferId: transfer.id,
+          failedDomainIds: deleted.failedDomainIds,
+        })
+      }
+
+      await db.prepare(`
+        UPDATE site_transfer_requests
+        SET custom_domains_snapshot = ?
+        WHERE id = ?
+      `).bind(snapshotRaw, transfer.id).run()
+      pausedDomains += deleted.deletedCount
     }
 
     const threshold = reminderThresholdForCount(reminderCount)

@@ -4,6 +4,17 @@ import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
 import { executeSiteTransfer } from '~/server/utils/site-transfer'
 import { getStripe, getPriceIdForPlan } from '~/server/utils/billing'
+import type Stripe from 'stripe'
+
+function checkoutSessionIsReusable(
+  session: Stripe.Checkout.Session,
+  transferId: string,
+): session is Stripe.Checkout.Session & { url: string } {
+  return session.status === 'open'
+    && typeof session.url === 'string'
+    && session.url.length > 0
+    && session.metadata?.transfer_request_id === transferId
+}
 
 export default defineEventHandler(async (event) => {
   const token = getRouterParam(event, 'token')
@@ -23,7 +34,7 @@ export default defineEventHandler(async (event) => {
   const transfer = await db
     .prepare(
       `SELECT id, site_id, from_organization_id, to_email, status,
-              invited_plan, invited_coupon, requires_payment
+              invited_plan, invited_coupon, requires_payment, stripe_checkout_session_id
        FROM site_transfer_requests WHERE token = ? LIMIT 1`,
     )
     .bind(token)
@@ -36,6 +47,7 @@ export default defineEventHandler(async (event) => {
       invited_plan: string | null
       invited_coupon: string | null
       requires_payment: number
+      stripe_checkout_session_id: string | null
     }>()
 
   if (!transfer) return jsonResponse({ error: 'Transfer not found' }, { status: 404 })
@@ -97,6 +109,22 @@ export default defineEventHandler(async (event) => {
         .first<{ name: string; slug: string | null; stripe_customer_id: string | null }>()
 
       let customerId = orgRow?.stripe_customer_id ?? null
+      if (customerId) {
+        try {
+          const existingCustomer = await stripe.customers.retrieve(customerId)
+          if ('deleted' in existingCustomer && existingCustomer.deleted) {
+            customerId = null
+          }
+        } catch (error) {
+          console.warn('transfer_checkout_customer_lookup_failed', {
+            organizationId: toOrgId,
+            customerId,
+            error,
+          })
+          customerId = null
+        }
+      }
+
       if (!customerId) {
         if (!userEmail) throw new Error('User email required to create Stripe customer')
         const customer = await stripe.customers.create({
@@ -105,14 +133,48 @@ export default defineEventHandler(async (event) => {
           metadata: { organization_id: toOrgId },
         })
         customerId = customer.id
-        await db
-          .prepare(`INSERT OR REPLACE INTO organization_billing (id, organization_id, stripe_customer_id, updated_at) VALUES (?, ?, ?, ?)`)
-          .bind(`billing-${toOrgId}`, toOrgId, customerId, new Date().toISOString())
-          .run()
+        const billingId = `billing-${toOrgId}`
+        const billingExists = await db
+          .prepare(`SELECT id FROM organization_billing WHERE organization_id = ? LIMIT 1`)
+          .bind(toOrgId)
+          .first<{ id: string }>()
+
+        if (billingExists?.id) {
+          await db
+            .prepare(`UPDATE organization_billing SET stripe_customer_id = ?, updated_at = ? WHERE id = ?`)
+            .bind(customerId, new Date().toISOString(), billingExists.id)
+            .run()
+        } else {
+          await db
+            .prepare(`INSERT INTO organization_billing (id, organization_id, stripe_customer_id, updated_at) VALUES (?, ?, ?, ?)`)
+            .bind(billingId, toOrgId, customerId, new Date().toISOString())
+            .run()
+        }
       }
 
       const origin = getRequestURL(event).origin
       const slug = orgRow?.slug ? encodeURIComponent(orgRow.slug) : encodeURIComponent(toOrgId)
+
+      if (transfer.stripe_checkout_session_id) {
+        try {
+          const existingSession = await stripe.checkout.sessions.retrieve(transfer.stripe_checkout_session_id)
+          if (checkoutSessionIsReusable(existingSession, transfer.id)) {
+            await db.prepare(`
+              UPDATE site_transfer_requests
+              SET claiming_user_id = ?, claiming_organization_id = ?
+              WHERE id = ?
+            `).bind(userId, toOrgId, transfer.id).run()
+
+            return jsonResponse({ success: true, site_id: transfer.site_id, checkout_url: existingSession.url })
+          }
+        } catch (error) {
+          console.warn('transfer_checkout_session_reuse_failed', {
+            transferId: transfer.id,
+            checkoutSessionId: transfer.stripe_checkout_session_id,
+            error,
+          })
+        }
+      }
 
       const checkoutParams: Parameters<typeof stripe.checkout.sessions.create>[0] = {
         customer: customerId,
@@ -143,11 +205,28 @@ export default defineEventHandler(async (event) => {
       }
 
       const checkoutSession = await stripe.checkout.sessions.create(checkoutParams)
-      await db.prepare(`
+      const persistResult = await db.prepare(`
         UPDATE site_transfer_requests
         SET claiming_user_id = ?, claiming_organization_id = ?, stripe_checkout_session_id = ?
         WHERE id = ?
-      `).bind(userId, toOrgId, checkoutSession.id, transfer.id).run()
+          AND (stripe_checkout_session_id IS NULL OR stripe_checkout_session_id = ?)
+      `).bind(userId, toOrgId, checkoutSession.id, transfer.id, transfer.stripe_checkout_session_id).run()
+
+      if ((persistResult.meta?.changes ?? 0) === 0) {
+        const latestTransfer = await db
+          .prepare(`SELECT stripe_checkout_session_id FROM site_transfer_requests WHERE id = ? LIMIT 1`)
+          .bind(transfer.id)
+          .first<{ stripe_checkout_session_id: string | null }>()
+
+        if (latestTransfer?.stripe_checkout_session_id) {
+          const latestSession = await stripe.checkout.sessions.retrieve(latestTransfer.stripe_checkout_session_id)
+          if (checkoutSessionIsReusable(latestSession, transfer.id)) {
+            return jsonResponse({ success: true, site_id: transfer.site_id, checkout_url: latestSession.url })
+          }
+        }
+
+        throw new Error('Failed to persist or reuse checkout session for this handoff.')
+      }
 
       return jsonResponse({ success: true, site_id: transfer.site_id, checkout_url: checkoutSession.url })
     } catch (err) {
