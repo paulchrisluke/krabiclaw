@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { verifyStripeWebhook, setOrganizationEntitlementsFromPlan, getPlanFromStripePrice } from '../../utils/billing'
 import { deleteOrganizationCustomDomains } from '../../utils/domains'
+import { completePaidSiteTransfer } from '../../utils/site-transfer'
 import Stripe from 'stripe'
 
 interface BillingOrgRow {
@@ -132,7 +133,78 @@ export default defineEventHandler(async (event) => {
   }
 })
 
-// Handle checkout session completion — routes to credit top-up or plan upgrade
+function expandedCheckoutSubscription(session: Stripe.Checkout.Session): ExpandedCheckoutSubscription | null {
+  const subRef = session.subscription
+  return typeof subRef === 'object' && subRef !== null
+    ? subRef as ExpandedCheckoutSubscription
+    : null
+}
+
+function checkoutSubscriptionId(session: Stripe.Checkout.Session): string {
+  const subRef = session.subscription
+  const expanded = expandedCheckoutSubscription(session)
+  return expanded?.id ?? (typeof subRef === 'string' ? subRef : '')
+}
+
+async function applyCheckoutSubscriptionToOrganization(
+  env: Record<string, string | undefined>,
+  db: D1Database,
+  session: Stripe.Checkout.Session,
+  organizationId: string,
+  plan: string,
+) {
+  const customerId = session.customer as string
+  const subscriptionId = checkoutSubscriptionId(session)
+  if (!organizationId || !plan || !subscriptionId) {
+    throw new Error('Missing checkout metadata or subscription')
+  }
+
+  const expanded = expandedCheckoutSubscription(session)
+  const subscriptionItemId: string | null = expanded?.items?.data?.[0]?.id ?? null
+  const periodEnd: string | null = expanded?.billing_cycle_anchor
+    ? new Date(expanded.billing_cycle_anchor * 1000).toISOString()
+    : null
+
+  await db.prepare(`
+    INSERT OR REPLACE INTO organization_billing
+    (id, organization_id, stripe_customer_id, stripe_subscription_id, stripe_subscription_item_id,
+     plan, status, current_period_end, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    `billing-${organizationId}`,
+    organizationId,
+    customerId,
+    subscriptionId,
+    subscriptionItemId,
+    plan,
+    'active',
+    periodEnd,
+    new Date().toISOString()
+  ).run()
+
+  await setOrganizationEntitlementsFromPlan(env, db, organizationId, plan)
+}
+
+async function handleSiteTransferCheckoutCompleted(env: Record<string, string | undefined>, db: D1Database, session: Stripe.Checkout.Session) {
+  const organizationId = session.metadata?.organization_id
+  const plan = session.metadata?.plan
+  const transferId = session.metadata?.transfer_request_id
+
+  if (!organizationId || !plan || !transferId) {
+    console.error('Invalid site transfer checkout metadata:', session.id, {
+      organizationId,
+      plan,
+      transferId,
+    })
+    return
+  }
+
+  await applyCheckoutSubscriptionToOrganization(env, db, session, organizationId, plan)
+  await completePaidSiteTransfer(env, db, transferId)
+  console.log(`Site transfer checkout completed for organization ${organizationId}, transfer ${transferId}`)
+}
+
+// Handle checkout session completion — routes to credit top-up, paid handoff, or plan upgrade
 async function handleCheckoutCompleted(env: Record<string, string | undefined>, db: D1Database, session: Stripe.Checkout.Session) {
   const organizationId = session.metadata?.organization_id
 
@@ -162,44 +234,17 @@ async function handleCheckoutCompleted(env: Record<string, string | undefined>, 
     return
   }
 
-  const plan = session.metadata?.plan
-  const customerId = session.customer as string
-
-  // In Stripe v22 the subscription is expanded inline in the webhook payload
-  const subRef = session.subscription
-  const sub: ExpandedCheckoutSubscription | null = typeof subRef === 'object' && subRef !== null
-    ? subRef as ExpandedCheckoutSubscription
-    : null
-  const subscriptionId: string = sub?.id ?? (typeof subRef === 'string' ? subRef : '')
-
-  if (!organizationId || !plan || !subscriptionId) {
-    console.error('Missing metadata or subscription in checkout session:', session.id)
+  if (session.metadata?.type === 'site_transfer') {
+    await handleSiteTransferCheckoutCompleted(env, db, session)
     return
   }
 
-  const subscriptionItemId: string | null = sub?.items?.data?.[0]?.id ?? null
-  const periodEnd: string | null = sub?.billing_cycle_anchor
-    ? new Date(sub.billing_cycle_anchor * 1000).toISOString()
-    : null
-
-  await db.prepare(`
-    INSERT OR REPLACE INTO organization_billing
-    (id, organization_id, stripe_customer_id, stripe_subscription_id, stripe_subscription_item_id,
-     plan, status, current_period_end, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    `billing-${organizationId}`,
-    organizationId,
-    customerId,
-    subscriptionId,
-    subscriptionItemId,
-    plan,
-    'active',
-    periodEnd,
-    new Date().toISOString()
-  ).run()
-
-  await setOrganizationEntitlementsFromPlan(env, db, organizationId, plan)
+  const plan = session.metadata?.plan
+  if (!organizationId || !plan || !checkoutSubscriptionId(session)) {
+    console.error('Missing metadata or subscription in checkout session:', session.id)
+    return
+  }
+  await applyCheckoutSubscriptionToOrganization(env, db, session, organizationId, plan)
 
   console.log(`Checkout completed for organization ${organizationId}, plan ${plan}`)
 }

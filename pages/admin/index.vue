@@ -488,7 +488,7 @@
 
             <UFormField label="Their domain (optional)">
               <UInput v-model="handoffDomain" placeholder="potteryhouse.com" class="w-full" />
-              <template #help>If you've already set up DNS, enter it here — shown as a selling point in the email and claim page.</template>
+              <template #help>If you enter a domain here, choose a paid plan too. The client must complete checkout before ownership transfers.</template>
             </UFormField>
 
             <UFormField label="Plan to invite them to">
@@ -527,7 +527,7 @@
             variant="soft"
             icon="i-heroicons-check-circle"
             :title="`Invite sent to ${handoffResult.to_email}`"
-            :description="handoffResult.invited_plan ? `Plan: ${handoffResult.invited_plan} — they'll be taken to Stripe after claiming.` : 'No plan attached — they can choose after claiming.'"
+            :description="handoffResult.invited_plan ? `Plan: ${handoffResult.invited_plan} — checkout happens before ownership transfers.` : 'No plan attached — ownership transfers as soon as they claim it.'"
           />
 
           <div>
@@ -545,7 +545,7 @@
                 WhatsApp
               </UButton>
             </div>
-            <p class="text-xs text-muted mt-2">An invite email was also sent automatically. Share this link as a backup via WhatsApp.</p>
+            <p class="text-xs text-muted mt-2">An invite email was also sent automatically. This handoff link stays active until it is completed or cancelled.</p>
           </div>
 
           <div class="flex justify-end">

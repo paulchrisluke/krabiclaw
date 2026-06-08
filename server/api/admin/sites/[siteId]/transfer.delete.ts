@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
+import { cancelPendingSiteTransfer } from '~/server/utils/site-transfer'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -30,15 +31,18 @@ export default defineEventHandler(async (event) => {
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const result = await db
-    .prepare(
-      `UPDATE site_transfer_requests SET status = 'cancelled'
-       WHERE site_id = ? AND status = 'pending'`,
-    )
-    .bind(siteId)
-    .run()
+  const transfer = await db.prepare(`
+    SELECT id
+    FROM site_transfer_requests
+    WHERE site_id = ? AND status = 'pending'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(siteId).first<{ id: string }>()
 
-  if (!result.meta.changes) return jsonResponse({ error: 'No pending transfer found' }, { status: 404 })
+  if (!transfer) return jsonResponse({ error: 'No pending transfer found' }, { status: 404 })
 
-  return jsonResponse({ cancelled: true })
+  const result = await cancelPendingSiteTransfer(env, db, transfer.id)
+  if (!result.cancelled) return jsonResponse({ error: 'No pending transfer found' }, { status: 404 })
+
+  return jsonResponse({ cancelled: true, custom_domains_deleted: result.customDomainsDeleted })
 })

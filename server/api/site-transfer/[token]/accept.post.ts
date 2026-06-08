@@ -22,7 +22,8 @@ export default defineEventHandler(async (event) => {
 
   const transfer = await db
     .prepare(
-      `SELECT id, site_id, from_organization_id, to_email, status, expires_at, invited_plan, invited_coupon
+      `SELECT id, site_id, from_organization_id, to_email, status,
+              invited_plan, invited_coupon, requires_payment
        FROM site_transfer_requests WHERE token = ? LIMIT 1`,
     )
     .bind(token)
@@ -32,9 +33,9 @@ export default defineEventHandler(async (event) => {
       from_organization_id: string
       to_email: string
       status: string
-      expires_at: string
       invited_plan: string | null
       invited_coupon: string | null
+      requires_payment: number
     }>()
 
   if (!transfer) return jsonResponse({ error: 'Transfer not found' }, { status: 404 })
@@ -44,14 +45,6 @@ export default defineEventHandler(async (event) => {
       { error: `Transfer is already ${transfer.status}` },
       { status: 410 },
     )
-  }
-
-  if (new Date(transfer.expires_at) < new Date()) {
-    await db
-      .prepare(`UPDATE site_transfer_requests SET status = 'expired' WHERE id = ?`)
-      .bind(transfer.id)
-      .run()
-    return jsonResponse({ error: 'Transfer has expired' }, { status: 410 })
   }
 
   // Only the intended recipient or a platform admin may accept
@@ -83,17 +76,16 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'You already own this site' }, { status: 422 })
   }
 
-  await executeSiteTransfer(
-    db,
-    transfer.site_id,
-    transfer.from_organization_id,
-    toOrgId,
-    transfer.id,
-    userId,
-  )
+  const requiresPayment = transfer.requires_payment === 1 || Boolean(transfer.invited_plan)
 
-  // If a plan was attached, create a Stripe Checkout session for the new owner's org
-  if (transfer.invited_plan && env.STRIPE_SECRET_KEY) {
+  if (requiresPayment) {
+    if (!transfer.invited_plan) {
+      return jsonResponse({ error: 'This handoff is missing its required plan.' }, { status: 500 })
+    }
+    if (!env.STRIPE_SECRET_KEY) {
+      return jsonResponse({ error: 'Stripe secret key not configured' }, { status: 503 })
+    }
+
     try {
       const priceId = await getPriceIdForPlan(env, transfer.invited_plan, 'month')
       const stripe = getStripe(env)
@@ -128,8 +120,22 @@ export default defineEventHandler(async (event) => {
         line_items: [{ price: priceId, quantity: 1 }],
         success_url: `${origin}/dashboard/${slug}/~/onboarding?new=true`,
         cancel_url: `${origin}/dashboard/${slug}/~/onboarding?new=true&payment=cancelled`,
-        metadata: { organization_id: toOrgId, plan: transfer.invited_plan },
-        subscription_data: { metadata: { organization_id: toOrgId, plan: transfer.invited_plan } },
+        metadata: {
+          type: 'site_transfer',
+          organization_id: toOrgId,
+          plan: transfer.invited_plan,
+          transfer_request_id: transfer.id,
+          transfer_site_id: transfer.site_id,
+          transfer_claiming_user_id: userId,
+          transfer_claiming_organization_id: toOrgId,
+        },
+        subscription_data: {
+          metadata: {
+            organization_id: toOrgId,
+            plan: transfer.invited_plan,
+            transfer_request_id: transfer.id,
+          },
+        },
       }
 
       if (transfer.invited_coupon) {
@@ -137,13 +143,27 @@ export default defineEventHandler(async (event) => {
       }
 
       const checkoutSession = await stripe.checkout.sessions.create(checkoutParams)
+      await db.prepare(`
+        UPDATE site_transfer_requests
+        SET claiming_user_id = ?, claiming_organization_id = ?, stripe_checkout_session_id = ?
+        WHERE id = ?
+      `).bind(userId, toOrgId, checkoutSession.id, transfer.id).run()
 
       return jsonResponse({ success: true, site_id: transfer.site_id, checkout_url: checkoutSession.url })
     } catch (err) {
-      // Transfer already completed — don't fail, just skip the checkout
       console.error('transfer_checkout_failed', err)
+      return jsonResponse({ error: 'Failed to start checkout for this handoff.' }, { status: 500 })
     }
   }
+
+  await executeSiteTransfer(
+    db,
+    transfer.site_id,
+    transfer.from_organization_id,
+    toOrgId,
+    transfer.id,
+    userId,
+  )
 
   return jsonResponse({ success: true, site_id: transfer.site_id })
 })

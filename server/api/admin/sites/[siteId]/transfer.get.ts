@@ -32,7 +32,8 @@ export default defineEventHandler(async (event) => {
 
   const transfer = await db
     .prepare(
-      `SELECT id, to_email, status, created_at, expires_at, completed_at
+      `SELECT id, to_email, status, created_at, completed_at,
+              requires_payment, reminder_count, last_reminder_at, custom_domains_removed_at
        FROM site_transfer_requests
        WHERE site_id = ? AND status = 'pending'
        ORDER BY created_at DESC LIMIT 1`,
@@ -43,20 +44,14 @@ export default defineEventHandler(async (event) => {
       to_email: string
       status: string
       created_at: string
-      expires_at: string
       completed_at: string | null
+      requires_payment: number
+      reminder_count: number | null
+      last_reminder_at: string | null
+      custom_domains_removed_at: string | null
     }>()
 
   if (!transfer) return jsonResponse({ pending: null })
-
-  // Auto-expire if past expiry
-  if (new Date(transfer.expires_at) < new Date()) {
-    await db
-      .prepare(`UPDATE site_transfer_requests SET status = 'expired' WHERE id = ?`)
-      .bind(transfer.id)
-      .run()
-    return jsonResponse({ pending: null })
-  }
 
   return jsonResponse({ pending: transfer })
 })
