@@ -21,11 +21,11 @@
       </p>
 
       <!-- Actions -->
-      <div class="bg-elevated p-7 rounded-[18px] border border-default shadow-sm space-y-5 mt-4 text-left">
+      <UCard class="bg-elevated p-7 rounded-[18px] border border-default shadow-sm space-y-5 mt-4 text-left" :ui="{ body: 'p-0 sm:p-0' }">
         <div class="text-[15px] text-default font-bold">
           Are you a restaurant owner?
         </div>
-        
+
         <p class="text-[14px] text-muted">
           Build a beautiful, high-converting website for your restaurant in minutes with KrabiClaw.
         </p>
@@ -45,7 +45,7 @@
             Sign In
           </a>
         </div>
-      </div>
+      </UCard>
     </div>
   </div>
 </template>

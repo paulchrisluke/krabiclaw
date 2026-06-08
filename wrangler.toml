@@ -75,14 +75,17 @@ binding = "DB"
 database_name = "krabiclaw-db-staging"
 database_id = "757824d5-bdb2-4041-81a7-c30b9d1dc960"
 migrations_dir = "migrations"
+remote = false
 
 [[env.preview.r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "krabiclaw-media-staging"
+remote = false
 
 [[env.preview.kv_namespaces]]
 binding = "SITE_CACHE"
 id = "9e829557fd2b46dba4148f2ed27a5c0b"
+remote = false
 
 [env.preview.ai]
 binding = "AI"

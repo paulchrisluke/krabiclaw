@@ -1,11 +1,11 @@
 import { fetch } from 'undici';
 
-const TOKEN = process.env.CF_AIG_TOKEN;
+const TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 
 async function main() {
   try {
     if (!TOKEN) {
-      console.error('CF_AIG_TOKEN not set');
+      console.error('CLOUDFLARE_API_TOKEN not set');
       process.exit(1);
     }
 

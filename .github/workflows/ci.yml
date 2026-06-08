@@ -115,9 +115,9 @@ jobs:
             --env preview \
             --preview-alias "$alias" \
             --message "CI smoke ${{ github.sha }}" | tee /tmp/wrangler-upload.log
-          preview_url=$(grep -oE 'Version Preview Alias URL: \S+' /tmp/wrangler-upload.log | awk '{print $5}')
-          if [ -z "$preview_url" ]; then
-            echo "Could not parse preview URL from wrangler output" >&2
+          preview_url=$(grep -oE 'Version Preview Alias URL: https://\S+' /tmp/wrangler-upload.log | sed -E 's/^Version Preview Alias URL: //')
+          if [[ ! "$preview_url" =~ ^https://[A-Za-z0-9.-]+\.workers\.dev/?$ ]]; then
+            echo "Could not parse a valid preview URL from wrangler output: '${preview_url}'" >&2
             exit 1
           fi
           echo "Preview deployed: $preview_url"

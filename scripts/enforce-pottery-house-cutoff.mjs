@@ -6,7 +6,6 @@ const SITE_ID = 'site-pottery-house'
 const FREE_SUBDOMAIN_ID = 'domain-pottery-prod'
 const CUSTOM_DOMAIN_ID = 'dom-pottery-www'
 const TRANSFER_EMAIL = 'thesdrew@gmail.com'
-const FAR_FUTURE_EXPIRY = '2099-01-01T00:00:00.000Z'
 const APPLY = process.argv.includes('--apply')
 
 function runWranglerJson(sql) {
@@ -55,7 +54,7 @@ function loadState() {
   `).results
 
   const transfers = runWranglerJson(`
-    SELECT id, site_id, from_organization_id, to_email, token, status, expires_at, completed_at, invited_plan, invited_domain, created_at
+    SELECT id, site_id, from_organization_id, to_email, status, completed_at, invited_plan, invited_domain, created_at
     FROM site_transfer_requests
     WHERE site_id = ${q(SITE_ID)}
     ORDER BY created_at DESC;
@@ -86,10 +85,26 @@ function assertExpectedState(state) {
     throw new Error(`Unexpected free subdomain hostname: ${freeSubdomain.domain}`)
   }
 
-  const transfer = state.transfers.find((row) => row.to_email === TRANSFER_EMAIL)
-  if (!transfer) throw new Error(`Transfer row for ${TRANSFER_EMAIL} not found`)
+  const pendingTransfers = state.transfers.filter(
+    (row) => row.to_email === TRANSFER_EMAIL && row.status === 'pending',
+  )
+  if (pendingTransfers.length === 0) {
+    throw new Error(`No pending transfer row for ${TRANSFER_EMAIL} found`)
+  }
+  if (pendingTransfers.length > 1) {
+    throw new Error(`Multiple pending transfer rows for ${TRANSFER_EMAIL} found — refusing to guess which one to reset (ids: ${pendingTransfers.map((row) => row.id).join(', ')})`)
+  }
+  const transfer = pendingTransfers[0]
 
   return { customDomain, freeSubdomain, transfer }
+}
+
+function redactTransfer(row) {
+  return {
+    ...row,
+    to_email: row.to_email ? row.to_email.replace(/^(.).*(@.*)$/, '$1***$2') : row.to_email,
+    invited_domain: row.invited_domain ? '<redacted>' : row.invited_domain,
+  }
 }
 
 function printState(label, state) {
@@ -97,7 +112,7 @@ function printState(label, state) {
   console.log(JSON.stringify({
     site: state.site,
     domains: state.domains,
-    transfers: state.transfers,
+    transfers: state.transfers.map(redactTransfer),
   }, null, 2))
 }
 
@@ -133,15 +148,14 @@ function buildApplySql({ customDomain, freeSubdomain, transfer, site }) {
 
     UPDATE sites
     SET public_url = ${q(`https://${freeSubdomain.domain}`)},
-        custom_domain = ${q(freeSubdomain.domain)},
-        custom_domain_status = 'active',
+        custom_domain = NULL,
+        custom_domain_status = NULL,
         updated_at = ${q(now)}
     WHERE id = ${q(site.id)}
       AND organization_id = ${q(site.organization_id)};
 
     UPDATE site_transfer_requests
     SET status = 'pending',
-        expires_at = ${q(FAR_FUTURE_EXPIRY)},
         completed_at = NULL
     WHERE id = ${q(transfer.id)};
 

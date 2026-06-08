@@ -134,22 +134,16 @@ export default defineEventHandler(async (event) => {
         })
         customerId = customer.id
         const billingId = `billing-${toOrgId}`
-        const billingExists = await db
-          .prepare(`SELECT id FROM organization_billing WHERE organization_id = ? LIMIT 1`)
-          .bind(toOrgId)
-          .first<{ id: string }>()
-
-        if (billingExists?.id) {
-          await db
-            .prepare(`UPDATE organization_billing SET stripe_customer_id = ?, updated_at = ? WHERE id = ?`)
-            .bind(customerId, new Date().toISOString(), billingExists.id)
-            .run()
-        } else {
-          await db
-            .prepare(`INSERT INTO organization_billing (id, organization_id, stripe_customer_id, updated_at) VALUES (?, ?, ?, ?)`)
-            .bind(billingId, toOrgId, customerId, new Date().toISOString())
-            .run()
-        }
+        await db
+          .prepare(`
+            INSERT INTO organization_billing (id, organization_id, stripe_customer_id, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(organization_id) DO UPDATE SET
+              stripe_customer_id = excluded.stripe_customer_id,
+              updated_at = excluded.updated_at
+          `)
+          .bind(billingId, toOrgId, customerId, new Date().toISOString())
+          .run()
       }
 
       const origin = getRequestURL(event).origin
