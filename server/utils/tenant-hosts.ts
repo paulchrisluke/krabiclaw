@@ -9,6 +9,12 @@ export interface TenantHostEnv {
 
 const PAGES_DEV_HOST = 'kikuzuki-thailand-marketing.pages.dev'
 
+// CI deploys real preview Workers to `<alias-or-version>-kikuzuki-thailand-marketing-preview.<account-subdomain>.workers.dev`
+// (see [env.preview] in wrangler.toml and the e2e-smoke job in ci.yml) and runs
+// Playwright straight against that live edge URL — same shape of problem as
+// PAGES_DEV_HOST above, just for `wrangler versions upload --preview-alias`.
+const WORKERS_DEV_PREVIEW_HOST_PATTERN = /^(?:[a-z0-9-]+-)?kikuzuki-thailand-marketing-preview\.[a-z0-9-]+\.workers\.dev$/
+
 // Strip protocol, trailing slash, and port so config values (which may be
 // full URLs like "https://krabiclaw.com" or "http://localhost:3000") compare
 // cleanly against a request's hostname (which never carries protocol and has
@@ -42,6 +48,9 @@ export function getPlatformHosts(env: TenantHostEnv): string[] {
 export function isPlatformHost(host: string, env: TenantHostEnv): boolean {
   const hostname = hostnameOf(host)
   if (hostname === PAGES_DEV_HOST || hostname.endsWith(`.${PAGES_DEV_HOST}`)) {
+    return true
+  }
+  if (WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)) {
     return true
   }
   return getPlatformHosts(env).includes(hostname)

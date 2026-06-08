@@ -189,9 +189,9 @@ export default defineEventHandler(async (event) => {
       ${personalNote}
       <p>Click the button below to sign in and take ownership of your site. You only pay once you've had a look around and you're happy.</p>
       <p style="margin:24px 0">
-        <a href="${escapeHtml(transferUrl)}" style="background:#8F1D21;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Claim your website</a>
+        <a href="${escapeHtml(transferUrl)}" style="background:#FB7461;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Claim your website</a>
       </p>
-      <p style="font-size:12px;color:#71717a">This handoff stays active until you complete it or we cancel it. If you didn't expect this email, you can safely ignore it.</p>
+      <p style="font-size:12px;color:#71717a">This transfer link will stay active until you're ready to claim it. Didn't expect this email? No worries, you can safely ignore it.</p>
     `
 
     const textParts = [
@@ -205,7 +205,7 @@ export default defineEventHandler(async (event) => {
     if (requiresPayment) {
       textParts.push('', 'Checkout comes before ownership transfer on paid handoffs.')
     }
-    textParts.push('', `Claim your website: ${transferUrl}`, '', 'This handoff stays active until you complete it or we cancel it.')
+    textParts.push('', `Claim your website: ${transferUrl}`, '', `This transfer link will stay active until you're ready to claim it. Didn't expect this email? No worries, you can safely ignore it.`)
 
     fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -213,7 +213,7 @@ export default defineEventHandler(async (event) => {
       body: JSON.stringify({
         from: 'KrabiClaw <hello@krabiclaw.com>',
         to: [toEmail],
-        subject: `${initiatorName} built your website — it's ready to claim`,
+        subject: `${initiatorName} just built your new website! 🎉`,
         html,
         text: textParts.join('\n'),
       }),

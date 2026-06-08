@@ -137,11 +137,11 @@ export async function notifySiteTransferReminder(
   opts: ReminderInput,
 ) {
   const title = opts.customDomainsPaused
-    ? `Action needed: ${opts.siteName} payment is still pending`
-    : `Reminder: ${opts.siteName} is ready to claim`
+    ? `Action needed: Finishing touches for ${opts.siteName}`
+    : `Reminder: ${opts.siteName} is ready for you!`
   const body = opts.customDomainsPaused
-    ? `Your website is still ready, but the custom domain has been paused until checkout is completed.`
-    : `Your website is ready to claim and stays reserved for you until the handoff is completed.`
+    ? `Your website is ready to go, but we just need to wrap up the payment setup to get your custom domain live and kicking.`
+    : `Good news—your new website is ready and waiting for you to take the reins. Click below to review and claim it whenever you're ready.`
 
   const payload = {
     site_name: opts.siteName,
@@ -170,7 +170,7 @@ export async function notifySiteTransferReminder(
   const planLine = opts.invitedPlan ? `<p><strong>Recommended plan:</strong> ${escapeHtml(opts.invitedPlan)}</p>` : ''
   const domainLine = opts.invitedDomain ? `<p><strong>Domain:</strong> ${escapeHtml(opts.invitedDomain)}</p>` : ''
   const pausedLine = opts.customDomainsPaused
-    ? '<p><strong>Custom domain status:</strong> paused until checkout completes.</p>'
+    ? '<p><em>Custom domain status: Paused until checkout is complete.</em></p>'
     : ''
   const html = `
     <p>${escapeHtml(body)}</p>
@@ -178,7 +178,7 @@ export async function notifySiteTransferReminder(
     ${domainLine}
     ${planLine}
     ${pausedLine}
-    <p><a href="${escapeHtml(opts.transferUrl)}">Open your handoff page</a></p>
+    <p style="margin:24px 0"><a href="${escapeHtml(opts.transferUrl)}" style="background:#FB7461;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">View your website handoff</a></p>
   `
   const text = [
     body,
@@ -186,9 +186,9 @@ export async function notifySiteTransferReminder(
     `Site: ${opts.siteName}`,
     opts.invitedDomain ? `Domain: ${opts.invitedDomain}` : '',
     opts.invitedPlan ? `Recommended plan: ${opts.invitedPlan}` : '',
-    opts.customDomainsPaused ? 'Custom domain status: paused until checkout completes.' : '',
+    opts.customDomainsPaused ? 'Custom domain status: Paused until checkout is complete.' : '',
     '',
-    `Open your handoff page: ${opts.transferUrl}`,
+    `View your website handoff: ${opts.transferUrl}`,
   ].filter(Boolean).join('\n')
 
   await sendReminderEmail(env, db, {

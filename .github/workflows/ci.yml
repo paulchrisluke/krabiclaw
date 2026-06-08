@@ -82,14 +82,11 @@ jobs:
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_TEST }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: http://localhost:3000
       NUXT_PUBLIC_APP_NAME: KrabiClaw
       NUXT_PUBLIC_TURNSTILE_ENABLED: "false"
       BETTER_AUTH_SECRET: test-secret-for-ci
-      BETTER_AUTH_URL: http://localhost:3000
       E2E_ALLOW_DEV_ROUTES: "true"
       E2E_DEV_ROUTE_SECRET: ci-dev-route-secret
-      NUXT_DISABLE_NITRO_TASKS: "true"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -99,24 +96,40 @@ jobs:
           node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - name: Prepare local D1 fixture data
+      - run: yarn build
+      - name: Migrate + seed preview database (staging D1, never prod)
         run: |
-          yarn schema:local
-          yarn seed:local
-          yarn seed:pottery-local
+          npx wrangler d1 migrations apply DB --env preview --remote
+          npx wrangler d1 execute DB --env preview --remote --file seeds/demo.sql
+          npx wrangler d1 execute DB --env preview --remote --file seeds/pottery-house-krabi.sql
+      # Deploys a real Worker version to the edge and gets back its live
+      # `workers.dev` preview-alias URL — Cloudflare's documented way to test
+      # real edge behavior in CI. Replaces booting `yarn dev` (which proxies
+      # bindings locally via getPlatformProxy and isn't meant for CI runners).
+      - name: Deploy preview Worker
+        id: deploy
+        run: |
+          set -euo pipefail
+          alias="ci-pr-${{ github.event.pull_request.number || github.run_id }}"
+          npx wrangler versions upload \
+            --env preview \
+            --preview-alias "$alias" \
+            --message "CI smoke ${{ github.sha }}" | tee /tmp/wrangler-upload.log
+          preview_url=$(grep -oE 'Version Preview Alias URL: \S+' /tmp/wrangler-upload.log | awk '{print $5}')
+          if [ -z "$preview_url" ]; then
+            echo "Could not parse preview URL from wrangler output" >&2
+            exit 1
+          fi
+          echo "Preview deployed: $preview_url"
+          echo "url=$preview_url" >> "$GITHUB_OUTPUT"
       - run: npx playwright install --with-deps chromium
-      - name: Print E2E CI context
+      - name: Run smoke tests against deployed preview
+        env:
+          PLAYWRIGHT_PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+          NUXT_PUBLIC_FREE_SITE_DOMAIN: ${{ steps.deploy.outputs.url }}
         run: |
-          node -v
-          yarn -v
-          npx playwright --version
-          echo "CI=$CI"
-          echo "NODE_ENV=$NODE_ENV"
-          echo "NUXT_HOST=$NUXT_HOST"
-          echo "NUXT_PUBLIC_SITE_URL=$NUXT_PUBLIC_SITE_URL"
-          echo "NUXT_PUBLIC_FREE_SITE_DOMAIN=$NUXT_PUBLIC_FREE_SITE_DOMAIN"
-          echo "PORT=$PORT"
-      - run: yarn test:e2e:smoke
+          echo "Testing against live preview: $PLAYWRIGHT_PREVIEW_URL"
+          yarn test:e2e:smoke
 
   e2e-full:
     name: E2E full

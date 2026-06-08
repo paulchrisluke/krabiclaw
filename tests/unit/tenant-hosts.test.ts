@@ -94,6 +94,13 @@ test('isPlatformHost recognizes the deployed *.pages.dev preview host', () => {
   assert.equal(isPlatformHost('preview-123.kikuzuki-thailand-marketing.pages.dev', prodEnv), true)
 })
 
+test('isPlatformHost recognizes deployed CI preview Worker hosts on workers.dev', () => {
+  assert.equal(isPlatformHost('kikuzuki-thailand-marketing-preview.paulchrisluke.workers.dev', prodEnv), true)
+  assert.equal(isPlatformHost('ci-pr-1234567890-kikuzuki-thailand-marketing-preview.paulchrisluke.workers.dev', prodEnv), true)
+  assert.equal(isPlatformHost('5a91b33e-kikuzuki-thailand-marketing-preview.paulchrisluke.workers.dev', prodEnv), true)
+  assert.equal(isPlatformHost('some-other-worker.paulchrisluke.workers.dev', prodEnv), false)
+})
+
 test('getFreeSiteDomain normalizes the configured domain and strips its port', () => {
   assert.equal(getFreeSiteDomain(prodEnv), 'krabiclaw.com')
   assert.equal(getFreeSiteDomain(localEnv), 'localhost')
