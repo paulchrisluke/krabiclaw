@@ -26,9 +26,9 @@ CREATE TABLE site_transfer_requests_new (
   custom_domains_snapshot TEXT,
   custom_domains_removed_at TEXT,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
-  FOREIGN KEY (initiated_by_user_id) REFERENCES user(id),
-  FOREIGN KEY (accepted_by_user_id) REFERENCES user(id),
-  FOREIGN KEY (claiming_user_id) REFERENCES user(id)
+  FOREIGN KEY (initiated_by_user_id) REFERENCES user(id) ON DELETE RESTRICT,
+  FOREIGN KEY (accepted_by_user_id) REFERENCES user(id) ON DELETE SET NULL,
+  FOREIGN KEY (claiming_user_id) REFERENCES user(id) ON DELETE SET NULL
 );
 
 INSERT INTO site_transfer_requests_new (

@@ -22,12 +22,10 @@ export default defineConfig({
     video: 'retain-on-failure'
   },
   webServer: {
-    command: `node scripts/e2e-web-server.mjs`,
-    url: `http://localhost:${port}/api/healthz`,
+    command: `PORT=${port} yarn dev`,
+    url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-    stdout: 'pipe',
-    stderr: 'pipe'
+    timeout: 180_000
   },
   projects: [
     {

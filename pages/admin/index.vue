@@ -490,6 +490,9 @@
               <UInput v-model="handoffDomain" placeholder="potteryhouse.com" class="w-full" />
               <template #help>If you enter a domain here, choose a paid plan too. The client must complete checkout before ownership transfers.</template>
             </UFormField>
+            <p v-if="handoffDomainNeedsPlan" class="text-sm text-error -mt-2">
+              A paid plan is required when inviting a client with a custom domain.
+            </p>
 
             <UFormField label="Plan to invite them to">
               <USelect v-model="handoffPlan" :options="PLAN_OPTIONS" value-attribute="value" label-attribute="label" class="w-full" />
@@ -512,7 +515,7 @@
             <UButton
               color="primary"
               :loading="handoffSending"
-              :disabled="!handoffEmail.trim()"
+              :disabled="!handoffEmail.trim() || handoffDomainNeedsPlan"
               icon="i-heroicons-paper-airplane"
               @click="sendHandoff"
             >
@@ -805,6 +808,8 @@ const PLAN_OPTIONS = [
   { label: 'SEO Accelerator — $349/mo', value: 'seo_accelerator' },
 ]
 
+const handoffDomainNeedsPlan = computed(() => Boolean(handoffDomain.value.trim()) && !handoffPlan.value)
+
 function openHandoff(client: Client) {
   handoffClient.value = client
   handoffEmail.value = ''
@@ -819,6 +824,10 @@ function openHandoff(client: Client) {
 
 async function sendHandoff() {
   if (!handoffClient.value?.site_id || !handoffEmail.value.trim()) return
+  if (handoffDomainNeedsPlan.value) {
+    handoffError.value = 'A paid plan is required when inviting a client with a custom domain.'
+    return
+  }
   handoffSending.value = true
   handoffError.value = ''
   handoffResult.value = null
