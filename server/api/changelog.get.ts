@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
 
     const githubToken = env.GITHUB_TOKEN
     const repoOwner = env.GITHUB_REPO_OWNER || 'paulchrisluke'
-    const repoName = env.GITHUB_REPO_NAME || 'kikuzuki-thailand-marketing'
+    const repoName = env.GITHUB_REPO_NAME || 'krabiclaw'
 
     if (!githubToken) {
       return jsonResponse({ error: 'GITHUB_TOKEN not configured' }, { status: 500 })

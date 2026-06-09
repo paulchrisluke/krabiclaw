@@ -35,17 +35,21 @@ export default defineEventHandler(async (event) => {
     const previewSlug = getHeader(event, 'x-preview-tenant')
     if (previewSlug && /^[a-z0-9-]+$/.test(previewSlug)) {
       const freeSiteDomain = getFreeSiteDomain(env as TenantResolutionEnv)
-      const site = await resolveTenantSite(`${previewSlug}.${freeSiteDomain}`, event)
-      if (site) {
-        event.context.siteId = site.id
-        event.context.organizationId = site.organization_id
-        event.context.themeId = site.theme_id
-        event.context.onboardingStatus = site.onboarding_status
-        event.context.tenantType = 'tenant'
-        event.context.tenantHost = host.split(':')[0]
-        event.context.canonicalDomain = site.canonical_domain || null
-        event.context.site = { brand_name: site.brand_name || null, logo_url: site.logo_url || null, vertical: site.vertical || 'restaurant' }
-        return
+      if (!freeSiteDomain) {
+        console.error('[TenantResolution] Missing free site domain for workers.dev preview tenant resolution')
+      } else {
+        const site = await resolveTenantSite(`${previewSlug}.${freeSiteDomain}`, event)
+        if (site) {
+          event.context.siteId = site.id
+          event.context.organizationId = site.organization_id
+          event.context.themeId = site.theme_id
+          event.context.onboardingStatus = site.onboarding_status
+          event.context.tenantType = 'tenant'
+          event.context.tenantHost = host.split(':')[0]
+          event.context.canonicalDomain = site.canonical_domain || null
+          event.context.site = { brand_name: site.brand_name || null, logo_url: site.logo_url || null, vertical: site.vertical || 'restaurant' }
+          return
+        }
       }
     }
   }
@@ -94,6 +98,7 @@ function isPlatformRoute(pathname: string): boolean {
     '/api/dashboard',
     '/api/sites',
     '/api/admin',
+    '/api/integrations',
     '/templates',
     '/features'
   ]

@@ -7,13 +7,13 @@ export interface TenantHostEnv {
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
-const PAGES_DEV_HOST = 'kikuzuki-thailand-marketing.pages.dev'
+const PAGES_DEV_HOST = 'krabiclaw.pages.dev'
 
-// CI deploys real preview Workers to `<alias-or-version>-kikuzuki-thailand-marketing-preview.<account-subdomain>.workers.dev`
+// CI deploys real preview Workers to `<alias-or-version>-krabiclaw-preview.<account-subdomain>.workers.dev`
 // (see [env.preview] in wrangler.toml and the e2e-smoke job in ci.yml) and runs
 // Playwright straight against that live edge URL — same shape of problem as
 // PAGES_DEV_HOST above, just for `wrangler versions upload --preview-alias`.
-const WORKERS_DEV_PREVIEW_HOST_PATTERN = /^(?:[a-z0-9-]+-)?kikuzuki-thailand-marketing-preview\.[a-z0-9-]+\.workers\.dev$/
+const WORKERS_DEV_PREVIEW_HOST_PATTERN = /^(?:[a-z0-9-]+-)?krabiclaw-preview\.[a-z0-9-]+\.workers\.dev$/
 
 // Strip protocol, trailing slash, and port so config values (which may be
 // full URLs like "https://krabiclaw.com" or "http://localhost:3000") compare
