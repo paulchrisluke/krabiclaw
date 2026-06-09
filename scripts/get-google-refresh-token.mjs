@@ -21,7 +21,11 @@ function loadEnvFile(filename) {
       if (!trimmed || trimmed.startsWith('#')) continue
       const eq = trimmed.indexOf('=')
       if (eq === -1) continue
-      env[trimmed.slice(0, eq)] = trimmed.slice(eq + 1)
+      let val = trimmed.slice(eq + 1)
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1).replace(/\\"/g, '"').replace(/\\'/g, "'")
+      }
+      env[trimmed.slice(0, eq)] = val
     }
     return env
   } catch {
@@ -128,7 +132,7 @@ const server = http.createServer(async (req, res) => {
     console.log('\nGOOGLE_REFRESH_TOKEN=' + tokens.refresh_token)
     console.log('\nNow run:')
     console.log(`  # Update wrangler secret:`)
-    console.log(`  echo "${tokens.refresh_token}" | wrangler secret put GOOGLE_REFRESH_TOKEN --name kikuzuki-thailand-marketing`)
+    console.log(`  echo "${tokens.refresh_token}" | wrangler secret put GOOGLE_REFRESH_TOKEN --name krabiclaw`)
     console.log(`  # Update GitHub secret:`)
     console.log(`  gh secret set GOOGLE_REFRESH_TOKEN --body "${tokens.refresh_token}" --repo paulchrisluke/krabiclaw`)
     console.log('\nAlso add GOOGLE_REFRESH_TOKEN=<value> to .env and .env.production\n')
