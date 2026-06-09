@@ -9,11 +9,11 @@ PRAGMA foreign_keys = ON;
 INSERT OR IGNORE INTO themes (id, name, slug, version, description, status)
 VALUES ('saya-theme-v1', 'Saya', 'saya', '1.0.0', 'Restaurant website theme', 'active');
 
--- Clean replace (disabling foreign keys during setup prevents cascading delete/lock issues with some tables)
-PRAGMA foreign_keys = OFF;
+-- Cleanly replace the protected pottery-house tenant. Deleting the site first
+-- keeps the seed idempotent even if a prior run left the subdomain row behind.
+DELETE FROM sites WHERE id = 'site-pottery-house' OR subdomain = 'pottery-house';
 DELETE FROM organization WHERE id = 'org-pottery-house';
 DELETE FROM site_domains WHERE domain IN ('pottery-house.localhost', 'pottery-house.krabiclaw.com');
-PRAGMA foreign_keys = ON;
 
 -- Organization (owned by your existing platform admin account)
 INSERT INTO organization (id, name, slug, createdAt)
