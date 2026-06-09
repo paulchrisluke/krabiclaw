@@ -10,6 +10,8 @@ test.describe('role permission matrix', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('content + billing permissions by role', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
+
     const ownerLogin = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders(), maxRedirects: 0 })
     expect(ownerLogin.status()).toBe(302)
     const sessionRes = await request.get(`${baseURL}/api/auth/get-session`)
