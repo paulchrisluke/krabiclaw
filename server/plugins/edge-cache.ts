@@ -53,6 +53,12 @@ export default defineNitroPlugin((nitroApp) => {
 
     // Use Cloudflare runtime request headers for cookies and host (more reliable on cloudflare_module)
     const cfRequest = (event.context.cloudflare as CloudflareRequestContext | undefined)?.request
+
+    // Skip KV writes on preview/staging — same reason as the read-path skip in
+    // 00.edge-cache.ts: stale HTML survives redeploys and references wrong asset hashes.
+    const writeHost = cfRequest?.headers.get('host') ?? getHeader(event, 'host') ?? ''
+    const writeHostname = writeHost.split(':')[0] ?? writeHost
+    if (isPreviewContext(writeHostname)) return
     const cookieHeader = cfRequest?.headers.get('cookie') ?? getHeader(event, 'cookie') ?? ''
     if (cookieHeader.includes(SESSION_COOKIE)) return
 

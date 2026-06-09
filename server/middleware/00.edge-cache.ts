@@ -32,6 +32,17 @@ export default defineEventHandler(async (event) => {
   if ((getHeader(event, 'cookie') ?? '').includes(SESSION_COOKIE)) return
   if (event.path.includes('?')) return
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cfReq = (event.context.cloudflare as any)?.request as Request | undefined
+  const host = cfReq?.headers.get('host') ?? getHeader(event, 'host') ?? ''
+  const hostname = host.split(':')[0] ?? host
+
+  // Preview/staging Workers are redeployed on every CI run. Serving KV-cached HTML
+  // from the previous deploy references stale asset hashes (/_nuxt/*.css|js) that
+  // no longer exist in the new deploy's Assets binding → ERR_ABORTED in tests.
+  // Skip the KV layer entirely; SSR always returns fresh HTML with correct hashes.
+  if (isPreviewContext(hostname)) return
+
   const key = buildHtmlCacheKey(event)
   if (!key) return
 
@@ -44,15 +55,7 @@ export default defineEventHandler(async (event) => {
     const hit = await kv.get(key, 'text')
     if (!hit) return
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cfRequest = (event.context.cloudflare as any)?.request as Request | undefined
-    const host = cfRequest?.headers.get('host') ?? getHeader(event, 'host') ?? ''
-    const hostname = host.split(':')[0] ?? host
-    // Preview/staging hosts share one hostname across tenants — must not let CF
-    // edge-cache the response or tenants will receive each other's cached HTML.
-    const cacheControl = isPreviewContext(hostname)
-      ? 'private, no-store'
-      : `public, s-maxage=${CACHE_TTL_SECONDS}, stale-while-revalidate=${CACHE_TTL_SECONDS}, max-age=0`
+    const cacheControl = `public, s-maxage=${CACHE_TTL_SECONDS}, stale-while-revalidate=${CACHE_TTL_SECONDS}, max-age=0`
 
     setResponseHeaders(event, {
       'content-type': 'text/html; charset=utf-8',
