@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, staging]
   push:
-    branches: [main]
+    branches: [main, staging]
   schedule:
     - cron: "15 3 * * *"
   workflow_dispatch:
@@ -73,7 +73,7 @@ jobs:
 
   e2e-smoke:
     name: E2E smoke
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'))
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
