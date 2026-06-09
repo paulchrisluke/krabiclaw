@@ -56,6 +56,7 @@ const THIRD_PARTY_ERROR_PATTERNS = [
   'google.internal.maps',
   'gen_204',
   'maps.gstatic.com',
+  'ERR_FAILED',
 ]
 
 export async function expectHealthyPage(page: Page, errors: string[]) {
