@@ -2,6 +2,20 @@
 // Returns notification records matching query params. 404 in production.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 
+const _enc = new TextEncoder()
+function timingSafeEqualText(a: string, b: string): boolean {
+  const left = _enc.encode(a)
+  const right = _enc.encode(b)
+  if (left.length !== right.length) {
+    let _noop = 0
+    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
+    return false
+  }
+  let diff = 0
+  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!
+  return diff === 0
+}
+
 export default defineEventHandler(async (event) => {
   const devMode = import.meta.dev
   const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
@@ -12,7 +26,7 @@ export default defineEventHandler(async (event) => {
   if (!devMode && e2eOverride) {
     const expected = process.env.E2E_DEV_ROUTE_SECRET || ''
     const provided = getHeader(event, 'x-dev-route-secret') || ''
-    if (!expected || !provided || provided !== expected) {
+    if (!expected || !provided || !timingSafeEqualText(provided, expected)) {
       throw createError({ statusCode: 404, statusMessage: 'Not found' })
     }
   }
