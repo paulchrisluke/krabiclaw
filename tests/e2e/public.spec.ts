@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { collectPageErrors, expectHealthyPage, tenantBaseURL } from './helpers'
+import { collectPageErrors, expectHealthyPage, tenantBaseURL, tenantExtraHeaders } from './helpers'
 
 const tenantRoutes = [
   { path: '/', title: /Ember & Slice/, text: 'Ember & Slice' },
@@ -18,6 +18,8 @@ const tenantRoutes = [
 ]
 
 test.describe('public tenant site', () => {
+  test.use({ extraHTTPHeaders: tenantExtraHeaders })
+
   for (const route of tenantRoutes) {
     test(`${route.path} renders without runtime errors`, async ({ page }) => {
       const errors = collectPageErrors(page)

@@ -1,8 +1,13 @@
 import { expect, type Page } from '@playwright/test'
-import { tenantTestBaseUrl, potteryHouseTestBaseUrl } from './test-env'
+import { tenantTestBaseUrl, potteryHouseTestBaseUrl, tenantTestExtraHeaders, potteryHouseTestExtraHeaders } from './test-env'
 
 export const tenantBaseURL = tenantTestBaseUrl()
 export const potteryHouseBaseURL = potteryHouseTestBaseUrl()
+// Extra headers for tenant tests against *.workers.dev preview Workers.
+// Apply via test.use({ extraHTTPHeaders: tenantExtraHeaders }) in each describe
+// block that navigates to a tenant URL (not the platform/dashboard describes).
+export const tenantExtraHeaders = tenantTestExtraHeaders()
+export const potteryHouseExtraHeaders = potteryHouseTestExtraHeaders()
 
 export function collectPageErrors(page: Page) {
   const errors: string[] = []
