@@ -45,21 +45,33 @@ const validGoogleAnalyticsId = computed(() => {
   return isValidGoogleAnalyticsId(id) ? id : null
 })
 
-if (validGoogleAnalyticsId.value) {
-  useScriptGoogleAnalytics({ id: validGoogleAnalyticsId })
-}
-
 useHead(() => {
   const meta = []
+  const script = []
   if (googleSiteVerification.value) {
     meta.push({
       name: 'google-site-verification',
       content: googleSiteVerification.value
     })
   }
+  if (validGoogleAnalyticsId.value) {
+    const id = validGoogleAnalyticsId.value
+    script.push({
+      src: `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`,
+      async: true
+    })
+    script.push({
+      key: 'saya-google-analytics-init',
+      innerHTML: `window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', '${id}');`
+    })
+  }
 
   return {
-    meta
+    meta,
+    script,
+    __dangerouslyDisableSanitizersByTagID: {
+      'saya-google-analytics-init': ['innerHTML']
+    }
   }
 })
 </script>
