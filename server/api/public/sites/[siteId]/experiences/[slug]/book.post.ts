@@ -93,7 +93,8 @@ export default defineEventHandler(async (event) => {
   const ipHash = await hashValue(clientIp)
   const emailHash = await hashValue(guestEmail)
 
-  if (!import.meta.dev) {
+  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  if (!import.meta.dev && !e2eOverride) {
     const hourWindow = Math.floor(Date.now() / 3_600_000)
     const today = new Date().toISOString().split('T')[0]
 

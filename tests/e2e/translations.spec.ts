@@ -25,7 +25,9 @@ test.describe('restaurant translations', () => {
 
     const localeCode = `qaa-${Date.now().toString(36).slice(-8)}`
     const sourceTitle = `Translation test ${Date.now()}`
-    const draftContent = await request.post(`${baseURL}/api/dashboard/editor/content/draft`, {
+    const editorBase = `${baseURL}/api/editor/sites/${siteId}`
+
+    const draftContent = await request.post(`${editorBase}/content/draft`, {
       data: {
         page: 'home',
         changes: {
@@ -36,12 +38,12 @@ test.describe('restaurant translations', () => {
     })
     expect(draftContent.status()).toBe(200)
 
-    const publishContent = await request.post(`${baseURL}/api/dashboard/editor/content/publish`, {
+    const publishContent = await request.post(`${editorBase}/content/publish`, {
       data: { page: 'home' }
     })
     expect(publishContent.status()).toBe(200)
 
-    const locale = await request.post(`${baseURL}/api/dashboard/editor/locales`, {
+    const locale = await request.post(`${editorBase}/locales`, {
       data: {
         locale: localeCode,
         label: 'Test Locale',
@@ -51,7 +53,7 @@ test.describe('restaurant translations', () => {
     })
     expect([200, 201]).toContain(locale.status())
 
-    const inventory = await request.get(`${baseURL}/api/dashboard/editor/translations/inventory?locale=${localeCode}&scope=content&includePublished=true`)
+    const inventory = await request.get(`${editorBase}/translations/inventory?locale=${localeCode}&scope=content&includePublished=true`)
     expect(inventory.status()).toBe(200)
     const inventoryBody = await inventory.json()
     expect(inventoryBody.estimate.total_items).toBeGreaterThan(0)
@@ -64,7 +66,7 @@ test.describe('restaurant translations', () => {
       Object.entries(item.source_fields as Record<string, string>).map(([key, value]) => [key, `[TH] ${value}`])
     )
 
-    const draft = await request.patch(`${baseURL}/api/dashboard/editor/translations/review`, {
+    const draft = await request.patch(`${editorBase}/translations/review`, {
       data: {
         locale: localeCode,
         scope: 'content',
@@ -78,7 +80,7 @@ test.describe('restaurant translations', () => {
     const draftBody = await draft.json()
     expect(draftBody.item.status).toBe('draft')
 
-    const publish = await request.post(`${baseURL}/api/dashboard/editor/translations/publish`, {
+    const publish = await request.post(`${editorBase}/translations/publish`, {
       data: { locale: localeCode, scope: 'content' }
     })
     expect(publish.status()).toBe(200)
@@ -93,7 +95,7 @@ test.describe('restaurant translations', () => {
     expect(hero).toBeDefined()
     expect(hero.hero_title).toContain('[TH]')
 
-    const changedSource = await request.post(`${baseURL}/api/dashboard/editor/content/draft`, {
+    const changedSource = await request.post(`${editorBase}/content/draft`, {
       data: {
         page: 'home',
         changes: {
@@ -103,12 +105,12 @@ test.describe('restaurant translations', () => {
     })
     expect(changedSource.status()).toBe(200)
 
-    const publishChangedSource = await request.post(`${baseURL}/api/dashboard/editor/content/publish`, {
+    const publishChangedSource = await request.post(`${editorBase}/content/publish`, {
       data: { page: 'home' }
     })
     expect(publishChangedSource.status()).toBe(200)
 
-    const staleInventory = await request.get(`${baseURL}/api/dashboard/editor/translations/inventory?locale=${localeCode}&scope=content&includePublished=true`)
+    const staleInventory = await request.get(`${editorBase}/translations/inventory?locale=${localeCode}&scope=content&includePublished=true`)
     expect(staleInventory.status()).toBe(200)
     const staleBody = await staleInventory.json()
     const staleItem = staleBody.items.find((candidate: { entity_type: string; entity_id: string; field: string }) =>

@@ -16,6 +16,18 @@ function timingSafeEqualText(a: string, b: string): boolean {
   return diff === 0
 }
 
+async function hmacHex(secret: string, payload: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    textEncoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const sig = await crypto.subtle.sign('HMAC', key, textEncoder.encode(payload))
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 export default defineEventHandler(async (event) => {
   const devMode = import.meta.dev
   const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
@@ -32,43 +44,22 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const query = getQuery(event)
-  const transferId = String(query.transfer_id || '').trim()
-  const token = String(query.token || '').trim()
-
-  if (!transferId && !token) {
-    return jsonResponse({ error: 'transfer_id or token is required' }, { status: 400 })
+  if (!env.STRIPE_WEBHOOK_SECRET) {
+    return jsonResponse({ error: 'Stripe webhook secret not configured' }, { status: 503 })
   }
 
-  const transfer = await db.prepare(`
-    SELECT *
-    FROM site_transfer_requests
-    WHERE ${transferId ? 'id = ?' : 'token = ?'}
-    LIMIT 1
-  `).bind(transferId || token).first()
+  const body = await readBody(event).catch(() => null) as { payload?: string; timestamp?: number } | null
+  const payload = typeof body?.payload === 'string' ? body.payload : ''
+  const timestamp = Number.isFinite(body?.timestamp) ? Number(body?.timestamp) : Math.floor(Date.now() / 1000)
 
-  if (!transfer) return jsonResponse({ transfer: null, site: null, domains: [] })
+  if (!payload) {
+    return jsonResponse({ error: 'payload is required' }, { status: 400 })
+  }
 
-  const site = await db.prepare(`
-    SELECT id, organization_id, public_url, custom_domain, custom_domain_status
-    FROM sites
-    WHERE id = ?
-    LIMIT 1
-  `).bind(String(transfer.site_id)).first()
-
-  const domains = await db.prepare(`
-    SELECT id, organization_id, domain, type, role, status
-    FROM site_domains
-    WHERE site_id = ?
-    ORDER BY type ASC, created_at ASC
-  `).bind(String(transfer.site_id)).all()
-
+  const signedPayload = `${timestamp}.${payload}`
+  const digest = await hmacHex(env.STRIPE_WEBHOOK_SECRET, signedPayload)
   return jsonResponse({
-    transfer,
-    site,
-    domains: domains.results ?? [],
+    signature: `t=${timestamp},v1=${digest}`,
+    timestamp,
   })
 })

@@ -1,6 +1,7 @@
 // POST /api/admin/sites/[siteId]/transfer — initiate a site transfer to a new owner
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { normalizeHost } from '~/server/utils/tenant-hosts'
 import { rootDomainForPair } from '~/server/utils/domains'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
 import {
@@ -153,7 +154,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to initiate site transfer due to a database error.' }, { status: 500 })
   }
 
-  const platformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'krabiclaw.com'
+  const platformDomain = normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN) || 'krabiclaw.com'
   const transferUrl = `https://${platformDomain}/transfer/${token}`
   const siteName = site.brand_name ?? siteId
 

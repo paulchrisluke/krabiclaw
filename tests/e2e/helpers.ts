@@ -88,8 +88,10 @@ export function collectPageErrors(page: Page) {
   page.on('requestfailed', (request) => {
     const url = request.url()
     const isThirdParty = THIRD_PARTY_REQUEST_DOMAINS.some(d => url.includes(d))
+    const reason = request.failure()?.errorText ?? 'ERR_FAILED'
+    const isAborted = reason.includes('ERR_ABORTED')
+    if (isAborted) return
     if (!isThirdParty) {
-      const reason = request.failure()?.errorText ?? 'ERR_FAILED'
       errors.push(`Request failed: ${request.method()} ${url} (${reason})`)
     }
   })

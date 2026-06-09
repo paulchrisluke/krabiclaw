@@ -1,11 +1,17 @@
-import { createHmac } from 'node:crypto'
-import { expect, test } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl, testEnv } from './test-env'
+import { expect, test, type APIRequestContext } from '@playwright/test'
+import { devLoginHeaders, devLoginUrl } from './test-env'
 
-function stripeSignature(payload: string, secret: string, timestamp = Math.floor(Date.now() / 1000)) {
-  const signedPayload = `${timestamp}.${payload}`
-  const digest = createHmac('sha256', secret).update(signedPayload, 'utf8').digest('hex')
-  return `t=${timestamp},v1=${digest}`
+async function runtimeStripeSignature(
+  request: APIRequestContext,
+  baseURL: string,
+  payload: string,
+) {
+  const res = await request.post(`${baseURL}/api/dev/stripe-signature`, {
+    headers: devLoginHeaders(),
+    data: { payload },
+  })
+  expect(res.status()).toBe(200)
+  return res.json() as Promise<{ signature: string }>
 }
 
 test.describe('billing webhook signed flow', () => {
@@ -18,17 +24,6 @@ test.describe('billing webhook signed flow', () => {
     const contextBody = await context.json() as { organization?: { id?: string } }
     const organizationId = contextBody.organization?.id
     expect(organizationId).toEqual(expect.any(String))
-
-    const webhookSecret = testEnv('STRIPE_WEBHOOK_SECRET')
-    if (!webhookSecret) {
-      const response = await request.post(`${baseURL}/api/billing/webhook`, {
-        data: {},
-      })
-      expect(response.status()).toBe(503)
-      const body = await response.json()
-      expect(String(body.error || '')).toContain('Stripe webhook secret not configured')
-      return
-    }
 
     const eventId = `evt_e2e_${Date.now()}`
     const now = Math.floor(Date.now() / 1000)
@@ -58,7 +53,7 @@ test.describe('billing webhook signed flow', () => {
         },
       },
     })
-    const signature = stripeSignature(payload, webhookSecret)
+    const { signature } = await runtimeStripeSignature(request, baseURL!, payload)
 
     const first = await request.post(`${baseURL}/api/billing/webhook`, {
       headers: {
@@ -79,7 +74,10 @@ test.describe('billing webhook signed flow', () => {
     const firstBody = await first.json()
     expect(firstBody.received).toBe(true)
 
-    const state = await request.get(`${baseURL}/api/dev/billing-state?organization_id=${encodeURIComponent(organizationId!)}&stripe_event_id=${encodeURIComponent(eventId)}`)
+    const state = await request.get(
+      `${baseURL}/api/dev/billing-state?organization_id=${encodeURIComponent(organizationId!)}&stripe_event_id=${encodeURIComponent(eventId)}`,
+      { headers: devLoginHeaders() },
+    )
     expect(state.status()).toBe(200)
     const stateBody = await state.json() as {
       billing: { plan?: string; stripe_customer_id?: string } | null

@@ -10,8 +10,8 @@ test.describe('role permission matrix', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('content + billing permissions by role', async ({ request, baseURL }) => {
-    const ownerLogin = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
-    expect(ownerLogin.status()).toBeLessThan(400)
+    const ownerLogin = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders(), maxRedirects: 0 })
+    expect(ownerLogin.status()).toBe(302)
     const sessionRes = await request.get(`${baseURL}/api/auth/get-session`)
     expect(sessionRes.status()).toBe(200)
     const session = await sessionRes.json() as { user?: { id?: string } }
@@ -44,8 +44,8 @@ test.describe('role permission matrix', () => {
     const member = await createUser('member')
 
     const asUser = async (userId: string) => {
-      const login = await request.get(devLoginUrl(baseURL!, userId), { headers: devLoginHeaders() })
-      expect(login.status()).toBeLessThan(400)
+      const login = await request.get(devLoginUrl(baseURL!, userId), { headers: devLoginHeaders(), maxRedirects: 0 })
+      expect(login.status()).toBe(302)
     }
 
     const assertCheckoutStatus = async (userId: string, expected: 'owner' | 'non_owner') => {

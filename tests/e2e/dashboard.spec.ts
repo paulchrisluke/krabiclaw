@@ -76,11 +76,27 @@ test.describe('dashboard functional smoke', () => {
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json()
-    const hasRestaurant = Boolean(context?.restaurant?.id)
+    const siteId = context?.restaurant?.id as string | undefined
+    const hasRestaurant = Boolean(siteId)
 
     const uniqueTitle = `Dashboard E2E ${Date.now()}`
 
-    const draftRes = await request.post(`${baseURL}/api/dashboard/editor/content/draft`, {
+    if (!hasRestaurant) {
+      const draftRes = await request.post(`${baseURL}/api/dashboard/editor/content/draft`, {
+        data: {
+          page: 'home',
+          changes: {
+            'hero.title': uniqueTitle,
+          },
+        },
+      })
+      expect(draftRes.status()).toBe(400)
+      const draftBody = await draftRes.json()
+      expect(String(draftBody.error || '')).toContain('Restaurant workspace has not been created yet')
+      return
+    }
+
+    const draftRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/draft`, {
       data: {
         page: 'home',
         changes: {
@@ -88,18 +104,11 @@ test.describe('dashboard functional smoke', () => {
         },
       },
     })
-    if (!hasRestaurant) {
-      expect(draftRes.status()).toBe(400)
-      const draftBody = await draftRes.json()
-      expect(String(draftBody.error || '')).toContain('Restaurant workspace has not been created yet')
-      return
-    }
-
     expect(draftRes.status()).toBe(200)
     const draftBody = await draftRes.json()
     expect(draftBody.success).toBe(true)
 
-    const publishRes = await request.post(`${baseURL}/api/dashboard/editor/content/publish`, {
+    const publishRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/publish`, {
       data: { page: 'home' },
     })
     expect(publishRes.status()).toBe(200)
