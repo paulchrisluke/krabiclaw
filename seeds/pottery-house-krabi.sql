@@ -114,38 +114,95 @@ INSERT INTO business_locations (
 -- Set primary location
 UPDATE sites SET primary_location_id = 'loc-pottery-house' WHERE id = 'site-pottery-house';
 
--- Media assets (R2-hosted via media.krabiclaw.com CDN — upload files before seeding remote)
+-- Media assets — synced with production D1 / R2 (2026-06-09)
+-- Relative /images/pottery-house/ URLs are served from public/ in the Nuxt build.
 INSERT OR REPLACE INTO media_assets
   (id, organization_id, site_id, location_id,
    kind, provider, source,
    r2_key, public_url, thumbnail_url,
    mime_type, file_name, alt_text, category, status)
 VALUES
-  -- Hero: studio exterior with Pottery House sign and hanging greenery
-  ('media-ph-hero', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
+  -- Homepage hero (custom upload, UUID key)
+  ('media-ph-homepage-custom', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
    'image', 'cloudflare_r2', 'uploaded',
-   'sites/site-pottery-house/media/pottery-house-hero.png',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-house-hero.png',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-house-hero.png',
-   'image/png', 'pottery-house-hero.png', 'Pottery House Krabi studio exterior with hanging greenery and warm lights', 'exterior', 'active'),
+   'sites/site-pottery-house/media/620a54b7-33ef-48b9-b5d3-0b3a5a22be13.png',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/620a54b7-33ef-48b9-b5d3-0b3a5a22be13.png',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/620a54b7-33ef-48b9-b5d3-0b3a5a22be13.png',
+   'image/png', '620a54b7-33ef-48b9-b5d3-0b3a5a22be13.png', 'Homepage hero', 'exterior', 'active'),
 
-  -- Studio interior: dark walls, hanging plants, shelves of pottery
-  ('media-ph-studio', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
+  -- Beachfront location hero (custom upload, UUID key)
+  ('media-ph-beach-hero', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-beachfront',
    'image', 'cloudflare_r2', 'uploaded',
-   'sites/site-pottery-house/media/pottery-house-studio.jpg',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-house-studio.jpg',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-house-studio.jpg',
+   'sites/site-pottery-house/media/862ac356-bc0f-40b1-a8e6-0395fe183c3d.png',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/862ac356-bc0f-40b1-a8e6-0395fe183c3d.png',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/862ac356-bc0f-40b1-a8e6-0395fe183c3d.png',
+   'image/png', '862ac356-bc0f-40b1-a8e6-0395fe183c3d.png', 'Beachfront location hero', 'exterior', 'active'),
+
+  -- Krabi location hero (custom upload, UUID key)
+  ('media-ph-krabi-hero', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
+   'image', 'cloudflare_r2', 'uploaded',
+   'sites/site-pottery-house/media/38945199-c3bb-4a0b-8e24-6d2f09ab3fd5.png',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/38945199-c3bb-4a0b-8e24-6d2f09ab3fd5.png',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/38945199-c3bb-4a0b-8e24-6d2f09ab3fd5.png',
+   'image/png', '38945199-c3bb-4a0b-8e24-6d2f09ab3fd5.png', 'Krabi location hero', 'exterior', 'active'),
+
+  -- About page custom image (UUID key)
+  ('media-ph-about-custom', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
+   'image', 'cloudflare_r2', 'uploaded',
+   'sites/site-pottery-house/media/262e7084-30b8-48c6-94b9-1ba60664666c.png',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/262e7084-30b8-48c6-94b9-1ba60664666c.png',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/262e7084-30b8-48c6-94b9-1ba60664666c.png',
+   'image/png', '262e7084-30b8-48c6-94b9-1ba60664666c.png', 'About page image', 'other', 'active'),
+
+  -- Beachfront location image (WhatsApp client photo)
+  ('media-ph-beachfront', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-beachfront',
+   'image', 'cloudflare_r2', 'uploaded',
+   'sites/site-pottery-house/media/WhatsApp-Image-2026-05-28-at-09.17.56.jpeg',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/WhatsApp-Image-2026-05-28-at-09.17.56.jpeg',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/WhatsApp-Image-2026-05-28-at-09.17.56.jpeg',
+   'image/jpeg', 'WhatsApp-Image-2026-05-28-at-09.17.56.jpeg', 'Beachfront pottery', 'exterior', 'active'),
+
+  -- Cocktails & Clay event photo (client photo)
+  ('media-ph-cocktails', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
+   'image', 'cloudflare_r2', 'uploaded',
+   'sites/site-pottery-house/media/705340249_1010726131467629_3263381692626801997_n.png',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/705340249_1010726131467629_3263381692626801997_n.png',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/705340249_1010726131467629_3263381692626801997_n.png',
+   'image/png', '705340249_1010726131467629_3263381692626801997_n.png', 'Cocktails & Clay', 'other', 'active'),
+
+  -- Monthly membership image (WhatsApp client photo)
+  ('media-ph-membership', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
+   'image', 'cloudflare_r2', 'uploaded',
+   'sites/site-pottery-house/media/WhatsApp-Image-2026-05-28-at-18.33.09.jpeg',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/WhatsApp-Image-2026-05-28-at-18.33.09.jpeg',
+   'https://media.krabiclaw.com/sites/site-pottery-house/media/WhatsApp-Image-2026-05-28-at-18.33.09.jpeg',
+   'image/jpeg', 'WhatsApp-Image-2026-05-28-at-18.33.09.jpeg', 'Monthly membership', 'other', 'active'),
+
+  -- Legacy hero record (Unsplash; production DB still has this record, no longer used as hero)
+  ('media-ph-hero', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
+   'image', 'external_url', 'external',
+   NULL,
+   'https://images.unsplash.com/photo-1607556671927-78a6605e290b?w=1280&q=80&fm=webp',
+   'https://images.unsplash.com/photo-1607556671927-78a6605e290b?w=600&q=70&fm=webp',
+   'image/jpeg', 'pottery-house-hero.png', 'Pottery House Krabi studio exterior with hanging greenery and warm lights', 'exterior', 'active'),
+
+  -- Studio interior (public/ static asset; external_url in production)
+  ('media-ph-studio', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
+   'image', 'external_url', 'external',
+   NULL,
+   '/images/pottery-house/702076535_1536875324669582_6858683140635045482_n.jpg',
+   '/images/pottery-house/702076535_1536875324669582_6858683140635045482_n.jpg',
    'image/jpeg', 'pottery-house-studio.jpg', 'Pottery House Krabi studio with dark walls, hanging greenery and shelves of handmade ceramics', 'interior', 'active'),
 
-  -- Team: the two founders holding clay
+  -- Team (public/ static asset; external_url in production)
   ('media-ph-team', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
-   'image', 'cloudflare_r2', 'uploaded',
-   'sites/site-pottery-house/media/pottery-house-team.jpg',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-house-team.jpg',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-house-team.jpg',
+   'image', 'external_url', 'external',
+   NULL,
+   '/images/pottery-house/705001439_1023555783578064_2057760163234352028_n.jpg',
+   '/images/pottery-house/705001439_1023555783578064_2057760163234352028_n.jpg',
    'image/jpeg', 'pottery-house-team.jpg', 'Pottery House Krabi team with handmade pottery on shelves behind them', 'team', 'active'),
 
-  -- Wheel class image
+  -- Wheel class (R2)
   ('media-ph-wheel', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
    'image', 'cloudflare_r2', 'uploaded',
    'sites/site-pottery-house/media/pottery-wheel-class.jpg',
@@ -153,39 +210,39 @@ VALUES
    'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-wheel-class.jpg',
    'image/jpeg', 'pottery-wheel-class.jpg', 'Pottery wheel throwing class at Pottery House Krabi', 'interior', 'active'),
 
-  -- Finished ceramics on display
+  -- Ceramics display (public/ static asset; external_url in production)
   ('media-ph-ceramics', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
-   'image', 'cloudflare_r2', 'uploaded',
-   'sites/site-pottery-house/media/pottery-ceramics-display.jpg',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-ceramics-display.jpg',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-ceramics-display.jpg',
+   'image', 'external_url', 'external',
+   NULL,
+   '/images/pottery-house/701881199_1297931665853512_4498860250475437214_n.jpg',
+   '/images/pottery-house/701881199_1297931665853512_4498860250475437214_n.jpg',
    'image/jpeg', 'pottery-ceramics-display.jpg', 'Display of handmade ceramics, cups, plates and vases at Pottery House Krabi', 'food', 'active'),
 
-  -- Kiln / firing
+  -- Kiln (public/ static asset; external_url in production)
   ('media-ph-kiln', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
-   'image', 'cloudflare_r2', 'uploaded',
-   'sites/site-pottery-house/media/pottery-kiln.jpg',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-kiln.jpg',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-kiln.jpg',
+   'image', 'external_url', 'external',
+   NULL,
+   '/images/pottery-house/685364691_26612713248421573_8612762676974548589_n.jpg',
+   '/images/pottery-house/685364691_26612713248421573_8612762676974548589_n.jpg',
    'image/jpeg', 'pottery-kiln.jpg', 'Professional kiln at Pottery House Krabi for bisque and glaze firing', 'interior', 'active'),
 
-  -- Cocktails & Clay promo
+  -- Cocktails & Clay legacy record (public/ static asset; external_url in production)
   ('media-ph-cocktails-clay', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
-   'image', 'cloudflare_r2', 'uploaded',
-   'sites/site-pottery-house/media/cocktails-and-clay.jpg',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/cocktails-and-clay.jpg',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/cocktails-and-clay.jpg',
+   'image', 'external_url', 'external',
+   NULL,
+   '/images/pottery-house/553069773_1513411773229740_6966074185346464833_n.jpg',
+   '/images/pottery-house/553069773_1513411773229740_6966074185346464833_n.jpg',
    'image/jpeg', 'cocktails-and-clay.jpg', 'Cocktails and Clay Friday night event at Pottery House Krabi', 'interior', 'active'),
 
-  -- Beachfront location
+  -- Beachfront legacy record (public/ static asset; external_url in production)
   ('media-ph-beach', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-beachfront',
-   'image', 'cloudflare_r2', 'uploaded',
-   'sites/site-pottery-house/media/klong-muang-beachfront.jpg',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/klong-muang-beachfront.jpg',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/klong-muang-beachfront.jpg',
+   'image', 'external_url', 'external',
+   NULL,
+   '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.11.54.jpeg',
+   '/images/pottery-house/WhatsApp-Image-2026-05-28-at-08.11.54.jpeg',
    'image/jpeg', 'klong-muang-beachfront.jpg', 'Beachfront pottery session at Klong Muang with Gulf of Thailand view', 'exterior', 'active'),
 
-  -- Post images
+  -- Post images (R2)
   ('media-ph-post1', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
    'image', 'cloudflare_r2', 'uploaded',
    'sites/site-pottery-house/media/post-wheel.jpg',
@@ -205,32 +262,9 @@ VALUES
    'https://media.krabiclaw.com/sites/site-pottery-house/media/post-cocktails.jpg',
    'image/jpeg', 'post-cocktails.jpg', 'Cocktails and Clay Friday event', 'interior', 'active');
 
--- Hero video assets (R2-hosted)
-INSERT OR REPLACE INTO media_assets
-  (id, organization_id, site_id, location_id,
-   kind, provider, source,
-   r2_key, public_url,
-   mime_type, file_name, alt_text, category, status)
-VALUES
-  ('media-ph-hero-video', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-house',
-   'video', 'cloudflare_r2', 'uploaded',
-   'sites/site-pottery-house/media/media-ph-hero-video.mp4',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-hero-video.mp4',
-   'video/mp4', 'pottery-house-hero.mp4', 'Pottery House Krabi studio hero video', 'exterior', 'active'),
-  ('media-ph-beach-hero-video', 'org-pottery-house', 'site-pottery-house', 'loc-pottery-beachfront',
-   'video', 'cloudflare_r2', 'uploaded',
-   'sites/site-pottery-house/media/media-ph-beach-hero-video.mp4',
-   'https://media.krabiclaw.com/sites/site-pottery-house/media/media-ph-beach-hero-video.mp4',
-   'video/mp4', 'pottery-house-beach-hero.mp4', 'Beachfront pottery session hero video at Klong Muang', 'exterior', 'active');
-
--- Set site logo asset
-UPDATE sites SET logo_asset_id = 'media-ph-hero' WHERE id = 'site-pottery-house';
-
--- Set hero images and videos
-UPDATE business_locations SET hero_image_asset_id = 'media-ph-hero' WHERE id = 'loc-pottery-house';
-UPDATE business_locations SET hero_image_asset_id = 'media-ph-beach' WHERE id = 'loc-pottery-beachfront';
-UPDATE business_locations SET hero_video_asset_id = 'media-ph-hero-video' WHERE id = 'loc-pottery-house';
-UPDATE business_locations SET hero_video_asset_id = 'media-ph-beach-hero-video' WHERE id = 'loc-pottery-beachfront';
+-- Set hero images (synced with production — no hero videos active)
+UPDATE business_locations SET hero_image_asset_id = 'media-ph-homepage-custom' WHERE id = 'loc-pottery-house';
+UPDATE business_locations SET hero_image_asset_id = 'media-ph-beach-hero' WHERE id = 'loc-pottery-beachfront';
 
 -- Experiences (no menu — this is an experience-only site)
 INSERT OR REPLACE INTO experiences
@@ -279,7 +313,7 @@ What is included:
 - All clay, aprons, and tools provided
 - Bisque firing and glaze firing included
 - Pieces ready in 2–3 weeks',
-   'media-ph-cocktails-clay',
+   'media-ph-cocktails',
    '฿1,500', 180, 12,
    '["19:00"]',
    'Every Friday, 7PM to 10PM. Book in advance as spots fill quickly.',
@@ -301,7 +335,7 @@ Good for:
 - Hotel guests staying in Klong Muang or Tubkaek
 - Couples looking for a unique Krabi experience
 - Anyone who wants to make something by the sea',
-   'media-ph-beach',
+   'media-ph-beachfront',
    '฿1,800', 120, 4,
    '["09:00","15:00"]',
    'Available on selected days. Message us on Instagram @potteryclasseskrabi to check availability.',
@@ -328,7 +362,7 @@ What membership includes:
 - A chance to meet other makers and feel part of the Pottery House rhythm
 
 Ask us about current member hours, firing schedule, and monthly pricing.',
-   'media-ph-studio',
+   'media-ph-membership',
    'Ask us', NULL, NULL,
    NULL,
    'Contact us on Instagram @potteryclasseskrabi or email hello@potteryhoueskrabi.com to discuss membership.',
@@ -479,11 +513,11 @@ VALUES
    'home', 'hero', NULL,
    'Clay, calm, and a place to return to.',
    'Pottery classes, wheel throwing & handbuilding in Krabi, Thailand.',
-   'media-ph-hero',
+   'media-ph-homepage-custom',
    'text', 'manual'),
 
   ('sc-ph-cta', 'org-pottery-house', 'site-pottery-house', NULL,
-   'home', 'cta.title', 'Book your first class.', NULL, NULL, NULL,
+   'home', 'cta.title', 'Book your first class.', NULL, NULL, 'media-ph-homepage-custom',
    'text', 'manual'),
 
   ('sc-ph-story-image', 'org-pottery-house', 'site-pottery-house', NULL,
