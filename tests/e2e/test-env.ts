@@ -56,6 +56,16 @@ function previewWorkerHeaders(slug: string): Record<string, string> {
   return { 'x-preview-tenant': slug, 'cache-control': 'no-store' }
 }
 
+// Strips an environment prefix (e.g. "staging.") from the hostname so that
+// tenant subdomain URLs are constructed against the root domain:
+//   staging.krabiclaw.com → krabiclaw.com (then prepend demo.)
+//   demo.krabiclaw.com   → demo.krabiclaw.com (no change)
+function tenantRootDomain(hostname: string): string {
+  const stagingRoot = hostname.match(/^staging\.(.+)$/)?.[1]
+  if (stagingRoot) return stagingRoot
+  return hostname
+}
+
 export function tenantTestBaseUrl() {
   const base = new URL(testBaseUrl())
   if (['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) {
@@ -68,9 +78,8 @@ export function tenantTestBaseUrl() {
     // x-preview-tenant header carries the tenant identity instead.
     return base.toString().replace(/\/$/, '')
   }
-  if (!base.hostname.startsWith('demo.')) {
-    base.hostname = `demo.${base.hostname}`
-  }
+  const root = tenantRootDomain(base.hostname)
+  base.hostname = root.startsWith('demo.') ? root : `demo.${root}`
   return base.toString().replace(/\/$/, '')
 }
 
@@ -83,9 +92,8 @@ export function potteryHouseTestBaseUrl() {
   if (isWorkersDevHost(base.hostname)) {
     return base.toString().replace(/\/$/, '')
   }
-  if (!base.hostname.startsWith('pottery-house.')) {
-    base.hostname = `pottery-house.${base.hostname}`
-  }
+  const root = tenantRootDomain(base.hostname)
+  base.hostname = root.startsWith('pottery-house.') ? root : `pottery-house.${root}`
   return base.toString().replace(/\/$/, '')
 }
 

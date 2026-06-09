@@ -141,20 +141,19 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_TEST }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
-      NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: http://localhost:3000
+      NUXT_PUBLIC_PLATFORM_DOMAIN: https://staging.krabiclaw.com
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://staging.krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
       NUXT_PUBLIC_TURNSTILE_ENABLED: "false"
       BETTER_AUTH_SECRET: test-secret-for-ci
-      BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_URL: https://staging.krabiclaw.com
       E2E_ALLOW_DEV_ROUTES: "true"
       E2E_DEV_ROUTE_SECRET: ci-dev-route-secret
       NUXT_DISABLE_NITRO_TASKS: "true"
+      PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -164,23 +163,25 @@ jobs:
           node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - name: Prepare local D1 fixture data
+      - run: yarn build
+      - name: Deploy to staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --env staging
+      - name: Migrate + seed staging database
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          yarn schema:local
-          yarn seed:local
-          yarn seed:pottery-local
+          npx wrangler d1 migrations apply DB --env staging --remote
+          yarn seed:staging
       - run: npx playwright install --with-deps chromium
-      - name: Print E2E CI context
+      - name: Warm up staging Worker
         run: |
-          node -v
-          yarn -v
-          npx playwright --version
-          echo "CI=$CI"
-          echo "NODE_ENV=$NODE_ENV"
-          echo "NUXT_HOST=$NUXT_HOST"
-          echo "NUXT_PUBLIC_SITE_URL=$NUXT_PUBLIC_SITE_URL"
-          echo "NUXT_PUBLIC_FREE_SITE_DOMAIN=$NUXT_PUBLIC_FREE_SITE_DOMAIN"
-          echo "PORT=$PORT"
+          curl -sf -o /dev/null "https://staging.krabiclaw.com/" || true
+          curl -sf -o /dev/null "https://staging.krabiclaw.com/blog" || true
+          sleep 3
       - run: yarn test:e2e:full
 
   prod-smoke:

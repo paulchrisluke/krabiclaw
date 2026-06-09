@@ -2,16 +2,6 @@
 
 When an internal API returns errors, nulls, or malformed data, fix the API contract/source of truth first. Do not add frontend fallbacks, guards, or workaround logic unless the API behavior is intentionally nullable and documented.
 
-## Stack
-
-## Critical Wrangler Rules
-
-## Auth
-
-### Auth/App Naming Boundary
-
-## ChowBot Ownership Boundary
-
 ## Database Schema Workflow
 
 Migrations are managed via **wrangler D1 migrations** — applied automatically on every deploy.
@@ -37,6 +27,7 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - Tenant resolution: `server/middleware/tenant-resolution.ts`
   - `localhost` / `krabiclaw.com` = platform routes
   - `*.krabiclaw.com` or custom domains = tenant sites
+  - On `*.workers.dev` preview Workers: `x-preview-tenant: <slug>` header carries tenant identity (browser can't spoof subdomain against single-level wildcard cert)
 
 ---
 
@@ -47,7 +38,7 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - `server/middleware/tenant-resolution.ts` — runs on every request
 - `lib/auth-client.ts` — client-side Better Auth instance
 - `composables/` — Nuxt auto-imported
-- `schema.sql` — canonical D1 schema
+- `migrations/` — canonical D1 schema (numbered files; `0001_initial.sql` is the base)
 - Layout name for Saya theme pages: `layout: 'saya'` — `tenant` is dead
 
 ---
@@ -55,8 +46,18 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 ## Local Testing
 
 - Dev login (bypasses OAuth): `http://localhost:3000/api/dev/login` — only works in `import.meta.dev`, creates session for first local D1 user
+- Dev login in CI/E2E: `GET /api/dev/login` with `x-dev-route-secret` header — enabled by `E2E_ALLOW_DEV_ROUTES=true` + `E2E_DEV_ROUTE_SECRET` in `wrangler.toml [env.preview.vars]` and `[env.staging.vars]`. Never pass the secret in query params.
 - To test `/admin` locally, promote a user: `yarn wrangler d1 execute DB --local --command "UPDATE user SET role = 'admin' WHERE lower(email) = 'your@email.com';"`
 - Stripe webhooks: run `yarn stripe:listen` in a second terminal; use the CLI-output signing secret as `STRIPE_WEBHOOK_SECRET` in `.env` during local dev only
+
+---
+
+## CI / E2E Architecture
+
+- **e2e-smoke** (every PR): builds → deploys a `workers.dev` preview Worker → seeds staging D1 → runs smoke tests against the live preview URL. Set by `PLAYWRIGHT_PREVIEW_URL`; `playwright.config.ts` skips `webServer` when this is set.
+- **e2e-full** (main merges only): same build → deploy cycle but targets `staging.krabiclaw.com` (`[env.staging]` in `wrangler.toml`) with isolated D1/R2/KV resources. Never touches production.
+- Cloudflare creds (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) are scoped to deploy steps only — not in the top-level job `env:`.
+- All E2E jobs require `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` — without them billing API calls 503 and console-error assertions fail.
 
 ---
 
@@ -104,15 +105,12 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 ## Design System Enforcement
 
-
 - Never bypass Nuxt UI layout components (`UCard`, `UPage`, `UPageBody`) to write custom Tailwind `div` wrappers
 - UCard `:ui` prop only accepts: `root`, `header`, `title`, `description`, `body`, `footer` — use `class` on the element for all other styling (border, background, rounded, shadow)
 - Dashboard pages do NOT use `UPageHeader` — content goes directly in `UPageBody`
 - Admin nav uses `i-lucide-*` icons; keep consistent with the rest of the dashboard nav
-- # Do not introduce custom `border` or `bg` classes that break the global theme inheritance
-- Never bypass Nuxt UI layout components (`UCard`, `UPage`, `UPageHeader`) to write custom Tailwind `div` wrappers, even when matching external design references.
-- If a specific visual layout (like a flat Vercel card) is needed, you must use the Nuxt UI component and override its specific tokens via the `:ui` prop (e.g., `<UCard :ui="{ shadow: '', rounded: 'rounded-xl', body: { padding: 'p-0' } }">`).
-- Do not introduce custom `border` or `bg` classes that break the global theme inheritance.
+- Do not introduce custom `border` or `bg` classes that break the global theme inheritance
+- If a specific visual layout (like a flat Vercel card) is needed, use the Nuxt UI component and override specific tokens via the `:ui` prop (e.g., `<UCard :ui="{ shadow: '', rounded: 'rounded-xl', body: { padding: 'p-0' } }">`)
 
 ---
 

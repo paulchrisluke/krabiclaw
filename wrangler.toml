@@ -1,4 +1,4 @@
-name = "kikuzuki-thailand-marketing"
+name = "krabiclaw"
 main = ".output/server/index.mjs"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat_v2"]
@@ -58,10 +58,10 @@ binding = "AI"
 # Routes are intentionally omitted — preview Workers are reached via their
 # `workers.dev` preview-alias URL, not custom domains/zones.
 #
-# Dedicated staging resources (created 2026-06-08, never pointed at production):
-#   krabiclaw-db-staging      D1   757824d5-bdb2-4041-81a7-c30b9d1dc960
-#   krabiclaw-media-staging   R2
-#   krabiclaw-site-cache-staging  KV  9e829557fd2b46dba4148f2ed27a5c0b
+# Dedicated preview resources (created 2026-06-09, isolated from stable staging):
+#   krabiclaw-db-preview         D1   fba9d0aa-c6e2-411e-8cf5-ede43c15aae5
+#   krabiclaw-media-preview      R2
+#   krabiclaw-site-cache-preview KV   69252567b9cd4becbd486a337ab1e589
 [env.preview]
 workers_dev = true
 preview_urls = true
@@ -77,20 +77,57 @@ E2E_DEV_ROUTE_SECRET = "ci-dev-route-secret"
 
 [[env.preview.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-db-staging"
-database_id = "757824d5-bdb2-4041-81a7-c30b9d1dc960"
+database_name = "krabiclaw-db-preview"
+database_id = "fba9d0aa-c6e2-411e-8cf5-ede43c15aae5"
 migrations_dir = "migrations"
 remote = false
 
 [[env.preview.r2_buckets]]
 binding = "MEDIA_BUCKET"
-bucket_name = "krabiclaw-media-staging"
+bucket_name = "krabiclaw-media-preview"
 remote = false
 
 [[env.preview.kv_namespaces]]
 binding = "SITE_CACHE"
-id = "9e829557fd2b46dba4148f2ed27a5c0b"
+id = "69252567b9cd4becbd486a337ab1e589"
 remote = false
 
 [env.preview.ai]
+binding = "AI"
+
+# Stable staging environment — uses dedicated non-production data/resources and
+# a fixed platform host for manual QA. Public tenant previews stay on workers.dev
+# because nested hosts like demo.staging.krabiclaw.com are not covered by the
+# zone's wildcard TLS certificate.
+[env.staging]
+routes = [
+  { pattern = "staging.krabiclaw.com/*", zone_name = "krabiclaw.com" }
+]
+
+[env.staging.vars]
+CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+NUXT_PUBLIC_PLATFORM_DOMAIN = "https://staging.krabiclaw.com"
+NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://staging.krabiclaw.com"
+NUXT_PUBLIC_APP_NAME = "KrabiClaw Staging"
+E2E_ALLOW_DEV_ROUTES = "true"
+E2E_DEV_ROUTE_SECRET = "ci-dev-route-secret"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "krabiclaw-db-staging"
+database_id = "757824d5-bdb2-4041-81a7-c30b9d1dc960"
+migrations_dir = "migrations"
+remote = false
+
+[[env.staging.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "krabiclaw-media-staging"
+remote = false
+
+[[env.staging.kv_namespaces]]
+binding = "SITE_CACHE"
+id = "9e829557fd2b46dba4148f2ed27a5c0b"
+remote = false
+
+[env.staging.ai]
 binding = "AI"
