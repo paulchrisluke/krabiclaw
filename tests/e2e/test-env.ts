@@ -48,22 +48,18 @@ function isWorkersDevHost(hostname: string) {
   return hostname === 'workers.dev' || hostname.endsWith('.workers.dev')
 }
 
-// Returns extra HTTP headers for tests targeting a *.workers.dev preview Worker.
-// On workers.dev all tenants share one base URL — x-preview-tenant tells the
-// middleware which tenant to resolve (see tenant-resolution.ts preview path).
-// cache-control: no-store prevents edge-cache collisions across tenants.
-function previewWorkerHeaders(slug: string): Record<string, string> {
-  return { 'x-preview-tenant': slug, 'cache-control': 'no-store' }
+// "staging.krabiclaw.com" — the staging platform root. Wildcard TLS only covers
+// one subdomain level, so "demo.staging.krabiclaw.com" won't handshake.
+// Treat it like workers.dev: use base URL + x-preview-tenant header.
+function isStagingRootHost(hostname: string) {
+  return /^staging\.[^.]+\.[^.]+$/.test(hostname)
 }
 
-// Strips an environment prefix (e.g. "staging.") from the hostname so that
-// tenant subdomain URLs are constructed against the root domain:
-//   staging.krabiclaw.com → krabiclaw.com (then prepend demo.)
-//   demo.krabiclaw.com   → demo.krabiclaw.com (no change)
-function tenantRootDomain(hostname: string): string {
-  const stagingRoot = hostname.match(/^staging\.(.+)$/)?.[1]
-  if (stagingRoot) return stagingRoot
-  return hostname
+// x-preview-tenant carries tenant identity when subdomain routing isn't available
+// (workers.dev single-level wildcard, staging root). cache-control: no-store
+// prevents edge-cache collisions across tenants.
+function previewWorkerHeaders(slug: string): Record<string, string> {
+  return { 'x-preview-tenant': slug, 'cache-control': 'no-store' }
 }
 
 export function tenantTestBaseUrl() {
@@ -72,14 +68,10 @@ export function tenantTestBaseUrl() {
     base.hostname = 'demo.localhost'
     return base.toString().replace(/\/$/, '')
   }
-  if (isWorkersDevHost(base.hostname)) {
-    // *.workers.dev wildcard TLS cert is single-level — constructing
-    // demo.<preview>.workers.dev would fail the handshake. Return the base URL;
-    // x-preview-tenant header carries the tenant identity instead.
+  if (isWorkersDevHost(base.hostname) || isStagingRootHost(base.hostname)) {
     return base.toString().replace(/\/$/, '')
   }
-  const root = tenantRootDomain(base.hostname)
-  base.hostname = root.startsWith('demo.') ? root : `demo.${root}`
+  base.hostname = base.hostname.startsWith('demo.') ? base.hostname : `demo.${base.hostname}`
   return base.toString().replace(/\/$/, '')
 }
 
@@ -89,22 +81,25 @@ export function potteryHouseTestBaseUrl() {
     base.hostname = 'pottery-house.localhost'
     return base.toString().replace(/\/$/, '')
   }
-  if (isWorkersDevHost(base.hostname)) {
+  if (isWorkersDevHost(base.hostname) || isStagingRootHost(base.hostname)) {
     return base.toString().replace(/\/$/, '')
   }
-  const root = tenantRootDomain(base.hostname)
-  base.hostname = root.startsWith('pottery-house.') ? root : `pottery-house.${root}`
+  base.hostname = base.hostname.startsWith('pottery-house.') ? base.hostname : `pottery-house.${base.hostname}`
   return base.toString().replace(/\/$/, '')
 }
 
 export function tenantTestExtraHeaders(): Record<string, string> {
   const base = new URL(testBaseUrl())
-  return isWorkersDevHost(base.hostname) ? previewWorkerHeaders('demo') : {}
+  return (isWorkersDevHost(base.hostname) || isStagingRootHost(base.hostname))
+    ? previewWorkerHeaders('demo')
+    : {}
 }
 
 export function potteryHouseTestExtraHeaders(): Record<string, string> {
   const base = new URL(testBaseUrl())
-  return isWorkersDevHost(base.hostname) ? previewWorkerHeaders('pottery-house') : {}
+  return (isWorkersDevHost(base.hostname) || isStagingRootHost(base.hostname))
+    ? previewWorkerHeaders('pottery-house')
+    : {}
 }
 
 export function devLoginUrl(baseURL: string, userId?: string) {
