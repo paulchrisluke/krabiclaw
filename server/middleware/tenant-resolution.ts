@@ -148,8 +148,15 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
 
   // Try subdomains
   const platformDomain = getFreeSiteDomain(env)
-  const subdomain = deriveSubdomain(hostname, platformDomain)
-  if (subdomain) {
+  const isPlatformSubdomainHost =
+    hostname !== 'localhost' &&
+    hostname !== platformDomain &&
+    hostname.endsWith(`.${platformDomain}`)
+
+  if (isPlatformSubdomainHost) {
+    const subdomain = deriveSubdomain(hostname, platformDomain)
+    if (!subdomain) return null
+
     const subdomainSite = await db.prepare(`
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
              COALESCE(canonical.domain, sd.domain) AS canonical_domain,
