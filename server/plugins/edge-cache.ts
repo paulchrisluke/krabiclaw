@@ -2,9 +2,10 @@
 // Uses Nitro's afterResponse hook with H3 utility functions only
 // (no event.node.* — not available in Cloudflare Workers Web API runtime).
 
-import { getHeader, getResponseStatus, getResponseHeader } from 'h3'
+import { getHeader, getResponseStatus, getResponseHeader, setResponseHeader } from 'h3'
 import type { H3Event } from 'h3'
 import { buildHtmlCacheKey } from '~/server/utils/edge-cache'
+import { isPreviewContext } from '~/server/utils/tenant-hosts'
 
 const SKIP_PREFIXES = [
   '/api/', '/dashboard', '/admin', '/auth/',
@@ -23,6 +24,21 @@ type CloudflareEnvContext = {
 }
 
 export default defineNitroPlugin((nitroApp) => {
+  // Override cache-control for preview/staging hosts before the response is sent.
+  // routeRules sets `public, s-maxage=60` globally, but these hosts serve multiple
+  // tenants on the same hostname — CF edge caching would cross-contaminate tenants.
+  // This hook fires after the route handler (including routeRules) but before the
+  // network send, so the override takes effect even on the SSR path.
+  nitroApp.hooks.hook('beforeResponse', (event: H3Event) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cfRequest = (event.context.cloudflare as any)?.request as Request | undefined
+    const host = cfRequest?.headers.get('host') ?? getHeader(event, 'host') ?? ''
+    const hostname = host.split(':')[0] ?? host
+    if (isPreviewContext(hostname)) {
+      setResponseHeader(event, 'cache-control', 'private, no-store')
+    }
+  })
+
   nitroApp.hooks.hook('afterResponse', async (event: H3Event, response?: { body?: unknown }) => {
     const body = response?.body
     if (!body || typeof body !== 'string') return
@@ -37,6 +53,12 @@ export default defineNitroPlugin((nitroApp) => {
 
     // Use Cloudflare runtime request headers for cookies and host (more reliable on cloudflare_module)
     const cfRequest = (event.context.cloudflare as CloudflareRequestContext | undefined)?.request
+
+    // Skip KV writes on preview/staging — same reason as the read-path skip in
+    // 00.edge-cache.ts: stale HTML survives redeploys and references wrong asset hashes.
+    const writeHost = cfRequest?.headers.get('host') ?? getHeader(event, 'host') ?? ''
+    const writeHostname = writeHost.split(':')[0] ?? writeHost
+    if (isPreviewContext(writeHostname)) return
     const cookieHeader = cfRequest?.headers.get('cookie') ?? getHeader(event, 'cookie') ?? ''
     if (cookieHeader.includes(SESSION_COOKIE)) return
 

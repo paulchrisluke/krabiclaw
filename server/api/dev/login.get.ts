@@ -94,6 +94,7 @@ export default defineEventHandler(async (event) => {
   const cookieName = ctx.authCookies.sessionToken.name
   setCookie(event, cookieName, signed, {
     httpOnly: true,
+    secure: cookieName.startsWith('__Secure-'),
     path: '/',
     sameSite: 'lax',
     maxAge: 60 * 60 * 24 * 7,

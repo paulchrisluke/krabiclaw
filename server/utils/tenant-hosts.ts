@@ -56,6 +56,17 @@ export function isPlatformHost(host: string, env: TenantHostEnv): boolean {
   return getPlatformHosts(env).includes(hostname)
 }
 
+// Returns true for hosts where x-preview-tenant header carries tenant identity
+// because subdomain routing is unavailable (wildcard TLS cert only covers one
+// subdomain level, so demo.preview.krabiclaw.com or demo.staging.krabiclaw.com
+// won't handshake). Applies to workers.dev, staging.*, and preview.* hosts.
+export function isPreviewContext(host: string): boolean {
+  const hostname = hostnameOf(host)
+  if (hostname.endsWith('.workers.dev')) return true
+  if (/^(?:staging|preview)\.[^.]+\.[^.]+$/.test(hostname)) return true
+  return false
+}
+
 // The domain that free-tier subdomains (e.g. "demo.krabiclaw.com") are minted
 // under. Falls back to 'krabiclaw.com' when unconfigured, matching
 // platformDomainCandidates in server/utils/domains.ts.

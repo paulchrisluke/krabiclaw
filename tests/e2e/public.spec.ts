@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { collectPageErrors, expectHealthyPage, tenantBaseURL, tenantExtraHeaders } from './helpers'
+import { collectPageErrors, expectHealthyPage, tenantBaseURL, tenantExtraHeaders, setupTenantHeaders } from './helpers'
 
 const tenantRoutes = [
   { path: '/', title: /Ember & Slice/, text: 'Ember & Slice' },
@@ -19,9 +19,7 @@ const tenantRoutes = [
 
 test.describe('public tenant site', () => {
   test.beforeEach(async ({ page }) => {
-    if (Object.keys(tenantExtraHeaders).length > 0) {
-      await page.setExtraHTTPHeaders(tenantExtraHeaders)
-    }
+    await setupTenantHeaders(page, tenantBaseURL, tenantExtraHeaders)
   })
 
   for (const route of tenantRoutes) {

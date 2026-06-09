@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { collectPageErrors, expectHealthyPage, potteryHouseBaseURL, potteryHouseExtraHeaders } from './helpers'
+import { collectPageErrors, expectHealthyPage, potteryHouseBaseURL, potteryHouseExtraHeaders, setupTenantHeaders } from './helpers'
 
 const siteId = 'site-pottery-house'
 
@@ -33,9 +33,7 @@ const routes = [
 
 test.describe('pottery house public site', () => {
   test.beforeEach(async ({ page }) => {
-    if (Object.keys(potteryHouseExtraHeaders).length > 0) {
-      await page.setExtraHTTPHeaders(potteryHouseExtraHeaders)
-    }
+    await setupTenantHeaders(page, potteryHouseBaseURL, potteryHouseExtraHeaders)
   })
 
   for (const route of routes) {

@@ -54,8 +54,11 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 ## CI / E2E Architecture
 
-- **e2e-smoke** (every PR): builds → deploys a `workers.dev` preview Worker → seeds staging D1 → runs smoke tests against the live preview URL. Set by `PLAYWRIGHT_PREVIEW_URL`; `playwright.config.ts` skips `webServer` when this is set.
-- **e2e-full** (main merges only): same build → deploy cycle but targets `staging.krabiclaw.com` (`[env.staging]` in `wrangler.toml`) with isolated D1/R2/KV resources. Never touches production.
+Three tiers, each with a dedicated Worker and URL:
+
+- **e2e-smoke** (every PR): builds → `wrangler deploy --env preview` → seeds `krabiclaw-db-preview` → smoke tests against `preview.krabiclaw.com`. `PLAYWRIGHT_PREVIEW_URL` is hardcoded to that URL; `playwright.config.ts` skips `webServer` when it is set.
+- **e2e-staging** (push to `staging` branch): builds → `wrangler deploy --env staging` → seeds `krabiclaw-db-staging` → full E2E suite against `staging.krabiclaw.com`. Pre-production gate before staging is merged to main.
+- **prod-deploy** (push to `main`): applies D1 migrations → `wrangler deploy` (production `krabiclaw`) → `prod-smoke` and canaries run after, testing `krabiclaw.com`.
 - Cloudflare creds (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) are scoped to deploy steps only — not in the top-level job `env:`.
 - All E2E jobs require `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` — without them billing API calls 503 and console-error assertions fail.
 
