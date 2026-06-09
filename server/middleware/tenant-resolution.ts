@@ -41,10 +41,14 @@ export default defineEventHandler(async (event) => {
       if (db) {
         const site = await db.prepare(`
           SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
-                 sd.domain AS canonical_domain,
+                 canonical.domain AS canonical_domain,
                  s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
           FROM sites s
-          LEFT JOIN site_domains sd ON sd.site_id = s.id AND sd.type = 'subdomain' AND sd.status = 'active'
+          LEFT JOIN site_domains canonical
+            ON canonical.site_id = s.id
+           AND canonical.type = 'subdomain'
+           AND canonical.role = 'canonical'
+           AND canonical.status = 'active'
           LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
           WHERE s.subdomain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
           LIMIT 1
@@ -56,7 +60,11 @@ export default defineEventHandler(async (event) => {
           event.context.onboardingStatus = site.onboarding_status
           event.context.tenantType = 'tenant'
           event.context.tenantHost = host.split(':')[0]
-          event.context.canonicalDomain = site.canonical_domain || null
+          // Preview/staging tenant access intentionally stays on the current
+          // host because nested tenant subdomains are unavailable there. If we
+          // carry through the DB canonical domain, tenant-routing can 301 to a
+          // localhost or production tenant host and break CI navigation.
+          event.context.canonicalDomain = host.split(':')[0]
           event.context.site = { brand_name: site.brand_name || null, logo_url: site.logo_url || null, vertical: site.vertical || 'restaurant' }
           return
         }
