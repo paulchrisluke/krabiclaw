@@ -65,7 +65,7 @@ routes = [
 
 [env.preview.vars]
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
-NUXT_PUBLIC_PLATFORM_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_PLATFORM_DOMAIN = "https://preview.krabiclaw.com"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw"
 E2E_ALLOW_DEV_ROUTES = "true"

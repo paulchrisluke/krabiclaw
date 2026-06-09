@@ -44,20 +44,16 @@ export function testBaseUrl() {
   return testEnv('NUXT_PUBLIC_FREE_SITE_DOMAIN') || `http://localhost:${port}`
 }
 
-function isWorkersDevHost(hostname: string) {
-  return hostname === 'workers.dev' || hostname.endsWith('.workers.dev')
+// x-preview-tenant carries tenant identity when subdomain routing isn't available:
+// workers.dev single-level wildcard, staging.*, preview.* (wildcard TLS only
+// covers one subdomain level so demo.preview.krabiclaw.com won't handshake).
+// Must stay in sync with isPreviewContext in server/utils/tenant-hosts.ts.
+function isPreviewContext(hostname: string) {
+  if (hostname === 'workers.dev' || hostname.endsWith('.workers.dev')) return true
+  if (/^(?:staging|preview)\.[^.]+\.[^.]+$/.test(hostname)) return true
+  return false
 }
 
-// "staging.krabiclaw.com" — the staging platform root. Wildcard TLS only covers
-// one subdomain level, so "demo.staging.krabiclaw.com" won't handshake.
-// Treat it like workers.dev: use base URL + x-preview-tenant header.
-function isStagingRootHost(hostname: string) {
-  return /^staging\.[^.]+\.[^.]+$/.test(hostname)
-}
-
-// x-preview-tenant carries tenant identity when subdomain routing isn't available
-// (workers.dev single-level wildcard, staging root). cache-control: no-store
-// prevents edge-cache collisions across tenants.
 function previewWorkerHeaders(slug: string): Record<string, string> {
   return { 'x-preview-tenant': slug, 'cache-control': 'no-store' }
 }
@@ -68,7 +64,7 @@ export function tenantTestBaseUrl() {
     base.hostname = 'demo.localhost'
     return base.toString().replace(/\/$/, '')
   }
-  if (isWorkersDevHost(base.hostname) || isStagingRootHost(base.hostname)) {
+  if (isPreviewContext(base.hostname)) {
     return base.toString().replace(/\/$/, '')
   }
   base.hostname = base.hostname.startsWith('demo.') ? base.hostname : `demo.${base.hostname}`
@@ -81,7 +77,7 @@ export function potteryHouseTestBaseUrl() {
     base.hostname = 'pottery-house.localhost'
     return base.toString().replace(/\/$/, '')
   }
-  if (isWorkersDevHost(base.hostname) || isStagingRootHost(base.hostname)) {
+  if (isPreviewContext(base.hostname)) {
     return base.toString().replace(/\/$/, '')
   }
   base.hostname = base.hostname.startsWith('pottery-house.') ? base.hostname : `pottery-house.${base.hostname}`
@@ -90,16 +86,12 @@ export function potteryHouseTestBaseUrl() {
 
 export function tenantTestExtraHeaders(): Record<string, string> {
   const base = new URL(testBaseUrl())
-  return (isWorkersDevHost(base.hostname) || isStagingRootHost(base.hostname))
-    ? previewWorkerHeaders('demo')
-    : {}
+  return isPreviewContext(base.hostname) ? previewWorkerHeaders('demo') : {}
 }
 
 export function potteryHouseTestExtraHeaders(): Record<string, string> {
   const base = new URL(testBaseUrl())
-  return (isWorkersDevHost(base.hostname) || isStagingRootHost(base.hostname))
-    ? previewWorkerHeaders('pottery-house')
-    : {}
+  return isPreviewContext(base.hostname) ? previewWorkerHeaders('pottery-house') : {}
 }
 
 export function devLoginUrl(baseURL: string, userId?: string) {

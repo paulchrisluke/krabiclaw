@@ -3,7 +3,7 @@
 
 import { defineEventHandler, getRequestURL, getHeader } from 'h3'
 import { cloudflareEnv } from '../utils/api-response'
-import { deriveSubdomain, getFreeSiteDomain, hostnameOf, isPlatformHost } from '../utils/tenant-hosts'
+import { deriveSubdomain, getFreeSiteDomain, hostnameOf, isPlatformHost, isPreviewContext } from '../utils/tenant-hosts'
 
 interface TenantResolutionEnv {
   DB?: D1Database
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
   // Preview E2E: allow tests running against *.workers.dev preview Workers to
   // specify tenant via x-preview-tenant header. Only trusted for workers.dev
   // hosts — production custom domains never match this path.
-  if (host.endsWith('.workers.dev')) {
+  if (isPreviewContext(host)) {
     const previewSlug = getHeader(event, 'x-preview-tenant')
     if (previewSlug && /^[a-z0-9-]+$/.test(previewSlug)) {
       const freeSiteDomain = getFreeSiteDomain(env as TenantResolutionEnv)
