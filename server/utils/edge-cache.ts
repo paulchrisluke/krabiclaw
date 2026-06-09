@@ -9,5 +9,10 @@ export function buildHtmlCacheKey(event: H3Event): string | null {
     ?? getHeader(event, 'host')
     ?? getHeader(event, 'x-forwarded-host')
   if (!host) return null
-  return `html:${host}:${event.path}`
+  // On *.workers.dev preview Workers, multiple tenants share one host. Include
+  // x-preview-tenant in the key so their cached HTML doesn't collide.
+  const previewTenant = cfRequest?.headers.get('x-preview-tenant')
+    ?? getHeader(event, 'x-preview-tenant')
+  const tenantSuffix = previewTenant ? `:${previewTenant}` : ''
+  return `html:${host}${tenantSuffix}:${event.path}`
 }

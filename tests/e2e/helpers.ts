@@ -1,8 +1,13 @@
 import { expect, type Page } from '@playwright/test'
-import { tenantTestBaseUrl, potteryHouseTestBaseUrl } from './test-env'
+import { tenantTestBaseUrl, potteryHouseTestBaseUrl, tenantTestExtraHeaders, potteryHouseTestExtraHeaders } from './test-env'
 
 export const tenantBaseURL = tenantTestBaseUrl()
 export const potteryHouseBaseURL = potteryHouseTestBaseUrl()
+// Extra headers for tenant tests against *.workers.dev preview Workers.
+// Apply via test.use({ extraHTTPHeaders: tenantExtraHeaders }) in each describe
+// block that navigates to a tenant URL (not the platform/dashboard describes).
+export const tenantExtraHeaders = tenantTestExtraHeaders()
+export const potteryHouseExtraHeaders = potteryHouseTestExtraHeaders()
 
 export function collectPageErrors(page: Page) {
   const errors: string[] = []
@@ -45,6 +50,15 @@ export function collectPageErrors(page: Page) {
   return errors
 }
 
+// Third-party origins whose console errors are noise, not app failures.
+const THIRD_PARTY_ERROR_PATTERNS = [
+  'maps.googleapis.com',
+  'google.internal.maps',
+  'gen_204',
+  'maps.gstatic.com',
+  'ERR_FAILED',
+]
+
 export async function expectHealthyPage(page: Page, errors: string[]) {
   await expect(page.locator('body')).not.toContainText('Site Not Found')
   await expect(page.locator('body')).not.toContainText('Vite Error')
@@ -56,5 +70,6 @@ export async function expectHealthyPage(page: Page, errors: string[]) {
   expect(h1Texts.some(text => /503/.test(text))).toBe(false)
   // Catch the custom error page copy
   await expect(page.locator('body')).not.toContainText('wrong link sando')
-  expect(errors).toEqual([])
+  const appErrors = errors.filter(e => !THIRD_PARTY_ERROR_PATTERNS.some(p => e.includes(p)))
+  expect(appErrors).toEqual([])
 }

@@ -44,13 +44,30 @@ export function testBaseUrl() {
   return testEnv('NUXT_PUBLIC_FREE_SITE_DOMAIN') || `http://localhost:${port}`
 }
 
+function isWorkersDevHost(hostname: string) {
+  return hostname === 'workers.dev' || hostname.endsWith('.workers.dev')
+}
+
+// Returns extra HTTP headers for tests targeting a *.workers.dev preview Worker.
+// On workers.dev all tenants share one base URL — x-preview-tenant tells the
+// middleware which tenant to resolve (see tenant-resolution.ts preview path).
+// cache-control: no-store prevents edge-cache collisions across tenants.
+function previewWorkerHeaders(slug: string): Record<string, string> {
+  return { 'x-preview-tenant': slug, 'cache-control': 'no-store' }
+}
+
 export function tenantTestBaseUrl() {
   const base = new URL(testBaseUrl())
   if (['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) {
     base.hostname = 'demo.localhost'
     return base.toString().replace(/\/$/, '')
   }
-
+  if (isWorkersDevHost(base.hostname)) {
+    // *.workers.dev wildcard TLS cert is single-level — constructing
+    // demo.<preview>.workers.dev would fail the handshake. Return the base URL;
+    // x-preview-tenant header carries the tenant identity instead.
+    return base.toString().replace(/\/$/, '')
+  }
   if (!base.hostname.startsWith('demo.')) {
     base.hostname = `demo.${base.hostname}`
   }
@@ -63,10 +80,23 @@ export function potteryHouseTestBaseUrl() {
     base.hostname = 'pottery-house.localhost'
     return base.toString().replace(/\/$/, '')
   }
+  if (isWorkersDevHost(base.hostname)) {
+    return base.toString().replace(/\/$/, '')
+  }
   if (!base.hostname.startsWith('pottery-house.')) {
     base.hostname = `pottery-house.${base.hostname}`
   }
   return base.toString().replace(/\/$/, '')
+}
+
+export function tenantTestExtraHeaders(): Record<string, string> {
+  const base = new URL(testBaseUrl())
+  return isWorkersDevHost(base.hostname) ? previewWorkerHeaders('demo') : {}
+}
+
+export function potteryHouseTestExtraHeaders(): Record<string, string> {
+  const base = new URL(testBaseUrl())
+  return isWorkersDevHost(base.hostname) ? previewWorkerHeaders('pottery-house') : {}
 }
 
 export function devLoginUrl(baseURL: string, userId?: string) {

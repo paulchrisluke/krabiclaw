@@ -1,11 +1,15 @@
 // POST /api/admin/sites/[siteId]/transfer — initiate a site transfer to a new owner
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { rootDomainForPair } from '~/server/utils/domains'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
+import {
+  buildTransferDomainSnapshot,
+  serializeTransferDomainSnapshot,
+} from '~/server/utils/site-transfer'
 
 const ALLOWED_PLANS = ['growth', 'managed', 'seo_accelerator']
 const TOKEN_BYTES = 32
-const EXPIRY_DAYS = 7
 
 function generateToken(): string {
   const bytes = new Uint8Array(TOKEN_BYTES)
@@ -63,6 +67,11 @@ export default defineEventHandler(async (event) => {
   }
   const invitedCoupon = body.coupon?.trim() || null
   const invitedDomain = body.domain?.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') || null
+  const requiresPayment = Boolean(invitedPlan)
+
+  if (invitedDomain && !invitedPlan) {
+    return jsonResponse({ error: 'A custom-domain handoff requires a paid plan.' }, { status: 400 })
+  }
 
   const toEmailRaw = body.email ?? ''
   if (typeof toEmailRaw !== 'string' || toEmailRaw !== toEmailRaw.trim() || toEmailRaw.trim() === '') {
@@ -90,7 +99,20 @@ export default defineEventHandler(async (event) => {
   const id = crypto.randomUUID()
   const token = generateToken()
   const now = new Date()
-  const expiresAt = new Date(now.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const domainSnapshot = requiresPayment
+    ? await buildTransferDomainSnapshot(db, siteId)
+    : []
+  const customDomainsSnapshot = requiresPayment
+    ? serializeTransferDomainSnapshot(domainSnapshot)
+    : null
+
+  if (invitedDomain) {
+    const invitedDomainRoot = rootDomainForPair(invitedDomain)
+    const hasInvitedDomain = domainSnapshot.some((entry) => rootDomainForPair(entry.domain) === invitedDomainRoot)
+    if (!hasInvitedDomain) {
+      return jsonResponse({ error: 'This site is not currently configured for that custom domain handoff.' }, { status: 400 })
+    }
+  }
 
   const cancelStmt = db.prepare(
     `UPDATE site_transfer_requests SET status = 'cancelled'
@@ -99,8 +121,9 @@ export default defineEventHandler(async (event) => {
 
   const insertStmt = db.prepare(
     `INSERT INTO site_transfer_requests
-     (id, site_id, from_organization_id, to_email, token, status, initiated_by_user_id, message, invited_plan, invited_coupon, invited_domain, created_at, expires_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
+     (id, site_id, from_organization_id, to_email, token, status, initiated_by_user_id, message,
+      invited_plan, invited_coupon, invited_domain, requires_payment, created_at, custom_domains_snapshot)
+     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     id,
     siteId,
@@ -112,8 +135,9 @@ export default defineEventHandler(async (event) => {
     invitedPlan,
     invitedCoupon,
     invitedDomain,
+    requiresPayment ? 1 : 0,
     now.toISOString(),
-    expiresAt,
+    customDomainsSnapshot,
   )
 
   try {
@@ -165,9 +189,9 @@ export default defineEventHandler(async (event) => {
       ${personalNote}
       <p>Click the button below to sign in and take ownership of your site. You only pay once you've had a look around and you're happy.</p>
       <p style="margin:24px 0">
-        <a href="${escapeHtml(transferUrl)}" style="background:#8F1D21;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Claim your website</a>
+        <a href="${escapeHtml(transferUrl)}" style="background:#FB7461;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Claim your website</a>
       </p>
-      <p style="font-size:12px;color:#71717a">This link expires in 7 days. If you didn't expect this email, you can safely ignore it.</p>
+      <p style="font-size:12px;color:#71717a">This transfer link will stay active until you're ready to claim it. Didn't expect this email? No worries, you can safely ignore it.</p>
     `
 
     const textParts = [
@@ -178,7 +202,10 @@ export default defineEventHandler(async (event) => {
     if (invitedDomain) textParts.push('', `Your domain: ${invitedDomain} — already set up, no extra hosting needed`)
     if (personalNote) textParts.push('', `"${body.message!.trim()}"`)
     if (invitedPlan) textParts.push('', `Recommended plan: ${planLabel[invitedPlan] ?? invitedPlan}${discountNote}`)
-    textParts.push('', `Claim your website: ${transferUrl}`, '', 'This link expires in 7 days.')
+    if (requiresPayment) {
+      textParts.push('', 'Checkout comes before ownership transfer on paid handoffs.')
+    }
+    textParts.push('', `Claim your website: ${transferUrl}`, '', `This transfer link will stay active until you're ready to claim it. Didn't expect this email? No worries, you can safely ignore it.`)
 
     fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -186,7 +213,7 @@ export default defineEventHandler(async (event) => {
       body: JSON.stringify({
         from: 'KrabiClaw <hello@krabiclaw.com>',
         to: [toEmail],
-        subject: `${initiatorName} built your website — it's ready to claim`,
+        subject: `${initiatorName} just built your new website! 🎉`,
         html,
         text: textParts.join('\n'),
       }),
@@ -198,10 +225,10 @@ export default defineEventHandler(async (event) => {
     token,
     transfer_url: transferUrl,
     to_email: toEmail,
-    expires_at: expiresAt,
     site_name: siteName,
     invited_plan: invitedPlan,
     invited_coupon: invitedCoupon,
     invited_domain: invitedDomain,
+    requires_payment: requiresPayment,
   })
 })

@@ -57,7 +57,7 @@
 
           <!-- Site name + builder -->
           <h1 class="text-[clamp(32px,4vw,48px)] font-extrabold leading-[1.02] tracking-tight text-default text-balance m-0">{{ transfer.site_name }}</h1>
-          <p class="mt-4 text-base text-muted">Created by <strong class="text-default">{{ transfer.initiated_by_name }}</strong> • Link expires in {{ expiresIn }}</p>
+          <p class="mt-4 text-base text-muted">Created by <strong class="text-default">{{ transfer.initiated_by_name }}</strong> • This handoff stays active until it is completed or cancelled.</p>
 
           <!-- Personal note -->
           <p v-if="transfer.message" class="mt-5 text-sm italic text-muted border-l-2 border-default pl-3">
@@ -88,8 +88,9 @@
                     </p>
                   </div>
                   <p class="text-center text-xs text-muted mt-2">
-                    <template v-if="transfer.invited_domain">An active plan is required to keep your custom domain live.</template>
-                    <template v-else>Subscribe when you're ready to launch.</template>
+                    <template v-if="transfer.requires_payment && transfer.invited_domain">Payment is required before we transfer ownership and keep your custom domain live.</template>
+                    <template v-else-if="transfer.requires_payment">Payment is required before we transfer ownership.</template>
+                    <template v-else>Claim the site now and set up billing later if you want to upgrade.</template>
                   </p>
                 </template>
               </BillingPlanCard>
@@ -132,9 +133,16 @@
                 icon="i-heroicons-check-badge"
                 :description="`Signed in as ${user?.email}`"
               />
+              <UAlert
+                v-if="transfer.requires_payment"
+                color="warning"
+                variant="soft"
+                icon="i-heroicons-credit-card"
+                description="This is a paid handoff. Checkout completes before the site moves into your account."
+              />
               <UAlert v-if="acceptError" color="error" variant="soft" :description="acceptError" />
               <UButton block color="primary" size="xl" class="rounded-[10px] font-semibold text-[15px] shadow-sm hover:scale-[1.01] transition-all duration-300" :loading="accepting" @click="acceptTransfer">
-                Claim {{ transfer.site_name }}
+                {{ transfer.requires_payment ? 'Continue to checkout' : `Claim ${transfer.site_name}` }}
               </UButton>
             </template>
 
@@ -213,12 +221,13 @@ interface TransferInfo {
   site_name: string
   site_subdomain: string | null
   to_email: string
-  expires_at: string
   message: string | null
   invited_plan: string | null
   invited_coupon: string | null
   pricing: PricingInfo | null
   invited_domain: string | null
+  requires_payment: boolean
+  never_expires: boolean
   initiated_by_name: string
   initiated_by_domain: string
 }
@@ -241,14 +250,6 @@ const iframeUrl = computed(() => {
   return `https://${transfer.value.site_subdomain}.krabiclaw.com`
 })
 
-const expiresIn = computed(() => {
-  if (!transfer.value) return ''
-  const diff = new Date(transfer.value.expires_at).getTime() - Date.now()
-  const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
-  if (days <= 0) return 'a few hours'
-  return days === 1 ? '1 day' : `${days} days`
-})
-
 const { plans } = usePlans()
 const matchedPlan = computed(() => {
   if (!transfer.value?.invited_plan || !plans.value) return null
@@ -262,7 +263,7 @@ onMounted(async () => {
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
     const errorMessage = err && typeof err === 'object' && 'message' in err ? (err as Record<string, string>).message : null
-    loadError.value = errorData?.error ?? errorMessage ?? 'This transfer link is invalid or has expired.'
+    loadError.value = errorData?.error ?? errorMessage ?? 'This transfer link is invalid or unavailable.'
   } finally {
     loading.value = false
   }

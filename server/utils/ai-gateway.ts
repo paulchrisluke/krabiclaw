@@ -53,10 +53,10 @@ export async function callAiGateway(
 ): Promise<AiGatewayResponse> {
   const accountId = env.CF_ACCOUNT_ID
   const gatewayName = env.CF_GATEWAY_NAME
-  const aigToken = env.CF_AIG_TOKEN
+  const aigToken = env.CLOUDFLARE_API_TOKEN
 
   if (!accountId || !gatewayName || !aigToken) {
-    throw new Error('CF AI Gateway env vars not configured (CF_ACCOUNT_ID, CF_GATEWAY_NAME, CF_AIG_TOKEN)')
+    throw new Error('CF AI Gateway env vars not configured (CF_ACCOUNT_ID, CF_GATEWAY_NAME, CLOUDFLARE_API_TOKEN)')
   }
 
   const model = opts.model ?? 'claude-sonnet-4-6'
@@ -158,10 +158,10 @@ export async function generateImageViaGateway(
 ): Promise<AiImageGenerationResult> {
   const accountId = env.CF_ACCOUNT_ID
   const gatewayName = env.CF_GATEWAY_NAME
-  const aigToken = env.CF_AIG_TOKEN
+  const aigToken = env.CLOUDFLARE_API_TOKEN
 
   if (!accountId || !gatewayName || !aigToken) {
-    throw new Error('CF AI Gateway env vars not configured (CF_ACCOUNT_ID, CF_GATEWAY_NAME, CF_AIG_TOKEN)')
+    throw new Error('CF AI Gateway env vars not configured (CF_ACCOUNT_ID, CF_GATEWAY_NAME, CLOUDFLARE_API_TOKEN)')
   }
 
   const url = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayName}/openai/v1/images/generations`

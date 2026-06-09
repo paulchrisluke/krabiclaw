@@ -8,7 +8,7 @@ directory = ".output/public"
 
 [triggers]
 # Matches scheduledTasks in nuxt.config.ts
-crons = ["*/5 * * * *", "*/10 * * * *", "0 3 * * *", "0 * * * *"]
+crons = ["*/5 * * * *", "*/10 * * * *", "0 3 * * *", "0 4 * * *", "0 * * * *"]
 
 [[routes]]
 pattern = "*.krabiclaw.com/*"
@@ -47,4 +47,50 @@ id = "7fadf142e35745d6bec16b260eaab2f2"
 remote = false
 
 [ai]
+binding = "AI"
+
+# Preview environment — used by CI to deploy a real edge Worker per PR and run
+# Playwright against its live `workers.dev` preview URL (see ci.yml `e2e-smoke`
+# and PLAYWRIGHT_PREVIEW_URL in playwright.config.ts), instead of emulating
+# bindings locally via `yarn dev` + getPlatformProxy. Cloudflare's own guidance:
+# real edge behavior in CI requires a deployed preview Worker, not a local proxy.
+#
+# Routes are intentionally omitted — preview Workers are reached via their
+# `workers.dev` preview-alias URL, not custom domains/zones.
+#
+# Dedicated staging resources (created 2026-06-08, never pointed at production):
+#   krabiclaw-db-staging      D1   757824d5-bdb2-4041-81a7-c30b9d1dc960
+#   krabiclaw-media-staging   R2
+#   krabiclaw-site-cache-staging  KV  9e829557fd2b46dba4148f2ed27a5c0b
+[env.preview]
+workers_dev = true
+preview_urls = true
+routes = []
+
+[env.preview.vars]
+CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+NUXT_PUBLIC_PLATFORM_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_APP_NAME = "KrabiClaw"
+E2E_ALLOW_DEV_ROUTES = "true"
+E2E_DEV_ROUTE_SECRET = "ci-dev-route-secret"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "krabiclaw-db-staging"
+database_id = "757824d5-bdb2-4041-81a7-c30b9d1dc960"
+migrations_dir = "migrations"
+remote = false
+
+[[env.preview.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "krabiclaw-media-staging"
+remote = false
+
+[[env.preview.kv_namespaces]]
+binding = "SITE_CACHE"
+id = "9e829557fd2b46dba4148f2ed27a5c0b"
+remote = false
+
+[env.preview.ai]
 binding = "AI"

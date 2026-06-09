@@ -185,14 +185,27 @@ export default defineNuxtConfig({
   // Poppins: only the weights actually used in CSS (NOT all 18 variants).
   // Instrument Serif: italic is the LCP font on tenant hero pages — kept minimal.
   // Fredoka: platform wordmark / display, all 4 weights used.
+  //
+  // All three families are Google Fonts — pin `provider: 'google'` per family and
+  // disable the other providers so unifont never registers/queries them (e.g. the
+  // bunny provider fetches https://fonts.bunny.net/list on every boot otherwise,
+  // adding retry delay for a provider this project doesn't use).
   fonts: {
     defaults: {
       subsets: ['latin'],
     },
+    providers: {
+      bunny: false,
+      adobe: false,
+      fontshare: false,
+      fontsource: false,
+      googleicons: false,
+      npm: false,
+    },
     families: [
-      { name: 'Instrument Serif', weights: [400], styles: ['normal', 'italic'], display: 'swap' },
-      { name: 'Poppins', weights: [400, 500, 600, 700], display: 'swap' },
-      { name: 'Fredoka', weights: [400, 500, 600, 700], display: 'swap' },
+      { name: 'Instrument Serif', provider: 'google', weights: [400], styles: ['normal', 'italic'], display: 'swap' },
+      { name: 'Poppins', provider: 'google', weights: [400, 500, 600, 700], display: 'swap' },
+      { name: 'Fredoka', provider: 'google', weights: [400, 500, 600, 700], display: 'swap' },
     ],
   },
 
@@ -215,6 +228,7 @@ export default defineNuxtConfig({
       '*/5 * * * *': ['translation-jobs-process'],
       '*/10 * * * *': ['domain-reconciliation'],
       '0 3 * * *': ['domain-reconciliation-daily'],
+      '0 4 * * *': ['site-transfer-reminders'],
       '0 * * * *': ['instagram-sync-process', 'google-business-sync']
     } : {},
     devServer: {

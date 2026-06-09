@@ -12,8 +12,8 @@ export default defineEventHandler(async (event) => {
 
   const row = await db
     .prepare(
-      `SELECT r.id, r.site_id, r.to_email, r.status, r.expires_at, r.message,
-              r.invited_plan, r.invited_coupon, r.invited_domain,
+      `SELECT r.id, r.site_id, r.to_email, r.status, r.message,
+              r.invited_plan, r.invited_coupon, r.invited_domain, r.requires_payment,
               s.brand_name, s.slug, s.subdomain,
               u.name AS initiated_by_name, u.email AS initiated_by_email
        FROM site_transfer_requests r
@@ -27,11 +27,11 @@ export default defineEventHandler(async (event) => {
       site_id: string
       to_email: string
       status: string
-      expires_at: string
       message: string | null
       invited_plan: string | null
       invited_coupon: string | null
       invited_domain: string | null
+      requires_payment: number
       brand_name: string | null
       slug: string
       subdomain: string | null
@@ -45,15 +45,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Transfer is no longer active', status: row.status }, { status: 410 })
   }
 
-  if (new Date(row.expires_at) < new Date()) {
-    await db
-      .prepare(
-        `UPDATE site_transfer_requests SET status = 'expired' WHERE id = ?`,
-      )
-      .bind(row.id)
-      .run()
-    return jsonResponse({ error: 'Transfer has expired', status: 'expired' }, { status: 410 })
-  }
+  const requiresPayment = row.requires_payment === 1 || Boolean(row.invited_plan)
 
   // Fetch plan price + coupon discount from Stripe (best-effort)
   interface PricingInfo {
@@ -103,12 +95,13 @@ export default defineEventHandler(async (event) => {
     site_id: row.site_id,
     site_name: row.brand_name ?? row.slug,
     to_email: row.to_email,
-    expires_at: row.expires_at,
     message: row.message,
     invited_plan: row.invited_plan,
     invited_coupon: row.invited_coupon,
     pricing,
     invited_domain: row.invited_domain,
+    requires_payment: requiresPayment,
+    never_expires: true,
     site_subdomain: row.subdomain,
     initiated_by_name: row.initiated_by_name,
     // Redact the initiating email to just the domain for privacy
