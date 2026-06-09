@@ -111,13 +111,17 @@ jobs:
         run: |
           set -euo pipefail
           alias="ci-pr-${{ github.event.pull_request.number || github.run_id }}"
+          # Capture both stdout and stderr — wrangler 4.x may write the preview URL to stderr
           npx wrangler versions upload \
             --env preview \
             --preview-alias "$alias" \
-            --message "CI smoke ${{ github.sha }}" | tee /tmp/wrangler-upload.log
-          preview_url=$(grep -oE 'Version Preview Alias URL: https://\S+' /tmp/wrangler-upload.log | sed -E 's/^Version Preview Alias URL: //')
-          if [[ ! "$preview_url" =~ ^https://[A-Za-z0-9.-]+\.workers\.dev/?$ ]]; then
+            --message "CI smoke ${{ github.sha }}" 2>&1 | tee /tmp/wrangler-upload.log
+          # Match any workers.dev URL regardless of surrounding label text (wrangler output format changed in 4.x)
+          preview_url=$(grep -oE 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wrangler-upload.log | grep -v '^https://workers\.dev$' | head -1 || true)
+          if [[ ! "$preview_url" =~ ^https://[A-Za-z0-9._-]+\.workers\.dev/?$ ]]; then
             echo "Could not parse a valid preview URL from wrangler output: '${preview_url}'" >&2
+            echo "--- Full wrangler output ---" >&2
+            cat /tmp/wrangler-upload.log >&2
             exit 1
           fi
           echo "Preview deployed: $preview_url"
