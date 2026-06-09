@@ -125,8 +125,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Warm up preview Worker
         run: |
-          curl -sf -o /dev/null -w "Warm-up status: %{http_code}\n" \
-            "${{ steps.deploy.outputs.url }}/" || true
+          curl -sf -o /dev/null "${{ steps.deploy.outputs.url }}/" || true
+          curl -sf -o /dev/null "${{ steps.deploy.outputs.url }}/blog" || true
           sleep 3
       - name: Run smoke tests against deployed preview
         env:
