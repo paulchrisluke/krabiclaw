@@ -3,7 +3,8 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 
 export default defineEventHandler(async (event) => {
-  if (!import.meta.dev) {
+  const allowDevRoute = import.meta.dev || process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  if (!allowDevRoute) {
     throw createError({ statusCode: 404, statusMessage: 'Not found' })
   }
 

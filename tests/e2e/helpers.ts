@@ -57,6 +57,7 @@ const THIRD_PARTY_ERROR_PATTERNS = [
   'gen_204',
   'maps.gstatic.com',
   'ERR_FAILED',
+  'cloudflareinsights.com',
 ]
 
 export async function expectHealthyPage(page: Page, errors: string[]) {
