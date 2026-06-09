@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 import { potteryHouseBaseURL, tenantBaseURL } from './helpers'
+import { devLoginHeaders } from './test-env'
 
 // Verify that submission APIs correctly trigger notification records in the DB.
 // Notification delivery (Resend email, WhatsApp) requires live credentials — those
@@ -13,6 +14,8 @@ const devNotificationsUrl = (baseURL: string, params: Record<string, string>) =>
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
   return url.toString()
 }
+
+const devNotificationsHeaders = () => devLoginHeaders() ?? {}
 
 type NotificationRow = {
   id: string
@@ -37,7 +40,7 @@ async function waitForNotifications(
   let lastRows: NotificationRow[] = []
 
   while (Date.now() < deadline) {
-    const res = await request.get(devNotificationsUrl(baseURL, params))
+    const res = await request.get(devNotificationsUrl(baseURL, params), { headers: devNotificationsHeaders() })
     expect(res.status()).toBe(200)
     const payload = await res.json() as { notifications: NotificationRow[] }
     lastRows = payload.notifications

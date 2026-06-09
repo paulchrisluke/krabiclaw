@@ -3,9 +3,18 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 
 export default defineEventHandler(async (event) => {
-  const allowDevRoute = import.meta.dev || process.env.E2E_ALLOW_DEV_ROUTES === 'true'
-  if (!allowDevRoute) {
+  const devMode = import.meta.dev
+  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  if (!devMode && !e2eOverride) {
     throw createError({ statusCode: 404, statusMessage: 'Not found' })
+  }
+
+  if (!devMode && e2eOverride) {
+    const expected = process.env.E2E_DEV_ROUTE_SECRET || ''
+    const provided = getHeader(event, 'x-dev-route-secret') || ''
+    if (!expected || !provided || provided !== expected) {
+      throw createError({ statusCode: 404, statusMessage: 'Not found' })
+    }
   }
 
   const env = cloudflareEnv(event)
