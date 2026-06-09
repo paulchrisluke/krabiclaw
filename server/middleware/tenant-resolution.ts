@@ -98,6 +98,7 @@ function isPlatformRoute(pathname: string): boolean {
     '/api/dashboard',
     '/api/sites',
     '/api/admin',
+    '/api/integrations',
     '/templates',
     '/features'
   ]
