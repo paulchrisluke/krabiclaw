@@ -127,7 +127,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_TEST }}
+      STRIPE_WEBHOOK_SECRET: "ci-stripe-webhook-secret-staging"
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://staging.krabiclaw.com
       NUXT_PUBLIC_FREE_SITE_DOMAIN: https://staging.krabiclaw.com
@@ -166,7 +166,8 @@ jobs:
         run: |
           curl -sf -o /dev/null "https://staging.krabiclaw.com/" || true
           curl -sf -o /dev/null "https://staging.krabiclaw.com/blog" || true
-          sleep 3
+          curl -sf -o /dev/null "https://staging.krabiclaw.com/api/billing/plans" || true
+          sleep 10
       - name: Run full E2E suite
         run: yarn test:e2e:full
 

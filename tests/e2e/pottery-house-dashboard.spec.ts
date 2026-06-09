@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test'
+import { setupTenantHeaders } from './helpers'
 import { devLoginHeaders, devLoginUrl } from './test-env'
 
 test.describe('pottery house dashboard', () => {
   test('workspace routes are healthy for owner, otherwise site access is denied', async ({ page, baseURL }) => {
-    await page.context().setExtraHTTPHeaders(devLoginHeaders() || {})
-    const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'networkidle' })
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
 
     const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
@@ -25,7 +26,7 @@ test.describe('pottery house dashboard', () => {
         `/dashboard/${orgSlug}/~/settings/general`,
         `/dashboard/${orgSlug}/~/settings/billing`,
       ]) {
-        const res = await page.goto(`${baseURL}${route}`, { waitUntil: 'networkidle' })
+        const res = await page.goto(`${baseURL}${route}`, { waitUntil: 'load' })
         expect(res?.status()).toBeLessThan(400)
         await expect(page.locator('body')).not.toContainText('Site Not Found')
         await expect(page.locator('body')).not.toContainText('Vite Error')

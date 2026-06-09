@@ -88,28 +88,30 @@ export default defineEventHandler(async (event) => {
   `).bind(siteId).all<{ field: string; content: string | null }>()
   const contactMap = Object.fromEntries((contactRows.results ?? []).map(r => [r.field, r.content]))
 
-  notifyReservationCreated(env, db, {
-    organizationId: site.organization_id,
-    siteId,
-    siteName: site.brand_name,
-    reservationId: id,
-    guestName: name,
-    email,
-    phone,
-    date,
-    time,
-    guests,
-    cancelUrl,
-    contactPhone: contactMap['contact.phone'] ?? null,
-    contactEmail: contactMap['contact.email'] ?? null,
-  }).catch((error) => {
+  try {
+    await notifyReservationCreated(env, db, {
+      organizationId: site.organization_id,
+      siteId,
+      siteName: site.brand_name,
+      reservationId: id,
+      guestName: name,
+      email,
+      phone,
+      date,
+      time,
+      guests,
+      cancelUrl,
+      contactPhone: contactMap['contact.phone'] ?? null,
+      contactEmail: contactMap['contact.email'] ?? null,
+    })
+  } catch (error) {
     console.error('reservation_notification_failed', {
       organizationId: site.organization_id,
       siteId,
       reservationId: id,
       error: error instanceof Error ? error.message : String(error)
     })
-  })
+  }
 
   return jsonResponse({
     success: true,

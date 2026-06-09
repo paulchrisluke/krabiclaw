@@ -13,14 +13,25 @@ VALUES ('saya-theme-v1', 'Saya', 'saya', '1.0.0', 'Restaurant website theme', 'a
 -- locations, media, menus, reviews, posts, translations, bookings, billing,
 -- credits, ChowBot state, domains, and other demo-owned child rows.
 DELETE FROM organization WHERE id IN ('org-demo', 'org_demo');
-DELETE FROM user WHERE id IN ('user-demo', 'user_demo');
+DELETE FROM user WHERE id IN ('user-demo', 'user_demo', 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re');
 
 -- Guard against legacy demo scripts that may have claimed the demo domains.
 DELETE FROM site_domains WHERE domain IN ('demo.localhost', 'demo.krabiclaw.com');
 
--- User
+-- Users
 INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
 VALUES ('user-demo', 'Demo Owner', 'demo@krabiclaw.com', 1, 'admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- Site-transfer recipient: used by site-transfer E2E tests.
+-- Must be an owner of an org so that the site-transfer accept endpoint can find an owner organization.
+INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
+VALUES ('Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re', 'Transfer Recipient', 'recipient@example.test', 1, 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT OR IGNORE INTO organization (id, name, slug, createdAt)
+VALUES ('org-transfer-recipient', 'Recipient Studio', 'recipient-studio', CURRENT_TIMESTAMP);
+
+INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt)
+VALUES ('member-transfer-recipient', 'org-transfer-recipient', 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re', 'owner', CURRENT_TIMESTAMP);
 
 -- Organization
 INSERT INTO organization (id, name, slug, createdAt)

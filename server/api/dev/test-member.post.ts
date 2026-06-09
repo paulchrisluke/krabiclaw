@@ -4,8 +4,18 @@ import { getAuthSession } from '~/server/utils/auth'
 type MemberRole = 'owner' | 'admin' | 'editor' | 'member'
 
 export default defineEventHandler(async (event) => {
-  if (!import.meta.dev) {
+  const devMode = import.meta.dev
+  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  if (!devMode && !e2eOverride) {
     throw createError({ statusCode: 404, statusMessage: 'Not found' })
+  }
+
+  if (!devMode && e2eOverride) {
+    const expectedSecret = process.env.E2E_DEV_ROUTE_SECRET || ''
+    const providedSecret = getHeader(event, 'x-dev-route-secret') || ''
+    if (!expectedSecret || !providedSecret || expectedSecret !== providedSecret) {
+      throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
+    }
   }
 
   const env = cloudflareEnv(event)

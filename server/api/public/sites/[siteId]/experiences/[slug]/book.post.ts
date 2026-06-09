@@ -119,26 +119,28 @@ export default defineEventHandler(async (event) => {
     ip_hash: ipHash,
   })
 
-  notifyExperienceBookingCreated(env, db, {
-    organizationId: site.organization_id,
-    siteId,
-    siteName: site.brand_name,
-    bookingId: booking.id,
-    guestName,
-    email: guestEmail,
-    guestPhone,
-    experienceTitle: experience.title,
-    bookingDate,
-    timeSlot,
-    partySize,
-  }).catch((error) => {
+  try {
+    await notifyExperienceBookingCreated(env, db, {
+      organizationId: site.organization_id,
+      siteId,
+      siteName: site.brand_name,
+      bookingId: booking.id,
+      guestName,
+      email: guestEmail,
+      guestPhone,
+      experienceTitle: experience.title,
+      bookingDate,
+      timeSlot,
+      partySize,
+    })
+  } catch (error) {
     console.error('experience_booking_notification_failed', {
       organizationId: site.organization_id,
       siteId,
       bookingId: booking.id,
       error: error instanceof Error ? error.message : String(error),
     })
-  })
+  }
 
   return jsonResponse({
     success: true,

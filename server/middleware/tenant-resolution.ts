@@ -34,11 +34,21 @@ export default defineEventHandler(async (event) => {
   if (isPreviewContext(host)) {
     const previewSlug = getHeader(event, 'x-preview-tenant')
     if (previewSlug && /^[a-z0-9-]+$/.test(previewSlug)) {
-      const freeSiteDomain = getFreeSiteDomain(env as TenantResolutionEnv)
-      if (!freeSiteDomain) {
-        console.error('[TenantResolution] Missing free site domain for workers.dev preview tenant resolution')
-      } else {
-        const site = await resolveTenantSite(`${previewSlug}.${freeSiteDomain}`, event)
+      // Look up by subdomain directly — freeSiteDomain differs between staging/preview/production,
+      // so constructing `${slug}.${freeSiteDomain}` would produce 'pottery-house.staging.krabiclaw.com'
+      // in staging but site_domains only stores 'pottery-house.krabiclaw.com'.
+      const db = (env as TenantResolutionEnv).DB
+      if (db) {
+        const site = await db.prepare(`
+          SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
+                 sd.domain AS canonical_domain,
+                 s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
+          FROM sites s
+          LEFT JOIN site_domains sd ON sd.site_id = s.id AND sd.type = 'subdomain' AND sd.status = 'active'
+          LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
+          WHERE s.subdomain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
+          LIMIT 1
+        `).bind(previewSlug).first() as TenantSiteRow | null
         if (site) {
           event.context.siteId = site.id
           event.context.organizationId = site.organization_id

@@ -31,6 +31,7 @@ test.describe('role permission matrix', () => {
     const createUser = async (role: 'admin' | 'editor' | 'member') => {
       const res = await request.post(`${baseURL}/api/dev/test-member`, {
         data: { role, organizationId },
+        headers: devLoginHeaders(),
       })
       expect(res.status()).toBe(200)
       const body = await res.json() as { user: RoleUser }

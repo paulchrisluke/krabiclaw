@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { collectPageErrors } from './helpers'
+import { collectPageErrors, setupTenantHeaders } from './helpers'
 import { devLoginHeaders, devLoginUrl } from './test-env'
 
 function extractOrgSlug(url: string) {
@@ -13,13 +13,13 @@ function extractOrgSlug(url: string) {
 test.describe('dashboard functional smoke', () => {
   test('dev login opens the owner dashboard', async ({ page, baseURL }) => {
     const errors = collectPageErrors(page)
-    await page.context().setExtraHTTPHeaders(devLoginHeaders() || {})
-    const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'networkidle' })
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
     await expect(page.locator('body')).toContainText(/Overview|Create your restaurant workspace/)
 
-    const dashboard = await page.goto(`${baseURL}/dashboard`, { waitUntil: 'networkidle' })
+    const dashboard = await page.goto(`${baseURL}/dashboard`, { waitUntil: 'load' })
     expect(dashboard?.status()).toBeLessThan(400)
     await expect(page.locator('body')).toContainText(/Overview|Create your restaurant workspace/)
 
@@ -28,8 +28,8 @@ test.describe('dashboard functional smoke', () => {
 
   test('owner can open core dashboard pages for their org', async ({ page, baseURL }) => {
     const errors = collectPageErrors(page)
-    await page.context().setExtraHTTPHeaders(devLoginHeaders() || {})
-    const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'networkidle' })
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
 
@@ -43,7 +43,7 @@ test.describe('dashboard functional smoke', () => {
     ]
 
     for (const route of pages) {
-      const response = await page.goto(`${baseURL}${route}`, { waitUntil: 'networkidle' })
+      const response = await page.goto(`${baseURL}${route}`, { waitUntil: 'load' })
       expect(response?.status()).toBeLessThan(400)
       await expect(page.locator('body')).not.toContainText('Site Not Found')
       await expect(page.locator('body')).not.toContainText('Vite Error')

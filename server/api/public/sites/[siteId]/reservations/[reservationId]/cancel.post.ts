@@ -113,26 +113,28 @@ export default defineEventHandler(async (event) => {
     SELECT brand_name FROM sites WHERE id = ? LIMIT 1
   `).bind(siteId).first<{ brand_name?: string | null }>()
 
-  notifyReservationCancelled(env, db, {
-    organizationId: reservation.organization_id,
-    siteId: reservation.site_id,
-    siteName: site?.brand_name,
-    reservationId,
-    guestName: reservation.name,
-    email: reservation.email,
-    phone: reservation.phone,
-    date: reservation.date,
-    time: reservation.time,
-    guests: reservation.guests,
-    wasConfirmed: cancellable.status === 'confirmed'
-  }).catch((error) => {
+  try {
+    await notifyReservationCancelled(env, db, {
+      organizationId: reservation.organization_id,
+      siteId: reservation.site_id,
+      siteName: site?.brand_name,
+      reservationId,
+      guestName: reservation.name,
+      email: reservation.email,
+      phone: reservation.phone,
+      date: reservation.date,
+      time: reservation.time,
+      guests: reservation.guests,
+      wasConfirmed: cancellable.status === 'confirmed'
+    })
+  } catch (error) {
     console.error('reservation_cancellation_notification_failed', {
       organizationId: reservation.organization_id,
       siteId: reservation.site_id,
       reservationId,
       error: error instanceof Error ? error.message : String(error)
     })
-  })
+  }
 
   return jsonResponse({
     success: true,
