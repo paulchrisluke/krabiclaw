@@ -49,23 +49,19 @@ remote = false
 [ai]
 binding = "AI"
 
-# Preview environment — used by CI to deploy a real edge Worker per PR and run
-# Playwright against its live `workers.dev` preview URL (see ci.yml `e2e-smoke`
-# and PLAYWRIGHT_PREVIEW_URL in playwright.config.ts), instead of emulating
-# bindings locally via `yarn dev` + getPlatformProxy. Cloudflare's own guidance:
-# real edge behavior in CI requires a deployed preview Worker, not a local proxy.
+# Preview environment — CI deploys here on every PR; Playwright smoke tests run
+# against preview.krabiclaw.com. Dedicated resources isolated from staging/prod.
 #
-# Routes are intentionally omitted — preview Workers are reached via their
-# `workers.dev` preview-alias URL, not custom domains/zones.
-#
-# Dedicated preview resources (created 2026-06-09, isolated from stable staging):
+# Dedicated preview resources (created 2026-06-09):
 #   krabiclaw-db-preview         D1   fba9d0aa-c6e2-411e-8cf5-ede43c15aae5
 #   krabiclaw-media-preview      R2
 #   krabiclaw-site-cache-preview KV   69252567b9cd4becbd486a337ab1e589
 [env.preview]
 workers_dev = true
 preview_urls = true
-routes = []
+routes = [
+  { pattern = "preview.krabiclaw.com/*", zone_name = "krabiclaw.com" }
+]
 
 [env.preview.vars]
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
