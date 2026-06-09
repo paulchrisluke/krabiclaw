@@ -203,7 +203,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pottery_hosts=("https://www.potteryhousekrabi.com" "https://pottery-house.krabiclaw.com")
+          pottery_hosts=("https://pottery-house.krabiclaw.com")
           pottery_routes=("/" "/experiences" "/experiences/pottery-wheel-class" "/about" "/contact")
 
           for host in "${pottery_hosts[@]}"; do
