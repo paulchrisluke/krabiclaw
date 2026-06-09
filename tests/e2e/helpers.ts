@@ -9,6 +9,29 @@ export const potteryHouseBaseURL = potteryHouseTestBaseUrl()
 export const tenantExtraHeaders = tenantTestExtraHeaders()
 export const potteryHouseExtraHeaders = potteryHouseTestExtraHeaders()
 
+// Third-party origins whose request failures are expected noise in CI:
+// no API keys, no allowlisted IP, headless browser blocked by CORS, etc.
+const THIRD_PARTY_REQUEST_DOMAINS = [
+  'maps.googleapis.com',
+  'maps.gstatic.com',
+  'google.internal.maps',
+  'googletagmanager.com',
+  'google-analytics.com',
+  'doubleclick.net',
+  'gen_204',
+  'cloudflareinsights.com',
+  'cdn-cgi',      // Cloudflare injected endpoints (Zaraz, Web Analytics beacon)
+  'zaraz',
+]
+
+// Console-level text patterns for errors that are noise in CI.
+// 'ERR_FAILED' suppresses the URL-less "Failed to load resource: net::ERR_FAILED"
+// browser message — we rely on the requestfailed listener below for URL-aware filtering.
+const THIRD_PARTY_CONSOLE_PATTERNS = [
+  'ERR_FAILED',
+  'cloudflareinsights.com',
+]
+
 export function collectPageErrors(page: Page) {
   const errors: string[] = []
   const warnFailurePatterns = [
@@ -47,18 +70,20 @@ export function collectPageErrors(page: Page) {
     errors.push(error.message)
   })
 
+  // URL-aware network failure detection. The 'console' listener only gets the
+  // generic "Failed to load resource: net::ERR_FAILED" message with no URL.
+  // requestfailed provides the URL so we can distinguish first-party from noise.
+  page.on('requestfailed', (request) => {
+    const url = request.url()
+    const isThirdParty = THIRD_PARTY_REQUEST_DOMAINS.some(d => url.includes(d))
+    if (!isThirdParty) {
+      const reason = request.failure()?.errorText ?? 'ERR_FAILED'
+      errors.push(`Request failed: ${request.method()} ${url} (${reason})`)
+    }
+  })
+
   return errors
 }
-
-// Third-party origins whose console errors are noise, not app failures.
-const THIRD_PARTY_ERROR_PATTERNS = [
-  'maps.googleapis.com',
-  'google.internal.maps',
-  'gen_204',
-  'maps.gstatic.com',
-  'ERR_FAILED',
-  'cloudflareinsights.com',
-]
 
 export async function expectHealthyPage(page: Page, errors: string[]) {
   await expect(page.locator('body')).not.toContainText('Site Not Found')
@@ -71,6 +96,6 @@ export async function expectHealthyPage(page: Page, errors: string[]) {
   expect(h1Texts.some(text => /503/.test(text))).toBe(false)
   // Catch the custom error page copy
   await expect(page.locator('body')).not.toContainText('wrong link sando')
-  const appErrors = errors.filter(e => !THIRD_PARTY_ERROR_PATTERNS.some(p => e.includes(p)))
+  const appErrors = errors.filter(e => !THIRD_PARTY_CONSOLE_PATTERNS.some(p => e.includes(p)))
   expect(appErrors).toEqual([])
 }
