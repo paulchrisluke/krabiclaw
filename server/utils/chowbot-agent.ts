@@ -330,28 +330,28 @@ function isPlatformPage(page: string): page is (typeof PLATFORM_PAGES)[number] {
 function getComponentFromField(field: string): string | null {
   // Direct mapping for specific fields
   const fieldToComponentMap: Record<string, string> = {
-    'hero': 'SayaHomeHero',
-    'hero.title': 'SayaHomeHero',
-    'hero.subtitle': 'SayaHomeHero',
-    'hero.eyebrow': 'SayaHomeHero',
-    'hero.image': 'SayaHomeHero',
-    'hero.video': 'SayaHomeHero',
-    'story.headline': 'SayaBrandStory',
-    'story.body': 'SayaBrandStory',
-    'story.image': 'SayaBrandStory',
-    'story.title': 'SayaBrandStory',
-    'journey.title': 'SayaBrandStory',
-    'journey.body': 'SayaBrandStory',
-    'experience.body': 'SayaBrandStory',
-    'experience.title': 'SayaBrandStory',
-    'cta.title': 'SayaCTA',
-    'cta.description': 'SayaCTA',
-    'reviews.heading': 'SayaReviews',
-    'posts.eyebrow': 'SayaPosts',
-    'posts.heading': 'SayaPosts',
-    'locations.heading': 'SayaLocationsGrid',
-    'qa.heading': 'SayaQA',
-    'featured.heading': 'SayaFeaturedContent',
+    hero: "SayaHomeHero",
+    "hero.title": "SayaHomeHero",
+    "hero.subtitle": "SayaHomeHero",
+    "hero.eyebrow": "SayaHomeHero",
+    "hero.image": "SayaHomeHero",
+    "hero.video": "SayaHomeHero",
+    "story.headline": "SayaBrandStory",
+    "story.body": "SayaBrandStory",
+    "story.image": "SayaBrandStory",
+    "story.title": "SayaBrandStory",
+    "journey.title": "SayaBrandStory",
+    "journey.body": "SayaBrandStory",
+    "experience.body": "SayaBrandStory",
+    "experience.title": "SayaBrandStory",
+    "cta.title": "SayaCTA",
+    "cta.description": "SayaCTA",
+    "reviews.heading": "SayaReviews",
+    "posts.eyebrow": "SayaPosts",
+    "posts.heading": "SayaPosts",
+    "locations.heading": "SayaLocationsGrid",
+    "qa.heading": "SayaQA",
+    "featured.heading": "SayaFeaturedContent",
   };
 
   if (fieldToComponentMap[field]) {
@@ -359,16 +359,16 @@ function getComponentFromField(field: string): string | null {
   }
 
   // Pattern matching
-  if (field.startsWith('hero.')) return 'SayaHomeHero';
-  if (field.startsWith('story.')) return 'SayaBrandStory';
-  if (field.startsWith('journey.')) return 'SayaBrandStory';
-  if (field.startsWith('experience.')) return 'SayaBrandStory';
-  if (field.startsWith('cta.')) return 'SayaCTA';
-  if (field.startsWith('reviews.')) return 'SayaReviews';
-  if (field.startsWith('posts.')) return 'SayaPosts';
-  if (field.startsWith('locations.')) return 'SayaLocationsGrid';
-  if (field.startsWith('qa.')) return 'SayaQA';
-  if (field.startsWith('featured.')) return 'SayaFeaturedContent';
+  if (field.startsWith("hero.")) return "SayaHomeHero";
+  if (field.startsWith("story.")) return "SayaBrandStory";
+  if (field.startsWith("journey.")) return "SayaBrandStory";
+  if (field.startsWith("experience.")) return "SayaBrandStory";
+  if (field.startsWith("cta.")) return "SayaCTA";
+  if (field.startsWith("reviews.")) return "SayaReviews";
+  if (field.startsWith("posts.")) return "SayaPosts";
+  if (field.startsWith("locations.")) return "SayaLocationsGrid";
+  if (field.startsWith("qa.")) return "SayaQA";
+  if (field.startsWith("featured.")) return "SayaFeaturedContent";
 
   return null;
 }
@@ -3550,10 +3550,10 @@ async function executeTool(
         );
       } else {
         const id = `draft::${orgId}::${siteId}::${targetLocationId ?? "site"}::${page}::${field}`;
-        
+
         // Map field to component identifier for dynamic rendering
         const component = getComponentFromField(field);
-        
+
         await upsertDraftContent(db, {
           id,
           organization_id: orgId,
@@ -4355,7 +4355,7 @@ Rules in setup mode:
 `
     : "";
 
-  const SYSTEM = `You are ChowBot, an AI assistant for restaurant website owners using Kikuzuki.
+  const SYSTEM = `You are ChowBot, an AI assistant for restaurant website owners using Krabiclaw.
 Help manage all site content with concise, action-oriented responses.
 ${SETUP_PREAMBLE}
 Site: ${siteName}
