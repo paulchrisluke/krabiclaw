@@ -61,7 +61,7 @@ async function smokePublic() {
 }
 
 function main() {
-  const workerName = env('ROLLBACK_WORKER_NAME', { optional: true }) || 'kikuzuki-thailand-marketing'
+  const workerName = env('ROLLBACK_WORKER_NAME', { optional: true }) || 'krabiclaw'
 
   if (!/^[a-zA-Z0-9_\-]+$/.test(workerName)) {
     throw new Error('Invalid ROLLBACK_WORKER_NAME (allowed: letters, numbers, -, _).')
