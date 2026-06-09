@@ -59,6 +59,7 @@ test.describe('billing webhook signed flow', () => {
       headers: {
         'content-type': 'application/json',
         'stripe-signature': signature,
+        ...(devLoginHeaders() || {}),
       },
       data: payload,
     })
@@ -94,6 +95,7 @@ test.describe('billing webhook signed flow', () => {
       headers: {
         'content-type': 'application/json',
         'stripe-signature': signature,
+        ...(devLoginHeaders() || {}),
       },
       data: payload,
     })

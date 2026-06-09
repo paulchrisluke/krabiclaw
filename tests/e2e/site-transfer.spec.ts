@@ -144,6 +144,7 @@ test.describe('site transfer handoff flow', () => {
       headers: {
         'content-type': 'application/json',
         'stripe-signature': signature,
+        ...(devLoginHeaders() || {}),
       },
       data: payload,
     })

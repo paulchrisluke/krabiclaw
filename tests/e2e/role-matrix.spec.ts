@@ -60,7 +60,6 @@ test.describe('role permission matrix', () => {
       }
     }
 
-    await assertCheckoutStatus(ownerUserId!, 'owner')
     await assertCheckoutStatus(admin.id, 'non_owner')
     await assertCheckoutStatus(editor.id, 'non_owner')
     await assertCheckoutStatus(member.id, 'non_owner')

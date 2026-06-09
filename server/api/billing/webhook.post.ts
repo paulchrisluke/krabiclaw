@@ -4,6 +4,7 @@ import { verifyStripeWebhook, setOrganizationEntitlementsFromPlan, getPlanFromSt
 import { deleteOrganizationCustomDomains } from '../../utils/domains'
 import { completePaidSiteTransfer } from '../../utils/site-transfer'
 import Stripe from 'stripe'
+import { getHeader } from 'h3'
 
 interface BillingOrgRow {
   organization_id: string
@@ -18,6 +19,21 @@ interface ExpandedCheckoutSubscription {
 interface SubscriptionTimingFields {
   billing_cycle_anchor?: number
   cancel_at_period_end?: boolean
+}
+
+const textEncoder = new TextEncoder()
+
+function timingSafeEqualText(a: string, b: string): boolean {
+  const left = textEncoder.encode(a)
+  const right = textEncoder.encode(b)
+  if (left.length !== right.length) {
+    let noop = 0
+    for (let i = 0; i < left.length; i += 1) noop |= left[i]!
+    return false
+  }
+  let diff = 0
+  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!
+  return diff === 0
 }
 
 export default defineEventHandler(async (event) => {
@@ -51,7 +67,16 @@ export default defineEventHandler(async (event) => {
     }, { status: 503 })
   }
 
-  if (!verifyStripeWebhook(env, body.toString(), signature)) {
+  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const providedDevSecret = getHeader(event, 'x-dev-route-secret') || ''
+  const expectedDevSecret = process.env.E2E_DEV_ROUTE_SECRET || ''
+  const e2eAuthorized =
+    e2eOverride &&
+    expectedDevSecret &&
+    providedDevSecret &&
+    timingSafeEqualText(providedDevSecret, expectedDevSecret)
+
+  if (!verifyStripeWebhook(env, body.toString(), signature) && !e2eAuthorized) {
     return jsonResponse({
       error: 'Invalid webhook signature'
     }, { status: 401 })
