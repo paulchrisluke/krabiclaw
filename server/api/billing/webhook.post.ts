@@ -27,8 +27,8 @@ function timingSafeEqualText(a: string, b: string): boolean {
   const left = textEncoder.encode(a)
   const right = textEncoder.encode(b)
   if (left.length !== right.length) {
-    let noop = 0
-    for (let i = 0; i < left.length; i += 1) noop |= left[i]!
+    let _noop = 0
+    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
     return false
   }
   let diff = 0
@@ -67,16 +67,19 @@ export default defineEventHandler(async (event) => {
     }, { status: 503 })
   }
 
-  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
   const providedDevSecret = getHeader(event, 'x-dev-route-secret') || ''
-  const expectedDevSecret = process.env.E2E_DEV_ROUTE_SECRET || ''
+  const expectedDevSecret = env.E2E_DEV_ROUTE_SECRET || ''
   const e2eAuthorized =
     e2eOverride &&
     expectedDevSecret &&
     providedDevSecret &&
     timingSafeEqualText(providedDevSecret, expectedDevSecret)
 
-  if (!verifyStripeWebhook(env, body.toString(), signature) && !e2eAuthorized) {
+  const rawBody = body.toString()
+  const verifiedSignature = verifyStripeWebhook(env, rawBody, signature)
+
+  if (!verifiedSignature && !e2eAuthorized) {
     return jsonResponse({
       error: 'Invalid webhook signature'
     }, { status: 401 })
@@ -90,14 +93,10 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Parse webhook event
     const stripe = new Stripe(env.STRIPE_SECRET_KEY)
-
-    const webhookEvent = stripe.webhooks.constructEvent(
-      body.toString(),
-      signature,
-      env.STRIPE_WEBHOOK_SECRET
-    )
+    const webhookEvent = verifiedSignature
+      ? stripe.webhooks.constructEvent(rawBody, signature, env.STRIPE_WEBHOOK_SECRET)
+      : JSON.parse(rawBody) as Stripe.Event
 
     // Check for idempotency - prevent duplicate webhook processing
     const existingEvent = await db.prepare(`

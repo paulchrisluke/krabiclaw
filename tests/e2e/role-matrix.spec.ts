@@ -48,8 +48,7 @@ test.describe('role permission matrix', () => {
       expect(login.status()).toBe(302)
     }
 
-    const assertCheckoutStatus = async (userId: string, expected: 'owner' | 'non_owner') => {
-      await asUser(userId)
+    const checkoutStatus = async (expected: 'owner' | 'non_owner') => {
       const res = await request.post(`${baseURL}/api/billing/checkout`, {
         data: { plan: 'growth', interval: 'month' },
       })
@@ -60,40 +59,39 @@ test.describe('role permission matrix', () => {
       }
     }
 
-    await assertCheckoutStatus(admin.id, 'non_owner')
-    await assertCheckoutStatus(editor.id, 'non_owner')
-    await assertCheckoutStatus(member.id, 'non_owner')
+    const draftStatus = async () => request.post(`${baseURL}/api/editor/sites/${siteId}/content/draft`, {
+      data: {
+        page: 'home',
+        changes: { 'hero.title': `Role matrix ${Date.now()}` },
+      },
+    })
+
+    const publishStatus = async () => request.post(`${baseURL}/api/editor/sites/${siteId}/content/publish`, {
+      data: { page: 'home' },
+    })
+
+    const assertRole = async (
+      userId: string,
+      expectedCheckout: 'owner' | 'non_owner',
+      expectedDraft?: number,
+      expectedPublish?: number,
+    ) => {
+      await asUser(userId)
+      await checkoutStatus(expectedCheckout)
+      if (siteId && expectedDraft !== undefined && expectedPublish !== undefined) {
+        expect((await draftStatus()).status()).toBe(expectedDraft)
+        expect((await publishStatus()).status()).toBe(expectedPublish)
+      }
+    }
+
+    await assertRole(ownerUserId!, 'owner', 200, 200)
+    await assertRole(admin.id, 'non_owner', 200, 200)
+    await assertRole(editor.id, 'non_owner', 200, 404)
+    await assertRole(member.id, 'non_owner', 404, 404)
 
     if (!siteId) {
       // No restaurant workspace in this environment: content draft/publish role checks are not applicable.
       return
     }
-
-    const draftCall = async (userId: string) => {
-      await asUser(userId)
-      return request.post(`${baseURL}/api/editor/sites/${siteId}/content/draft`, {
-        data: {
-          page: 'home',
-          changes: { 'hero.title': `Role matrix ${Date.now()} ${userId.slice(-6)}` },
-        },
-      })
-    }
-
-    const publishCall = async (userId: string) => {
-      await asUser(userId)
-      return request.post(`${baseURL}/api/editor/sites/${siteId}/content/publish`, {
-        data: { page: 'home' },
-      })
-    }
-
-    expect((await draftCall(ownerUserId!)).status()).toBe(200)
-    expect((await draftCall(admin.id)).status()).toBe(200)
-    expect((await draftCall(editor.id)).status()).toBe(200)
-    expect((await draftCall(member.id)).status()).toBe(404)
-
-    expect((await publishCall(ownerUserId!)).status()).toBe(200)
-    expect((await publishCall(admin.id)).status()).toBe(200)
-    expect((await publishCall(editor.id)).status()).toBe(404)
-    expect((await publishCall(member.id)).status()).toBe(404)
   })
 })
