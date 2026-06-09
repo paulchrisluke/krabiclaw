@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
-import { potteryHouseBaseURL, tenantBaseURL, potteryHouseExtraHeaders, tenantExtraHeaders } from './helpers'
+import { potteryHouseBaseURL, tenantBaseURL } from './helpers'
 
 // Verify that submission APIs correctly trigger notification records in the DB.
 // Notification delivery (Resend email, WhatsApp) requires live credentials — those
@@ -51,8 +51,6 @@ async function waitForNotifications(
 }
 
 test.describe('notification records — contact form', () => {
-  test.use({ extraHTTPHeaders: potteryHouseExtraHeaders })
-
   test('pottery house contact submission creates dashboard + email notification records', async ({ request }) => {
     const since = new Date().toISOString()
     const guestEmail = `test-contact-${Date.now()}@playwright.example`
@@ -96,8 +94,6 @@ test.describe('notification records — contact form', () => {
 })
 
 test.describe('notification records — restaurant reservation (demo site)', () => {
-  test.use({ extraHTTPHeaders: tenantExtraHeaders })
-
   test('reservation submission creates dashboard + email notification records', async ({ request }) => {
     const since = new Date().toISOString()
     const guestEmail = `test-res-${Date.now()}@playwright.example`
@@ -209,7 +205,6 @@ test.describe('notification records — restaurant reservation (demo site)', () 
 })
 
 test.describe('notification records — experience booking (pottery house)', () => {
-  test.use({ extraHTTPHeaders: potteryHouseExtraHeaders })
   test.describe.configure({ mode: 'serial' })
 
   test('experience booking creates dashboard + email notification records', async ({ request }) => {

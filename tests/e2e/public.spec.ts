@@ -18,7 +18,11 @@ const tenantRoutes = [
 ]
 
 test.describe('public tenant site', () => {
-  test.use({ extraHTTPHeaders: tenantExtraHeaders })
+  test.beforeEach(async ({ page }) => {
+    if (Object.keys(tenantExtraHeaders).length > 0) {
+      await page.setExtraHTTPHeaders(tenantExtraHeaders)
+    }
+  })
 
   for (const route of tenantRoutes) {
     test(`${route.path} renders without runtime errors`, async ({ page }) => {

@@ -123,6 +123,11 @@ jobs:
           echo "Preview deployed: $preview_url"
           echo "url=$preview_url" >> "$GITHUB_OUTPUT"
       - run: npx playwright install --with-deps chromium
+      - name: Warm up preview Worker
+        run: |
+          curl -sf -o /dev/null -w "Warm-up status: %{http_code}\n" \
+            "${{ steps.deploy.outputs.url }}/" || true
+          sleep 3
       - name: Run smoke tests against deployed preview
         env:
           PLAYWRIGHT_PREVIEW_URL: ${{ steps.deploy.outputs.url }}

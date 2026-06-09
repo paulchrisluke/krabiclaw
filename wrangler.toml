@@ -72,6 +72,8 @@ CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw"
+E2E_ALLOW_DEV_ROUTES = "true"
+E2E_DEV_ROUTE_SECRET = "ci-dev-route-secret"
 
 [[env.preview.d1_databases]]
 binding = "DB"

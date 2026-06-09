@@ -32,7 +32,11 @@ const routes = [
 ]
 
 test.describe('pottery house public site', () => {
-  test.use({ extraHTTPHeaders: potteryHouseExtraHeaders })
+  test.beforeEach(async ({ page }) => {
+    if (Object.keys(potteryHouseExtraHeaders).length > 0) {
+      await page.setExtraHTTPHeaders(potteryHouseExtraHeaders)
+    }
+  })
 
   for (const route of routes) {
     test(`${route.path} renders without runtime errors`, async ({ page }) => {
