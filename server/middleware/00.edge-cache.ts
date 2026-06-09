@@ -15,6 +15,7 @@
 
 import { defineEventHandler, setResponseHeaders, getHeader } from 'h3'
 import { buildHtmlCacheKey } from '~/server/utils/edge-cache'
+import { isPreviewContext } from '~/server/utils/tenant-hosts'
 
 const CACHE_TTL_SECONDS = 60
 
@@ -43,9 +44,19 @@ export default defineEventHandler(async (event) => {
     const hit = await kv.get(key, 'text')
     if (!hit) return
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cfRequest = (event.context.cloudflare as any)?.request as Request | undefined
+    const host = cfRequest?.headers.get('host') ?? getHeader(event, 'host') ?? ''
+    const hostname = host.split(':')[0] ?? host
+    // Preview/staging hosts share one hostname across tenants — must not let CF
+    // edge-cache the response or tenants will receive each other's cached HTML.
+    const cacheControl = isPreviewContext(hostname)
+      ? 'private, no-store'
+      : `public, s-maxage=${CACHE_TTL_SECONDS}, stale-while-revalidate=${CACHE_TTL_SECONDS}, max-age=0`
+
     setResponseHeaders(event, {
       'content-type': 'text/html; charset=utf-8',
-      'cache-control': `public, s-maxage=${CACHE_TTL_SECONDS}, stale-while-revalidate=${CACHE_TTL_SECONDS}, max-age=0`,
+      'cache-control': cacheControl,
       'x-edge-cache': 'HIT',
     })
     return hit

@@ -1,5 +1,6 @@
 import { getHeader } from 'h3'
 import type { H3Event } from 'h3'
+import { isPreviewContext } from '~/server/utils/tenant-hosts'
 
 export function buildHtmlCacheKey(event: H3Event): string | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -10,10 +11,9 @@ export function buildHtmlCacheKey(event: H3Event): string | null {
     ?? getHeader(event, 'x-forwarded-host')
   if (!host) return null
   const hostname = host.split(':')[0] ?? host
-  const isWorkersPreviewHost = hostname.endsWith('.workers.dev')
-  // On *.workers.dev preview Workers, multiple tenants share one host. Include
-  // x-preview-tenant in the key so their cached HTML doesn't collide.
-  const previewTenant = isWorkersPreviewHost
+  // On hosts where multiple tenants share one hostname (workers.dev, preview.*, staging.*),
+  // include x-preview-tenant in the key so their cached HTML doesn't collide.
+  const previewTenant = isPreviewContext(hostname)
     ? (cfRequest?.headers.get('x-preview-tenant')
       ?? getHeader(event, 'x-preview-tenant'))
     : null
