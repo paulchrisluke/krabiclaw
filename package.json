@@ -20,6 +20,7 @@
     "test:e2e:smoke": "playwright test tests/e2e/public.spec.ts tests/e2e/pottery-house.spec.ts tests/e2e/billing.spec.ts tests/e2e/billing-webhook.spec.ts",
     "test:e2e:full": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "check:deploy": "node scripts/check-deploy-env.mjs",
     "deploy": "yarn build && wrangler d1 migrations apply DB --remote && wrangler deploy",
     "deploy:staging": "yarn build && wrangler d1 migrations apply DB --env staging --remote && wrangler deploy --env staging",
     "dev": "nuxt dev",
