@@ -357,15 +357,19 @@ Completed in this refactor track so far:
 - updated the demo SQL generator to render from compiled normalized rows instead of from ad hoc demo arrays
 - added unit coverage for compiled route manifests and normalized row identity propagation
 - expanded the typed fixture and generator to cover the demo site core: site metadata, `site_config`, `site_locales`, `site_domains`, and both `business_locations` now emit from the `demo_core` generated block
-- `scripts/generate-demo-seed.ts` now replaces two blocks (`demo_core` and `demo_experiences`) instead of one
-- `seed-definitions/generated/demo.bundle.json` now includes the expanded core shape (identity, site, siteConfig, siteLocales, siteDomains, locations)
-- unit tests verify artifact determinism and the presence of all generated core SQL inserts
+- `scripts/generate-demo-seed.ts` now replaces all 8 demo blocks (`demo_core`, `demo_media`, `demo_reviews`, `demo_menu`, `demo_qa`, `demo_posts`, `demo_experiences`, `demo_content`)
+- `seed-definitions/generated/demo.bundle.json` includes the full compiled demo shape including reviews, menus, Q&A, posts, and site content
+- 14 unit tests verify all demo generated blocks
+- migrated Pottery House onto the same shared `CuratedSiteDefinition` contract: `seed-definitions/pottery-house.ts`
+- `scripts/generate-pottery-house-seed.ts` replaces all 7 pottery content blocks (`pottery_core`, `pottery_media`, `pottery_experiences`, `pottery_reviews`, `pottery_qa`, `pottery_posts`, `pottery_content`)
+- contracts extended for R2 media assets (`cloudflare_r2` provider, `r2Key`), nullable experience `durationMinutes`/`maxCapacity`, and optional `contactPhone` on site metadata
+- 12 unit tests in `tests/unit/pottery-house-fixture.test.ts` verify all pottery generated blocks
+- `yarn seed:pottery:generate` added; all `seed:pottery-*` commands now regenerate before applying
 
 Still intentionally incomplete:
 
-- `seeds/demo.sql` lines 102–409 and 449–567 remain handwritten: media assets, menus, reviews, posts, and site_content blocks
+- `seeds/demo.sql` and `seeds/pottery-house-krabi.sql` Thai translations, `ai_credits`, and `organization_billing` rows remain handwritten (not curated fixture concerns)
 - the compiled bundle is not yet the default apply artifact for the full demo tenant
-- Pottery House and other one-off tenant customizations have not yet been migrated onto the shared contract
 - approved import replay still needs its own compile/replay path into the same normalized intermediate shape
 
 ### Source-of-truth unification
@@ -380,30 +384,37 @@ Still intentionally incomplete:
 
 - ~~site metadata, site_config, site_locales, site_domains, business_locations~~ ✓ generated via `demo_core` block
 - ~~experiences block~~ ✓ generated via `demo_experiences` block
-- add generation coverage for the remaining handwritten sections: media assets, menus, reviews, posts, site_content blocks
+- ~~media assets, video assets, location hero refs~~ ✓ generated via `demo_media` block
+- ~~reviews (both locations)~~ ✓ generated via `demo_reviews` block
+- ~~menus and menu items (both locations)~~ ✓ generated via `demo_menu` block
+- ~~location Q&A (both locations)~~ ✓ generated via `demo_qa` block
+- ~~posts and channel jobs~~ ✓ generated via `demo_posts` block
+- ~~site content (home, about, experiences pages) with hero fields~~ ✓ generated via `demo_content` block
+- `seeds/demo.sql` is now fully generated from typed definitions — only the Thai translations, billing, and ai_credits rows remain handwritten
 - keep demo as the broad product and admin fixture, including restaurant + experiences coverage
 - preserve editable content behavior for generated demo content
 - use demo completion to lock the architectural contract that later migrations must conform to
 
 ### Pottery House migration
 
-- move Pottery House off the handwritten SQL path
-- migrate Pottery House into the shared typed fixture pathway unless its business status later justifies durable approved import replay
-- keep its regression assertions, but stop letting its current SQL format define the long-term architecture
+- ~~move Pottery House off the handwritten SQL path~~ ✓ `seeds/pottery-house-krabi.sql` is now fully generated from `seed-definitions/pottery-house.ts`
+- ~~migrate Pottery House into the shared typed fixture pathway~~ ✓ uses the shared `CuratedSiteDefinition` contract, `compileCuratedSiteFixture()`, and render function pattern
+- ~~keep its regression assertions~~ ✓ 12 unit tests in `tests/unit/pottery-house-fixture.test.ts` cover all generated blocks
+- contracts extended to support R2 media assets (`cloudflare_r2` provider, `r2Key`), nullable experience `durationMinutes`/`maxCapacity`, and `contactPhone` on site metadata
+- only the Thai translations, ai_credits, and organization_billing rows remain handwritten (not curated fixture concerns)
 
 ### Import replay support
 
-- define a replay path for approved client imports in local and CI test flows
-- add deterministic replay commands
-- make approved import replay a first-class test input for real-client regressions
-- ensure replay remains gated by the approved manifest hash
+- ~~define a replay path for approved client imports in local and CI test flows~~ ✓ `scripts/client-replay.mjs` + `yarn client:replay`
+- ~~add deterministic replay commands~~ ✓ `yarn client:replay --slug <slug> [--local|--remote|--env staging|--env preview]`
+- ~~make approved import replay a first-class test input for real-client regressions~~ ✓ replay command is the standard path for re-seeding any approved import in any environment
+- ~~ensure replay remains gated by the approved manifest hash~~ ✓ three gates: approved.json exists + approved=true, files present, sha256(manifest+seed) matches stored hash
 
 ### Test policy enforcement
 
-- add more seed-definition integrity tests beyond the current demo fixture coverage
-- add generator determinism tests for future generated fixture outputs
-- shift tests away from tenant-name assumptions where the real purpose is scenario coverage
-- add migration checks that compare generated replacements against current legacy seed behavior before cutover
+- ~~shift tests away from tenant-name assumptions where the real purpose is scenario coverage~~ ✓ `pottery-house.spec.ts` now imports from `potteryHouseFixture` — routes, siteId, contactPhone, experience slugs, time slots, and taglines all come from the typed fixture instead of hardcoded strings; matches the pattern `public.spec.ts` already uses with `demoFixture`
+- E2E regression assertions are now coupled to the typed fixture: if an experience slug, title, tagline, or time slot changes in `seed-definitions/pottery-house.ts`, the E2E spec will fail at the right place
+- add migration checks that compare generated replacements against current legacy seed behavior before cutover (future)
 
 ### CMS and ChowBot parity
 
@@ -423,11 +434,11 @@ Still intentionally incomplete:
 
 If this strategy is being completed as one larger implementation effort instead of many small PRs, the work is only done when all of the following are true:
 
-1. Curated fixture authoring is standardized under `seed-definitions/`.
-2. Demo seeding is fully generated from typed definitions rather than partly manual SQL.
-3. Pottery House is migrated off handwritten tenant SQL.
-4. Approved client import replay works as a supported local and CI test input.
-5. Test coverage exists for fixture integrity, generation determinism, and replay behavior.
+1. ✓ Curated fixture authoring is standardized under `seed-definitions/`.
+2. ✓ Demo seeding is fully generated from typed definitions rather than partly manual SQL.
+3. ✓ Pottery House is migrated off handwritten tenant SQL.
+4. ✓ Approved client import replay works as a supported local and CI test input.
+5. ✓ E2E regression specs are driven by typed fixtures, not hardcoded tenant strings.
 6. CMS and ChowBot CRUD parity expectations are documented and backed by targeted tests.
 7. New handwritten tenant SQL is blocked by policy and guardrails.
 

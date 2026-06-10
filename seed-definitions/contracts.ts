@@ -24,10 +24,11 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
     urlStructure: 'location_subdirectories' | 'flat'
     primaryLocationId: string
     contactEmail: string
+    contactPhone?: string | null
     defaultCurrency: string
     vertical: 'restaurant' | 'experience' | 'retail' | 'wellness' | 'service'
-    contentSource: 'generated' | 'imported' | 'manual'
-    mediaSource: 'stock' | 'client' | 'mixed'
+    contentSource: 'generated' | 'imported' | 'manual' | 'google_maps'
+    mediaSource: 'stock' | 'client' | 'mixed' | 'client_photos'
   }
   siteConfig: CuratedSiteConfigEntry[]
   siteLocales: CuratedSiteLocaleDefinition[]
@@ -36,6 +37,10 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
   mediaAssets: CuratedMediaAssetDefinition[]
   siteContent: CuratedSiteContentDefinition[]
   experiences: CuratedExperienceDefinition[]
+  reviews: CuratedReviewDefinition[]
+  menus: CuratedMenuDefinition[]
+  locationQa: CuratedLocationQaDefinition[]
+  posts: CuratedPostDefinition[]
   publicRoutes: SeedPublicRouteExpectation[]
 }
 
@@ -94,11 +99,17 @@ export interface CuratedLocationDefinition {
   facebookUrl: string
   isPrimary: boolean
   status: 'active' | 'inactive' | 'sync_error'
+  heroImageAssetId?: string | null
+  heroVideoAssetId?: string | null
 }
 
 export interface CuratedMediaAssetDefinition {
   id: string
   locationId: string | null
+  kind?: 'image' | 'video'
+  provider?: 'external_url' | 'cloudflare_r2'
+  source?: 'external' | 'uploaded'
+  r2Key?: string | null
   publicUrl: string
   thumbnailUrl: string | null
   mimeType: string
@@ -112,9 +123,13 @@ export interface CuratedSiteContentDefinition {
   locationId: string | null
   page: string
   field: string
-  content: string
+  content: string | null
   type: 'text' | 'textarea' | 'richtext' | 'media'
   source?: 'manual' | 'generated'
+  heroTitle?: string | null
+  heroSubtitle?: string | null
+  heroImageAssetId?: string | null
+  heroVideoAssetId?: string | null
 }
 
 export interface CuratedExperienceDefinition {
@@ -126,8 +141,8 @@ export interface CuratedExperienceDefinition {
   body: string
   imageAssetId: string
   price: string
-  durationMinutes: number
-  maxCapacity: number
+  durationMinutes: number | null
+  maxCapacity: number | null
   timeSlots: string[]
   availableNote: string
   status: 'active' | 'inactive' | 'sold_out'
@@ -138,14 +153,88 @@ export interface CuratedExperienceDefinition {
   seoDescription: string
 }
 
+export interface CuratedReviewDefinition {
+  id: string
+  locationId: string
+  authorName: string
+  reviewerPhotoUrl: string
+  rating: number
+  content: string
+  ownerReply: string | null
+  ownerReplyAt: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  source: 'google' | 'manual' | 'tripadvisor'
+}
+
+export interface CuratedMenuItemDefinition {
+  id: string
+  section: string
+  name: string
+  slug: string
+  description: string
+  priceAmount: number
+  imageAssetId: string | null
+  allergens: string | null
+  dietaryNotes: string | null
+  available: boolean
+  sortOrder: number
+}
+
+export interface CuratedMenuDefinition {
+  id: string
+  locationId: string
+  name: string
+  description: string
+  sectionOrder: string[]
+  status: 'draft' | 'published'
+  items: CuratedMenuItemDefinition[]
+}
+
+export interface CuratedLocationQaDefinition {
+  id: string
+  locationId: string
+  question: string
+  questionAuthor: string
+  answer: string
+  answerAuthor: string
+  isOwnerAnswer: boolean
+  upvoteCount: number
+  source: 'manual' | 'google'
+  status: 'published' | 'pending' | 'rejected'
+  sortOrder: number
+}
+
+export interface CuratedPostChannelJobDefinition {
+  id: string
+  channel: string
+  status: 'published' | 'pending' | 'failed'
+  publishedAt: string
+}
+
+export interface CuratedPostDefinition {
+  id: string
+  locationId: string | null
+  postType: 'update' | 'standard' | 'offer'
+  title: string | null
+  body: string
+  imageAssetId: string | null
+  status: 'published' | 'draft'
+  publishedAt: string
+  createdBy: string
+  channelJobs: CuratedPostChannelJobDefinition[]
+}
+
+// Compiled/normalized interfaces
+
 export interface CompiledSeedMediaAsset {
   id: string
   organizationId: string
   siteId: string
   locationId: string | null
-  kind: 'image'
-  provider: 'external_url'
-  source: 'external'
+  kind: 'image' | 'video'
+  provider: 'external_url' | 'cloudflare_r2'
+  source: 'external' | 'uploaded'
+  r2Key: string | null
   publicUrl: string
   thumbnailUrl: string | null
   mimeType: string
@@ -162,10 +251,11 @@ export interface CompiledSeedSiteContent {
   locationId: string | null
   page: string
   field: string
-  content: string
-  heroTitle: null
-  heroSubtitle: null
-  heroImageAssetId: null
+  content: string | null
+  heroTitle: string | null
+  heroSubtitle: string | null
+  heroImageAssetId: string | null
+  heroVideoAssetId: string | null
   type: CuratedSiteContentDefinition['type']
   source: 'manual' | 'generated'
 }
@@ -181,8 +271,8 @@ export interface CompiledSeedExperience {
   body: string
   imageAssetId: string
   price: string
-  durationMinutes: number
-  maxCapacity: number
+  durationMinutes: number | null
+  maxCapacity: number | null
   timeSlots: string[]
   availableNote: string
   status: CuratedExperienceDefinition['status']
@@ -191,6 +281,90 @@ export interface CompiledSeedExperience {
   featuredSortOrder: number
   seoTitle: string
   seoDescription: string
+}
+
+export interface CompiledSeedReview {
+  id: string
+  organizationId: string
+  siteId: string
+  locationId: string
+  authorName: string
+  reviewerPhotoUrl: string
+  rating: number
+  content: string
+  ownerReply: string | null
+  ownerReplyAt: string | null
+  status: CuratedReviewDefinition['status']
+  source: CuratedReviewDefinition['source']
+}
+
+export interface CompiledSeedMenuItem {
+  id: string
+  menuId: string
+  organizationId: string
+  siteId: string
+  section: string
+  name: string
+  slug: string
+  description: string
+  priceAmount: number
+  imageAssetId: string | null
+  allergens: string | null
+  dietaryNotes: string | null
+  available: boolean
+  sortOrder: number
+}
+
+export interface CompiledSeedMenu {
+  id: string
+  organizationId: string
+  siteId: string
+  locationId: string
+  name: string
+  description: string
+  sectionOrder: string[]
+  status: CuratedMenuDefinition['status']
+  items: CompiledSeedMenuItem[]
+}
+
+export interface CompiledSeedLocationQa {
+  id: string
+  organizationId: string
+  siteId: string
+  locationId: string
+  question: string
+  questionAuthor: string
+  answer: string
+  answerAuthor: string
+  isOwnerAnswer: boolean
+  upvoteCount: number
+  source: CuratedLocationQaDefinition['source']
+  status: CuratedLocationQaDefinition['status']
+  sortOrder: number
+}
+
+export interface CompiledSeedPostChannelJob {
+  id: string
+  postId: string
+  organizationId: string
+  channel: string
+  status: CuratedPostChannelJobDefinition['status']
+  publishedAt: string
+}
+
+export interface CompiledSeedPost {
+  id: string
+  organizationId: string
+  siteId: string
+  locationId: string | null
+  postType: CuratedPostDefinition['postType']
+  title: string | null
+  body: string
+  imageAssetId: string | null
+  status: CuratedPostDefinition['status']
+  publishedAt: string
+  createdBy: string
+  channelJobs: CompiledSeedPostChannelJob[]
 }
 
 export interface CompiledCuratedSiteBundle {
@@ -203,6 +377,10 @@ export interface CompiledCuratedSiteBundle {
   mediaAssets: CompiledSeedMediaAsset[]
   siteContent: CompiledSeedSiteContent[]
   experiences: CompiledSeedExperience[]
+  reviews: CompiledSeedReview[]
+  menus: CompiledSeedMenu[]
+  locationQa: CompiledSeedLocationQa[]
+  posts: CompiledSeedPost[]
   publicRoutes: SeedPublicRouteExpectation[]
   routeManifest: {
     locations: string[]

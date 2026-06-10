@@ -1,7 +1,13 @@
 import type {
   CompiledCuratedSiteBundle,
   CompiledSeedExperience,
+  CompiledSeedLocationQa,
   CompiledSeedMediaAsset,
+  CompiledSeedMenu,
+  CompiledSeedMenuItem,
+  CompiledSeedPost,
+  CompiledSeedPostChannelJob,
+  CompiledSeedReview,
   CompiledSeedSiteContent,
   CuratedSiteDefinition,
 } from './contracts.ts'
@@ -15,35 +21,41 @@ function uniqueStrings(values: string[], label: string) {
 export function compileCuratedSiteFixture(
   fixture: CuratedSiteDefinition,
 ): CompiledCuratedSiteBundle {
-  const locationIds = new Set(fixture.locations.map((location) => location.id))
-  const mediaIds = new Set(fixture.mediaAssets.map((asset) => asset.id))
+  const locationIds = new Set(fixture.locations.map((l) => l.id))
+  const mediaIds = new Set(fixture.mediaAssets.map((a) => a.id))
 
-  uniqueStrings(fixture.locations.map((location) => location.id), 'location id')
-  uniqueStrings(fixture.locations.map((location) => location.slug), 'location slug')
-  uniqueStrings(fixture.siteLocales.map((locale) => locale.id), 'site locale id')
-  uniqueStrings(fixture.siteLocales.map((locale) => locale.locale), 'site locale')
-  uniqueStrings(fixture.siteDomains.map((domain) => domain.id), 'site domain id')
-  uniqueStrings(fixture.siteDomains.map((domain) => domain.domain), 'site domain')
-  uniqueStrings(fixture.mediaAssets.map((asset) => asset.id), 'media asset id')
-  uniqueStrings(fixture.mediaAssets.map((asset) => asset.fileName), 'media asset file name')
-  uniqueStrings(fixture.siteContent.map((entry) => entry.id), 'site content id')
-  uniqueStrings(fixture.experiences.map((experience) => experience.id), 'experience id')
-  uniqueStrings(fixture.experiences.map((experience) => experience.slug), 'experience slug')
-  uniqueStrings(fixture.publicRoutes.map((route) => route.path), 'public route path')
+  uniqueStrings(fixture.locations.map((l) => l.id), 'location id')
+  uniqueStrings(fixture.locations.map((l) => l.slug), 'location slug')
+  uniqueStrings(fixture.siteLocales.map((l) => l.id), 'site locale id')
+  uniqueStrings(fixture.siteLocales.map((l) => l.locale), 'site locale')
+  uniqueStrings(fixture.siteDomains.map((d) => d.id), 'site domain id')
+  uniqueStrings(fixture.siteDomains.map((d) => d.domain), 'site domain')
+  uniqueStrings(fixture.mediaAssets.map((a) => a.id), 'media asset id')
+  uniqueStrings(fixture.mediaAssets.map((a) => a.fileName), 'media asset file name')
+  uniqueStrings(fixture.siteContent.map((e) => e.id), 'site content id')
+  uniqueStrings(fixture.experiences.map((e) => e.id), 'experience id')
+  uniqueStrings(fixture.experiences.map((e) => e.slug), 'experience slug')
+  uniqueStrings(fixture.reviews.map((r) => r.id), 'review id')
+  uniqueStrings(fixture.menus.map((m) => m.id), 'menu id')
+  uniqueStrings(fixture.menus.flatMap((m) => m.items.map((i) => i.id)), 'menu item id')
+  uniqueStrings(fixture.locationQa.map((q) => q.id), 'location qa id')
+  uniqueStrings(fixture.posts.map((p) => p.id), 'post id')
+  uniqueStrings(fixture.posts.flatMap((p) => p.channelJobs.map((j) => j.id)), 'post channel job id')
+  uniqueStrings(fixture.publicRoutes.map((r) => r.path), 'public route path')
 
   const mediaAssets: CompiledSeedMediaAsset[] = fixture.mediaAssets.map((asset) => {
     if (asset.locationId && !locationIds.has(asset.locationId)) {
       throw new Error(`Media asset "${asset.id}" references unknown location "${asset.locationId}"`)
     }
-
     return {
       id: asset.id,
       organizationId: fixture.organizationId,
       siteId: fixture.siteId,
       locationId: asset.locationId,
-      kind: 'image',
-      provider: 'external_url',
-      source: 'external',
+      kind: asset.kind ?? 'image',
+      provider: asset.provider ?? 'external_url',
+      source: asset.source ?? 'external',
+      r2Key: asset.r2Key ?? null,
       publicUrl: asset.publicUrl,
       thumbnailUrl: asset.thumbnailUrl,
       mimeType: asset.mimeType,
@@ -58,7 +70,12 @@ export function compileCuratedSiteFixture(
     if (entry.locationId && !locationIds.has(entry.locationId)) {
       throw new Error(`Site content "${entry.id}" references unknown location "${entry.locationId}"`)
     }
-
+    if (entry.heroImageAssetId && !mediaIds.has(entry.heroImageAssetId)) {
+      throw new Error(`Site content "${entry.id}" references unknown hero image asset "${entry.heroImageAssetId}"`)
+    }
+    if (entry.heroVideoAssetId && !mediaIds.has(entry.heroVideoAssetId)) {
+      throw new Error(`Site content "${entry.id}" references unknown hero video asset "${entry.heroVideoAssetId}"`)
+    }
     return {
       id: entry.id,
       organizationId: fixture.organizationId,
@@ -67,9 +84,10 @@ export function compileCuratedSiteFixture(
       page: entry.page,
       field: entry.field,
       content: entry.content,
-      heroTitle: null,
-      heroSubtitle: null,
-      heroImageAssetId: null,
+      heroTitle: entry.heroTitle ?? null,
+      heroSubtitle: entry.heroSubtitle ?? null,
+      heroImageAssetId: entry.heroImageAssetId ?? null,
+      heroVideoAssetId: entry.heroVideoAssetId ?? null,
       type: entry.type,
       source: entry.source ?? 'manual',
     }
@@ -86,7 +104,6 @@ export function compileCuratedSiteFixture(
         `Experience "${experience.id}" references unknown image asset "${experience.imageAssetId}"`,
       )
     }
-
     return {
       id: experience.id,
       organizationId: fixture.organizationId,
@@ -111,6 +128,116 @@ export function compileCuratedSiteFixture(
     }
   })
 
+  const reviews: CompiledSeedReview[] = fixture.reviews.map((review) => {
+    if (!locationIds.has(review.locationId)) {
+      throw new Error(`Review "${review.id}" references unknown location "${review.locationId}"`)
+    }
+    return {
+      id: review.id,
+      organizationId: fixture.organizationId,
+      siteId: fixture.siteId,
+      locationId: review.locationId,
+      authorName: review.authorName,
+      reviewerPhotoUrl: review.reviewerPhotoUrl,
+      rating: review.rating,
+      content: review.content,
+      ownerReply: review.ownerReply,
+      ownerReplyAt: review.ownerReplyAt,
+      status: review.status,
+      source: review.source,
+    }
+  })
+
+  const menus: CompiledSeedMenu[] = fixture.menus.map((menu) => {
+    if (!locationIds.has(menu.locationId)) {
+      throw new Error(`Menu "${menu.id}" references unknown location "${menu.locationId}"`)
+    }
+    const items: CompiledSeedMenuItem[] = menu.items.map((item) => {
+      if (item.imageAssetId && !mediaIds.has(item.imageAssetId)) {
+        throw new Error(`Menu item "${item.id}" references unknown image asset "${item.imageAssetId}"`)
+      }
+      return {
+        id: item.id,
+        menuId: menu.id,
+        organizationId: fixture.organizationId,
+        siteId: fixture.siteId,
+        section: item.section,
+        name: item.name,
+        slug: item.slug,
+        description: item.description,
+        priceAmount: item.priceAmount,
+        imageAssetId: item.imageAssetId,
+        allergens: item.allergens,
+        dietaryNotes: item.dietaryNotes,
+        available: item.available,
+        sortOrder: item.sortOrder,
+      }
+    })
+    return {
+      id: menu.id,
+      organizationId: fixture.organizationId,
+      siteId: fixture.siteId,
+      locationId: menu.locationId,
+      name: menu.name,
+      description: menu.description,
+      sectionOrder: [...menu.sectionOrder],
+      status: menu.status,
+      items,
+    }
+  })
+
+  const locationQa: CompiledSeedLocationQa[] = fixture.locationQa.map((qa) => {
+    if (!locationIds.has(qa.locationId)) {
+      throw new Error(`Location Q&A "${qa.id}" references unknown location "${qa.locationId}"`)
+    }
+    return {
+      id: qa.id,
+      organizationId: fixture.organizationId,
+      siteId: fixture.siteId,
+      locationId: qa.locationId,
+      question: qa.question,
+      questionAuthor: qa.questionAuthor,
+      answer: qa.answer,
+      answerAuthor: qa.answerAuthor,
+      isOwnerAnswer: qa.isOwnerAnswer,
+      upvoteCount: qa.upvoteCount,
+      source: qa.source,
+      status: qa.status,
+      sortOrder: qa.sortOrder,
+    }
+  })
+
+  const posts: CompiledSeedPost[] = fixture.posts.map((post) => {
+    if (post.locationId && !locationIds.has(post.locationId)) {
+      throw new Error(`Post "${post.id}" references unknown location "${post.locationId}"`)
+    }
+    if (post.imageAssetId && !mediaIds.has(post.imageAssetId)) {
+      throw new Error(`Post "${post.id}" references unknown image asset "${post.imageAssetId}"`)
+    }
+    const channelJobs: CompiledSeedPostChannelJob[] = post.channelJobs.map((job) => ({
+      id: job.id,
+      postId: post.id,
+      organizationId: fixture.organizationId,
+      channel: job.channel,
+      status: job.status,
+      publishedAt: job.publishedAt,
+    }))
+    return {
+      id: post.id,
+      organizationId: fixture.organizationId,
+      siteId: fixture.siteId,
+      locationId: post.locationId,
+      postType: post.postType,
+      title: post.title,
+      body: post.body,
+      imageAssetId: post.imageAssetId,
+      status: post.status,
+      publishedAt: post.publishedAt,
+      createdBy: post.createdBy,
+      channelJobs,
+    }
+  })
+
   return {
     identity: {
       fixtureId: fixture.fixtureId,
@@ -125,10 +252,14 @@ export function compileCuratedSiteFixture(
     mediaAssets,
     siteContent,
     experiences,
+    reviews,
+    menus,
+    locationQa,
+    posts,
     publicRoutes: fixture.publicRoutes.map((route) => ({ ...route })),
     routeManifest: {
-      locations: fixture.locations.map((location) => `/locations/${location.slug}`),
-      experiences: fixture.experiences.map((experience) => `/experiences/${experience.slug}`),
+      locations: fixture.locations.map((l) => `/locations/${l.slug}`),
+      experiences: fixture.experiences.map((e) => `/experiences/${e.slug}`),
     },
   }
 }

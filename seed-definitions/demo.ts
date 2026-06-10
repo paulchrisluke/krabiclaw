@@ -117,6 +117,8 @@ export const demoFixture: CuratedSiteDefinition = {
       facebookUrl: 'https://facebook.com/emberandslice',
       isPrimary: true,
       status: 'active',
+      heroImageAssetId: 'media-demo-hero',
+      heroVideoAssetId: 'media-demo-pizza-prep-video',
     },
     {
       id: 'loc-demo-2',
@@ -156,9 +158,221 @@ export const demoFixture: CuratedSiteDefinition = {
       facebookUrl: 'https://facebook.com/emberandslice',
       isPrimary: false,
       status: 'active',
+      heroImageAssetId: 'media-demo2-hero',
     },
   ],
   mediaAssets: [
+    // Loc-demo: hero + video assets
+    {
+      id: 'media-demo-hero',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1579751626657-72bc17010498?w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1579751626657-72bc17010498?w=600&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'wood-fired-pizza-hero.jpg',
+      altText: 'Wood-fired pizza with blistered crust',
+      category: 'food',
+    },
+    {
+      id: 'media-demo-hero-video',
+      locationId: 'loc-demo',
+      kind: 'video',
+      publicUrl: '/videos/krabiclaw-demo-hero-video.mp4',
+      thumbnailUrl: null,
+      mimeType: 'video/mp4',
+      fileName: 'krabiclaw-demo-hero-video.mp4',
+      altText: 'Hero background video of the restaurant',
+      category: 'interior',
+    },
+    {
+      id: 'media-demo-margherita-video',
+      locationId: 'loc-demo',
+      kind: 'video',
+      publicUrl: '/videos/krabiclaw-demo-pizza-cutting.mp4',
+      thumbnailUrl: null,
+      mimeType: 'video/mp4',
+      fileName: 'krabiclaw-demo-pizza-cutting.mp4',
+      altText: 'Fresh Margherita pizza being cut',
+      category: 'food',
+    },
+    {
+      id: 'media-demo-pizza-prep-video',
+      locationId: 'loc-demo',
+      kind: 'video',
+      publicUrl: '/videos/krabiclaw-demo-pizza-prep.mp4',
+      thumbnailUrl: null,
+      mimeType: 'video/mp4',
+      fileName: 'krabiclaw-demo-pizza-prep.mp4',
+      altText: 'Pizza dough being prepared and wood-fired',
+      category: 'interior',
+    },
+    // Loc-demo: exterior
+    {
+      id: 'media-demo-ext-1',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'brooklyn-storefront.jpg',
+      altText: 'Neighborhood restaurant storefront',
+      category: 'exterior',
+    },
+    {
+      id: 'media-demo-ext-2',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'evening-entrance.jpg',
+      altText: 'Warm trattoria entrance at night',
+      category: 'exterior',
+    },
+    // Loc-demo: interior
+    {
+      id: 'media-demo-int-1',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'dining-room.jpg',
+      altText: 'Cozy Brooklyn dining room',
+      category: 'interior',
+    },
+    {
+      id: 'media-demo-int-2',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=600&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'oven-counter.jpg',
+      altText: 'Open kitchen counter near the oven',
+      category: 'interior',
+    },
+    {
+      id: 'media-demo-int-3',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'table-service.jpg',
+      altText: 'Table set for trattoria service',
+      category: 'interior',
+    },
+    // Loc-demo: team
+    {
+      id: 'media-demo-team-1',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1581299894007-aaa50297cf16?w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1581299894007-aaa50297cf16?w=600&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'pizza-team.jpg',
+      altText: 'Ember & Slice kitchen team',
+      category: 'team',
+    },
+    // Loc-demo: menu food
+    {
+      id: 'media-demo-margherita',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=900&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=450&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'margherita.jpg',
+      altText: 'Margherita pizza with basil',
+      category: 'food',
+    },
+    {
+      id: 'media-demo-pepperoni',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=900&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=450&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'pepperoni-calabrese.jpg',
+      altText: 'Pepperoni Calabrese pizza',
+      category: 'food',
+    },
+    {
+      id: 'media-demo-funghi',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1594007654729-407eedc4be65?w=900&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1594007654729-407eedc4be65?w=450&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'funghi-bianco.jpg',
+      altText: 'Mushroom white pizza',
+      category: 'food',
+    },
+    {
+      id: 'media-demo-burrata',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1608897013039-887f21d8c804?w=900&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1608897013039-887f21d8c804?w=450&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'burrata.jpg',
+      altText: 'Burrata with tomatoes and herbs',
+      category: 'food',
+    },
+    {
+      id: 'media-demo-knots',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?w=900&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?w=450&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'garlic-knots.jpg',
+      altText: 'Garlic knots with marinara',
+      category: 'food',
+    },
+    // Loc-demo: post images
+    {
+      id: 'media-demo-post1',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1579751626657-72bc17010498?w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1579751626657-72bc17010498?w=600&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'post-oven.jpg',
+      altText: 'Pizza coming out of the oven',
+      category: 'food',
+    },
+    {
+      id: 'media-demo-post2',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'post-dining-room.jpg',
+      altText: 'Dining room during dinner service',
+      category: 'interior',
+    },
+    {
+      id: 'media-demo-post3',
+      locationId: 'loc-demo',
+      publicUrl: 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=600&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'post-margherita.jpg',
+      altText: 'Margherita pizza special',
+      category: 'food',
+    },
+    // Loc-demo-2: assets
+    {
+      id: 'media-demo2-hero',
+      locationId: 'loc-demo-2',
+      publicUrl: 'https://images.unsplash.com/photo-1544148103-0773bf10d330?w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1544148103-0773bf10d330?w=600&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'west-village-hero.jpg',
+      altText: 'West Village restaurant storefront',
+      category: 'exterior',
+    },
+    {
+      id: 'media-demo2-int-1',
+      locationId: 'loc-demo-2',
+      publicUrl: 'https://images.unsplash.com/photo-1559339352-11d035aa65de?w=1200&q=80',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1559339352-11d035aa65de?w=600&q=70',
+      mimeType: 'image/jpeg',
+      fileName: 'west-village-interior.jpg',
+      altText: 'Cozy West Village dining room',
+      category: 'interior',
+    },
+    // Experience media
     {
       id: 'media-demo-exp-class',
       locationId: 'loc-demo',
@@ -191,6 +405,72 @@ export const demoFixture: CuratedSiteDefinition = {
     },
   ],
   siteContent: [
+    // Home page
+    {
+      id: 'sc-demo-home-hero',
+      locationId: null,
+      page: 'home',
+      field: 'hero',
+      content: null,
+      heroTitle: 'Wood fire. Brooklyn nights.',
+      heroSubtitle: 'Blistered pies & warm neighborhood vibes.',
+      heroImageAssetId: 'media-demo-hero',
+      heroVideoAssetId: 'media-demo-hero-video',
+      type: 'text',
+    },
+    {
+      id: 'sc-demo-cta',
+      locationId: null,
+      page: 'home',
+      field: 'cta.title',
+      content: 'Book a table near the oven.',
+      type: 'text',
+    },
+    // About page
+    {
+      id: 'sc-demo-story-image',
+      locationId: null,
+      page: 'about',
+      field: 'story.image',
+      content: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1400&q=85',
+      type: 'media',
+    },
+    {
+      id: 'sc-demo-story-title',
+      locationId: null,
+      page: 'about',
+      field: 'story.title',
+      content: 'A trattoria shaped by the oven.',
+      type: 'text',
+    },
+    {
+      id: 'sc-demo-story-body',
+      locationId: null,
+      page: 'about',
+      field: 'story.body',
+      content:
+        'Ember & Slice started with a sourdough starter, a borrowed mixer, and a pop-up oven behind a Brooklyn wine bar. The pies sold out before sunset, then again the next weekend, and then every weekend after that.\n\nToday the room is permanent, but the promise is the same: slow dough, live fire, seasonal produce, and the kind of service that makes a weeknight feel like an occasion.',
+      type: 'richtext',
+    },
+    {
+      id: 'sc-demo-journey',
+      locationId: null,
+      page: 'about',
+      field: 'journey.body',
+      content:
+        'We cold-ferment our dough, stretch every pie to order, and cook it hot enough for a crisp rim and a tender center. The menu changes around the market, but the Margherita never leaves the board.\n\nThe oven anchors the room. Everything else moves around it.',
+      type: 'textarea',
+    },
+    {
+      id: 'sc-demo-experience',
+      locationId: null,
+      page: 'about',
+      field: 'experience.body',
+      content:
+        'Come for a quick counter pie, stay for antipasti and another round, or bring a group and let the table fill itself. Ember & Slice is casual by design, but the details matter.\n\nGood tomatoes. Good flour. Good fire. No shortcuts.',
+      type: 'textarea',
+    },
+    // Experiences page
     {
       id: 'sc-demo-exp-kicker',
       locationId: null,
@@ -282,6 +562,445 @@ export const demoFixture: CuratedSiteDefinition = {
       seoTitle: 'Family Pizza Night Brooklyn | Ember & Slice',
       seoDescription:
         'Book Family Pizza Night at Ember & Slice in Brooklyn for a relaxed group dinner built around the oven.',
+    },
+  ],
+  reviews: [
+    {
+      id: 'rev-demo-1',
+      locationId: 'loc-demo',
+      authorName: 'Maya R.',
+      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=96&q=80',
+      rating: 5,
+      content: 'The Margherita had that perfect leopard-spotted crust and the basil hit the table smelling fresh. Exactly what I want from a neighborhood pizza night.',
+      ownerReply: null,
+      ownerReplyAt: null,
+      status: 'approved',
+      source: 'google',
+    },
+    {
+      id: 'rev-demo-2',
+      locationId: 'loc-demo',
+      authorName: 'Julian P.',
+      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=96&q=80',
+      rating: 5,
+      content: 'Sat at the counter and watched the oven all night. Pepperoni Calabrese, burrata, and a spritz made this feel like a tiny vacation.',
+      ownerReply: 'Thank you Julian. The counter seats are our favorite too - come back for the Funghi Bianco next time.',
+      ownerReplyAt: '2026-04-22T09:15:00.000Z',
+      status: 'approved',
+      source: 'google',
+    },
+    {
+      id: 'rev-demo-3',
+      locationId: 'loc-demo',
+      authorName: 'Priya S.',
+      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=96&q=80',
+      rating: 4,
+      content: 'Great crust, warm service, and the garlic knots vanished before the pizza landed. It gets loud at peak dinner but in a good way.',
+      ownerReply: 'Thanks Priya. Dinner definitely has energy, and we are glad the knots did their job.',
+      ownerReplyAt: '2026-04-15T11:30:00.000Z',
+      status: 'approved',
+      source: 'google',
+    },
+    {
+      id: 'rev-demo-4',
+      locationId: 'loc-demo',
+      authorName: 'Noah L.',
+      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=96&q=80',
+      rating: 5,
+      content: 'The hot honey soppressata is ridiculous. Sweet, spicy, smoky, and somehow still balanced. Best pie I have had in Williamsburg this year.',
+      ownerReply: null,
+      ownerReplyAt: null,
+      status: 'approved',
+      source: 'google',
+    },
+    {
+      id: 'rev-demo-5',
+      locationId: 'loc-demo',
+      authorName: 'Elena C.',
+      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=96&q=80',
+      rating: 4,
+      content: 'Lovely date-night spot without feeling precious. Caesar was sharp and cold, pizza was blistered, staff knew the menu well.',
+      ownerReply: null,
+      ownerReplyAt: null,
+      status: 'approved',
+      source: 'google',
+    },
+    {
+      id: 'rev-demo-6',
+      locationId: 'loc-demo',
+      authorName: 'Chris B.',
+      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=96&q=80',
+      rating: 3,
+      content: 'Food was strong but our table was about 15 minutes late on a busy Friday. I would come earlier next time.',
+      ownerReply: 'Hi Chris - sorry for the Friday wait. We tightened our turn times and would love to host you again on a smoother night.',
+      ownerReplyAt: '2026-03-30T14:45:00.000Z',
+      status: 'approved',
+      source: 'google',
+    },
+    {
+      id: 'rev-demo2-1',
+      locationId: 'loc-demo-2',
+      authorName: 'Michael T.',
+      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=96&q=80',
+      rating: 5,
+      content: 'Unbelievable sourdough pizza right in the West Village! The Margherita is simple, fresh, and perfectly charred. Truly a hidden gem.',
+      ownerReply: 'Thank you Michael! We are thrilled you enjoyed the neighborhood vibes and our signature crust.',
+      ownerReplyAt: '2026-05-15T12:00:00.000Z',
+      status: 'approved',
+      source: 'google',
+    },
+    {
+      id: 'rev-demo2-2',
+      locationId: 'loc-demo-2',
+      authorName: 'Emma W.',
+      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=96&q=80',
+      rating: 5,
+      content: 'Beautiful space, exceptionally friendly service, and a fantastic corner view. Highly recommend the Burrata and the Hot Honey pie!',
+      ownerReply: null,
+      ownerReplyAt: null,
+      status: 'approved',
+      source: 'google',
+    },
+  ],
+  menus: [
+    {
+      id: 'menu-demo',
+      locationId: 'loc-demo',
+      name: 'Menu',
+      description: 'Wood-fired pizza, antipasti, salads, and drinks from the Ember & Slice oven.',
+      sectionOrder: ['Wood-Fired Pizza', 'Antipasti', 'Pasta & Salads', 'Drinks'],
+      status: 'published',
+      items: [
+        {
+          id: 'mi-1',
+          section: 'Wood-Fired Pizza',
+          name: 'Margherita',
+          slug: 'margherita',
+          description: 'San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt',
+          priceAmount: 18,
+          imageAssetId: 'media-demo-margherita',
+          allergens: 'Gluten, Dairy',
+          dietaryNotes: 'Vegetarian',
+          available: true,
+          sortOrder: 1,
+        },
+        {
+          id: 'mi-2',
+          section: 'Wood-Fired Pizza',
+          name: 'Pepperoni Calabrese',
+          slug: 'pepperoni-calabrese',
+          description: 'Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano',
+          priceAmount: 21,
+          imageAssetId: 'media-demo-pepperoni',
+          allergens: 'Gluten, Dairy',
+          dietaryNotes: null,
+          available: true,
+          sortOrder: 2,
+        },
+        {
+          id: 'mi-3',
+          section: 'Wood-Fired Pizza',
+          name: 'Funghi Bianco',
+          slug: 'funghi-bianco',
+          description: 'Roasted mushrooms, ricotta crema, garlic, thyme, mozzarella, pecorino',
+          priceAmount: 22,
+          imageAssetId: 'media-demo-funghi',
+          allergens: 'Gluten, Dairy',
+          dietaryNotes: 'Vegetarian',
+          available: true,
+          sortOrder: 3,
+        },
+        {
+          id: 'mi-4',
+          section: 'Wood-Fired Pizza',
+          name: 'Soppressata Hot Honey',
+          slug: 'soppressata-hot-honey',
+          description: 'Spicy soppressata, tomato, mozzarella, pickled Fresno chile, Brooklyn hot honey',
+          priceAmount: 23,
+          imageAssetId: null,
+          allergens: 'Gluten, Dairy',
+          dietaryNotes: null,
+          available: true,
+          sortOrder: 4,
+        },
+        {
+          id: 'mi-5',
+          section: 'Antipasti',
+          name: 'Burrata',
+          slug: 'burrata',
+          description: 'Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough',
+          priceAmount: 16,
+          imageAssetId: 'media-demo-burrata',
+          allergens: 'Gluten, Dairy',
+          dietaryNotes: 'Vegetarian',
+          available: true,
+          sortOrder: 1,
+        },
+        {
+          id: 'mi-6',
+          section: 'Antipasti',
+          name: 'Garlic Knots',
+          slug: 'garlic-knots',
+          description: 'Wood-fired knots, parsley, roasted garlic butter, marinara',
+          priceAmount: 9,
+          imageAssetId: 'media-demo-knots',
+          allergens: 'Gluten, Dairy',
+          dietaryNotes: 'Vegetarian',
+          available: true,
+          sortOrder: 2,
+        },
+        {
+          id: 'mi-7',
+          section: 'Pasta & Salads',
+          name: 'Little Gem Caesar',
+          slug: 'little-gem-caesar',
+          description: 'Little gem lettuce, anchovy dressing, sourdough crumbs, shaved pecorino',
+          priceAmount: 14,
+          imageAssetId: null,
+          allergens: 'Gluten, Dairy, Fish',
+          dietaryNotes: null,
+          available: true,
+          sortOrder: 1,
+        },
+        {
+          id: 'mi-8',
+          section: 'Pasta & Salads',
+          name: 'Rigatoni Pomodoro',
+          slug: 'rigatoni-pomodoro',
+          description: 'Rigatoni, slow tomato sauce, basil, parmesan',
+          priceAmount: 19,
+          imageAssetId: null,
+          allergens: 'Gluten, Dairy',
+          dietaryNotes: 'Vegetarian',
+          available: true,
+          sortOrder: 2,
+        },
+        {
+          id: 'mi-9',
+          section: 'Drinks',
+          name: 'Sparkling Lemonade',
+          slug: 'sparkling-lemonade',
+          description: 'House lemon cordial, soda, rosemary',
+          priceAmount: 6,
+          imageAssetId: null,
+          allergens: null,
+          dietaryNotes: 'Vegan, Gluten-free',
+          available: true,
+          sortOrder: 1,
+        },
+        {
+          id: 'mi-10',
+          section: 'Drinks',
+          name: 'Italian Soda',
+          slug: 'italian-soda',
+          description: 'Blood orange, grapefruit, or limonata',
+          priceAmount: 5,
+          imageAssetId: null,
+          allergens: null,
+          dietaryNotes: 'Vegan, Gluten-free',
+          available: true,
+          sortOrder: 2,
+        },
+      ],
+    },
+    {
+      id: 'menu-demo-2',
+      locationId: 'loc-demo-2',
+      name: 'Menu',
+      description: 'Wood-fired pizza, fresh local antipasti, and craft drinks in the West Village.',
+      sectionOrder: ['Wood-Fired Pizza', 'Antipasti', 'Drinks'],
+      status: 'published',
+      items: [
+        {
+          id: 'mi-demo2-1',
+          section: 'Wood-Fired Pizza',
+          name: 'Margherita',
+          slug: 'margherita',
+          description: 'San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt',
+          priceAmount: 18,
+          imageAssetId: 'media-demo-margherita',
+          allergens: 'Gluten, Dairy',
+          dietaryNotes: 'Vegetarian',
+          available: true,
+          sortOrder: 1,
+        },
+        {
+          id: 'mi-demo2-2',
+          section: 'Wood-Fired Pizza',
+          name: 'Pepperoni Calabrese',
+          slug: 'pepperoni-calabrese',
+          description: 'Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano',
+          priceAmount: 21,
+          imageAssetId: 'media-demo-pepperoni',
+          allergens: 'Gluten, Dairy',
+          dietaryNotes: null,
+          available: true,
+          sortOrder: 2,
+        },
+        {
+          id: 'mi-demo2-3',
+          section: 'Antipasti',
+          name: 'Burrata',
+          slug: 'burrata',
+          description: 'Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough',
+          priceAmount: 16,
+          imageAssetId: 'media-demo-burrata',
+          allergens: 'Gluten, Dairy',
+          dietaryNotes: 'Vegetarian',
+          available: true,
+          sortOrder: 1,
+        },
+        {
+          id: 'mi-demo2-4',
+          section: 'Drinks',
+          name: 'Sparkling Lemonade',
+          slug: 'sparkling-lemonade',
+          description: 'House lemon cordial, soda, rosemary',
+          priceAmount: 6,
+          imageAssetId: null,
+          allergens: null,
+          dietaryNotes: 'Vegan, Gluten-free',
+          available: true,
+          sortOrder: 1,
+        },
+      ],
+    },
+  ],
+  locationQa: [
+    {
+      id: 'qa-demo-1',
+      locationId: 'loc-demo',
+      question: 'Do you take reservations?',
+      questionAuthor: 'A Guest',
+      answer: 'Yes. We hold room for walk-ins, but reservations are recommended for dinner and weekends.',
+      answerAuthor: 'Ember & Slice Brooklyn',
+      isOwnerAnswer: true,
+      upvoteCount: 14,
+      source: 'manual',
+      status: 'published',
+      sortOrder: 1,
+    },
+    {
+      id: 'qa-demo-2',
+      locationId: 'loc-demo',
+      question: 'Do you offer gluten-free crust?',
+      questionAuthor: 'Another Guest',
+      answer: 'Not yet. Our dough room uses wheat flour all day, so we cannot safely guarantee a gluten-free crust.',
+      answerAuthor: 'Ember & Slice Brooklyn',
+      isOwnerAnswer: true,
+      upvoteCount: 8,
+      source: 'manual',
+      status: 'published',
+      sortOrder: 2,
+    },
+    {
+      id: 'qa-demo-3',
+      locationId: 'loc-demo',
+      question: 'Can I order takeout?',
+      questionAuthor: 'A Guest',
+      answer: 'Yes. Call us directly for pickup. Wood-fired pies travel best when picked up close to oven time.',
+      answerAuthor: 'Ember & Slice Brooklyn',
+      isOwnerAnswer: true,
+      upvoteCount: 11,
+      source: 'manual',
+      status: 'published',
+      sortOrder: 3,
+    },
+    {
+      id: 'qa-demo-4',
+      locationId: 'loc-demo',
+      question: 'What are your busiest times?',
+      questionAuthor: 'A Guest',
+      answer: 'Friday and Saturday from 7pm to 9pm are peak. Earlier dinner or Sunday lunch is calmer.',
+      answerAuthor: 'Ember & Slice Brooklyn',
+      isOwnerAnswer: true,
+      upvoteCount: 6,
+      source: 'manual',
+      status: 'published',
+      sortOrder: 4,
+    },
+    {
+      id: 'qa-demo-5',
+      locationId: 'loc-demo',
+      question: 'Do you have vegetarian options?',
+      questionAuthor: 'A Guest',
+      answer: 'Absolutely. Margherita, Funghi Bianco, Burrata, Garlic Knots, and Rigatoni Pomodoro are vegetarian.',
+      answerAuthor: 'Ember & Slice Brooklyn',
+      isOwnerAnswer: true,
+      upvoteCount: 5,
+      source: 'manual',
+      status: 'published',
+      sortOrder: 5,
+    },
+    {
+      id: 'qa-demo2-1',
+      locationId: 'loc-demo-2',
+      question: 'Do you offer outdoor seating?',
+      questionAuthor: 'Outdoor Diner',
+      answer: 'Absolutely! We have a lovely patio setup for the warmer months.',
+      answerAuthor: 'Ember & Slice West Village',
+      isOwnerAnswer: true,
+      upvoteCount: 8,
+      source: 'manual',
+      status: 'published',
+      sortOrder: 1,
+    },
+    {
+      id: 'qa-demo2-2',
+      locationId: 'loc-demo-2',
+      question: 'Do you offer gluten-free crust?',
+      questionAuthor: 'Coeliac Foodie',
+      answer: 'Yes, we offer gluten-free crust for any of our wood-fired pizzas for an additional charge.',
+      answerAuthor: 'Ember & Slice West Village',
+      isOwnerAnswer: true,
+      upvoteCount: 5,
+      source: 'manual',
+      status: 'published',
+      sortOrder: 2,
+    },
+  ],
+  posts: [
+    {
+      id: 'post-demo-1',
+      locationId: 'loc-demo',
+      postType: 'update',
+      title: 'Weekend lunch now starts at 11',
+      body: 'The oven is lighting up earlier on Saturdays and Sundays. Come by for lunch pies, garlic knots, and spritzes from 11am.',
+      imageAssetId: 'media-demo-post1',
+      status: 'published',
+      publishedAt: '2026-05-01T12:00:00.000Z',
+      createdBy: 'user-demo',
+      channelJobs: [
+        { id: 'pcj-demo-1', channel: 'site', status: 'published', publishedAt: '2026-05-01T12:00:00.000Z' },
+      ],
+    },
+    {
+      id: 'post-demo-2',
+      locationId: 'loc-demo',
+      postType: 'standard',
+      title: null,
+      body: 'Our Funghi Bianco is back with roasted mushrooms, ricotta crema, thyme, and a little pecorino snow at the pass.',
+      imageAssetId: 'media-demo-post2',
+      status: 'published',
+      publishedAt: '2026-04-18T10:00:00.000Z',
+      createdBy: 'user-demo',
+      channelJobs: [
+        { id: 'pcj-demo-2', channel: 'site', status: 'published', publishedAt: '2026-04-18T10:00:00.000Z' },
+      ],
+    },
+    {
+      id: 'post-demo-3',
+      locationId: 'loc-demo',
+      postType: 'offer',
+      title: 'Margherita Monday',
+      body: 'Every Monday in May: Margherita pies are $14 from open to close. Dine-in only, one per guest.',
+      imageAssetId: 'media-demo-post3',
+      status: 'published',
+      publishedAt: '2026-04-10T09:00:00.000Z',
+      createdBy: 'user-demo',
+      channelJobs: [
+        { id: 'pcj-demo-3', channel: 'site', status: 'published', publishedAt: '2026-04-10T09:00:00.000Z' },
+      ],
     },
   ],
   publicRoutes: [
@@ -416,7 +1135,7 @@ UPDATE sites SET primary_location_id = ${sqlValue(compiledDemoSeed.site.primaryL
 -- END GENERATED: demo_core`
 }
 
-export function renderCompiledDemoExperienceSeedBlock(): string {
+export function renderCompiledDemoMediaBlock(): string {
   const mediaRows = compiledDemoSeed.mediaAssets
     .map((media) => `  (${[
       sqlValue(media.id),
@@ -436,6 +1155,181 @@ export function renderCompiledDemoExperienceSeedBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
+  const heroUpdates = compiledDemoSeed.locations
+    .filter((loc) => loc.heroImageAssetId || loc.heroVideoAssetId)
+    .map((loc) => {
+      const parts: string[] = []
+      if (loc.heroImageAssetId) parts.push(`hero_image_asset_id = ${sqlValue(loc.heroImageAssetId)}`)
+      if (loc.heroVideoAssetId) parts.push(`hero_video_asset_id = ${sqlValue(loc.heroVideoAssetId)}`)
+      return `UPDATE business_locations SET ${parts.join(', ')} WHERE id = ${sqlValue(loc.id)};`
+    })
+    .join('\n')
+
+  return `-- BEGIN GENERATED: demo_media
+-- All media assets for the demo tenant.
+INSERT INTO media_assets
+  (id, organization_id, site_id, location_id,
+   kind, provider, source,
+   public_url, thumbnail_url,
+   mime_type, file_name, alt_text, category, status)
+VALUES
+${mediaRows};
+
+${heroUpdates}
+-- END GENERATED: demo_media`
+}
+
+export function renderCompiledDemoReviewsBlock(): string {
+  const reviewRows = compiledDemoSeed.reviews
+    .map((review) => `  (${[
+      sqlValue(review.id),
+      sqlValue(review.organizationId),
+      sqlValue(review.siteId),
+      sqlValue(review.locationId),
+      sqlValue(review.authorName),
+      sqlValue(review.reviewerPhotoUrl),
+      sqlValue(review.rating),
+      sqlValue(review.content),
+      sqlValue(review.ownerReply),
+      sqlValue(review.ownerReplyAt),
+      sqlValue(review.status),
+      sqlValue(review.source),
+    ].join(', ')})`)
+    .join(',\n')
+
+  return `-- BEGIN GENERATED: demo_reviews
+-- Reviews for the demo tenant.
+INSERT INTO reviews
+  (id, organization_id, site_id, location_id,
+   author_name, reviewer_photo_url, rating, content,
+   owner_reply, owner_reply_at,
+   status, source)
+VALUES
+${reviewRows};
+-- END GENERATED: demo_reviews`
+}
+
+export function renderCompiledDemoMenuBlock(): string {
+  const menuRows = compiledDemoSeed.menus
+    .map((menu) => `  (${[
+      sqlValue(menu.id),
+      sqlValue(menu.organizationId),
+      sqlValue(menu.siteId),
+      sqlValue(menu.locationId),
+      sqlValue(menu.name),
+      sqlValue(menu.description),
+      sqlJson(menu.sectionOrder),
+      sqlValue(menu.status),
+    ].join(', ')})`)
+    .join(',\n')
+
+  const allItems = compiledDemoSeed.menus.flatMap((menu) => menu.items)
+  const menuItemRows = allItems
+    .map((item) => `  (${[
+      sqlValue(item.id),
+      sqlValue(item.menuId),
+      sqlValue(item.section),
+      sqlValue(item.name),
+      sqlValue(item.slug),
+      sqlValue(item.description),
+      sqlValue(item.priceAmount),
+      sqlValue(item.imageAssetId),
+      sqlValue(item.allergens),
+      sqlValue(item.dietaryNotes),
+      sqlValue(item.available),
+      sqlValue(item.sortOrder),
+    ].join(', ')})`)
+    .join(',\n')
+
+  return `-- BEGIN GENERATED: demo_menu
+-- Menus and menu items for the demo tenant.
+INSERT INTO menus (id, organization_id, site_id, location_id, name, description, section_order, status)
+VALUES
+${menuRows};
+
+INSERT INTO menu_items
+  (id, menu_id, section, name, slug, description, price_amount,
+   image_asset_id, allergens, dietary_notes, available, sort_order)
+VALUES
+${menuItemRows};
+-- END GENERATED: demo_menu`
+}
+
+export function renderCompiledDemoQaBlock(): string {
+  const qaRows = compiledDemoSeed.locationQa
+    .map((qa) => `  (${[
+      sqlValue(qa.id),
+      sqlValue(qa.organizationId),
+      sqlValue(qa.siteId),
+      sqlValue(qa.locationId),
+      sqlValue(qa.question),
+      sqlValue(qa.questionAuthor),
+      sqlValue(qa.answer),
+      sqlValue(qa.answerAuthor),
+      sqlValue(qa.isOwnerAnswer),
+      sqlValue(qa.upvoteCount),
+      sqlValue(qa.source),
+      sqlValue(qa.status),
+      sqlValue(qa.sortOrder),
+    ].join(', ')})`)
+    .join(',\n')
+
+  return `-- BEGIN GENERATED: demo_qa
+-- Location Q&A for the demo tenant.
+INSERT INTO location_qa
+  (id, organization_id, site_id, location_id,
+   question, question_author, answer, answer_author,
+   is_owner_answer, upvote_count, source, status, sort_order)
+VALUES
+${qaRows};
+-- END GENERATED: demo_qa`
+}
+
+export function renderCompiledDemoPostsBlock(): string {
+  const postRows = compiledDemoSeed.posts
+    .map((post) => `  (${[
+      sqlValue(post.id),
+      sqlValue(post.organizationId),
+      sqlValue(post.siteId),
+      sqlValue(post.locationId),
+      sqlValue(post.postType),
+      sqlValue(post.title),
+      sqlValue(post.body),
+      sqlValue(post.imageAssetId),
+      sqlValue(post.status),
+      sqlValue(post.publishedAt),
+      sqlValue(post.createdBy),
+    ].join(', ')})`)
+    .join(',\n')
+
+  const allChannelJobs = compiledDemoSeed.posts.flatMap((post) => post.channelJobs)
+  const channelJobRows = allChannelJobs
+    .map((job) => `  (${[
+      sqlValue(job.id),
+      sqlValue(job.postId),
+      sqlValue(job.organizationId),
+      sqlValue(job.channel),
+      sqlValue(job.status),
+      sqlValue(job.publishedAt),
+    ].join(', ')})`)
+    .join(',\n')
+
+  return `-- BEGIN GENERATED: demo_posts
+-- Posts and channel jobs for the demo tenant.
+INSERT INTO posts
+  (id, organization_id, site_id, location_id,
+   post_type, title, body, image_asset_id,
+   status, published_at, created_by)
+VALUES
+${postRows};
+
+INSERT INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
+VALUES
+${channelJobRows};
+-- END GENERATED: demo_posts`
+}
+
+export function renderCompiledDemoExperienceSeedBlock(): string {
   const experienceRows = compiledDemoSeed.experiences
     .map((experience) => `  (${[
       sqlValue(experience.id),
@@ -461,33 +1355,8 @@ export function renderCompiledDemoExperienceSeedBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
-  const contentRows = compiledDemoSeed.siteContent
-    .map((entry) => `  (${[
-      sqlValue(entry.id),
-      sqlValue(entry.organizationId),
-      sqlValue(entry.siteId),
-      sqlValue(entry.locationId),
-      sqlValue(entry.page),
-      sqlValue(entry.field),
-      sqlValue(entry.content),
-      'NULL',
-      'NULL',
-      'NULL',
-      sqlValue(entry.type),
-      sqlValue(entry.source),
-    ].join(', ')})`)
-    .join(',\n')
-
   return `-- BEGIN GENERATED: demo_experiences
 -- Hybrid restaurant + experiences showcase for the platform demo.
-INSERT INTO media_assets
-  (id, organization_id, site_id, location_id,
-   kind, provider, source,
-   public_url, thumbnail_url,
-   mime_type, file_name, alt_text, category, status)
-VALUES
-${mediaRows};
-
 INSERT INTO experiences
   (id, organization_id, site_id, location_id,
    title, slug, tagline, body,
@@ -497,14 +1366,37 @@ INSERT INTO experiences
    seo_title, seo_description)
 VALUES
 ${experienceRows};
+-- END GENERATED: demo_experiences`
+}
 
+export function renderCompiledDemoContentBlock(): string {
+  const contentRows = compiledDemoSeed.siteContent
+    .map((entry) => `  (${[
+      sqlValue(entry.id),
+      sqlValue(entry.organizationId),
+      sqlValue(entry.siteId),
+      sqlValue(entry.locationId),
+      sqlValue(entry.page),
+      sqlValue(entry.field),
+      sqlValue(entry.content),
+      sqlValue(entry.heroTitle),
+      sqlValue(entry.heroSubtitle),
+      sqlValue(entry.heroImageAssetId),
+      sqlValue(entry.heroVideoAssetId),
+      sqlValue(entry.type),
+      sqlValue(entry.source),
+    ].join(', ')})`)
+    .join(',\n')
+
+  return `-- BEGIN GENERATED: demo_content
+-- Site content for the demo tenant.
 INSERT INTO site_content
   (id, organization_id, site_id, location_id,
-   page, field, content, hero_title, hero_subtitle, hero_image_asset_id,
+   page, field, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id,
    type, source)
 VALUES
 ${contentRows};
--- END GENERATED: demo_experiences`
+-- END GENERATED: demo_content`
 }
 
 export const renderDemoExperienceSeedBlock = renderCompiledDemoExperienceSeedBlock

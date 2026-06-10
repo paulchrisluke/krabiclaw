@@ -7,7 +7,13 @@ import {
   compiledDemoSeed,
   demoFixture,
   renderCompiledDemoCoreSeedBlock,
+  renderCompiledDemoMediaBlock,
+  renderCompiledDemoReviewsBlock,
+  renderCompiledDemoMenuBlock,
+  renderCompiledDemoQaBlock,
+  renderCompiledDemoPostsBlock,
   renderDemoExperienceSeedBlock,
+  renderCompiledDemoContentBlock,
 } from '../../seed-definitions/demo.ts'
 import { serializeCompiledSeedBundle } from '../../seed-definitions/serialize.ts'
 
@@ -64,13 +70,66 @@ test('checked-in demo bundle artifact matches the compiled demo seed', () => {
   assert.deepEqual(artifact, serializeCompiledSeedBundle(compiledDemoSeed))
 })
 
-test('demo experience seed block includes editable experiences page content', () => {
+test('demo experience seed block contains only the experiences table', () => {
   const sql = renderDemoExperienceSeedBlock()
 
   assert.match(sql, /INSERT INTO experiences/)
-  assert.match(sql, /INSERT INTO site_content/)
-  assert.match(sql, /hero\.title/)
   assert.match(sql, /Pizza Making Class/)
+  assert.doesNotMatch(sql, /INSERT INTO media_assets/)
+  assert.doesNotMatch(sql, /INSERT INTO site_content/)
+})
+
+test('demo media block includes all media assets and hero refs', () => {
+  const sql = renderCompiledDemoMediaBlock()
+
+  assert.match(sql, /INSERT INTO media_assets/)
+  assert.match(sql, /media-demo-hero/)
+  assert.match(sql, /'video'/)
+  assert.match(sql, /UPDATE business_locations SET hero_image_asset_id/)
+  assert.match(sql, /hero_video_asset_id/)
+})
+
+test('demo reviews block includes reviews for both locations', () => {
+  const sql = renderCompiledDemoReviewsBlock()
+
+  assert.match(sql, /INSERT INTO reviews/)
+  assert.match(sql, /loc-demo'/)
+  assert.match(sql, /loc-demo-2'/)
+})
+
+test('demo menu block includes menus and menu items', () => {
+  const sql = renderCompiledDemoMenuBlock()
+
+  assert.match(sql, /INSERT INTO menus/)
+  assert.match(sql, /INSERT INTO menu_items/)
+  assert.match(sql, /Margherita/)
+  assert.match(sql, /menu-demo-2/)
+})
+
+test('demo qa block includes location Q&A for both locations', () => {
+  const sql = renderCompiledDemoQaBlock()
+
+  assert.match(sql, /INSERT INTO location_qa/)
+  assert.match(sql, /reservations/)
+  assert.match(sql, /loc-demo-2'/)
+})
+
+test('demo posts block includes posts and channel jobs', () => {
+  const sql = renderCompiledDemoPostsBlock()
+
+  assert.match(sql, /INSERT INTO posts/)
+  assert.match(sql, /INSERT INTO post_channel_jobs/)
+  assert.match(sql, /Margherita Monday/)
+})
+
+test('demo content block includes site content for all pages including home hero fields', () => {
+  const sql = renderCompiledDemoContentBlock()
+
+  assert.match(sql, /INSERT INTO site_content/)
+  assert.match(sql, /hero_video_asset_id/)
+  assert.match(sql, /Wood fire\. Brooklyn nights\./)
+  assert.match(sql, /story\.title/)
+  assert.match(sql, /hero\.kicker/)
 })
 
 test('demo core seed block includes generated site, locale, domain, and location rows', () => {
