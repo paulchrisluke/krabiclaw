@@ -128,6 +128,12 @@ Rules:
 - `approved.json` remains the gate for any apply or replay that claims to represent a real client.
 - Manifest replay is the default long-term answer for client-specific regression coverage.
 
+Operational policy:
+
+- approved import replay should be reserved for paid clients or clients whose onboarding state must be preserved as a support-grade regression case
+- unpaid prospects, exploratory demos, and sales-stage tenants should not automatically become permanent replay fixtures
+- if a non-paying tenant reveals a product-level issue, the default response is to capture that behavior as a curated typed scenario fixture unless and until the tenant becomes a paid long-term support case
+
 ### 3. Generated execution artifacts
 
 Generated SQL remains acceptable only as an apply artifact.
@@ -176,6 +182,8 @@ The rule is:
 - when a client reveals a bug, preserve the reviewed import data or a derived replayable subset
 - do not create a new hand-maintained tenant SQL seed by default
 - only promote a client case into a shared typed fixture if it becomes a recurring product-level scenario
+- reserve durable replay coverage primarily for paid or support-grade clients whose exact onboarding state is worth preserving long-term
+- prefer curated typed scenario fixtures for pre-sale, unpaid, or short-lived exploratory cases
 
 ## Pottery House Classification
 
@@ -196,9 +204,11 @@ Long term, Pottery House should move away from being defined by a handwritten de
 - generated output from a typed fixture definition, if it remains a curated regression fixture
 - approved import replay, if it remains primarily a real-client onboarding case
 
-The default recommendation is approved import replay.
+Given current business status, Pottery House should not be assumed to deserve permanent approved import replay coverage yet. Until it becomes a paid or support-grade client case, the default recommendation is to preserve its lessons as curated typed fixtures and migration tests rather than as a forever replay artifact.
 
 ## Implementation Strategy
+
+The implementation order must serve the platform-level migration goal, not a sequence of isolated quick wins. "Demo first" means "establish the canonical architecture on the flagship fixture," then use that architecture to pull the rest of the repo back into a uniform shape.
 
 ### Phase 1: standardize authoring rules
 
@@ -206,6 +216,7 @@ Adopt and document these repo rules:
 
 - `seed-definitions/*` is the canonical home for curated typed fixtures and reusable seed builders.
 - `client-imports/<slug>/` is the canonical home for approved real-client onboarding artifacts.
+- curated fixtures should compile into the same normalized intermediate seed shape used by import replay
 - No new tenant is introduced via a hand-authored SQL seed file.
 - Generated SQL or structured apply output is allowed, but only as a derived artifact.
 
@@ -216,7 +227,9 @@ This phase is mostly policy, tests, and migration guardrails.
 Move current SQL-first tenants to generated or replayable sources:
 
 - move `demo` from partially generated SQL to fully generated site seed output from typed definitions
-- move `pottery-house` away from handwritten SQL to either typed generation or approved import replay
+- use `demo` to define the full canonical typed fixture contract and normalized intermediate seed shape
+- migrate existing one-off tenant customizations toward that shared contract instead of treating each as a special case
+- move `pottery-house` away from handwritten SQL to typed generation first, unless later business status justifies approved import replay
 - keep future tenants out of `seeds/*.sql` entirely unless the file is generated
 
 Generated outputs must support:
@@ -236,7 +249,7 @@ This should include:
 - stable fixture/replay naming in tests
 - clear separation between curated fixture tests and client replay tests
 
-The goal is to let E2E tests assert real-client regressions without forcing every client into the permanent fixture set.
+The goal is to let E2E tests assert real-client regressions without forcing every prospect or one-off onboarding case into the permanent fixture set.
 
 ### Phase 4: formalize CMS and ChowBot parity
 
@@ -320,9 +333,11 @@ Require migration-safe verification while replacing legacy SQL seeds:
 
 - This document covers the broader repo state, not just PR 1.
 - The preferred canonical authoring model is based on the successful pattern from the older typed-seed project: typed TypeScript definitions first.
-- Approved import replay is the default long-term home for real-client regressions.
+- Curated fixtures and approved import replay should converge on a shared normalized intermediate seed shape.
+- Approved import replay is the default long-term home for real-client regressions that belong to paid or support-grade clients.
 - Handwritten SQL remains acceptable only as a temporary transitional artifact.
 - Demo remains the primary curated platform fixture.
+- Demo-first work is only complete when it establishes the reusable architecture needed to migrate the rest of the repo, not when one visible subsection is improved.
 - Pottery House is useful today, but should not define the permanent long-term shape of client seeding.
 - CMS and ChowBot parity is required before chat-first onboarding can be considered a complete replacement for manual CMS-driven setup.
 
@@ -332,25 +347,48 @@ Require migration-safe verification while replacing legacy SQL seeds:
 
 The system is not complete until the following work is done:
 
+## Progress Update
+
+Completed in this refactor track so far:
+
+- added a shared curated fixture contract under `seed-definitions/contracts.ts`
+- added a compiler that normalizes curated fixtures into a shared intermediate seed bundle in `seed-definitions/compile.ts`
+- migrated the demo experiences fixture onto that shared contract instead of keeping a demo-only object shape
+- updated the demo SQL generator to render from compiled normalized rows instead of from ad hoc demo arrays
+- added unit coverage for compiled route manifests and normalized row identity propagation
+- expanded the typed fixture and generator to cover the demo site core: site metadata, `site_config`, `site_locales`, `site_domains`, and both `business_locations` now emit from the `demo_core` generated block
+- `scripts/generate-demo-seed.ts` now replaces two blocks (`demo_core` and `demo_experiences`) instead of one
+- `seed-definitions/generated/demo.bundle.json` now includes the expanded core shape (identity, site, siteConfig, siteLocales, siteDomains, locations)
+- unit tests verify artifact determinism and the presence of all generated core SQL inserts
+
+Still intentionally incomplete:
+
+- `seeds/demo.sql` lines 102–409 and 449–567 remain handwritten: media assets, menus, reviews, posts, and site_content blocks
+- the compiled bundle is not yet the default apply artifact for the full demo tenant
+- Pottery House and other one-off tenant customizations have not yet been migrated onto the shared contract
+- approved import replay still needs its own compile/replay path into the same normalized intermediate shape
+
 ### Source-of-truth unification
 
 - expand the shared `seed-definitions/` contract beyond the demo experiences block
 - define the full typed shape for curated site fixtures, not just one generated subsection
+- define the shared normalized intermediate seed shape that both curated fixtures and approved import replay compile into
 - make generated outputs the default apply format for curated fixtures
 - stop treating handwritten tenant SQL as an acceptable authoring surface for new work
 
 ### Demo completion
 
-- add generation coverage for the rest of the demo tenant so `seeds/demo.sql` becomes fully derived
+- ~~site metadata, site_config, site_locales, site_domains, business_locations~~ ✓ generated via `demo_core` block
+- ~~experiences block~~ ✓ generated via `demo_experiences` block
+- add generation coverage for the remaining handwritten sections: media assets, menus, reviews, posts, site_content blocks
 - keep demo as the broad product and admin fixture, including restaurant + experiences coverage
 - preserve editable content behavior for generated demo content
+- use demo completion to lock the architectural contract that later migrations must conform to
 
 ### Pottery House migration
 
 - move Pottery House off the handwritten SQL path
-- decide and implement one target representation:
-  - generated typed fixture, or
-  - approved client import replay
+- migrate Pottery House into the shared typed fixture pathway unless its business status later justifies durable approved import replay
 - keep its regression assertions, but stop letting its current SQL format define the long-term architecture
 
 ### Import replay support
@@ -379,6 +417,7 @@ The system is not complete until the following work is done:
 - add repo guardrails that block new hand-authored tenant SQL from being introduced
 - make the preferred seeding path obvious in docs, scripts, and command names
 - keep generated seed/apply workflows deterministic across local, preview, and staging flows
+- keep migration scope oriented around reducing one-off tenant customization across the repo, not around isolated one-tenant wins
 
 ## Single-PR Completion Checklist
 

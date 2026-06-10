@@ -40,23 +40,37 @@ VALUES ('org-demo', 'Ember & Slice', 'ember-slice-demo', CURRENT_TIMESTAMP);
 INSERT INTO member (id, organizationId, userId, role, createdAt)
 VALUES ('member-demo', 'org-demo', 'user-demo', 'owner', CURRENT_TIMESTAMP);
 
--- Site
+-- BEGIN GENERATED: demo_core
+-- Canonical demo site core generated from the curated fixture contract.
 INSERT INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
   status, plan, onboarding_status, url_structure, primary_location_id,
   contact_email, default_currency, vertical, content_source, media_source
 ) VALUES (
-  'site-demo', 'org-demo', 'saya-theme-v1', 'saya', 'ember-slice-demo', 'demo',
+  'site-demo',
+  'org-demo',
+  'saya-theme-v1',
+  'saya',
+  'ember-slice-demo',
+  'demo',
   'Ember & Slice',
   'A Brooklyn wood-fired trattoria serving blistered pies, seasonal antipasti, and easy neighborhood hospitality.',
-  'active', 'free', 'active', 'location_subdirectories', NULL,
-  'hello@emberandslice.example', 'USD', 'restaurant', 'generated', 'stock'
+  'active',
+  'free',
+  'active',
+  'location_subdirectories',
+  NULL,
+  'hello@emberandslice.example',
+  'USD',
+  'restaurant',
+  'generated',
+  'stock'
 );
 
--- Demo languages
 INSERT INTO site_config (organization_id, site_id, key, value)
-VALUES ('org-demo', 'site-demo', 'source_locale', 'en');
+VALUES
+  ('org-demo', 'site-demo', 'source_locale', 'en');
 
 INSERT INTO site_locales
   (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
@@ -64,13 +78,11 @@ VALUES
   ('locale::org-demo::site-demo::en', 'org-demo', 'site-demo', 'en', 'English', 1, 'published', 1),
   ('locale::org-demo::site-demo::th', 'org-demo', 'site-demo', 'th', 'ไทย', 0, 'published', 1);
 
--- Site domains
 INSERT INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status)
 VALUES
   ('domain-demo-local', 'org-demo', 'site-demo', 'demo.localhost', 'subdomain', 'secondary', 'active', 'valid'),
   ('domain-demo-prod', 'org-demo', 'site-demo', 'demo.krabiclaw.com', 'subdomain', 'canonical', 'active', 'valid');
 
--- Location
 INSERT INTO business_locations (
   id, organization_id, site_id, slug, title, city,
   address, phone, email, maps_url,
@@ -81,42 +93,12 @@ INSERT INTO business_locations (
   price_level, categories,
   instagram_url, facebook_url,
   is_primary, status
-) VALUES (
-  'loc-demo', 'org-demo', 'site-demo', 'brooklyn', 'Ember & Slice Brooklyn', 'Brooklyn',
-  '{"addressLines":["184 Wythe Ave"],"locality":"Brooklyn","administrativeArea":"NY","postalCode":"11249","country":"US"}',
-  '(718) 555-0148',
-  'hello@emberandslice.example',
-  'https://maps.app.goo.gl/ember-slice-brooklyn',
-  40.7193, -73.9618,
-  'A Brooklyn wood-fired trattoria built around blistered sourdough pies, bright antipasti, and an open oven that runs from lunch through late dinner.',
-  'Wood-fired pizza, seasonal antipasti, and warm neighborhood hospitality in Brooklyn.',
-  '[{"openDay":"MONDAY","openTime":"12:00","closeTime":"22:00"},{"openDay":"TUESDAY","openTime":"12:00","closeTime":"22:00"},{"openDay":"WEDNESDAY","openTime":"12:00","closeTime":"22:00"},{"openDay":"THURSDAY","openTime":"12:00","closeTime":"22:00"},{"openDay":"FRIDAY","openTime":"12:00","closeTime":"23:00"},{"openDay":"SATURDAY","openTime":"11:00","closeTime":"23:00"},{"openDay":"SUNDAY","openTime":"11:00","closeTime":"21:00"}]',
-  4.8, 188,
-  '$$',
-  '["Pizza","Italian Restaurant","Wood-fired Trattoria"]',
-  'https://instagram.com/emberandslice',
-  'https://facebook.com/emberandslice',
-  1, 'active'
-), (
-  'loc-demo-2', 'org-demo', 'site-demo', 'west-village', 'Ember & Slice West Village', 'New York',
-  '{"addressLines":["100 7th Ave S"],"locality":"New York","administrativeArea":"NY","postalCode":"10014","country":"US"}',
-  '(212) 555-0199',
-  'hello@emberandslice.example',
-  'https://maps.app.goo.gl/ember-slice-west-village',
-  40.7335, -74.0027,
-  'Our signature wood-fired pies and warm hospitality, brought to the heart of the West Village.',
-  'Wood-fired pizza, seasonal antipasti, and neighborhood hospitality in the West Village.',
-  '[{"openDay":"MONDAY","openTime":"16:00","closeTime":"23:00"},{"openDay":"TUESDAY","openTime":"16:00","closeTime":"23:00"},{"openDay":"WEDNESDAY","openTime":"16:00","closeTime":"23:00"},{"openDay":"THURSDAY","openTime":"16:00","closeTime":"23:00"},{"openDay":"FRIDAY","openTime":"15:00","closeTime":"23:59"},{"openDay":"SATURDAY","openTime":"15:00","closeTime":"23:59"},{"openDay":"SUNDAY","openTime":"15:00","closeTime":"23:00"}]',
-  4.9, 112,
-  '$$',
-  '["Pizza","Italian Restaurant","Trattoria"]',
-  'https://instagram.com/emberandslice',
-  'https://facebook.com/emberandslice',
-  0, 'active'
-);
+) VALUES
+  ('loc-demo', 'org-demo', 'site-demo', 'brooklyn', 'Ember & Slice Brooklyn', 'Brooklyn', '{"addressLines":["184 Wythe Ave"],"locality":"Brooklyn","administrativeArea":"NY","postalCode":"11249","country":"US"}', '(718) 555-0148', 'hello@emberandslice.example', 'https://maps.app.goo.gl/ember-slice-brooklyn', 40.7193, -73.9618, 'A Brooklyn wood-fired trattoria built around blistered sourdough pies, bright antipasti, and an open oven that runs from lunch through late dinner.', 'Wood-fired pizza, seasonal antipasti, and warm neighborhood hospitality in Brooklyn.', '[{"openDay":"MONDAY","openTime":"12:00","closeTime":"22:00"},{"openDay":"TUESDAY","openTime":"12:00","closeTime":"22:00"},{"openDay":"WEDNESDAY","openTime":"12:00","closeTime":"22:00"},{"openDay":"THURSDAY","openTime":"12:00","closeTime":"22:00"},{"openDay":"FRIDAY","openTime":"12:00","closeTime":"23:00"},{"openDay":"SATURDAY","openTime":"11:00","closeTime":"23:00"},{"openDay":"SUNDAY","openTime":"11:00","closeTime":"21:00"}]', 4.8, 188, '$$', '["Pizza","Italian Restaurant","Wood-fired Trattoria"]', 'https://instagram.com/emberandslice', 'https://facebook.com/emberandslice', 1, 'active'),
+  ('loc-demo-2', 'org-demo', 'site-demo', 'west-village', 'Ember & Slice West Village', 'New York', '{"addressLines":["100 7th Ave S"],"locality":"New York","administrativeArea":"NY","postalCode":"10014","country":"US"}', '(212) 555-0199', 'hello@emberandslice.example', 'https://maps.app.goo.gl/ember-slice-west-village', 40.7335, -74.0027, 'Our signature wood-fired pies and warm hospitality, brought to the heart of the West Village.', 'Wood-fired pizza, seasonal antipasti, and neighborhood hospitality in the West Village.', '[{"openDay":"MONDAY","openTime":"16:00","closeTime":"23:00"},{"openDay":"TUESDAY","openTime":"16:00","closeTime":"23:00"},{"openDay":"WEDNESDAY","openTime":"16:00","closeTime":"23:00"},{"openDay":"THURSDAY","openTime":"16:00","closeTime":"23:00"},{"openDay":"FRIDAY","openTime":"15:00","closeTime":"23:59"},{"openDay":"SATURDAY","openTime":"15:00","closeTime":"23:59"},{"openDay":"SUNDAY","openTime":"15:00","closeTime":"23:00"}]', 4.9, 112, '$$', '["Pizza","Italian Restaurant","Trattoria"]', 'https://instagram.com/emberandslice', 'https://facebook.com/emberandslice', 0, 'active');
 
--- Set primary location after business_locations row exists
 UPDATE sites SET primary_location_id = 'loc-demo' WHERE id = 'site-demo';
+-- END GENERATED: demo_core
 
 -- Media assets
 INSERT INTO media_assets

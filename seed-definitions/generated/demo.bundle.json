@@ -1,0 +1,418 @@
+{
+  "identity": {
+    "fixtureId": "demo",
+    "organizationId": "org-demo",
+    "siteId": "site-demo"
+  },
+  "site": {
+    "slug": "ember-slice-demo",
+    "subdomain": "demo",
+    "brandName": "Ember & Slice",
+    "themeId": "saya-theme-v1",
+    "theme": "saya",
+    "brandDescription": "A Brooklyn wood-fired trattoria serving blistered pies, seasonal antipasti, and easy neighborhood hospitality.",
+    "status": "active",
+    "plan": "free",
+    "onboardingStatus": "active",
+    "urlStructure": "location_subdirectories",
+    "primaryLocationId": "loc-demo",
+    "contactEmail": "hello@emberandslice.example",
+    "defaultCurrency": "USD",
+    "vertical": "restaurant",
+    "contentSource": "generated",
+    "mediaSource": "stock"
+  },
+  "siteConfig": [
+    {
+      "key": "source_locale",
+      "value": "en"
+    }
+  ],
+  "siteLocales": [
+    {
+      "id": "locale::org-demo::site-demo::en",
+      "locale": "en",
+      "label": "English",
+      "isSource": true,
+      "status": "published",
+      "fallbackEnabled": true
+    },
+    {
+      "id": "locale::org-demo::site-demo::th",
+      "locale": "th",
+      "label": "ไทย",
+      "isSource": false,
+      "status": "published",
+      "fallbackEnabled": true
+    }
+  ],
+  "siteDomains": [
+    {
+      "id": "domain-demo-local",
+      "domain": "demo.localhost",
+      "type": "subdomain",
+      "role": "secondary",
+      "status": "active",
+      "dnsStatus": "valid"
+    },
+    {
+      "id": "domain-demo-prod",
+      "domain": "demo.krabiclaw.com",
+      "type": "subdomain",
+      "role": "canonical",
+      "status": "active",
+      "dnsStatus": "valid"
+    }
+  ],
+  "locations": [
+    {
+      "id": "loc-demo",
+      "slug": "brooklyn",
+      "title": "Ember & Slice Brooklyn",
+      "city": "Brooklyn",
+      "address": {
+        "addressLines": [
+          "184 Wythe Ave"
+        ],
+        "locality": "Brooklyn",
+        "administrativeArea": "NY",
+        "postalCode": "11249",
+        "country": "US"
+      },
+      "phone": "(718) 555-0148",
+      "email": "hello@emberandslice.example",
+      "mapsUrl": "https://maps.app.goo.gl/ember-slice-brooklyn",
+      "latitude": 40.7193,
+      "longitude": -73.9618,
+      "description": "A Brooklyn wood-fired trattoria built around blistered sourdough pies, bright antipasti, and an open oven that runs from lunch through late dinner.",
+      "shortDescription": "Wood-fired pizza, seasonal antipasti, and warm neighborhood hospitality in Brooklyn.",
+      "openingHours": [
+        {
+          "openDay": "MONDAY",
+          "openTime": "12:00",
+          "closeTime": "22:00"
+        },
+        {
+          "openDay": "TUESDAY",
+          "openTime": "12:00",
+          "closeTime": "22:00"
+        },
+        {
+          "openDay": "WEDNESDAY",
+          "openTime": "12:00",
+          "closeTime": "22:00"
+        },
+        {
+          "openDay": "THURSDAY",
+          "openTime": "12:00",
+          "closeTime": "22:00"
+        },
+        {
+          "openDay": "FRIDAY",
+          "openTime": "12:00",
+          "closeTime": "23:00"
+        },
+        {
+          "openDay": "SATURDAY",
+          "openTime": "11:00",
+          "closeTime": "23:00"
+        },
+        {
+          "openDay": "SUNDAY",
+          "openTime": "11:00",
+          "closeTime": "21:00"
+        }
+      ],
+      "rating": 4.8,
+      "reviewCount": 188,
+      "priceLevel": "$$",
+      "categories": [
+        "Pizza",
+        "Italian Restaurant",
+        "Wood-fired Trattoria"
+      ],
+      "instagramUrl": "https://instagram.com/emberandslice",
+      "facebookUrl": "https://facebook.com/emberandslice",
+      "isPrimary": true,
+      "status": "active"
+    },
+    {
+      "id": "loc-demo-2",
+      "slug": "west-village",
+      "title": "Ember & Slice West Village",
+      "city": "New York",
+      "address": {
+        "addressLines": [
+          "100 7th Ave S"
+        ],
+        "locality": "New York",
+        "administrativeArea": "NY",
+        "postalCode": "10014",
+        "country": "US"
+      },
+      "phone": "(212) 555-0199",
+      "email": "hello@emberandslice.example",
+      "mapsUrl": "https://maps.app.goo.gl/ember-slice-west-village",
+      "latitude": 40.7335,
+      "longitude": -74.0027,
+      "description": "Our signature wood-fired pies and warm hospitality, brought to the heart of the West Village.",
+      "shortDescription": "Wood-fired pizza, seasonal antipasti, and neighborhood hospitality in the West Village.",
+      "openingHours": [
+        {
+          "openDay": "MONDAY",
+          "openTime": "16:00",
+          "closeTime": "23:00"
+        },
+        {
+          "openDay": "TUESDAY",
+          "openTime": "16:00",
+          "closeTime": "23:00"
+        },
+        {
+          "openDay": "WEDNESDAY",
+          "openTime": "16:00",
+          "closeTime": "23:00"
+        },
+        {
+          "openDay": "THURSDAY",
+          "openTime": "16:00",
+          "closeTime": "23:00"
+        },
+        {
+          "openDay": "FRIDAY",
+          "openTime": "15:00",
+          "closeTime": "23:59"
+        },
+        {
+          "openDay": "SATURDAY",
+          "openTime": "15:00",
+          "closeTime": "23:59"
+        },
+        {
+          "openDay": "SUNDAY",
+          "openTime": "15:00",
+          "closeTime": "23:00"
+        }
+      ],
+      "rating": 4.9,
+      "reviewCount": 112,
+      "priceLevel": "$$",
+      "categories": [
+        "Pizza",
+        "Italian Restaurant",
+        "Trattoria"
+      ],
+      "instagramUrl": "https://instagram.com/emberandslice",
+      "facebookUrl": "https://facebook.com/emberandslice",
+      "isPrimary": false,
+      "status": "active"
+    }
+  ],
+  "mediaAssets": [
+    {
+      "id": "media-demo-exp-class",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "kind": "image",
+      "provider": "external_url",
+      "source": "external",
+      "publicUrl": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=1200&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=70",
+      "mimeType": "image/jpeg",
+      "fileName": "pizza-making-class.jpg",
+      "altText": "Guests shaping pizza dough at a hands-on pizza making class",
+      "category": "food",
+      "status": "active"
+    },
+    {
+      "id": "media-demo-exp-wine",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "kind": "image",
+      "provider": "external_url",
+      "source": "external",
+      "publicUrl": "https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?w=1200&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?w=600&q=70",
+      "mimeType": "image/jpeg",
+      "fileName": "natural-wine-pizza-night.jpg",
+      "altText": "Pizza and wine set for a long-table dinner evening",
+      "category": "interior",
+      "status": "active"
+    },
+    {
+      "id": "media-demo-exp-family",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "kind": "image",
+      "provider": "external_url",
+      "source": "external",
+      "publicUrl": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=70",
+      "mimeType": "image/jpeg",
+      "fileName": "family-pizza-night.jpg",
+      "altText": "Family-style dinner table set for pizza night",
+      "category": "interior",
+      "status": "active"
+    }
+  ],
+  "siteContent": [
+    {
+      "id": "sc-demo-exp-kicker",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": null,
+      "page": "experiences",
+      "field": "hero.kicker",
+      "content": "Experiences",
+      "heroTitle": null,
+      "heroSubtitle": null,
+      "heroImageAssetId": null,
+      "type": "text",
+      "source": "manual"
+    },
+    {
+      "id": "sc-demo-exp-title",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": null,
+      "page": "experiences",
+      "field": "hero.title",
+      "content": "Pizza classes, tasting nights, and big-table evenings.",
+      "heroTitle": null,
+      "heroSubtitle": null,
+      "heroImageAssetId": null,
+      "type": "text",
+      "source": "manual"
+    },
+    {
+      "id": "sc-demo-exp-subtitle",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": null,
+      "page": "experiences",
+      "field": "hero.subtitle",
+      "content": "Book a hands-on pizza class, a natural wine pairing night, or a family-style evening built around the oven.",
+      "heroTitle": null,
+      "heroSubtitle": null,
+      "heroImageAssetId": null,
+      "type": "textarea",
+      "source": "manual"
+    }
+  ],
+  "experiences": [
+    {
+      "id": "exp-demo-pizza-class",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "title": "Pizza Making Class",
+      "slug": "pizza-making-class",
+      "tagline": "Stretch dough, top your pie, and fire it yourself.",
+      "body": "Our flagship pizza making class brings guests right up to the bench and oven. You will learn how we stretch our dough, build a balanced pie, and work with high-heat live fire without feeling rushed.\n\nEach booking includes dough, toppings, one personal pizza, and a glass of house wine or sparkling lemonade. Great for couples, visitors, and anyone who wants a hands-on dinner plan in Brooklyn.",
+      "imageAssetId": "media-demo-exp-class",
+      "price": "$95 per guest",
+      "durationMinutes": 120,
+      "maxCapacity": 10,
+      "timeSlots": [
+        "14:00",
+        "18:00"
+      ],
+      "availableNote": "Thursday to Sunday. Advance booking recommended.",
+      "status": "active",
+      "sortOrder": 1,
+      "featured": true,
+      "featuredSortOrder": 1,
+      "seoTitle": "Pizza Making Class Brooklyn | Ember & Slice",
+      "seoDescription": "Book a hands-on pizza making class at Ember & Slice in Brooklyn. Stretch dough, build your pie, and fire it in our oven."
+    },
+    {
+      "id": "exp-demo-wine-night",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "title": "Natural Wine & Pizza Night",
+      "slug": "natural-wine-and-pizza-night",
+      "tagline": "Small pours, hot pies, and long-table energy.",
+      "body": "This evening is part tasting, part dinner party. We pair a rotating lineup of natural wines with off-menu pies, seasonal antipasti, and a little background on why each pairing works.\n\nBest for date nights, visiting friends, and anyone who wants the room at its loudest and warmest. Seats are shared at the table, and the menu changes with the week.",
+      "imageAssetId": "media-demo-exp-wine",
+      "price": "$78 per guest",
+      "durationMinutes": 150,
+      "maxCapacity": 16,
+      "timeSlots": [
+        "19:30"
+      ],
+      "availableNote": "Fridays only. Shared table seating.",
+      "status": "active",
+      "sortOrder": 2,
+      "featured": true,
+      "featuredSortOrder": 2,
+      "seoTitle": "Natural Wine & Pizza Night Brooklyn | Ember & Slice",
+      "seoDescription": "Reserve Natural Wine & Pizza Night at Ember & Slice in Brooklyn for curated pours, seasonal pies, and a long-table dinner."
+    },
+    {
+      "id": "exp-demo-family-night",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "title": "Family Pizza Night",
+      "slug": "family-pizza-night",
+      "tagline": "Big-table dinner, easy pacing, and pizza for all ages.",
+      "body": "Family Pizza Night is our easiest way to turn a Sunday dinner into something a little more memorable. Kids shape mini pies, grown-ups share large-format pizzas and salads, and the kitchen keeps the pacing relaxed.\n\nIdeal for families, birthday dinners, and mixed-age groups who want an experience that feels special without feeling formal.",
+      "imageAssetId": "media-demo-exp-family",
+      "price": "$140 per table",
+      "durationMinutes": 105,
+      "maxCapacity": 6,
+      "timeSlots": [
+        "17:00",
+        "18:30"
+      ],
+      "availableNote": "Sundays only. Best for groups of 4 to 6.",
+      "status": "active",
+      "sortOrder": 3,
+      "featured": true,
+      "featuredSortOrder": 3,
+      "seoTitle": "Family Pizza Night Brooklyn | Ember & Slice",
+      "seoDescription": "Book Family Pizza Night at Ember & Slice in Brooklyn for a relaxed group dinner built around the oven."
+    }
+  ],
+  "publicRoutes": [
+    {
+      "path": "/experiences",
+      "titlePattern": "Experiences \\| Ember & Slice",
+      "titleFlags": "",
+      "text": "Pizza Making Class"
+    },
+    {
+      "path": "/experiences/pizza-making-class",
+      "titlePattern": "Pizza Making Class Brooklyn \\| Ember & Slice",
+      "titleFlags": "",
+      "text": "Stretch dough"
+    },
+    {
+      "path": "/experiences/natural-wine-and-pizza-night",
+      "titlePattern": "Natural Wine & Pizza Night Brooklyn \\| Ember & Slice",
+      "titleFlags": "",
+      "text": "Small pours"
+    },
+    {
+      "path": "/experiences/family-pizza-night",
+      "titlePattern": "Family Pizza Night Brooklyn \\| Ember & Slice",
+      "titleFlags": "",
+      "text": "Big-table dinner"
+    }
+  ],
+  "routeManifest": {
+    "locations": [
+      "/locations/brooklyn",
+      "/locations/west-village"
+    ],
+    "experiences": [
+      "/experiences/pizza-making-class",
+      "/experiences/natural-wine-and-pizza-night",
+      "/experiences/family-pizza-night"
+    ]
+  }
+}
