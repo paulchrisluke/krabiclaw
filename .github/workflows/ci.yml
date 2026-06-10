@@ -121,7 +121,7 @@ jobs:
       - name: Run smoke tests
         env:
           PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
-        run: yarn test:e2e:smoke
+        run: yarn test:e2e:full
 
   e2e-staging:
     name: E2E staging
