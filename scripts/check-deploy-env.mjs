@@ -63,21 +63,6 @@ console.log('\nChecking Cloudflare Workers permissions…')
   else fail('Workers Scripts: list', body.errors?.[0]?.message ?? `status ${r.status}`)
 }
 
-// ── 4. Workers Scripts: write — check via memberships (account-level write scope)
-{
-  // Attempting to list worker cron triggers on a known worker; a 401/403 here
-  // means the token lacks account-level write scope even if reads work.
-  const r = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/workers/scripts`,
-    {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${CF_TOKEN}` },
-    },
-  )
-  // We already checked list above; if we got here the token has at minimum read.
-  // For write, wrangler will surface the real error with WRANGLER_LOG=debug in CI.
-  pass('Workers Scripts: read confirmed (write verified at deploy time via WRANGLER_LOG=debug)')
-}
 
 // ── 5. D1: can list databases ────────────────────────────────────────────────
 {
