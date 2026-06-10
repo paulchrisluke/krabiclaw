@@ -16,26 +16,53 @@ function sqlEscape(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/'/g, "''")
 }
 
-function d1Raw(sql) {
+function describeError(error) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack ?? null,
+      cause: error.cause ? String(error.cause) : null,
+    }
+  }
+
+  return {
+    name: 'NonError',
+    message: String(error),
+    stack: null,
+    cause: null,
+  }
+}
+
+function d1Raw(sql, label = 'd1Raw') {
   const res = spawnSync('yarn', ['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
     stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
   })
-  if (res.error) throw res.error
-  if (res.status !== 0) throw new Error(res.stderr || `d1Raw exited ${res.status}`)
+  if (res.error) {
+    throw new Error(`${label} failed before execution: ${res.error.message}`, { cause: res.error })
+  }
+  if (res.status !== 0) {
+    throw new Error(`${label} failed with exit ${res.status}: ${(res.stderr || '').trim() || 'no stderr output'}`)
+  }
   return JSON.parse(res.stdout)?.[0]
 }
 
-function d1Query(sql) {
-  return d1Raw(sql)?.results ?? []
+function d1Query(sql, label = 'd1Query') {
+  return d1Raw(sql, label)?.results ?? []
 }
 
-async function postJson(url, data) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(data),
-  })
+async function postJson(url, data, label) {
+  let res
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+  } catch (error) {
+    throw new Error(`${label} fetch failed for ${url}`, { cause: error })
+  }
   const text = await res.text()
   let body = null
   try { body = text ? JSON.parse(text) : null } catch { body = null }
@@ -52,18 +79,20 @@ async function main() {
   const since = nowIso()
   const suffix = Date.now()
 
-  const contact = await postJson(`${baseUrl}/api/public/sites/${encodeURIComponent(siteId)}/contact`, {
+  const contactUrl = `${baseUrl}/api/public/sites/${encodeURIComponent(siteId)}/contact`
+  const contact = await postJson(contactUrl, {
     name: `Prod Canary ${suffix}`,
     email: canaryEmail,
     message: 'Hello, this is an automated notification check message to confirm delivery.',
-  })
+  }, 'contact trigger')
 
   if (contact.res.status >= 400) {
-    throw new Error(`Contact canary trigger failed (${contact.res.status}): ${contact.text}`)
+    throw new Error(`Contact canary trigger failed for ${contactUrl} (${contact.res.status}): ${contact.text}`)
   }
 
   const reservationDate = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
-  const reservation = await postJson(`${baseUrl}/api/public/sites/${encodeURIComponent(siteId)}/reservations`, {
+  const reservationUrl = `${baseUrl}/api/public/sites/${encodeURIComponent(siteId)}/reservations`
+  const reservation = await postJson(reservationUrl, {
     name: `Prod Canary ${suffix}`,
     email: canaryEmail,
     phone: canaryPhone,
@@ -71,10 +100,10 @@ async function main() {
     time: '18:00',
     guests: '2',
     requests: `notification canary ${suffix}`,
-  })
+  }, 'reservation trigger')
 
   if (reservation.res.status >= 400) {
-    throw new Error(`Reservation canary trigger failed (${reservation.res.status}): ${reservation.text}`)
+    throw new Error(`Reservation canary trigger failed for ${reservationUrl} (${reservation.res.status}): ${reservation.text}`)
   }
 
   const deadline = Date.now() + 45_000
@@ -90,7 +119,7 @@ async function main() {
         AND created_at >= '${sqlEscape(since)}'
       ORDER BY created_at DESC
       LIMIT 100
-    `)
+    `, 'notification poll')
 
     emailRow = rows.find((r) => r.channel === 'email' && r.status === 'sent' && r.provider_message_id)
     whatsappRow = rows.find((r) => r.channel === 'whatsapp' && r.status === 'sent' && r.provider_message_id)
@@ -108,7 +137,7 @@ async function main() {
         AND created_at >= '${sqlEscape(since)}'
       ORDER BY created_at DESC
       LIMIT 100
-    `)
+    `, 'notification final read')
     throw new Error(`Provider-level canary assertions failed. email_sent=${Boolean(emailRow)} whatsapp_sent=${Boolean(whatsappRow)} rows=${JSON.stringify(rows)}`)
   }
 
@@ -144,7 +173,7 @@ async function main() {
       '${sqlEscape(JSON.stringify(details))}',
       '${sqlEscape(nowIso())}'
     )
-  `)
+  `, 'canary success audit')
 
   console.log(JSON.stringify({ status: 'pass', run_id: runId, ...details }, null, 2))
 }
@@ -156,7 +185,7 @@ main().catch((error) => {
     if (orgId && siteId) {
       const failure = {
         failed_at: nowIso(),
-        message: error instanceof Error ? error.message : String(error),
+        error: describeError(error),
       }
       d1Raw(`
         INSERT INTO canary_runs (id, run_type, environment, status, organization_id, site_id, details_json, created_at)
@@ -170,13 +199,13 @@ main().catch((error) => {
           '${sqlEscape(JSON.stringify(failure))}',
           '${sqlEscape(nowIso())}'
         )
-      `)
+      `, 'canary failure audit')
     }
   } catch {
     // Best-effort failure audit; do not mask original canary error.
   }
 
   console.error('canary:notifications failed')
-  console.error(error instanceof Error ? error.message : String(error))
+  console.error(JSON.stringify(describeError(error), null, 2))
   process.exit(1)
 })

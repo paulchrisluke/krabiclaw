@@ -283,7 +283,7 @@ jobs:
           CANARY_NOTIFICATION_PHONE_E164: ${{ secrets.CANARY_NOTIFICATION_PHONE_E164 }}
         run: |
           set -euo pipefail
-          yarn canary:notifications | tee canary-notifications.log
+          yarn canary:notifications 2>&1 | tee canary-notifications.log
       - name: Upload notification canary log
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
