@@ -425,6 +425,46 @@ VALUES
   ('pcj-demo-2', 'post-demo-2', 'org-demo', 'site', 'published', '2026-04-18T10:00:00.000Z'),
   ('pcj-demo-3', 'post-demo-3', 'org-demo', 'site', 'published', '2026-04-10T09:00:00.000Z');
 
+-- BEGIN GENERATED: demo_experiences
+-- Hybrid restaurant + experiences showcase for the platform demo.
+INSERT INTO media_assets
+  (id, organization_id, site_id, location_id,
+   kind, provider, source,
+   public_url, thumbnail_url,
+   mime_type, file_name, alt_text, category, status)
+VALUES
+  ('media-demo-exp-class', 'org-demo', 'site-demo', 'loc-demo', 'image', 'external_url', 'external', 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=1200&q=80', 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=70', 'image/jpeg', 'pizza-making-class.jpg', 'Guests shaping pizza dough at a hands-on pizza making class', 'food', 'active'),
+  ('media-demo-exp-wine', 'org-demo', 'site-demo', 'loc-demo', 'image', 'external_url', 'external', 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?w=1200&q=80', 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?w=600&q=70', 'image/jpeg', 'natural-wine-pizza-night.jpg', 'Pizza and wine set for a long-table dinner evening', 'interior', 'active'),
+  ('media-demo-exp-family', 'org-demo', 'site-demo', 'loc-demo', 'image', 'external_url', 'external', 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80', 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=70', 'image/jpeg', 'family-pizza-night.jpg', 'Family-style dinner table set for pizza night', 'interior', 'active');
+
+INSERT INTO experiences
+  (id, organization_id, site_id, location_id,
+   title, slug, tagline, body,
+   image_asset_id, price, duration_minutes, max_capacity,
+   time_slots, available_note,
+   status, sort_order, featured, featured_sort_order,
+   seo_title, seo_description)
+VALUES
+  ('exp-demo-pizza-class', 'org-demo', 'site-demo', 'loc-demo', 'Pizza Making Class', 'pizza-making-class', 'Stretch dough, top your pie, and fire it yourself.', 'Our flagship pizza making class brings guests right up to the bench and oven. You will learn how we stretch our dough, build a balanced pie, and work with high-heat live fire without feeling rushed.
+
+Each booking includes dough, toppings, one personal pizza, and a glass of house wine or sparkling lemonade. Great for couples, visitors, and anyone who wants a hands-on dinner plan in Brooklyn.', 'media-demo-exp-class', '$95 per guest', 120, 10, '["14:00","18:00"]', 'Thursday to Sunday. Advance booking recommended.', 'active', 1, 1, 1, 'Pizza Making Class Brooklyn | Ember & Slice', 'Book a hands-on pizza making class at Ember & Slice in Brooklyn. Stretch dough, build your pie, and fire it in our oven.'),
+  ('exp-demo-wine-night', 'org-demo', 'site-demo', 'loc-demo', 'Natural Wine & Pizza Night', 'natural-wine-and-pizza-night', 'Small pours, hot pies, and long-table energy.', 'This evening is part tasting, part dinner party. We pair a rotating lineup of natural wines with off-menu pies, seasonal antipasti, and a little background on why each pairing works.
+
+Best for date nights, visiting friends, and anyone who wants the room at its loudest and warmest. Seats are shared at the table, and the menu changes with the week.', 'media-demo-exp-wine', '$78 per guest', 150, 16, '["19:30"]', 'Fridays only. Shared table seating.', 'active', 2, 1, 2, 'Natural Wine & Pizza Night Brooklyn | Ember & Slice', 'Reserve Natural Wine & Pizza Night at Ember & Slice in Brooklyn for curated pours, seasonal pies, and a long-table dinner.'),
+  ('exp-demo-family-night', 'org-demo', 'site-demo', 'loc-demo', 'Family Pizza Night', 'family-pizza-night', 'Big-table dinner, easy pacing, and pizza for all ages.', 'Family Pizza Night is our easiest way to turn a Sunday dinner into something a little more memorable. Kids shape mini pies, grown-ups share large-format pizzas and salads, and the kitchen keeps the pacing relaxed.
+
+Ideal for families, birthday dinners, and mixed-age groups who want an experience that feels special without feeling formal.', 'media-demo-exp-family', '$140 per table', 105, 6, '["17:00","18:30"]', 'Sundays only. Best for groups of 4 to 6.', 'active', 3, 1, 3, 'Family Pizza Night Brooklyn | Ember & Slice', 'Book Family Pizza Night at Ember & Slice in Brooklyn for a relaxed group dinner built around the oven.');
+
+INSERT INTO site_content
+  (id, organization_id, site_id, location_id,
+   page, field, content, hero_title, hero_subtitle, hero_image_asset_id,
+   type, source)
+VALUES
+  ('sc-demo-exp-kicker', 'org-demo', 'site-demo', NULL, 'experiences', 'hero.kicker', 'Experiences', NULL, NULL, NULL, 'text', 'manual'),
+  ('sc-demo-exp-title', 'org-demo', 'site-demo', NULL, 'experiences', 'hero.title', 'Pizza classes, tasting nights, and big-table evenings.', NULL, NULL, NULL, 'text', 'manual'),
+  ('sc-demo-exp-subtitle', 'org-demo', 'site-demo', NULL, 'experiences', 'hero.subtitle', 'Book a hands-on pizza class, a natural wine pairing night, or a family-style evening built around the oven.', NULL, NULL, NULL, 'textarea', 'manual');
+-- END GENERATED: demo_experiences
+
 -- Site content
 INSERT INTO site_content
   (id, organization_id, site_id, location_id,

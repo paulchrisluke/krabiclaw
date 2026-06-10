@@ -21,6 +21,9 @@ const registry = {
     reservationWord: "reservation",
     reservationExploreLabel: "View Menu",
     reservationExploreRoute: "/menu",
+    experiencesPageTitle: "Experiences",
+    experiencesPageSubtitle:
+      "Classes, special dinners, and bookable nights beyond the usual table reservation.",
     locationGroupLine: (count: number) =>
       `${count} location${count === 1 ? "" : "s"}, one kitchen philosophy.`,
     postsEyebrow: "From the kitchen",
@@ -32,6 +35,8 @@ const registry = {
     otherLocationsHeading: "Sister rooms",
     highlightsSectionHeading: "Posts, reviews & dishes from across the brand.",
     seoReservationDescription: (name: string) => `Reserve a table at ${name}.`,
+    seoExperiencesDescription: (name: string) =>
+      `Explore classes, tasting nights, and bookable experiences at ${name}.`,
   },
   experience: {
     poweredByTagline: "experience booking sites that run themselves",
@@ -48,6 +53,9 @@ const registry = {
     reservationWord: "booking",
     reservationExploreLabel: "View Experiences",
     reservationExploreRoute: "/experiences",
+    experiencesPageTitle: "Experiences",
+    experiencesPageSubtitle:
+      "Classes, workshops, and special sessions you can book right now.",
     locationGroupLine: (count: number) =>
       `${count} location${count === 1 ? "" : "s"}, one hands-on experience.`,
     postsEyebrow: "From the studio",
@@ -59,6 +67,8 @@ const registry = {
     otherLocationsHeading: "Other spaces",
     highlightsSectionHeading: "Posts, reviews & classes from across the studio.",
     seoReservationDescription: (name: string) => `Book a class at ${name}.`,
+    seoExperiencesDescription: (name: string) =>
+      `Browse classes and bookable experiences at ${name}.`,
   },
   retail: {
     poweredByTagline: "retail sites that run themselves",
@@ -76,6 +86,9 @@ const registry = {
     reservationWord: undefined,
     reservationExploreLabel: "Plan a visit",
     reservationExploreRoute: "/locations",
+    experiencesPageTitle: "Experiences",
+    experiencesPageSubtitle:
+      "Workshops, launches, and in-store events worth planning around.",
     locationGroupLine: (count: number) =>
       `${count} location${count === 1 ? "" : "s"}, one shared vision.`,
     postsEyebrow: "From the team",
@@ -87,6 +100,8 @@ const registry = {
     otherLocationsHeading: "Other locations",
     highlightsSectionHeading: "Posts, reviews & picks from across the brand.",
     seoReservationDescription: (name: string) => `Visit ${name}.`,
+    seoExperiencesDescription: (name: string) =>
+      `Explore workshops, events, and bookable experiences at ${name}.`,
   },
   wellness: {
     poweredByTagline: "wellness sites that run themselves",
@@ -103,6 +118,9 @@ const registry = {
     reservationWord: "booking",
     reservationExploreLabel: "Learn More",
     reservationExploreRoute: "/about",
+    experiencesPageTitle: "Experiences",
+    experiencesPageSubtitle:
+      "Sessions, workshops, and restorative experiences available to book.",
     locationGroupLine: (count: number) =>
       `${count} location${count === 1 ? "" : "s"}, one wellness philosophy.`,
     postsEyebrow: "From the studio",
@@ -114,6 +132,8 @@ const registry = {
     otherLocationsHeading: "Other studios",
     highlightsSectionHeading: "Posts, reviews & sessions from across the studio.",
     seoReservationDescription: (name: string) => `Book a session at ${name}.`,
+    seoExperiencesDescription: (name: string) =>
+      `Browse sessions, workshops, and bookable experiences at ${name}.`,
   },
   service: {
     poweredByTagline: "service sites that run themselves",
@@ -130,6 +150,9 @@ const registry = {
     reservationWord: "booking",
     reservationExploreLabel: "Learn More",
     reservationExploreRoute: "/about",
+    experiencesPageTitle: "Experiences",
+    experiencesPageSubtitle:
+      "Appointments, workshops, and service experiences available to book.",
     locationGroupLine: (count: number) =>
       `${count} location${count === 1 ? "" : "s"}, one team.`,
     postsEyebrow: "From the team",
@@ -142,6 +165,8 @@ const registry = {
     highlightsSectionHeading: "Posts, reviews & work from across the team.",
     seoReservationDescription: (name: string) =>
       `Book an appointment at ${name}.`,
+    seoExperiencesDescription: (name: string) =>
+      `Explore appointments, workshops, and bookable experiences at ${name}.`,
   },
 } as const satisfies Record<SiteVertical, object>;
 

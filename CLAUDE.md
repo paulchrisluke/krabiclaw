@@ -39,6 +39,8 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - `lib/auth-client.ts` — client-side Better Auth instance
 - `composables/` — Nuxt auto-imported
 - `migrations/` — canonical D1 schema (numbered files; `0001_initial.sql` is the base)
+- `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo's generated experience block
+- `seeds/demo.sql` — checked-in demo seed; refresh generated demo experience content with `yarn seed:demo:generate`
 - Layout name for Saya theme pages: `layout: 'saya'` — `tenant` is dead
 
 ---
