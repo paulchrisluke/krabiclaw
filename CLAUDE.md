@@ -41,7 +41,17 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - `migrations/` — canonical D1 schema (numbered files; `0001_initial.sql` is the base)
 - `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo's generated experience block
 - `seeds/demo.sql` — checked-in demo seed; refresh generated demo experience content with `yarn seed:demo:generate`
+- `scripts/archive/` — historical one-off migration scripts only; do not wire archived tooling back into package scripts or routine workflows
 - Layout name for Saya theme pages: `layout: 'saya'` — `tenant` is dead
+
+## Media Contract
+
+- Images must use the Cloudflare Images flow: request an upload URL from `/api/editor/sites/[siteId]/media/request-upload`, upload directly from the browser, then persist `provider = 'cloudflare_images'`
+- Videos and other files must use the Worker-streamed `/api/editor/sites/[siteId]/media/upload` path and persist `provider = 'cloudflare_r2'`
+- Do not use `external_url` for curated fixtures, approved client imports, or template-generated tenant media
+- Do not commit tenant media under `public/images/*` or `public/videos/*`
+- Demo/reference assets may start from external sources during research, but seeded or imported tenant state must download them, upload them to Cloudflare, and serve the Cloudflare URL only
+- Seeded tenant-facing URLs include `media_assets`, `site_content` image/video fields, review avatars, post thumbnails, and any similar content blocks
 
 ---
 
@@ -160,7 +170,7 @@ notes: |
 
 ### LLM Operating Rule — Client Sites
 
-**Never** manually seed, patch D1, invent client data, use stock images, or claim deployment success for a client site. A site is not complete until `client:verify` passes and `client-handoff.md` is generated.
+**Never** manually seed, patch D1, invent client data, use stock images, leave tenant media on third-party hosts, or claim deployment success for a client site. A site is not complete until `client:verify` passes and `client-handoff.md` is generated.
 
 The required pipeline is:
 

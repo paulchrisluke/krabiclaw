@@ -66,8 +66,9 @@ test('compiled demo seed can be serialized into a deterministic artifact bundle'
 test('checked-in demo bundle artifact matches the compiled demo seed', () => {
   const artifactPath = resolve(process.cwd(), 'seed-definitions/generated/demo.bundle.json')
   const artifact = JSON.parse(readFileSync(artifactPath, 'utf8'))
+  const compiledArtifact = JSON.parse(JSON.stringify(serializeCompiledSeedBundle(compiledDemoSeed)))
 
-  assert.deepEqual(artifact, serializeCompiledSeedBundle(compiledDemoSeed))
+  assert.deepEqual(artifact, compiledArtifact)
 })
 
 test('demo experience seed block contains only the experiences table', () => {

@@ -121,13 +121,15 @@ test('pottery house content block includes home hero and about page content', ()
   assert.match(sql, /journey\.body/)
 })
 
-test('pottery house compiled media assets carry R2 provider and r2Key on uploads', () => {
+test('pottery house compiled media assets carry Cloudflare provider metadata for uploaded assets', () => {
   const r2Assets = compiledPotteryHouseSeed.mediaAssets.filter((a) => a.provider === 'cloudflare_r2')
   assert.ok(r2Assets.length > 0)
   assert.ok(r2Assets.every((a) => a.r2Key !== null))
   assert.ok(r2Assets.every((a) => a.source === 'uploaded'))
 
-  const externalAssets = compiledPotteryHouseSeed.mediaAssets.filter((a) => a.provider === 'external_url')
-  assert.ok(externalAssets.length > 0)
-  assert.ok(externalAssets.every((a) => a.r2Key === null))
+  const imageAssets = compiledPotteryHouseSeed.mediaAssets.filter((a) => a.provider === 'cloudflare_images')
+  assert.ok(imageAssets.length > 0)
+  assert.ok(imageAssets.every((a) => a.cloudflareImageId !== null))
+  assert.ok(imageAssets.every((a) => a.r2Key === null))
+  assert.ok(imageAssets.every((a) => a.source === 'uploaded'))
 })

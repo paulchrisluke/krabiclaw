@@ -33,13 +33,34 @@ Every `CuratedSiteDefinition` is the complete initial state for a tenant. This i
 
 - site metadata, config, locales, domains
 - business locations with opening hours, coordinates, contact details
-- media assets — provider `external_url`, `cloudflare_r2`, or `cloudflare_images`
+- media assets — for curated tenants, only `cloudflare_images` (images) and `cloudflare_r2` (videos/files)
 - experiences, reviews, menus, Q&A, posts
 - site content (page hero fields, copy blocks)
 - `ai_credits` initial balance and lifetime used
 - `organization_billing` initial plan and status
 
 Nothing tenant-specific should live outside the typed definition. `ai_credits` and `organization_billing` are per-org initial state, not platform infrastructure — they belong in the fixture like any other tenant row.
+
+### Curated tenant media policy
+
+Curated tenants must use the same media storage contract as production CMS uploads:
+
+- images use `cloudflare_images`
+- videos and other files use `cloudflare_r2`
+- `external_url` must not appear in approved curated fixtures, approved client imports, or template-generated site content
+- tenant media must not be committed under `public/` and served as Worker static assets
+- any demo or reference media discovered from third-party sources during authoring must be downloaded, uploaded, and re-served from Cloudflare before the seed or template is considered complete
+
+In practice this means:
+
+- no `/images/<tenant>/...` or `/videos/<tenant>/...` paths in `media_assets` rows for curated tenants
+- no dependency on third-party delivery URLs such as Unsplash in seeded D1 state
+- no third-party or local URLs in `site_content` media fields, review avatars, post thumbnails, or any other tenant-facing seeded content
+- fixture media should mirror the dashboard upload split exactly:
+  images -> Cloudflare Images direct upload flow
+  videos/files -> R2 upload flow
+- new-site templates must seed Cloudflare-hosted media only; they may not introduce repo-local placeholders or external CDN dependencies
+- approved import manifests must normalize media the same way before `client:import --approve`
 
 ---
 
@@ -68,6 +89,20 @@ All three tenants are on the typed fixture path. CI generates from source on eve
 ### Kikuzuki media
 
 Kikuzuki uses `cloudflare_images` as the provider for all food/interior photos (78 assets). The hero is a Cloudflare R2 video. CDN URL pattern: `https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/{cloudflareImageId}/public`.
+
+### Demo and Pottery House migration status
+
+As of June 11, 2026, the curated Demo and Pottery House fixtures have been normalized onto Cloudflare-hosted media:
+
+- seeded `media_assets` rows now use `cloudflare_images` for images and `cloudflare_r2` for videos/files
+- seeded `site_content.story.image` URLs are Cloudflare-hosted
+- seeded review avatar URLs are Cloudflare-hosted
+- repo-served tenant media under `public/` has been removed and must not be reintroduced for tenant content
+
+Historical backfill tooling:
+
+- one-off normalization scripts used for the June 11, 2026 backfill now live under `scripts/archive/`
+- they are archived reference tooling, not part of the normal seed or onboarding workflow
 
 ---
 
@@ -118,6 +153,10 @@ Approved import replay (`client:replay`) is the standard path for re-seeding any
 - `lint-seeds.mjs` checks for missing contract fields on `INSERT INTO sites` but does not block a new hand-authored `seeds/*.sql` from being introduced
 - CI should fail if a new `seeds/*.sql` appears that is not a declared generated output
 - `seeds/*.sql` should be gitignored once all handwritten content is removed
+- fixture reviews should treat any `external_url`, `/public/` tenant asset path, or third-party hosted tenant media URL as a regression
+- template work, seed edits, and onboarding changes must preserve the dashboard storage split:
+  images via `/media/request-upload` -> Cloudflare Images
+  videos/files via `/media/upload` -> Cloudflare R2
 
 ### CMS and ChowBot parity
 
@@ -137,3 +176,5 @@ This is a separate implementation track but required before chat-first onboardin
 - `client-imports/<slug>/` — generated and approved onboarding artifacts
 - `migrations/` — schema DDL only, no data
 - `seeds/` — build outputs only, never edited directly; will be gitignored once clean
+- `public/` — never store tenant-specific source media here
+- `scripts/archive/` — historical migration/backfill tooling only, not active workflow entrypoints
