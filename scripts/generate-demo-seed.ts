@@ -22,6 +22,11 @@ const isRemote = process.argv.includes('--remote')
 const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
 
+if ([isRemote, isStaging, isPreview].filter(Boolean).length > 1) {
+  console.error('Only one of --remote, --staging, or --preview may be provided.')
+  process.exit(1)
+}
+
 const envFlag = isStaging ? '--env staging' : isPreview ? '--env preview' : isRemote ? '' : '--local'
 const remoteFlag = isRemote || isStaging || isPreview ? '--remote' : ''
 

@@ -873,11 +873,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       id: 'blt-ph-th-beach',
       locationId: 'loc-pottery-beachfront',
       locale: 'th',
-      title: 'Pottery House — บีชฟร้อนท์ กล่องม่วง',
-      address: 'ซีวิว กล่องม่วง',
+      title: 'Pottery House — บีชฟร้อนท์ คลองม่วง',
+      address: 'ซีวิว คลองม่วง',
       city: 'กระบี่',
-      description: 'คลาสปั้นวงล้อบนชายหาด ณ ซีวิว กล่องม่วง มองเห็นทะเลอ่าวไทย ที่นั่งจำกัดมาก',
-      shortDescription: 'คลาสปั้นวงล้อบนชายหาดกล่องม่วง ที่นั่งจำกัด วิวทะเลอ่าวไทย',
+      description: 'คลาสปั้นวงล้อบนชายหาด ณ ซีวิว คลองม่วง มองเห็นทะเลอ่าวไทย ที่นั่งจำกัดมาก',
+      shortDescription: 'คลาสปั้นวงล้อบนชายหาดคลองม่วง ที่นั่งจำกัด วิวทะเลอ่าวไทย',
       status: 'published',
       sourceHash: 'ph-th-beachfront-v1',
       translatedAt: '2026-05-28T00:00:00.000Z',
@@ -1057,6 +1057,7 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
       sqlValue(media.kind),
       sqlValue(media.provider),
       sqlValue(media.source),
+      sqlValue(media.cloudflareImageId),
       sqlValue(media.r2Key),
       sqlValue(media.publicUrl),
       sqlValue(media.thumbnailUrl),
@@ -1083,7 +1084,7 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
 INSERT OR REPLACE INTO media_assets
   (id, organization_id, site_id, location_id,
    kind, provider, source,
-   r2_key, public_url, thumbnail_url,
+   cloudflare_image_id, r2_key, public_url, thumbnail_url,
    mime_type, file_name, alt_text, category, status)
 VALUES
 ${mediaRows};

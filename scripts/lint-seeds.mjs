@@ -51,7 +51,7 @@ async function collectSqlFiles() {
     for (const entry of entries) {
       if (!entry.endsWith('.sql')) continue
       const rel = relative(ROOT, join(seedsDir, entry))
-      if (!ALLOWED_GENERATED_SEED_SQL.has(rel)) {
+      if (ALLOWED_GENERATED_SEED_SQL.has(rel)) {
         files.push(join(seedsDir, entry))
       }
     }

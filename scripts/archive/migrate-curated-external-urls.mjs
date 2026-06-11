@@ -184,7 +184,8 @@ function storyImageRows() {
     FROM site_content
     WHERE site_id IN ('site-demo', 'site-pottery-house')
       AND field = 'story.image'
-      AND content LIKE 'http%';
+      AND content LIKE 'http%'
+      AND content NOT LIKE '%imagedelivery.net%';
   `)
 }
 
@@ -193,7 +194,8 @@ function reviewRows() {
     SELECT id, site_id, reviewer_photo_url
     FROM reviews
     WHERE site_id IN ('site-demo', 'site-pottery-house')
-      AND reviewer_photo_url LIKE 'http%';
+      AND reviewer_photo_url LIKE 'http%'
+      AND reviewer_photo_url NOT LIKE '%imagedelivery.net%';
   `)
 }
 

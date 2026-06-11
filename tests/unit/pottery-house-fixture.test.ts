@@ -67,6 +67,7 @@ test('pottery house media block uses Cloudflare Images for seeded image assets a
   const sql = renderCompiledPotteryHouseMediaBlock()
 
   assert.match(sql, /INSERT OR REPLACE INTO media_assets/)
+  assert.match(sql, /cloudflare_image_id/)
   assert.match(sql, /cloudflare_images/)
   assert.match(sql, /7f1520e7-b6e4-4181-c689-0f1fc6bfaa00/)
   assert.match(sql, /UPDATE business_locations SET hero_image_asset_id/)

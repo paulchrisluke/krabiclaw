@@ -80,8 +80,8 @@ Schema DDL only: `CREATE TABLE`, `ALTER TABLE`, index definitions. Applied autom
 
 | Tenant | Typed definition | Generator | Flags | CI-reproducible |
 |---|---|---|---|---|
-| Demo | `seed-definitions/demo.ts` | `generate-demo-seed.ts` | `--local` / `--remote` / `--staging` | ✓ |
-| Pottery House | `seed-definitions/pottery-house.ts` | `generate-pottery-house-seed.ts` | `--local` / `--remote` / `--staging` | ✓ |
+| Demo | `seed-definitions/demo.ts` | `generate-demo-seed.ts` | `--local` / `--preview` / `--remote` / `--staging` | ✓ |
+| Pottery House | `seed-definitions/pottery-house.ts` | `generate-pottery-house-seed.ts` | `--local` / `--preview` / `--remote` / `--staging` | ✓ |
 | Kikuzuki | `seed-definitions/kikuzuki.ts` | `generate-kikuzuki-seed.ts` | `--local` / `--preview` / `--staging` / `--remote` | ✓ |
 
 All three tenants are on the typed fixture path. CI generates from source on every run — committed SQL files are never used as-is without regeneration.

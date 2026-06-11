@@ -86,6 +86,8 @@ test('demo media block includes all media assets and hero refs', () => {
   const sql = renderCompiledDemoMediaBlock()
 
   assert.match(sql, /INSERT INTO media_assets/)
+  assert.match(sql, /cloudflare_image_id/)
+  assert.match(sql, /r2_key/)
   assert.match(sql, /media-demo-hero/)
   assert.match(sql, /'video'/)
   assert.match(sql, /UPDATE business_locations SET hero_image_asset_id/)

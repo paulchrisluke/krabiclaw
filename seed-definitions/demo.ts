@@ -1390,6 +1390,8 @@ export function renderCompiledDemoMediaBlock(): string {
       sqlValue(media.kind),
       sqlValue(media.provider),
       sqlValue(media.source),
+      sqlValue(media.cloudflareImageId),
+      sqlValue(media.r2Key),
       sqlValue(media.publicUrl),
       sqlValue(media.thumbnailUrl),
       sqlValue(media.mimeType),
@@ -1415,7 +1417,7 @@ export function renderCompiledDemoMediaBlock(): string {
 INSERT INTO media_assets
   (id, organization_id, site_id, location_id,
    kind, provider, source,
-   public_url, thumbnail_url,
+   cloudflare_image_id, r2_key, public_url, thumbnail_url,
    mime_type, file_name, alt_text, category, status)
 VALUES
 ${mediaRows};

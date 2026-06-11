@@ -213,7 +213,10 @@ async function resolveSource(asset) {
   const fileName = normalizeFileName(asset)
 
   if (publicUrl.startsWith('/')) {
-    const localPath = join(process.cwd(), 'public', publicUrl.replace(/^\//, ''))
+    const relativePublicPath = publicUrl
+      .replace(/^\/+/, '')
+      .replace(/^public\//, '')
+    const localPath = join(process.cwd(), 'public', relativePublicPath)
     await access(localPath)
     const bytes = await readFile(localPath)
     const fileStat = await stat(localPath)

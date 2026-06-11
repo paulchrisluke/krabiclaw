@@ -27,6 +27,7 @@ export function compileCuratedSiteFixture(
 ): CompiledCuratedSiteBundle {
   const locationIds = new Set(fixture.locations.map((l) => l.id))
   const mediaIds = new Set(fixture.mediaAssets.map((a) => a.id))
+  const siteLocaleIds = new Set(fixture.siteLocales.map((l) => l.locale))
 
   uniqueStrings(fixture.locations.map((l) => l.id), 'location id')
   uniqueStrings(fixture.locations.map((l) => l.slug), 'location slug')
@@ -251,6 +252,9 @@ export function compileCuratedSiteFixture(
   })
 
   const siteContentTranslations: CompiledSeedSiteContentTranslation[] = (fixture.siteContentTranslations ?? []).map((entry) => {
+    if (!siteLocaleIds.has(entry.locale)) {
+      throw new Error(`Site content translation "${entry.id}" references unknown locale "${entry.locale}"`)
+    }
     if (entry.locationId && !locationIds.has(entry.locationId)) {
       throw new Error(`Site content translation "${entry.id}" references unknown location "${entry.locationId}"`)
     }
@@ -275,6 +279,9 @@ export function compileCuratedSiteFixture(
   })
 
   const businessLocationTranslations: CompiledSeedBusinessLocationTranslation[] = (fixture.businessLocationTranslations ?? []).map((entry) => {
+    if (!siteLocaleIds.has(entry.locale)) {
+      throw new Error(`Business location translation "${entry.id}" references unknown locale "${entry.locale}"`)
+    }
     if (!locationIds.has(entry.locationId)) {
       throw new Error(`Business location translation "${entry.id}" references unknown location "${entry.locationId}"`)
     }
@@ -297,6 +304,9 @@ export function compileCuratedSiteFixture(
   })
 
   const menuTranslations: CompiledSeedMenuTranslation[] = (fixture.menuTranslations ?? []).map((entry) => {
+    if (!siteLocaleIds.has(entry.locale)) {
+      throw new Error(`Menu translation "${entry.id}" references unknown locale "${entry.locale}"`)
+    }
     if (!menuIds.has(entry.menuId)) {
       throw new Error(`Menu translation "${entry.id}" references unknown menu "${entry.menuId}"`)
     }
@@ -317,6 +327,9 @@ export function compileCuratedSiteFixture(
   })
 
   const menuItemTranslations: CompiledSeedMenuItemTranslation[] = (fixture.menuItemTranslations ?? []).map((entry) => {
+    if (!siteLocaleIds.has(entry.locale)) {
+      throw new Error(`Menu item translation "${entry.id}" references unknown locale "${entry.locale}"`)
+    }
     if (!menuItemIds.has(entry.menuItemId)) {
       throw new Error(`Menu item translation "${entry.id}" references unknown menu item "${entry.menuItemId}"`)
     }
