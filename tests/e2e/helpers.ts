@@ -18,6 +18,7 @@ const THIRD_PARTY_REQUEST_DOMAINS = [
   'googletagmanager.com',
   'google-analytics.com',
   'doubleclick.net',
+  'media.krabiclaw.com',
   'gen_204',
   'cloudflareinsights.com',
   'cdn-cgi',      // Cloudflare injected endpoints (Zaraz, Web Analytics beacon)

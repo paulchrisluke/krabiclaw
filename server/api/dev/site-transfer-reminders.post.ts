@@ -8,8 +8,8 @@ function timingSafeEqualText(a: string, b: string): boolean {
   const left = textEncoder.encode(a)
   const right = textEncoder.encode(b)
   if (left.length !== right.length) {
-    let noop = 0
-    for (let i = 0; i < left.length; i += 1) noop |= left[i]!
+    let _noop = 0
+    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
     return false
   }
   let diff = 0

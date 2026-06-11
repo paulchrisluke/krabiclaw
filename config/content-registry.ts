@@ -465,6 +465,34 @@ export const contentRegistry: Record<string, PageDefinition> = {
     }
   },
 
+  experiences: {
+    label: 'Experiences',
+    path: '/experiences',
+    fields: {
+      'hero.kicker': {
+        label: 'Hero Kicker',
+        type: 'text',
+        sources: ['manual'],
+        defaultValue: 'Experiences',
+        placeholder: 'e.g. Experiences'
+      },
+      'hero.title': {
+        label: 'Page Title',
+        type: 'text',
+        sources: ['manual'],
+        defaultValue: 'Experiences',
+        placeholder: 'e.g. Classes, dinners, and nights by the oven'
+      },
+      'hero.subtitle': {
+        label: 'Page Subtitle',
+        type: 'textarea',
+        sources: ['manual'],
+        defaultValue: 'Book a hands-on class, tasting night, or special event.',
+        placeholder: 'A short line shown under the page title'
+      }
+    }
+  },
+
   order: {
     label: 'Order Online',
     path: '/order',

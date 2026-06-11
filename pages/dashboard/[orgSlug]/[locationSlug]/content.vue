@@ -614,6 +614,9 @@ const groupConfig: Record<string, Array<{ id: string; label: string; icon: strin
     { id: 'items',  label: 'Menu Items',     icon: 'i-heroicons-list-bullet',    fields: ['menu_items'] },
     { id: 'google', label: 'Google Products', icon: 'i-heroicons-circle-stack', fields: ['business.products'] },
   ],
+  experiences: [
+    { id: 'hero', label: 'Hero Section', icon: 'i-heroicons-sparkles', fields: ['hero.kicker', 'hero.title', 'hero.subtitle'] },
+  ],
   order: [
     { id: 'hero', label: 'Hero Section', icon: 'i-heroicons-shopping-bag', fields: ['hero.title', 'hero.subtitle'] },
   ],

@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test'
 import { collectPageErrors, expectHealthyPage, tenantBaseURL, tenantExtraHeaders, setupTenantHeaders } from './helpers'
+import { demoFixture } from '../../seed-definitions/demo'
+
+const demoSiteId = demoFixture.siteId
+const demoExperienceSlug = demoFixture.experiences[0]!.slug
 
 const tenantRoutes = [
   { path: '/', title: /Ember & Slice/, text: 'Ember & Slice' },
@@ -13,6 +17,7 @@ const tenantRoutes = [
   { path: '/locations/brooklyn/contact', title: /Plan a visit .* Ember & Slice Brooklyn/, text: 'Visit' },
   { path: '/about', title: /About|Story|Ember/, text: 'Ember' },
   { path: '/posts', title: /Updates|Posts|Ember/, text: 'Ember' },
+  ...demoFixture.publicRoutes,
   { path: '/reservations', title: /Reserve a [Tt]able/, text: 'Make a Reservation' },
   { path: '/contact', title: /Contact/, text: 'Send a message' }
 ]
@@ -83,6 +88,48 @@ test.describe('public tenant site', () => {
       }
     })
     expect(replayResponse.status()).toBe(404)
+  })
+
+  test('demo experience booking API creates a pending booking and returns booking_id', async ({ request }) => {
+    const futureDate = new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
+
+    const response = await request.post(
+      `${tenantBaseURL}/api/public/sites/${demoSiteId}/experiences/${demoExperienceSlug}/book`,
+      {
+        data: {
+          guest_name: 'Playwright Demo Experience Guest',
+          guest_email: `demo-exp-${Date.now()}@playwright.example`,
+          party_size: 2,
+          booking_date: futureDate,
+          time_slot: '14:00',
+          notes: 'Playwright demo experience booking coverage',
+        },
+      },
+    )
+
+    expect(response.status()).toBe(201)
+    const body = await response.json()
+    expect(body.success).toBe(true)
+    expect(body.booking_id).toEqual(expect.any(String))
+    expect(body.message).toContain('Pizza Making Class')
+    expect(body.message).toContain(futureDate)
+  })
+
+  test('demo experience detail route renders detail, not the experiences index page', async ({ page }) => {
+    const errors = collectPageErrors(page)
+    const response = await page.goto(
+      `${tenantBaseURL}/experiences/${demoExperienceSlug}`,
+      { waitUntil: 'domcontentloaded' },
+    )
+
+    expect(response?.status()).toBeLessThan(400)
+    await page.waitForFunction(() => document.body && document.body.textContent !== null)
+
+    await expect(page).not.toHaveTitle(/^Experiences \| Ember & Slice$/)
+    await expect(page).toHaveTitle(/Pizza Making Class Brooklyn \| Ember & Slice/)
+    await expect(page.locator('body')).toContainText('Stretch dough, top your pie, and fire it yourself.')
+
+    await expectHealthyPage(page, errors)
   })
 })
 

@@ -193,31 +193,6 @@ function getPlanEntitlements(plan: string): EntitlementsMap {
   }
 
   switch (plan) {
-    // Legacy tech plans (kept for backward compat)
-    case 'pro':
-      return {
-        ...baseEntitlements,
-        custom_domains: true,
-        google_business: true,
-        advanced_seo: true,
-        max_locations: -1,
-        ai_credits: 5000,
-      }
-
-    case 'enterprise':
-      return {
-        ...baseEntitlements,
-        custom_domains: true,
-        google_business: true,
-        remove_branding: true,
-        advanced_seo: true,
-        white_label: true,
-        api_access: true,
-        max_locations: -1,
-        ai_credits: 50000,
-      }
-
-    // Managed service plans
     case 'growth':
       return {
         ...baseEntitlements,

@@ -39,6 +39,8 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - `lib/auth-client.ts` — client-side Better Auth instance
 - `composables/` — Nuxt auto-imported
 - `migrations/` — canonical D1 schema (numbered files; `0001_initial.sql` is the base)
+- `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo's generated experience block
+- `seeds/demo.sql` — checked-in demo seed; refresh generated demo experience content with `yarn seed:demo:generate`
 - Layout name for Saya theme pages: `layout: 'saya'` — `tenant` is dead
 
 ---
@@ -56,7 +58,7 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 Three tiers, each with a dedicated Worker and URL:
 
-- **e2e-smoke** (every PR): builds → `wrangler deploy --env preview` → seeds `krabiclaw-db-preview` → smoke tests against `preview.krabiclaw.com`. `PLAYWRIGHT_PREVIEW_URL` is hardcoded to that URL; `playwright.config.ts` skips `webServer` when it is set.
+- **e2e-smoke** (every PR): builds → `wrangler deploy --env preview` → seeds `krabiclaw-db-preview` → full E2E suite against `preview.krabiclaw.com`. `PLAYWRIGHT_PREVIEW_URL` is hardcoded to that URL; `playwright.config.ts` skips `webServer` when it is set.
 - **e2e-staging** (push to `staging` branch): builds → `wrangler deploy --env staging` → seeds `krabiclaw-db-staging` → full E2E suite against `staging.krabiclaw.com`. Pre-production gate before staging is merged to main. Keep real assertions here; only fix staging-only false negatives, do not casually trim coverage.
 - **prod-deploy** (push to `main`): applies D1 migrations → `wrangler deploy` (production `krabiclaw`) → `prod-smoke` and canaries run after, testing production routes/domains that are intentionally live.
 - Cloudflare creds (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) are scoped to deploy steps only — not in the top-level job `env:`.

@@ -4,10 +4,10 @@
 
       <!-- Header -->
       <div class="mb-16 max-w-2xl">
-        <p class="saya-kicker mb-4">{{ getField('hero.kicker', 'Experiences') }}</p>
-        <h1 class="saya-display-md text-default">{{ getField('hero.title', expCopy.reserveCta) }}</h1>
-        <p v-if="getField('hero.subtitle')" class="mt-5 text-base leading-relaxed text-muted">
-          {{ getField('hero.subtitle') }}
+        <p class="saya-kicker mb-4">{{ heroKicker }}</p>
+        <h1 class="saya-display-md text-default">{{ heroTitle }}</h1>
+        <p v-if="heroSubtitle" class="mt-5 text-base leading-relaxed text-muted">
+          {{ heroSubtitle }}
         </p>
       </div>
 
@@ -98,6 +98,9 @@ const { experiencesList, pending: bootstrapPending, getField } = useBootstrap()
 
 const pending = computed(() => !isPlatform && bootstrapPending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
+const heroKicker = computed(() => getField('hero.kicker', 'Experiences') || 'Experiences')
+const heroTitle = computed(() => getField('hero.title', expCopy.experiencesPageTitle) || expCopy.experiencesPageTitle)
+const heroSubtitle = computed(() => getField('hero.subtitle', expCopy.experiencesPageSubtitle) || expCopy.experiencesPageSubtitle)
 const currentPageUrl = useSeoUrl('/experiences')
 const ogImage = useSharedOgImage(() => experiences.value[0]?.image_url)
 
@@ -115,7 +118,7 @@ useBreadcrumbSchema([
 
 useSeoMeta({
   title: computed(() => `Experiences | ${siteName.value}`),
-  description: computed(() => expCopy.seoReservationDescription(siteName.value)),
+  description: computed(() => expCopy.seoExperiencesDescription(siteName.value)),
   ogUrl: currentPageUrl,
   ogType: 'website',
   ogImage,

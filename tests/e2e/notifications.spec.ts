@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 import { potteryHouseBaseURL, tenantBaseURL } from './helpers'
 import { devLoginHeaders } from './test-env'
+import { demoFixture } from '../../seed-definitions/demo'
 
 // Verify that submission APIs correctly trigger notification records in the DB.
 // Notification delivery (Resend email, WhatsApp) requires live credentials — those
@@ -16,6 +17,8 @@ const devNotificationsUrl = (baseURL: string, params: Record<string, string>) =>
 }
 
 const devNotificationsHeaders = () => devLoginHeaders() ?? {}
+const demoSiteId = demoFixture.siteId
+const demoExperience = demoFixture.experiences[0]!
 
 type NotificationRow = {
   id: string
@@ -204,6 +207,68 @@ test.describe('notification records — restaurant reservation (demo site)', () 
     const guestCancel = notifications.find(n => n.channel === 'email' && n.template === 'reservation_customer_cancelled')
     expect(guestCancel).toBeDefined()
     expect(guestCancel?.recipient).toBe(guestEmail)
+  })
+})
+
+test.describe('notification records — demo experience booking', () => {
+  test('demo experience booking creates dashboard + email notification records', async ({ request }) => {
+    const since = new Date().toISOString()
+    const guestEmail = `test-demo-booking-${Date.now()}@playwright.example`
+    const futureDate = new Date(Date.now() + 32 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
+
+    const res = await request.post(
+      `${tenantBaseURL}/api/public/sites/${demoSiteId}/experiences/${demoExperience.slug}/book`,
+      {
+        data: {
+          guest_name: 'Playwright Demo Booking Test',
+          guest_email: guestEmail,
+          party_size: 2,
+          booking_date: futureDate,
+          time_slot: '14:00',
+        },
+      },
+    )
+    expect(res.status()).toBe(201)
+    const body = await res.json()
+    expect(body.booking_id).toEqual(expect.any(String))
+
+    const notifications = await waitForNotifications(
+      request,
+      tenantBaseURL,
+      { site_id: demoSiteId, since },
+      rows =>
+        rows.some(n => n.channel === 'dashboard' && n.template === 'new_reservation')
+        && rows.some(n => n.channel === 'email' && n.template === 'new_reservation' && n.title.includes('Playwright Demo Booking Test'))
+        && rows.some(n => n.channel === 'email' && n.template === 'experience_booking_customer_received' && n.recipient === guestEmail),
+    )
+
+    const dashboard = notifications.find(
+      n =>
+        n.channel === 'dashboard'
+        && n.template === 'new_reservation'
+        && n.title.includes('Playwright Demo Booking Test'),
+    )
+    expect(dashboard).toBeDefined()
+    expect(dashboard?.status).toBe('sent')
+
+    const ownerEmail = notifications.find(
+      n =>
+        n.channel === 'email'
+        && n.template === 'new_reservation'
+        && n.title.includes('Playwright Demo Booking Test'),
+    )
+    expect(ownerEmail).toBeDefined()
+    expect(['sent', 'failed', 'pending']).toContain(ownerEmail?.status)
+
+    const guestConfirm = notifications.find(
+      n =>
+        n.channel === 'email'
+        && n.template === 'experience_booking_customer_received'
+        && n.recipient === guestEmail,
+    )
+    expect(guestConfirm).toBeDefined()
+    expect(guestConfirm?.recipient).toBe(guestEmail)
+    expect(['sent', 'failed', 'pending']).toContain(guestConfirm?.status)
   })
 })
 
