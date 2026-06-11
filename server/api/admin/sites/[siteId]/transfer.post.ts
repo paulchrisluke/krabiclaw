@@ -1,6 +1,7 @@
 // POST /api/admin/sites/[siteId]/transfer — initiate a site transfer to a new owner
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
 import { rootDomainForPair } from '~/server/utils/domains'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
@@ -159,7 +160,7 @@ export default defineEventHandler(async (event) => {
   const siteName = site.brand_name ?? siteId
 
   // Send invite email via Resend (best-effort — don't block the response)
-  if (env.RESEND_API_KEY) {
+  if (env.RESEND_API_KEY || !shouldSendRealEmail(env)) {
     const initiatorName = (session.user as { name?: string }).name || session.user.email || 'Your web designer'
     const planLabel: Record<string, string> = {
       growth: 'Growth ($49/mo)',
@@ -208,17 +209,27 @@ export default defineEventHandler(async (event) => {
     }
     textParts.push('', `Claim your website: ${transferUrl}`, '', `This transfer link will stay active until you're ready to claim it. Didn't expect this email? No worries, you can safely ignore it.`)
 
-    fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: 'KrabiClaw <hello@krabiclaw.com>',
-        to: [toEmail],
+    if (shouldSendRealEmail(env)) {
+      fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'KrabiClaw <hello@krabiclaw.com>',
+          to: [toEmail],
+          subject: `${initiatorName} just built your new website! 🎉`,
+          html,
+          text: textParts.join('\n'),
+        }),
+      }).catch((err) => console.error('transfer_invite_email_failed', err))
+    } else {
+      console.info('email_delivery_log_only', {
+        recipient: toEmail,
+        siteId,
+        organizationId: site.organization_id,
+        template: 'site_transfer_invite',
         subject: `${initiatorName} just built your new website! 🎉`,
-        html,
-        text: textParts.join('\n'),
-      }),
-    }).catch((err) => console.error('transfer_invite_email_failed', err))
+      })
+    }
   }
 
   return jsonResponse({

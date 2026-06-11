@@ -1,5 +1,6 @@
 // POST /api/contact - Platform contact form submission via Resend
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { shouldSendRealEmail } from '~/server/utils/email-delivery'
 
 const NAME_MAX_LENGTH = 100
 const EMAIL_MAX_LENGTH = 254
@@ -127,7 +128,7 @@ export default defineEventHandler(async (event) => {
     const env = cloudflareEnv(event)
     const resendApiKey = env.RESEND_API_KEY
 
-    if (!resendApiKey) {
+    if (shouldSendRealEmail(env) && !resendApiKey) {
       return jsonResponse({ error: 'Email service not configured' }, { status: 500 })
     }
 
@@ -145,6 +146,17 @@ export default defineEventHandler(async (event) => {
         console.error('Failed to store contact submission:', err)
         // Continue to send email even if DB fails
       }
+    }
+
+    if (!shouldSendRealEmail(env)) {
+      console.info('email_delivery_log_only', {
+        channel: 'platform_contact',
+        recipient: 'hello@krabiclaw.com',
+        name,
+        email,
+        submissionId: id,
+      })
+      return jsonResponse({ success: true, message: 'Message sent successfully' })
     }
 
     // Send email with sanitized content

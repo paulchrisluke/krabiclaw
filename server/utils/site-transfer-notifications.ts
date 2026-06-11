@@ -1,6 +1,9 @@
+import { logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+
 interface SiteTransferNotificationEnv {
   PLATFORM_OWNER_EMAILS?: string
   RESEND_API_KEY?: string
+  EMAIL_DELIVERY_MODE?: string
 }
 
 interface ReminderInput {
@@ -83,9 +86,30 @@ async function sendReminderEmail(
     recipient: opts.recipient,
     title: opts.title,
     payload: opts.payload,
-    status: env.RESEND_API_KEY ? 'pending' : 'failed',
-    error: env.RESEND_API_KEY ? null : 'RESEND_API_KEY not configured',
+    status: shouldSendRealEmail(env)
+      ? (env.RESEND_API_KEY ? 'pending' : 'failed')
+      : 'pending',
+    error: shouldSendRealEmail(env)
+      ? (env.RESEND_API_KEY ? null : 'RESEND_API_KEY not configured')
+      : null,
   })
+
+  if (!shouldSendRealEmail(env)) {
+    await db.prepare(`
+      UPDATE notifications
+      SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL
+      WHERE id = ?
+    `).bind(logOnlyEmailProviderId('site-transfer'), new Date().toISOString(), notificationId).run()
+    console.info('email_delivery_log_only', {
+      notificationId,
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      recipient: opts.recipient,
+      title: opts.title,
+      template: 'site_transfer_reminder',
+    })
+    return
+  }
 
   if (!env.RESEND_API_KEY) return
 

@@ -1,10 +1,12 @@
 import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
+import { logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 
 interface DomainNotificationEnv {
   PLATFORM_OWNER_EMAILS?: string
   RESEND_API_KEY?: string
   WHATSAPP_PHONE_NUMBER_ID?: string
   WHATSAPP_ACCESS_TOKEN?: string
+  EMAIL_DELIVERY_MODE?: string
 }
 
 interface ResendResponse {
@@ -80,6 +82,24 @@ async function sendEmail(
     JSON.stringify({ audience: opts.audience, domain: opts.domain, status: opts.status, message: opts.message, dashboard_url: opts.dashboardUrl }),
     now
   ).run()
+
+  if (!shouldSendRealEmail(env)) {
+    await db.prepare(`UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL WHERE id = ?`).bind(
+      logOnlyEmailProviderId('domain'),
+      now,
+      id,
+    ).run()
+    console.info('email_delivery_log_only', {
+      notificationId: id,
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      audience: opts.audience,
+      recipient: opts.to,
+      title: opts.title,
+      template: 'domain_update',
+    })
+    return
+  }
 
   const timeoutMs = 5000
   const controller = new AbortController()
@@ -170,7 +190,7 @@ export async function notifyDomainLifecycle(
     now
   ).run()
 
-  if (env.RESEND_API_KEY) {
+  if (env.RESEND_API_KEY || !shouldSendRealEmail(env)) {
     const owner = await db.prepare(ownerEmailQuery()).bind(opts.organizationId).first() as { email?: string } | null
     if (owner?.email) await sendEmail(env, db, { ...opts, to: owner.email, audience: 'owner' })
     const supportSendPromises = supportEmails(env).map((email) => sendEmail(env, db, { ...opts, to: email, audience: 'support' }))
