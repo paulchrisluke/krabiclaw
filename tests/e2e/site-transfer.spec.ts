@@ -18,12 +18,25 @@ async function runtimeStripeSignature(
   return res.json() as Promise<{ signature: string }>
 }
 
+async function resetTransferFixture(request: APIRequestContext, baseURL: string) {
+  const res = await request.post(`${baseURL}/api/dev/site-transfer-reset`, {
+    headers: devLoginHeaders(),
+    data: {
+      siteId: SITE_ID,
+      organizationId: 'org-pottery-house',
+    },
+  })
+  expect(res.status()).toBe(200)
+}
+
 test.describe('site transfer handoff flow', () => {
   test('paid handoff stays pending until checkout completes and reminders can be forced', async ({ request, baseURL }) => {
     test.skip(
       !testEnv('STRIPE_SECRET_KEY') || !testEnv('NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'),
       'Stripe must be configured for the paid handoff flow test.',
     )
+
+    await resetTransferFixture(request, baseURL!)
 
     const since = new Date().toISOString()
 
