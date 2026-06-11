@@ -30,7 +30,7 @@ test.describe('billing contracts', () => {
     expect((await missingPlan.json()).error).toContain('Plan is required')
 
     const invalidPlan = await request.post(`${baseURL}/api/billing/checkout`, {
-      data: { plan: 'enterprise' },
+      data: { plan: 'premium' },
     })
     expect(invalidPlan.status()).toBe(400)
     expect((await invalidPlan.json()).error).toContain('Invalid plan')

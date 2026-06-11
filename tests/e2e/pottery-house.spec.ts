@@ -1,34 +1,15 @@
 import { expect, test } from '@playwright/test'
 import { collectPageErrors, expectHealthyPage, potteryHouseBaseURL, potteryHouseExtraHeaders, setupTenantHeaders } from './helpers'
+import { potteryHouseFixture } from '../../seed-definitions/pottery-house'
 
-const siteId = 'site-pottery-house'
+const siteId = potteryHouseFixture.siteId
+const wheelClass = potteryHouseFixture.experiences.find((e) => e.slug === 'pottery-wheel-class')!
 
-// All public routes for the Pottery House experience-vertical site
 const routes = [
-  { path: '/', title: /Pottery House Krabi/, text: 'Pottery House Krabi' },
-  { path: '/experiences', title: /Experiences \| Pottery House Krabi/, text: 'Pottery Wheel Class' },
-  {
-    path: '/experiences/pottery-wheel-class',
-    title: /Pottery Wheel Class Krabi — Pottery House/,
-    text: 'Shape something beautiful',
-  },
-  {
-    path: '/experiences/cocktails-and-clay',
-    title: /Cocktails & Clay Friday Night — Pottery House Krabi/,
-    text: 'Friday night',
-  },
-  {
-    path: '/experiences/beachfront-pottery',
-    title: /Beachfront Pottery Class Klong Muang Krabi — Pottery House/,
-    text: 'Klong Muang',
-  },
-  {
-    path: '/experiences/monthly-membership',
-    title: /Monthly Pottery Studio Membership Krabi — Pottery House/,
-    text: 'creative base',
-  },
+  { path: '/', title: /Pottery House Krabi/, text: potteryHouseFixture.site.brandName },
+  ...potteryHouseFixture.publicRoutes,
   { path: '/about', title: /Pottery House/, text: 'Pottery House' },
-  { path: '/contact', title: /Contact/, text: '+66626505890' },
+  { path: '/contact', title: /Contact/, text: potteryHouseFixture.site.contactPhone! },
 ]
 
 test.describe('pottery house public site', () => {
@@ -56,7 +37,7 @@ test.describe('pottery house public site', () => {
   test('experience detail route renders detail, not index page', async ({ page }) => {
     const errors = collectPageErrors(page)
     const response = await page.goto(
-      `${potteryHouseBaseURL}/experiences/pottery-wheel-class`,
+      `${potteryHouseBaseURL}/experiences/${wheelClass.slug}`,
       { waitUntil: 'load' },
     )
 
@@ -65,14 +46,14 @@ test.describe('pottery house public site', () => {
 
     // Index title must not appear — proves detail route rendered
     await expect(page).not.toHaveTitle(/^Experiences \| Pottery House Krabi$/)
-    await expect(page).toHaveTitle(/Pottery Wheel Class/)
+    await expect(page).toHaveTitle(new RegExp(wheelClass.title))
 
     // Breadcrumb shows the experience name (detail rendered the breadcrumb, index does not).
     // Use last() — breadcrumb is always the last nav on the page (primary nav comes first in DOM).
-    await expect(page.locator('nav').last()).toContainText('Pottery Wheel Class')
+    await expect(page.locator('nav').last()).toContainText(wheelClass.title)
 
     // Tagline is detail-page-only content
-    await expect(page.locator('body')).toContainText('Shape something beautiful')
+    await expect(page.locator('body')).toContainText(wheelClass.tagline)
 
     await expectHealthyPage(page, errors)
   })
@@ -107,16 +88,17 @@ test.describe('pottery house public site', () => {
   // Booking API: creates a pending booking for a real experience
   test('booking API creates a pending booking and returns booking_id', async ({ request }) => {
     const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
+    const firstSlot = wheelClass.timeSlots[0]!
 
     const response = await request.post(
-      `${potteryHouseBaseURL}/api/public/sites/${siteId}/experiences/pottery-wheel-class/book`,
+      `${potteryHouseBaseURL}/api/public/sites/${siteId}/experiences/${wheelClass.slug}/book`,
       {
         data: {
           guest_name: 'Playwright E2E Guest',
           guest_email: `test-${Date.now()}@playwright.example`,
           party_size: 2,
           booking_date: futureDate,
-          time_slot: '10:00',
+          time_slot: firstSlot,
           notes: 'Playwright E2E test — safe to ignore',
         },
       },
@@ -126,21 +108,21 @@ test.describe('pottery house public site', () => {
     const body = await response.json()
     expect(body.success).toBe(true)
     expect(body.booking_id).toEqual(expect.any(String))
-    expect(body.message).toContain('Pottery Wheel Class')
+    expect(body.message).toContain(wheelClass.title)
     expect(body.message).toContain(futureDate)
   })
 
   // Booking API: rejects past dates
   test('booking API rejects past dates', async ({ request }) => {
     const response = await request.post(
-      `${potteryHouseBaseURL}/api/public/sites/${siteId}/experiences/pottery-wheel-class/book`,
+      `${potteryHouseBaseURL}/api/public/sites/${siteId}/experiences/${wheelClass.slug}/book`,
       {
         data: {
           guest_name: 'Playwright E2E Guest',
           guest_email: `test-${Date.now()}@playwright.example`,
           party_size: 1,
           booking_date: '2020-01-01',
-          time_slot: '10:00',
+          time_slot: wheelClass.timeSlots[0],
         },
       },
     )
@@ -155,7 +137,7 @@ test.describe('pottery house public site', () => {
     const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
 
     const response = await request.post(
-      `${potteryHouseBaseURL}/api/public/sites/${siteId}/experiences/pottery-wheel-class/book`,
+      `${potteryHouseBaseURL}/api/public/sites/${siteId}/experiences/${wheelClass.slug}/book`,
       {
         data: {
           guest_name: 'Playwright E2E Guest',

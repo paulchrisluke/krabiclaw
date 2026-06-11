@@ -35,9 +35,11 @@ if (!STRIPE_SECRET_KEY) {
 
 const stripe = new Stripe(STRIPE_SECRET_KEY)
 
-// --- Archive old plans ---
+const ACTIVE_PLAN_IDS = new Set(['growth', 'managed', 'seo_accelerator'])
+
+// --- Archive old non-canonical paid plan products ---
 async function archiveOldPlans() {
-  console.log('\nArchiving old pro/enterprise products...')
+  console.log('\nArchiving non-canonical Stripe plan products...')
   let startingAfter;
   while (true) {
     const products = await stripe.products.list({
@@ -47,7 +49,7 @@ async function archiveOldPlans() {
     })
     for (const product of products.data) {
       const planId = product.metadata?.plan_id
-      if (planId === 'pro' || planId === 'enterprise') {
+      if (planId && !ACTIVE_PLAN_IDS.has(planId)) {
         await stripe.products.update(product.id, { active: false })
         console.log(`  Archived: ${product.name} (${product.id})`)
       }

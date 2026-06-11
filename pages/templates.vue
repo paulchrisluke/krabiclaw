@@ -186,7 +186,7 @@ const config = useRuntimeConfig()
 const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
 const isDemoPreviewOpen = ref(false)
 
-// The live demo site — matches seeds/demo.sql subdomain
+// The live demo site — matches the ephemeral demo seed subdomain
 const demoUrl = computed(() =>
   import.meta.dev
     ? 'http://demo.localhost:3000'
