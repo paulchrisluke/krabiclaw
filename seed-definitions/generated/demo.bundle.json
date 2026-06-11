@@ -1406,6 +1406,201 @@
       ]
     }
   ],
+  "siteContentTranslations": [
+    {
+      "id": "sct-demo-th-home-hero",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": null,
+      "locale": "th",
+      "page": "home",
+      "field": "hero",
+      "content": null,
+      "heroTitle": "ไฟฟืนและค่ำคืนในบรูคลิน",
+      "heroSubtitle": "พิซซ่าแป้งซาวโดว์ขอบพองกรอบ แอนติพาสติตามฤดูกาล และห้องอาหารที่อบอุ่นด้วยแสงจากเตา",
+      "value": "ไฟฟืนและค่ำคืนในบรูคลิน",
+      "type": "text",
+      "status": "published",
+      "sourceHash": "demo-pizza-home-hero-v1",
+      "translatedAt": "2026-05-01T00:00:00.000Z",
+      "reviewedAt": "2026-05-01T00:00:00.000Z"
+    },
+    {
+      "id": "sct-demo-th-cta",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": null,
+      "locale": "th",
+      "page": "home",
+      "field": "cta.title",
+      "content": "จองโต๊ะใกล้เตาอบ",
+      "heroTitle": null,
+      "heroSubtitle": null,
+      "value": "จองโต๊ะใกล้เตาอบ",
+      "type": "text",
+      "status": "published",
+      "sourceHash": "demo-pizza-cta-v1",
+      "translatedAt": "2026-05-01T00:00:00.000Z",
+      "reviewedAt": "2026-05-01T00:00:00.000Z"
+    },
+    {
+      "id": "sct-demo-th-story-title",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": null,
+      "locale": "th",
+      "page": "about",
+      "field": "story.title",
+      "content": "แทรตโทเรียที่มีเตาอบเป็นหัวใจ",
+      "heroTitle": null,
+      "heroSubtitle": null,
+      "value": "แทรตโทเรียที่มีเตาอบเป็นหัวใจ",
+      "type": "text",
+      "status": "published",
+      "sourceHash": "demo-pizza-story-title-v1",
+      "translatedAt": "2026-05-01T00:00:00.000Z",
+      "reviewedAt": "2026-05-01T00:00:00.000Z"
+    },
+    {
+      "id": "sct-demo-th-story-body",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": null,
+      "locale": "th",
+      "page": "about",
+      "field": "story.body",
+      "content": "Ember & Slice เริ่มจากแป้งซาวโดว์ เครื่องผสมที่ยืมมา และเตาอบป๊อปอัพหลังบาร์ไวน์แห่งหนึ่งในบรูคลิน พิซซ่าขายหมดก่อนพระอาทิตย์ตก แล้วก็ขายหมดอีกในสุดสัปดาห์ถัดมา และทุกสุดสัปดาห์หลังจากนั้น\n\nวันนี้ร้านมีที่อยู่ถาวรแล้ว แต่คำสัญญายังเหมือนเดิม: แป้งที่ใช้เวลา ไฟจริง วัตถุดิบตามฤดูกาล และการบริการที่ทำให้คืนธรรมดารู้สึกพิเศษ",
+      "heroTitle": null,
+      "heroSubtitle": null,
+      "value": "Ember & Slice เริ่มจากแป้งซาวโดว์ เครื่องผสมที่ยืมมา และเตาอบป๊อปอัพหลังบาร์ไวน์แห่งหนึ่งในบรูคลิน",
+      "type": "richtext",
+      "status": "published",
+      "sourceHash": "demo-pizza-story-body-v1",
+      "translatedAt": "2026-05-01T00:00:00.000Z",
+      "reviewedAt": "2026-05-01T00:00:00.000Z"
+    }
+  ],
+  "businessLocationTranslations": [
+    {
+      "id": "blt-demo-th-loc",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "locale": "th",
+      "title": "Ember & Slice บรูคลิน",
+      "address": "184 Wythe Ave",
+      "city": "บรูคลิน",
+      "description": "แทรตโทเรียพิซซ่าเตาฟืนในบรูคลิน เสิร์ฟพิซซ่าแป้งซาวโดว์ แอนติพาสติตามฤดูกาล และบรรยากาศอบอุ่นรอบเตาอบ",
+      "shortDescription": "พิซซ่าเตาฟืน แอนติพาสติตามฤดูกาล และการต้อนรับแบบเพื่อนบ้านในบรูคลิน",
+      "status": "published",
+      "sourceHash": "demo-pizza-location-v1",
+      "translatedAt": "2026-05-01T00:00:00.000Z",
+      "reviewedAt": "2026-05-01T00:00:00.000Z"
+    }
+  ],
+  "menuTranslations": [
+    {
+      "id": "mt-demo-th-menu",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "menuId": "menu-demo",
+      "locale": "th",
+      "name": "เมนู",
+      "description": "พิซซ่าเตาฟืน แอนติพาสตี สลัด และเครื่องดื่มจาก Ember & Slice",
+      "sectionOrder": [
+        "พิซซ่าเตาฟืน",
+        "แอนติพาสตี",
+        "พาสต้าและสลัด",
+        "เครื่องดื่ม"
+      ],
+      "status": "published",
+      "sourceHash": "demo-pizza-menu-v1",
+      "translatedAt": "2026-05-01T00:00:00.000Z",
+      "reviewedAt": "2026-05-01T00:00:00.000Z"
+    }
+  ],
+  "menuItemTranslations": [
+    {
+      "id": "mit-demo-th-mi-1",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "menuItemId": "mi-1",
+      "locale": "th",
+      "section": "พิซซ่าเตาฟืน",
+      "name": "มาร์เกริตา",
+      "description": "มะเขือเทศซานมาร์ซาโน ฟิออร์ดิลาเต้ ใบโหระพา น้ำมันมะกอกเอ็กซ์ตร้าเวอร์จิน และเกลือทะเล",
+      "allergens": "กลูเตน, นม",
+      "dietaryNotes": "มังสวิรัติ",
+      "status": "published",
+      "sourceHash": "demo-pizza-mi-1-v1",
+      "translatedAt": "2026-05-01T00:00:00.000Z",
+      "reviewedAt": "2026-05-01T00:00:00.000Z"
+    },
+    {
+      "id": "mit-demo-th-mi-2",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "menuItemId": "mi-2",
+      "locale": "th",
+      "section": "พิซซ่าเตาฟืน",
+      "name": "เปปเปอโรนีคาลาเบรเซ",
+      "description": "ซอสมะเขือเทศ มอซซาเรลลา เปปเปอโรนี พริกคาลาเบรีย และออริกาโน",
+      "allergens": "กลูเตน, นม",
+      "dietaryNotes": null,
+      "status": "published",
+      "sourceHash": "demo-pizza-mi-2-v1",
+      "translatedAt": "2026-05-01T00:00:00.000Z",
+      "reviewedAt": "2026-05-01T00:00:00.000Z"
+    },
+    {
+      "id": "mit-demo-th-mi-3",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "menuItemId": "mi-3",
+      "locale": "th",
+      "section": "พิซซ่าเตาฟืน",
+      "name": "ฟุงกีบิอังโก",
+      "description": "เห็ดย่าง ครีมริคอตตา กระเทียม ไทม์ มอซซาเรลลา และเปโคริโน",
+      "allergens": "กลูเตน, นม",
+      "dietaryNotes": "มังสวิรัติ",
+      "status": "published",
+      "sourceHash": "demo-pizza-mi-3-v1",
+      "translatedAt": "2026-05-01T00:00:00.000Z",
+      "reviewedAt": "2026-05-01T00:00:00.000Z"
+    },
+    {
+      "id": "mit-demo-th-mi-5",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "menuItemId": "mi-5",
+      "locale": "th",
+      "section": "แอนติพาสตี",
+      "name": "บูราตา",
+      "description": "บูราตาครีมมี่ มะเขือเทศเชอร์รีย่าง น้ำมันโหระพา และซาวโดว์ย่าง",
+      "allergens": "กลูเตน, นม",
+      "dietaryNotes": "มังสวิรัติ",
+      "status": "published",
+      "sourceHash": "demo-pizza-mi-5-v1",
+      "translatedAt": "2026-05-01T00:00:00.000Z",
+      "reviewedAt": "2026-05-01T00:00:00.000Z"
+    },
+    {
+      "id": "mit-demo-th-mi-6",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "menuItemId": "mi-6",
+      "locale": "th",
+      "section": "แอนติพาสตี",
+      "name": "การ์ลิกนอตส์",
+      "description": "ขนมปังนอตส์อบเตาฟืน คลุกพาร์สลีย์ เนยกระเทียมย่าง และมารินารา",
+      "allergens": "กลูเตน, นม",
+      "dietaryNotes": "มังสวิรัติ",
+      "status": "published",
+      "sourceHash": "demo-pizza-mi-6-v1",
+      "translatedAt": "2026-05-01T00:00:00.000Z",
+      "reviewedAt": "2026-05-01T00:00:00.000Z"
+    }
+  ],
   "publicRoutes": [
     {
       "path": "/experiences",
@@ -1442,5 +1637,13 @@
       "/experiences/natural-wine-and-pizza-night",
       "/experiences/family-pizza-night"
     ]
+  },
+  "aiCredits": {
+    "balance": 500,
+    "lifetimeUsed": 127
+  },
+  "organizationBilling": {
+    "status": "free",
+    "plan": "free"
   }
 }

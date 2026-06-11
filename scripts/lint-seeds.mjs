@@ -1,21 +1,23 @@
 #!/usr/bin/env node
 /**
- * Schema lint for seed SQL files.
+ * Seed and curated-fixture guardrails.
  *
- * Fails if any INSERT INTO sites omits the required seed contract fields:
- *   vertical, content_source, media_source
+ * 1. Rejects undeclared `seeds/*.sql` files.
+ * 2. Ensures any checked SQL seed still honors the site seed contract.
+ * 3. Flags curated fixture media regressions:
+ *    - `external_url` providers
+ *    - repo-local `/public/`, `/images/`, `/videos/` tenant asset paths
+ *    - third-party hosted tenant media URLs in seeded media fields
  *
  * Usage:
  *   node scripts/lint-seeds.mjs
- *   node scripts/lint-seeds.mjs --file seeds/pottery-house-krabi.sql
- *
- * Exit code 0 = all clean. Non-zero = violations found.
+ *   node scripts/lint-seeds.mjs --file client-imports/acme/seed-preview.sql
  */
 
 import { readdir, readFile } from 'node:fs/promises'
-import { parseArgs } from 'node:util'
-import { join, relative } from 'node:path'
 import { existsSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { parseArgs } from 'node:util'
 
 const { values: args } = parseArgs({
   options: {
@@ -26,8 +28,12 @@ const { values: args } = parseArgs({
 
 const ROOT = process.cwd()
 const REQUIRED_FIELDS = ['vertical', 'content_source', 'media_source']
-
-// ── File discovery ────────────────────────────────────────────────────────────
+const ALLOWED_GENERATED_SEED_SQL = new Set([])
+const CURATED_FIXTURE_FILES = [
+  'seed-definitions/demo.ts',
+  'seed-definitions/pottery-house.ts',
+  'seed-definitions/kikuzuki.ts',
+]
 
 async function collectSqlFiles() {
   if (args.file) {
@@ -39,17 +45,18 @@ async function collectSqlFiles() {
   }
 
   const files = []
-
-  // seeds/*.sql
   const seedsDir = join(ROOT, 'seeds')
   if (existsSync(seedsDir)) {
     const entries = await readdir(seedsDir)
-    for (const e of entries) {
-      if (e.endsWith('.sql')) files.push(join(seedsDir, e))
+    for (const entry of entries) {
+      if (!entry.endsWith('.sql')) continue
+      const rel = relative(ROOT, join(seedsDir, entry))
+      if (!ALLOWED_GENERATED_SEED_SQL.has(rel)) {
+        files.push(join(seedsDir, entry))
+      }
     }
   }
 
-  // client-imports/*/seed-preview.sql
   const importDir = join(ROOT, 'client-imports')
   if (existsSync(importDir)) {
     const slugDirs = await readdir(importDir)
@@ -62,41 +69,21 @@ async function collectSqlFiles() {
   return files
 }
 
-// ── Lint logic ────────────────────────────────────────────────────────────────
+async function collectUnexpectedSeedOutputs() {
+  if (args.file) return []
 
-/**
- * Returns an array of violation objects for INSERT INTO sites statements
- * that are missing one or more required fields.
- *
- * Strategy: find each INSERT INTO sites block, extract the column list,
- * check required fields are present.
- */
-function lintSql(sql, filePath) {
   const violations = []
+  const seedsDir = join(ROOT, 'seeds')
+  if (!existsSync(seedsDir)) return violations
 
-  // Match multi-line INSERT INTO sites (...) statements
-  // Capture column list between the first ( and the matching )
-  const insertRe = /INSERT\s+INTO\s+sites\s*\(([^)]+)\)/gi
-  let match
-
-  while ((match = insertRe.exec(sql)) !== null) {
-    const columnBlock = match[1]
-    const columns = columnBlock
-      .split(',')
-      .map(c => c.trim().replace(/[`"[\]]/g, '').toLowerCase())
-
-    const missing = REQUIRED_FIELDS.filter(f => !columns.includes(f))
-
-    if (missing.length > 0) {
-      // Find line number
-      const linesBefore = sql.slice(0, match.index).split('\n')
-      const lineNumber = linesBefore.length
-
+  const entries = await readdir(seedsDir)
+  for (const entry of entries) {
+    if (!entry.endsWith('.sql')) continue
+    const rel = relative(ROOT, join(seedsDir, entry))
+    if (!ALLOWED_GENERATED_SEED_SQL.has(rel)) {
       violations.push({
-        file: relative(ROOT, filePath),
-        line: lineNumber,
-        missing,
-        snippet: match[0].slice(0, 120).replace(/\n/g, ' '),
+        file: rel,
+        message: 'Unexpected checked-in seeds/*.sql output. Curated tenant seeds must be ephemeral.',
       })
     }
   }
@@ -104,37 +91,101 @@ function lintSql(sql, filePath) {
   return violations
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+function lintSql(sql, filePath) {
+  const violations = []
+  const insertRe = /INSERT\s+INTO\s+sites\s*\(([^)]+)\)/gi
+  let match
 
-const files = await collectSqlFiles()
+  while ((match = insertRe.exec(sql)) !== null) {
+    const columns = match[1]
+      .split(',')
+      .map((column) => column.trim().replace(/[`"[\]]/g, '').toLowerCase())
 
-if (files.length === 0) {
-  console.log('No seed SQL files found — nothing to lint.')
-  process.exit(0)
+    const missing = REQUIRED_FIELDS.filter((field) => !columns.includes(field))
+    if (missing.length === 0) continue
+
+    const line = sql.slice(0, match.index).split('\n').length
+    violations.push({
+      file: relative(ROOT, filePath),
+      line,
+      message: `INSERT INTO sites missing: ${missing.join(', ')}`,
+    })
+  }
+
+  return violations
+}
+
+function lintCuratedFixtureSource(source, filePath) {
+  const violations = []
+  const rel = relative(ROOT, filePath)
+  const patterns = [
+    {
+      regex: /provider:\s*'external_url'/g,
+      message: 'Curated fixtures may not use external_url media providers.',
+    },
+    {
+      regex: /(?:publicUrl|thumbnailUrl|reviewerPhotoUrl|content):\s*['"]\/(?:public|images|videos)\//g,
+      message: 'Curated fixtures may not point tenant media at repo-local /public, /images, or /videos paths.',
+    },
+    {
+      regex: /(?:publicUrl|thumbnailUrl|reviewerPhotoUrl|content):\s*['"]https?:\/\/(?!imagedelivery\.net\/|media\.krabiclaw\.com\/)/g,
+      message: 'Curated fixtures may not point tenant media at third-party hosted URLs.',
+    },
+  ]
+
+  for (const { regex, message } of patterns) {
+    let match
+    while ((match = regex.exec(source)) !== null) {
+      const line = source.slice(0, match.index).split('\n').length
+      violations.push({ file: rel, line, message })
+    }
+  }
+
+  return violations
 }
 
 let totalViolations = 0
 
-for (const file of files) {
+for (const violation of await collectUnexpectedSeedOutputs()) {
+  console.error(`  ✗ ${violation.file} — ${violation.message}`)
+  totalViolations++
+}
+
+for (const file of await collectSqlFiles()) {
   const sql = await readFile(file, 'utf8')
   const violations = lintSql(sql, file)
 
   if (violations.length === 0) {
     console.log(`  ✓ ${relative(ROOT, file)}`)
-  } else {
-    for (const v of violations) {
-      console.error(`  ✗ ${v.file}:${v.line} — INSERT INTO sites missing: ${v.missing.join(', ')}`)
-      console.error(`    ${v.snippet}...`)
-      totalViolations++
-    }
+    continue
+  }
+
+  for (const violation of violations) {
+    console.error(`  ✗ ${violation.file}:${violation.line} — ${violation.message}`)
+    totalViolations++
   }
 }
 
-console.log(`\n${files.length} file(s) checked, ${totalViolations} violation(s).`)
+for (const rel of CURATED_FIXTURE_FILES) {
+  const file = join(ROOT, rel)
+  if (!existsSync(file)) continue
+
+  const source = await readFile(file, 'utf8')
+  const violations = lintCuratedFixtureSource(source, file)
+
+  if (violations.length === 0) {
+    console.log(`  ✓ ${rel}`)
+    continue
+  }
+
+  for (const violation of violations) {
+    console.error(`  ✗ ${violation.file}:${violation.line} — ${violation.message}`)
+    totalViolations++
+  }
+}
+
+console.log(`\nSeed guardrails finished with ${totalViolations} violation(s).`)
 
 if (totalViolations > 0) {
-  console.error('\nFIX: Every INSERT INTO sites must include vertical, content_source, and media_source.')
   process.exit(1)
-} else {
-  process.exit(0)
 }

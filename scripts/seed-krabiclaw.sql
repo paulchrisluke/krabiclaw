@@ -1,5 +1,5 @@
 -- LEGACY seed kept for reference only. Do not run for the active demo tenant.
--- Use seeds/demo.sql via yarn seed:local or yarn seed:remote --confirm-production.
+-- Use the ephemeral demo generator via yarn seed:local or yarn seed:remote --confirm-production.
 
 -- 1. Create a demo user
 DELETE FROM user WHERE id = 'user_demo';

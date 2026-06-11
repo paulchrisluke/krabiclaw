@@ -1,43 +1,101 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { execSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
-  renderCompiledPotteryHouseCoreSeedBlock,
-  renderCompiledPotteryHouseMediaBlock,
-  renderCompiledPotteryHouseExperiencesBlock,
-  renderCompiledPotteryHouseReviewsBlock,
-  renderCompiledPotteryHouseQaBlock,
-  renderCompiledPotteryHousePostsBlock,
+  renderCompiledPotteryHouseBillingBlock,
   renderCompiledPotteryHouseContentBlock,
+  renderCompiledPotteryHouseCoreSeedBlock,
+  renderCompiledPotteryHouseExperiencesBlock,
+  renderCompiledPotteryHouseMediaBlock,
+  renderCompiledPotteryHousePostsBlock,
+  renderCompiledPotteryHouseQaBlock,
+  renderCompiledPotteryHouseReviewsBlock,
+  renderCompiledPotteryHouseTranslationsBlock,
 } from '../seed-definitions/pottery-house.ts'
 
-const root = process.cwd()
-const seedPath = resolve(root, 'seeds/pottery-house-krabi.sql')
-const current = readFileSync(seedPath, 'utf8')
+const isStdout = process.argv.includes('--stdout')
+const isRemote = process.argv.includes('--remote')
+const isStaging = process.argv.includes('--staging')
+const isPreview = process.argv.includes('--preview')
 
-function replaceBlock(source: string, startMarker: string, endMarker: string, replacement: string) {
-  const start = source.indexOf(startMarker)
-  const end = source.indexOf(endMarker)
+const envFlag = isStaging ? '--env staging' : isPreview ? '--env preview' : isRemote ? '' : '--local'
+const remoteFlag = isRemote || isStaging || isPreview ? '--remote' : ''
 
-  if (start === -1 || end === -1 || end < start) {
-    throw new Error(`Could not find generated seed markers: ${startMarker} ... ${endMarker}`)
-  }
+const sql = `-- Pottery House Krabi seed
+-- Ephemeral: generated from seed-definitions/pottery-house.ts
+-- Preview at: http://pottery-house.localhost:3000
+-- Production at: https://pottery-house.krabiclaw.com
+-- Destructive for pottery-house-owned rows: safe to re-run with yarn seed:local or yarn seed:remote --confirm-production
 
-  return `${source.slice(0, start)}${replacement}${source.slice(end + endMarker.length)}`
+PRAGMA foreign_keys = ON;
+
+-- Theme is shared platform data, not client-owned.
+INSERT OR IGNORE INTO themes (id, name, slug, version, description, status)
+VALUES ('saya-theme-v1', 'Saya', 'saya', '1.0.0', 'Restaurant website theme', 'active');
+
+-- Cleanly replace the protected pottery-house tenant. Deleting the site first
+-- keeps the seed idempotent even if a prior run left the subdomain row behind.
+DELETE FROM sites WHERE id = 'site-pottery-house' OR subdomain = 'pottery-house';
+DELETE FROM organization WHERE id = 'org-pottery-house';
+DELETE FROM site_domains WHERE domain IN ('pottery-house.localhost', 'pottery-house.krabiclaw.com');
+
+-- Organization (owned by your existing platform admin account)
+INSERT INTO organization (id, name, slug, createdAt)
+VALUES ('org-pottery-house', 'Pottery House Krabi', 'pottery-house-krabi', CURRENT_TIMESTAMP);
+
+-- Ensure the owner user exists in the user table to satisfy foreign key constraints.
+-- For local D1, we insert the user-pottery-house user.
+-- For remote production, the owner account is IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO. We ensure BOTH users exist.
+INSERT OR IGNORE INTO user (id, name, email, emailVerified)
+VALUES
+  ('user-pottery-house', 'Pottery House Owner', 'thesdrew@gmail.com', 1),
+  ('IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO', 'Platform Admin', 'paulchrisluke@gmail.com', 1);
+
+INSERT INTO member (id, organizationId, userId, role, createdAt)
+VALUES
+  ('member-pottery-house', 'org-pottery-house',
+   CASE WHEN EXISTS(SELECT 1 FROM user WHERE id = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO')
+        THEN 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
+        ELSE 'user-pottery-house'
+   END,
+   'owner', CURRENT_TIMESTAMP);
+
+${renderCompiledPotteryHouseCoreSeedBlock()}
+
+${renderCompiledPotteryHouseMediaBlock()}
+
+${renderCompiledPotteryHouseExperiencesBlock()}
+
+${renderCompiledPotteryHouseReviewsBlock()}
+
+${renderCompiledPotteryHouseQaBlock()}
+
+${renderCompiledPotteryHousePostsBlock()}
+
+${renderCompiledPotteryHouseContentBlock()}
+
+${renderCompiledPotteryHouseTranslationsBlock()}
+
+${renderCompiledPotteryHouseBillingBlock()}
+`
+
+if (isStdout) {
+  process.stdout.write(sql)
+  process.exit(0)
 }
 
-let result = current
-result = replaceBlock(result, '-- BEGIN GENERATED: pottery_core', '-- END GENERATED: pottery_core', renderCompiledPotteryHouseCoreSeedBlock())
-result = replaceBlock(result, '-- BEGIN GENERATED: pottery_media', '-- END GENERATED: pottery_media', renderCompiledPotteryHouseMediaBlock())
-result = replaceBlock(result, '-- BEGIN GENERATED: pottery_experiences', '-- END GENERATED: pottery_experiences', renderCompiledPotteryHouseExperiencesBlock())
-result = replaceBlock(result, '-- BEGIN GENERATED: pottery_reviews', '-- END GENERATED: pottery_reviews', renderCompiledPotteryHouseReviewsBlock())
-result = replaceBlock(result, '-- BEGIN GENERATED: pottery_qa', '-- END GENERATED: pottery_qa', renderCompiledPotteryHouseQaBlock())
-result = replaceBlock(result, '-- BEGIN GENERATED: pottery_posts', '-- END GENERATED: pottery_posts', renderCompiledPotteryHousePostsBlock())
-result = replaceBlock(result, '-- BEGIN GENERATED: pottery_content', '-- END GENERATED: pottery_content', renderCompiledPotteryHouseContentBlock())
+const dir = mkdtempSync(join(tmpdir(), 'krabiclaw-seed-pottery-house-'))
+const sqlPath = join(dir, 'pottery-house-krabi.sql')
 
-if (process.argv.includes('--stdout')) {
-  process.stdout.write(result)
-} else {
-  writeFileSync(seedPath, result)
+try {
+  writeFileSync(sqlPath, sql, 'utf8')
+  const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
+  console.log(`[seed:pottery-house] Applying: ${cmd}`)
+  execSync(cmd, { stdio: 'inherit' })
+  console.log('[seed:pottery-house] Done.')
+} finally {
+  rmSync(dir, { recursive: true, force: true })
 }

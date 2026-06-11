@@ -16,12 +16,12 @@ Schema DDL lives in `migrations/` and is applied by wrangler on every deploy. Se
 
 Wrangler D1's only interface is `wrangler d1 execute --file <sql>`, so SQL is always the apply format. But that doesn't mean SQL files should be checked in and maintained. The correct flow is:
 
-```
+```text
 seed-definitions/kikuzuki.ts      ← source of truth
 ↓ yarn seed:kikuzuki               generate → /tmp/kikuzuki.sql → wrangler d1 execute → discard
 ```
 
-A maintained SQL seed file is a half-truth: it looks authoritative but isn't. The typed TS definition is. `seeds/*.sql` for demo and pottery house are committed only because they still contain handwritten rows (Thai translations, etc.) that haven't been moved into the typed fixture yet. Once those rows are migrated, the SQL files will be gitignored and every tenant will follow the fully ephemeral model.
+A maintained SQL seed file is a half-truth: it looks authoritative but isn't. The typed TS definition is. Demo, Pottery House, and Kikuzuki now all follow the same ephemeral model: generate SQL to `/tmp`, apply it with wrangler, and discard it immediately. `seeds/*.sql` is no longer a source-of-truth path for curated tenants.
 
 No new tenant is introduced via a hand-authored SQL file. Ever.
 
@@ -88,7 +88,7 @@ All three tenants are on the typed fixture path. CI generates from source on eve
 
 ### Kikuzuki media
 
-Kikuzuki uses `cloudflare_images` as the provider for all food/interior photos (78 assets). The hero is a Cloudflare R2 video. CDN URL pattern: `https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/{cloudflareImageId}/public`.
+Kikuzuki uses `cloudflare_images` as the provider for 77 food/interior images. The 78th media asset is a Cloudflare R2 hero video. CDN URL pattern: `https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/{cloudflareImageId}/public`.
 
 ### Demo and Pottery House migration status
 
@@ -128,7 +128,7 @@ Scripts:
 
 Real client data goes through the approved import pipeline, not typed fixtures:
 
-```
+```text
 client:import --dry-run   → reviewable manifests in client-imports/<slug>/
 human review
 client:import --approve   → signs the manifest hash
@@ -142,18 +142,13 @@ Approved import replay (`client:replay`) is the standard path for re-seeding any
 
 ---
 
-## Remaining work
+## Guardrails
 
-### Finish removing handwritten SQL from demo and pottery house
+Demo, Pottery House, and Kikuzuki now all follow the same ephemeral model: typed fixture -> generated SQL in `/tmp` -> `wrangler d1 execute` -> discard.
 
-`seeds/demo.sql` and `seeds/pottery-house-krabi.sql` still contain handwritten rows for Thai translations, `ai_credits`, and `organization_billing`. Once moved into the typed fixture, the SQL files can be gitignored and those tenants follow the fully ephemeral model like kikuzuki.
-
-### Guardrails
-
-- `lint-seeds.mjs` checks for missing contract fields on `INSERT INTO sites` but does not block a new hand-authored `seeds/*.sql` from being introduced
-- CI should fail if a new `seeds/*.sql` appears that is not a declared generated output
-- `seeds/*.sql` should be gitignored once all handwritten content is removed
-- fixture reviews should treat any `external_url`, `/public/` tenant asset path, or third-party hosted tenant media URL as a regression
+- `seeds/*.sql` is gitignored and should stay empty for curated tenant seeds
+- `lint-seeds.mjs` fails CI if a new `seeds/*.sql` appears that is not a declared generated output
+- fixture reviews treat any `external_url`, repo-local `/public/` / `/images/` / `/videos/` tenant asset path, or third-party hosted tenant media URL in curated media fields as a regression
 - template work, seed edits, and onboarding changes must preserve the dashboard storage split:
   images via `/media/request-upload` -> Cloudflare Images
   videos/files via `/media/upload` -> Cloudflare R2

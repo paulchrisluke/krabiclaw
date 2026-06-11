@@ -1072,6 +1072,182 @@ export const demoFixture: CuratedSiteDefinition = {
       ],
     },
   ],
+  siteContentTranslations: [
+    {
+      id: 'sct-demo-th-home-hero',
+      locationId: null,
+      locale: 'th',
+      page: 'home',
+      field: 'hero',
+      content: null,
+      heroTitle: 'ไฟฟืนและค่ำคืนในบรูคลิน',
+      heroSubtitle: 'พิซซ่าแป้งซาวโดว์ขอบพองกรอบ แอนติพาสติตามฤดูกาล และห้องอาหารที่อบอุ่นด้วยแสงจากเตา',
+      value: 'ไฟฟืนและค่ำคืนในบรูคลิน',
+      type: 'text',
+      status: 'published',
+      sourceHash: 'demo-pizza-home-hero-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'sct-demo-th-cta',
+      locationId: null,
+      locale: 'th',
+      page: 'home',
+      field: 'cta.title',
+      content: 'จองโต๊ะใกล้เตาอบ',
+      heroTitle: null,
+      heroSubtitle: null,
+      value: 'จองโต๊ะใกล้เตาอบ',
+      type: 'text',
+      status: 'published',
+      sourceHash: 'demo-pizza-cta-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'sct-demo-th-story-title',
+      locationId: null,
+      locale: 'th',
+      page: 'about',
+      field: 'story.title',
+      content: 'แทรตโทเรียที่มีเตาอบเป็นหัวใจ',
+      heroTitle: null,
+      heroSubtitle: null,
+      value: 'แทรตโทเรียที่มีเตาอบเป็นหัวใจ',
+      type: 'text',
+      status: 'published',
+      sourceHash: 'demo-pizza-story-title-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'sct-demo-th-story-body',
+      locationId: null,
+      locale: 'th',
+      page: 'about',
+      field: 'story.body',
+      content: 'Ember & Slice เริ่มจากแป้งซาวโดว์ เครื่องผสมที่ยืมมา และเตาอบป๊อปอัพหลังบาร์ไวน์แห่งหนึ่งในบรูคลิน พิซซ่าขายหมดก่อนพระอาทิตย์ตก แล้วก็ขายหมดอีกในสุดสัปดาห์ถัดมา และทุกสุดสัปดาห์หลังจากนั้น\n\nวันนี้ร้านมีที่อยู่ถาวรแล้ว แต่คำสัญญายังเหมือนเดิม: แป้งที่ใช้เวลา ไฟจริง วัตถุดิบตามฤดูกาล และการบริการที่ทำให้คืนธรรมดารู้สึกพิเศษ',
+      heroTitle: null,
+      heroSubtitle: null,
+      value: 'Ember & Slice เริ่มจากแป้งซาวโดว์ เครื่องผสมที่ยืมมา และเตาอบป๊อปอัพหลังบาร์ไวน์แห่งหนึ่งในบรูคลิน',
+      type: 'richtext',
+      status: 'published',
+      sourceHash: 'demo-pizza-story-body-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+  ],
+  businessLocationTranslations: [
+    {
+      id: 'blt-demo-th-loc',
+      locationId: 'loc-demo',
+      locale: 'th',
+      title: 'Ember & Slice บรูคลิน',
+      address: '184 Wythe Ave',
+      city: 'บรูคลิน',
+      description: 'แทรตโทเรียพิซซ่าเตาฟืนในบรูคลิน เสิร์ฟพิซซ่าแป้งซาวโดว์ แอนติพาสติตามฤดูกาล และบรรยากาศอบอุ่นรอบเตาอบ',
+      shortDescription: 'พิซซ่าเตาฟืน แอนติพาสติตามฤดูกาล และการต้อนรับแบบเพื่อนบ้านในบรูคลิน',
+      status: 'published',
+      sourceHash: 'demo-pizza-location-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+  ],
+  menuTranslations: [
+    {
+      id: 'mt-demo-th-menu',
+      menuId: 'menu-demo',
+      locale: 'th',
+      name: 'เมนู',
+      description: 'พิซซ่าเตาฟืน แอนติพาสตี สลัด และเครื่องดื่มจาก Ember & Slice',
+      sectionOrder: ['พิซซ่าเตาฟืน', 'แอนติพาสตี', 'พาสต้าและสลัด', 'เครื่องดื่ม'],
+      status: 'published',
+      sourceHash: 'demo-pizza-menu-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+  ],
+  menuItemTranslations: [
+    {
+      id: 'mit-demo-th-mi-1',
+      menuItemId: 'mi-1',
+      locale: 'th',
+      section: 'พิซซ่าเตาฟืน',
+      name: 'มาร์เกริตา',
+      description: 'มะเขือเทศซานมาร์ซาโน ฟิออร์ดิลาเต้ ใบโหระพา น้ำมันมะกอกเอ็กซ์ตร้าเวอร์จิน และเกลือทะเล',
+      allergens: 'กลูเตน, นม',
+      dietaryNotes: 'มังสวิรัติ',
+      status: 'published',
+      sourceHash: 'demo-pizza-mi-1-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'mit-demo-th-mi-2',
+      menuItemId: 'mi-2',
+      locale: 'th',
+      section: 'พิซซ่าเตาฟืน',
+      name: 'เปปเปอโรนีคาลาเบรเซ',
+      description: 'ซอสมะเขือเทศ มอซซาเรลลา เปปเปอโรนี พริกคาลาเบรีย และออริกาโน',
+      allergens: 'กลูเตน, นม',
+      dietaryNotes: null,
+      status: 'published',
+      sourceHash: 'demo-pizza-mi-2-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'mit-demo-th-mi-3',
+      menuItemId: 'mi-3',
+      locale: 'th',
+      section: 'พิซซ่าเตาฟืน',
+      name: 'ฟุงกีบิอังโก',
+      description: 'เห็ดย่าง ครีมริคอตตา กระเทียม ไทม์ มอซซาเรลลา และเปโคริโน',
+      allergens: 'กลูเตน, นม',
+      dietaryNotes: 'มังสวิรัติ',
+      status: 'published',
+      sourceHash: 'demo-pizza-mi-3-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'mit-demo-th-mi-5',
+      menuItemId: 'mi-5',
+      locale: 'th',
+      section: 'แอนติพาสตี',
+      name: 'บูราตา',
+      description: 'บูราตาครีมมี่ มะเขือเทศเชอร์รีย่าง น้ำมันโหระพา และซาวโดว์ย่าง',
+      allergens: 'กลูเตน, นม',
+      dietaryNotes: 'มังสวิรัติ',
+      status: 'published',
+      sourceHash: 'demo-pizza-mi-5-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'mit-demo-th-mi-6',
+      menuItemId: 'mi-6',
+      locale: 'th',
+      section: 'แอนติพาสตี',
+      name: 'การ์ลิกนอตส์',
+      description: 'ขนมปังนอตส์อบเตาฟืน คลุกพาร์สลีย์ เนยกระเทียมย่าง และมารินารา',
+      allergens: 'กลูเตน, นม',
+      dietaryNotes: 'มังสวิรัติ',
+      status: 'published',
+      sourceHash: 'demo-pizza-mi-6-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+  ],
+  aiCredits: {
+    balance: 500,
+    lifetimeUsed: 127,
+  },
+  organizationBilling: {
+    status: 'free',
+    plan: 'free',
+  },
   publicRoutes: [
     { path: '/experiences', title: /Experiences \| Ember & Slice/, text: 'Pizza Making Class' },
     { path: '/experiences/pizza-making-class', title: /Pizza Making Class Brooklyn \| Ember & Slice/, text: 'Stretch dough' },
@@ -1466,6 +1642,125 @@ INSERT INTO site_content
 VALUES
 ${contentRows};
 -- END GENERATED: demo_content`
+}
+
+export function renderCompiledDemoTranslationsBlock(): string {
+  const siteContentTranslationRows = compiledDemoSeed.siteContentTranslations
+    .map((entry) => `  (${[
+      sqlValue(entry.id),
+      sqlValue(entry.organizationId),
+      sqlValue(entry.siteId),
+      sqlValue(entry.locationId),
+      sqlValue(entry.locale),
+      sqlValue(entry.page),
+      sqlValue(entry.field),
+      sqlValue(entry.content),
+      sqlValue(entry.heroTitle),
+      sqlValue(entry.heroSubtitle),
+      sqlValue(entry.value),
+      sqlValue(entry.type),
+      sqlValue(entry.status),
+      sqlValue(entry.sourceHash),
+      sqlValue(entry.translatedAt),
+      sqlValue(entry.reviewedAt),
+    ].join(', ')})`)
+    .join(',\n')
+
+  const businessLocationTranslationRows = compiledDemoSeed.businessLocationTranslations
+    .map((entry) => `  (${[
+      sqlValue(entry.id),
+      sqlValue(entry.organizationId),
+      sqlValue(entry.siteId),
+      sqlValue(entry.locationId),
+      sqlValue(entry.locale),
+      sqlValue(entry.title),
+      sqlValue(entry.address),
+      sqlValue(entry.city),
+      sqlValue(entry.description),
+      sqlValue(entry.shortDescription),
+      sqlValue(entry.status),
+      sqlValue(entry.sourceHash),
+      sqlValue(entry.translatedAt),
+      sqlValue(entry.reviewedAt),
+    ].join(', ')})`)
+    .join(',\n')
+
+  const menuTranslationRows = compiledDemoSeed.menuTranslations
+    .map((entry) => `  (${[
+      sqlValue(entry.id),
+      sqlValue(entry.organizationId),
+      sqlValue(entry.siteId),
+      sqlValue(entry.menuId),
+      sqlValue(entry.locale),
+      sqlValue(entry.name),
+      sqlValue(entry.description),
+      sqlJson(entry.sectionOrder),
+      sqlValue(entry.status),
+      sqlValue(entry.sourceHash),
+      sqlValue(entry.translatedAt),
+      sqlValue(entry.reviewedAt),
+    ].join(', ')})`)
+    .join(',\n')
+
+  const menuItemTranslationRows = compiledDemoSeed.menuItemTranslations
+    .map((entry) => `  (${[
+      sqlValue(entry.id),
+      sqlValue(entry.organizationId),
+      sqlValue(entry.siteId),
+      sqlValue(entry.menuItemId),
+      sqlValue(entry.locale),
+      sqlValue(entry.section),
+      sqlValue(entry.name),
+      sqlValue(entry.description),
+      sqlValue(entry.allergens),
+      sqlValue(entry.dietaryNotes),
+      sqlValue(entry.status),
+      sqlValue(entry.sourceHash),
+      sqlValue(entry.translatedAt),
+      sqlValue(entry.reviewedAt),
+    ].join(', ')})`)
+    .join(',\n')
+
+  return `-- BEGIN GENERATED: demo_translations
+INSERT INTO site_content_translations
+  (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, reviewed_at)
+VALUES
+${siteContentTranslationRows};
+
+INSERT INTO business_location_translations
+  (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, reviewed_at)
+VALUES
+${businessLocationTranslationRows};
+
+INSERT INTO menu_translations
+  (id, organization_id, site_id, menu_id, locale, name, description, section_order, status, source_hash, translated_at, reviewed_at)
+VALUES
+${menuTranslationRows};
+
+INSERT INTO menu_item_translations
+  (id, organization_id, site_id, menu_item_id, locale, section, name, description, allergens, dietary_notes, status, source_hash, translated_at, reviewed_at)
+VALUES
+${menuItemTranslationRows};
+-- END GENERATED: demo_translations`
+}
+
+export function renderCompiledDemoBillingBlock(): string {
+  const { identity, aiCredits, organizationBilling } = compiledDemoSeed
+  const parts: string[] = []
+
+  if (aiCredits) {
+    parts.push(`INSERT INTO ai_credits (organization_id, balance, lifetime_used)
+VALUES (${sqlValue(identity.organizationId)}, ${aiCredits.balance}, ${aiCredits.lifetimeUsed});`)
+  }
+
+  if (organizationBilling) {
+    parts.push(`INSERT INTO organization_billing (id, organization_id, status, plan)
+VALUES (${sqlValue(`billing-${identity.organizationId}`)}, ${sqlValue(identity.organizationId)}, ${sqlValue(organizationBilling.status)}, ${sqlValue(organizationBilling.plan)});`)
+  }
+
+  return `-- BEGIN GENERATED: demo_billing
+${parts.join('\n\n')}
+-- END GENERATED: demo_billing`
 }
 
 export const renderDemoExperienceSeedBlock = renderCompiledDemoExperienceSeedBlock

@@ -103,11 +103,9 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           npx wrangler d1 migrations apply DB --env preview --remote
-          node --experimental-strip-types scripts/generate-demo-seed.ts
           node --experimental-strip-types scripts/generate-demo-bundle.ts
-          npx wrangler d1 execute DB --env preview --remote --file seeds/demo.sql
-          node --experimental-strip-types scripts/generate-pottery-house-seed.ts
-          npx wrangler d1 execute DB --env preview --remote --file seeds/pottery-house-krabi.sql
+          node --experimental-strip-types scripts/generate-demo-seed.ts --preview
+          node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview
       - name: Deploy preview Worker
         env:
@@ -121,6 +119,7 @@ jobs:
         run: |
           curl -sf -o /dev/null "https://preview.krabiclaw.com/" || true
           curl -sf -o /dev/null "https://preview.krabiclaw.com/blog" || true
+          curl -sf -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://preview.krabiclaw.com/api/dev/login" || true
           sleep 3
       - name: Run smoke tests
         env:
@@ -160,11 +159,9 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           npx wrangler d1 migrations apply DB --env staging --remote
-          node --experimental-strip-types scripts/generate-demo-seed.ts
           node --experimental-strip-types scripts/generate-demo-bundle.ts
-          npx wrangler d1 execute DB --env staging --remote --file seeds/demo.sql
-          node --experimental-strip-types scripts/generate-pottery-house-seed.ts
-          npx wrangler d1 execute DB --env staging --remote --file seeds/pottery-house-krabi.sql
+          node --experimental-strip-types scripts/generate-demo-seed.ts --staging
+          node --experimental-strip-types scripts/generate-pottery-house-seed.ts --staging
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --staging
       - name: Deploy staging Worker
         env:
@@ -179,6 +176,7 @@ jobs:
           curl -sf -o /dev/null "https://staging.krabiclaw.com/" || true
           curl -sf -o /dev/null "https://staging.krabiclaw.com/blog" || true
           curl -sf -o /dev/null "https://staging.krabiclaw.com/api/billing/plans" || true
+          curl -sf -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://staging.krabiclaw.com/api/dev/login" || true
           sleep 10
       - name: Run full E2E suite
         run: yarn test:e2e:full
