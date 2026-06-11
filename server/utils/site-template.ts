@@ -6,6 +6,18 @@ function uid(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`
 }
 
+const TEMPLATE_HERO_IMAGE = {
+  cloudflareImageId: '0762ea49-0bd2-4cc8-1044-d6c9b1f00100',
+  publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public',
+  thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/thumbnail',
+}
+
+const TEMPLATE_STORY_IMAGE = {
+  cloudflareImageId: '03e7f501-7689-4607-3acb-ec6f0d958500',
+  publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/03e7f501-7689-4607-3acb-ec6f0d958500/public',
+  thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/03e7f501-7689-4607-3acb-ec6f0d958500/thumbnail',
+}
+
 export async function seedNewSite(
   db: D1Database,
   params: { organizationId: string; siteId: string; restaurantName: string }
@@ -40,12 +52,19 @@ export async function seedNewSite(
   statements.push(db.prepare(`
     INSERT OR IGNORE INTO media_assets
       (id, organization_id, site_id, location_id, kind, provider, source,
-       public_url, thumbnail_url, mime_type, file_name, alt_text, status)
-    VALUES (?, ?, ?, ?, 'image', 'external_url', 'external',
-      'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&q=80',
-      'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=70',
-      'image/jpeg', 'hero.jpg', ?, 'active')
-  `).bind(heroMediaId, organizationId, siteId, locationId, `${restaurantName} hero image`))
+       cloudflare_image_id, public_url, thumbnail_url, mime_type, file_name, alt_text, status)
+    VALUES (?, ?, ?, ?, 'image', 'cloudflare_images', 'generated',
+      ?, ?, ?, 'image/jpeg', 'hero.jpg', ?, 'active')
+  `).bind(
+    heroMediaId,
+    organizationId,
+    siteId,
+    locationId,
+    TEMPLATE_HERO_IMAGE.cloudflareImageId,
+    TEMPLATE_HERO_IMAGE.publicUrl,
+    TEMPLATE_HERO_IMAGE.thumbnailUrl,
+    `${restaurantName} hero image`
+  ))
 
   statements.push(db.prepare(`
     UPDATE business_locations
@@ -57,12 +76,19 @@ export async function seedNewSite(
   statements.push(db.prepare(`
     INSERT OR IGNORE INTO media_assets
       (id, organization_id, site_id, location_id, kind, provider, source,
-       public_url, thumbnail_url, mime_type, file_name, alt_text, status)
-    VALUES (?, ?, ?, ?, 'image', 'external_url', 'external',
-      'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=1400&q=85',
-      'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=600&q=70',
-      'image/jpeg', 'story.jpg', ?, 'active')
-  `).bind(storyMediaId, organizationId, siteId, locationId, `${restaurantName} story image`))
+       cloudflare_image_id, public_url, thumbnail_url, mime_type, file_name, alt_text, status)
+    VALUES (?, ?, ?, ?, 'image', 'cloudflare_images', 'generated',
+      ?, ?, ?, 'image/jpeg', 'story.jpg', ?, 'active')
+  `).bind(
+    storyMediaId,
+    organizationId,
+    siteId,
+    locationId,
+    TEMPLATE_STORY_IMAGE.cloudflareImageId,
+    TEMPLATE_STORY_IMAGE.publicUrl,
+    TEMPLATE_STORY_IMAGE.thumbnailUrl,
+    `${restaurantName} story image`
+  ))
 
   // ── Sample menu ───────────────────────────────────────────────────────────
   statements.push(db.prepare(`

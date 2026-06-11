@@ -14,6 +14,8 @@ import {
   renderCompiledDemoPostsBlock,
   renderDemoExperienceSeedBlock,
   renderCompiledDemoContentBlock,
+  renderCompiledDemoTranslationsBlock,
+  renderCompiledDemoBillingBlock,
 } from '../../seed-definitions/demo.ts'
 import { serializeCompiledSeedBundle } from '../../seed-definitions/serialize.ts'
 
@@ -66,8 +68,9 @@ test('compiled demo seed can be serialized into a deterministic artifact bundle'
 test('checked-in demo bundle artifact matches the compiled demo seed', () => {
   const artifactPath = resolve(process.cwd(), 'seed-definitions/generated/demo.bundle.json')
   const artifact = JSON.parse(readFileSync(artifactPath, 'utf8'))
+  const compiledArtifact = JSON.parse(JSON.stringify(serializeCompiledSeedBundle(compiledDemoSeed)))
 
-  assert.deepEqual(artifact, serializeCompiledSeedBundle(compiledDemoSeed))
+  assert.deepEqual(artifact, compiledArtifact)
 })
 
 test('demo experience seed block contains only the experiences table', () => {
@@ -83,6 +86,8 @@ test('demo media block includes all media assets and hero refs', () => {
   const sql = renderCompiledDemoMediaBlock()
 
   assert.match(sql, /INSERT INTO media_assets/)
+  assert.match(sql, /cloudflare_image_id/)
+  assert.match(sql, /r2_key/)
   assert.match(sql, /media-demo-hero/)
   assert.match(sql, /'video'/)
   assert.match(sql, /UPDATE business_locations SET hero_image_asset_id/)
@@ -132,6 +137,25 @@ test('demo content block includes site content for all pages including home hero
   assert.match(sql, /hero\.kicker/)
 })
 
+test('demo translations block includes Thai translations for content, locations, and menus', () => {
+  const sql = renderCompiledDemoTranslationsBlock()
+
+  assert.match(sql, /INSERT INTO site_content_translations/)
+  assert.match(sql, /INSERT INTO business_location_translations/)
+  assert.match(sql, /INSERT INTO menu_translations/)
+  assert.match(sql, /INSERT INTO menu_item_translations/)
+  assert.match(sql, /ไฟฟืนและค่ำคืนในบรูคลิน/)
+})
+
+test('demo billing block includes ai credits and organization billing state', () => {
+  const sql = renderCompiledDemoBillingBlock()
+
+  assert.match(sql, /INSERT INTO ai_credits/)
+  assert.match(sql, /INSERT INTO organization_billing/)
+  assert.match(sql, /127/)
+  assert.match(sql, /billing-org-demo/)
+})
+
 test('demo core seed block includes generated site, locale, domain, and location rows', () => {
   const sql = renderCompiledDemoCoreSeedBlock()
 
@@ -142,4 +166,17 @@ test('demo core seed block includes generated site, locale, domain, and location
   assert.match(sql, /INSERT INTO business_locations/)
   assert.match(sql, /source_locale/)
   assert.match(sql, /Ember & Slice Brooklyn/)
+})
+
+test('demo compiled media assets preserve the Cloudflare media split', () => {
+  const imageAssets = compiledDemoSeed.mediaAssets.filter((asset) => asset.mimeType.startsWith('image/'))
+  const fileAssets = compiledDemoSeed.mediaAssets.filter((asset) => !asset.mimeType.startsWith('image/'))
+
+  assert.ok(imageAssets.length > 0)
+  assert.ok(fileAssets.length > 0)
+  assert.ok(imageAssets.every((asset) => asset.provider === 'cloudflare_images'))
+  assert.ok(imageAssets.every((asset) => asset.cloudflareImageId !== null))
+  assert.ok(imageAssets.every((asset) => asset.r2Key === null))
+  assert.ok(fileAssets.every((asset) => asset.provider === 'cloudflare_r2'))
+  assert.ok(fileAssets.every((asset) => asset.r2Key !== null))
 })

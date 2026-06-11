@@ -166,8 +166,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-hero',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1579751626657-72bc17010498?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1579751626657-72bc17010498?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '0762ea49-0bd2-4cc8-1044-d6c9b1f00100',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'wood-fired-pizza-hero.jpg',
       altText: 'Wood-fired pizza with blistered crust',
@@ -177,7 +180,10 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'media-demo-hero-video',
       locationId: 'loc-demo',
       kind: 'video',
-      publicUrl: '/videos/krabiclaw-demo-hero-video.mp4',
+      provider: 'cloudflare_r2',
+      source: 'uploaded',
+      r2Key: 'sites/site-demo/media/media-demo-hero-video.mp4',
+      publicUrl: 'https://media.krabiclaw.com/sites/site-demo/media/media-demo-hero-video.mp4',
       thumbnailUrl: null,
       mimeType: 'video/mp4',
       fileName: 'krabiclaw-demo-hero-video.mp4',
@@ -188,7 +194,10 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'media-demo-margherita-video',
       locationId: 'loc-demo',
       kind: 'video',
-      publicUrl: '/videos/krabiclaw-demo-pizza-cutting.mp4',
+      provider: 'cloudflare_r2',
+      source: 'uploaded',
+      r2Key: 'sites/site-demo/media/media-demo-margherita-video.mp4',
+      publicUrl: 'https://media.krabiclaw.com/sites/site-demo/media/media-demo-margherita-video.mp4',
       thumbnailUrl: null,
       mimeType: 'video/mp4',
       fileName: 'krabiclaw-demo-pizza-cutting.mp4',
@@ -199,7 +208,10 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'media-demo-pizza-prep-video',
       locationId: 'loc-demo',
       kind: 'video',
-      publicUrl: '/videos/krabiclaw-demo-pizza-prep.mp4',
+      provider: 'cloudflare_r2',
+      source: 'uploaded',
+      r2Key: 'sites/site-demo/media/media-demo-pizza-prep-video.mp4',
+      publicUrl: 'https://media.krabiclaw.com/sites/site-demo/media/media-demo-pizza-prep-video.mp4',
       thumbnailUrl: null,
       mimeType: 'video/mp4',
       fileName: 'krabiclaw-demo-pizza-prep.mp4',
@@ -210,8 +222,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-ext-1',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '6ad28d44-8997-46b8-3a06-87833c65c000',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6ad28d44-8997-46b8-3a06-87833c65c000/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6ad28d44-8997-46b8-3a06-87833c65c000/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'brooklyn-storefront.jpg',
       altText: 'Neighborhood restaurant storefront',
@@ -220,8 +235,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-ext-2',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: 'e7db135b-cd81-4b15-aa22-a07f24d0b900',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/e7db135b-cd81-4b15-aa22-a07f24d0b900/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/e7db135b-cd81-4b15-aa22-a07f24d0b900/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'evening-entrance.jpg',
       altText: 'Warm trattoria entrance at night',
@@ -231,8 +249,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-int-1',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: 'fd99958c-6feb-47da-3040-bf5c56705e00',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/fd99958c-6feb-47da-3040-bf5c56705e00/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/fd99958c-6feb-47da-3040-bf5c56705e00/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'dining-room.jpg',
       altText: 'Cozy Brooklyn dining room',
@@ -241,8 +262,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-int-2',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '03e7f501-7689-4607-3acb-ec6f0d958500',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/03e7f501-7689-4607-3acb-ec6f0d958500/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/03e7f501-7689-4607-3acb-ec6f0d958500/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'oven-counter.jpg',
       altText: 'Open kitchen counter near the oven',
@@ -251,8 +275,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-int-3',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '01f1ec1c-1440-41d1-5323-1cf279b10600',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/01f1ec1c-1440-41d1-5323-1cf279b10600/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/01f1ec1c-1440-41d1-5323-1cf279b10600/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'table-service.jpg',
       altText: 'Table set for trattoria service',
@@ -262,8 +289,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-team-1',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1581299894007-aaa50297cf16?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1581299894007-aaa50297cf16?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: 'b877d25c-e835-48b8-1faf-00e0c4614000',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b877d25c-e835-48b8-1faf-00e0c4614000/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b877d25c-e835-48b8-1faf-00e0c4614000/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'pizza-team.jpg',
       altText: 'Ember & Slice kitchen team',
@@ -273,8 +303,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-margherita',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=900&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=450&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '59e0fb6a-06dc-400c-9b38-5cd2d957bd00',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/59e0fb6a-06dc-400c-9b38-5cd2d957bd00/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/59e0fb6a-06dc-400c-9b38-5cd2d957bd00/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'margherita.jpg',
       altText: 'Margherita pizza with basil',
@@ -283,8 +316,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-pepperoni',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=900&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=450&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '0d5c6306-8783-475c-ae49-d40be5783c00',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0d5c6306-8783-475c-ae49-d40be5783c00/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0d5c6306-8783-475c-ae49-d40be5783c00/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'pepperoni-calabrese.jpg',
       altText: 'Pepperoni Calabrese pizza',
@@ -293,8 +329,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-funghi',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1594007654729-407eedc4be65?w=900&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1594007654729-407eedc4be65?w=450&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: 'a352e160-d8b2-443f-a539-0c585f1fda00',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a352e160-d8b2-443f-a539-0c585f1fda00/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a352e160-d8b2-443f-a539-0c585f1fda00/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'funghi-bianco.jpg',
       altText: 'Mushroom white pizza',
@@ -303,8 +342,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-burrata',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1608897013039-887f21d8c804?w=900&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1608897013039-887f21d8c804?w=450&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: 'cca97463-0109-4ea6-60dd-64001fd87d00',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/cca97463-0109-4ea6-60dd-64001fd87d00/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/cca97463-0109-4ea6-60dd-64001fd87d00/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'burrata.jpg',
       altText: 'Burrata with tomatoes and herbs',
@@ -313,8 +355,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-knots',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?w=900&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?w=450&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: 'af94834c-67b7-4dc9-a893-564ffcd2cf00',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/af94834c-67b7-4dc9-a893-564ffcd2cf00/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/af94834c-67b7-4dc9-a893-564ffcd2cf00/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'garlic-knots.jpg',
       altText: 'Garlic knots with marinara',
@@ -324,8 +369,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-post1',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1579751626657-72bc17010498?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1579751626657-72bc17010498?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '294bda34-8a59-4f17-623b-e2a5feec7c00',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/294bda34-8a59-4f17-623b-e2a5feec7c00/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/294bda34-8a59-4f17-623b-e2a5feec7c00/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'post-oven.jpg',
       altText: 'Pizza coming out of the oven',
@@ -334,8 +382,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-post2',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '276a3c4d-9bfe-45bd-90e7-85899356f700',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/276a3c4d-9bfe-45bd-90e7-85899356f700/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/276a3c4d-9bfe-45bd-90e7-85899356f700/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'post-dining-room.jpg',
       altText: 'Dining room during dinner service',
@@ -344,8 +395,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-post3',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '1246e510-65ce-4335-1309-0353b47ae100',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1246e510-65ce-4335-1309-0353b47ae100/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1246e510-65ce-4335-1309-0353b47ae100/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'post-margherita.jpg',
       altText: 'Margherita pizza special',
@@ -355,8 +409,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo2-hero',
       locationId: 'loc-demo-2',
-      publicUrl: 'https://images.unsplash.com/photo-1544148103-0773bf10d330?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1544148103-0773bf10d330?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: 'e3ac3094-6e43-4ffe-7659-67365cc21d00',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/e3ac3094-6e43-4ffe-7659-67365cc21d00/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/e3ac3094-6e43-4ffe-7659-67365cc21d00/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'west-village-hero.jpg',
       altText: 'West Village restaurant storefront',
@@ -365,8 +422,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo2-int-1',
       locationId: 'loc-demo-2',
-      publicUrl: 'https://images.unsplash.com/photo-1559339352-11d035aa65de?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1559339352-11d035aa65de?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: 'e76fe844-f1e0-4fcd-c1ed-8f9ad2dd6700',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/e76fe844-f1e0-4fcd-c1ed-8f9ad2dd6700/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/e76fe844-f1e0-4fcd-c1ed-8f9ad2dd6700/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'west-village-interior.jpg',
       altText: 'Cozy West Village dining room',
@@ -376,8 +436,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-exp-class',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '245066b6-926f-4dbb-e731-53ebb0e22700',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/245066b6-926f-4dbb-e731-53ebb0e22700/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/245066b6-926f-4dbb-e731-53ebb0e22700/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'pizza-making-class.jpg',
       altText: 'Guests shaping pizza dough at a hands-on pizza making class',
@@ -386,8 +449,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-exp-wine',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '9b3d4f55-4b43-4a98-40d4-225947dc7300',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/9b3d4f55-4b43-4a98-40d4-225947dc7300/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/9b3d4f55-4b43-4a98-40d4-225947dc7300/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'natural-wine-pizza-night.jpg',
       altText: 'Pizza and wine set for a long-table dinner evening',
@@ -396,8 +462,11 @@ export const demoFixture: CuratedSiteDefinition = {
     {
       id: 'media-demo-exp-family',
       locationId: 'loc-demo',
-      publicUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=70',
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '0b7af787-3380-4adc-2804-17792dd73300',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0b7af787-3380-4adc-2804-17792dd73300/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0b7af787-3380-4adc-2804-17792dd73300/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'family-pizza-night.jpg',
       altText: 'Family-style dinner table set for pizza night',
@@ -432,7 +501,7 @@ export const demoFixture: CuratedSiteDefinition = {
       locationId: null,
       page: 'about',
       field: 'story.image',
-      content: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1400&q=85',
+      content: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/cad82f19-5ecd-43cd-8781-606a59256000/public',
       type: 'media',
     },
     {
@@ -569,7 +638,7 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo-1',
       locationId: 'loc-demo',
       authorName: 'Maya R.',
-      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=96&q=80',
+      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/45239b3d-625e-49da-e751-a5ff8cc7e700/public',
       rating: 5,
       content: 'The Margherita had that perfect leopard-spotted crust and the basil hit the table smelling fresh. Exactly what I want from a neighborhood pizza night.',
       ownerReply: null,
@@ -581,7 +650,7 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo-2',
       locationId: 'loc-demo',
       authorName: 'Julian P.',
-      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=96&q=80',
+      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/699707fd-1559-4dc9-b115-3fe4a753aa00/public',
       rating: 5,
       content: 'Sat at the counter and watched the oven all night. Pepperoni Calabrese, burrata, and a spritz made this feel like a tiny vacation.',
       ownerReply: 'Thank you Julian. The counter seats are our favorite too - come back for the Funghi Bianco next time.',
@@ -593,7 +662,7 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo-3',
       locationId: 'loc-demo',
       authorName: 'Priya S.',
-      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=96&q=80',
+      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6e004069-4d01-4709-34bd-d1a0cacc4600/public',
       rating: 4,
       content: 'Great crust, warm service, and the garlic knots vanished before the pizza landed. It gets loud at peak dinner but in a good way.',
       ownerReply: 'Thanks Priya. Dinner definitely has energy, and we are glad the knots did their job.',
@@ -605,7 +674,7 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo-4',
       locationId: 'loc-demo',
       authorName: 'Noah L.',
-      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=96&q=80',
+      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ee18283c-d024-4bf0-15a5-73fc6c321e00/public',
       rating: 5,
       content: 'The hot honey soppressata is ridiculous. Sweet, spicy, smoky, and somehow still balanced. Best pie I have had in Williamsburg this year.',
       ownerReply: null,
@@ -617,7 +686,7 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo-5',
       locationId: 'loc-demo',
       authorName: 'Elena C.',
-      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=96&q=80',
+      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b010933f-cac7-420f-1b4e-130b3b01ca00/public',
       rating: 4,
       content: 'Lovely date-night spot without feeling precious. Caesar was sharp and cold, pizza was blistered, staff knew the menu well.',
       ownerReply: null,
@@ -629,7 +698,7 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo-6',
       locationId: 'loc-demo',
       authorName: 'Chris B.',
-      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=96&q=80',
+      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6413ee7e-ca8d-4616-00f4-8a4224217a00/public',
       rating: 3,
       content: 'Food was strong but our table was about 15 minutes late on a busy Friday. I would come earlier next time.',
       ownerReply: 'Hi Chris - sorry for the Friday wait. We tightened our turn times and would love to host you again on a smoother night.',
@@ -641,7 +710,7 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo2-1',
       locationId: 'loc-demo-2',
       authorName: 'Michael T.',
-      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=96&q=80',
+      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ee18283c-d024-4bf0-15a5-73fc6c321e00/public',
       rating: 5,
       content: 'Unbelievable sourdough pizza right in the West Village! The Margherita is simple, fresh, and perfectly charred. Truly a hidden gem.',
       ownerReply: 'Thank you Michael! We are thrilled you enjoyed the neighborhood vibes and our signature crust.',
@@ -653,7 +722,7 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo2-2',
       locationId: 'loc-demo-2',
       authorName: 'Emma W.',
-      reviewerPhotoUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=96&q=80',
+      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/45239b3d-625e-49da-e751-a5ff8cc7e700/public',
       rating: 5,
       content: 'Beautiful space, exceptionally friendly service, and a fantastic corner view. Highly recommend the Burrata and the Hot Honey pie!',
       ownerReply: null,
@@ -1003,6 +1072,182 @@ export const demoFixture: CuratedSiteDefinition = {
       ],
     },
   ],
+  siteContentTranslations: [
+    {
+      id: 'sct-demo-th-home-hero',
+      locationId: null,
+      locale: 'th',
+      page: 'home',
+      field: 'hero',
+      content: null,
+      heroTitle: 'ไฟฟืนและค่ำคืนในบรูคลิน',
+      heroSubtitle: 'พิซซ่าแป้งซาวโดว์ขอบพองกรอบ แอนติพาสติตามฤดูกาล และห้องอาหารที่อบอุ่นด้วยแสงจากเตา',
+      value: 'ไฟฟืนและค่ำคืนในบรูคลิน',
+      type: 'text',
+      status: 'published',
+      sourceHash: 'demo-pizza-home-hero-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'sct-demo-th-cta',
+      locationId: null,
+      locale: 'th',
+      page: 'home',
+      field: 'cta.title',
+      content: 'จองโต๊ะใกล้เตาอบ',
+      heroTitle: null,
+      heroSubtitle: null,
+      value: 'จองโต๊ะใกล้เตาอบ',
+      type: 'text',
+      status: 'published',
+      sourceHash: 'demo-pizza-cta-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'sct-demo-th-story-title',
+      locationId: null,
+      locale: 'th',
+      page: 'about',
+      field: 'story.title',
+      content: 'แทรตโทเรียที่มีเตาอบเป็นหัวใจ',
+      heroTitle: null,
+      heroSubtitle: null,
+      value: 'แทรตโทเรียที่มีเตาอบเป็นหัวใจ',
+      type: 'text',
+      status: 'published',
+      sourceHash: 'demo-pizza-story-title-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'sct-demo-th-story-body',
+      locationId: null,
+      locale: 'th',
+      page: 'about',
+      field: 'story.body',
+      content: 'Ember & Slice เริ่มจากแป้งซาวโดว์ เครื่องผสมที่ยืมมา และเตาอบป๊อปอัพหลังบาร์ไวน์แห่งหนึ่งในบรูคลิน พิซซ่าขายหมดก่อนพระอาทิตย์ตก แล้วก็ขายหมดอีกในสุดสัปดาห์ถัดมา และทุกสุดสัปดาห์หลังจากนั้น\n\nวันนี้ร้านมีที่อยู่ถาวรแล้ว แต่คำสัญญายังเหมือนเดิม: แป้งที่ใช้เวลา ไฟจริง วัตถุดิบตามฤดูกาล และการบริการที่ทำให้คืนธรรมดารู้สึกพิเศษ',
+      heroTitle: null,
+      heroSubtitle: null,
+      value: 'Ember & Slice เริ่มจากแป้งซาวโดว์ เครื่องผสมที่ยืมมา และเตาอบป๊อปอัพหลังบาร์ไวน์แห่งหนึ่งในบรูคลิน',
+      type: 'richtext',
+      status: 'published',
+      sourceHash: 'demo-pizza-story-body-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+  ],
+  businessLocationTranslations: [
+    {
+      id: 'blt-demo-th-loc',
+      locationId: 'loc-demo',
+      locale: 'th',
+      title: 'Ember & Slice บรูคลิน',
+      address: '184 Wythe Ave',
+      city: 'บรูคลิน',
+      description: 'แทรตโทเรียพิซซ่าเตาฟืนในบรูคลิน เสิร์ฟพิซซ่าแป้งซาวโดว์ แอนติพาสติตามฤดูกาล และบรรยากาศอบอุ่นรอบเตาอบ',
+      shortDescription: 'พิซซ่าเตาฟืน แอนติพาสติตามฤดูกาล และการต้อนรับแบบเพื่อนบ้านในบรูคลิน',
+      status: 'published',
+      sourceHash: 'demo-pizza-location-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+  ],
+  menuTranslations: [
+    {
+      id: 'mt-demo-th-menu',
+      menuId: 'menu-demo',
+      locale: 'th',
+      name: 'เมนู',
+      description: 'พิซซ่าเตาฟืน แอนติพาสตี สลัด และเครื่องดื่มจาก Ember & Slice',
+      sectionOrder: ['พิซซ่าเตาฟืน', 'แอนติพาสตี', 'พาสต้าและสลัด', 'เครื่องดื่ม'],
+      status: 'published',
+      sourceHash: 'demo-pizza-menu-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+  ],
+  menuItemTranslations: [
+    {
+      id: 'mit-demo-th-mi-1',
+      menuItemId: 'mi-1',
+      locale: 'th',
+      section: 'พิซซ่าเตาฟืน',
+      name: 'มาร์เกริตา',
+      description: 'มะเขือเทศซานมาร์ซาโน ฟิออร์ดิลาเต้ ใบโหระพา น้ำมันมะกอกเอ็กซ์ตร้าเวอร์จิน และเกลือทะเล',
+      allergens: 'กลูเตน, นม',
+      dietaryNotes: 'มังสวิรัติ',
+      status: 'published',
+      sourceHash: 'demo-pizza-mi-1-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'mit-demo-th-mi-2',
+      menuItemId: 'mi-2',
+      locale: 'th',
+      section: 'พิซซ่าเตาฟืน',
+      name: 'เปปเปอโรนีคาลาเบรเซ',
+      description: 'ซอสมะเขือเทศ มอซซาเรลลา เปปเปอโรนี พริกคาลาเบรีย และออริกาโน',
+      allergens: 'กลูเตน, นม',
+      dietaryNotes: null,
+      status: 'published',
+      sourceHash: 'demo-pizza-mi-2-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'mit-demo-th-mi-3',
+      menuItemId: 'mi-3',
+      locale: 'th',
+      section: 'พิซซ่าเตาฟืน',
+      name: 'ฟุงกีบิอังโก',
+      description: 'เห็ดย่าง ครีมริคอตตา กระเทียม ไทม์ มอซซาเรลลา และเปโคริโน',
+      allergens: 'กลูเตน, นม',
+      dietaryNotes: 'มังสวิรัติ',
+      status: 'published',
+      sourceHash: 'demo-pizza-mi-3-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'mit-demo-th-mi-5',
+      menuItemId: 'mi-5',
+      locale: 'th',
+      section: 'แอนติพาสตี',
+      name: 'บูราตา',
+      description: 'บูราตาครีมมี่ มะเขือเทศเชอร์รีย่าง น้ำมันโหระพา และซาวโดว์ย่าง',
+      allergens: 'กลูเตน, นม',
+      dietaryNotes: 'มังสวิรัติ',
+      status: 'published',
+      sourceHash: 'demo-pizza-mi-5-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+    {
+      id: 'mit-demo-th-mi-6',
+      menuItemId: 'mi-6',
+      locale: 'th',
+      section: 'แอนติพาสตี',
+      name: 'การ์ลิกนอตส์',
+      description: 'ขนมปังนอตส์อบเตาฟืน คลุกพาร์สลีย์ เนยกระเทียมย่าง และมารินารา',
+      allergens: 'กลูเตน, นม',
+      dietaryNotes: 'มังสวิรัติ',
+      status: 'published',
+      sourceHash: 'demo-pizza-mi-6-v1',
+      translatedAt: '2026-05-01T00:00:00.000Z',
+      reviewedAt: '2026-05-01T00:00:00.000Z',
+    },
+  ],
+  aiCredits: {
+    balance: 500,
+    lifetimeUsed: 127,
+  },
+  organizationBilling: {
+    status: 'free',
+    plan: 'free',
+  },
   publicRoutes: [
     { path: '/experiences', title: /Experiences \| Ember & Slice/, text: 'Pizza Making Class' },
     { path: '/experiences/pizza-making-class', title: /Pizza Making Class Brooklyn \| Ember & Slice/, text: 'Stretch dough' },
@@ -1145,6 +1390,8 @@ export function renderCompiledDemoMediaBlock(): string {
       sqlValue(media.kind),
       sqlValue(media.provider),
       sqlValue(media.source),
+      sqlValue(media.cloudflareImageId),
+      sqlValue(media.r2Key),
       sqlValue(media.publicUrl),
       sqlValue(media.thumbnailUrl),
       sqlValue(media.mimeType),
@@ -1170,7 +1417,7 @@ export function renderCompiledDemoMediaBlock(): string {
 INSERT INTO media_assets
   (id, organization_id, site_id, location_id,
    kind, provider, source,
-   public_url, thumbnail_url,
+   cloudflare_image_id, r2_key, public_url, thumbnail_url,
    mime_type, file_name, alt_text, category, status)
 VALUES
 ${mediaRows};
@@ -1397,6 +1644,125 @@ INSERT INTO site_content
 VALUES
 ${contentRows};
 -- END GENERATED: demo_content`
+}
+
+export function renderCompiledDemoTranslationsBlock(): string {
+  const siteContentTranslationRows = compiledDemoSeed.siteContentTranslations
+    .map((entry) => `  (${[
+      sqlValue(entry.id),
+      sqlValue(entry.organizationId),
+      sqlValue(entry.siteId),
+      sqlValue(entry.locationId),
+      sqlValue(entry.locale),
+      sqlValue(entry.page),
+      sqlValue(entry.field),
+      sqlValue(entry.content),
+      sqlValue(entry.heroTitle),
+      sqlValue(entry.heroSubtitle),
+      sqlValue(entry.value),
+      sqlValue(entry.type),
+      sqlValue(entry.status),
+      sqlValue(entry.sourceHash),
+      sqlValue(entry.translatedAt),
+      sqlValue(entry.reviewedAt),
+    ].join(', ')})`)
+    .join(',\n')
+
+  const businessLocationTranslationRows = compiledDemoSeed.businessLocationTranslations
+    .map((entry) => `  (${[
+      sqlValue(entry.id),
+      sqlValue(entry.organizationId),
+      sqlValue(entry.siteId),
+      sqlValue(entry.locationId),
+      sqlValue(entry.locale),
+      sqlValue(entry.title),
+      sqlValue(entry.address),
+      sqlValue(entry.city),
+      sqlValue(entry.description),
+      sqlValue(entry.shortDescription),
+      sqlValue(entry.status),
+      sqlValue(entry.sourceHash),
+      sqlValue(entry.translatedAt),
+      sqlValue(entry.reviewedAt),
+    ].join(', ')})`)
+    .join(',\n')
+
+  const menuTranslationRows = compiledDemoSeed.menuTranslations
+    .map((entry) => `  (${[
+      sqlValue(entry.id),
+      sqlValue(entry.organizationId),
+      sqlValue(entry.siteId),
+      sqlValue(entry.menuId),
+      sqlValue(entry.locale),
+      sqlValue(entry.name),
+      sqlValue(entry.description),
+      sqlJson(entry.sectionOrder),
+      sqlValue(entry.status),
+      sqlValue(entry.sourceHash),
+      sqlValue(entry.translatedAt),
+      sqlValue(entry.reviewedAt),
+    ].join(', ')})`)
+    .join(',\n')
+
+  const menuItemTranslationRows = compiledDemoSeed.menuItemTranslations
+    .map((entry) => `  (${[
+      sqlValue(entry.id),
+      sqlValue(entry.organizationId),
+      sqlValue(entry.siteId),
+      sqlValue(entry.menuItemId),
+      sqlValue(entry.locale),
+      sqlValue(entry.section),
+      sqlValue(entry.name),
+      sqlValue(entry.description),
+      sqlValue(entry.allergens),
+      sqlValue(entry.dietaryNotes),
+      sqlValue(entry.status),
+      sqlValue(entry.sourceHash),
+      sqlValue(entry.translatedAt),
+      sqlValue(entry.reviewedAt),
+    ].join(', ')})`)
+    .join(',\n')
+
+  return `-- BEGIN GENERATED: demo_translations
+INSERT INTO site_content_translations
+  (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, reviewed_at)
+VALUES
+${siteContentTranslationRows};
+
+INSERT INTO business_location_translations
+  (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, reviewed_at)
+VALUES
+${businessLocationTranslationRows};
+
+INSERT INTO menu_translations
+  (id, organization_id, site_id, menu_id, locale, name, description, section_order, status, source_hash, translated_at, reviewed_at)
+VALUES
+${menuTranslationRows};
+
+INSERT INTO menu_item_translations
+  (id, organization_id, site_id, menu_item_id, locale, section, name, description, allergens, dietary_notes, status, source_hash, translated_at, reviewed_at)
+VALUES
+${menuItemTranslationRows};
+-- END GENERATED: demo_translations`
+}
+
+export function renderCompiledDemoBillingBlock(): string {
+  const { identity, aiCredits, organizationBilling } = compiledDemoSeed
+  const parts: string[] = []
+
+  if (aiCredits) {
+    parts.push(`INSERT INTO ai_credits (organization_id, balance, lifetime_used)
+VALUES (${sqlValue(identity.organizationId)}, ${aiCredits.balance}, ${aiCredits.lifetimeUsed});`)
+  }
+
+  if (organizationBilling) {
+    parts.push(`INSERT INTO organization_billing (id, organization_id, status, plan)
+VALUES (${sqlValue(`billing-${identity.organizationId}`)}, ${sqlValue(identity.organizationId)}, ${sqlValue(organizationBilling.status)}, ${sqlValue(organizationBilling.plan)});`)
+  }
+
+  return `-- BEGIN GENERATED: demo_billing
+${parts.join('\n\n')}
+-- END GENERATED: demo_billing`
 }
 
 export const renderDemoExperienceSeedBlock = renderCompiledDemoExperienceSeedBlock

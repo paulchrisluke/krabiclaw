@@ -11,6 +11,8 @@ import {
   renderCompiledPotteryHouseQaBlock,
   renderCompiledPotteryHousePostsBlock,
   renderCompiledPotteryHouseContentBlock,
+  renderCompiledPotteryHouseTranslationsBlock,
+  renderCompiledPotteryHouseBillingBlock,
 } from '../../seed-definitions/pottery-house.ts'
 
 test('pottery house fixture experience slugs are unique', () => {
@@ -61,13 +63,13 @@ test('pottery house core block includes site, locale, domain, and location rows 
   assert.match(sql, /klong-muang-beach/)
 })
 
-test('pottery house media block includes R2 assets and hero refs', () => {
+test('pottery house media block uses Cloudflare Images for seeded image assets and preserves hero refs', () => {
   const sql = renderCompiledPotteryHouseMediaBlock()
 
   assert.match(sql, /INSERT OR REPLACE INTO media_assets/)
-  assert.match(sql, /cloudflare_r2/)
-  assert.match(sql, /r2_key/)
-  assert.match(sql, /620a54b7-33ef-48b9-b5d3-0b3a5a22be13/)
+  assert.match(sql, /cloudflare_image_id/)
+  assert.match(sql, /cloudflare_images/)
+  assert.match(sql, /7f1520e7-b6e4-4181-c689-0f1fc6bfaa00/)
   assert.match(sql, /UPDATE business_locations SET hero_image_asset_id/)
   assert.match(sql, /media-ph-homepage-custom/)
   assert.match(sql, /media-ph-beach-hero/)
@@ -121,13 +123,40 @@ test('pottery house content block includes home hero and about page content', ()
   assert.match(sql, /journey\.body/)
 })
 
-test('pottery house compiled media assets carry R2 provider and r2Key on uploads', () => {
-  const r2Assets = compiledPotteryHouseSeed.mediaAssets.filter((a) => a.provider === 'cloudflare_r2')
-  assert.ok(r2Assets.length > 0)
-  assert.ok(r2Assets.every((a) => a.r2Key !== null))
-  assert.ok(r2Assets.every((a) => a.source === 'uploaded'))
+test('pottery house translations block includes Thai content and location translations', () => {
+  const sql = renderCompiledPotteryHouseTranslationsBlock()
 
-  const externalAssets = compiledPotteryHouseSeed.mediaAssets.filter((a) => a.provider === 'external_url')
-  assert.ok(externalAssets.length > 0)
-  assert.ok(externalAssets.every((a) => a.r2Key === null))
+  assert.match(sql, /INSERT INTO site_content_translations/)
+  assert.match(sql, /INSERT INTO business_location_translations/)
+  assert.match(sql, /ดินเผา ความสงบ และสถานที่ที่อยากกลับมา/)
+  assert.match(sql, /loc-pottery-beachfront/)
+})
+
+test('pottery house billing block includes ai credits and organization billing state', () => {
+  const sql = renderCompiledPotteryHouseBillingBlock()
+
+  assert.match(sql, /INSERT INTO ai_credits/)
+  assert.match(sql, /INSERT INTO organization_billing/)
+  assert.match(sql, /billing-org-pottery-house/)
+})
+
+test('pottery house compiled media assets carry Cloudflare provider metadata for uploaded assets', () => {
+  const imageAssets = compiledPotteryHouseSeed.mediaAssets.filter((a) => a.provider === 'cloudflare_images')
+  assert.ok(imageAssets.length > 0)
+  assert.equal(imageAssets.length, compiledPotteryHouseSeed.mediaAssets.length)
+  assert.ok(imageAssets.every((a) => a.cloudflareImageId !== null))
+  assert.ok(imageAssets.every((a) => a.r2Key === null))
+  assert.ok(imageAssets.every((a) => a.source === 'uploaded'))
+})
+
+test('pottery house compiled media assets preserve the Cloudflare media split', () => {
+  const imageAssets = compiledPotteryHouseSeed.mediaAssets.filter((asset) => asset.mimeType.startsWith('image/'))
+  const fileAssets = compiledPotteryHouseSeed.mediaAssets.filter((asset) => !asset.mimeType.startsWith('image/'))
+
+  assert.ok(imageAssets.length > 0)
+  assert.equal(imageAssets.length, compiledPotteryHouseSeed.mediaAssets.length)
+  assert.ok(imageAssets.every((asset) => asset.provider === 'cloudflare_images'))
+  assert.ok(imageAssets.every((asset) => asset.cloudflareImageId !== null))
+  assert.ok(imageAssets.every((asset) => asset.r2Key === null))
+  assert.equal(fileAssets.length, 0)
 })

@@ -39,9 +39,19 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - `lib/auth-client.ts` — client-side Better Auth instance
 - `composables/` — Nuxt auto-imported
 - `migrations/` — canonical D1 schema (numbered files; `0001_initial.sql` is the base)
-- `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo's generated experience block
-- `seeds/demo.sql` — checked-in demo seed; refresh generated demo experience content with `yarn seed:demo:generate`
+- `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo tenant
+- `scripts/generate-demo-seed.ts` — ephemeral demo seed generator; applies from `/tmp`, never from a checked-in SQL file
+- `scripts/archive/` — historical one-off migration scripts only; do not wire archived tooling back into package scripts or routine workflows
 - Layout name for Saya theme pages: `layout: 'saya'` — `tenant` is dead
+
+## Media Contract
+
+- Images must use the Cloudflare Images flow: request an upload URL from `/api/editor/sites/[siteId]/media/request-upload`, upload directly from the browser, then persist `provider = 'cloudflare_images'`
+- Videos and other files must use the Worker-streamed `/api/editor/sites/[siteId]/media/upload` path and persist `provider = 'cloudflare_r2'`
+- Do not use `external_url` for curated fixtures, approved client imports, or template-generated tenant media
+- Do not commit tenant media under `public/images/*` or `public/videos/*`
+- Demo/reference assets may start from external sources during research, but seeded or imported tenant state must download them, upload them to Cloudflare, and serve the Cloudflare URL only
+- Seeded tenant-facing URLs include `media_assets`, `site_content` image/video fields, review avatars, post thumbnails, and any similar content blocks
 
 ---
 
@@ -61,7 +71,7 @@ Three tiers, each with a dedicated Worker and URL:
 - **e2e-smoke** (every PR): builds → `wrangler deploy --env preview` → seeds `krabiclaw-db-preview` → full E2E suite against `preview.krabiclaw.com`. `PLAYWRIGHT_PREVIEW_URL` is hardcoded to that URL; `playwright.config.ts` skips `webServer` when it is set.
 - **e2e-staging** (push to `staging` branch): builds → `wrangler deploy --env staging` → seeds `krabiclaw-db-staging` → full E2E suite against `staging.krabiclaw.com`. Pre-production gate before staging is merged to main. Keep real assertions here; only fix staging-only false negatives, do not casually trim coverage.
 - **prod-deploy** (push to `main`): applies D1 migrations → `wrangler deploy` (production `krabiclaw`) → `prod-smoke` and canaries run after, testing production routes/domains that are intentionally live.
-- Cloudflare creds (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) are scoped to deploy steps only — not in the top-level job `env:`.
+- Cloudflare creds (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) are scoped to the specific steps that perform Cloudflare actions (`wrangler deploy`, `wrangler d1 *`, canaries), never the top-level job `env:`.
 - All E2E jobs require `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` — without them billing API calls 503 and console-error assertions fail.
 - Remote staging seeds must be idempotent. Repeated runs should be able to reseed without unique-key collisions like `sites.subdomain`.
 - Production smoke must not include intentionally disabled paid customer domains. As of June 9, 2026, `www.potteryhousekrabi.com` is intentionally disabled and excluded from `prod-smoke`; the free tenant host `pottery-house.krabiclaw.com` remains covered.
@@ -160,7 +170,7 @@ notes: |
 
 ### LLM Operating Rule — Client Sites
 
-**Never** manually seed, patch D1, invent client data, use stock images, or claim deployment success for a client site. A site is not complete until `client:verify` passes and `client-handoff.md` is generated.
+**Never** manually seed, patch D1, invent client data, use stock images, leave tenant media on third-party hosts, or claim deployment success for a client site. A site is not complete until `client:verify` passes and `client-handoff.md` is generated.
 
 The required pipeline is:
 

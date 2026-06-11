@@ -1,0 +1,21 @@
+# Kikuzuki Krabi Thailand — Client Intake
+# Usage: yarn client:onboard --from client-intake/kikuzuki.yml
+# Seed: yarn seed:kikuzuki (local) | yarn seed:kikuzuki:staging | yarn seed:kikuzuki:remote
+
+slug: kikuzuki-krabi-thailand
+vertical: restaurant
+live_url: https://kikuzuki-krabi-thailand.krabiclaw.com
+site_id: site-kikuzuki
+
+maps_urls:
+  - https://www.google.com/maps/place/Kikuzuki+Krabi+Thailand/@8.0337,98.8390,17z
+
+notes: |
+  Japanese robatayaki and sushi restaurant in Ao Nang, Krabi.
+  Single location. Restaurant vertical (no experiences).
+  All media from Cloudflare Images CDN (cloudflare_images provider).
+  Hero is a Cloudflare R2 video asset.
+  Source data: prod-backup-kikuzuki-2026-05-20.sql (can be deleted once typed fixture is verified).
+  ai_credits balance: 302 (lifetime_used: 198)
+  organization_billing: free plan
+  Opening hours: daily 14:00–23:00

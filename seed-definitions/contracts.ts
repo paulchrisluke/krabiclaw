@@ -41,7 +41,19 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
   menus: CuratedMenuDefinition[]
   locationQa: CuratedLocationQaDefinition[]
   posts: CuratedPostDefinition[]
+  siteContentTranslations?: CuratedSiteContentTranslationDefinition[]
+  businessLocationTranslations?: CuratedBusinessLocationTranslationDefinition[]
+  menuTranslations?: CuratedMenuTranslationDefinition[]
+  menuItemTranslations?: CuratedMenuItemTranslationDefinition[]
   publicRoutes: SeedPublicRouteExpectation[]
+  aiCredits?: {
+    balance: number
+    lifetimeUsed?: number
+  }
+  organizationBilling?: {
+    status: string
+    plan: string
+  }
 }
 
 export interface CuratedSiteConfigEntry {
@@ -91,8 +103,8 @@ export interface CuratedLocationDefinition {
     openTime: string
     closeTime: string
   }>
-  rating: number
-  reviewCount: number
+  rating: number | null
+  reviewCount: number | null
   priceLevel: string
   categories: string[]
   instagramUrl: string
@@ -107,9 +119,10 @@ export interface CuratedMediaAssetDefinition {
   id: string
   locationId: string | null
   kind?: 'image' | 'video'
-  provider?: 'external_url' | 'cloudflare_r2'
+  provider?: 'external_url' | 'cloudflare_r2' | 'cloudflare_images'
   source?: 'external' | 'uploaded'
   r2Key?: string | null
+  cloudflareImageId?: string | null
   publicUrl: string
   thumbnailUrl: string | null
   mimeType: string
@@ -224,6 +237,66 @@ export interface CuratedPostDefinition {
   channelJobs: CuratedPostChannelJobDefinition[]
 }
 
+export interface CuratedSiteContentTranslationDefinition {
+  id: string
+  locationId: string | null
+  locale: string
+  page: string
+  field: string
+  content: string | null
+  heroTitle?: string | null
+  heroSubtitle?: string | null
+  value: string | null
+  type: 'text' | 'textarea' | 'richtext' | 'media'
+  status: 'draft' | 'published' | 'stale'
+  sourceHash: string
+  translatedAt: string | null
+  reviewedAt: string | null
+}
+
+export interface CuratedBusinessLocationTranslationDefinition {
+  id: string
+  locationId: string
+  locale: string
+  title: string | null
+  address: string | null
+  city: string | null
+  description: string | null
+  shortDescription: string | null
+  status: 'draft' | 'published' | 'stale'
+  sourceHash: string
+  translatedAt: string | null
+  reviewedAt: string | null
+}
+
+export interface CuratedMenuTranslationDefinition {
+  id: string
+  menuId: string
+  locale: string
+  name: string | null
+  description: string | null
+  sectionOrder: string[] | null
+  status: 'draft' | 'published' | 'stale'
+  sourceHash: string
+  translatedAt: string | null
+  reviewedAt: string | null
+}
+
+export interface CuratedMenuItemTranslationDefinition {
+  id: string
+  menuItemId: string
+  locale: string
+  section: string | null
+  name: string | null
+  description: string | null
+  allergens: string | null
+  dietaryNotes: string | null
+  status: 'draft' | 'published' | 'stale'
+  sourceHash: string
+  translatedAt: string | null
+  reviewedAt: string | null
+}
+
 // Compiled/normalized interfaces
 
 export interface CompiledSeedMediaAsset {
@@ -232,9 +305,10 @@ export interface CompiledSeedMediaAsset {
   siteId: string
   locationId: string | null
   kind: 'image' | 'video'
-  provider: 'external_url' | 'cloudflare_r2'
+  provider: 'external_url' | 'cloudflare_r2' | 'cloudflare_images'
   source: 'external' | 'uploaded'
   r2Key: string | null
+  cloudflareImageId: string | null
   publicUrl: string
   thumbnailUrl: string | null
   mimeType: string
@@ -367,6 +441,74 @@ export interface CompiledSeedPost {
   channelJobs: CompiledSeedPostChannelJob[]
 }
 
+export interface CompiledSeedSiteContentTranslation {
+  id: string
+  organizationId: string
+  siteId: string
+  locationId: string | null
+  locale: string
+  page: string
+  field: string
+  content: string | null
+  heroTitle: string | null
+  heroSubtitle: string | null
+  value: string | null
+  type: CuratedSiteContentTranslationDefinition['type']
+  status: CuratedSiteContentTranslationDefinition['status']
+  sourceHash: string
+  translatedAt: string | null
+  reviewedAt: string | null
+}
+
+export interface CompiledSeedBusinessLocationTranslation {
+  id: string
+  organizationId: string
+  siteId: string
+  locationId: string
+  locale: string
+  title: string | null
+  address: string | null
+  city: string | null
+  description: string | null
+  shortDescription: string | null
+  status: CuratedBusinessLocationTranslationDefinition['status']
+  sourceHash: string
+  translatedAt: string | null
+  reviewedAt: string | null
+}
+
+export interface CompiledSeedMenuTranslation {
+  id: string
+  organizationId: string
+  siteId: string
+  menuId: string
+  locale: string
+  name: string | null
+  description: string | null
+  sectionOrder: string[] | null
+  status: CuratedMenuTranslationDefinition['status']
+  sourceHash: string
+  translatedAt: string | null
+  reviewedAt: string | null
+}
+
+export interface CompiledSeedMenuItemTranslation {
+  id: string
+  organizationId: string
+  siteId: string
+  menuItemId: string
+  locale: string
+  section: string | null
+  name: string | null
+  description: string | null
+  allergens: string | null
+  dietaryNotes: string | null
+  status: CuratedMenuItemTranslationDefinition['status']
+  sourceHash: string
+  translatedAt: string | null
+  reviewedAt: string | null
+}
+
 export interface CompiledCuratedSiteBundle {
   identity: CuratedSiteIdentity
   site: CuratedSiteDefinition['site']
@@ -381,10 +523,22 @@ export interface CompiledCuratedSiteBundle {
   menus: CompiledSeedMenu[]
   locationQa: CompiledSeedLocationQa[]
   posts: CompiledSeedPost[]
+  siteContentTranslations: CompiledSeedSiteContentTranslation[]
+  businessLocationTranslations: CompiledSeedBusinessLocationTranslation[]
+  menuTranslations: CompiledSeedMenuTranslation[]
+  menuItemTranslations: CompiledSeedMenuItemTranslation[]
   publicRoutes: SeedPublicRouteExpectation[]
   routeManifest: {
     locations: string[]
     experiences: string[]
+  }
+  aiCredits?: {
+    balance: number
+    lifetimeUsed: number
+  }
+  organizationBilling?: {
+    status: string
+    plan: string
   }
 }
 
