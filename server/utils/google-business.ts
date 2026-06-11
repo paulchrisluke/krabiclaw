@@ -408,36 +408,40 @@ export const getGoogleBusinessLocations = async (
   return response.locations || []
 }
 
-// Sync Google locations to business_locations table
+// Sync Google locations to business_locations table and upsert their reviews
 export const syncGoogleLocations = async (
   env: GoogleBusinessEnv,
   organizationId: string,
   siteId: string,
   connectionId: string,
-  locations: GoogleLocation[]
-): Promise<void> => {
+  locations: GoogleLocation[],
+  accessToken?: string
+): Promise<{ reviewsUpserted: number }> => {
   if (!env.DB) {
     throw new Error('Database not available')
   }
 
   const now = new Date().toISOString()
+  let reviewsUpserted = 0
 
   for (const location of locations) {
     const googleLocationId = location.name.split('/').pop() || ''
     const slug = generateLocationSlug(location.title)
 
+    let localLocationId: string
+
     // Check if location already exists
     const existing = await env.DB.prepare(`
-      SELECT id FROM business_locations 
+      SELECT id FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND google_location_id = ?
       LIMIT 1
-    `).bind(organizationId, siteId, googleLocationId).first()
+    `).bind(organizationId, siteId, googleLocationId).first<{ id: string }>()
 
     if (existing) {
-      // Update existing location
+      localLocationId = existing.id
       await env.DB.prepare(`
-        UPDATE business_locations 
-        SET title = ?, address = ?, phone = ?, website_url = ?, 
+        UPDATE business_locations
+        SET title = ?, address = ?, phone = ?, website_url = ?,
             latitude = ?, longitude = ?, rating = ?, review_count = ?,
             last_synced_at = ?, updated_at = ?
         WHERE organization_id = ? AND site_id = ? AND google_location_id = ?
@@ -457,15 +461,15 @@ export const syncGoogleLocations = async (
         googleLocationId
       ).run()
     } else {
-      // Insert new location
+      localLocationId = `location-${organizationId}-${siteId}-${googleLocationId}`
       await env.DB.prepare(`
-        INSERT INTO business_locations 
-        (id, organization_id, site_id, google_location_id, 
-         slug, title, address, phone, website_url, latitude, longitude, 
+        INSERT INTO business_locations
+        (id, organization_id, site_id, google_location_id,
+         slug, title, address, phone, website_url, latitude, longitude,
          rating, review_count, is_primary, status, last_synced_at, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
-        `location-${organizationId}-${siteId}-${googleLocationId}`,
+        localLocationId,
         organizationId,
         siteId,
         googleLocationId,
@@ -478,14 +482,61 @@ export const syncGoogleLocations = async (
         location.latlng?.longitude || null,
         location.rating || null,
         location.reviewCount || null,
-        false, // Not primary by default
+        false,
         'active',
         now,
         now,
         now
       ).run()
     }
+
+    // Sync reviews from GBP if we have an access token
+    if (accessToken) {
+      try {
+        const reviewResp = await googleJson<{ reviews?: JsonRecord[] }>(
+          `https://mybusinessreviews.googleapis.com/v1/${location.name}/reviews?pageSize=50`,
+          accessToken
+        )
+        for (const r of reviewResp.reviews ?? []) {
+          const reviewName = String(r.name ?? '')
+          if (!reviewName) continue
+          const rating = Number(r.rating ?? 0)
+          if (!rating) continue
+
+          const reviewer = r.reviewer as JsonRecord | undefined
+          const authorName = String((reviewer?.displayName) ?? 'Anonymous')
+          const authorPhotoUrl = String((reviewer?.profilePhotoUrl) ?? '') || null
+          const comment = r.comment ? String(r.comment) : null
+          const createTime = r.createTime ? String(r.createTime) : now
+
+          const result = await env.DB.prepare(`
+            INSERT OR IGNORE INTO reviews
+              (id, organization_id, site_id, location_id, google_review_id,
+               author_name, reviewer_photo_url, rating, content,
+               status, source, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_business', ?, ?)
+          `).bind(
+            `gbiz-${reviewName.replace(/\//g, '-')}`,
+            organizationId,
+            siteId,
+            localLocationId,
+            reviewName,
+            authorName,
+            authorPhotoUrl,
+            Math.round(rating),
+            comment,
+            createTime,
+            now
+          ).run()
+          if (result.meta.changes > 0) reviewsUpserted++
+        }
+      } catch {
+        // Non-fatal: reviews sync failure should not abort location sync
+      }
+    }
   }
+
+  return { reviewsUpserted }
 }
 
 // Generate URL-friendly slug from location title

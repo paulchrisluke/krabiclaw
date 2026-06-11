@@ -1,22 +1,13 @@
 // PATCH /api/editor/sites/[siteId]/reviews/[reviewId]
-// Allows owners to set owner_reply, change status (approve/hide)
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+// Allows owners/admins to set owner_reply, change status (approve/hide)
+import { jsonResponse } from '~/server/utils/api-response'
+import { requireSiteAccess } from '~/server/utils/location-access'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const reviewId = getRouterParam(event, 'reviewId')
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await db.prepare(
-    `SELECT s.organization_id FROM sites s JOIN member m ON s.organization_id = m.organizationId
-     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') LIMIT 1`
-  ).bind(siteId, session.user.id).first()
-  if (!site) return jsonResponse({ error: 'Access denied' }, { status: 403 })
+  const { db } = await requireSiteAccess(event, siteId!, ['owner', 'admin'])
 
   const body = await readBody(event)
   const allowed = ['owner_reply', 'owner_reply_at', 'status']

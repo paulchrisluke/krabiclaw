@@ -1,274 +1,35 @@
-// Restaurant site creation API with idempotency and rollback safety
-import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
-import { seedNewSite } from '../../utils/site-template'
-import { getAuthSession } from '../../utils/auth'
-import { createSystemSubdomain } from '../../utils/domains'
+// Thin proxy to canonical site creation logic.
+// Translates the legacy { restaurantName, subdomain } body shape and defaults
+// vertical to 'restaurant' so callers that pre-date the vertical param still work.
+import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
+import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
+import type { SiteVertical } from '~/utils/vertical-copy'
 import { defineEventHandler, readBody } from 'h3'
 
-type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
-
-interface MemberRoleRow {
-  role: string
-}
-
-interface SiteCountRow {
-  count: number
-}
-
-interface SubdomainRow {
-  subdomain: string
-}
-
-interface CreateSiteRequest {
-  restaurantName: string
-  subdomain: string
-}
-
 export default defineEventHandler(async (event) => {
-  const body = await readBody<CreateSiteRequest>(event)
-  if (!body || typeof body !== 'object') {
-    return jsonResponse({
-      error: 'Restaurant name and subdomain are required'
-    }, { status: 400 })
+  const body = await readBody<Record<string, unknown>>(event)
+  const name = ((body?.name ?? body?.restaurantName) as string | undefined)?.trim()
+  const subdomain = (body?.subdomain as string | undefined)?.trim()
+  const rawVertical = (body?.vertical as string | undefined) ?? 'restaurant'
+  const vertical: SiteVertical = VALID_VERTICALS.includes(rawVertical as SiteVertical)
+    ? rawVertical as SiteVertical
+    : 'restaurant'
+
+  if (!name || !subdomain) {
+    return jsonResponse({ error: 'name and subdomain are required' }, { status: 400 })
   }
-  const { restaurantName, subdomain } = body
-  
-  if (!restaurantName || !subdomain) {
-    return jsonResponse({ 
-      error: 'Restaurant name and subdomain are required' 
-    }, { status: 400 })
-  }
-  
+
   const env = cloudflareEnv(event)
   const db = env.DB
-  
-  if (!db) {
-    return jsonResponse({ 
-      error: 'Database not available' 
-    }, { status: 500 })
-  }
-  
-  // Get authenticated user from Better Auth session using server-side API
+  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
+
   const session = await getAuthSession(event, env)
-  
-  if (!session?.user?.id) {
-    return jsonResponse({ 
-      error: 'Authentication required' 
-    }, { status: 401 })
-  }
-  
-  const userId = session.user.id
-  const normalizedSubdomain = subdomain.toLowerCase()
-  let siteId: string = ''
-  
-  try {
-    // Step 1: Check if user already has organization membership via Better Auth
-    const userOrganizations = await db.prepare(`
-      SELECT o.* FROM organization o
-      JOIN member m ON o.id = m.organizationId
-      WHERE m.userId = ?
-      LIMIT 1
-    `).bind(userId).first<{ id: string }>()
-    
-    let organizationId: string
-    
-    if (userOrganizations) {
-      organizationId = userOrganizations.id
-      
-      // Guard: Check user's role and existing site count before updating org
-      const memberRole = await db.prepare(`
-        SELECT role FROM member WHERE organizationId = ? AND userId = ?
-      `).bind(organizationId, userId).first() as MemberRoleRow | null
-      
-      const siteCount = await db.prepare(`
-        SELECT COUNT(*) as count FROM sites WHERE organization_id = ?
-      `).bind(organizationId).first() as SiteCountRow | null
-      
-      // Only update organization if user is owner AND no sites exist yet
-      if (memberRole?.role === 'owner' && (siteCount?.count ?? 0) === 0) {
-        await db.prepare(`UPDATE organization SET name = ?, slug = ? WHERE id = ?`)
-          .bind(restaurantName, restaurantName.toLowerCase().replace(/[^a-z0-9]/g, '-'), organizationId)
-          .run()
-      }
-      
-      // Step 2: This product is one restaurant site per organization.
-      const existingSite = await db.prepare(`
-        SELECT id, onboarding_status FROM sites 
-        WHERE organization_id = ?
-        LIMIT 1
-      `).bind(organizationId).first<{ id: string; onboarding_status: string }>()
-      
-      if (existingSite) {
-        if (existingSite.onboarding_status === 'active') {
-          return jsonResponse({
-            restaurantId: existingSite.id,
-            organizationId,
-            subdomain: normalizedSubdomain,
-            message: 'Restaurant site already exists'
-          })
-        } else if (existingSite.onboarding_status === 'pending' || existingSite.onboarding_status === 'failed') {
-          return await resumeRestaurantSetup(env, db, existingSite.id, organizationId, restaurantName)
-        }
-      }
-      
-      // Step 3: Check if subdomain is taken by another organization
-      const otherOrgSite = await db.prepare(`
-        SELECT id FROM sites 
-        WHERE subdomain = ? AND organization_id != ?
-        LIMIT 1
-      `).bind(normalizedSubdomain, organizationId).first<{ id: string }>()
-      
-      if (otherOrgSite) {
-        return jsonResponse({ 
-          error: 'This subdomain is already taken by another restaurant' 
-        }, { status: 409 })
-      }
-    } else {
-      // Step 4: Create new organization for first-time user
-      organizationId = `org-${userId}-${Date.now()}`
-      
-      try {
-        await db.prepare(`
-          INSERT INTO organization (
-            id, name, slug, createdAt
-          ) VALUES (?, ?, ?, ?)
-        `).bind(
-          organizationId,
-          restaurantName,
-          restaurantName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-          new Date().toISOString()
-        ).run()
-        
-        // Add user as organization member
-        await db.prepare(`
-          INSERT INTO member (
-            id, organizationId, userId, role, createdAt
-          ) VALUES (?, ?, ?, ?, ?)
-        `).bind(
-          `member-${organizationId}-${userId}-${Date.now()}`,
-          organizationId,
-          userId,
-          'owner',
-          new Date().toISOString()
-        ).run()
-        
-      } catch (orgError) {
-        // Handle potential race condition where organization was created by another request
-        const existingOrg = await db.prepare(`
-          SELECT o.* FROM organization o
-          JOIN member m ON o.id = m.organizationId
-          WHERE m.userId = ?
-          LIMIT 1
-        `).bind(userId).first<{ id: string }>()
-        
-        if (existingOrg) {
-          organizationId = existingOrg.id
-        } else {
-          throw orgError
-        }
-      }
-    }
-    
-    // Step 5: Create site record with pending status
-    siteId = crypto.randomUUID()
-    
-    try {
-      await db.prepare(`
-        INSERT INTO sites (
-          id, organization_id, theme_id, slug, subdomain, brand_name,
-          status, plan, onboarding_status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        siteId,
-        organizationId,
-        'saya-theme-v1',
-        normalizedSubdomain,
-        normalizedSubdomain,
-        restaurantName,
-        'active',
-        'free',
-        'pending',
-        new Date().toISOString(),
-        new Date().toISOString()
-      ).run()
-    } catch (siteError) {
-      // Handle unique constraint violation for subdomain
-      const normalizedSiteError = siteError instanceof Error ? siteError : new Error('Unknown error')
-      if (normalizedSiteError.message.includes('UNIQUE constraint failed')) {
-        return jsonResponse({ 
-          error: 'This subdomain is already taken' 
-        }, { status: 409 })
-      }
-      throw siteError
-    }
-    
-    // Step 6: Perform required seeding (must succeed)
-    return await performRequiredSeeding(env, db, siteId, organizationId, restaurantName, normalizedSubdomain)
-    
-  } catch (error) {
-      const normalizedError = error instanceof Error ? error : new Error('Unknown error')
-      console.error('Site creation failed:', normalizedError)
-    
-    // Mark site as failed if it exists
-    try {
-      await db.prepare(`
-        UPDATE sites SET onboarding_status = 'failed', updated_at = ?
-        WHERE id = ?
-      `).bind(new Date().toISOString(), siteId).run()
-    } catch (updateError) {
-      console.error('Failed to mark site as failed:', updateError)
-    }
-    
-    return jsonResponse({ 
-      error: 'Failed to create site. Please try again.' 
-    }, { status: 500 })
-  }
+  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+
+  const result = await runSiteCreation(env, db, session.user.id, { name, subdomain, vertical })
+
+  // Re-map siteId → restaurantId for legacy callers
+  const { siteId, ...rest } = result.data
+  return jsonResponse({ restaurantId: siteId, ...rest }, { status: result.status })
 })
-
-async function resumeRestaurantSetup(env: SetupEnv, db: D1Database, siteId: string, organizationId: string, restaurantName: string) {
-  try {
-    return await performRequiredSeeding(env, db, siteId, organizationId, restaurantName, '')
-  } catch (error) {
-    console.error('Failed to resume restaurant setup:', error)
-    throw error
-  }
-}
-
-async function performRequiredSeeding(env: SetupEnv, db: D1Database, siteId: string, organizationId: string, restaurantName: string, subdomain: string) {
-  const now = new Date().toISOString()
-  
-  try {
-    // Step 1: Seed template content (location, menu, reviews, Q&A, posts, site_content)
-    await seedNewSite(db, { organizationId, siteId, restaurantName })
-    
-    const resolvedSubdomain = subdomain || await db.prepare('SELECT subdomain FROM sites WHERE id = ?').bind(siteId).first<SubdomainRow>().then((r) => r?.subdomain)
-    if (!resolvedSubdomain || typeof resolvedSubdomain !== 'string' || !resolvedSubdomain.trim()) {
-      throw new Error(`Missing subdomain for site ${siteId}`)
-    }
-    await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
-
-    // Step 3: Mark site as active after required setup data exists
-    await db.prepare(`
-      UPDATE sites SET onboarding_status = 'active', updated_at = ?
-      WHERE id = ?
-    `).bind(now, siteId).run()
-    
-    return jsonResponse({
-      restaurantId: siteId,
-      organizationId,
-      subdomain: resolvedSubdomain,
-      message: 'Site created successfully'
-    })
-    
-  } catch (seedingError) {
-    console.error('Required seeding failed:', seedingError)
-    
-    // Mark site as failed
-    await db.prepare(`
-      UPDATE sites SET onboarding_status = 'failed', updated_at = ?
-      WHERE id = ?
-    `).bind(now, siteId).run()
-    
-    throw new Error('Failed to complete required site setup')
-  }
-}

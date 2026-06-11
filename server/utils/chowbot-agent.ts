@@ -55,8 +55,6 @@ import type { MenuItem, UpdateMenuItemRequest } from "~/server/types/menu";
 
 const MAX_ITERATIONS = 10;
 const MAX_SLUG_ATTEMPTS = 10;
-const RESERVATIONS_PAGE = "reservations";
-const RESERVATION_POLICIES_FIELD = "policies.body";
 const HERO_FIELDS = new Set([
   "hero.title",
   "hero.subtitle",
@@ -1121,67 +1119,6 @@ const TOOLS: AiTool[] = [
       required: ["review_id", "reply"],
     },
   },
-  {
-    name: "create_review",
-    description: "Create a manual customer review for a location.",
-    input_schema: {
-      type: "object",
-      properties: {
-        location_id: {
-          type: "string",
-          description: "Location ID from get_locations.",
-        },
-        author_name: { type: "string", description: "Guest name." },
-        rating: { type: "integer", description: "1 to 5 stars." },
-        title: { type: "string", description: "Optional short review title." },
-        content: { type: "string", description: "Review text." },
-        created_at: {
-          type: "string",
-          description: "Optional ISO date/time for the review.",
-        },
-        status: {
-          type: "string",
-          enum: ["pending", "approved", "rejected"],
-          description: "Default approved.",
-        },
-      },
-      required: ["location_id", "author_name", "rating", "content"],
-    },
-  },
-  {
-    name: "update_review",
-    description: "Update a manual customer review.",
-    input_schema: {
-      type: "object",
-      properties: {
-        review_id: {
-          type: "string",
-          description: "Review ID from get_reviews.",
-        },
-        author_name: { type: "string" },
-        rating: { type: "integer", description: "1 to 5 stars." },
-        title: { type: "string" },
-        content: { type: "string" },
-        created_at: { type: "string" },
-        status: { type: "string", enum: ["pending", "approved", "rejected"] },
-      },
-      required: ["review_id"],
-    },
-  },
-  {
-    name: "delete_review",
-    description: "Permanently delete a review. Confirm with user first.",
-    input_schema: {
-      type: "object",
-      properties: {
-        review_id: {
-          type: "string",
-          description: "Review ID from get_reviews.",
-        },
-      },
-      required: ["review_id"],
-    },
-  },
 
   // ── Media ──────────────────────────────────────────────────────────────────
   {
@@ -1313,31 +1250,6 @@ const TOOLS: AiTool[] = [
   {
     name: "get_reservation_submissions",
     description: "List reservation requests for this site.",
-    input_schema: { type: "object", properties: {} },
-  },
-  {
-    name: "get_reservation_policies",
-    description: "Read the reservation policy copy for this site.",
-    input_schema: { type: "object", properties: {} },
-  },
-  {
-    name: "save_reservation_policies",
-    description: "Update the live reservation policy copy for this site.",
-    input_schema: {
-      type: "object",
-      properties: {
-        body: {
-          type: "string",
-          description: "Reservation policy HTML or rich text.",
-        },
-      },
-      required: ["body"],
-    },
-  },
-  {
-    name: "delete_reservation_policies",
-    description:
-      "Remove the custom reservation policy copy and restore the default. Confirm with the user first.",
     input_schema: { type: "object", properties: {} },
   },
 
@@ -1897,10 +1809,8 @@ const CONFIRM_REQUIRED = new Set([
   "delete_menu_item",
   "delete_menu_section",
   "delete_location",
-  "delete_review",
   "delete_media_asset",
   "delete_qa",
-  "delete_reservation_policies",
   "delete_site_content_field",
   "delete_site_language",
   "start_site_translation_job",
@@ -2997,143 +2907,6 @@ async function executeTool(
       return { review_id: input.review_id, replied: true };
     }
 
-    case "create_review": {
-      const locationId = toSqlText(input.location_id);
-      const authorName = toSqlText(input.author_name)?.trim();
-      const content = toSqlText(input.content)?.trim();
-      const rating = getToolInteger(input, "rating");
-      const status = toSqlText(input.status) ?? "approved";
-      if (!locationId) return { error: "location_id is required." };
-      if (!authorName) return { error: "author_name is required." };
-      if (!content) return { error: "content is required." };
-      if (rating === undefined || rating === null || rating < 1 || rating > 5)
-        return { error: "rating must be between 1 and 5." };
-      if (!["pending", "approved", "rejected"].includes(status))
-        return { error: "Invalid review status." };
-
-      const loc = await db
-        .prepare(
-          `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        )
-        .bind(locationId, orgId, siteId)
-        .first();
-      if (!loc) return { error: "Location not found." };
-
-      const id = crypto.randomUUID();
-      const now = new Date().toISOString();
-      const createdAt = toSqlText(input.created_at) ?? now;
-      await db
-        .prepare(
-          `INSERT INTO reviews (
-          id, organization_id, site_id, location_id, author_name, rating, title, content,
-          status, source, created_at, updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?)`,
-        )
-        .bind(
-          id,
-          orgId,
-          siteId,
-          locationId,
-          authorName,
-          rating,
-          toSqlText(input.title) ?? null,
-          content,
-          status,
-          createdAt,
-          now,
-        )
-        .run();
-      return {
-        id,
-        location_id: locationId,
-        author_name: authorName,
-        rating,
-        status,
-        source: "manual",
-        created: true,
-      };
-    }
-
-    case "update_review": {
-      const reviewId = toSqlText(input.review_id);
-      if (!reviewId) return { error: "review_id is required." };
-      const sets: string[] = [];
-      const params: SqlBindValue[] = [];
-
-      if (input.author_name !== undefined) {
-        const authorName = toSqlText(input.author_name)?.trim();
-        if (!authorName) return { error: "author_name cannot be empty." };
-        sets.push("author_name = ?");
-        params.push(authorName);
-      }
-      if (input.title !== undefined) {
-        sets.push("title = ?");
-        params.push(toSqlText(input.title) ?? null);
-      }
-      if (input.content !== undefined) {
-        const content = toSqlText(input.content)?.trim();
-        if (!content) return { error: "content cannot be empty." };
-        sets.push("content = ?");
-        params.push(content);
-      }
-      if (input.rating !== undefined) {
-        const rating = getToolInteger(input, "rating");
-        if (rating === undefined || rating === null || rating < 1 || rating > 5)
-          return { error: "rating must be between 1 and 5." };
-        sets.push("rating = ?");
-        params.push(rating);
-      }
-      if (input.status !== undefined) {
-        const status = toSqlText(input.status);
-        if (!status || !["pending", "approved", "rejected"].includes(status))
-          return { error: "Invalid review status." };
-        sets.push("status = ?");
-        params.push(status);
-      }
-      if (input.created_at !== undefined) {
-        sets.push("created_at = ?");
-        params.push(toSqlText(input.created_at) ?? new Date().toISOString());
-      }
-      if (!sets.length) return { error: "No review fields provided." };
-
-      const now = new Date().toISOString();
-      sets.push("updated_at = ?");
-      params.push(now, reviewId, orgId, siteId);
-      const result = await db
-        .prepare(
-          `UPDATE reviews SET ${sets.join(", ")} WHERE id = ? AND organization_id = ? AND site_id = ?`,
-        )
-        .bind(...params)
-        .run();
-      if (!result.meta.changes || result.meta.changes === 0) {
-        return { error: "Review not found." };
-      }
-      const updated = await db
-        .prepare(
-          `SELECT id, author_name, rating, title, content, source, status, created_at, updated_at
-         FROM reviews WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        )
-        .bind(reviewId, orgId, siteId)
-        .first();
-      return updated ?? { error: "Review not found." };
-    }
-
-    case "delete_review": {
-      const reviewId = toSqlText(input.review_id);
-      if (!reviewId) return { error: "review_id is required." };
-      const result = await db
-        .prepare(
-          `DELETE FROM reviews WHERE id = ? AND organization_id = ? AND site_id = ?`,
-        )
-        .bind(reviewId, orgId, siteId)
-        .run();
-      if (!result.meta.changes || result.meta.changes === 0) {
-        return { error: "Review not found." };
-      }
-      return { review_id: reviewId, deleted: true };
-    }
-
     case "get_location_media": {
       const conditions = [
         `site_id = ?`,
@@ -3330,96 +3103,6 @@ async function executeTool(
         .bind(siteId)
         .all();
       return results ?? [];
-    }
-
-    case "get_reservation_policies": {
-      const defaultBody =
-        getFieldDef(RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)
-          ?.defaultValue ?? "";
-      const liveRow = await getSiteContentField(
-        db,
-        orgId,
-        siteId,
-        null,
-        RESERVATIONS_PAGE,
-        RESERVATION_POLICIES_FIELD,
-      );
-      const draftRow = await db
-        .prepare(
-          `SELECT content, type, source, updated_at
-         FROM site_content_drafts
-         WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ? AND location_id IS NULL
-         LIMIT 1`,
-        )
-        .bind(orgId, siteId, RESERVATIONS_PAGE, RESERVATION_POLICIES_FIELD)
-        .first<{
-          content: string | null;
-          type: string;
-          source: string;
-          updated_at: string;
-        }>();
-
-      return {
-        body: liveRow?.content ?? defaultBody,
-        default_body: defaultBody,
-        live_body: liveRow?.content ?? null,
-        draft_body: draftRow?.content ?? null,
-        has_custom_policy: Boolean(liveRow?.content),
-        has_draft_policy: Boolean(draftRow?.content),
-        updated_at: draftRow?.updated_at ?? liveRow?.updated_at ?? null,
-      };
-    }
-
-    case "save_reservation_policies": {
-      const body = getToolString(input, "body", 20000)?.trim();
-      if (!body) return { error: "Reservation policy body is required." };
-
-      const id = `content::${orgId}::${siteId}::site::${RESERVATIONS_PAGE}::${RESERVATION_POLICIES_FIELD}`;
-
-      await upsertSiteContent(db, {
-        id,
-        organization_id: orgId,
-        site_id: siteId,
-        location_id: undefined,
-        page: RESERVATIONS_PAGE,
-        field: RESERVATION_POLICIES_FIELD,
-        value: body,
-        type: "richtext",
-        source: "manual",
-        content: body,
-        hero_title: undefined,
-        hero_subtitle: undefined,
-        hero_image_asset_id: undefined,
-        hero_video_asset_id: undefined,
-      });
-
-      await deleteDraftContentField(
-        db,
-        orgId,
-        siteId,
-        RESERVATIONS_PAGE,
-        RESERVATION_POLICIES_FIELD,
-      );
-
-      return { body, updated: true };
-    }
-
-    case "delete_reservation_policies": {
-      await deleteSiteContentField(
-        db,
-        orgId,
-        siteId,
-        RESERVATIONS_PAGE,
-        RESERVATION_POLICIES_FIELD,
-      );
-      await deleteDraftContentField(
-        db,
-        orgId,
-        siteId,
-        RESERVATIONS_PAGE,
-        RESERVATION_POLICIES_FIELD,
-      );
-      return { deleted: true, restored_default: true };
     }
 
     case "get_site_content_page": {
@@ -3707,12 +3390,28 @@ async function executeTool(
             await createSystemSubdomain(env, db, siteId, orgId, subdomain);
           } catch (subdomainErr) {
             if (prev) {
-              await db
-                .prepare(
-                  `UPDATE sites SET brand_name = ?, subdomain = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
-                )
-                .bind(prev.brand_name, prev.subdomain, now, siteId, orgId)
-                .run();
+              try {
+                await db
+                  .prepare(
+                    `UPDATE sites SET brand_name = ?, subdomain = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+                  )
+                  .bind(prev.brand_name, prev.subdomain, now, siteId, orgId)
+                  .run();
+                console.error("rename_site: createSystemSubdomain failed, rolled back", {
+                  siteId,
+                  subdomain,
+                  err: subdomainErr,
+                });
+                return { error: "Failed to register subdomain with Cloudflare. The rename was not applied." };
+              } catch (rollbackErr) {
+                console.error("rename_site: createSystemSubdomain failed AND rollback failed", {
+                  siteId,
+                  subdomain,
+                  subdomainErr,
+                  rollbackErr,
+                });
+                return { error: "Rename was applied but subdomain registration with Cloudflare failed. Please contact support." };
+              }
             }
             console.error("rename_site: createSystemSubdomain failed, rolled back", {
               siteId,
@@ -4287,7 +3986,7 @@ Capabilities (always use tools — never say you can't do something the tools su
 - Experiences: list, create (title, tagline, rich body, price, duration, capacity, time slots, image, SEO), update, delete, view/confirm/cancel guest bookings
 - Contact & reservation submissions: read
 - Managed service requests: submit work to Paul & Julia's queue (content, translation, SEO, Google Business, seasonal, photos, social media)
-- Site: rename (updates subdomain), set default menu currency, manage languages, manage reservation policies, read/write site page content
+- Site: rename (updates subdomain), set default menu currency, manage languages, read/write site page content (including reservation policies via reservations page)
 - Translations: estimate site translation cost, queue translation jobs, inspect translation jobs, run translation batches, publish reviewed drafts
 - Platform admin pages: read/write/delete about, contact, help content
 - Stats: posts, menus, locations, reviews
@@ -4301,13 +4000,13 @@ Guidelines:
 - Use add_menu_items_batch only when the user is clearly adding brand-new items that are not already on the menu
 - Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
 - When creating menus, omit location_id — the server links it to the current location automatically
-- Use get_reservation_policies, save_reservation_policies, and delete_reservation_policies when the user asks about reservation rules, hold times, cancellation windows, deposits, or dietary accommodations
+- Use get_site_content_page, save_site_content_field, and delete_site_content_field with page: 'reservations' when the user asks about reservation rules, hold times, cancellation windows, or deposits
 - Use list_site_languages, save_site_language, and delete_site_language when the user asks to add, publish, disable, delete, or change the source language for translated site versions
 - Use estimate_site_translation before start_site_translation_job; tell the owner item count and estimated credits, then get confirmation before queuing the job
 - Use run_translation_job_batch only after a job exists and the owner confirms spending credits; it processes one batch and saves translations as drafts
 - Use publish_site_translations after the owner confirms drafted translations should go live; published languages become visible on the public site
 - Use get_site_content_page, save_site_content_field, publish_site_content_page, discard_site_content_page, and delete_site_content_field for tenant page content such as home, about, contact, location notes, and reservations
-- Before publish_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_review, delete_media_asset, delete_qa, delete_site_language, start_site_translation_job, run_translation_job_batch, publish_site_translations — confirm first
+- Before publish_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, delete_qa, delete_site_content_field, delete_site_language, start_site_translation_job, run_translation_job_batch, publish_site_translations — confirm first
 - Menus are DRAFT by default — publish_menu makes them live
 - Keep responses short — this is a chat panel`;
 
