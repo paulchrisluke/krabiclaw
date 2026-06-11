@@ -57,9 +57,8 @@ export default defineEventHandler(async (event) => {
     const locationId = getQuery(event).locationId as string || undefined
 
     if (all) {
-      // Discard all drafts for this site  
-      await discardAllDrafts(db)
-      
+      await discardAllDrafts(db, site.organization_id, siteId)
+
       return jsonResponse({
         success: true,
         message: 'All drafts discarded',

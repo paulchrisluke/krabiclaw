@@ -223,7 +223,7 @@ export default defineEventHandler(async (event) => {
       }).catch((err) => console.error('transfer_invite_email_failed', err))
     } else {
       console.info('email_delivery_log_only', {
-        hashedRecipient: hashEmail(toEmail),
+        recipient: hashEmail(toEmail),
         siteId,
         organizationId: site.organization_id,
         template: 'site_transfer_invite',

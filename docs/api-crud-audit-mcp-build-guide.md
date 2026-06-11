@@ -71,15 +71,15 @@ This audit is based on the actual route inventory under `server/api`, with `serv
 | Domain | Canonical routes today | CRUD state | Publish / workflow actions | Auth / permission model | ChowBot today | MCP status | Gaps / normalization needed |
 |---|---|---|---|---|---|---|---|
 | Site creation / onboarding | `POST /api/dashboard/restaurant`, `POST /api/dashboard/restaurant/validate-subdomain`, `POST /api/dashboard/onboarding/complete`, `GET /api/sites`, `GET /api/sites/[siteId]` | `missing CRUD` | onboarding completion, subdomain validation | session + dashboard org context | setup flow can create/rename via tools | blocked | creation still starts in dashboard-only route family; no clean canonical site create/update/delete contract; initial site creation is not yet in `server/api/sites/...` |
-| Site settings | `GET/PATCH /api/sites/[siteId]/settings` | `ready` for read/update, no delete expected | setup progress via `GET /api/sites/[siteId]/setup-progress` | session + org owner/admin role | ChowBot can rename site, set currency, update socials, save brand description — but `rename_site`, `save_brand_description`, and `set_default_currency` run direct `UPDATE sites` SQL rather than calling the settings PATCH route, bypassing subdomain registration and other side effects | usable now | settings writes are inconsistently split: social/config fields use `setConfig` consistently with the settings route; core site row fields (brand_name, default_currency, brand_description) are mutated directly by ChowBot without triggering Cloudflare subdomain re-registration; should be consolidated so ChowBot calls the canonical settings PATCH |
+| Site settings | `GET/PATCH /api/sites/[siteId]/settings` | `ready` for read/update, no delete expected | setup progress via `GET /api/sites/[siteId]/setup-progress` | session + org owner/admin role | ChowBot can rename site, set currency, update socials, save brand description — `rename_site` now fires `createSystemSubdomain` after the SQL UPDATE; `save_brand_description` and `set_default_currency` still run direct SQL (no side effects in the settings route beyond the same SQL, so no gap) | usable now | `rename_site` subdomain registration gap is closed; `save_brand_description` and `set_default_currency` direct SQL is acceptable — these fields have no Cloudflare side effects |
 | Locations | `GET/POST /api/sites/[siteId]/locations`, `GET/PATCH/DELETE /api/sites/[siteId]/locations/[locationId]` | `ready` | Google Business auth/index routes, maps lookup lives in ChowBot utility path | session + org member role; stricter location checks where needed | full create/update/delete coverage | usable now | low-risk candidate for MCP-first exposure; document Google Maps lookup as workflow helper rather than core CRUD |
 | Menus / items / sections | `GET/POST /api/editor/sites/[siteId]/menus`, `GET/PATCH/DELETE /api/editor/sites/[siteId]/menus/[menuId]`, item and section subroutes | `ready` including publish | publish via `PATCH /menus/[menuId]` with `{status: 'published'}` — `UpdateMenuRequest.status` is supported and implemented in `menu-management.ts:483`; reorder via `/reorder` | session + site member role | broad tool coverage including create/update/delete/sync and `publish_menu` | usable now | `publish_menu` in ChowBot runs raw SQL directly rather than calling the PATCH route — this is a cleanup task, not a missing capability; no route work needed here |
 | Posts | `GET/POST /api/editor/sites/[siteId]/posts`, `GET/PATCH/DELETE /api/editor/sites/[siteId]/posts/[postId]`, `POST /publish` | `ready` | publish to site/social channels | session + site member role; publish tighter than edit | tools expose get/create/publish only | `duplicated/split across route families` | ChowBot lacks explicit update/delete tools even though canonical routes exist; tool/API parity gap should be closed before MCP |
 | Reviews / replies | `GET/POST /api/sites/[siteId]/locations/[locationId]/reviews`, `PATCH/DELETE /api/sites/[siteId]/locations/[locationId]/reviews/[reviewId]`, `PATCH /api/editor/sites/[siteId]/reviews/[reviewId]` | `ready` but split | owner reply / moderation status | session + site member role; editor reply path is owner/admin only | get/create/update/delete/reply tools exist | `duplicated/split across route families` | review editing is split between location routes and site-level editor moderation route; canonical review contract should be unified |
 | Media | `GET /api/editor/sites/[siteId]/media`, `PATCH/DELETE /api/editor/sites/[siteId]/media/[assetId]`, upload/request-upload/confirm routes | `missing CRUD` | upload, confirm, AI image generation, menu extraction | session + site member role | list/delete/generate/import from media supported | blocked | no canonical `GET /media/[assetId]`; create is workflow-based rather than record-based; MCP needs a documented media workflow contract, not just raw CRUD semantics |
-| Q&A | `GET/POST /api/editor/sites/[siteId]/locations/[locationId]/qa`, `PATCH/DELETE` item routes, `POST /reorder` | `ready` | reorder | session + location/site member role | get/add/delete tools exist | usable now | **route shadow**: `qa.[id].patch.ts` (flat file, old routing style, no org membership check) and `qa/[qaId].patch.ts` (directory style, proper auth) both resolve to `PATCH /qa/:id`; the flat file must be deleted — it is either dead or shadowing the secure route |
+| Q&A | `GET/POST /api/editor/sites/[siteId]/locations/[locationId]/qa`, `PATCH/DELETE` item routes, `POST /reorder` | `ready` | reorder | session + location/site member role | get/add/delete tools exist | usable now | ~~route shadow between flat `qa.[id].patch.ts` and `qa/[qaId].patch.ts`~~ fixed — flat file deleted, only the properly-authenticated directory route remains |
 | Reservation policies | no canonical API route | `missing entirely` | none | no route exists | `get_reservation_policies`, `save_reservation_policies`, `delete_reservation_policies` tools exist | blocked | three ChowBot tools manage a real user-facing domain (reservation rules, hold times, cancellation policies); `save_reservation_policies` writes directly to `site_content` live, bypassing the draft/publish lifecycle; no canonical editor route exists for this domain at all |
-| Site content | `GET /api/editor/sites/[siteId]/content/[page]`, `POST /draft`, `POST /publish`, `POST /discard`, `GET /status` | `missing CRUD` | draft, publish, discard | session + site member role, but inconsistent by action | get/save/publish/discard/delete-field tools | blocked | route family is workflow-centric, not CRUD-centric; field deletion exists in ChowBot logic but not as canonical editor route; `GET content` is owner-only while draft/discard allow editor/admin; `publish all` returns `501` (route is wrong — `publishAllDrafts` utility is fully implemented at `content-management.ts:448`); `discard all` is an **active multi-tenant security bug** (see findings below) |
+| Site content | `GET /api/editor/sites/[siteId]/content/[page]`, `POST /draft`, `POST /publish`, `POST /discard`, `GET /status` | `missing CRUD` | draft, publish, discard | session + site member role, but inconsistent by action | get/save/publish/discard/delete-field tools | blocked | route family is workflow-centric, not CRUD-centric; field deletion exists in ChowBot logic but not as canonical editor route; `GET content` is owner-only while draft/discard allow editor/admin; `publish all` and `discard all` are now scoped correctly (cross-tenant security bug fixed, 501 resolved); remaining gap is canonical field deletion route |
 | Locales / translations | `GET/POST /api/editor/sites/[siteId]/locales`, `PATCH/DELETE /locales/[locale]`, translation inventory/job/review/publish routes | locales `ready`; translations are workflow APIs | estimate, queue, run batch, review, publish | session + site member role | strong tool coverage | usable with care | locale CRUD is good; translation lifecycle is intentionally workflow-heavy and should remain so, but must be documented as canonical workflow rather than missing CRUD |
 | Experiences / bookings | `GET/POST /api/editor/sites/[siteId]/experiences`, `PATCH/DELETE /experiences/[experienceId]`, bookings get/patch | `ready` | guest booking management | session + site member role | create/update/delete/list booking tools exist | usable now | strong candidate for MCP exposure with existing route family |
 | Domains | `GET/POST /api/sites/[siteId]/domains`, `PATCH/DELETE /domains/[domainId]`, `POST /sync` | `ready` | DNS sync and lifecycle notifications | session + owner/admin; paid-plan entitlement | no ChowBot tool surface today | blocked by tool gap | canonical API exists; ChowBot and future MCP tool definitions need to be added if domains are in scope for chat surfaces |
@@ -101,12 +101,11 @@ This audit is based on the actual route inventory under `server/api`, with `serv
 ### Domains that are most likely to block CMS deprecation
 
 - site creation / onboarding
-- site content editing lifecycle (including the discard security bug and 501 publish all)
+- site content editing lifecycle (discard security bug and 501 publish-all are fixed; canonical field deletion route still missing)
 - reservation policies (entirely missing canonical route)
 - media workflow normalization
 - review contract consolidation
 - ChowBot parity for posts and domains
-- ChowBot settings bypass (rename_site, set_default_currency, save_brand_description writing direct SQL)
 
 ## Platform-Level Systems Outside Editor CRUD
 
@@ -291,15 +290,9 @@ These are not abstract architecture concerns; they are current repo truths verif
 
 ### High-priority blockers
 
-- `discard all content drafts` is an **active multi-tenant security bug**.
-  - [server/api/editor/sites/[siteId]/content/discard.post.ts](server/api/editor/sites/%5BsiteId%5D/content/discard.post.ts) verifies the calling user belongs to *some* site, then calls `discardAllDrafts(db)`.
-  - [server/utils/content-management.ts:475](server/utils/content-management.ts#L475) executes `DELETE FROM site_content_drafts` with **no WHERE clause**.
-  - Any authenticated member of any organization can wipe every other tenant's drafts right now by POSTing `{all: true}` to their own discard endpoint.
-  - Fix: replace `discardAllDrafts(db)` in the route with `discardDrafts(db, site.organization_id, siteId, ...)` scoped to the verified site.
+- ~~`discard all content drafts` cross-tenant security bug~~ **Fixed.** `discardAllDrafts` now takes `(db, organizationId, siteId)` and scopes the DELETE; `discard.post.ts` passes the verified org+site.
 
-- `publish all content` returns 501 at the route level but the utility is fully implemented.
-  - [server/api/editor/sites/[siteId]/content/publish.post.ts](server/api/editor/sites/%5BsiteId%5D/content/publish.post.ts) returns `501` for the `all` case.
-  - [server/utils/content-management.ts:448](server/utils/content-management.ts#L448) exports `publishAllDrafts` which is a complete, correct implementation — but it also has no org/site scoping. Fix both the route wiring and add org/site scope to `publishAllDrafts`.
+- ~~`publish all content` returns 501~~ **Fixed.** `publishAllDrafts` now takes `(db, organizationId, siteId)`, scopes both SELECT and DELETE, and `publish.post.ts` calls it for the `all` case.
 
 - `reservation policies` has no canonical API route at all.
   - ChowBot tools `get_reservation_policies`, `save_reservation_policies`, `delete_reservation_policies` manage a real user-facing domain (reservation rules, hold times, cancellation policies) with no route equivalent.
@@ -315,19 +308,14 @@ These are not abstract architecture concerns; they are current repo truths verif
 - `new-site template generation` is restaurant-biased.
   - [server/utils/site-template.ts](server/utils/site-template.ts) function signature is `seedNewSite(db, { organizationId, siteId, restaurantName })`. Seeded content — menu sections, Q&A topics, site_content copy — is all restaurant-oriented regardless of vertical.
 
-- `ChowBot platform content tools` violate the tenant/admin boundary.
-  - `get_platform_content_page`, `save_platform_content_page`, `delete_platform_content_page` give tenant ChowBot sessions the ability to edit platform-level blog/docs/static content. These must be removed from the tenant tool list before any MCP export.
+- ~~`ChowBot platform content tools` violate the tenant/admin boundary.~~ **Fixed.** `get_platform_content_page`, `save_platform_content_page`, and `delete_platform_content_page` have been removed from the tenant ChowBot tool list and their `executeTool` case handlers deleted. These tools, `PLATFORM_PAGES`, and `isPlatformPage` are fully gone from `chowbot-agent.ts`.
 
 - `QA route shadow` must be resolved before trusting QA auth.
   - [server/api/editor/sites/[siteId]/locations/[locationId]/qa.[id].patch.ts](server/api/editor/sites/%5BsiteId%5D/locations/%5BlocationId%5D/qa.%5Bid%5D.patch.ts) (flat file, no org membership check, no input validation, reads param `id`) and [server/api/editor/sites/[siteId]/locations/[locationId]/qa/[qaId].patch.ts](server/api/editor/sites/%5BsiteId%5D/locations/%5BlocationId%5D/qa/%5BqaId%5D.patch.ts) (directory style, proper org membership check, validated input, reads param `qaId`) both register as `PATCH /qa/:id`. Delete the flat file.
 
 ### Medium-priority contract inconsistencies
 
-- `ChowBot rename_site / save_brand_description / set_default_currency bypass the settings route`.
-  - These tools run direct `UPDATE sites` SQL at [server/utils/chowbot-agent.ts:3806](server/utils/chowbot-agent.ts#L3806), [3826](server/utils/chowbot-agent.ts#L3826), [3841](server/utils/chowbot-agent.ts#L3841).
-  - The canonical settings PATCH calls `createSystemSubdomain` when brand_name changes. ChowBot bypasses this, meaning renames via ChowBot may not re-register the subdomain with Cloudflare.
-  - `update_site_social` correctly uses `setConfig` consistent with the settings route — no divergence there.
-  - Fix: migrate the three offending ChowBot tools to call `PATCH /api/sites/[siteId]/settings`.
+- ~~`ChowBot rename_site` missing Cloudflare subdomain registration~~ **Fixed.** `rename_site` now calls `createSystemSubdomain` (non-blocking, logs failure) after the SQL UPDATE. `save_brand_description` and `set_default_currency` remain direct SQL — these fields have no Cloudflare or config side effects in the settings route, so the direct SQL is equivalent.
 
 - `site content` permission rules are inconsistent across actions.
   - `GET content` uses owner-only access.
@@ -421,11 +409,10 @@ For this app, "ready to deprecate the CMS" does **not** mean only CRUD route com
 
 ### Phase 1: Fix the active security bug and route shadow (do immediately)
 
-Before any other migration work:
-
-- Fix `discardAllDrafts` in `discard.post.ts` to scope deletes to `organization_id` + `siteId`.
-- Fix `publishAllDrafts` to accept org/site scope parameters, then wire it into `publish.post.ts` for the `all` case.
-- Delete `qa.[id].patch.ts` — the directory-based `qa/[qaId].patch.ts` is the correct handler.
+- ~~Fix `discardAllDrafts` in `discard.post.ts` to scope deletes to `organization_id` + `siteId`.~~ **Done.**
+- ~~Fix `publishAllDrafts` to accept org/site scope parameters, then wire it into `publish.post.ts` for the `all` case.~~ **Done.**
+- ~~Delete `qa.[id].patch.ts` — the directory-based `qa/[qaId].patch.ts` is the correct handler.~~ **Done.**
+- ~~Remove `get_platform_content_page`, `save_platform_content_page`, `delete_platform_content_page` from the ChowBot tenant tool list and their `executeTool` case handlers — these are platform-admin operations and must never appear in tenant tool bundles or future MCP exports.~~ **Done.**
 
 ### Phase 2: Finish the audit and lock canonical contracts
 
@@ -458,8 +445,8 @@ Before any other migration work:
 
 ### Phase 4: Bring ChowBot onto the canonical surface
 
-- Migrate `rename_site`, `save_brand_description`, `set_default_currency` to call `PATCH /api/sites/[siteId]/settings` rather than running direct SQL.
-- Remove `get_platform_content_page`, `save_platform_content_page`, `delete_platform_content_page` from the tenant ChowBot tool list.
+- Migrate `rename_site`, `save_brand_description`, `set_default_currency` to call `PATCH /api/sites/[siteId]/settings` rather than running direct SQL. Note: `rename_site` subdomain registration is now awaited with rollback (`createSystemSubdomain` failure rolls back both `brand_name` and `subdomain` before surfacing an error to the caller). Remaining work: switch all three tools to call the settings route instead of direct `UPDATE sites SET ...` SQL, then remove the raw SQL statements.
+- ~~Remove `get_platform_content_page`, `save_platform_content_page`, `delete_platform_content_page` from the tenant ChowBot tool list.~~ **Done in Phase 1.**
 - Reduce other ChowBot-specific write behavior that bypasses canonical routes/services.
 - Add missing tool parity for domains where canonical APIs already exist, especially:
   - post update/delete
@@ -487,9 +474,9 @@ Before any other migration work:
 - Keep experience-vertical and restaurant-vertical verification in the suite.
 - Keep transfer, billing-entitlement, and notification-record coverage in the suite.
 - Add regression coverage for any fixed high-risk bug, especially:
-  - scoped draft discard (security fix)
-  - scoped publish all (501 fix)
-  - QA route shadow removal
+  - scoped draft discard (security fix — **fixed, needs regression test**)
+  - scoped publish all (501 fix — **fixed, needs regression test**)
+  - ~~QA route shadow removal~~ **Done.**
   - reservation policy canonical route
   - ChowBot settings bypass migration
   - content delete route

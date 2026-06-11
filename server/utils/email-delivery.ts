@@ -15,6 +15,7 @@ export function getEmailDeliveryMode(env: EmailDeliveryEnv | null | undefined | 
 
   const normalized = raw.replace(/[-_]/g, '')
   if (normalized === 'logonly') return 'log_only'
+  if (normalized === 'provider') return 'provider'
 
   console.warn('[email-delivery] Invalid EMAIL_DELIVERY_MODE value; defaulting to provider', {
     EMAIL_DELIVERY_MODE: raw,

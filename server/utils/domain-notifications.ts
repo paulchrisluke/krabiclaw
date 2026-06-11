@@ -69,6 +69,7 @@ async function sendEmail(
 ) {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
+  const storedRecipient = shouldSendRealEmail(env) ? opts.to : hashEmail(opts.to)
   await db.prepare(`
     INSERT INTO notifications
     (id, organization_id, site_id, channel, template, recipient, title, payload, status, created_at)
@@ -77,7 +78,7 @@ async function sendEmail(
     id,
     opts.organizationId,
     opts.siteId,
-    opts.to,
+    storedRecipient,
     opts.title,
     JSON.stringify({ audience: opts.audience, domain: opts.domain, status: opts.status, message: opts.message, dashboard_url: opts.dashboardUrl }),
     now
