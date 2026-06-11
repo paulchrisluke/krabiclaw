@@ -14,6 +14,8 @@ import {
   renderCompiledDemoPostsBlock,
   renderDemoExperienceSeedBlock,
   renderCompiledDemoContentBlock,
+  renderCompiledDemoTranslationsBlock,
+  renderCompiledDemoBillingBlock,
 } from '../../seed-definitions/demo.ts'
 import { serializeCompiledSeedBundle } from '../../seed-definitions/serialize.ts'
 
@@ -133,6 +135,25 @@ test('demo content block includes site content for all pages including home hero
   assert.match(sql, /hero\.kicker/)
 })
 
+test('demo translations block includes Thai translations for content, locations, and menus', () => {
+  const sql = renderCompiledDemoTranslationsBlock()
+
+  assert.match(sql, /INSERT INTO site_content_translations/)
+  assert.match(sql, /INSERT INTO business_location_translations/)
+  assert.match(sql, /INSERT INTO menu_translations/)
+  assert.match(sql, /INSERT INTO menu_item_translations/)
+  assert.match(sql, /ไฟฟืนและค่ำคืนในบรูคลิน/)
+})
+
+test('demo billing block includes ai credits and organization billing state', () => {
+  const sql = renderCompiledDemoBillingBlock()
+
+  assert.match(sql, /INSERT INTO ai_credits/)
+  assert.match(sql, /INSERT INTO organization_billing/)
+  assert.match(sql, /127/)
+  assert.match(sql, /billing-org-demo/)
+})
+
 test('demo core seed block includes generated site, locale, domain, and location rows', () => {
   const sql = renderCompiledDemoCoreSeedBlock()
 
@@ -143,4 +164,17 @@ test('demo core seed block includes generated site, locale, domain, and location
   assert.match(sql, /INSERT INTO business_locations/)
   assert.match(sql, /source_locale/)
   assert.match(sql, /Ember & Slice Brooklyn/)
+})
+
+test('demo compiled media assets preserve the Cloudflare media split', () => {
+  const imageAssets = compiledDemoSeed.mediaAssets.filter((asset) => asset.mimeType.startsWith('image/'))
+  const fileAssets = compiledDemoSeed.mediaAssets.filter((asset) => !asset.mimeType.startsWith('image/'))
+
+  assert.ok(imageAssets.length > 0)
+  assert.ok(fileAssets.length > 0)
+  assert.ok(imageAssets.every((asset) => asset.provider === 'cloudflare_images'))
+  assert.ok(imageAssets.every((asset) => asset.cloudflareImageId !== null))
+  assert.ok(imageAssets.every((asset) => asset.r2Key === null))
+  assert.ok(fileAssets.every((asset) => asset.provider === 'cloudflare_r2'))
+  assert.ok(fileAssets.every((asset) => asset.r2Key !== null))
 })

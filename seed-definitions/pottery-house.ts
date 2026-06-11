@@ -162,15 +162,15 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
   ],
   mediaAssets: [
-    // Cloudflare R2 uploads — synced with production (2026-06-09)
+    // Cloudflare-hosted uploads normalized to the production media split (2026-06-11)
     {
       id: 'media-ph-homepage-custom',
       locationId: 'loc-pottery-house',
-      provider: 'cloudflare_r2',
+      provider: 'cloudflare_images',
       source: 'uploaded',
-      r2Key: 'sites/site-pottery-house/media/620a54b7-33ef-48b9-b5d3-0b3a5a22be13.png',
-      publicUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/620a54b7-33ef-48b9-b5d3-0b3a5a22be13.png',
-      thumbnailUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/620a54b7-33ef-48b9-b5d3-0b3a5a22be13.png',
+      cloudflareImageId: '7f1520e7-b6e4-4181-c689-0f1fc6bfaa00',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/7f1520e7-b6e4-4181-c689-0f1fc6bfaa00/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/7f1520e7-b6e4-4181-c689-0f1fc6bfaa00/thumbnail',
       mimeType: 'image/png',
       fileName: '620a54b7-33ef-48b9-b5d3-0b3a5a22be13.png',
       altText: 'Homepage hero',
@@ -179,11 +179,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     {
       id: 'media-ph-beach-hero',
       locationId: 'loc-pottery-beachfront',
-      provider: 'cloudflare_r2',
+      provider: 'cloudflare_images',
       source: 'uploaded',
-      r2Key: 'sites/site-pottery-house/media/862ac356-bc0f-40b1-a8e6-0395fe183c3d.png',
-      publicUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/862ac356-bc0f-40b1-a8e6-0395fe183c3d.png',
-      thumbnailUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/862ac356-bc0f-40b1-a8e6-0395fe183c3d.png',
+      cloudflareImageId: 'ed6fbe45-5d08-45b4-0d80-94893e3d1300',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ed6fbe45-5d08-45b4-0d80-94893e3d1300/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ed6fbe45-5d08-45b4-0d80-94893e3d1300/thumbnail',
       mimeType: 'image/png',
       fileName: '862ac356-bc0f-40b1-a8e6-0395fe183c3d.png',
       altText: 'Beachfront location hero',
@@ -192,11 +192,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     {
       id: 'media-ph-krabi-hero',
       locationId: 'loc-pottery-house',
-      provider: 'cloudflare_r2',
+      provider: 'cloudflare_images',
       source: 'uploaded',
-      r2Key: 'sites/site-pottery-house/media/38945199-c3bb-4a0b-8e24-6d2f09ab3fd5.png',
-      publicUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/38945199-c3bb-4a0b-8e24-6d2f09ab3fd5.png',
-      thumbnailUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/38945199-c3bb-4a0b-8e24-6d2f09ab3fd5.png',
+      cloudflareImageId: '2af9d7ad-b9a6-4184-8f1b-22300280d200',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/2af9d7ad-b9a6-4184-8f1b-22300280d200/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/2af9d7ad-b9a6-4184-8f1b-22300280d200/thumbnail',
       mimeType: 'image/png',
       fileName: '38945199-c3bb-4a0b-8e24-6d2f09ab3fd5.png',
       altText: 'Krabi location hero',
@@ -205,11 +205,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     {
       id: 'media-ph-about-custom',
       locationId: 'loc-pottery-house',
-      provider: 'cloudflare_r2',
+      provider: 'cloudflare_images',
       source: 'uploaded',
-      r2Key: 'sites/site-pottery-house/media/262e7084-30b8-48c6-94b9-1ba60664666c.png',
-      publicUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/262e7084-30b8-48c6-94b9-1ba60664666c.png',
-      thumbnailUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/262e7084-30b8-48c6-94b9-1ba60664666c.png',
+      cloudflareImageId: '2273e2ec-f0a6-40fa-9009-9d535a568600',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/2273e2ec-f0a6-40fa-9009-9d535a568600/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/2273e2ec-f0a6-40fa-9009-9d535a568600/thumbnail',
       mimeType: 'image/png',
       fileName: '262e7084-30b8-48c6-94b9-1ba60664666c.png',
       altText: 'About page image',
@@ -218,11 +218,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     {
       id: 'media-ph-beachfront',
       locationId: 'loc-pottery-beachfront',
-      provider: 'cloudflare_r2',
+      provider: 'cloudflare_images',
       source: 'uploaded',
-      r2Key: 'sites/site-pottery-house/media/WhatsApp-Image-2026-05-28-at-09.17.56.jpeg',
-      publicUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/WhatsApp-Image-2026-05-28-at-09.17.56.jpeg',
-      thumbnailUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/WhatsApp-Image-2026-05-28-at-09.17.56.jpeg',
+      cloudflareImageId: 'ba40b9b1-7283-4d9d-1e2c-9919bc88fd00',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ba40b9b1-7283-4d9d-1e2c-9919bc88fd00/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ba40b9b1-7283-4d9d-1e2c-9919bc88fd00/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'WhatsApp-Image-2026-05-28-at-09.17.56.jpeg',
       altText: 'Beachfront pottery',
@@ -231,11 +231,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     {
       id: 'media-ph-cocktails',
       locationId: 'loc-pottery-house',
-      provider: 'cloudflare_r2',
+      provider: 'cloudflare_images',
       source: 'uploaded',
-      r2Key: 'sites/site-pottery-house/media/705340249_1010726131467629_3263381692626801997_n.png',
-      publicUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/705340249_1010726131467629_3263381692626801997_n.png',
-      thumbnailUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/705340249_1010726131467629_3263381692626801997_n.png',
+      cloudflareImageId: '603b05c1-9ef8-492a-315f-3989c8b7c200',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/603b05c1-9ef8-492a-315f-3989c8b7c200/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/603b05c1-9ef8-492a-315f-3989c8b7c200/thumbnail',
       mimeType: 'image/png',
       fileName: '705340249_1010726131467629_3263381692626801997_n.png',
       altText: 'Cocktails & Clay',
@@ -244,11 +244,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     {
       id: 'media-ph-membership',
       locationId: 'loc-pottery-house',
-      provider: 'cloudflare_r2',
+      provider: 'cloudflare_images',
       source: 'uploaded',
-      r2Key: 'sites/site-pottery-house/media/WhatsApp-Image-2026-05-28-at-18.33.09.jpeg',
-      publicUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/WhatsApp-Image-2026-05-28-at-18.33.09.jpeg',
-      thumbnailUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/WhatsApp-Image-2026-05-28-at-18.33.09.jpeg',
+      cloudflareImageId: 'da2a5365-1a9a-468f-f695-d70d7b2e9100',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/da2a5365-1a9a-468f-f695-d70d7b2e9100/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/da2a5365-1a9a-468f-f695-d70d7b2e9100/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'WhatsApp-Image-2026-05-28-at-18.33.09.jpeg',
       altText: 'Monthly membership',
@@ -297,11 +297,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     {
       id: 'media-ph-wheel',
       locationId: 'loc-pottery-house',
-      provider: 'cloudflare_r2',
+      provider: 'cloudflare_images',
       source: 'uploaded',
-      r2Key: 'sites/site-pottery-house/media/pottery-wheel-class.jpg',
-      publicUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-wheel-class.jpg',
-      thumbnailUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/pottery-wheel-class.jpg',
+      cloudflareImageId: 'b1a26753-af38-462e-9835-0acd065eac00',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b1a26753-af38-462e-9835-0acd065eac00/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b1a26753-af38-462e-9835-0acd065eac00/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'pottery-wheel-class.jpg',
       altText: 'Pottery wheel throwing class at Pottery House Krabi',
@@ -362,11 +362,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     {
       id: 'media-ph-post1',
       locationId: 'loc-pottery-house',
-      provider: 'cloudflare_r2',
+      provider: 'cloudflare_images',
       source: 'uploaded',
-      r2Key: 'sites/site-pottery-house/media/post-wheel.jpg',
-      publicUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/post-wheel.jpg',
-      thumbnailUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/post-wheel.jpg',
+      cloudflareImageId: '6d8865b8-78e1-44a7-9a7f-c850b23e0800',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6d8865b8-78e1-44a7-9a7f-c850b23e0800/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6d8865b8-78e1-44a7-9a7f-c850b23e0800/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'post-wheel.jpg',
       altText: 'Pottery wheel class at Pottery House Krabi',
@@ -375,11 +375,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     {
       id: 'media-ph-post2',
       locationId: 'loc-pottery-house',
-      provider: 'cloudflare_r2',
+      provider: 'cloudflare_images',
       source: 'uploaded',
-      r2Key: 'sites/site-pottery-house/media/post-team.jpg',
-      publicUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/post-team.jpg',
-      thumbnailUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/post-team.jpg',
+      cloudflareImageId: 'd340b852-67de-44e2-4174-526143f95900',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/d340b852-67de-44e2-4174-526143f95900/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/d340b852-67de-44e2-4174-526143f95900/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'post-team.jpg',
       altText: 'Pottery House Krabi team',
@@ -388,11 +388,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     {
       id: 'media-ph-post3',
       locationId: 'loc-pottery-house',
-      provider: 'cloudflare_r2',
+      provider: 'cloudflare_images',
       source: 'uploaded',
-      r2Key: 'sites/site-pottery-house/media/post-cocktails.jpg',
-      publicUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/post-cocktails.jpg',
-      thumbnailUrl: 'https://media.krabiclaw.com/sites/site-pottery-house/media/post-cocktails.jpg',
+      cloudflareImageId: '4dd42ffb-7912-4595-208e-964eafdbc200',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/4dd42ffb-7912-4595-208e-964eafdbc200/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/4dd42ffb-7912-4595-208e-964eafdbc200/thumbnail',
       mimeType: 'image/jpeg',
       fileName: 'post-cocktails.jpg',
       altText: 'Cocktails and Clay Friday event',
@@ -788,6 +788,110 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       ],
     },
   ],
+  siteContentTranslations: [
+    {
+      id: 'sct-ph-th-home-hero',
+      locationId: null,
+      locale: 'th',
+      page: 'home',
+      field: 'hero',
+      content: null,
+      heroTitle: 'ดินเผา ความสงบ และสถานที่ที่อยากกลับมา',
+      heroSubtitle: 'คลาสปั้นดินเผา ปั้นด้วยวงล้อ และปั้นมือในกระบี่ ประเทศไทย',
+      value: 'ดินเผา ความสงบ และสถานที่ที่อยากกลับมา',
+      type: 'text',
+      status: 'published',
+      sourceHash: 'ph-th-home-hero-v1',
+      translatedAt: '2026-05-28T00:00:00.000Z',
+      reviewedAt: '2026-05-28T00:00:00.000Z',
+    },
+    {
+      id: 'sct-ph-th-cta',
+      locationId: null,
+      locale: 'th',
+      page: 'home',
+      field: 'cta.title',
+      content: 'จองคลาสแรกของคุณ',
+      heroTitle: null,
+      heroSubtitle: null,
+      value: 'จองคลาสแรกของคุณ',
+      type: 'text',
+      status: 'published',
+      sourceHash: 'ph-th-cta-v1',
+      translatedAt: '2026-05-28T00:00:00.000Z',
+      reviewedAt: '2026-05-28T00:00:00.000Z',
+    },
+    {
+      id: 'sct-ph-th-story-title',
+      locationId: null,
+      locale: 'th',
+      page: 'about',
+      field: 'story.title',
+      content: 'สตูดิโอที่หล่อหลอมจากความสุขของการสร้างสรรค์',
+      heroTitle: null,
+      heroSubtitle: null,
+      value: 'สตูดิโอที่หล่อหลอมจากความสุขของการสร้างสรรค์',
+      type: 'text',
+      status: 'published',
+      sourceHash: 'ph-th-story-title-v1',
+      translatedAt: '2026-05-28T00:00:00.000Z',
+      reviewedAt: '2026-05-28T00:00:00.000Z',
+    },
+    {
+      id: 'sct-ph-th-story-body',
+      locationId: null,
+      locale: 'th',
+      page: 'about',
+      field: 'story.body',
+      content: 'Pottery House เริ่มต้นจากช่างปั้นสองคน วงล้อสองตัว และความเชื่อที่ว่าการสร้างสรรค์สิ่งต่างๆ ด้วยมือของตัวเองจะเปลี่ยนความรู้สึกของคุณที่มีต่อวันหนึ่งๆ\n\nเราตั้งสตูดิโอในกระบี่เพราะที่นี่ดึงดูดผู้คน นักเดินทางที่ชะลอความเร็ว พักอยู่นานขึ้น และเริ่มมองหาสิ่งที่จะทำกับเวลาของตัวเองที่ไม่ใช่แค่ทัวร์ ดินเผากลายเป็นคำตอบที่ลงตัว',
+      heroTitle: null,
+      heroSubtitle: null,
+      value: 'Pottery House เริ่มต้นจากช่างปั้นสองคน วงล้อสองตัว และความเชื่อในพลังของการสร้างด้วยมือ',
+      type: 'richtext',
+      status: 'published',
+      sourceHash: 'ph-th-story-body-v1',
+      translatedAt: '2026-05-28T00:00:00.000Z',
+      reviewedAt: '2026-05-28T00:00:00.000Z',
+    },
+  ],
+  businessLocationTranslations: [
+    {
+      id: 'blt-ph-th-loc',
+      locationId: 'loc-pottery-house',
+      locale: 'th',
+      title: 'Pottery House กระบี่',
+      address: '',
+      city: 'กระบี่',
+      description: 'สตูดิโอเซรามิกในกระบี่ บรรยากาศอบอุ่น เรียนปั้นวงล้อและปั้นมือ พร้อมบริการเผาดินและเคลือบครบชุด เหมาะสำหรับทุกระดับ',
+      shortDescription: 'คลาสปั้นดินเผา วงล้อ และปั้นมือในกระบี่ รวมวัสดุและการเผาทุกอย่าง',
+      status: 'published',
+      sourceHash: 'ph-th-location-v1',
+      translatedAt: '2026-05-28T00:00:00.000Z',
+      reviewedAt: '2026-05-28T00:00:00.000Z',
+    },
+    {
+      id: 'blt-ph-th-beach',
+      locationId: 'loc-pottery-beachfront',
+      locale: 'th',
+      title: 'Pottery House — บีชฟร้อนท์ กล่องม่วง',
+      address: 'ซีวิว กล่องม่วง',
+      city: 'กระบี่',
+      description: 'คลาสปั้นวงล้อบนชายหาด ณ ซีวิว กล่องม่วง มองเห็นทะเลอ่าวไทย ที่นั่งจำกัดมาก',
+      shortDescription: 'คลาสปั้นวงล้อบนชายหาดกล่องม่วง ที่นั่งจำกัด วิวทะเลอ่าวไทย',
+      status: 'published',
+      sourceHash: 'ph-th-beachfront-v1',
+      translatedAt: '2026-05-28T00:00:00.000Z',
+      reviewedAt: '2026-05-28T00:00:00.000Z',
+    },
+  ],
+  aiCredits: {
+    balance: 500,
+    lifetimeUsed: 0,
+  },
+  organizationBilling: {
+    status: 'free',
+    plan: 'free',
+  },
   publicRoutes: [
     {
       path: '/experiences',
@@ -1160,4 +1264,77 @@ INSERT INTO site_content
 VALUES
 ${contentRows};
 -- END GENERATED: pottery_content`
+}
+
+export function renderCompiledPotteryHouseTranslationsBlock(): string {
+  const siteContentTranslationRows = compiledPotteryHouseSeed.siteContentTranslations
+    .map((entry) => `  (${[
+      sqlValue(entry.id),
+      sqlValue(entry.organizationId),
+      sqlValue(entry.siteId),
+      sqlValue(entry.locationId),
+      sqlValue(entry.locale),
+      sqlValue(entry.page),
+      sqlValue(entry.field),
+      sqlValue(entry.content),
+      sqlValue(entry.heroTitle),
+      sqlValue(entry.heroSubtitle),
+      sqlValue(entry.value),
+      sqlValue(entry.type),
+      sqlValue(entry.status),
+      sqlValue(entry.sourceHash),
+      sqlValue(entry.translatedAt),
+      sqlValue(entry.reviewedAt),
+    ].join(', ')})`)
+    .join(',\n')
+
+  const businessLocationTranslationRows = compiledPotteryHouseSeed.businessLocationTranslations
+    .map((entry) => `  (${[
+      sqlValue(entry.id),
+      sqlValue(entry.organizationId),
+      sqlValue(entry.siteId),
+      sqlValue(entry.locationId),
+      sqlValue(entry.locale),
+      sqlValue(entry.title),
+      sqlValue(entry.address),
+      sqlValue(entry.city),
+      sqlValue(entry.description),
+      sqlValue(entry.shortDescription),
+      sqlValue(entry.status),
+      sqlValue(entry.sourceHash),
+      sqlValue(entry.translatedAt),
+      sqlValue(entry.reviewedAt),
+    ].join(', ')})`)
+    .join(',\n')
+
+  return `-- BEGIN GENERATED: pottery_translations
+INSERT INTO site_content_translations
+  (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, reviewed_at)
+VALUES
+${siteContentTranslationRows};
+
+INSERT INTO business_location_translations
+  (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, reviewed_at)
+VALUES
+${businessLocationTranslationRows};
+-- END GENERATED: pottery_translations`
+}
+
+export function renderCompiledPotteryHouseBillingBlock(): string {
+  const { identity, aiCredits, organizationBilling } = compiledPotteryHouseSeed
+  const parts: string[] = []
+
+  if (aiCredits) {
+    parts.push(`INSERT INTO ai_credits (organization_id, balance, lifetime_used)
+VALUES (${sqlValue(identity.organizationId)}, ${aiCredits.balance}, ${aiCredits.lifetimeUsed});`)
+  }
+
+  if (organizationBilling) {
+    parts.push(`INSERT INTO organization_billing (id, organization_id, status, plan)
+VALUES (${sqlValue(`billing-${identity.organizationId}`)}, ${sqlValue(identity.organizationId)}, ${sqlValue(organizationBilling.status)}, ${sqlValue(organizationBilling.plan)});`)
+  }
+
+  return `-- BEGIN GENERATED: pottery_billing
+${parts.join('\n\n')}
+-- END GENERATED: pottery_billing`
 }
