@@ -56,6 +56,7 @@ export function compileCuratedSiteFixture(
       provider: asset.provider ?? 'external_url',
       source: asset.source ?? 'external',
       r2Key: asset.r2Key ?? null,
+      cloudflareImageId: asset.cloudflareImageId ?? null,
       publicUrl: asset.publicUrl,
       thumbnailUrl: asset.thumbnailUrl,
       mimeType: asset.mimeType,
@@ -261,5 +262,9 @@ export function compileCuratedSiteFixture(
       locations: fixture.locations.map((l) => `/locations/${l.slug}`),
       experiences: fixture.experiences.map((e) => `/experiences/${e.slug}`),
     },
+    aiCredits: fixture.aiCredits
+      ? { balance: fixture.aiCredits.balance, lifetimeUsed: fixture.aiCredits.lifetimeUsed ?? 0 }
+      : undefined,
+    organizationBilling: fixture.organizationBilling,
   }
 }

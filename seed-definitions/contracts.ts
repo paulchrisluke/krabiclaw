@@ -42,6 +42,14 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
   locationQa: CuratedLocationQaDefinition[]
   posts: CuratedPostDefinition[]
   publicRoutes: SeedPublicRouteExpectation[]
+  aiCredits?: {
+    balance: number
+    lifetimeUsed?: number
+  }
+  organizationBilling?: {
+    status: string
+    plan: string
+  }
 }
 
 export interface CuratedSiteConfigEntry {
@@ -107,9 +115,10 @@ export interface CuratedMediaAssetDefinition {
   id: string
   locationId: string | null
   kind?: 'image' | 'video'
-  provider?: 'external_url' | 'cloudflare_r2'
+  provider?: 'external_url' | 'cloudflare_r2' | 'cloudflare_images'
   source?: 'external' | 'uploaded'
   r2Key?: string | null
+  cloudflareImageId?: string | null
   publicUrl: string
   thumbnailUrl: string | null
   mimeType: string
@@ -232,9 +241,10 @@ export interface CompiledSeedMediaAsset {
   siteId: string
   locationId: string | null
   kind: 'image' | 'video'
-  provider: 'external_url' | 'cloudflare_r2'
+  provider: 'external_url' | 'cloudflare_r2' | 'cloudflare_images'
   source: 'external' | 'uploaded'
   r2Key: string | null
+  cloudflareImageId: string | null
   publicUrl: string
   thumbnailUrl: string | null
   mimeType: string
@@ -385,6 +395,14 @@ export interface CompiledCuratedSiteBundle {
   routeManifest: {
     locations: string[]
     experiences: string[]
+  }
+  aiCredits?: {
+    balance: number
+    lifetimeUsed: number
+  }
+  organizationBilling?: {
+    status: string
+    plan: string
   }
 }
 
