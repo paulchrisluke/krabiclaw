@@ -660,17 +660,137 @@ Each item below has a resolved architectural decision — see the Architectural 
 
 ### Phase 4: Bring ChowBot onto the canonical surface
 
-1. **Migrate `publish_menu` to call `PATCH /editor/sites/[siteId]/menus/[menuId]` with `{ status: 'published' }`.**
+**Pre-condition:** Phase 3 complete and deployed. `tsc --noEmit` clean.
 
-2. **Migrate `rename_site`, `save_brand_description`, `set_default_currency` to call `PATCH /api/sites/[siteId]/settings`.** Do in a single PR after verifying the settings route handles all four fields. The `rename_site` rollback on Cloudflare failure must be preserved in the route handler before switching.
+**Implementation pattern:** ChowBot tool handlers call shared utility functions directly — never via `$fetch` or internal HTTP calls. The Nuxt typed `$fetch` system triggers "Excessive stack depth" errors when called with `method: 'POST'` from a server handler (discovered in Phase 3 when first attempting to proxy the site creation route). Use the same utility-extraction pattern established in Phase 3 (`server/utils/site-creation.ts`).
 
-3. **Add `update_post` and `delete_post` ChowBot tools** calling the existing canonical routes.
+#### 4.1 Migrate `publish_menu` off raw SQL
+
+`publish_menu` currently runs:
+```sql
+UPDATE menus SET status = 'published', updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND site_id = ?
+```
+The canonical utility `updateMenu()` in `server/utils/menu-management.ts` already supports `{ status: 'published' }` — it is the same function `PATCH /editor/sites/[siteId]/menus/[menuId]` calls.
+
+**Change:** In the `publish_menu` case handler, replace the raw `db.prepare(UPDATE menus ...)` call with:
+```ts
+const menu = await updateMenu(db, orgId, siteId, input.menu_id, { status: 'published' }, userId)
+if (!menu) return { error: 'Menu not found or access denied.' }
+return { menu_id: input.menu_id, status: 'published' }
+```
+`updateMenu` is already imported at the top of `chowbot-agent.ts`. No new imports or route changes needed.
+
+#### 4.2 Fix the settings route rollback gap, then migrate `rename_site`, `save_brand_description`, `set_default_currency`
+
+**Step A — Fix `settings.patch.ts` rollback gap (required before migrating any tool).**
+
+`server/api/sites/[siteId]/settings.patch.ts` currently executes the `UPDATE sites` SQL (around line 228), then calls `createSystemSubdomain` if `brand_name` changed (around line 243). There is no rollback: if `createSystemSubdomain` throws, the outer `catch` at line ~304 returns a 500 but the DB already has the new `brand_name` and `subdomain` — the site is left in an inconsistent state.
+
+Fix: After the `UPDATE sites` succeeds and before calling `createSystemSubdomain`, capture `prev = { brand_name: site.brand_name, subdomain: site.subdomain }` from the `site` object fetched at line ~47. Wrap `createSystemSubdomain` in a try-catch:
+- On failure, attempt a rollback `UPDATE sites SET brand_name = ?, subdomain = ?` in its own inner try-catch.
+  - If rollback succeeds: return 400 `"Failed to register subdomain with Cloudflare. The rename was not applied."`
+  - If rollback also fails: log both errors, return 400 `"Rename was applied but subdomain registration with Cloudflare failed. Please contact support."`
+
+This mirrors the pattern already in the `rename_site` ChowBot tool handler (fixed in the Phase 3 bug-fix session).
+
+**Step B — Extract a shared site-settings utility.**
+
+Create `server/utils/site-settings.ts` exporting `updateSiteSettingsFields(db, env, siteId, organizationId, updates, userId)`. Move the field-update logic out of the route handler into this utility. Both `settings.patch.ts` and the ChowBot tool handlers call this function directly. The function signature matches the `UpdateSiteSettingsRequest` fields: `brand_name`, `brand_description`, `default_currency` at minimum; include any other fields the current route handler supports.
+
+The utility returns a typed result (same `SiteCreationResult`-style pattern: `{ status: number; data: Record<string, unknown> }`) so callers can re-map for their response format without an HTTP round-trip.
+
+**Step C — Migrate the three ChowBot tools.**
+
+Replace raw SQL in each case handler with a call to `updateSiteSettingsFields`:
+
+- `rename_site`: call `updateSiteSettingsFields(db, env, siteId, orgId, { brand_name: input.brand_name }, userId)`. Remove the `MAX_SLUG_ATTEMPTS` loop — the utility handles the unique-subdomain check via the same pattern the route uses. Handle conflict (status 400/409) and Cloudflare failure return values from the utility.
+- `save_brand_description`: call `updateSiteSettingsFields(db, env, siteId, orgId, { brand_description: description }, userId)`.
+- `set_default_currency`: call `updateSiteSettingsFields(db, env, siteId, orgId, { default_currency: currency }, userId)`. Keep the existing `SUPPORTED_CURRENCIES` validation in the tool handler before calling the utility (fail fast, same as today).
+
+Do all three ChowBot tool migrations in a single PR after Step A and Step B are complete and verified.
+
+#### 4.3 Add `update_post` and `delete_post` ChowBot tools
+
+Both routes and utilities exist. `updatePost` and `deletePost` are exported from `server/utils/post-management.ts` (lines 141 and 210). Add them to the existing import at the top of `chowbot-agent.ts`.
+
+**Add to `TOOLS` array** (immediately after the `publish_post` tool definition):
+```ts
+{
+  name: "update_post",
+  description: "Update a draft or published post — title, body, image, location, type, CTA, or event/offer fields. Does not change publish status.",
+  input_schema: {
+    type: "object",
+    properties: {
+      post_id: { type: "string", description: "ID of the post to update." },
+      title: { type: "string", description: "New headline (max 80 chars). Omit to leave unchanged." },
+      body: { type: "string", description: "New post body (max 400 chars). Omit to leave unchanged." },
+      image_asset_id: { type: "string", description: "New media asset ID. Omit to leave unchanged." },
+      location_id: { type: "string", description: "Reassign to a location. Omit to leave unchanged." },
+      post_type: { type: "string", enum: ["standard", "offer", "event", "update"] },
+      cta_type: { type: "string", enum: ["BOOK", "ORDER", "SHOP", "LEARN_MORE", "SIGN_UP", "CALL"] },
+      cta_url: { type: "string" },
+      event_title: { type: "string" },
+      event_start: { type: "string", description: "ISO datetime string." },
+      event_end: { type: "string", description: "ISO datetime string." },
+      offer_coupon: { type: "string" },
+      offer_terms: { type: "string" },
+    },
+    required: ["post_id"],
+  },
+},
+{
+  name: "delete_post",
+  description: "Permanently delete a post. Confirm with user first.",
+  input_schema: {
+    type: "object",
+    properties: {
+      post_id: { type: "string", description: "ID of the post to delete." },
+    },
+    required: ["post_id"],
+  },
+},
+```
+
+**Add `"delete_post"` to `CONFIRM_REQUIRED`** (next to `"publish_post"`).
+
+**Add to `executeTool` switch** (immediately after the `publish_post` case):
+```ts
+case "update_post": {
+  const post = await updatePost(db, orgId, siteId, input.post_id, {
+    title: input.title, body: input.body, image_asset_id: input.image_asset_id,
+    location_id: input.location_id, post_type: input.post_type,
+    cta_type: input.cta_type, cta_url: input.cta_url,
+    event_title: input.event_title, event_start: input.event_start,
+    event_end: input.event_end, offer_coupon: input.offer_coupon,
+    offer_terms: input.offer_terms,
+  }, userId)
+  if (!post) return { error: "Post not found." }
+  return { id: post.id, title: post.title, body: post.body, status: post.status, updated: true }
+}
+
+case "delete_post": {
+  await deletePost(db, orgId, siteId, input.post_id)
+  return { post_id: input.post_id, deleted: true }
+}
+```
+
+Note: `delete_post` in ChowBot does not need an additional owner/admin role check — ChowBot already operates fully scoped to the authenticated org+site. The `CONFIRM_REQUIRED` gate handles intent confirmation.
+
+Also update the system prompt: add `delete_post` to the confirm-first list (the same line that mentions `delete_menu`, `delete_menu_item`, etc.).
+
+#### 4.4 Verify no remaining private SQL
+
+After 4.1 and 4.2 are complete, audit every `case` in `executeTool`. The verification command:
+```bash
+grep -n "db\.prepare.*UPDATE\|db\.prepare.*DELETE" server/utils/chowbot-agent.ts
+```
+This must return zero results inside the `switch` block. The only acceptable `db.prepare` calls in ChowBot tool handlers are read-only `SELECT` queries used to look up IDs before calling a utility. Any write SQL remaining after Phase 4 is a bug.
+
+#### 4.5 Post-Phase 4 state
+
+ChowBot is now a pure client of the same domain utilities the canonical routes use. No business logic exists solely in ChowBot tool handlers. Any future MCP tool that wraps the same utilities shares behavior with ChowBot without duplication. Phase 5 (MCP tool contracts) can proceed from this clean baseline.
 
 4. ~~Remove `get_platform_content_page`, `save_platform_content_page`, `delete_platform_content_page` from ChowBot.~~ **Done in Phase 1.**
-
-5. **Verify no remaining ChowBot tools run raw `UPDATE`/`DELETE` SQL outside named domain utilities.** After items 1–2 are done, the only acceptable SQL in ChowBot tool handlers is read-only (`SELECT`) used for lookup before calling a utility. Any remaining write SQL is a bug.
-
-6. ChowBot is now a client of the same domain layer MCP will use. No behavior that only exists in ChowBot should survive Phase 4.
 
 ### Phase 5: Expose MCP-safe tool contracts
 
