@@ -203,13 +203,11 @@ export async function restoreSiteCustomDomains(
   return restored
 }
 
-export async function executeSiteTransfer(
+export async function reassignSiteOwnership(
   db: D1Database,
   siteId: string,
   fromOrgId: string,
   toOrgId: string,
-  transferId: string,
-  acceptedByUserId: string,
 ): Promise<void> {
   const now = new Date().toISOString()
 
@@ -230,6 +228,46 @@ export async function executeSiteTransfer(
   )
 
   // sites itself — update last so the FK is still valid during the batch
+  batch.push(
+    db
+      .prepare(
+        `UPDATE sites SET organization_id = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+      )
+      .bind(toOrgId, now, siteId, fromOrgId),
+  )
+
+  await db.batch(batch)
+}
+
+export async function executeSiteTransfer(
+  db: D1Database,
+  siteId: string,
+  fromOrgId: string,
+  toOrgId: string,
+  transferId: string,
+  acceptedByUserId: string,
+): Promise<void> {
+  const now = new Date().toISOString()
+
+  const batch: D1PreparedStatement[] = []
+
+  batch.push(
+    ...SITE_SCOPED_TABLES.map((table) =>
+      db
+        .prepare(`UPDATE ${table} SET organization_id = ? WHERE site_id = ? AND organization_id = ?`)
+        .bind(toOrgId, siteId, fromOrgId),
+    ),
+  )
+
+  batch.push(
+    db
+      .prepare(
+        `UPDATE post_channel_jobs SET organization_id = ?
+         WHERE organization_id = ? AND post_id IN (SELECT id FROM posts WHERE site_id = ?)`,
+      )
+      .bind(toOrgId, fromOrgId, siteId),
+  )
+
   batch.push(
     db
       .prepare(
