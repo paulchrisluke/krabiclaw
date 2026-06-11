@@ -1,5 +1,5 @@
 import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
-import { logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 
 interface DomainNotificationEnv {
   PLATFORM_OWNER_EMAILS?: string
@@ -69,6 +69,7 @@ async function sendEmail(
 ) {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
+  const storedRecipient = shouldSendRealEmail(env) ? opts.to : hashEmail(opts.to)
   await db.prepare(`
     INSERT INTO notifications
     (id, organization_id, site_id, channel, template, recipient, title, payload, status, created_at)
@@ -77,7 +78,7 @@ async function sendEmail(
     id,
     opts.organizationId,
     opts.siteId,
-    opts.to,
+    storedRecipient,
     opts.title,
     JSON.stringify({ audience: opts.audience, domain: opts.domain, status: opts.status, message: opts.message, dashboard_url: opts.dashboardUrl }),
     now
@@ -94,7 +95,7 @@ async function sendEmail(
       organizationId: opts.organizationId,
       siteId: opts.siteId,
       audience: opts.audience,
-      recipient: opts.to,
+      recipient: hashEmail(opts.to),
       title: opts.title,
       template: 'domain_update',
     })
@@ -134,7 +135,7 @@ async function sendEmail(
       ? `Email request timed out after ${timeoutMs}ms`
       : `Email request failed: ${normalizedError.message || 'Unknown error'}`
     console.error('domain_notification_email_send_failed', {
-      to: opts.to,
+      to: hashEmail(opts.to),
       audience: opts.audience,
       siteId: opts.siteId,
       organizationId: opts.organizationId,
@@ -159,7 +160,7 @@ async function sendEmail(
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
     const raw = await response.text().catch(() => '<unavailable>')
     console.error('domain_notification_email_response_parse_failed', {
-      to: opts.to,
+      to: hashEmail(opts.to),
       audience: opts.audience,
       status: response.status,
       error: normalizedError.message,

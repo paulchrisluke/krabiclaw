@@ -1,7 +1,7 @@
 // POST publish page
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { publishDrafts } from '~/server/utils/content-management'
+import { publishDrafts, publishAllDrafts } from '~/server/utils/content-management'
 import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
 
 interface PublishRequest {
@@ -60,11 +60,8 @@ export default defineEventHandler(async (event) => {
     }
 
     if (all) {
-      // Publish all drafts for this site
-      // Note: This would need to be implemented in content-management
-      return jsonResponse({
-        error: 'Publish all not yet implemented'
-      }, { status: 501 })
+      await publishAllDrafts(db, site.organization_id, siteId)
+      return jsonResponse({ success: true, message: 'All drafts published', scope: 'all' })
     } else {
       // Publish specific page
       await publishDrafts(db, site.organization_id, siteId, page, locationId)

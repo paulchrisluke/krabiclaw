@@ -45,6 +45,7 @@ import {
 } from "~/server/utils/translation-inventory";
 import { processTranslationJobBatch } from "~/server/utils/translation-processor";
 import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
+import { createSystemSubdomain } from "~/server/utils/domains";
 import { extractMenuFromMediaAsset } from "~/server/utils/chowbot-media";
 import { upsertChannelState } from "~/server/utils/chowbot-conversations";
 import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
@@ -62,7 +63,6 @@ const HERO_FIELDS = new Set([
   "hero.image",
   "hero.video",
 ]);
-const PLATFORM_PAGES = ["about", "contact", "help"] as const;
 const TRANSLATION_SCOPES = new Set([
   "site",
   "content",
@@ -323,9 +323,6 @@ function isEmptyHeroState(state: {
   );
 }
 
-function isPlatformPage(page: string): page is (typeof PLATFORM_PAGES)[number] {
-  return PLATFORM_PAGES.includes(page as (typeof PLATFORM_PAGES)[number]);
-}
 
 function getComponentFromField(field: string): string | null {
   // Direct mapping for specific fields
@@ -1452,55 +1449,6 @@ const TOOLS: AiTool[] = [
     },
   },
 
-  // ── Platform Content ──────────────────────────────────────────────────────
-  {
-    name: "get_platform_content_page",
-    description: "Read a platform admin content page.",
-    input_schema: {
-      type: "object",
-      properties: {
-        page: {
-          type: "string",
-          enum: [...PLATFORM_PAGES],
-          description: "Platform page to inspect.",
-        },
-      },
-      required: ["page"],
-    },
-  },
-  {
-    name: "save_platform_content_page",
-    description: "Update a platform admin content page.",
-    input_schema: {
-      type: "object",
-      properties: {
-        page: {
-          type: "string",
-          enum: [...PLATFORM_PAGES],
-          description: "Platform page to update.",
-        },
-        content: { type: "string", description: "Raw page content." },
-      },
-      required: ["page", "content"],
-    },
-  },
-  {
-    name: "delete_platform_content_page",
-    description:
-      "Delete a platform admin content page. Confirm with the user first.",
-    input_schema: {
-      type: "object",
-      properties: {
-        page: {
-          type: "string",
-          enum: [...PLATFORM_PAGES],
-          description: "Platform page to delete.",
-        },
-      },
-      required: ["page"],
-    },
-  },
-
   // ── Site ───────────────────────────────────────────────────────────────────
   {
     name: "get_site_stats",
@@ -1954,7 +1902,6 @@ const CONFIRM_REQUIRED = new Set([
   "delete_qa",
   "delete_reservation_policies",
   "delete_site_content_field",
-  "delete_platform_content_page",
   "delete_site_language",
   "start_site_translation_job",
   "run_translation_job_batch",
@@ -3684,63 +3631,6 @@ async function executeTool(
       };
     }
 
-    case "get_platform_content_page": {
-      const page = getToolString(input, "page", 40);
-      if (!page || !isPlatformPage(page)) return { error: "Invalid page." };
-
-      const row = await db
-        .prepare(
-          `SELECT id, page, content, updated_by, updated_at FROM platform_content WHERE page = ? LIMIT 1`,
-        )
-        .bind(page)
-        .first<{
-          id: string;
-          page: string;
-          content: string;
-          updated_by: string | null;
-          updated_at: string;
-        }>();
-
-      return {
-        page,
-        exists: Boolean(row),
-        content: row?.content ?? "",
-        updated_by: row?.updated_by ?? null,
-        updated_at: row?.updated_at ?? null,
-      };
-    }
-
-    case "save_platform_content_page": {
-      const page = getToolString(input, "page", 40);
-      const content = getToolString(input, "content", 1_000_000);
-      if (!page || !isPlatformPage(page)) return { error: "Invalid page." };
-      if (content === undefined) return { error: "content is required." };
-
-      const now = new Date().toISOString();
-      const id = crypto.randomUUID();
-      await db
-        .prepare(
-          `INSERT INTO platform_content (id, page, content, updated_by, updated_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(page) DO UPDATE SET content = excluded.content, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
-        )
-        .bind(id, page, content, userId, now)
-        .run();
-
-      return { page, content, updated_at: now, updated: true };
-    }
-
-    case "delete_platform_content_page": {
-      const page = getToolString(input, "page", 40);
-      if (!page || !isPlatformPage(page)) return { error: "Invalid page." };
-
-      await db
-        .prepare(`DELETE FROM platform_content WHERE page = ?`)
-        .bind(page)
-        .run();
-      return { page, deleted: true };
-    }
-
     case "get_site_stats": {
       const [postStats, menuCount, itemCount, locationCount, reviewCount] =
         await Promise.all([
@@ -3797,6 +3687,12 @@ async function executeTool(
     case "rename_site": {
       const now = new Date().toISOString();
       const baseSubdomain = toSlug(input.brand_name);
+      const prev = await db
+        .prepare(
+          `SELECT brand_name, subdomain FROM sites WHERE id = ? AND organization_id = ?`,
+        )
+        .bind(siteId, orgId)
+        .first<{ brand_name: string | null; subdomain: string | null }>();
       for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
         const subdomain =
           attempt === 0 ? baseSubdomain : `${baseSubdomain}-${attempt + 1}`;
@@ -3807,6 +3703,24 @@ async function executeTool(
             )
             .bind(input.brand_name, subdomain, now, siteId, orgId)
             .run();
+          try {
+            await createSystemSubdomain(env, db, siteId, orgId, subdomain);
+          } catch (subdomainErr) {
+            if (prev) {
+              await db
+                .prepare(
+                  `UPDATE sites SET brand_name = ?, subdomain = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+                )
+                .bind(prev.brand_name, prev.subdomain, now, siteId, orgId)
+                .run();
+            }
+            console.error("rename_site: createSystemSubdomain failed, rolled back", {
+              siteId,
+              subdomain,
+              err: subdomainErr,
+            });
+            return { error: "Failed to register subdomain with Cloudflare. The rename was not applied." };
+          }
           return { brand_name: input.brand_name, subdomain, updated: true };
         } catch (error) {
           if (isUniqueConstraintError(error)) continue;
@@ -4393,7 +4307,6 @@ Guidelines:
 - Use run_translation_job_batch only after a job exists and the owner confirms spending credits; it processes one batch and saves translations as drafts
 - Use publish_site_translations after the owner confirms drafted translations should go live; published languages become visible on the public site
 - Use get_site_content_page, save_site_content_field, publish_site_content_page, discard_site_content_page, and delete_site_content_field for tenant page content such as home, about, contact, location notes, and reservations
-- Use get_platform_content_page, save_platform_content_page, and delete_platform_content_page for platform admin pages about, contact, and help
 - Before publish_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_review, delete_media_asset, delete_qa, delete_site_language, start_site_translation_job, run_translation_job_batch, publish_site_translations — confirm first
 - Menus are DRAFT by default — publish_menu makes them live
 - Keep responses short — this is a chat panel`;

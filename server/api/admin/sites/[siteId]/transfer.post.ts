@@ -1,7 +1,7 @@
 // POST /api/admin/sites/[siteId]/transfer — initiate a site transfer to a new owner
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { hashEmail, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
 import { rootDomainForPair } from '~/server/utils/domains'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
@@ -223,7 +223,7 @@ export default defineEventHandler(async (event) => {
       }).catch((err) => console.error('transfer_invite_email_failed', err))
     } else {
       console.info('email_delivery_log_only', {
-        recipient: toEmail,
+        recipient: hashEmail(toEmail),
         siteId,
         organizationId: site.organization_id,
         template: 'site_transfer_invite',

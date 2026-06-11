@@ -1,4 +1,4 @@
-import { logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 
 type NotificationChannel = 'email' | 'whatsapp'
@@ -257,7 +257,7 @@ async function sendEmailNotification(
       organizationId: opts.organizationId,
       siteId: opts.siteId,
       template: opts.template,
-      recipient: opts.to,
+      recipient: hashEmail(opts.to),
       title: opts.title,
     })
     return

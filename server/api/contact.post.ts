@@ -1,6 +1,6 @@
 // POST /api/contact - Platform contact form submission via Resend
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { hashEmail, shouldSendRealEmail } from '~/server/utils/email-delivery'
 
 const NAME_MAX_LENGTH = 100
 const EMAIL_MAX_LENGTH = 254
@@ -11,13 +11,6 @@ const EMAIL_DAILY_LIMIT = 3
 const hashIp = async (ip: string) => {
   if (!ip) return null
   const bytes = new TextEncoder().encode(ip)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
-const hashEmail = async (email: string) => {
-  if (!email) return null
-  const bytes = new TextEncoder().encode(email.toLowerCase().trim())
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
 }
@@ -95,7 +88,7 @@ export default defineEventHandler(async (event) => {
   const db = cloudflareEnv(event).DB
   const clientIp = getClientIp(event)
   const hourKey = `rate:ip:${clientIp}:${Math.floor(Date.now() / 3600000)}`
-  const emailHash = await hashEmail(email)
+  const emailHash = hashEmail(email)
   const dateKey = `rate:email:${emailHash}:${new Date().toISOString().split('T')[0]}`
 
   if (db) {
@@ -153,7 +146,7 @@ export default defineEventHandler(async (event) => {
         channel: 'platform_contact',
         recipient: 'hello@krabiclaw.com',
         name,
-        email,
+        email: emailHash,
         submissionId: id,
       })
       return jsonResponse({ success: true, message: 'Message sent successfully' })

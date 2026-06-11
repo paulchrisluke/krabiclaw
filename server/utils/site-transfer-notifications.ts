@@ -1,4 +1,4 @@
-import { logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 
 interface SiteTransferNotificationEnv {
   PLATFORM_OWNER_EMAILS?: string
@@ -104,7 +104,7 @@ async function sendReminderEmail(
       notificationId,
       organizationId: opts.organizationId,
       siteId: opts.siteId,
-      recipient: opts.recipient,
+      recipient: hashEmail(opts.recipient),
       title: opts.title,
       template: 'site_transfer_reminder',
     })

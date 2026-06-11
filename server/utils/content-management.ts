@@ -445,16 +445,16 @@ export const publishDrafts = async (db: D1Database, organizationId: string, site
   console.log(`[content-management.ts] db.batch completed successfully.`)
 }
 
-export const publishAllDrafts = async (db: D1Database) => {
+export const publishAllDrafts = async (db: D1Database, organizationId: string, siteId: string) => {
   const { results: drafts } = await db.prepare(
-    `SELECT id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, updated_at FROM site_content_drafts ORDER BY organization_id, site_id, location_id, page, field`
-  ).all<SiteContent>()
-  
+    `SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component, updated_at FROM site_content_drafts WHERE organization_id = ? AND site_id = ? ORDER BY location_id, page, field`
+  ).bind(organizationId, siteId).all<SiteContent>()
+
   if (!drafts || drafts.length === 0) return
 
   const stmts = drafts.map(draft => buildUpsertSiteStmt(db, draft))
-  stmts.push(db.prepare(`DELETE FROM site_content_drafts`))
-  
+  stmts.push(db.prepare(`DELETE FROM site_content_drafts WHERE organization_id = ? AND site_id = ?`).bind(organizationId, siteId))
+
   await db.batch(stmts)
 }
 
@@ -472,8 +472,8 @@ export const discardDrafts = async (db: D1Database, organizationId: string, site
   await db.prepare(query).bind(...params).run()
 }
 
-export const discardAllDrafts = async (db: D1Database) => {
-  await db.prepare(`DELETE FROM site_content_drafts`).run()
+export const discardAllDrafts = async (db: D1Database, organizationId: string, siteId: string) => {
+  await db.prepare(`DELETE FROM site_content_drafts WHERE organization_id = ? AND site_id = ?`).bind(organizationId, siteId).run()
 }
 
 export const getDraftStatus = async (db: D1Database, organizationId: string, siteId: string, page?: string, locationId?: string): Promise<{ hasDrafts: boolean; count: number }> => {
