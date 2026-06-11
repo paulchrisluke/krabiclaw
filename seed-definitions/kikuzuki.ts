@@ -39,6 +39,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     slug: 'kikuzuki',
     subdomain: 'kikuzuki-krabi-thailand',
     brandName: 'Kikuzuki Krabi Thailand',
+    logoAssetId: 'media-kiku-logo',
     themeId: 'saya-theme-v1',
     theme: 'saya',
     brandDescription:
@@ -592,6 +593,7 @@ INSERT OR REPLACE INTO media_assets
 VALUES
 ${mediaRows};
 
+UPDATE sites SET logo_asset_id = ${sqlValue(compiledKikuzukiSeed.site.logoAssetId ?? null)} WHERE id = ${sqlValue(identity.siteId)};
 ${heroUpdates}
 -- END GENERATED: kikuzuki_media`
 }
