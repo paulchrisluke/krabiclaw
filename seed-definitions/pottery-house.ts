@@ -1326,12 +1326,12 @@ export function renderCompiledPotteryHouseBillingBlock(): string {
   const parts: string[] = []
 
   if (aiCredits) {
-    parts.push(`INSERT INTO ai_credits (organization_id, balance, lifetime_used)
+    parts.push(`INSERT OR REPLACE INTO ai_credits (organization_id, balance, lifetime_used)
 VALUES (${sqlValue(identity.organizationId)}, ${aiCredits.balance}, ${aiCredits.lifetimeUsed});`)
   }
 
   if (organizationBilling) {
-    parts.push(`INSERT INTO organization_billing (id, organization_id, status, plan)
+    parts.push(`INSERT OR REPLACE INTO organization_billing (id, organization_id, status, plan)
 VALUES (${sqlValue(`billing-${identity.organizationId}`)}, ${sqlValue(identity.organizationId)}, ${sqlValue(organizationBilling.status)}, ${sqlValue(organizationBilling.plan)});`)
   }
 
