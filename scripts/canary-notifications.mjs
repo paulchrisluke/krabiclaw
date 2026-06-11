@@ -34,6 +34,21 @@ function describeError(error) {
   }
 }
 
+function parseProviderError(raw) {
+  if (!raw || typeof raw !== 'string') return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function isKnownEmailQuotaFailure(row) {
+  if (!row || row.channel !== 'email' || row.status !== 'failed') return false
+  const parsed = parseProviderError(row.error)
+  return parsed?.statusCode === 429 && parsed?.name === 'daily_quota_exceeded'
+}
+
 function d1Raw(sql, label = 'd1Raw') {
   const res = spawnSync('yarn', ['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -109,6 +124,7 @@ async function main() {
   const deadline = Date.now() + 45_000
   let emailRow = null
   let whatsappRow = null
+  let quotaBlockedEmailRows = []
   while (Date.now() < deadline) {
     const rows = d1Query(`
       SELECT id, channel, template, status, provider_message_id, error, created_at
@@ -123,12 +139,15 @@ async function main() {
 
     emailRow = rows.find((r) => r.channel === 'email' && r.status === 'sent' && r.provider_message_id)
     whatsappRow = rows.find((r) => r.channel === 'whatsapp' && r.status === 'sent' && r.provider_message_id)
+    quotaBlockedEmailRows = rows.filter(isKnownEmailQuotaFailure)
 
-    if (emailRow && whatsappRow) break
+    if ((emailRow || quotaBlockedEmailRows.length > 0) && whatsappRow) break
     await new Promise((r) => setTimeout(r, 1500))
   }
 
-  if (!emailRow || !whatsappRow) {
+  const emailQuotaBlocked = !emailRow && quotaBlockedEmailRows.length > 0
+
+  if ((!emailRow && !emailQuotaBlocked) || !whatsappRow) {
     const rows = d1Query(`
       SELECT id, channel, template, status, provider_message_id, error, created_at
       FROM notifications
@@ -152,13 +171,17 @@ async function main() {
       reservation_id: reservation.body?.id ?? null,
     },
     notification_ids: {
-      email: emailRow.id,
+      email: emailRow?.id ?? null,
       whatsapp: whatsappRow.id,
     },
     provider_message_ids: {
-      email: emailRow.provider_message_id,
+      email: emailRow?.provider_message_id ?? null,
       whatsapp: whatsappRow.provider_message_id,
     },
+    provider_degraded: emailQuotaBlocked ? {
+      email_daily_quota_exceeded: true,
+      affected_notification_ids: quotaBlockedEmailRows.map((row) => row.id),
+    } : null,
   }
 
   d1Raw(`
@@ -176,6 +199,10 @@ async function main() {
   `, 'canary success audit')
 
   console.log(JSON.stringify({ status: 'pass', run_id: runId, ...details }, null, 2))
+
+  if (emailQuotaBlocked) {
+    console.warn('canary:notifications passed with degraded email provider capacity (daily quota exceeded)')
+  }
 }
 
 main().catch((error) => {
