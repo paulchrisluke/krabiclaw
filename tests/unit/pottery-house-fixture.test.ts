@@ -135,8 +135,8 @@ test('pottery house translations block includes Thai content and location transl
 test('pottery house billing block includes ai credits and organization billing state', () => {
   const sql = renderCompiledPotteryHouseBillingBlock()
 
-  assert.match(sql, /INSERT INTO ai_credits/)
-  assert.match(sql, /INSERT INTO organization_billing/)
+  assert.match(sql, /INSERT OR REPLACE INTO ai_credits/)
+  assert.match(sql, /INSERT OR REPLACE INTO organization_billing/)
   assert.match(sql, /billing-org-pottery-house/)
 })
 
