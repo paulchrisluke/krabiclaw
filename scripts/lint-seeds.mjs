@@ -124,11 +124,11 @@ function lintCuratedFixtureSource(source, filePath) {
       message: 'Curated fixtures may not use external_url media providers.',
     },
     {
-      regex: /(?:publicUrl|thumbnailUrl|reviewerPhotoUrl|content):\s*['"]\/(?:public|images|videos)\//g,
+      regex: /(?:publicUrl|thumbnailUrl|reviewerPhotoUrl|content|logoUrl):\s*['"]\/(?:public|images|videos)\//g,
       message: 'Curated fixtures may not point tenant media at repo-local /public, /images, or /videos paths.',
     },
     {
-      regex: /(?:publicUrl|thumbnailUrl|reviewerPhotoUrl|content):\s*['"]https?:\/\/(?!imagedelivery\.net\/|media\.krabiclaw\.com\/)/g,
+      regex: /(?:publicUrl|thumbnailUrl|reviewerPhotoUrl|content|logoUrl):\s*['"]https?:\/\/(?!imagedelivery\.net\/|media\.krabiclaw\.com\/)/g,
       message: 'Curated fixtures may not point tenant media at third-party hosted URLs.',
     },
   ]

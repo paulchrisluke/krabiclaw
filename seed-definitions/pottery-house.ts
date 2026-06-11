@@ -24,6 +24,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     slug: 'pottery-house-krabi',
     subdomain: 'pottery-house',
     brandName: 'Pottery House Krabi',
+    logoAssetId: 'media-ph-logo',
     themeId: 'saya-theme-v1',
     theme: 'saya',
     brandDescription:
@@ -163,6 +164,19 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
   ],
   mediaAssets: [
     // Cloudflare-hosted uploads normalized to the production media split (2026-06-11)
+    {
+      id: 'media-ph-logo',
+      locationId: null,
+      provider: 'cloudflare_images',
+      source: 'uploaded',
+      cloudflareImageId: '43fb6656-0913-4f3b-be60-b5f180f80400',
+      publicUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/43fb6656-0913-4f3b-be60-b5f180f80400/public',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/43fb6656-0913-4f3b-be60-b5f180f80400/thumbnail',
+      mimeType: 'image/jpeg',
+      fileName: 'pottery-house-logo.jpg',
+      altText: 'Pottery House Krabi logo',
+      category: 'other',
+    },
     {
       id: 'media-ph-homepage-custom',
       locationId: 'loc-pottery-house',
@@ -1089,6 +1103,7 @@ INSERT OR REPLACE INTO media_assets
 VALUES
 ${mediaRows};
 
+UPDATE sites SET logo_asset_id = ${sqlValue(compiledPotteryHouseSeed.site.logoAssetId ?? null)} WHERE id = ${sqlValue(compiledPotteryHouseSeed.identity.siteId)};
 ${heroUpdates}
 -- END GENERATED: pottery_media`
 }

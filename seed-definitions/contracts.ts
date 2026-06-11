@@ -15,6 +15,7 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
     slug: string
     subdomain: string
     brandName: string
+    logoAssetId?: string | null
     themeId: string
     theme: string
     brandDescription: string

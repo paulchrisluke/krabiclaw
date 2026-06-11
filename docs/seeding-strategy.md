@@ -32,6 +32,7 @@ No new tenant is introduced via a hand-authored SQL file. Ever.
 Every `CuratedSiteDefinition` is the complete initial state for a tenant. This includes:
 
 - site metadata, config, locales, domains
+- site logo asset linkage via `logo_asset_id` when a tenant has a logo
 - business locations with opening hours, coordinates, contact details
 - media assets — for curated tenants, only `cloudflare_images` (images) and `cloudflare_r2` (videos/files)
 - experiences, reviews, menus, Q&A, posts
@@ -56,9 +57,11 @@ In practice this means:
 - no `/images/<tenant>/...` or `/videos/<tenant>/...` paths in `media_assets` rows for curated tenants
 - no dependency on third-party delivery URLs such as Unsplash in seeded D1 state
 - no third-party or local URLs in `site_content` media fields, review avatars, post thumbnails, or any other tenant-facing seeded content
+- no legacy `sites.logo_url` dependency for curated tenants; logos must be rehosted in Cloudflare and linked through `sites.logo_asset_id`
 - fixture media should mirror the dashboard upload split exactly:
   images -> Cloudflare Images direct upload flow
   videos/files -> R2 upload flow
+- R2-backed video thumbnails are acceptable when they are derived from a `cloudflare_r2` video asset; they are part of the video pipeline, not a bypass of the image policy
 - new-site templates must seed Cloudflare-hosted media only; they may not introduce repo-local placeholders or external CDN dependencies
 - approved import manifests must normalize media the same way before `client:import --approve`
 
@@ -88,15 +91,17 @@ All three tenants are on the typed fixture path. CI generates from source on eve
 
 ### Kikuzuki media
 
-Kikuzuki uses `cloudflare_images` as the provider for 77 food/interior images. The 78th media asset is a Cloudflare R2 hero video. CDN URL pattern: `https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/{cloudflareImageId}/public`.
+Kikuzuki uses `cloudflare_images` for 77 image assets, including the tenant logo, and `cloudflare_r2` for 1 hero video. CDN URL pattern: `https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/{cloudflareImageId}/public`.
 
 ### Demo and Pottery House migration status
 
 As of June 11, 2026, the curated Demo and Pottery House fixtures have been normalized onto Cloudflare-hosted media:
 
 - seeded `media_assets` rows now use `cloudflare_images` for images and `cloudflare_r2` for videos/files
+- seeded site logos must resolve through `logo_asset_id` to Cloudflare-hosted media, not raw `logo_url` fallbacks
 - seeded `site_content.story.image` URLs are Cloudflare-hosted
 - seeded review avatar URLs are Cloudflare-hosted
+- live tenant pages may still render `media.krabiclaw.com/...-thumb.webp` for video thumbnails; that is expected as long as the parent asset is a `cloudflare_r2` video row
 - repo-served tenant media under `public/` has been removed and must not be reintroduced for tenant content
 
 Historical backfill tooling:
@@ -149,6 +154,7 @@ Demo, Pottery House, and Kikuzuki now all follow the same ephemeral model: typed
 - `seeds/*.sql` is gitignored and should stay empty for curated tenant seeds
 - `lint-seeds.mjs` fails CI if a new `seeds/*.sql` appears that is not a declared generated output
 - fixture reviews treat any `external_url`, repo-local `/public/` / `/images/` / `/videos/` tenant asset path, or third-party hosted tenant media URL in curated media fields as a regression
+- fixture reviews should also reject direct use of `sites.logo_url` for curated tenant branding when a Cloudflare-hosted logo asset is expected
 - template work, seed edits, and onboarding changes must preserve the dashboard storage split:
   images via `/media/request-upload` -> Cloudflare Images
   videos/files via `/media/upload` -> Cloudflare R2

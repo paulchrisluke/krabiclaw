@@ -93,7 +93,12 @@ export default defineEventHandler(async (event) => {
   const [site, locationRow] = await Promise.all([
     db
       .prepare(
-        `SELECT id, organization_id, default_currency, contact_email, contact_phone, brand_name, logo_url FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`,
+        `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name,
+                COALESCE(ma.public_url, s.logo_url) AS logo_url
+           FROM sites s
+           LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
+          WHERE s.id = ? AND s.status = 'active' AND s.onboarding_status = 'active'
+          LIMIT 1`,
       )
       .bind(siteId)
       .first<{
