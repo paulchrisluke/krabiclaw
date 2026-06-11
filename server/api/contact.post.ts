@@ -127,6 +127,7 @@ export default defineEventHandler(async (event) => {
   try {
     const env = cloudflareEnv(event)
     const resendApiKey = env.RESEND_API_KEY
+    const logPii = String(env.LOG_PII || '').toLowerCase() === 'true'
 
     if (shouldSendRealEmail(env) && !resendApiKey) {
       return jsonResponse({ error: 'Email service not configured' }, { status: 500 })
@@ -153,7 +154,7 @@ export default defineEventHandler(async (event) => {
         channel: 'platform_contact',
         recipient: 'hello@krabiclaw.com',
         name,
-        email,
+        email: logPii ? email : emailHash,
         submissionId: id,
       })
       return jsonResponse({ success: true, message: 'Message sent successfully' })
