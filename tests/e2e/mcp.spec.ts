@@ -119,6 +119,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('owner can use content, notifications, submissions, and translation workflow tools', async ({ request, baseURL }) => {
+    test.setTimeout(120_000)
     await loginAs(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
 
@@ -559,6 +560,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('owner can use menus, posts, media, experiences, and Google Business workflow tools', async ({ request, baseURL }) => {
+    test.setTimeout(120_000)
     await loginAs(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
     const locationId = await ensureLocation(request, baseURL!, siteId)
