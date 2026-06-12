@@ -71,19 +71,37 @@ export default defineEventHandler(async (event) => {
   } else {
     const { results } = await db.prepare(`
       SELECT u.id, u.email, u.role,
-             EXISTS(SELECT 1 FROM member m WHERE m.userId = u.id) AS has_org
+             EXISTS(SELECT 1 FROM member m WHERE m.userId = u.id) AS has_org,
+             EXISTS(SELECT 1 FROM member m WHERE m.userId = u.id AND m.role = 'owner') AS is_owner,
+             EXISTS(
+               SELECT 1
+               FROM member m
+               JOIN sites s ON s.organization_id = m.organizationId
+               WHERE m.userId = u.id
+             ) AS has_site
       FROM user u
-      ORDER BY has_org DESC, u.createdAt ASC
+      ORDER BY has_site DESC, is_owner DESC, has_org DESC, u.createdAt ASC
       LIMIT 50
-    `).all<{ id: string; email: string; role?: string | null; has_org: number }>()
+    `).all<{ id: string; email: string; role?: string | null; has_org: number; is_owner: number; has_site: number }>()
     const rows = results || []
     user = rows.find((row) =>
+      row.has_site === 1 &&
+      row.is_owner === 1 &&
+      row.has_org === 1 &&
+      String(row.role || '').toLowerCase() !== 'admin' &&
+      !isPlatformOwner(row.email, env)
+    ) || rows.find((row) =>
+      row.is_owner === 1 &&
+      row.has_org === 1 &&
+      String(row.role || '').toLowerCase() !== 'admin' &&
+      !isPlatformOwner(row.email, env)
+    ) || rows.find((row) =>
       row.has_org === 1 &&
       String(row.role || '').toLowerCase() !== 'admin' &&
       !isPlatformOwner(row.email, env)
     ) || null
     if (!user) {
-      throw createError({ statusCode: 500, statusMessage: 'No suitable dev user (has_org=1, role!=admin, !isPlatformOwner)' })
+      throw createError({ statusCode: 500, statusMessage: 'No suitable dev user (prefer owner with site, fallback owner with org, fallback member with org)' })
     }
   }
   if (!user) throw createError({ statusCode: 500, statusMessage: 'No users in database' })

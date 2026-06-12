@@ -39,8 +39,21 @@ function readFileEnv() {
 export const testEnv = (key: string): string => process.env[key] ?? readFileEnv()[key] ?? ''
 
 export function testBaseUrl() {
-  let port = Number.parseInt(testEnv('PORT') ?? '', 10)
+  const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
+  if (previewUrl) return previewUrl
+
+  let port = Number.parseInt(process.env.PORT ?? '', 10)
+  if (Number.isNaN(port) || port <= 0) {
+    port = Number.parseInt(readFileEnv().PORT ?? '', 10)
+  }
   if (Number.isNaN(port) || port <= 0) port = 3000
+
+  // Local E2E should target the webServer port explicitly instead of a stale
+  // app domain from .env, otherwise tests can hit an unrelated process.
+  if (process.env.PORT) {
+    return `http://localhost:${port}`
+  }
+
   return testEnv('NUXT_PUBLIC_FREE_SITE_DOMAIN') || `http://localhost:${port}`
 }
 

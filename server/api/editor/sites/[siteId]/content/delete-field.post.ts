@@ -38,8 +38,16 @@ export default defineEventHandler(async (event) => {
 
   const locationId = location_id || undefined
 
-  await deleteSiteContentField(db, site.organization_id, siteId, page, field, locationId)
-  await deleteDraftContentField(db, site.organization_id, siteId, page, field, locationId)
+  try {
+    await deleteSiteContentField(db, site.organization_id, siteId, page, field, locationId)
+    await deleteDraftContentField(db, site.organization_id, siteId, page, field, locationId)
+  } catch (err) {
+    console.error('Failed to delete field:', err)
+    return jsonResponse({
+      error: 'Failed to delete field',
+      details: err instanceof Error ? err.message : String(err),
+    }, { status: 500 })
+  }
 
   return jsonResponse({ deleted: true, page, field })
 })

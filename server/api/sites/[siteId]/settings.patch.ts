@@ -1,15 +1,28 @@
 // PATCH update site settings
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
-import { createSystemSubdomain } from '~/server/utils/domains'
-import { isCurrencyCode } from '~/shared/currencies'
 import { isDemoOrg } from '~/server/utils/demo'
+import { updateSiteSettingsFields } from '~/server/utils/site-settings'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
+import { createError, getHeader, getRouterParam, readBody } from 'h3'
+
+function timingSafeEqualText(a: string, b: string): boolean {
+  const left = new TextEncoder().encode(a)
+  const right = new TextEncoder().encode(b)
+  if (left.length !== right.length) {
+    let noop = 0
+    for (let i = 0; i < left.length; i += 1) noop |= left[i]!
+    return false
+  }
+  let diff = 0
+  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!
+  return diff === 0
+}
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const body = await readBody(event) as UpdateSiteSettingsRequest
+  const forceSubdomainRegistrationFailure = getHeader(event, 'x-e2e-force-subdomain-failure') === 'true'
   
   if (!siteId) {
     return jsonResponse({ 
@@ -41,15 +54,24 @@ export default defineEventHandler(async (event) => {
     }, { status: 401 })
   }
 
+  if (forceSubdomainRegistrationFailure) {
+    const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+    const expectedSecret = process.env.E2E_DEV_ROUTE_SECRET || ''
+    const providedSecret = getHeader(event, 'x-dev-route-secret') || ''
+    if (!e2eOverride || !expectedSecret || !providedSecret || !timingSafeEqualText(providedSecret, expectedSecret)) {
+      throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
+    }
+  }
+
   try {
     // Verify user has admin/owner permissions for settings
     const site = await db.prepare(`
-      SELECT s.id, s.organization_id, s.subdomain, s.settings FROM sites s
+      SELECT s.id, s.organization_id FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
       LIMIT 1
-    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; subdomain: string | null; settings: string | null }>()
+    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
     
     if (!site) {
       return jsonResponse({
@@ -63,243 +85,17 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Demo site is read-only' }, { status: 403 })
     }
 
-    // Build dynamic update query
-    const setParts = []
-    const params = []
+    const result = await updateSiteSettingsFields(
+      db,
+      env,
+      siteId,
+      site.organization_id,
+      body,
+      session.user.id,
+      { forceSubdomainRegistrationFailure }
+    )
 
-    if (body.brand_name !== undefined) {
-      const slug = body.brand_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 30)
-      if (!slug) {
-        return jsonResponse({
-          error: 'Brand name must contain at least one alphanumeric character'
-        }, { status: 400 })
-      }
-      const existing = await db.prepare(`
-        SELECT id FROM sites WHERE subdomain = ? AND id != ? AND organization_id = ?
-        LIMIT 1
-      `).bind(slug, siteId, site.organization_id).first()
-      if (existing) {
-        return jsonResponse({
-          error: 'This brand name is already in use'
-        }, { status: 400 })
-      }
-      setParts.push('brand_name = ?', 'subdomain = ?')
-      params.push(body.brand_name, slug)
-    }
-    if (body.brand_description !== undefined) {
-      setParts.push('brand_description = ?')
-      params.push(body.brand_description)
-    }
-    if (body.logo_asset_id !== undefined) {
-      if (body.logo_asset_id !== null && body.logo_asset_id !== '') {
-        const asset = await db.prepare(`
-          SELECT id
-          FROM media_assets
-          WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active' AND kind = 'image'
-          LIMIT 1
-        `).bind(body.logo_asset_id, site.organization_id, siteId).first()
-
-        if (!asset) {
-          return jsonResponse({
-            error: 'Logo asset not found, unauthorized, or not an image'
-          }, { status: 400 })
-        }
-      }
-      setParts.push('logo_asset_id = ?')
-      params.push(body.logo_asset_id || null)
-    }
-    if (body.logo_url !== undefined) {
-      setParts.push('logo_url = ?')
-      params.push(body.logo_url)
-    }
-    if (body.contact_email !== undefined) {
-      if (body.contact_email !== null && body.contact_email !== '') {
-        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailPattern.test(String(body.contact_email).trim())) {
-          return jsonResponse({
-            error: 'Invalid email address for contact email'
-          }, { status: 400 })
-        }
-      }
-      setParts.push('contact_email = ?')
-      params.push(body.contact_email ? String(body.contact_email).trim().toLowerCase() : null)
-    }
-    if (body.brand_color !== undefined) {
-      if (body.brand_color) {
-        await setConfig(db, site.organization_id as string, siteId, 'brand_color', body.brand_color)
-      } else {
-        await deleteConfig(db, site.organization_id as string, siteId, 'brand_color')
-      }
-    }
-    if (body.default_currency !== undefined) {
-      if (typeof body.default_currency !== 'string') {
-        return jsonResponse({
-          error: 'Invalid default currency'
-        }, { status: 400 })
-      }
-      const currency = body.default_currency.toUpperCase().trim()
-      if (!isCurrencyCode(currency)) {
-        return jsonResponse({
-          error: 'Invalid default currency'
-        }, { status: 400 })
-      }
-      setParts.push('default_currency = ?')
-      params.push(currency)
-    }
-    if (body.primary_location_id !== undefined) {
-      if (body.primary_location_id !== null && body.primary_location_id !== '') {
-        const location = await db.prepare(`
-          SELECT id
-          FROM business_locations
-          WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active'
-          LIMIT 1
-        `).bind(body.primary_location_id, site.organization_id, siteId).first()
-
-        if (!location) {
-          return jsonResponse({
-            error: 'Primary location not found'
-          }, { status: 400 })
-        }
-      }
-      setParts.push('primary_location_id = ?')
-      params.push(body.primary_location_id || null)
-    }
-    if (body.url_structure !== undefined) {
-      if (!['location_subdirectories', 'brand_pages'].includes(body.url_structure)) {
-        return jsonResponse({
-          error: 'Invalid URL structure'
-        }, { status: 400 })
-      }
-
-      const settings = site.settings ? JSON.parse(String(site.settings)) : {}
-      settings.url_structure = body.url_structure
-      setParts.push('settings = ?')
-      params.push(JSON.stringify(settings))
-    }
-
-    if (body.last_published_at !== undefined) {
-      setParts.push('last_published_at = ?')
-      params.push(body.last_published_at)
-    }
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    for (const key of ['press_email', 'partnerships_email', 'catering_email', 'careers_email'] as const) {
-      if (body[key] !== undefined && body[key] !== null) {
-        const emailVal = String(body[key]).trim()
-        if (emailVal !== '') {
-          if (!emailPattern.test(emailVal)) {
-            return jsonResponse({
-              error: `Invalid email address for ${key.replace('_', ' ')}`
-            }, { status: 400 })
-          }
-        }
-      }
-    }
-
-    const socialUrlKeys = new Set(['social_facebook', 'social_instagram', 'social_tiktok'])
-    for (const key of ['social_facebook', 'social_instagram', 'social_tiktok', 'footer_tagline', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_analytics_measurement_id', 'google_site_verification'] as const) {
-      if (body[key] !== undefined) {
-        const value = body[key]
-        if (value) {
-          if (socialUrlKeys.has(key)) {
-            try {
-              const url = new URL(value)
-              if (!['http:', 'https:'].includes(url.protocol) || !url.hostname) {
-                await deleteConfig(db, site.organization_id as string, siteId, key)
-                continue
-              }
-            } catch {
-              await deleteConfig(db, site.organization_id as string, siteId, key)
-              continue
-            }
-          }
-          await setConfig(db, site.organization_id as string, siteId, key, value)
-        } else {
-          await deleteConfig(db, site.organization_id as string, siteId, key)
-        }
-      }
-    }
-
-    setParts.push('updated_at = ?')
-    setParts.push('updated_by = ?')
-    params.push(new Date().toISOString(), session.user.id)
-
-    params.push(siteId)
-
-    const result = await db.prepare(`
-      UPDATE sites 
-      SET ${setParts.join(', ')}
-      WHERE id = ? AND organization_id = ?
-    `).bind(...params, site.organization_id).run()
-
-    if (!result.success) {
-      throw new Error('Failed to update site settings')
-    }
-
-    // Only re-register the subdomain when it actually changed to avoid hitting
-    // the CF Pages API on every save (which errors if the domain is already registered).
-    if (body.brand_name !== undefined) {
-      const slug = body.brand_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 30)
-      if (slug !== site.subdomain) {
-        await createSystemSubdomain(env, db, siteId, site.organization_id as string, slug)
-      }
-    }
-
-    // Get updated settings
-    const updatedSite = await db.prepare(`
-      SELECT id, organization_id, subdomain, theme, status,
-             primary_location_id, public_url, custom_domain_status, default_currency,
-             brand_name, brand_description, logo_url, logo_asset_id, contact_email,
-             settings, last_published_at, created_at, updated_at
-      FROM sites
-      WHERE id = ? AND organization_id = ?
-      LIMIT 1
-    `).bind(siteId, site.organization_id).first()
-
-    if (!updatedSite) {
-      throw new Error('Site not found after update')
-    }
-
-    const siteSettings = updatedSite.settings ? JSON.parse(String(updatedSite.settings)) : {}
-    const siteConfig = await getConfig(db, updatedSite.organization_id as string, updatedSite.id as string)
-
-    const settings = {
-      id: updatedSite.id,
-      organization_id: updatedSite.organization_id,
-      site_id: updatedSite.id,
-      subdomain: updatedSite.subdomain,
-      theme: updatedSite.theme || 'saya',
-      status: updatedSite.status,
-      primary_location_id: updatedSite.primary_location_id,
-      public_url: updatedSite.public_url,
-      custom_domain_status: updatedSite.custom_domain_status || 'none',
-      brand_name: updatedSite.brand_name,
-      brand_description: updatedSite.brand_description,
-      logo_url: updatedSite.logo_url,
-      logo_asset_id: updatedSite.logo_asset_id,
-      contact_email: updatedSite.contact_email,
-      brand_color: siteConfig.brand_color || '',
-      default_currency: updatedSite.default_currency || 'THB',
-      url_structure: siteSettings.url_structure || 'location_subdirectories',
-      social_facebook: siteConfig.social_facebook || '',
-      social_instagram: siteConfig.social_instagram || '',
-      social_tiktok: siteConfig.social_tiktok || '',
-      footer_tagline: siteConfig.footer_tagline || '',
-      press_email: siteConfig.press_email || '',
-      partnerships_email: siteConfig.partnerships_email || '',
-      catering_email: siteConfig.catering_email || '',
-      careers_email: siteConfig.careers_email || '',
-      google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '',
-      google_site_verification: siteConfig.google_site_verification || '',
-      last_published_at: updatedSite.last_published_at,
-      created_at: updatedSite.created_at,
-      updated_at: updatedSite.updated_at
-    }
-    
-    return jsonResponse({
-      success: true,
-      settings,
-      message: 'Site settings updated successfully'
-    })
+    return jsonResponse(result.data, { status: result.status })
     
   } catch (error) {
     console.error('Failed to update site settings:', error)
