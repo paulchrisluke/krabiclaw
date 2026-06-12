@@ -221,6 +221,23 @@ export const deleteDraftContentField = async (
   await db.prepare(query).bind(...params).run()
 }
 
+export const deleteSiteAndDraftContentField = async (
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  page: string,
+  field: string,
+  locationId?: string,
+) => {
+  const params: Array<string> = [organizationId, siteId, page, field]
+  const locationClause = locationId ? 'AND location_id = ?' : 'AND location_id IS NULL'
+  if (locationId) params.push(locationId)
+
+  await db.batch([
+    db.prepare(`DELETE FROM site_content WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ? ${locationClause}`).bind(...params),
+    db.prepare(`DELETE FROM site_content_drafts WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ? ${locationClause}`).bind(...params),
+  ])
+}
 
 
 // Draft Management

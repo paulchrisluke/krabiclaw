@@ -7,6 +7,8 @@ import { hasCredits, chargeCredits } from "~/server/utils/ai-credits";
 import {
   listPosts,
   createPost,
+  updatePost,
+  deletePost,
   publishPost,
 } from "~/server/utils/post-management";
 import {
@@ -45,10 +47,10 @@ import {
 } from "~/server/utils/translation-inventory";
 import { processTranslationJobBatch } from "~/server/utils/translation-processor";
 import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
-import { createSystemSubdomain } from "~/server/utils/domains";
 import { extractMenuFromMediaAsset } from "~/server/utils/chowbot-media";
 import { upsertChannelState } from "~/server/utils/chowbot-conversations";
 import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
+import { updateSiteSettingsFields } from "~/server/utils/site-settings";
 import { contentRegistry, getFieldDef } from "~/config/content-registry";
 import { SUPPORTED_CURRENCIES } from "~/shared/currencies";
 import type { MenuItem, UpdateMenuItemRequest } from "~/server/types/menu";
@@ -104,6 +106,7 @@ export interface RunChowBotOptions {
   orgId: string;
   siteId: string;
   userId: string;
+  userRole?: string;
   siteName: string;
   defaultCurrency: string;
   messages: ChowBotIncomingMessage[];
@@ -579,6 +582,59 @@ const TOOLS: AiTool[] = [
       type: "object",
       properties: {
         post_id: { type: "string", description: "ID of the post to publish." },
+      },
+      required: ["post_id"],
+    },
+  },
+  {
+    name: "update_post",
+    description:
+      "Update a draft or published post — title, body, image, location, type, CTA, or event/offer fields. Does not change publish status.",
+    input_schema: {
+      type: "object",
+      properties: {
+        post_id: { type: "string", description: "ID of the post to update." },
+        title: {
+          type: "string",
+          description: "New headline (max 80 chars). Omit to leave unchanged.",
+        },
+        body: {
+          type: "string",
+          description: "New post body (max 400 chars). Omit to leave unchanged.",
+        },
+        image_asset_id: {
+          type: "string",
+          description: "New media asset ID. Omit to leave unchanged.",
+        },
+        location_id: {
+          type: "string",
+          description: "Reassign to a location. Omit to leave unchanged.",
+        },
+        post_type: {
+          type: "string",
+          enum: ["standard", "offer", "event", "update"],
+        },
+        cta_type: {
+          type: "string",
+          enum: ["BOOK", "ORDER", "SHOP", "LEARN_MORE", "SIGN_UP", "CALL"],
+        },
+        cta_url: { type: "string" },
+        event_title: { type: "string" },
+        event_start: { type: "string", description: "ISO datetime string." },
+        event_end: { type: "string", description: "ISO datetime string." },
+        offer_coupon: { type: "string" },
+        offer_terms: { type: "string" },
+      },
+      required: ["post_id"],
+    },
+  },
+  {
+    name: "delete_post",
+    description: "Permanently delete a post. Confirm with user first.",
+    input_schema: {
+      type: "object",
+      properties: {
+        post_id: { type: "string", description: "ID of the post to delete." },
       },
       required: ["post_id"],
     },
@@ -1804,6 +1860,7 @@ const TOOLS: AiTool[] = [
 
 const CONFIRM_REQUIRED = new Set([
   "publish_post",
+  "delete_post",
   "publish_menu",
   "delete_menu",
   "delete_menu_item",
@@ -1852,10 +1909,12 @@ async function executeTool(
     orgId: string;
     siteId: string;
     userId: string;
+    userRole?: string;
     agentMessages?: AiMessage[];
     locationId?: string | null;
     channel?: "dashboard" | "whatsapp";
     pendingMedia?: { assetId: string; siteId: string };
+    forceSubdomainRegistrationFailure?: boolean;
   },
 ): Promise<ApiValue> {
   const { db, env, orgId, siteId, userId } = ctx;
@@ -1925,6 +1984,47 @@ async function executeTool(
         status: result.status,
         published_at: result.published_at,
       };
+    }
+
+    case "update_post": {
+      const post = await updatePost(
+        db,
+        orgId,
+        siteId,
+        input.post_id,
+        {
+          title: input.title,
+          body: input.body,
+          image_asset_id: input.image_asset_id,
+          location_id: input.location_id,
+          post_type: input.post_type,
+          cta_type: input.cta_type,
+          cta_url: input.cta_url,
+          event_title: input.event_title,
+          event_start: input.event_start,
+          event_end: input.event_end,
+          offer_coupon: input.offer_coupon,
+          offer_terms: input.offer_terms,
+        },
+        userId,
+      );
+      if (!post) return { error: "Post not found." };
+      return {
+        id: post.id,
+        title: post.title,
+        body: post.body,
+        status: post.status,
+        updated: true,
+      };
+    }
+
+    case "delete_post": {
+      if (!["owner", "admin"].includes(ctx.userRole ?? "")) {
+        return { error: "Only owners or admins can delete posts." };
+      }
+      const deleted = await deletePost(db, orgId, siteId, input.post_id);
+      if (!deleted) return { error: "Post not found." };
+      return { post_id: input.post_id, deleted: true };
     }
 
     case "get_menu": {
@@ -2380,14 +2480,15 @@ async function executeTool(
     }
 
     case "publish_menu": {
-      const now = new Date().toISOString();
-      const result = await db
-        .prepare(
-          `UPDATE menus SET status = 'published', updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND site_id = ?`,
-        )
-        .bind(now, userId, input.menu_id, orgId, siteId)
-        .run();
-      if (!result.meta.changes || result.meta.changes === 0) {
+      const menu = await updateMenu(
+        db,
+        orgId,
+        siteId,
+        input.menu_id,
+        { status: "published" },
+        userId,
+      );
+      if (!menu) {
         return { error: "Menu not found or access denied." };
       }
       return { menu_id: input.menu_id, status: "published" };
@@ -3368,78 +3469,50 @@ async function executeTool(
     }
 
     case "rename_site": {
-      const now = new Date().toISOString();
-      const baseSubdomain = toSlug(input.brand_name);
-      const prev = await db
-        .prepare(
-          `SELECT brand_name, subdomain FROM sites WHERE id = ? AND organization_id = ?`,
-        )
-        .bind(siteId, orgId)
-        .first<{ brand_name: string | null; subdomain: string | null }>();
-      for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
-        const subdomain =
-          attempt === 0 ? baseSubdomain : `${baseSubdomain}-${attempt + 1}`;
-        try {
-          await db
-            .prepare(
-              `UPDATE sites SET brand_name = ?, subdomain = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
-            )
-            .bind(input.brand_name, subdomain, now, siteId, orgId)
-            .run();
-          try {
-            await createSystemSubdomain(env, db, siteId, orgId, subdomain);
-          } catch (subdomainErr) {
-            if (prev) {
-              try {
-                await db
-                  .prepare(
-                    `UPDATE sites SET brand_name = ?, subdomain = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
-                  )
-                  .bind(prev.brand_name, prev.subdomain, now, siteId, orgId)
-                  .run();
-                console.error("rename_site: createSystemSubdomain failed, rolled back", {
-                  siteId,
-                  subdomain,
-                  err: subdomainErr,
-                });
-                return { error: "Failed to register subdomain with Cloudflare. The rename was not applied." };
-              } catch (rollbackErr) {
-                console.error("rename_site: createSystemSubdomain failed AND rollback failed", {
-                  siteId,
-                  subdomain,
-                  subdomainErr,
-                  rollbackErr,
-                });
-                return { error: "Rename was applied but subdomain registration with Cloudflare failed. Please contact support." };
-              }
-            }
-            console.error("rename_site: createSystemSubdomain failed, rolled back", {
-              siteId,
-              subdomain,
-              err: subdomainErr,
-            });
-            return { error: "Failed to register subdomain with Cloudflare. The rename was not applied." };
-          }
-          return { brand_name: input.brand_name, subdomain, updated: true };
-        } catch (error) {
-          if (isUniqueConstraintError(error)) continue;
-          throw error;
-        }
+      const result = await updateSiteSettingsFields(
+        db,
+        env,
+        siteId,
+        orgId,
+        { brand_name: input.brand_name },
+        userId,
+        {
+          forceSubdomainRegistrationFailure:
+            ctx.forceSubdomainRegistrationFailure,
+        },
+      );
+      if (result.status >= 400) {
+        return {
+          error: String(result.data.error ?? "Failed to update site settings."),
+        };
       }
+      const settings =
+        result.data.settings && typeof result.data.settings === "object"
+          ? (result.data.settings as Record<string, unknown>)
+          : null;
       return {
-        error: `Unable to allocate a unique subdomain after ${MAX_SLUG_ATTEMPTS} attempts`,
+        brand_name: settings?.brand_name ?? input.brand_name,
+        subdomain: settings?.subdomain ?? null,
+        updated: true,
       };
     }
 
     case "save_brand_description": {
       const description = toSqlText(input.description)?.trim();
       if (!description) return { error: "Description is required." };
-      await db
-        .prepare(
-          `UPDATE sites SET brand_description = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
-        )
-        .bind(description, new Date().toISOString(), siteId, orgId)
-        .run();
+      const result = await updateSiteSettingsFields(
+        db,
+        env,
+        siteId,
+        orgId,
+        { brand_description: description },
+        userId,
+      );
+      if (result.status >= 400) {
+        return {
+          error: String(result.data.error ?? "Failed to update site settings."),
+        };
+      }
       return { brand_description: description, updated: true };
     }
 
@@ -3449,12 +3522,19 @@ async function executeTool(
       if (!currency || !supportedCurrencies.has(currency)) {
         return { error: "Unsupported currency." };
       }
-      await db
-        .prepare(
-          `UPDATE sites SET default_currency = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
-        )
-        .bind(currency, new Date().toISOString(), siteId, orgId)
-        .run();
+      const result = await updateSiteSettingsFields(
+        db,
+        env,
+        siteId,
+        orgId,
+        { default_currency: currency as (typeof SUPPORTED_CURRENCIES)[number] },
+        userId,
+      );
+      if (result.status >= 400) {
+        return {
+          error: String(result.data.error ?? "Failed to update site settings."),
+        };
+      }
       return { default_currency: currency, updated: true };
     }
 
@@ -3911,6 +3991,26 @@ async function executeTool(
   }
 }
 
+export async function executeChowBotToolForTest(
+  name: string,
+  input: ApiRecord,
+  ctx: {
+    db: D1Database;
+    env: ApiRecord;
+    orgId: string;
+    siteId: string;
+    userId: string;
+    userRole?: string;
+    agentMessages?: AiMessage[];
+    locationId?: string | null;
+    channel?: "dashboard" | "whatsapp";
+    pendingMedia?: { assetId: string; siteId: string };
+    forceSubdomainRegistrationFailure?: boolean;
+  },
+): Promise<ApiValue> {
+  return executeTool(name, input, ctx);
+}
+
 export async function runChowBot(
   opts: RunChowBotOptions,
 ): Promise<RunChowBotResult> {
@@ -3977,7 +4077,7 @@ Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?
 ${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Use this asset_id directly in any tool that accepts image/media — update_menu_item (image_asset_id), add_menu_item (image_asset_id), add_menu_items_batch (image_asset_id), update_location or create_location (hero_image_asset_id / hero_video_asset_id), create_post (image_asset_id). If the user wants to import/extract menu items from it, call import_menu_from_pending_media. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call, also call resolve_pending_media with action=save_media to clear the pending state. If the user's intent is unclear, ask one short clarifying question.` : ""}
 
 Capabilities (always use tools — never say you can't do something the tools support):
-- Posts: list, create (standard/offer/event/update with CTA), publish — optionally location-scoped
+- Posts: list, create, update, delete, publish (standard/offer/event/update with CTA) — optionally location-scoped
 - Menus: create, rename, view, rename/delete sections/categories, add brand-new items, reconcile/update item lists, update/delete individual items, publish, delete
 - Locations: list, create, update, delete (title syncs slug, plus manual address, hours, maps URL, Place ID, rating, review count, description, email, website, socials, price level, hero media), lookup from Google Maps URL
 - Reviews: get, create manual reviews, update manual reviews, reply as owner, delete reviews
@@ -4006,7 +4106,7 @@ Guidelines:
 - Use run_translation_job_batch only after a job exists and the owner confirms spending credits; it processes one batch and saves translations as drafts
 - Use publish_site_translations after the owner confirms drafted translations should go live; published languages become visible on the public site
 - Use get_site_content_page, save_site_content_field, publish_site_content_page, discard_site_content_page, and delete_site_content_field for tenant page content such as home, about, contact, location notes, and reservations
-- Before publish_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, delete_qa, delete_site_content_field, delete_site_language, start_site_translation_job, run_translation_job_batch, publish_site_translations — confirm first
+- Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, delete_qa, delete_site_content_field, delete_site_language, start_site_translation_job, run_translation_job_batch, publish_site_translations — confirm first
 - Menus are DRAFT by default — publish_menu makes them live
 - Keep responses short — this is a chat panel`;
 
@@ -4040,6 +4140,7 @@ Guidelines:
     orgId,
     siteId,
     userId,
+    userRole: opts.userRole,
     agentMessages,
     locationId,
     channel,

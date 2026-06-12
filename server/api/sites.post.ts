@@ -26,6 +26,10 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const result = await runSiteCreation(env, db, session.user.id, { name, subdomain, vertical: vertical as SiteVertical })
+  const result = await runSiteCreation(env, db, session.user.id, {
+    name,
+    subdomain,
+    vertical: vertical as SiteVertical
+  })
   return jsonResponse(result.data, { status: result.status })
 })

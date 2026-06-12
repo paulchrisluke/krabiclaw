@@ -70,11 +70,11 @@ This audit is based on the actual route inventory under `server/api`, with `serv
 
 | Domain | Canonical routes today | CRUD state | Publish / workflow actions | Auth / permission model | ChowBot today | MCP status | Gaps / normalization needed |
 |---|---|---|---|---|---|---|---|
-| Site creation / onboarding | `POST /api/dashboard/restaurant`, `POST /api/dashboard/restaurant/validate-subdomain`, `POST /api/dashboard/onboarding/complete`, `GET /api/sites`, `GET /api/sites/[siteId]` | `missing CRUD` | onboarding completion, subdomain validation | session + dashboard org context | setup flow can create/rename via tools | blocked | creation still starts in dashboard-only route family; no clean canonical site create/update/delete contract; initial site creation is not yet in `server/api/sites/...` |
-| Site settings | `GET/PATCH /api/sites/[siteId]/settings` | `ready` for read/update, no delete expected | setup progress via `GET /api/sites/[siteId]/setup-progress` | session + org owner/admin role | ChowBot can rename site, set currency, update socials, save brand description — `rename_site` now fires `createSystemSubdomain` after the SQL UPDATE; `save_brand_description` and `set_default_currency` still run direct SQL (no side effects in the settings route beyond the same SQL, so no gap) | usable now | `rename_site` subdomain registration gap is closed; `save_brand_description` and `set_default_currency` direct SQL is acceptable — these fields have no Cloudflare side effects |
+| Site creation / onboarding | `POST /api/sites`, `POST /api/dashboard/restaurant`, `POST /api/dashboard/restaurant/validate-subdomain`, `POST /api/dashboard/onboarding/complete`, `GET /api/sites`, `GET /api/sites/[siteId]` | `create+read ready; update/delete intentionally absent` | onboarding completion, subdomain validation | session + org/member creation flow | setup flow can create/rename via tools | usable with care | canonical create route now exists in `server/api/sites.post.ts`; remaining work is vertical-correct seeding and broader onboarding verification, not route absence |
+| Site settings | `GET/PATCH /api/sites/[siteId]/settings` | `ready` for read/update, no delete expected | setup progress via `GET /api/sites/[siteId]/setup-progress` | session + org owner/admin role | ChowBot rename/currency/brand-description tools now call the shared `updateSiteSettingsFields(...)` utility used by the settings route; socials still use `setConfig` directly | usable now | Phase 4 completed the route/utility normalization for site-row mutations, including Cloudflare rollback protection for renames |
 | Locations | `GET/POST /api/sites/[siteId]/locations`, `GET/PATCH/DELETE /api/sites/[siteId]/locations/[locationId]` | `ready` | Google Business auth/index routes, maps lookup lives in ChowBot utility path | session + org member role; stricter location checks where needed | full create/update/delete coverage | usable now | low-risk candidate for MCP-first exposure; document Google Maps lookup as workflow helper rather than core CRUD |
-| Menus / items / sections | `GET/POST /api/editor/sites/[siteId]/menus`, `GET/PATCH/DELETE /api/editor/sites/[siteId]/menus/[menuId]`, item and section subroutes | `ready` including publish | publish via `PATCH /menus/[menuId]` with `{status: 'published'}` — `UpdateMenuRequest.status` is supported and implemented in `menu-management.ts:483`; reorder via `/reorder` | session + site member role | broad tool coverage including create/update/delete/sync and `publish_menu` | usable now | `publish_menu` in ChowBot runs raw SQL directly rather than calling the PATCH route — this is a cleanup task, not a missing capability; no route work needed here |
-| Posts | `GET/POST /api/editor/sites/[siteId]/posts`, `GET/PATCH/DELETE /api/editor/sites/[siteId]/posts/[postId]`, `POST /publish` | `ready` | publish to site/social channels | session + site member role; publish tighter than edit | tools expose get/create/publish only | `duplicated/split across route families` | ChowBot lacks explicit update/delete tools even though canonical routes exist; tool/API parity gap should be closed before MCP |
+| Menus / items / sections | `GET/POST /api/editor/sites/[siteId]/menus`, `GET/PATCH/DELETE /api/editor/sites/[siteId]/menus/[menuId]`, item and section subroutes | `ready` including publish | publish via `PATCH /menus/[menuId]` with `{status: 'published'}` — `UpdateMenuRequest.status` is supported and implemented in `menu-management.ts:483`; reorder via `/reorder` | session + site member role | broad tool coverage including create/update/delete/sync and `publish_menu` | usable now | Phase 4 completed the cleanup: `publish_menu` now calls the same `updateMenu()` utility as the canonical PATCH route |
+| Posts | `GET/POST /api/editor/sites/[siteId]/posts`, `GET/PATCH/DELETE /api/editor/sites/[siteId]/posts/[postId]`, `POST /publish` | `ready` | publish to site/social channels | session + site member role; publish tighter than edit | tools now expose get/create/update/delete/publish; delete remains owner/admin-gated | usable now | Phase 4 closed the ChowBot parity gap; future MCP tooling can mirror the same utility surface and permission split |
 | Reviews / replies | `GET /api/sites/[siteId]/locations/[locationId]/reviews`, `PATCH /api/editor/sites/[siteId]/reviews/[reviewId]`, `POST /api/integrations/google-places/sync` | `deprecating manual CRUD` | owner reply / moderation status; Google Places sync | session + site member role; editor reply is owner/admin only | `get_reviews`, `reply_to_review` (manual create/update/delete tools to be removed) | `usable now for read+reply; sync already works` | Manual create/edit/delete routes are being deprecated — reviews come from Google Places sync (already working) and GBP review sync (Phase 3 extension). `create_review`, `update_review`, `delete_review` ChowBot tools and the manual mutation routes are removed. Template reviews removed from `seedNewSite`. Editor reply route keeps its business logic; auth pattern to be refactored to use a shared helper. Facebook reviews not viable — API deprecated April 2020. |
 | Media | `GET /api/editor/sites/[siteId]/media`, `PATCH/DELETE /api/editor/sites/[siteId]/media/[assetId]`, upload/request-upload/confirm routes | `missing CRUD` | upload, confirm, AI image generation, menu extraction | session + site member role | list/delete/generate/import from media supported | blocked | no canonical `GET /media/[assetId]`; create is workflow-based rather than record-based; MCP needs a documented media workflow contract, not just raw CRUD semantics |
 | Q&A | `GET/POST /api/editor/sites/[siteId]/locations/[locationId]/qa`, `PATCH/DELETE` item routes, `POST /reorder` | `ready` | reorder | session + location/site member role | get/add/delete tools exist | usable now | ~~route shadow between flat `qa.[id].patch.ts` and `qa/[qaId].patch.ts`~~ fixed — flat file deleted, only the properly-authenticated directory route remains |
@@ -82,8 +82,8 @@ This audit is based on the actual route inventory under `server/api`, with `serv
 | Site content | `GET /api/editor/sites/[siteId]/content/[page]`, `POST /draft`, `POST /publish`, `POST /discard`, `GET /status` | `missing CRUD` | draft, publish, discard | session + site member role, but inconsistent by action | get/save/publish/discard/delete-field tools | blocked | route family is workflow-centric, not CRUD-centric; field deletion exists in ChowBot logic but not as canonical editor route; `GET content` is owner-only while draft/discard allow editor/admin; `publish all` and `discard all` are now scoped correctly (cross-tenant security bug fixed, 501 resolved); remaining gap is canonical field deletion route |
 | Locales / translations | `GET/POST /api/editor/sites/[siteId]/locales`, `PATCH/DELETE /locales/[locale]`, translation inventory/job/review/publish routes | locales `ready`; translations are workflow APIs | estimate, queue, run batch, review, publish | session + site member role | strong tool coverage | usable with care | locale CRUD is good; translation lifecycle is intentionally workflow-heavy and should remain so, but must be documented as canonical workflow rather than missing CRUD |
 | Experiences / bookings | `GET/POST /api/editor/sites/[siteId]/experiences`, `PATCH/DELETE /experiences/[experienceId]`, bookings get/patch | `ready` | guest booking management | session + site member role | create/update/delete/list booking tools exist | usable now | strong candidate for MCP exposure with existing route family |
-| Domains | `GET/POST /api/sites/[siteId]/domains`, `PATCH/DELETE /domains/[domainId]`, `POST /sync` | `ready` | DNS sync and lifecycle notifications | session + owner/admin; paid-plan entitlement | no ChowBot tool surface today | blocked by tool gap | canonical API exists; ChowBot and future MCP tool definitions need to be added if domains are in scope for chat surfaces |
-| Facebook / Instagram integration | `server/api/integrations/facebook-pages/` (auth, callback, pages, publish, sync) | `ready` for OAuth + publish flow | publish post to Facebook page, sync | session + owner/admin; `managed_service` entitlement enforced at route level | no ChowBot tool surface today | blocked by tool gap | fully implemented and entitlement-gated; ChowBot has no tools for Facebook publish despite the route existing; `managed_service` boundary must be preserved when any tool layer is added |
+| Domains | `GET/POST /api/sites/[siteId]/domains`, `PATCH/DELETE /domains/[domainId]`, `POST /sync` | `ready` | DNS sync and lifecycle notifications | session + owner/admin; paid-plan entitlement | no ChowBot tool surface today | intentionally out of chat/MCP scope | canonical API exists, but the product decision is to keep domains in the dashboard/admin control plane rather than expose them through conversational tools |
+| Facebook / Instagram integration | `server/api/integrations/facebook-pages/` (auth, callback, pages, publish, sync) | `ready` for OAuth + publish flow | publish post to Facebook page, sync | session + owner/admin; `managed_service` entitlement enforced at route level | no ChowBot tool surface today | later MCP-only candidate | fully implemented and entitlement-gated; product direction keeps this out of ChowBot and reserves it for a future managed-service-gated MCP surface if opened at all |
 | Google Business integration | `server/api/integrations/google-business/` (auth, callback, accounts, locations.sync), `server/api/sites/[siteId]/locations/[locationId]/integrations/google-business/` | `ready` for OAuth + sync | sync GBP location data | session + owner/admin; `google_business` entitlement | location-level GBP auth surfaces in ChowBot | usable with care | entitlement enforcement must be preserved; canonicalize the two route families (site-level integration vs location-level GBP auth) |
 | Notifications | `GET/PATCH /api/editor/sites/[siteId]/notifications` | `missing CRUD` | update WhatsApp notification phone | session + owner/admin | not clearly exposed as dedicated tool | blocked | this is a settings/workflow surface, not full CRUD; keep in residual admin shell unless a stronger chat use case emerges |
 | Contact / reservation submission triage | `GET /contact-submissions`, `PATCH /contact-submissions/[submissionId]`, `GET /reservation-submissions`, `PATCH /reservation-submissions/[submissionId]`, public submission creation routes | `missing CRUD` by design | triage/status updates | session + site member role; public create is anonymous/site-facing | read tools exist | usable with care | should be modeled as workflow APIs, not forced into artificial CRUD expectations |
@@ -95,21 +95,20 @@ This audit is based on the actual route inventory under `server/api`, with `serv
 - locations
 - posts
 - experiences/bookings
-- domains
 - locales
 
 ### Domains that are most likely to block CMS deprecation
 
-- site creation / onboarding (needs `POST /api/sites` with vertical param)
+- site creation / onboarding (canonical `POST /api/sites` exists; remaining blocker is vertical-correct bootstrapping and onboarding verification)
 - site content editing lifecycle (discard + publish-all fixed; content field deletion route still needed)
 - reservation policies (resolved: no new route — remove 3 ChowBot tools, use content field workflow instead)
 - media workflow (no new routes needed; needs contract documentation for MCP)
 - review system (resolved: deprecate manual CRUD, Google Places sync already works, extend GBP for full coverage)
-- post tool parity (routes exist; update/delete tools missing)
+- post tool parity ~~(routes exist; update/delete tools missing)~~ **resolved in Phase 4**
 
 ## ChowBot Tool Classification
 
-**As of Phase 2 audit.** All 64 tool case handlers verified against `server/utils/chowbot-agent.ts`.
+**Updated after Phase 4 implementation.** Tool classifications below reflect the current `server/utils/chowbot-agent.ts` state.
 
 ### Canonical — calls named domain utility functions, org+site scoped correctly
 
@@ -117,7 +116,7 @@ These tools call the same underlying domain utilities that the route handlers ca
 
 | Tool | Domain |
 |---|---|
-| `get_posts`, `create_post`, `publish_post` | Posts |
+| `get_posts`, `create_post`, `update_post`, `delete_post`, `publish_post` | Posts |
 | `get_menu`, `create_menu`, `rename_menu`, `rename_menu_section`, `delete_menu_section`, `add_menu_items_batch`, `sync_menu_items`, `add_menu_item`, `update_menu_item`, `delete_menu_item`, `delete_menu` | Menus |
 | `get_locations`, `create_location`, `update_location`, `delete_location` | Locations |
 | `get_reviews`, `reply_to_review` | Reviews (read + owner reply — manual create/update/delete tools removed per deprecation decision) |
@@ -142,16 +141,9 @@ These tools are correctly scoped to their domain but perform workflow operations
 | `import_menu_from_pending_media` | Extracts menu data from a pending media asset; multi-step workflow |
 | `resolve_pending_media` | Confirms a pending media upload and links the asset |
 
-### Private SQL — raw `UPDATE` statements bypassing both routes and domain utilities
+### Private SQL — Phase 4 result
 
-These tools run direct SQL against the `sites` table instead of calling the settings route or any named utility. They are Phase 4 migration targets.
-
-| Tool | SQL statement | Gap |
-|---|---|---|
-| `publish_menu` | `UPDATE menus SET status = 'published'` | Should call `PATCH /editor/sites/[siteId]/menus/[menuId]` with `{status: 'published'}` |
-| `rename_site` | `UPDATE sites SET brand_name = ?, subdomain = ?` | Calls `createSystemSubdomain` after, but still raw SQL; should call `PATCH /api/sites/[siteId]/settings` |
-| `save_brand_description` | `UPDATE sites SET brand_description = ?` | No Cloudflare side effect so functionally equivalent, but bypasses route layer |
-| `set_default_currency` | `UPDATE sites SET default_currency = ?` | No Cloudflare side effect so functionally equivalent, but bypasses route layer |
+No write SQL remains inside ChowBot tool handlers. `publish_menu` now calls `updateMenu()`, and `rename_site` / `save_brand_description` / `set_default_currency` now call the shared `updateSiteSettingsFields()` utility used by the canonical settings route.
 
 ### Private logic — no canonical route exists for this domain
 
@@ -167,9 +159,6 @@ These tools manage a real user-facing domain that has no route equivalent. They 
 
 | Missing tool | Existing canonical route |
 |---|---|
-| update post | `PATCH /api/editor/sites/[siteId]/posts/[postId]` |
-| delete post | `DELETE /api/editor/sites/[siteId]/posts/[postId]` |
-| domain CRUD | `GET/POST /api/sites/[siteId]/domains`, `PATCH/DELETE /domains/[domainId]` |
 | Facebook/Instagram publish | `POST /api/integrations/facebook-pages/publish` (managed_service-gated) |
 | update notifications phone | `PATCH /api/editor/sites/[siteId]/notifications` |
 
@@ -495,7 +484,7 @@ This is a permanent decision, not a deferred one. Remove domains from "missing t
 
 ### Decision: site creation needs a canonical route outside dashboard
 
-**Do:** Move the logic from [server/api/dashboard/restaurant.post.ts](server/api/dashboard/restaurant.post.ts) into `server/api/sites/index.post.ts` and make the dashboard route a thin proxy to it.
+**Do:** Move the logic from [server/api/dashboard/restaurant.post.ts](server/api/dashboard/restaurant.post.ts) into `server/api/sites.post.ts` and make the dashboard route a thin proxy to it.
 
 The handler **does not** take `organizationId` as input — it creates or finds the org for the authenticated user as part of the same flow. The request signature is `{ name, subdomain, vertical }`. Org creation, member assignment, site record creation, `seedNewSite`, and `createSystemSubdomain` all remain part of this single handler, because they are semantically a single atomic operation for the user.
 
@@ -559,12 +548,12 @@ Historical record of what was found and fixed. The architectural decisions above
 - `staff_profiles` / `awards_recognition` dead schema → **Decision: drop both tables**
 - `site creation` dashboard-only → **Decision: add `POST /api/sites` with vertical param**
 - `new-site template` restaurant-biased → **Decision: extend to vertical-aware registry**
-- `publish_menu` direct SQL → **Decision: migrate to PATCH route in Phase 4**
-- `rename_site`, `save_brand_description`, `set_default_currency` direct SQL → **Decision: migrate to settings route in Phase 4**
+- `publish_menu` direct SQL ~~→ Decision: migrate to PATCH route in Phase 4~~ **Done in Phase 4**
+- `rename_site`, `save_brand_description`, `set_default_currency` direct SQL ~~→ Decision: migrate to settings route in Phase 4~~ **Done in Phase 4 via shared `updateSiteSettingsFields` utility**
 - `domains` tool parity gap → **Decision: domains are not a chat/MCP surface — permanently resolved**
 - `Facebook/Instagram` tool parity gap → **Decision: MCP Phase 5 only, not ChowBot**
 - `notifications` tool gap → **Decision: stays in admin shell**
-- `post update/delete` tool parity gap → **Decision: add in Phase 4**
+- `post update/delete` tool parity gap ~~→ Decision: add in Phase 4~~ **Done in Phase 4**
 
 ## Full-Surface Readiness Model
 
@@ -684,9 +673,9 @@ return { menu_id: input.menu_id, status: 'published' }
 
 **Step A — Fix `settings.patch.ts` rollback gap (required before migrating any tool).**
 
-`server/api/sites/[siteId]/settings.patch.ts` currently executes the `UPDATE sites` SQL (around line 228), then calls `createSystemSubdomain` if `brand_name` changed (around line 243). There is no rollback: if `createSystemSubdomain` throws, the outer `catch` at line ~304 returns a 500 but the DB already has the new `brand_name` and `subdomain` — the site is left in an inconsistent state.
+`server/api/sites/[siteId]/settings.patch.ts` currently executes the `UPDATE sites` SQL (around line 228), then calls `createSystemSubdomain` if `brand_name` changed (around line 243). There is no rollback: if `createSystemSubdomain` throws, the outer `catch` returns a 500 but the DB already has the new `brand_name` and `subdomain` — the site is left in an inconsistent state.
 
-Fix: After the `UPDATE sites` succeeds and before calling `createSystemSubdomain`, capture `prev = { brand_name: site.brand_name, subdomain: site.subdomain }` from the `site` object fetched at line ~47. Wrap `createSystemSubdomain` in a try-catch:
+Fix: expand the initial site lookup to also select `brand_name`, then after the `UPDATE sites` succeeds and before calling `createSystemSubdomain`, capture `prev = { brand_name: site.brand_name, subdomain: site.subdomain }`. Wrap `createSystemSubdomain` in a try-catch:
 - On failure, attempt a rollback `UPDATE sites SET brand_name = ?, subdomain = ?` in its own inner try-catch.
   - If rollback succeeds: return 400 `"Failed to register subdomain with Cloudflare. The rename was not applied."`
   - If rollback also fails: log both errors, return 400 `"Rename was applied but subdomain registration with Cloudflare failed. Please contact support."`
@@ -699,11 +688,13 @@ Create `server/utils/site-settings.ts` exporting `updateSiteSettingsFields(db, e
 
 The utility returns a typed result (same `SiteCreationResult`-style pattern: `{ status: number; data: Record<string, unknown> }`) so callers can re-map for their response format without an HTTP round-trip.
 
+Important: do **not** carry forward the current settings route's org-scoped pre-check as the full uniqueness strategy. `sites.subdomain` is globally unique at the schema level, while the current route only checks conflicts inside the same organization. The shared utility must preserve the current ChowBot rename behavior: if the base slug is taken globally, retry suffixed variants (`foo`, `foo-2`, `foo-3`, ...) up to `MAX_SLUG_ATTEMPTS`, and only fail after exhausting those attempts. Catch raw unique-constraint failures as part of this allocation loop.
+
 **Step C — Migrate the three ChowBot tools.**
 
 Replace raw SQL in each case handler with a call to `updateSiteSettingsFields`:
 
-- `rename_site`: call `updateSiteSettingsFields(db, env, siteId, orgId, { brand_name: input.brand_name }, userId)`. Remove the `MAX_SLUG_ATTEMPTS` loop — the utility handles the unique-subdomain check via the same pattern the route uses. Handle conflict (status 400/409) and Cloudflare failure return values from the utility.
+- `rename_site`: call `updateSiteSettingsFields(db, env, siteId, orgId, { brand_name: input.brand_name }, userId)`. Remove the local `MAX_SLUG_ATTEMPTS` loop from the ChowBot handler only after that retry logic has been moved into the shared utility. The utility must preserve today's global unique-subdomain allocation behavior, not the current route's weaker same-org pre-check.
 - `save_brand_description`: call `updateSiteSettingsFields(db, env, siteId, orgId, { brand_description: description }, userId)`.
 - `set_default_currency`: call `updateSiteSettingsFields(db, env, siteId, orgId, { default_currency: currency }, userId)`. Keep the existing `SUPPORTED_CURRENCIES` validation in the tool handler before calling the utility (fail fast, same as today).
 
@@ -774,17 +765,17 @@ case "delete_post": {
 }
 ```
 
-Note: `delete_post` in ChowBot does not need an additional owner/admin role check — ChowBot already operates fully scoped to the authenticated org+site. The `CONFIRM_REQUIRED` gate handles intent confirmation.
+Note: `delete_post` in ChowBot **does** need to preserve the canonical permission boundary. The route is owner/admin-only, while ChowBot access today includes editors. Add an explicit role check in the `delete_post` case (or pass the caller role into the tool context and gate there) so editors cannot delete posts through chat. `CONFIRM_REQUIRED` handles intent confirmation; it is not an authorization substitute.
 
 Also update the system prompt: add `delete_post` to the confirm-first list (the same line that mentions `delete_menu`, `delete_menu_item`, etc.).
 
 #### 4.4 Verify no remaining private SQL
 
-After 4.1 and 4.2 are complete, audit every `case` in `executeTool`. The verification command:
+After 4.1 and 4.2 are complete, audit every `case` in `executeTool`. Use a multiline-safe search so writes split across `.prepare(` and the SQL body are still caught. The verification command:
 ```bash
-grep -n "db\.prepare.*UPDATE\|db\.prepare.*DELETE" server/utils/chowbot-agent.ts
+rg -n -U "db\\.prepare\\([\\s\\S]{0,200}?(UPDATE|DELETE|INSERT)" server/utils/chowbot-agent.ts
 ```
-This must return zero results inside the `switch` block. The only acceptable `db.prepare` calls in ChowBot tool handlers are read-only `SELECT` queries used to look up IDs before calling a utility. Any write SQL remaining after Phase 4 is a bug.
+Review every match. This should return zero write statements inside the `switch` block when Phase 4 is complete. The only acceptable `db.prepare` calls in ChowBot tool handlers are read-only `SELECT` queries used to look up IDs before calling a utility. Any write SQL remaining after Phase 4 is a bug.
 
 #### 4.5 Post-Phase 4 state
 
@@ -802,7 +793,6 @@ ChowBot is now a pure client of the same domain utilities the canonical routes u
   - posts
   - experiences
   - locales/translations
-  - domains after tool parity exists
 - Keep billing, transfer acceptance, Facebook/Instagram, and destructive admin-global operations out of early public MCP unless a deliberate trust/safety design exists.
 
 ### Phase 6: Protect the migration with fixtures and tests
@@ -818,7 +808,7 @@ ChowBot is now a pure client of the same domain utilities the canonical routes u
   - reservation policy tools removed — verify `get_site_content_page` returns reservation policies correctly via the content system (Phase 3)
   - review contract consolidated under editor (Phase 3)
   - vertical-correct site bootstrap (Phase 3) — new fixture or extension to pottery-house spec covering at least one non-restaurant vertical
-  - ChowBot settings bypass migration — after Phase 4, verify `rename_site` calls settings route and that the rollback path is covered
+  - ChowBot settings bypass migration — `rename_site` now shares `updateSiteSettingsFields(...)` with the canonical settings route. E2E rollback coverage exists both at the route layer (`tests/e2e/site-settings.spec.ts`) and the ChowBot tool layer (`tests/e2e/chowbot-tools.spec.ts`).
   - transfer + domain restoration interactions
 
 ## MCP / OAuth Readiness
