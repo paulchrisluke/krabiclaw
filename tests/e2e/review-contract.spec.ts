@@ -1,19 +1,11 @@
 import { expect, test } from '@playwright/test'
-import type { APIRequestContext } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { devLoginHeaders } from './test-env'
+import { loginAs } from './helpers/auth'
 
 const POTTERY_HOUSE_USER_ID = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
 const POTTERY_HOUSE_SITE_ID = 'site-pottery-house'
 const POTTERY_HOUSE_LOCATION_ID = 'loc-pottery-house'
 const POTTERY_HOUSE_ORG_ID = 'org-pottery-house'
-
-async function loginAs(request: APIRequestContext, baseURL: string, userId?: string) {
-  const res = await request.get(devLoginUrl(baseURL, userId), {
-    headers: devLoginHeaders(),
-    maxRedirects: 0,
-  })
-  expect(res.status()).toBe(302)
-}
 
 test.describe('review contract regressions', () => {
   test.describe.configure({ mode: 'serial' })

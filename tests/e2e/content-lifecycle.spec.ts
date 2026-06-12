@@ -1,18 +1,15 @@
 import { expect, test } from '@playwright/test'
-import type { APIRequestContext } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl } from './test-env'
 import { ensureSite } from './helpers/ensure-site'
+import { loginAs } from './helpers/auth'
 
+// Two seeded users from different orgs used as the isolation pair.
+// POTTERY_HOUSE: org-pottery-house / site-pottery-house
+// DEMO: org-demo / site-demo  (role='admin' in user table but owner of org-demo;
+//       excluded from default dev-login selection, always accessed by explicit userId)
 const POTTERY_HOUSE_USER_ID = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
 const POTTERY_HOUSE_SITE_ID = 'site-pottery-house'
-
-async function loginAs(request: APIRequestContext, baseURL: string, userId?: string) {
-  const res = await request.get(devLoginUrl(baseURL, userId), {
-    headers: devLoginHeaders(),
-    maxRedirects: 0,
-  })
-  expect(res.status()).toBe(302)
-}
+const DEMO_USER_ID = 'user-demo'
+const DEMO_SITE_ID = 'site-demo'
 
 test.describe('content lifecycle regressions', () => {
   test.describe.configure({ mode: 'serial' })
@@ -20,13 +17,18 @@ test.describe('content lifecycle regressions', () => {
   test('discard-all is scoped to the requesting org and cannot affect another org drafts', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
 
-    // Start clean: discard any pre-existing pottery house drafts for page 'home'
+    // Clean up both orgs' home drafts before the test to start deterministic
     await loginAs(request, baseURL!, POTTERY_HOUSE_USER_ID)
     await request.post(`${baseURL}/api/editor/sites/${POTTERY_HOUSE_SITE_ID}/content/discard`, {
       data: { page: 'home' },
     })
+    await loginAs(request, baseURL!, DEMO_USER_ID)
+    await request.post(`${baseURL}/api/editor/sites/${DEMO_SITE_ID}/content/discard`, {
+      data: { page: 'home' },
+    })
 
-    // Create a distinctive draft in the pottery house site (org B)
+    // Pottery house (org A) creates a sentinel draft
+    await loginAs(request, baseURL!, POTTERY_HOUSE_USER_ID)
     const isolationField = `e2e-discard-isolation-${Date.now()}`
     const isolationValue = `pottery-house-sentinel-${Date.now()}`
     const potteryDraftRes = await request.post(
@@ -35,17 +37,12 @@ test.describe('content lifecycle regressions', () => {
     )
     expect(potteryDraftRes.status()).toBe(200)
 
-    // Switch to dev user (org A): create a draft then discard-all on their own site
-    await loginAs(request, baseURL!)
-    const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
-    expect(contextRes.status()).toBe(200)
-    const context = await contextRes.json() as { restaurant?: { id?: string | null } }
-    const devSiteId = await ensureSite(request, baseURL!, context.restaurant?.id ?? null)
-
-    await request.post(`${baseURL}/api/editor/sites/${devSiteId}/content/draft`, {
-      data: { page: 'home', changes: { 'e2e-discard-target': `dev draft ${Date.now()}` } },
+    // Demo org (org B) creates its own draft and then calls discard-all for ITS site only
+    await loginAs(request, baseURL!, DEMO_USER_ID)
+    await request.post(`${baseURL}/api/editor/sites/${DEMO_SITE_ID}/content/draft`, {
+      data: { page: 'home', changes: { 'e2e-discard-target': `demo draft ${Date.now()}` } },
     })
-    const discardRes = await request.post(`${baseURL}/api/editor/sites/${devSiteId}/content/discard`, {
+    const discardRes = await request.post(`${baseURL}/api/editor/sites/${DEMO_SITE_ID}/content/discard`, {
       data: { all: true },
     })
     expect(discardRes.status()).toBe(200)
@@ -53,7 +50,7 @@ test.describe('content lifecycle regressions', () => {
     expect(discardBody.success).toBe(true)
     expect(discardBody.scope).toBe('all')
 
-    // Verify pottery house's draft is still present by checking for the specific field
+    // Pottery house sentinel must still exist untouched
     await loginAs(request, baseURL!, POTTERY_HOUSE_USER_ID)
     const contentRes = await request.get(
       `${baseURL}/api/editor/sites/${POTTERY_HOUSE_SITE_ID}/content/home`,
@@ -61,13 +58,12 @@ test.describe('content lifecycle regressions', () => {
     expect(contentRes.status()).toBe(200)
     const contentBody = await contentRes.json() as {
       content: Array<{ field: string; value?: string }>
-      hasDrafts: boolean
     }
     const isolationRow = contentBody.content.find(c => c.field === isolationField)
     expect(isolationRow).toBeDefined()
     expect(isolationRow?.value).toBe(isolationValue)
 
-    // Clean up pottery house draft
+    // Clean up
     await request.post(`${baseURL}/api/editor/sites/${POTTERY_HOUSE_SITE_ID}/content/discard`, {
       data: { page: 'home' },
     })
@@ -76,13 +72,18 @@ test.describe('content lifecycle regressions', () => {
   test('publish-all is scoped to the requesting org and cannot affect another org drafts', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
 
-    // Start clean: discard any pre-existing pottery house drafts for page 'home'
+    // Clean up both orgs' home drafts
     await loginAs(request, baseURL!, POTTERY_HOUSE_USER_ID)
     await request.post(`${baseURL}/api/editor/sites/${POTTERY_HOUSE_SITE_ID}/content/discard`, {
       data: { page: 'home' },
     })
+    await loginAs(request, baseURL!, DEMO_USER_ID)
+    await request.post(`${baseURL}/api/editor/sites/${DEMO_SITE_ID}/content/discard`, {
+      data: { page: 'home' },
+    })
 
-    // Create a distinctive draft in pottery house (org B)
+    // Pottery house (org A) creates a sentinel draft
+    await loginAs(request, baseURL!, POTTERY_HOUSE_USER_ID)
     const isolationField = `e2e-publish-isolation-${Date.now()}`
     const isolationValue = `pottery-publish-sentinel-${Date.now()}`
     const potteryDraftRes = await request.post(
@@ -91,17 +92,12 @@ test.describe('content lifecycle regressions', () => {
     )
     expect(potteryDraftRes.status()).toBe(200)
 
-    // Switch to dev user (org A): create a draft and publish-all on their site
-    await loginAs(request, baseURL!)
-    const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
-    expect(contextRes.status()).toBe(200)
-    const context = await contextRes.json() as { restaurant?: { id?: string | null } }
-    const devSiteId = await ensureSite(request, baseURL!, context.restaurant?.id ?? null)
-
-    await request.post(`${baseURL}/api/editor/sites/${devSiteId}/content/draft`, {
-      data: { page: 'home', changes: { 'e2e-publish-target': `dev draft ${Date.now()}` } },
+    // Demo org (org B) creates its own draft and calls publish-all for ITS site
+    await loginAs(request, baseURL!, DEMO_USER_ID)
+    await request.post(`${baseURL}/api/editor/sites/${DEMO_SITE_ID}/content/draft`, {
+      data: { page: 'home', changes: { 'e2e-publish-target': `demo draft ${Date.now()}` } },
     })
-    const publishRes = await request.post(`${baseURL}/api/editor/sites/${devSiteId}/content/publish`, {
+    const publishRes = await request.post(`${baseURL}/api/editor/sites/${DEMO_SITE_ID}/content/publish`, {
       data: { all: true },
     })
     expect(publishRes.status()).toBe(200)
@@ -109,7 +105,7 @@ test.describe('content lifecycle regressions', () => {
     expect(publishBody.success).toBe(true)
     expect(publishBody.scope).toBe('all')
 
-    // Pottery house draft must still be a draft (not published/cleared by dev publish-all)
+    // Pottery house draft must still be pending (not affected by demo's publish-all)
     await loginAs(request, baseURL!, POTTERY_HOUSE_USER_ID)
     const statusRes = await request.get(
       `${baseURL}/api/editor/sites/${POTTERY_HOUSE_SITE_ID}/content/status`,
@@ -118,7 +114,7 @@ test.describe('content lifecycle regressions', () => {
     const statusBody = await statusRes.json() as { hasDrafts: boolean }
     expect(statusBody.hasDrafts).toBe(true)
 
-    // Clean up pottery house draft
+    // Clean up
     await request.post(`${baseURL}/api/editor/sites/${POTTERY_HOUSE_SITE_ID}/content/discard`, {
       data: { page: 'home' },
     })
@@ -204,7 +200,7 @@ test.describe('content lifecycle regressions', () => {
     expect(policyRow).toBeDefined()
     expect(policyRow?.value).toBe(policyValue)
 
-    // Clean up: discard the draft
+    // Clean up
     await request.post(`${baseURL}/api/editor/sites/${siteId}/content/discard`, {
       data: { page: 'reservations' },
     })
