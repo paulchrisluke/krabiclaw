@@ -646,6 +646,7 @@ Each item below has a resolved architectural decision — see the Architectural 
 8. **Drop `staff_profiles` and `awards_recognition` tables.** New migration. Delete the six utilities in `content-management.ts`.
 
 9. **Document media as a first-class workflow contract** (upload/request-upload/confirm/generate). No new routes needed; the existing routes are correct. The contract needs to be written as a reference so MCP tool definitions can describe the workflow without inventing their own.
+   - **Done:** see [docs/media-workflow-contract.md](docs/media-workflow-contract.md)
 
 ### Phase 4: Bring ChowBot onto the canonical surface
 

@@ -1,6 +1,7 @@
 // Thin proxy to canonical site creation logic.
-// Translates the legacy { restaurantName, subdomain } body shape and defaults
-// vertical to 'restaurant' so callers that pre-date the vertical param still work.
+// Accepts the legacy { restaurantName, subdomain } body shape, but requires
+// callers to explicitly send vertical so we do not silently create the wrong
+// kind of site.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
@@ -11,13 +12,15 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<Record<string, unknown>>(event)
   const name = ((body?.name ?? body?.restaurantName) as string | undefined)?.trim()
   const subdomain = (body?.subdomain as string | undefined)?.trim()
-  const rawVertical = (body?.vertical as string | undefined) ?? 'restaurant'
-  const vertical: SiteVertical = VALID_VERTICALS.includes(rawVertical as SiteVertical)
-    ? rawVertical as SiteVertical
-    : 'restaurant'
+  const vertical = body?.vertical as string | undefined
 
   if (!name || !subdomain) {
     return jsonResponse({ error: 'name and subdomain are required' }, { status: 400 })
+  }
+  if (!vertical || !VALID_VERTICALS.includes(vertical as SiteVertical)) {
+    return jsonResponse({
+      error: `vertical is required and must be one of: ${VALID_VERTICALS.join(', ')}`
+    }, { status: 400 })
   }
 
   const env = cloudflareEnv(event)
@@ -27,7 +30,11 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const result = await runSiteCreation(env, db, session.user.id, { name, subdomain, vertical })
+  const result = await runSiteCreation(env, db, session.user.id, {
+    name,
+    subdomain,
+    vertical: vertical as SiteVertical
+  })
 
   // Re-map siteId → restaurantId for legacy callers
   const { siteId, ...rest } = result.data
