@@ -5,9 +5,11 @@ import { getVisibleRoleForSite, requireMcpUser, roleSatisfies } from '~/server/u
 import { MCP_TOOLS } from '~/server/utils/mcp-tools'
 
 export default defineEventHandler(async (event) => {
+  let requestId: string | number | null | undefined
   try {
     const body = await readBody(event)
     const request = readMcpRequest(event, body)
+    requestId = request.id
 
     if (request.method === 'server/discover') {
       await requireMcpUser(event)
@@ -72,6 +74,6 @@ export default defineEventHandler(async (event) => {
       : mcpError.code === MCP_ERROR.parse ? 400
       : 500)
     setResponseStatus(event, status)
-    return mcpFailure(null, mcpError)
+    return mcpFailure(requestId, mcpError)
   }
 })

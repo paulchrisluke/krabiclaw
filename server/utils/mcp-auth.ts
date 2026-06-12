@@ -48,6 +48,27 @@ export async function requireMcpSite(
   minimumRole: McpToolRole = 'editor',
 ): Promise<McpSiteContext> {
   const user = await requireMcpUser(event)
+
+  if (user.isPlatformAdmin) {
+    const site = await user.db.prepare(`
+      SELECT organization_id
+      FROM sites
+      WHERE id = ?
+      LIMIT 1
+    `).bind(siteId).first<{ organization_id: string }>()
+
+    if (!site?.organization_id) {
+      throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
+    }
+
+    return {
+      ...user,
+      siteId,
+      organizationId: site.organization_id,
+      role: 'owner',
+    }
+  }
+
   const site = await user.db.prepare(`
     SELECT s.organization_id, m.role
     FROM sites s

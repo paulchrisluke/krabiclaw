@@ -8,6 +8,16 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 import { signOAuthState } from '~/server/utils/encryption'
 
 export async function listSitesForUser(db: D1Database, userId: string, isPlatformAdmin: boolean) {
+  if (isPlatformAdmin) {
+    const rows = await db.prepare(`
+      SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
+             s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
+      FROM sites s
+      ORDER BY s.created_at DESC
+    `).all()
+    return rows.results ?? []
+  }
+
   const orgRows = await db.prepare(`
     SELECT o.id
     FROM organization o
@@ -27,7 +37,6 @@ export async function listSitesForUser(db: D1Database, userId: string, isPlatfor
     ORDER BY s.created_at DESC
   `).bind(...orgIds).all()
 
-  void isPlatformAdmin
   return rows.results ?? []
 }
 
@@ -220,6 +229,12 @@ export async function reorderLocationQa(
   }
 
   const [first, second] = updates
+  const firstSortOrder = Number(first?.sort_order)
+  const secondSortOrder = Number(second?.sort_order)
+  if (!Number.isInteger(firstSortOrder) || !Number.isInteger(secondSortOrder)) {
+    throw new Error('Invalid sort_order for Q&A reorder')
+  }
+
   const now = new Date().toISOString()
   const result = await db.prepare(`
     UPDATE location_qa
@@ -235,9 +250,9 @@ export async function reorderLocationQa(
       AND id IN (?, ?)
   `).bind(
     first!.id,
-    first!.sort_order,
+    firstSortOrder,
     second!.id,
-    second!.sort_order,
+    secondSortOrder,
     now,
     locationId,
     siteId,
@@ -299,29 +314,7 @@ export async function saveContentDraft(
   const heroChange: Record<string, string | undefined> = {}
   let hasHeroChange = false
 
-  const isLocationHeroPage = input.page === 'location' && !!locationId
-  const locationHeroImageId = isLocationHeroPage && 'hero.image' in input.changes ? (input.changes['hero.image'] || null) : undefined
-  const locationHeroVideoId = isLocationHeroPage && 'hero.video' in input.changes ? (input.changes['hero.video'] || null) : undefined
-
-  if (locationHeroImageId !== undefined || locationHeroVideoId !== undefined) {
-    const setClauses: string[] = []
-    const bindParams: (string | null)[] = []
-    if (locationHeroImageId !== undefined) {
-      setClauses.push('hero_image_asset_id = ?')
-      bindParams.push(locationHeroImageId)
-    }
-    if (locationHeroVideoId !== undefined) {
-      setClauses.push('hero_video_asset_id = ?')
-      bindParams.push(locationHeroVideoId)
-    }
-    setClauses.push('updated_at = ?')
-    bindParams.push(new Date().toISOString(), locationId!, siteId)
-    await db.prepare(`UPDATE business_locations SET ${setClauses.join(', ')} WHERE id = ? AND site_id = ?`).bind(...bindParams).run()
-  }
-
   for (const [field, value] of Object.entries(input.changes)) {
-    if (isLocationHeroPage && (field === 'hero.image' || field === 'hero.video')) continue
-
     if (heroFields.includes(field)) {
       hasHeroChange = true
       if (field === 'hero.title') heroChange.hero_title = value || undefined
@@ -499,10 +492,15 @@ export async function deleteContentField(
 
 export async function getGoogleBusinessLocationConnectionForMcp(
   env: CloudflareEnv,
+  db: D1Database,
   organizationId: string,
   siteId: string,
   locationId: string,
 ) {
+  const entitled = await hasEntitlement(env, db, organizationId, 'google_business')
+  if (!entitled) {
+    throw new Error('Google Business integration requires a paid plan.')
+  }
   const connection = await getGoogleBusinessConnection(env, organizationId, siteId, locationId)
   if (!connection) return null
   return {
@@ -542,9 +540,14 @@ export async function getGoogleBusinessLocationAuthUrlForMcp(
 
 export async function listGoogleBusinessAccountsForMcp(
   env: CloudflareEnv,
+  db: D1Database,
   organizationId: string,
   siteId: string,
 ) {
+  const entitled = await hasEntitlement(env, db, organizationId, 'google_business')
+  if (!entitled) {
+    throw new Error('Google Business integration requires a paid plan.')
+  }
   const connection = await getGoogleBusinessConnection(env, organizationId, siteId)
   if (!connection) throw new Error('Google Business not connected')
 

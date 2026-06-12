@@ -332,11 +332,11 @@ export async function executeMcpToolCall(
     case 'update_notification_settings':
       return { notifications: await updateNotificationsSettings(site.db, site.organizationId, site.siteId, requiredString(args, 'whatsapp_phone')) }
     case 'get_google_business_connection':
-      return { connection: await getGoogleBusinessLocationConnectionForMcp(site.env, site.organizationId, site.siteId, requiredString(args, 'location_id')) }
+      return { connection: await getGoogleBusinessLocationConnectionForMcp(site.env, site.db, site.organizationId, site.siteId, requiredString(args, 'location_id')) }
     case 'get_google_business_auth_url':
       return await getGoogleBusinessLocationAuthUrlForMcp(site.env, site.db, site.organizationId, site.siteId, requiredString(args, 'location_id'), site.userId)
     case 'list_google_business_accounts':
-      return await listGoogleBusinessAccountsForMcp(site.env, site.organizationId, site.siteId)
+      return await listGoogleBusinessAccountsForMcp(site.env, site.db, site.organizationId, site.siteId)
     case 'sync_google_business_locations':
       return await syncGoogleBusinessLocationsForMcp(site.env, site.db, site.organizationId, site.siteId, requiredString(args, 'account_id'), requiredStringArray(args, 'location_ids'))
     case 'list_work_requests':

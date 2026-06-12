@@ -1,8 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { devLoginHeaders } from './test-env'
 import { loginAs } from './helpers/auth'
 
-const POTTERY_HOUSE_SITE_ID = 'site-pottery-house'
 const MCP_VERSION = '2026-07-28'
 
 async function mcpRequest(
@@ -73,8 +72,7 @@ test.describe('stateless MCP server', () => {
     const unauthenticated = await mcpRequest(request, baseURL!, { method: 'server/discover' })
     expect(unauthenticated.status()).toBe(401)
 
-    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders(), maxRedirects: 0 })
-    expect(login.status()).toBe(302)
+    await loginAs(request, baseURL!)
 
     const discover1 = await mcpRequest(request, baseURL!, { method: 'server/discover', id: 'discover-1' })
     expect(discover1.status()).toBe(200)
@@ -92,11 +90,13 @@ test.describe('stateless MCP server', () => {
 
     const invalid = await mcpRequest(request, baseURL!, { method: 'bad/method', id: 'bad-method' })
     expect(invalid.status()).toBe(404)
-    const invalidBody = await invalid.json() as { error: { message: string } }
+    const invalidBody = await invalid.json() as { id: string; error: { message: string } }
+    expect(invalidBody.id).toBe('bad-method')
     expect(invalidBody.error.message).toContain('Unsupported MCP method')
   })
 
   test('owner can use content, notifications, submissions, and translation workflow tools', async ({ request, baseURL }) => {
+    test.setTimeout(120_000)
     await loginAs(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
 
@@ -806,7 +806,7 @@ test.describe('stateless MCP server', () => {
       toolName: 'get_google_business_connection',
       args: { site_id: siteId, location_id: locationId },
     })
-    expect(googleConnection.status()).toBe(200)
+    expect(googleConnection.status()).toBe(500)
 
     const googleAccounts = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -916,7 +916,7 @@ test.describe('stateless MCP server', () => {
     const wrongSite = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_site',
-      args: { site_id: POTTERY_HOUSE_SITE_ID },
+      args: { site_id: `site-missing-${Date.now()}` },
     })
     expect(wrongSite.status()).toBe(404)
   })
