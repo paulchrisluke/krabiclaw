@@ -176,4 +176,67 @@ test.describe('site transfer handoff flow', () => {
     expect(completedState.transfer.payment_completed_at).toEqual(expect.any(String))
     expect(completedState.site.organization_id).toBe(targetOrgId)
   })
+
+  test('transfer cancellation keeps site in original org and clears pending state', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
+
+    await resetTransferFixture(request, baseURL!)
+
+    const adminLogin = await request.get(devLoginUrl(baseURL!, POTTERY_OWNER_USER_ID), {
+      headers: devLoginHeaders(),
+      maxRedirects: 0,
+    })
+    expect(adminLogin.status()).toBe(302)
+
+    // Cancel any leftover pending transfer first
+    await request.delete(`${baseURL}/api/admin/sites/${SITE_ID}/transfer`)
+
+    // Initiate a paid transfer (requires_payment=true so domain snapshot is attempted)
+    const create = await request.post(`${baseURL}/api/admin/sites/${SITE_ID}/transfer`, {
+      data: {
+        email: 'cancel-test@e2e.invalid',
+        plan: 'growth',
+        message: 'Cancellation regression test.',
+      },
+    })
+    expect(create.status()).toBe(200)
+    const created = await create.json() as { id: string; requires_payment: boolean }
+    expect(created.id).toEqual(expect.any(String))
+    expect(created.requires_payment).toBe(true)
+
+    // The transfer record must have a custom_domains_snapshot field (string or null — either is fine,
+    // but the field must be present to prove the snapshot code path ran)
+    const pendingStateRes = await request.get(
+      `${baseURL}/api/dev/site-transfer-state?transfer_id=${encodeURIComponent(created.id)}`,
+      { headers: devLoginHeaders() },
+    )
+    expect(pendingStateRes.status()).toBe(200)
+    const pendingState = await pendingStateRes.json() as {
+      transfer: { status: string; custom_domains_snapshot: string | null }
+      site: { organization_id: string }
+    }
+    expect(pendingState.transfer.status).toBe('pending')
+    expect('custom_domains_snapshot' in pendingState.transfer).toBe(true)
+    // Site ownership must not have changed yet
+    expect(pendingState.site.organization_id).toBe('org-pottery-house')
+
+    // Cancel the transfer
+    const cancelRes = await request.delete(`${baseURL}/api/admin/sites/${SITE_ID}/transfer`)
+    expect(cancelRes.status()).toBe(200)
+    const cancelBody = await cancelRes.json() as { cancelled: boolean }
+    expect(cancelBody.cancelled).toBe(true)
+
+    // Transfer must now be cancelled and site must still belong to the original org
+    const cancelledStateRes = await request.get(
+      `${baseURL}/api/dev/site-transfer-state?transfer_id=${encodeURIComponent(created.id)}`,
+      { headers: devLoginHeaders() },
+    )
+    expect(cancelledStateRes.status()).toBe(200)
+    const cancelledState = await cancelledStateRes.json() as {
+      transfer: { status: string }
+      site: { organization_id: string }
+    }
+    expect(cancelledState.transfer.status).toBe('cancelled')
+    expect(cancelledState.site.organization_id).toBe('org-pottery-house')
+  })
 })
