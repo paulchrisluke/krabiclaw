@@ -1,3 +1,4 @@
+import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 
 type NotificationChannel = 'email' | 'whatsapp'
@@ -7,6 +8,7 @@ interface NotificationEnv {
   WHATSAPP_PHONE_NUMBER_ID?: string
   WHATSAPP_ACCESS_TOKEN?: string
   EMAIL_FROM?: string
+  EMAIL_DELIVERY_MODE?: string
 }
 
 interface SiteContext {
@@ -245,6 +247,21 @@ async function sendEmailNotification(
     JSON.stringify(payloadWithPreview),
     now
   ).run()
+
+  if (!shouldSendRealEmail(env)) {
+    await db.prepare(`UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL WHERE id = ?`)
+      .bind(logOnlyEmailProviderId('notification'), new Date().toISOString(), id)
+      .run()
+    console.info('email_delivery_log_only', {
+      notificationId: id,
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      template: opts.template,
+      recipient: hashEmail(opts.to),
+      title: opts.title,
+    })
+    return
+  }
 
   if (!env.RESEND_API_KEY) {
     await db.prepare(`UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`)

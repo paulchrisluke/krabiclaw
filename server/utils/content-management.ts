@@ -38,29 +38,6 @@ interface SiteContentTranslationRow {
   updated_at: string
 }
 
-export interface StaffProfile {
-  id: string
-  name: string
-  role: string
-  bio?: string
-  image_url?: string
-  order_index: number
-  active: boolean
-  updated_at: string
-}
-
-export interface AwardRecognition {
-  id: string
-  title: string
-  description?: string
-  year?: number
-  issuer?: string
-  image_url?: string
-  order_index: number
-  active: boolean
-  updated_at: string
-}
-
 // Site Content
 export const getSiteContent = async (db: D1Database, organizationId: string, siteId: string, locationId?: string): Promise<SiteContent[]> => {
   let query = `
@@ -244,6 +221,23 @@ export const deleteDraftContentField = async (
   await db.prepare(query).bind(...params).run()
 }
 
+export const deleteSiteAndDraftContentField = async (
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  page: string,
+  field: string,
+  locationId?: string,
+) => {
+  const params: Array<string> = [organizationId, siteId, page, field]
+  const locationClause = locationId ? 'AND location_id = ?' : 'AND location_id IS NULL'
+  if (locationId) params.push(locationId)
+
+  await db.batch([
+    db.prepare(`DELETE FROM site_content WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ? ${locationClause}`).bind(...params),
+    db.prepare(`DELETE FROM site_content_drafts WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ? ${locationClause}`).bind(...params),
+  ])
+}
 
 
 // Draft Management
@@ -445,16 +439,20 @@ export const publishDrafts = async (db: D1Database, organizationId: string, site
   console.log(`[content-management.ts] db.batch completed successfully.`)
 }
 
-export const publishAllDrafts = async (db: D1Database) => {
+export const publishAllDrafts = async (db: D1Database, organizationId: string, siteId: string) => {
   const { results: drafts } = await db.prepare(
-    `SELECT id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, updated_at FROM site_content_drafts ORDER BY organization_id, site_id, location_id, page, field`
-  ).all<SiteContent>()
-  
+    `SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component, updated_at FROM site_content_drafts WHERE organization_id = ? AND site_id = ? ORDER BY location_id, page, field`
+  ).bind(organizationId, siteId).all<SiteContent>()
+
   if (!drafts || drafts.length === 0) return
 
-  const stmts = drafts.map(draft => buildUpsertSiteStmt(db, draft))
-  stmts.push(db.prepare(`DELETE FROM site_content_drafts`))
-  
+  const stmts = drafts.map(draft => {
+    const locationSegment = draft.location_id ?? 'site'
+    const canonicalId = `content::${organizationId}::${siteId}::${locationSegment}::${draft.page}::${draft.field}`
+    return buildUpsertSiteStmt(db, { ...draft, id: canonicalId })
+  })
+  stmts.push(db.prepare(`DELETE FROM site_content_drafts WHERE organization_id = ? AND site_id = ?`).bind(organizationId, siteId))
+
   await db.batch(stmts)
 }
 
@@ -472,8 +470,8 @@ export const discardDrafts = async (db: D1Database, organizationId: string, site
   await db.prepare(query).bind(...params).run()
 }
 
-export const discardAllDrafts = async (db: D1Database) => {
-  await db.prepare(`DELETE FROM site_content_drafts`).run()
+export const discardAllDrafts = async (db: D1Database, organizationId: string, siteId: string) => {
+  await db.prepare(`DELETE FROM site_content_drafts WHERE organization_id = ? AND site_id = ?`).bind(organizationId, siteId).run()
 }
 
 export const getDraftStatus = async (db: D1Database, organizationId: string, siteId: string, page?: string, locationId?: string): Promise<{ hasDrafts: boolean; count: number }> => {
@@ -498,108 +496,3 @@ export const getDraftStatus = async (db: D1Database, organizationId: string, sit
   return { hasDrafts: (row?.count ?? 0) > 0, count: row?.count ?? 0 }
 }
 
-// Staff Profiles
-export const getStaffProfiles = async (db: D1Database, organizationId: string, siteId: string, locationId?: string): Promise<StaffProfile[]> => {
-  let query = `
-    SELECT id, name, role, bio, image_url, order_index, active, updated_at 
-     FROM staff_profiles 
-     WHERE organization_id = ? AND site_id = ?
-  `
-  const params = [organizationId, siteId]
-  
-  if (locationId) {
-    query += ` AND location_id = ?`
-    params.push(locationId)
-  } else {
-    query += ` AND location_id IS NULL`
-  }
-  
-  query += ` ORDER BY order_index, name`
-  
-  const { results } = await db.prepare(query).bind(...params).all<StaffProfile>()
-  return results ?? []
-}
-
-export const upsertStaffProfile = async (db: D1Database, profile: Omit<StaffProfile, 'updated_at'> & { organization_id: string; site_id: string; location_id?: string }) => {
-  await db.prepare(`
-    INSERT INTO staff_profiles (id, organization_id, site_id, location_id, name, role, bio, image_url, order_index, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET 
-      name = excluded.name,
-      role = excluded.role,
-      bio = excluded.bio,
-      image_url = excluded.image_url,
-      order_index = excluded.order_index,
-      active = excluded.active,
-      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).bind(
-    profile.id || crypto.randomUUID(),
-    profile.organization_id,
-    profile.site_id,
-    profile.location_id || null,
-    profile.name,
-    profile.role,
-    profile.bio || null,
-    profile.image_url || null,
-    profile.order_index,
-    profile.active ? 1 : 0
-  ).run()
-}
-
-export const deleteStaffProfile = async (db: D1Database, organizationId: string, siteId: string, id: string) => {
-  await db.prepare(`DELETE FROM staff_profiles WHERE organization_id = ? AND site_id = ? AND id = ?`).bind(organizationId, siteId, id).run()
-}
-
-// Awards & Recognition
-export const getAwardsRecognition = async (db: D1Database, organizationId: string, siteId: string, locationId?: string): Promise<AwardRecognition[]> => {
-  let query = `
-    SELECT id, title, description, year, issuer, image_url, order_index, active, updated_at 
-     FROM awards_recognition 
-     WHERE organization_id = ? AND site_id = ?
-  `
-  const params = [organizationId, siteId]
-  
-  if (locationId) {
-    query += ` AND location_id = ?`
-    params.push(locationId)
-  } else {
-    query += ` AND location_id IS NULL`
-  }
-  
-  query += ` ORDER BY order_index, year DESC`
-  
-  const { results } = await db.prepare(query).bind(...params).all<AwardRecognition>()
-  return results ?? []
-}
-
-export const upsertAwardRecognition = async (db: D1Database, award: Omit<AwardRecognition, 'updated_at'> & { organization_id: string; site_id: string; location_id?: string }) => {
-  await db.prepare(`
-    INSERT INTO awards_recognition (id, organization_id, site_id, location_id, title, description, year, issuer, image_url, order_index, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET 
-      title = excluded.title,
-      description = excluded.description,
-      year = excluded.year,
-      issuer = excluded.issuer,
-      image_url = excluded.image_url,
-      order_index = excluded.order_index,
-      active = excluded.active,
-      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).bind(
-    award.id || crypto.randomUUID(),
-    award.organization_id,
-    award.site_id,
-    award.location_id || null,
-    award.title,
-    award.description || null,
-    award.year || null,
-    award.issuer || null,
-    award.image_url || null,
-    award.order_index,
-    award.active ? 1 : 0
-  ).run()
-}
-
-export const deleteAwardRecognition = async (db: D1Database, organizationId: string, siteId: string, id: string) => {
-  await db.prepare(`DELETE FROM awards_recognition WHERE organization_id = ? AND site_id = ? AND id = ?`).bind(organizationId, siteId, id).run()
-}

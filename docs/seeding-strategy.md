@@ -159,15 +159,6 @@ Demo, Pottery House, and Kikuzuki now all follow the same ephemeral model: typed
   images via `/media/request-upload` -> Cloudflare Images
   videos/files via `/media/upload` -> Cloudflare R2
 
-### CMS and ChowBot parity
-
-- Anything created by typed fixture generation or client import must remain editable through the CMS
-- Anything editable through the CMS must be representable in onboarding/import manifests
-- ChowBot must support the same CRUD surface as the CMS for supported content domains
-- Parity must be verified by targeted E2E tests, not treated as a loose expectation
-
-This is a separate implementation track but required before chat-first onboarding can be considered a complete replacement for manual CMS-driven setup.
-
 ---
 
 ## Authoring rules

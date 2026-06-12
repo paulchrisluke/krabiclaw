@@ -88,6 +88,7 @@ export default defineEventHandler(async (event) => {
         orgId: site.organization_id,
         siteId,
         userId: session.user.id,
+        userRole: site.role,
         siteName: site.brand_name ?? 'your site',
         defaultCurrency,
         messages,

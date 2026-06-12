@@ -212,10 +212,11 @@ export async function deletePost(
   organizationId: string,
   siteId: string,
   postId: string
-): Promise<void> {
-  await db.prepare(
+): Promise<boolean> {
+  const result = await db.prepare(
     'DELETE FROM posts WHERE id = ? AND organization_id = ? AND site_id = ?'
   ).bind(postId, organizationId, siteId).run()
+  return (result.meta.changes ?? 0) > 0
 }
 
 /** Public: published posts for the site, formatted for SayaPosts component */

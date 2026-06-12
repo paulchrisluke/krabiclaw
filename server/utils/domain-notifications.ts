@@ -1,10 +1,12 @@
 import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
+import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 
 interface DomainNotificationEnv {
   PLATFORM_OWNER_EMAILS?: string
   RESEND_API_KEY?: string
   WHATSAPP_PHONE_NUMBER_ID?: string
   WHATSAPP_ACCESS_TOKEN?: string
+  EMAIL_DELIVERY_MODE?: string
 }
 
 interface ResendResponse {
@@ -67,6 +69,7 @@ async function sendEmail(
 ) {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
+  const storedRecipient = shouldSendRealEmail(env) ? opts.to : hashEmail(opts.to)
   await db.prepare(`
     INSERT INTO notifications
     (id, organization_id, site_id, channel, template, recipient, title, payload, status, created_at)
@@ -75,11 +78,29 @@ async function sendEmail(
     id,
     opts.organizationId,
     opts.siteId,
-    opts.to,
+    storedRecipient,
     opts.title,
     JSON.stringify({ audience: opts.audience, domain: opts.domain, status: opts.status, message: opts.message, dashboard_url: opts.dashboardUrl }),
     now
   ).run()
+
+  if (!shouldSendRealEmail(env)) {
+    await db.prepare(`UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL WHERE id = ?`).bind(
+      logOnlyEmailProviderId('domain'),
+      now,
+      id,
+    ).run()
+    console.info('email_delivery_log_only', {
+      notificationId: id,
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      audience: opts.audience,
+      recipient: hashEmail(opts.to),
+      title: opts.title,
+      template: 'domain_update',
+    })
+    return
+  }
 
   const timeoutMs = 5000
   const controller = new AbortController()
@@ -114,7 +135,7 @@ async function sendEmail(
       ? `Email request timed out after ${timeoutMs}ms`
       : `Email request failed: ${normalizedError.message || 'Unknown error'}`
     console.error('domain_notification_email_send_failed', {
-      to: opts.to,
+      to: hashEmail(opts.to),
       audience: opts.audience,
       siteId: opts.siteId,
       organizationId: opts.organizationId,
@@ -139,7 +160,7 @@ async function sendEmail(
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
     const raw = await response.text().catch(() => '<unavailable>')
     console.error('domain_notification_email_response_parse_failed', {
-      to: opts.to,
+      to: hashEmail(opts.to),
       audience: opts.audience,
       status: response.status,
       error: normalizedError.message,
@@ -170,7 +191,7 @@ export async function notifyDomainLifecycle(
     now
   ).run()
 
-  if (env.RESEND_API_KEY) {
+  if (env.RESEND_API_KEY || !shouldSendRealEmail(env)) {
     const owner = await db.prepare(ownerEmailQuery()).bind(opts.organizationId).first() as { email?: string } | null
     if (owner?.email) await sendEmail(env, db, { ...opts, to: owner.email, audience: 'owner' })
     const supportSendPromises = supportEmails(env).map((email) => sendEmail(env, db, { ...opts, to: email, audience: 'support' }))

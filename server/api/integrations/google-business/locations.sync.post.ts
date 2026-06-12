@@ -99,20 +99,24 @@ export default defineEventHandler(async (event) => {
       `).bind(site.organization_id, siteId).run()
     }
 
-    // Sync locations
-    await syncGoogleLocations(env, site.organization_id, siteId, connection.id, selectedLocations)
-    
+    // Sync locations + their GBP reviews
+    const { reviewsUpserted } = await syncGoogleLocations(
+      env, site.organization_id, siteId, connection.id, selectedLocations,
+      connection.encrypted_access_token
+    )
+
     // Get synced locations count
     const syncedCount = await db.prepare(`
-      SELECT COUNT(*) as count FROM business_locations 
+      SELECT COUNT(*) as count FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND status = 'active'
     `).bind(site.organization_id, siteId).first()
-    
+
     return jsonResponse({
       success: true,
       message: `Successfully synced ${selectedLocations.length} locations`,
       syncedCount: (syncedCount as ApiValue)?.count || 0,
-      totalLocations: selectedLocations.length
+      totalLocations: selectedLocations.length,
+      reviewsUpserted
     })
     
   } catch (error) {

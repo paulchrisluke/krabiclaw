@@ -139,12 +139,15 @@ test.describe('platform public site', () => {
 
     const home = await page.goto(`${baseURL}/`, { waitUntil: 'domcontentloaded' })
     expect(home?.status()).toBeLessThan(400)
-    await expect(page.locator('body')).toContainText('krabiclaw.com')
+    await page.waitForLoadState('load')
+    await expect(page.getByRole('link', { name: /krabiclaw/i }).first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: /build, grow, and manage your business online/i })).toBeVisible()
 
     const blog = await page.goto(`${baseURL}/blog`, { waitUntil: 'domcontentloaded' })
     expect(blog?.status()).toBeLessThan(400)
+    await page.waitForLoadState('load')
     await expect(page).toHaveTitle(/Blog/)
-    await expect(page.locator('body')).toContainText('Business Blog')
+    await expect(page.getByRole('heading', { name: 'Business Blog' })).toBeVisible()
 
     await expectHealthyPage(page, errors)
   })

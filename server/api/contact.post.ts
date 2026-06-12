@@ -1,5 +1,6 @@
 // POST /api/contact - Platform contact form submission via Resend
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { hashEmail, shouldSendRealEmail } from '~/server/utils/email-delivery'
 
 const NAME_MAX_LENGTH = 100
 const EMAIL_MAX_LENGTH = 254
@@ -10,13 +11,6 @@ const EMAIL_DAILY_LIMIT = 3
 const hashIp = async (ip: string) => {
   if (!ip) return null
   const bytes = new TextEncoder().encode(ip)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
-const hashEmail = async (email: string) => {
-  if (!email) return null
-  const bytes = new TextEncoder().encode(email.toLowerCase().trim())
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
 }
@@ -94,7 +88,7 @@ export default defineEventHandler(async (event) => {
   const db = cloudflareEnv(event).DB
   const clientIp = getClientIp(event)
   const hourKey = `rate:ip:${clientIp}:${Math.floor(Date.now() / 3600000)}`
-  const emailHash = await hashEmail(email)
+  const emailHash = hashEmail(email)
   const dateKey = `rate:email:${emailHash}:${new Date().toISOString().split('T')[0]}`
 
   if (db) {
@@ -127,7 +121,7 @@ export default defineEventHandler(async (event) => {
     const env = cloudflareEnv(event)
     const resendApiKey = env.RESEND_API_KEY
 
-    if (!resendApiKey) {
+    if (shouldSendRealEmail(env) && !resendApiKey) {
       return jsonResponse({ error: 'Email service not configured' }, { status: 500 })
     }
 
@@ -145,6 +139,17 @@ export default defineEventHandler(async (event) => {
         console.error('Failed to store contact submission:', err)
         // Continue to send email even if DB fails
       }
+    }
+
+    if (!shouldSendRealEmail(env)) {
+      console.info('email_delivery_log_only', {
+        channel: 'platform_contact',
+        recipient: 'hello@krabiclaw.com',
+        name,
+        email: emailHash,
+        submissionId: id,
+      })
+      return jsonResponse({ success: true, message: 'Message sent successfully' })
     }
 
     // Send email with sanitized content
