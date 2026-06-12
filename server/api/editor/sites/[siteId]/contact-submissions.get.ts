@@ -1,9 +1,11 @@
 // GET /api/editor/sites/[siteId]/contact-submissions
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { listContactSubmissions } from '~/server/utils/mcp-workflows'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
+  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -16,9 +18,6 @@ export default defineEventHandler(async (event) => {
   ).bind(siteId, session.user.id).first()
   if (!site) return jsonResponse({ error: 'Access denied' }, { status: 403 })
 
-  const { results } = await db.prepare(
-    `SELECT * FROM contact_submissions WHERE site_id = ? ORDER BY created_at DESC LIMIT 200`
-  ).bind(siteId).all()
-
-  return jsonResponse({ submissions: results ?? [] })
+  const submissions = await listContactSubmissions(db, siteId)
+  return jsonResponse({ submissions })
 })

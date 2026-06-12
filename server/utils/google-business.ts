@@ -84,7 +84,6 @@ export const getGoogleAccessTokenForSite = async (env: GoogleBusinessEnv, organi
   return token.access_token
 }
 
-// LEGACY - Keeping for minimal compatibility but it will fail if env.GOOGLE_REFRESH_TOKEN is missing
 export const getGoogleAccessToken = async (env: GoogleBusinessEnv) => {
   if (env.GOOGLE_REFRESH_TOKEN && env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
     const response = await fetch('https://oauth2.googleapis.com/token', {
@@ -413,7 +412,6 @@ export const syncGoogleLocations = async (
   env: GoogleBusinessEnv,
   organizationId: string,
   siteId: string,
-  connectionId: string,
   locations: GoogleLocation[],
   accessToken?: string
 ): Promise<{ reviewsUpserted: number }> => {
