@@ -67,6 +67,29 @@ async function getSiteOrg(request: APIRequestContext, baseURL: string, siteId: s
   return body.organization_id
 }
 
+async function ensureLocation(request: APIRequestContext, baseURL: string, siteId: string) {
+  const locations = await mcpRequest(request, baseURL, {
+    method: 'tools/call',
+    toolName: 'list_locations',
+    args: { site_id: siteId },
+  })
+  expect(locations.status()).toBe(200)
+  const locationsBody = await locations.json() as { result: { content: Array<{ json: { locations: Array<{ id: string }> } }> } }
+  let locationId = locationsBody.result.content[0]?.json.locations[0]?.id
+  if (!locationId) {
+    const createLocation = await mcpRequest(request, baseURL, {
+      method: 'tools/call',
+      toolName: 'create_location',
+      args: { site_id: siteId, title: `MCP Location ${Date.now()}`, city: 'Krabi' },
+    })
+    expect(createLocation.status()).toBe(200)
+    const locationBody = await createLocation.json() as { result: { content: Array<{ json: { id?: string; location?: { id?: string } } }> } }
+    locationId = locationBody.result.content[0]?.json.id ?? locationBody.result.content[0]?.json.location?.id
+  }
+  expect(locationId).toEqual(expect.any(String))
+  return locationId as string
+}
+
 test.describe('stateless MCP server', () => {
   test('requires auth and handles stateless discovery/list/error flow without initialize', async ({ request, baseURL }) => {
     const unauthenticated = await mcpRequest(request, baseURL!, { method: 'server/discover' })
@@ -96,7 +119,6 @@ test.describe('stateless MCP server', () => {
   })
 
   test('owner can use content, notifications, submissions, and translation workflow tools', async ({ request, baseURL }) => {
-    test.setTimeout(120_000)
     await loginAs(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
 
@@ -116,25 +138,7 @@ test.describe('stateless MCP server', () => {
     })
     expect(siteRead.status()).toBe(200)
 
-    const locations = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'list_locations',
-      args: { site_id: siteId },
-    })
-    expect(locations.status()).toBe(200)
-    const locationsBody = await locations.json() as { result: { content: Array<{ json: { locations: Array<{ id: string }> } }> } }
-    let locationId = locationsBody.result.content[0]?.json.locations[0]?.id
-    if (!locationId) {
-      const createLocation = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'create_location',
-        args: { site_id: siteId, title: `MCP Location ${Date.now()}`, city: 'Krabi' },
-      })
-      expect(createLocation.status()).toBe(200)
-      const locationBody = await createLocation.json() as { result: { content: Array<{ json: { id?: string; location?: { id?: string } } }> } }
-      locationId = locationBody.result.content[0]?.json.id ?? locationBody.result.content[0]?.json.location?.id
-    }
-    expect(locationId).toEqual(expect.any(String))
+    const locationId = await ensureLocation(request, baseURL!, siteId)
 
     const locationRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -518,6 +522,47 @@ test.describe('stateless MCP server', () => {
     })
     expect([200, 500]).toContain(translationJobBatch.status())
 
+    const qaDelete = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'delete_location_qa',
+      args: { site_id: siteId, location_id: locationId, qa_id: qaId },
+    })
+    expect(qaDelete.status()).toBe(200)
+
+    const qaDeleteSecond = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'delete_location_qa',
+      args: { site_id: siteId, location_id: locationId, qa_id: qaIdSecond },
+    })
+    expect(qaDeleteSecond.status()).toBe(200)
+
+    const localeDelete = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'delete_locale',
+      args: { site_id: siteId, locale: localeCode },
+    })
+    expect(localeDelete.status()).toBe(200)
+
+    const jobLocaleDelete = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'delete_locale',
+      args: { site_id: siteId, locale: jobLocale },
+    })
+    expect(jobLocaleDelete.status()).toBe(200)
+
+    const deleteLocationRes = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'delete_location',
+      args: { site_id: siteId, location_id: locationId },
+    })
+    expect(deleteLocationRes.status()).toBe(200)
+  })
+
+  test('owner can use menus, posts, media, experiences, and Google Business workflow tools', async ({ request, baseURL }) => {
+    await loginAs(request, baseURL!)
+    const siteId = await ensureSite(request, baseURL!)
+    const locationId = await ensureLocation(request, baseURL!, siteId)
+
     const menu = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'create_menu',
@@ -828,34 +873,6 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, account_id: 'accounts/missing', location_ids: ['locations/missing'] },
     })
     expect(googleSync.status()).toBe(400)
-
-    const qaDelete = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'delete_location_qa',
-      args: { site_id: siteId, location_id: locationId, qa_id: qaId },
-    })
-    expect(qaDelete.status()).toBe(200)
-
-    const qaDeleteSecond = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'delete_location_qa',
-      args: { site_id: siteId, location_id: locationId, qa_id: qaIdSecond },
-    })
-    expect(qaDeleteSecond.status()).toBe(200)
-
-    const localeDelete = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'delete_locale',
-      args: { site_id: siteId, locale: localeCode },
-    })
-    expect(localeDelete.status()).toBe(200)
-
-    const jobLocaleDelete = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'delete_locale',
-      args: { site_id: siteId, locale: jobLocale },
-    })
-    expect(jobLocaleDelete.status()).toBe(200)
 
     const workRequest = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
