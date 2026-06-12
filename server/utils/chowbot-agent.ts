@@ -2022,7 +2022,8 @@ async function executeTool(
       if (!["owner", "admin"].includes(ctx.userRole ?? "")) {
         return { error: "Only owners or admins can delete posts." };
       }
-      await deletePost(db, orgId, siteId, input.post_id);
+      const deleted = await deletePost(db, orgId, siteId, input.post_id);
+      if (!deleted) return { error: "Post not found." };
       return { post_id: input.post_id, deleted: true };
     }
 

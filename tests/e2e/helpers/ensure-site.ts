@@ -5,10 +5,11 @@ export async function ensureSite(request: APIRequestContext, baseURL: string, si
   if (siteId) return siteId
 
   const suffix = Date.now()
+  const rand = Math.random().toString(36).slice(2, 8)
   const createRes = await request.post(`${baseURL}/api/sites`, {
     data: {
       name: `E2E Site ${suffix}`,
-      subdomain: `e2e-site-${suffix}`,
+      subdomain: `e2e-site-${suffix}-${rand}`,
       vertical: 'restaurant',
     },
   })

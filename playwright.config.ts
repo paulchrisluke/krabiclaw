@@ -5,6 +5,7 @@ const port = Number(testEnv('PORT') || 3000)
 const previewUrl = testEnv('PLAYWRIGHT_PREVIEW_URL')
 const baseURL = previewUrl || testBaseUrl()
 const devRouteSecret = testEnv('E2E_DEV_ROUTE_SECRET') || 'ci-dev-route-secret'
+const shellSafeSecret = `'${devRouteSecret.replace(/'/g, "'\\''")}'`
 
 process.env.E2E_DEV_ROUTE_SECRET = devRouteSecret
 
@@ -30,7 +31,7 @@ export default defineConfig({
   // CI tests real edge behavior (real bindings, real runtime) rather than
   // Nuxt dev + getPlatformProxy's local binding emulation.
   webServer: previewUrl ? undefined : {
-    command: `PORT=${port} E2E_ALLOW_DEV_ROUTES=true E2E_DEV_ROUTE_SECRET=${devRouteSecret} yarn dev`,
+    command: `PORT=${port} E2E_ALLOW_DEV_ROUTES=true E2E_DEV_ROUTE_SECRET=${shellSafeSecret} yarn dev`,
     url: `http://localhost:${port}/api/dev/ready`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
