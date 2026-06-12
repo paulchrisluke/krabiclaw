@@ -148,4 +148,97 @@ test.describe('chowbot tools', () => {
     expect(afterBody.settings.brand_name).toBe(beforeBody.settings.brand_name)
     expect(afterBody.settings.subdomain).toBe(beforeBody.settings.subdomain)
   })
+
+  test('location update and Q&A tools use the canonical write path end-to-end', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
+
+    await loginAs(request, baseURL!)
+
+    const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
+    expect(contextRes.status()).toBe(200)
+    const context = await contextRes.json() as {
+      restaurant?: { id?: string | null }
+    }
+    const siteId = await ensureSite(request, baseURL!, context.restaurant?.id ?? null)
+
+    const listLocationsRes = await request.post(`${baseURL}/api/dev/chowbot-tool`, {
+      headers: devLoginHeaders(),
+      data: {
+        siteId,
+        toolName: 'get_locations',
+        input: {},
+        messages: [{ role: 'user', content: 'show me locations' }],
+      },
+    })
+    expect(listLocationsRes.status()).toBe(200)
+    const listLocationsBody = await listLocationsRes.json() as {
+      result: Array<{ id: string; title: string }>
+    }
+    expect(Array.isArray(listLocationsBody.result)).toBe(true)
+    expect(listLocationsBody.result.length).toBeGreaterThan(0)
+    const locationId = listLocationsBody.result[0]!.id
+
+    const updateLocationRes = await request.post(`${baseURL}/api/dev/chowbot-tool`, {
+      headers: devLoginHeaders(),
+      data: {
+        siteId,
+        toolName: 'update_location',
+        input: {
+          location_id: locationId,
+          title: `Updated Tool Location ${Date.now()}`,
+          status: 'inactive',
+        },
+        messages: [{ role: 'user', content: 'update the location' }],
+      },
+    })
+    expect(updateLocationRes.status()).toBe(200)
+    const updateLocationBody = await updateLocationRes.json() as {
+      result: { id?: string; title?: string; status?: string; error?: string }
+    }
+    expect(updateLocationBody.result.error).toBeUndefined()
+    expect(updateLocationBody.result.id).toBe(locationId)
+    expect(updateLocationBody.result.status).toBe('inactive')
+
+    const addQaRes = await request.post(`${baseURL}/api/dev/chowbot-tool`, {
+      headers: devLoginHeaders(),
+      data: {
+        siteId,
+        toolName: 'add_qa',
+        input: {
+          location_id: locationId,
+          question: `Do you take walk-ins? ${Date.now()}`,
+          answer: 'Yes',
+        },
+        messages: [{ role: 'user', content: 'add a q and a' }],
+      },
+    })
+    expect(addQaRes.status()).toBe(200)
+    const addQaBody = await addQaRes.json() as {
+      result: { id?: string; added?: boolean; error?: string }
+    }
+    expect(addQaBody.result.error).toBeUndefined()
+    expect(addQaBody.result.id).toEqual(expect.any(String))
+    const qaId = addQaBody.result.id!
+
+    const deleteQaRes = await request.post(`${baseURL}/api/dev/chowbot-tool`, {
+      headers: devLoginHeaders(),
+      data: {
+        siteId,
+        toolName: 'delete_qa',
+        input: {
+          location_id: locationId,
+          qa_id: qaId,
+        },
+        messages: [{ role: 'user', content: 'yes, delete the q and a' }],
+      },
+    })
+    expect(deleteQaRes.status()).toBe(200)
+    expect(await deleteQaRes.json()).toEqual({
+      result: {
+        qa_id: qaId,
+        deleted: true,
+      },
+    })
+
+  })
 })

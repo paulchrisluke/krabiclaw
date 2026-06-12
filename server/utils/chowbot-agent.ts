@@ -51,6 +51,18 @@ import { extractMenuFromMediaAsset } from "~/server/utils/chowbot-media";
 import { upsertChannelState } from "~/server/utils/chowbot-conversations";
 import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
 import { updateSiteSettingsFields } from "~/server/utils/site-settings";
+import {
+  createLocation,
+  updateLocation,
+  deleteLocation,
+} from "~/server/utils/location-management";
+import {
+  listLocationQa,
+  createLocationQa,
+  deleteLocationQa,
+} from "~/server/utils/location-qa";
+import { replyToReview } from "~/server/utils/review-management";
+import { createWorkRequest } from "~/server/utils/work-request-management";
 import { contentRegistry, getFieldDef } from "~/config/content-registry";
 import { SUPPORTED_CURRENCIES } from "~/shared/currencies";
 import type { MenuItem, UpdateMenuItemRequest } from "~/server/types/menu";
@@ -128,20 +140,6 @@ interface StatusCountRow {
   count: number;
 }
 
-const toSlug = (s: string) => {
-  const normalized = s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-  if (normalized) return normalized;
-
-  let hash = 0;
-  for (let i = 0; i < s.length; i += 1) {
-    hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
-  }
-  return `site-${hash.toString(36) || "0"}`;
-};
-
 function isUniqueConstraintError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || "");
   return /UNIQUE constraint failed/i.test(message);
@@ -166,29 +164,6 @@ function isValidHttpUrl(value: string): boolean {
     return parsed.protocol === "http:" || parsed.protocol === "https:";
   } catch {
     return false;
-  }
-}
-
-function normalizeOrderingUrl(value: unknown, field: string): string | null {
-  if (value === undefined || value === null || value === "") return null;
-
-  if (typeof value !== "string") {
-    throw new Error(`${field} must be a URL string`);
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  try {
-    const url = new URL(trimmed);
-
-    if (!["http:", "https:"].includes(url.protocol)) {
-      throw new Error("Invalid protocol");
-    }
-
-    return url.toString();
-  } catch {
-    throw new Error(`${field} must be a valid http:// or https:// URL`);
   }
 }
 
@@ -230,13 +205,6 @@ function getToolBoolean(
 ): boolean | undefined {
   const value = record[key];
   return typeof value === "boolean" ? value : undefined;
-}
-
-function normalizeAddressLines(value: string): string[] {
-  return value
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
 }
 
 function isSiteContentPage(page: string): page is keyof typeof contentRegistry {
@@ -2514,354 +2482,96 @@ async function executeTool(
     }
 
     case "create_location": {
-      const id = crypto.randomUUID();
-      const now = new Date().toISOString();
       const title = toSqlText(input.title)?.trim();
       if (!title) return { error: "title is required." };
-      const baseSlug = toSlug(title);
-      const rating = getToolNumber(input, "rating");
-      if (
-        rating !== undefined &&
-        rating !== null &&
-        (rating < 0 || rating > 5)
-      ) {
-        return { error: "rating must be between 0 and 5." };
-      }
-      const reviewCount = getToolInteger(input, "review_count");
-      if (
-        reviewCount !== undefined &&
-        reviewCount !== null &&
-        reviewCount < 0
-      ) {
-        return {
-          error:
-            "review_count must be a whole number greater than or equal to 0.",
-        };
-      }
-      const isPrimary = getToolBoolean(input, "is_primary") === true;
-
-      for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
-        const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
-
-        try {
-          const statements: D1PreparedStatement[] = [];
-          if (isPrimary) {
-            statements.push(
-              db
-                .prepare(
-                  `UPDATE business_locations SET is_primary = 0, updated_at = ? WHERE organization_id = ? AND site_id = ?`,
-                )
-                .bind(now, orgId, siteId),
-            );
-          }
-          statements.push(
-            db
-              .prepare(
-                `INSERT INTO business_locations (
-              id, organization_id, site_id, title, slug, city, phone, email, website_url, maps_url,
-              google_place_id, description, short_description, address, opening_hours, rating,
-              review_count, price_level, facebook_url, instagram_url, tiktok_url,
-              grab_url, uber_eats_url, foodpanda_url,
-              hero_image_asset_id, hero_video_asset_id, is_primary, status, created_at, updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
-              )
-              .bind(
-                id,
-                orgId,
-                siteId,
-                title,
-                slug,
-                toSqlText(input.city) ?? null,
-                toSqlText(input.phone) ?? null,
-                toSqlText(input.email) ?? null,
-                toSqlText(input.website_url) ?? null,
-                toSqlText(input.maps_url) ?? null,
-                toSqlText(input.google_place_id) ?? null,
-                toSqlText(input.description) ?? null,
-                toSqlText(input.short_description) ?? null,
-                (() => {
-                  const normalizedAddress = toSqlText(input.address);
-                  if (
-                    normalizedAddress === null ||
-                    normalizedAddress === undefined
-                  )
-                    return null;
-                  const addressLines = normalizeAddressLines(
-                    String(normalizedAddress),
-                  );
-                  return addressLines.length
-                    ? JSON.stringify({ addressLines })
-                    : null;
-                })(),
-                input.opening_hours
-                  ? JSON.stringify({
-                      weekdayDescriptions: String(input.opening_hours)
-                        .split("\n")
-                        .map((line) => line.trim())
-                        .filter(Boolean),
-                    })
-                  : null,
-                rating ?? null,
-                reviewCount ?? null,
-                toSqlText(input.price_level) ?? null,
-                toSqlText(input.facebook_url) ?? null,
-                toSqlText(input.instagram_url) ?? null,
-                toSqlText(input.tiktok_url) ?? null,
-                normalizeOrderingUrl(input.grab_url, "grab_url"),
-                normalizeOrderingUrl(input.uber_eats_url, "uber_eats_url"),
-                normalizeOrderingUrl(input.foodpanda_url, "foodpanda_url"),
-                toSqlText(input.hero_image_asset_id) ?? null,
-                toSqlText(input.hero_video_asset_id) ?? null,
-                isPrimary ? 1 : 0,
-                now,
-                now,
-              ),
-          );
-          if (isPrimary) {
-            statements.push(
-              db
-                .prepare(
-                  `UPDATE sites SET primary_location_id = ?, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ?`,
-                )
-                .bind(id, now, userId, siteId, orgId),
-            );
-          }
-          await db.batch(statements);
-          return { id, title, slug, status: "active" };
-        } catch (error) {
-          if (isUniqueConstraintError(error)) continue;
-          throw error;
-        }
-      }
-
-      throw new Error(
-        `Unable to allocate a unique location slug after ${MAX_SLUG_ATTEMPTS} attempts`,
-      );
+      const result = await createLocation(env, db, orgId, siteId, {
+        title,
+        city: toSqlText(input.city) ?? null,
+        neighborhood: toSqlText(input.neighborhood) ?? null,
+        phone: toSqlText(input.phone) ?? null,
+        email: toSqlText(input.email) ?? null,
+        website_url: toSqlText(input.website_url) ?? null,
+        maps_url: toSqlText(input.maps_url) ?? null,
+        google_place_id: toSqlText(input.google_place_id) ?? null,
+        description: toSqlText(input.description) ?? null,
+        short_description: toSqlText(input.short_description) ?? null,
+        address: toSqlText(input.address) ?? null,
+        opening_hours: toSqlText(input.opening_hours) ?? null,
+        rating: getToolNumber(input, "rating") ?? null,
+        review_count: getToolInteger(input, "review_count") ?? null,
+        price_level: toSqlText(input.price_level) ?? null,
+        facebook_url: toSqlText(input.facebook_url) ?? null,
+        instagram_url: toSqlText(input.instagram_url) ?? null,
+        tiktok_url: toSqlText(input.tiktok_url) ?? null,
+        grab_url: toSqlText(input.grab_url) ?? null,
+        uber_eats_url: toSqlText(input.uber_eats_url) ?? null,
+        foodpanda_url: toSqlText(input.foodpanda_url) ?? null,
+        hero_image_asset_id: toSqlText(input.hero_image_asset_id) ?? null,
+        hero_video_asset_id: toSqlText(input.hero_video_asset_id) ?? null,
+        is_primary: getToolBoolean(input, "is_primary") === true,
+      }, userId);
+      if (result.status >= 400) return result.data;
+      const location = (result.data as { location?: { id: string; title: string; slug: string; status: string } }).location;
+      return location ?? { error: "Location could not be created." };
     }
 
     case "update_location": {
-      const now = new Date().toISOString();
       const locationId = toSqlText(input.location_id);
       if (!locationId) {
         return { error: "location_id is required." };
       }
-      const location = await db
-        .prepare(
-          `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        )
-        .bind(locationId, orgId, siteId)
-        .first();
-      if (!location) return { error: "Location not found." };
+      const result = await updateLocation(db, orgId, siteId, locationId, {
+        title: toSqlText(input.title) ?? undefined,
+        slug: toSqlText(input.slug) ?? undefined,
+        city: toSqlText(input.city) ?? undefined,
+        neighborhood: toSqlText(input.neighborhood) ?? undefined,
+        phone: toSqlText(input.phone) ?? undefined,
+        email: toSqlText(input.email) ?? undefined,
+        description: toSqlText(input.description) ?? undefined,
+        short_description: toSqlText(input.short_description) ?? undefined,
+        price_level: toSqlText(input.price_level) ?? undefined,
+        facebook_url: toSqlText(input.facebook_url) ?? undefined,
+        instagram_url: toSqlText(input.instagram_url) ?? undefined,
+        tiktok_url: toSqlText(input.tiktok_url) ?? undefined,
+        grab_url: toSqlText(input.grab_url) ?? undefined,
+        uber_eats_url: toSqlText(input.uber_eats_url) ?? undefined,
+        foodpanda_url: toSqlText(input.foodpanda_url) ?? undefined,
+        website_url: toSqlText(input.website_url) ?? undefined,
+        maps_url: toSqlText(input.maps_url) ?? undefined,
+        google_place_id: toSqlText(input.google_place_id) ?? undefined,
+        hero_image_asset_id: toSqlText(input.hero_image_asset_id) ?? undefined,
+        hero_video_asset_id: toSqlText(input.hero_video_asset_id) ?? undefined,
+        address: toSqlText(input.address) ?? undefined,
+        opening_hours: toSqlText(input.opening_hours) ?? undefined,
+        rating:
+          input.rating !== undefined
+            ? (getToolNumber(input, "rating") ?? null)
+            : undefined,
+        review_count:
+          input.review_count !== undefined
+            ? (getToolInteger(input, "review_count") ?? null)
+            : undefined,
+        is_primary: getToolBoolean(input, "is_primary"),
+        status:
+          typeof input.status === "string" &&
+          ["active", "inactive", "sync_error"].includes(input.status)
+            ? (input.status as "active" | "inactive" | "sync_error")
+            : undefined,
+      }, userId);
 
-      const sets: string[] = ["updated_at = ?"];
-      const params: SqlBindValue[] = [now];
-      let slugParamIndex: number | null = null;
-      let slugBase: string | null = null;
-      const normalizedTitle = toSqlText(input.title);
-      if (normalizedTitle !== undefined) {
-        if (!normalizedTitle?.trim())
-          return { error: "title cannot be empty." };
-        sets.push("title = ?", "slug = ?");
-        slugBase = toSlug(normalizedTitle);
-        params.push(normalizedTitle, slugBase);
-        slugParamIndex = params.length - 1;
-      }
-      const simpleFields = [
-        "city",
-        "neighborhood",
-        "phone",
-        "email",
-        "description",
-        "short_description",
-        "price_level",
-        "facebook_url",
-        "instagram_url",
-        "tiktok_url",
-        "grab_url",
-        "uber_eats_url",
-        "foodpanda_url",
-        "website_url",
-        "maps_url",
-        "google_place_id",
-        "hero_image_asset_id",
-        "hero_video_asset_id",
-        "status",
-      ] as const;
-      const orderingUrlFields = new Set([
-        "grab_url",
-        "uber_eats_url",
-        "foodpanda_url",
-      ]);
-      for (const field of simpleFields) {
-        if (input[field] !== undefined) {
-          const rawValue = input[field];
-          if (
-            field === "status" &&
-            rawValue &&
-            !["active", "inactive", "sync_error"].includes(String(rawValue))
-          ) {
-            return { error: "Invalid location status." };
-          }
-          const val = orderingUrlFields.has(field)
-            ? normalizeOrderingUrl(rawValue, field)
-            : (toSqlText(rawValue as ApiValue) ?? null);
-          sets.push(`${field} = ?`);
-          params.push(val);
+      if (result.status >= 400) return result.data;
+      return (
+        (result.data as { location?: JsonSerializable }).location ?? {
+          error: "Location not found.",
         }
-      }
-      if (input.address !== undefined) {
-        const normalizedAddress = toSqlText(input.address);
-        sets.push("address = ?");
-        if (normalizedAddress === null) {
-          params.push(null);
-        } else {
-          const addressLines = normalizeAddressLines(String(normalizedAddress));
-          params.push(
-            addressLines.length ? JSON.stringify({ addressLines }) : null,
-          );
-        }
-      }
-      if (input.opening_hours !== undefined) {
-        const normalizedHours = toSqlText(input.opening_hours);
-        sets.push("opening_hours = ?");
-        params.push(
-          normalizedHours === null
-            ? null
-            : JSON.stringify({
-                weekdayDescriptions: String(normalizedHours ?? "")
-                  .split("\n")
-                  .map((line) => line.trim())
-                  .filter(Boolean),
-              }),
-        );
-      }
-      if (input.rating !== undefined) {
-        const rating = getToolNumber(input, "rating");
-        if (
-          rating === undefined ||
-          (rating !== null && (rating < 0 || rating > 5))
-        )
-          return { error: "rating must be between 0 and 5." };
-        sets.push("rating = ?");
-        params.push(rating);
-      }
-      if (input.review_count !== undefined) {
-        const reviewCount = getToolInteger(input, "review_count");
-        if (
-          reviewCount === undefined ||
-          (reviewCount !== null && reviewCount < 0)
-        )
-          return {
-            error:
-              "review_count must be a whole number greater than or equal to 0.",
-          };
-        sets.push("review_count = ?");
-        params.push(reviewCount);
-      }
-      const isPrimary = getToolBoolean(input, "is_primary");
-      if (isPrimary !== undefined) {
-        sets.push("is_primary = ?");
-        params.push(isPrimary ? 1 : 0);
-      }
-
-      const runLocationUpdate = async (boundParams: SqlBindValue[]) => {
-        const statements: D1PreparedStatement[] = [];
-        if (isPrimary === true) {
-          statements.push(
-            db
-              .prepare(
-                `UPDATE business_locations SET is_primary = 0, updated_at = ? WHERE organization_id = ? AND site_id = ?`,
-              )
-              .bind(now, orgId, siteId),
-          );
-          statements.push(
-            db
-              .prepare(
-                `UPDATE sites SET primary_location_id = ?, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ?`,
-              )
-              .bind(locationId, now, userId, siteId, orgId),
-          );
-        } else if (isPrimary === false) {
-          statements.push(
-            db
-              .prepare(
-                `UPDATE sites SET primary_location_id = NULL, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND primary_location_id = ?`,
-              )
-              .bind(now, userId, siteId, orgId, locationId),
-          );
-        }
-        statements.push(
-          db
-            .prepare(
-              `UPDATE business_locations SET ${sets.join(", ")} WHERE id = ? AND organization_id = ? AND site_id = ?`,
-            )
-            .bind(...boundParams),
-        );
-        await db.batch(statements);
-      };
-
-      if (slugBase) {
-        let updated = false;
-        for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
-          const slug = attempt === 0 ? slugBase : `${slugBase}-${attempt + 1}`;
-          const updateParams = [...params];
-          if (slugParamIndex === null) {
-            return { error: "Unable to update location slug." };
-          }
-          updateParams[slugParamIndex] = slug;
-          updateParams.push(locationId, orgId, siteId);
-
-          try {
-            await runLocationUpdate(updateParams);
-            updated = true;
-            break;
-          } catch (error) {
-            if (isUniqueConstraintError(error)) continue;
-            throw error;
-          }
-        }
-
-        if (!updated) {
-          throw new Error(
-            `Unable to allocate a unique location slug after ${MAX_SLUG_ATTEMPTS} attempts`,
-          );
-        }
-      } else {
-        params.push(locationId, orgId, siteId);
-        await runLocationUpdate(params);
-      }
-
-      const updated = await db
-        .prepare(
-          `SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
-                rating, review_count, description, short_description, status, is_primary
-         FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        )
-        .bind(locationId, orgId, siteId)
-        .first();
-      return updated ?? { error: "Location not found." };
+      );
     }
 
     case "delete_location": {
       const locationId = toSqlText(input.location_id);
       if (!locationId) return { error: "location_id is required." };
-      const result = await db
-        .prepare(
-          `DELETE FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`,
-        )
-        .bind(locationId, orgId, siteId)
-        .run();
-      if (!result.meta.changes || result.meta.changes === 0) {
-        return { error: "Location not found." };
-      }
-      await db
-        .prepare(
-          `UPDATE sites SET primary_location_id = NULL, updated_at = ?, updated_by = ? WHERE id = ? AND organization_id = ? AND primary_location_id = ?`,
-        )
-        .bind(new Date().toISOString(), userId, siteId, orgId, locationId)
-        .run();
-      return { location_id: locationId, deleted: true };
+      const result = await deleteLocation(env, db, orgId, siteId, locationId, userId);
+      return result.status >= 400 ? result.data : { location_id: locationId, deleted: true };
     }
 
     case "lookup_maps_url": {
@@ -2995,17 +2705,14 @@ async function executeTool(
     }
 
     case "reply_to_review": {
-      const now = new Date().toISOString();
-      const result = await db
-        .prepare(
-          `UPDATE reviews SET owner_reply = ?, owner_reply_at = ?, updated_at = ? WHERE id = ? AND site_id = ? AND organization_id = ?`,
-        )
-        .bind(input.reply, now, now, input.review_id, siteId, orgId)
-        .run();
-      if (!result.meta.changes || result.meta.changes === 0) {
-        return { error: "Review not found." };
-      }
-      return { review_id: input.review_id, replied: true };
+      const result = await replyToReview(
+        db,
+        orgId,
+        siteId,
+        input.review_id,
+        String(input.reply ?? ""),
+      );
+      return result.data;
     }
 
     case "get_location_media": {
@@ -3134,16 +2841,10 @@ async function executeTool(
         .bind(input.location_id, orgId, siteId)
         .first();
       if (!loc) return { error: "Location not found." };
-      const { results } = await db
-        .prepare(`SELECT * FROM location_qa WHERE location_id = ?`)
-        .bind(input.location_id)
-        .all();
-      return results ?? [];
+      return listLocationQa(db, siteId, input.location_id);
     }
 
     case "add_qa": {
-      const id = crypto.randomUUID();
-      const now = new Date().toISOString();
       const loc = await db
         .prepare(
           `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
@@ -3151,23 +2852,14 @@ async function executeTool(
         .bind(input.location_id, orgId, siteId)
         .first();
       if (!loc) return { error: "Location not found." };
-      await db
-        .prepare(
-          `INSERT INTO location_qa (id, organization_id, site_id, location_id, question, answer, is_owner_answer, source, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, 'manual', ?, ?)`,
-        )
-        .bind(
-          id,
-          orgId,
-          siteId,
-          input.location_id,
-          input.question,
-          input.answer ?? null,
-          now,
-          now,
-        )
-        .run();
-      return { id, added: true };
+      const result = await createLocationQa(db, orgId, siteId, input.location_id, {
+        question: String(input.question ?? ""),
+        answer: toSqlText(input.answer) ?? null,
+        is_owner_answer: true,
+      });
+      return result.status >= 400
+        ? result.data
+        : { ...(result.data as object), added: true };
     }
 
     case "delete_qa": {
@@ -3178,11 +2870,15 @@ async function executeTool(
         .bind(input.location_id, orgId, siteId)
         .first();
       if (!loc) return { error: "Location not found." };
-      await db
-        .prepare(`DELETE FROM location_qa WHERE id = ? AND location_id = ?`)
-        .bind(input.qa_id, input.location_id)
-        .run();
-      return { qa_id: input.qa_id, deleted: true };
+      const result = await deleteLocationQa(
+        db,
+        siteId,
+        input.location_id,
+        input.qa_id,
+      );
+      return result.status >= 400
+        ? result.data
+        : { qa_id: input.qa_id, deleted: true };
     }
 
     case "get_contact_submissions": {
@@ -3966,21 +3662,18 @@ async function executeTool(
       if (!entitlements.work_requests)
         return { error: "Work requests require a Growth plan or above." };
 
-      const id = crypto.randomUUID();
-      const now = new Date().toISOString();
-      await db
-        .prepare(
-          `
-        INSERT INTO work_requests (id, organization_id, site_id, type, title, description, priority, source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'chowbot', ?, ?)
-      `,
-        )
-        .bind(id, orgId, siteId, type, title, description, priority, now, now)
-        .run();
+      const result = await createWorkRequest(env, db, orgId, siteId, {
+        type,
+        title,
+        description,
+        priority,
+        source: "chowbot",
+      });
+      if (result.status >= 400) return result.data;
 
       return {
         created: true,
-        id,
+        id: (result.data as { id: string }).id,
         message:
           "Work request submitted to the Paul & Julia queue. They'll take care of it.",
       };

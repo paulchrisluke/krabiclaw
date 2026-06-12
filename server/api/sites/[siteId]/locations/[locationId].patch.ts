@@ -1,368 +1,106 @@
-// Update a business location for a site
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { updateLocation } from '~/server/utils/location-management'
 
-interface UpdateLocationBody {
-  title?: string
-  slug?: string
-  address?: ApiValue
-  city?: string
-  phone?: string
-  email?: string
-  hero_image_asset_id?: string
-  hero_video_asset_id?: string
-  website_url?: string
-  maps_url?: string
-  opening_hours?: ApiValue
-  special_hours?: ApiValue
-  description?: string
-  short_description?: string
-  price_level?: string
-  attributes?: ApiValue
-  facebook_url?: string
-  instagram_url?: string
-  tiktok_url?: string
-  grab_url?: string
-  uber_eats_url?: string
-  foodpanda_url?: string
-  google_place_id?: string
-  rating?: number | string | null
-  review_count?: number | string | null
-  is_primary?: boolean
-  status?: 'active' | 'inactive' | 'sync_error'
-}
-
-interface SiteRow {
-  id: string
-  organization_id: string
-}
-
-interface LocationRow {
-  id: string
-  slug: string
-  title: string
-  address: string | null
-  city: string | null
-  phone: string | null
-  hero_image_asset_id: string | null
-  hero_video_asset_id: string | null
-  website_url: string | null
-  maps_url: string | null
-  opening_hours: string | null
-  description: string | null
-  short_description: string | null
-  email: string | null
-  price_level: string | null
-  facebook_url: string | null
-  instagram_url: string | null
-  tiktok_url: string | null
-  google_place_id: string | null
-  rating: number | null
-  review_count: number | null
-  is_primary: number | boolean
-  status: string
-  created_at: string
-  updated_at: string
-}
-
-const slugify = (value: string) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-
-function optionalHttpUrl(value: unknown, field: string): string | null {
-  if (value === undefined || value === null || value === '') return null
-
-  if (typeof value !== 'string') {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `${field} must be a URL string`
-    })
-  }
-
-  try {
-    const url = new URL(value.trim())
-
-    if (!['http:', 'https:'].includes(url.protocol)) {
-      throw new Error('Invalid protocol')
+function parseLocationPayload<T>(value: T) {
+  const location = value as Record<string, unknown>
+  const parseJson = (field: string) => {
+    const raw = location[field]
+    if (typeof raw !== 'string' || !raw) return raw ?? null
+    try {
+      return JSON.parse(raw)
+    } catch {
+      return null
     }
-
-    return url.toString()
-  } catch {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `${field} must be a valid http:// or https:// URL`
-    })
   }
-}
 
-async function ensureUniqueLocationSlug(
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  slug: string
-) {
-  const duplicate = await db.prepare(`
-    SELECT id FROM business_locations
-    WHERE organization_id = ? AND site_id = ? AND slug = ? AND id != ?
-    LIMIT 1
-  `).bind(organizationId, siteId, slug, locationId).first()
-
-  return !duplicate
+  return {
+    ...location,
+    address: parseJson('address'),
+    opening_hours: parseJson('opening_hours'),
+    is_primary: Boolean(location.is_primary),
+  }
 }
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locationId = getRouterParam(event, 'locationId')
-  const body = await readBody(event) as UpdateLocationBody
-
   if (!siteId || !locationId) {
     return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
   }
 
-  if (Object.keys(body).length === 0) {
-    return jsonResponse({ error: 'No update fields provided' }, { status: 400 })
-  }
-
+  const body = await readBody<Record<string, unknown>>(event)
   const env = cloudflareEnv(event)
   const db = env.DB
-  if (!db) {
-    return jsonResponse({ error: 'Database not available' }, { status: 500 })
-  }
+  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const session = await getAuthSession(event, env)
-  if (!session?.user?.id) {
-    return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+
+  const site = await db.prepare(`
+    SELECT s.id, s.organization_id
+    FROM sites s
+    JOIN member om ON s.organization_id = om.organizationId
+    WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
+    LIMIT 1
+  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+
+  if (!site) {
+    return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
   }
 
-  try {
-    const site = await db.prepare(`
-      SELECT s.id, s.organization_id
-      FROM sites s
-      JOIN member om ON s.organization_id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
-      LIMIT 1
-    `).bind(siteId, session.user.id).first() as SiteRow | null
+  const rating = body.rating === undefined || body.rating === null || String(body.rating).trim() === ''
+    ? undefined
+    : Number(body.rating)
+  const reviewCount = body.review_count === undefined || body.review_count === null || String(body.review_count).trim() === ''
+    ? undefined
+    : Number(body.review_count)
 
-    if (!site) {
-      return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
-    }
+  const result = await updateLocation(
+    db,
+    site.organization_id,
+    siteId,
+    locationId,
+    {
+      title: typeof body.title === 'string' ? body.title : undefined,
+      slug: typeof body.slug === 'string' ? body.slug : undefined,
+      address: body.address === undefined ? undefined : body.address ? JSON.stringify(body.address) : null,
+      city: typeof body.city === 'string' ? body.city : undefined,
+      neighborhood: typeof body.neighborhood === 'string' ? body.neighborhood : undefined,
+      phone: typeof body.phone === 'string' ? body.phone : undefined,
+      email: typeof body.email === 'string' ? body.email : undefined,
+      hero_image_asset_id: typeof body.hero_image_asset_id === 'string' ? body.hero_image_asset_id : body.hero_image_asset_id === null ? null : undefined,
+      hero_video_asset_id: typeof body.hero_video_asset_id === 'string' ? body.hero_video_asset_id : body.hero_video_asset_id === null ? null : undefined,
+      website_url: typeof body.website_url === 'string' ? body.website_url : body.website_url === null ? null : undefined,
+      maps_url: typeof body.maps_url === 'string' ? body.maps_url : body.maps_url === null ? null : undefined,
+      opening_hours: body.opening_hours === undefined ? undefined : body.opening_hours ? JSON.stringify(body.opening_hours) : null,
+      description: typeof body.description === 'string' ? body.description : body.description === null ? null : undefined,
+      short_description: typeof body.short_description === 'string' ? body.short_description : body.short_description === null ? null : undefined,
+      price_level: typeof body.price_level === 'string' ? body.price_level : body.price_level === null ? null : undefined,
+      facebook_url: typeof body.facebook_url === 'string' ? body.facebook_url : body.facebook_url === null ? null : undefined,
+      instagram_url: typeof body.instagram_url === 'string' ? body.instagram_url : body.instagram_url === null ? null : undefined,
+      tiktok_url: typeof body.tiktok_url === 'string' ? body.tiktok_url : body.tiktok_url === null ? null : undefined,
+      grab_url: typeof body.grab_url === 'string' ? body.grab_url : body.grab_url === null ? null : undefined,
+      uber_eats_url: typeof body.uber_eats_url === 'string' ? body.uber_eats_url : body.uber_eats_url === null ? null : undefined,
+      foodpanda_url: typeof body.foodpanda_url === 'string' ? body.foodpanda_url : body.foodpanda_url === null ? null : undefined,
+      google_place_id: typeof body.google_place_id === 'string' ? body.google_place_id : body.google_place_id === null ? null : undefined,
+      rating,
+      review_count: reviewCount,
+      is_primary: typeof body.is_primary === 'boolean' ? body.is_primary : undefined,
+      status: body.status === 'active' || body.status === 'inactive' || body.status === 'sync_error'
+        ? body.status
+        : undefined,
+    },
+    session.user.id,
+  )
 
-    const existingLocation = await db.prepare(`
-      SELECT id
-      FROM business_locations
-      WHERE id = ? AND organization_id = ? AND site_id = ?
-      LIMIT 1
-    `).bind(locationId, site.organization_id, siteId).first()
-
-    if (!existingLocation) {
-      return jsonResponse({ error: 'Location not found' }, { status: 404 })
-    }
-
-    const setParts: string[] = []
-    const params: ApiRecord[] = []
-
-    if (body.title !== undefined) {
-      if (!body.title.trim()) {
-        return jsonResponse({ error: 'Location title is required' }, { status: 400 })
-      }
-      const titleSlug = slugify(body.title)
-      if (body.slug === undefined) {
-        if (!titleSlug) {
-          return jsonResponse({ error: 'Location slug is required' }, { status: 400 })
-        }
-        if (!(await ensureUniqueLocationSlug(db, site.organization_id, siteId, locationId, titleSlug))) {
-          return jsonResponse({ error: 'Location slug already exists' }, { status: 409 })
-        }
-      }
-      setParts.push('title = ?')
-      params.push(body.title.trim())
-      if (body.slug === undefined) {
-        setParts.push('slug = ?')
-        params.push(titleSlug)
-      }
-    }
-
-    if (body.slug !== undefined) {
-      const slug = slugify(body.slug)
-      if (!slug) {
-        return jsonResponse({ error: 'Location slug is required' }, { status: 400 })
-      }
-
-      if (!(await ensureUniqueLocationSlug(db, site.organization_id, siteId, locationId, slug))) {
-        return jsonResponse({ error: 'Location slug already exists' }, { status: 409 })
-      }
-
-      setParts.push('slug = ?')
-      params.push(slug)
-    }
-
-    if (body.address !== undefined) {
-      setParts.push('address = ?')
-      params.push(body.address ? JSON.stringify(body.address) : null)
-    }
-    if (body.city !== undefined) {
-      setParts.push('city = ?')
-      params.push(body.city || null)
-    }
-    if (body.phone !== undefined) {
-      setParts.push('phone = ?')
-      params.push(body.phone || null)
-    }
-    if (body.hero_image_asset_id !== undefined) {
-      setParts.push('hero_image_asset_id = ?')
-      params.push(body.hero_image_asset_id || null)
-    }
-    if (body.hero_video_asset_id !== undefined) {
-      setParts.push('hero_video_asset_id = ?')
-      params.push(body.hero_video_asset_id || null)
-    }
-    if (body.website_url !== undefined) {
-      setParts.push('website_url = ?')
-      params.push(body.website_url || null)
-    }
-    if (body.maps_url !== undefined) {
-      setParts.push('maps_url = ?')
-      params.push(body.maps_url || null)
-    }
-    if (body.opening_hours !== undefined) {
-      setParts.push('opening_hours = ?')
-      params.push(body.opening_hours ? JSON.stringify(body.opening_hours) : null)
-    }
-    const ratingRaw = typeof body.rating === 'string' ? body.rating.trim() : body.rating
-    if (ratingRaw !== undefined) {
-      if (ratingRaw === null || ratingRaw === '') {
-        setParts.push('rating = ?')
-        params.push(null)
-      } else {
-        const rating = Number(ratingRaw)
-        if (!Number.isFinite(rating) || rating < 0 || rating > 5) {
-          return jsonResponse({ error: 'Rating must be between 0 and 5' }, { status: 400 })
-        }
-        setParts.push('rating = ?')
-        params.push(rating)
-      }
-    }
-    const reviewCountRaw = typeof body.review_count === 'string' ? body.review_count.trim() : body.review_count
-    if (reviewCountRaw !== undefined) {
-      if (reviewCountRaw === null || reviewCountRaw === '') {
-        setParts.push('review_count = ?')
-        params.push(null)
-      } else {
-        const reviewCount = Number(reviewCountRaw)
-        if (!Number.isInteger(reviewCount) || reviewCount < 0) {
-          return jsonResponse({ error: 'Review count must be a whole number greater than or equal to 0' }, { status: 400 })
-        }
-        setParts.push('review_count = ?')
-        params.push(reviewCount)
-      }
-    }
-    if (body.status !== undefined) {
-      const allowedStatuses = ['active', 'inactive', 'sync_error']
-      if (!allowedStatuses.includes(body.status)) {
-        return jsonResponse({ error: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}` }, { status: 400 })
-      }
-      setParts.push('status = ?')
-      params.push(body.status)
-    }
-
-    const simpleFields: Array<[keyof UpdateLocationBody, string?]> = [
-      ['email'], ['description'], ['short_description'], ['price_level'],
-      ['facebook_url'], ['instagram_url'], ['tiktok_url'],
-      ['google_place_id'],
-    ]
-    for (const [field] of simpleFields) {
-      if (body[field] !== undefined) {
-        setParts.push(`${field} = ?`)
-        params.push((body[field] as string) || null)
-      }
-    }
-
-    const urlFields: Array<keyof UpdateLocationBody> = ['grab_url', 'uber_eats_url', 'foodpanda_url']
-    for (const field of urlFields) {
-      if (body[field] !== undefined) {
-        try {
-          const validated = optionalHttpUrl(body[field], field)
-          setParts.push(`${field} = ?`)
-          params.push(validated)
-        } catch (err) {
-          return jsonResponse({ error: err instanceof Error ? err.message : `Invalid ${field}` }, { status: 400 })
-        }
-      }
-    }
-    if (body.special_hours !== undefined) {
-      setParts.push('special_hours = ?')
-      params.push(body.special_hours ? JSON.stringify(body.special_hours) : null)
-    }
-    if (body.attributes !== undefined) {
-      setParts.push('attributes = ?')
-      params.push(body.attributes ? JSON.stringify(body.attributes) : null)
-    }
-
-    const now = new Date().toISOString()
-    setParts.push('updated_at = ?')
-    params.push(now)
-
-    const statements = []
-    if (body.is_primary === true) {
-      statements.push(db.prepare(`
-        UPDATE business_locations
-        SET is_primary = 0, updated_at = ?
-        WHERE organization_id = ? AND site_id = ?
-      `).bind(now, site.organization_id, siteId))
-
-      setParts.push('is_primary = 1')
-
-      statements.push(db.prepare(`
-        UPDATE sites
-        SET primary_location_id = ?, updated_at = ?, updated_by = ?
-        WHERE id = ? AND organization_id = ?
-      `).bind(locationId, now, session.user.id, siteId, site.organization_id))
-    } else if (body.is_primary === false) {
-      setParts.push('is_primary = 0')
-      statements.push(db.prepare(`
-        UPDATE sites
-        SET primary_location_id = NULL, updated_at = ?, updated_by = ?
-        WHERE id = ? AND organization_id = ? AND primary_location_id = ?
-      `).bind(now, session.user.id, siteId, site.organization_id, locationId))
-    }
-
-    statements.push(db.prepare(`
-      UPDATE business_locations
-      SET ${setParts.join(', ')}
-      WHERE id = ? AND organization_id = ? AND site_id = ?
-    `).bind(...params, locationId, site.organization_id, siteId))
-
-    await db.batch(statements)
-
-    const location = await db.prepare(`
-      SELECT id, slug, title, address, city, phone, hero_image_asset_id, hero_video_asset_id, website_url,
-             maps_url, opening_hours, description, short_description, email, price_level,
-             facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-             google_place_id, rating, review_count, is_primary, status, created_at, updated_at
-      FROM business_locations
-      WHERE id = ? AND organization_id = ? AND site_id = ?
-      LIMIT 1
-    `).bind(locationId, site.organization_id, siteId).first() as LocationRow | null
-
-    if (!location) {
-      return jsonResponse({ error: 'Updated location could not be loaded' }, { status: 500 })
-    }
-
-    return jsonResponse({
-      success: true,
-      location: {
-        ...location,
-        address: (() => { try { return location.address ? JSON.parse(location.address) : null } catch { return null } })(),
-        opening_hours: (() => { try { return location.opening_hours ? JSON.parse(location.opening_hours) : null } catch { return null } })(),
-        is_primary: Boolean(location.is_primary)
-      }
-    })
-  } catch (error) {
-    console.error('Failed to update business location:', error)
-    return jsonResponse({ error: 'Failed to update business location' }, { status: 500 })
+  if (result.status >= 400) {
+    return jsonResponse(result.data, { status: result.status })
   }
+
+  const location = (result.data as { location?: unknown }).location
+  return jsonResponse({
+    success: true,
+    location: location ? parseLocationPayload(location) : null,
+  }, { status: result.status })
 })

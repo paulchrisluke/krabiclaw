@@ -449,6 +449,7 @@ async function handleSetupMessage(text: string) {
       body: {
         restaurantName: setupRestaurantName.value,
         subdomain: requestedSubdomain,
+        vertical: 'restaurant',
       }
     })
 
