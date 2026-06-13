@@ -112,12 +112,13 @@ async function runtimeStripeSignature(
   return res.json() as Promise<{ signature: string }>
 }
 
-async function upgradeOrganizationToGrowth(
+async function upgradeOrganizationPlan(
   request: APIRequestContext,
   baseURL: string,
   organizationId: string,
+  plan: 'growth' | 'managed' | 'seo_accelerator',
 ) {
-  const eventId = `evt_mcp_growth_${Date.now()}`
+  const eventId = `evt_mcp_${plan}_${Date.now()}`
   const now = Math.floor(Date.now() / 1000)
   const payload = JSON.stringify({
     id: eventId,
@@ -130,16 +131,16 @@ async function upgradeOrganizationToGrowth(
     type: 'checkout.session.completed',
     data: {
       object: {
-        id: `cs_mcp_growth_${Date.now()}`,
+        id: `cs_mcp_${plan}_${Date.now()}`,
         object: 'checkout.session',
-        customer: `cus_mcp_growth_${Date.now()}`,
+        customer: `cus_mcp_${plan}_${Date.now()}`,
         metadata: {
           organization_id: organizationId,
-          plan: 'growth',
+          plan,
         },
         subscription: {
-          id: `sub_mcp_growth_${Date.now()}`,
-          items: { data: [{ id: `si_mcp_growth_${Date.now()}` }] },
+          id: `sub_mcp_${plan}_${Date.now()}`,
+          items: { data: [{ id: `si_mcp_${plan}_${Date.now()}` }] },
           billing_cycle_anchor: now + 86400,
         },
       },
@@ -194,7 +195,7 @@ test.describe('stateless MCP server', () => {
     await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
     const organizationId = await getSiteOrg(request, baseURL!, siteId)
-    await upgradeOrganizationToGrowth(request, baseURL!, organizationId)
+    await upgradeOrganizationPlan(request, baseURL!, organizationId, 'growth')
 
     const sitesList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -634,8 +635,14 @@ test.describe('stateless MCP server', () => {
 
   test('owner can use menus, posts, media, experiences, and Google Business workflow tools', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
+    test.skip(
+      !testEnv('STRIPE_SECRET_KEY') || !testEnv('NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'),
+      'Stripe must be configured to grant managed-service entitlements for the work-request MCP flow test.',
+    )
     const freshUserId = await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
+    const organizationId = await getSiteOrg(request, baseURL!, siteId)
+    await upgradeOrganizationPlan(request, baseURL!, organizationId, 'managed')
     const locationId = await ensureLocation(request, baseURL!, siteId)
 
     const menu = await mcpRequest(request, baseURL!, {

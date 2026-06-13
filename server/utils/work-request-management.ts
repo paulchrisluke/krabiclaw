@@ -52,7 +52,7 @@ export async function createWorkRequest(
   const source = input.source ?? 'dashboard'
 
   if (!(await hasEntitlement(env, db, organizationId, 'managed_service'))) {
-    return { status: 403, data: { error: 'Work requests require a Growth plan or above.' } }
+    return { status: 403, data: { error: 'Work requests require a managed-service plan.' } }
   }
   if (!VALID_WORK_REQUEST_TYPES.includes(type)) {
     return {
