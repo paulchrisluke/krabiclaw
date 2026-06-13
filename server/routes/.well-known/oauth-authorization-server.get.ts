@@ -1,20 +1,23 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { createAuth } from '~/server/utils/auth'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
+  const auth = createAuth(env)
   const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
 
-  // Better Auth registers getOAuthServerConfig at /.well-known/oauth-authorization-server
-  // under the auth basePath. Requesting via /api/auth/ lets Better Auth's endpoint router
-  // strip the basePath and serve the RFC 8414 metadata document.
-  const upstream = await fetch(`${baseUrl}/api/auth/.well-known/oauth-authorization-server`)
-  const body = await upstream.text()
+  // Call the oauthProvider-registered endpoint directly — no HTTP subrequest.
+  // HTTP self-calls (fetch(${baseUrl}/api/auth/...)) time out in Cloudflare Workers.
+  const api = auth.api as Record<string, (opts: { request: Request; asResponse: false }) => Promise<unknown>>
+  const metadata = await api.getOAuthServerConfig({
+    request: new Request(`${baseUrl}/.well-known/oauth-authorization-server`),
+    asResponse: false,
+  })
 
   setResponseHeaders(event, {
     'content-type': 'application/json',
     'access-control-allow-origin': '*',
     'cache-control': 'public, max-age=3600',
   })
-  setResponseStatus(event, upstream.status)
-  return body
+  return metadata
 })
