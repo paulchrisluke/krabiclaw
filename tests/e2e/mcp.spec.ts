@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
-import { devLoginHeaders, testEnv } from './test-env'
+import { devLoginHeaders } from './test-env'
 import { loginAs } from './helpers/auth'
+import { MCP_FREE_USER_ID, MCP_GROWTH_USER_ID, MCP_MANAGED_USER_ID } from './helpers/plan-fixtures'
 
 const MCP_VERSION = '2026-07-28'
 const POTTERY_HOUSE_USER_ID = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
@@ -99,65 +100,6 @@ async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string) 
   return userId
 }
 
-async function runtimeStripeSignature(
-  request: APIRequestContext,
-  baseURL: string,
-  payload: string,
-) {
-  const res = await request.post(`${baseURL}/api/dev/stripe-signature`, {
-    headers: devLoginHeaders(),
-    data: { payload },
-  })
-  expect(res.status()).toBe(200)
-  return res.json() as Promise<{ signature: string }>
-}
-
-async function upgradeOrganizationPlan(
-  request: APIRequestContext,
-  baseURL: string,
-  organizationId: string,
-  plan: 'growth' | 'managed' | 'seo_accelerator',
-) {
-  const eventId = `evt_mcp_${plan}_${Date.now()}`
-  const now = Math.floor(Date.now() / 1000)
-  const payload = JSON.stringify({
-    id: eventId,
-    object: 'event',
-    api_version: '2025-04-30.basil',
-    created: now,
-    livemode: false,
-    pending_webhooks: 1,
-    request: { id: null, idempotency_key: null },
-    type: 'checkout.session.completed',
-    data: {
-      object: {
-        id: `cs_mcp_${plan}_${Date.now()}`,
-        object: 'checkout.session',
-        customer: `cus_mcp_${plan}_${Date.now()}`,
-        metadata: {
-          organization_id: organizationId,
-          plan,
-        },
-        subscription: {
-          id: `sub_mcp_${plan}_${Date.now()}`,
-          items: { data: [{ id: `si_mcp_${plan}_${Date.now()}` }] },
-          billing_cycle_anchor: now + 86400,
-        },
-      },
-    },
-  })
-  const { signature } = await runtimeStripeSignature(request, baseURL, payload)
-  const res = await request.post(`${baseURL}/api/billing/webhook`, {
-    headers: {
-      'content-type': 'application/json',
-      'stripe-signature': signature,
-      ...(devLoginHeaders() || {}),
-    },
-    data: payload,
-  })
-  expect(res.status()).toBe(200)
-}
-
 test.describe('stateless MCP server', () => {
   test('requires auth and handles stateless discovery/list/error flow without initialize', async ({ request, baseURL }) => {
     const unauthenticated = await mcpRequest(request, baseURL!, { method: 'server/discover' })
@@ -188,14 +130,8 @@ test.describe('stateless MCP server', () => {
 
   test('owner can use content, notifications, submissions, and translation workflow tools', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
-    test.skip(
-      !testEnv('STRIPE_SECRET_KEY') || !testEnv('NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'),
-      'Stripe must be configured to grant growth entitlements for the MCP translation flow test.',
-    )
-    await loginAsFreshMcpUser(request, baseURL!)
+    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
-    const organizationId = await getSiteOrg(request, baseURL!, siteId)
-    await upgradeOrganizationPlan(request, baseURL!, organizationId, 'growth')
 
     const sitesList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -635,14 +571,8 @@ test.describe('stateless MCP server', () => {
 
   test('owner can use menus, posts, media, experiences, and Google Business workflow tools', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
-    test.skip(
-      !testEnv('STRIPE_SECRET_KEY') || !testEnv('NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'),
-      'Stripe must be configured to grant managed-service entitlements for the work-request MCP flow test.',
-    )
-    const freshUserId = await loginAsFreshMcpUser(request, baseURL!)
+    await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
-    const organizationId = await getSiteOrg(request, baseURL!, siteId)
-    await upgradeOrganizationPlan(request, baseURL!, organizationId, 'managed')
     const locationId = await ensureLocation(request, baseURL!, siteId)
 
     const menu = await mcpRequest(request, baseURL!, {
@@ -960,7 +890,7 @@ test.describe('stateless MCP server', () => {
     })
     expect(googleSync.status()).toBe(400)
 
-    await loginAs(request, baseURL!, freshUserId)
+    await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
 
     const workRequest = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -1027,7 +957,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('translation tools are entitlement-gated — free plan gets 403 and tools are hidden from list', async ({ request, baseURL }) => {
-    await loginAsFreshMcpUser(request, baseURL!)
+    await loginAs(request, baseURL!, MCP_FREE_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
 
     const toolsList = await mcpRequest(request, baseURL!, {
