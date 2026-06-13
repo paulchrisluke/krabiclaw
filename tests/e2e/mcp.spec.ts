@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
-import { devLoginHeaders } from './test-env'
+import { devLoginHeaders, testEnv } from './test-env'
 import { loginAs } from './helpers/auth'
 
 const MCP_VERSION = '2026-07-28'
@@ -99,6 +99,64 @@ async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string) 
   return userId
 }
 
+async function runtimeStripeSignature(
+  request: APIRequestContext,
+  baseURL: string,
+  payload: string,
+) {
+  const res = await request.post(`${baseURL}/api/dev/stripe-signature`, {
+    headers: devLoginHeaders(),
+    data: { payload },
+  })
+  expect(res.status()).toBe(200)
+  return res.json() as Promise<{ signature: string }>
+}
+
+async function upgradeOrganizationToGrowth(
+  request: APIRequestContext,
+  baseURL: string,
+  organizationId: string,
+) {
+  const eventId = `evt_mcp_growth_${Date.now()}`
+  const now = Math.floor(Date.now() / 1000)
+  const payload = JSON.stringify({
+    id: eventId,
+    object: 'event',
+    api_version: '2025-04-30.basil',
+    created: now,
+    livemode: false,
+    pending_webhooks: 1,
+    request: { id: null, idempotency_key: null },
+    type: 'checkout.session.completed',
+    data: {
+      object: {
+        id: `cs_mcp_growth_${Date.now()}`,
+        object: 'checkout.session',
+        customer: `cus_mcp_growth_${Date.now()}`,
+        metadata: {
+          organization_id: organizationId,
+          plan: 'growth',
+        },
+        subscription: {
+          id: `sub_mcp_growth_${Date.now()}`,
+          items: { data: [{ id: `si_mcp_growth_${Date.now()}` }] },
+          billing_cycle_anchor: now + 86400,
+        },
+      },
+    },
+  })
+  const { signature } = await runtimeStripeSignature(request, baseURL, payload)
+  const res = await request.post(`${baseURL}/api/billing/webhook`, {
+    headers: {
+      'content-type': 'application/json',
+      'stripe-signature': signature,
+      ...(devLoginHeaders() || {}),
+    },
+    data: payload,
+  })
+  expect(res.status()).toBe(200)
+}
+
 test.describe('stateless MCP server', () => {
   test('requires auth and handles stateless discovery/list/error flow without initialize', async ({ request, baseURL }) => {
     const unauthenticated = await mcpRequest(request, baseURL!, { method: 'server/discover' })
@@ -129,8 +187,14 @@ test.describe('stateless MCP server', () => {
 
   test('owner can use content, notifications, submissions, and translation workflow tools', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
+    test.skip(
+      !testEnv('STRIPE_SECRET_KEY') || !testEnv('NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'),
+      'Stripe must be configured to grant growth entitlements for the MCP translation flow test.',
+    )
     await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
+    const organizationId = await getSiteOrg(request, baseURL!, siteId)
+    await upgradeOrganizationToGrowth(request, baseURL!, organizationId)
 
     const sitesList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',

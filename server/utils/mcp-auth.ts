@@ -101,8 +101,16 @@ export async function getVisibleSiteContext(
   try {
     const site = await requireMcpSite(event, siteId, 'editor')
     return { role: site.role, organizationId: site.organizationId }
-  } catch {
-    return null
+  } catch (error) {
+    const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
+      ? Number((error as { statusCode: number }).statusCode)
+      : typeof (error as { status?: unknown })?.status === 'number'
+        ? Number((error as { status: number }).status)
+        : null
+    if (statusCode === 403 || statusCode === 404) {
+      return null
+    }
+    throw error
   }
 }
 

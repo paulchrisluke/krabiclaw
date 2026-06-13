@@ -51,7 +51,7 @@ export async function createWorkRequest(
   const priority = (input.priority as WorkRequestPriority | undefined) ?? 'normal'
   const source = input.source ?? 'dashboard'
 
-  if (!(await hasEntitlement(env, db, organizationId, 'work_requests'))) {
+  if (!(await hasEntitlement(env, db, organizationId, 'managed_service'))) {
     return { status: 403, data: { error: 'Work requests require a Growth plan or above.' } }
   }
   if (!VALID_WORK_REQUEST_TYPES.includes(type)) {

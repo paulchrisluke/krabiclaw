@@ -45,17 +45,6 @@ import {
   updateReservationSubmissionStatus,
 } from '~/server/utils/mcp-workflows'
 
-const TRANSLATION_TOOLS = new Set([
-  'get_translation_inventory',
-  'start_translation_job',
-  'list_translation_jobs',
-  'get_translation_job',
-  'run_translation_job_batch',
-  'get_translation_review_items',
-  'save_translation_review_item',
-  'publish_translations',
-])
-
 export async function executeMcpToolCall(
   event: H3Event,
   toolName: string,
@@ -93,8 +82,8 @@ export async function executeMcpToolCall(
   const site = await requireMcpSite(event, siteId, tool.minimumRole)
   const args = omit(rawArguments, ['site_id'])
 
-  if (TRANSLATION_TOOLS.has(toolName) && !(await hasEntitlement(site.env, site.db, site.organizationId, 'translation'))) {
-    throw createError({ statusCode: 403, statusMessage: 'Translation requires a Growth plan or above.' })
+  if (tool.requiredEntitlement && !(await hasEntitlement(site.env, site.db, site.organizationId, tool.requiredEntitlement))) {
+    throw createError({ statusCode: 403, statusMessage: `${humanizeEntitlement(tool.requiredEntitlement)} is not enabled for this organization.` })
   }
 
   switch (toolName) {
@@ -365,6 +354,13 @@ export async function executeMcpToolCall(
     default:
       throw mcpProtocolError(MCP_ERROR.methodNotFound, `Unhandled tool: ${toolName}`)
   }
+}
+
+function humanizeEntitlement(entitlement: string) {
+  return entitlement
+    .split('_')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 }
 
 function validateRequiredArguments(schema: Record<string, unknown>, args: Record<string, unknown>) {
