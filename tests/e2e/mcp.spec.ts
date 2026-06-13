@@ -3,6 +3,9 @@ import { devLoginHeaders } from './test-env'
 import { loginAs } from './helpers/auth'
 
 const MCP_VERSION = '2026-07-28'
+const POTTERY_HOUSE_USER_ID = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
+const POTTERY_HOUSE_SITE_ID = 'site-pottery-house'
+const POTTERY_HOUSE_LOCATION_ID = 'loc-pottery-beachfront'
 
 async function mcpRequest(
   request: APIRequestContext,
@@ -567,7 +570,7 @@ test.describe('stateless MCP server', () => {
 
   test('owner can use menus, posts, media, experiences, and Google Business workflow tools', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
-    await loginAsFreshMcpUser(request, baseURL!)
+    const freshUserId = await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
     const locationId = await ensureLocation(request, baseURL!, siteId)
 
@@ -854,10 +857,12 @@ test.describe('stateless MCP server', () => {
     })
     expect(workRequests.status()).toBe(200)
 
+    await loginAs(request, baseURL!, POTTERY_HOUSE_USER_ID)
+
     const googleConnection = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_google_business_connection',
-      args: { site_id: siteId, location_id: locationId },
+      args: { site_id: POTTERY_HOUSE_SITE_ID, location_id: POTTERY_HOUSE_LOCATION_ID },
     })
     expect(googleConnection.status()).toBe(200)
     const googleConnectionBody = await googleConnection.json() as { result: { content: Array<{ json: { connection: unknown } }> } }
@@ -866,23 +871,25 @@ test.describe('stateless MCP server', () => {
     const googleAccounts = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'list_google_business_accounts',
-      args: { site_id: siteId },
+      args: { site_id: POTTERY_HOUSE_SITE_ID },
     })
     expect(googleAccounts.status()).toBe(500)
 
     const googleAuth = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_google_business_auth_url',
-      args: { site_id: siteId, location_id: locationId },
+      args: { site_id: POTTERY_HOUSE_SITE_ID, location_id: POTTERY_HOUSE_LOCATION_ID },
     })
     expect(googleAuth.status()).toBe(500)
 
     const googleSync = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'sync_google_business_locations',
-      args: { site_id: siteId, account_id: 'accounts/missing', location_ids: ['locations/missing'] },
+      args: { site_id: POTTERY_HOUSE_SITE_ID, account_id: 'accounts/missing', location_ids: ['locations/missing'] },
     })
     expect(googleSync.status()).toBe(400)
+
+    await loginAs(request, baseURL!, freshUserId)
 
     const workRequest = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
