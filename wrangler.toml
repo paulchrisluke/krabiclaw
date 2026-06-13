@@ -26,6 +26,7 @@ zone_name = "krabiclaw.com"
 
 [vars]
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+BETTER_AUTH_URL = "https://krabiclaw.com"
 # Internal cron/API endpoints use CRON_SECRET:
 #   yarn wrangler secret put CRON_SECRET
 
