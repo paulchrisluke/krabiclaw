@@ -90,6 +90,12 @@ async function ensureLocation(request: APIRequestContext, baseURL: string, siteI
   return locationId as string
 }
 
+async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string) {
+  const userId = `e2e-mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  await loginAs(request, baseURL, userId)
+  return userId
+}
+
 test.describe('stateless MCP server', () => {
   test('requires auth and handles stateless discovery/list/error flow without initialize', async ({ request, baseURL }) => {
     const unauthenticated = await mcpRequest(request, baseURL!, { method: 'server/discover' })
@@ -120,7 +126,7 @@ test.describe('stateless MCP server', () => {
 
   test('owner can use content, notifications, submissions, and translation workflow tools', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
-    await loginAs(request, baseURL!)
+    await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
 
     const sitesList = await mcpRequest(request, baseURL!, {
@@ -561,7 +567,7 @@ test.describe('stateless MCP server', () => {
 
   test('owner can use menus, posts, media, experiences, and Google Business workflow tools', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
-    await loginAs(request, baseURL!)
+    await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
     const locationId = await ensureLocation(request, baseURL!, siteId)
 
@@ -910,7 +916,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('site-scoped tool visibility follows current roles and wrong-site calls fail', async ({ request, baseURL }) => {
-    await loginAs(request, baseURL!)
+    await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
     const organizationId = await getSiteOrg(request, baseURL!, siteId)
 
@@ -943,7 +949,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('review reply stays owner/admin only through MCP', async ({ request, baseURL }) => {
-    await loginAs(request, baseURL!)
+    await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
     const organizationId = await getSiteOrg(request, baseURL!, siteId)
 

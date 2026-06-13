@@ -37,6 +37,15 @@ export default defineEventHandler(async (event) => {
       email: string
       role?: string | null
     } | null
+    if (!user) {
+      const now = new Date().toISOString()
+      const email = `${userId}@example.test`
+      await db.prepare(`
+        INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
+        VALUES (?, ?, ?, 1, 'user', ?, ?)
+      `).bind(userId, userId, email, now, now).run()
+      user = { id: userId, email, role: 'user' }
+    }
   } else {
     const { results } = await db.prepare(`
       SELECT u.id, u.email, u.role,
