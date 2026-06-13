@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
+import { getNotificationsSettings } from '~/server/utils/mcp-workflows'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -23,7 +23,6 @@ export default defineEventHandler(async (event) => {
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const whatsappPhone = await getOrgWhatsAppPhone(db, site.organization_id, siteId)
-
-  return jsonResponse({ success: true, notifications: { whatsapp_phone: whatsappPhone } })
+  const notifications = await getNotificationsSettings(db, site.organization_id, siteId)
+  return jsonResponse({ success: true, notifications })
 })

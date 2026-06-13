@@ -1,8 +1,7 @@
-import type { D1PreparedStatement } from '@cloudflare/workers-types'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isDemoOrg } from '~/server/utils/demo'
-import { buildTranslationInventory } from '~/server/utils/translation-inventory'
+import { publishTranslationDrafts } from '~/server/utils/translation-inventory'
 import { parseScope } from '~/server/utils/translation-helpers'
 
 export default defineEventHandler(async (event) => {
@@ -34,95 +33,14 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const inventory = await buildTranslationInventory(db, site.organization_id, siteId, {
-      targetLocale: body.locale,
-      scope: parseScope(body.scope),
-      includePublished: true,
-    })
-    const drafts = inventory.items.filter(item => item.translation_status === 'draft')
-    const now = new Date().toISOString()
-
-    const statements: D1PreparedStatement[] = []
-
-    for (const item of drafts) {
-      if (item.entity_type === 'site_content') {
-        if (!item.location_id) {
-          statements.push(db.prepare(`
-            UPDATE site_content_translations
-            SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-            WHERE organization_id = ? AND site_id = ? AND locale = ? AND page = ? AND field = ?
-              AND location_id IS NULL AND source_hash = ? AND status = 'draft'
-          `).bind(now, now, session.user.id, site.organization_id, siteId, inventory.target_locale, item.page, item.field, item.source_hash))
-        } else {
-          statements.push(db.prepare(`
-            UPDATE site_content_translations
-            SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-            WHERE organization_id = ? AND site_id = ? AND location_id = ? AND locale = ? AND page = ? AND field = ?
-              AND source_hash = ? AND status = 'draft'
-          `).bind(now, now, session.user.id, site.organization_id, siteId, item.location_id, inventory.target_locale, item.page, item.field, item.source_hash))
-        }
-      } else if (item.entity_type === 'menu') {
-        statements.push(db.prepare(`
-          UPDATE menu_translations
-          SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-          WHERE organization_id = ? AND site_id = ? AND menu_id = ? AND locale = ?
-            AND source_hash = ? AND status = 'draft'
-        `).bind(now, now, session.user.id, site.organization_id, siteId, item.entity_id, inventory.target_locale, item.source_hash))
-      } else if (item.entity_type === 'menu_item') {
-        statements.push(db.prepare(`
-          UPDATE menu_item_translations
-          SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-          WHERE organization_id = ? AND site_id = ? AND menu_item_id = ? AND locale = ?
-            AND source_hash = ? AND status = 'draft'
-        `).bind(now, now, session.user.id, site.organization_id, siteId, item.entity_id, inventory.target_locale, item.source_hash))
-      } else if (item.entity_type === 'business_location') {
-        statements.push(db.prepare(`
-          UPDATE business_location_translations
-          SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-          WHERE organization_id = ? AND site_id = ? AND location_id = ? AND locale = ?
-            AND source_hash = ? AND status = 'draft'
-        `).bind(now, now, session.user.id, site.organization_id, siteId, item.entity_id, inventory.target_locale, item.source_hash))
-      } else if (item.entity_type === 'post') {
-        statements.push(db.prepare(`
-          UPDATE post_translations
-          SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-          WHERE organization_id = ? AND site_id = ? AND post_id = ? AND locale = ?
-            AND source_hash = ? AND status = 'draft'
-        `).bind(now, now, session.user.id, site.organization_id, siteId, item.entity_id, inventory.target_locale, item.source_hash))
-      }
-    }
-
-    const localeId = `locale::${site.organization_id}::${siteId}::${inventory.target_locale}`
-    statements.push(db.prepare(`
-      INSERT INTO site_locales
-        (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled, created_at, updated_at)
-      VALUES (?, ?, ?, ?, NULL, 0, 'published', 1, ?, ?)
-      ON CONFLICT(organization_id, site_id, locale) DO UPDATE SET
-        is_source = excluded.is_source,
-        status = excluded.status,
-        fallback_enabled = excluded.fallback_enabled,
-        updated_at = excluded.updated_at
-    `).bind(
-      localeId,
+    const result = await publishTranslationDrafts(
+      db,
       site.organization_id,
       siteId,
-      inventory.target_locale,
-      now,
-      now,
-    ))
-
-    const batchResults = await db.batch(statements)
-
-    const publishedCount = (batchResults || []).slice(0, drafts.length).reduce((sum, res) => sum + (res.meta?.changes ?? 0), 0)
-
-    const result = {
-      source_locale: inventory.source_locale,
-      target_locale: inventory.target_locale,
-      scope: inventory.scope,
-      published_items: publishedCount,
-      skipped_items: inventory.items.length - publishedCount,
-    }
-
+      body.locale,
+      parseScope(body.scope),
+      session.user.id,
+    )
     return jsonResponse({ success: true, result })
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Failed to publish translations' }, { status: 400 })

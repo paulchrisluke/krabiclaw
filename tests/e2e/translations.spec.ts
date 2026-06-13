@@ -47,7 +47,7 @@ test.describe('restaurant translations', () => {
       data: {
         locale: localeCode,
         label: 'Test Locale',
-        status: 'draft',
+        status: 'published',
         fallback_enabled: true,
       }
     })

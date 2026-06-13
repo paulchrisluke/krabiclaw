@@ -101,7 +101,7 @@ export default defineEventHandler(async (event) => {
 
     // Sync locations + their GBP reviews
     const { reviewsUpserted } = await syncGoogleLocations(
-      env, site.organization_id, siteId, connection.id, selectedLocations,
+      env, site.organization_id, siteId, selectedLocations,
       connection.encrypted_access_token
     )
 
