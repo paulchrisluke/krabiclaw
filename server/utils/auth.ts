@@ -92,6 +92,12 @@ export function createAuth(env: CloudflareEnv) {
           ...(env.BETTER_AUTH_URL ? [`${env.BETTER_AUTH_URL}/api/mcp`] : []),
           'https://krabiclaw.com/api/mcp',
         ],
+        // Well-known metadata is served at /api/auth/.well-known/* by the plugin's
+        // onRequest hook. Root-level /.well-known/* are covered by Nitro routes.
+        silenceWarnings: {
+          oauthAuthServerConfig: true,
+          openidConfig: true,
+        },
       }),
       organization(),
       admin({

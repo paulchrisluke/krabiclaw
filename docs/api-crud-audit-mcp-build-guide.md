@@ -717,48 +717,45 @@ The MCP registry is now a shared source of truth for tool metadata and execution
 
 ## MCP / OAuth Readiness
 
-OAuth implementation is a later PR, but these are the current prerequisites.
+**Status as of 2026-06-14: implemented on `better-auth-oauth-provider` branch, pending merge.**
 
 ### Current repo state
 
-- Better Auth is mounted at [server/api/auth/[...].ts](server/api/auth/%5B...%5D.ts).
-- The repo currently does **not** expose `/.well-known/oauth-authorization-server`, `/.well-known/openid-configuration`, or MCP protected-resource metadata routes.
-- That means the repo is **not yet ready** for ChatGPT app auth or remote MCP OAuth linkage.
+- Better Auth mounted at [server/api/auth/[...].ts](server/api/auth/%5B...%5D.ts) with `jwt()` and `oauthProvider()` plugins.
+- `POST /api/mcp` accepts both session cookies and `Authorization: Bearer <jwt>` access tokens.
+- Bearer JWT verification reads JWKS keys directly from D1, verifies with `jose`, checks issuer + audience against `/api/mcp`.
+- `/.well-known/oauth-protected-resource` served via [server/routes/.well-known/oauth-protected-resource.get.ts](server/routes/.well-known/oauth-protected-resource.get.ts).
+- `/.well-known/openid-configuration` proxied to the Better Auth plugin endpoint via [server/routes/.well-known/openid-configuration.get.ts](server/routes/.well-known/openid-configuration.get.ts).
+- `/.well-known/oauth-authorization-server` served by the `oauthProvider` plugin's `onRequest` hook at the auth basePath level.
+- OAuth consent page at [pages/oauth/consent.vue](pages/oauth/consent.vue) — shows requesting app + scopes, calls `POST /api/auth/oauth2/consent`.
+- Login page detects OAuth context via `client_id` query param and adjusts headline copy.
+- D1 tables added (migration 0009): `jwks`, `oauthClient`, `oauthAccessToken`, `oauthRefreshToken`, `oauthConsent`.
+- `BETTER_AUTH_URL` added to `wrangler.toml` for preview and staging — required for `oauthProvider` init to parse the issuer URL.
 
-### Better Auth planning target
+### Known production requirement
 
-Per Better Auth's current OAuth Provider plugin docs:
+`BETTER_AUTH_URL = "https://krabiclaw.com"` must be set as a Cloudflare Worker secret (or in `[vars]` if not sensitive) for the production Worker. Without it the oauth-provider init throws and every auth request fails.
 
-- the auth server can act as an OAuth 2.1 / OIDC-compatible provider
-- public clients are supported
-- dynamic client registration is supported
-- MCP-oriented auth support is explicitly called out
+### OAuth flow for ChatGPT remote MCP
 
-Reference:
+1. ChatGPT fetches `GET /.well-known/oauth-protected-resource` → discovers `authorization_servers: [baseUrl]`.
+2. ChatGPT fetches `GET /.well-known/openid-configuration` → gets auth/token endpoint URLs.
+3. ChatGPT initiates Authorization Code + PKCE flow → user redirected to `/login` then `/oauth/consent`.
+4. After consent, ChatGPT exchanges code for access token at `/api/auth/oauth2/token`.
+5. ChatGPT calls `POST /api/mcp` with `Authorization: Bearer <token>` — verified locally via D1 JWKS.
 
-- Better Auth OAuth Provider docs: <https://better-auth.com/docs/plugins/oauth-provider>
+### Scopes
 
-### OpenAI planning target
+| Scope | Meaning |
+|-------|---------|
+| `openid` | Verify user identity |
+| `offline_access` | Refresh token persistence |
+| `tenant` | Access the user's restaurant workspace via MCP tools |
 
-Per current OpenAI Apps SDK authentication docs, a remote MCP integration needs:
-
-- protected resource metadata on the MCP server
-- OAuth metadata from the authorization server
-- authorization-code + PKCE (`S256`)
-- correct `resource` propagation through auth and token exchange
-- token verification by the MCP server for issuer, audience, expiry, and scopes
-
-References:
+### OpenAI reference
 
 - OpenAI Apps SDK authentication: <https://developers.openai.com/apps-sdk/build/auth>
 - OpenAI Apps SDK quickstart: <https://developers.openai.com/apps-sdk/quickstart>
-
-### Default auth direction
-
-- Keep Better Auth as the user identity system.
-- Add OAuth provider capabilities later for ChatGPT/MCP linking.
-- Treat ChowBot web chat and MCP tools as two clients over the same domain layer.
-- Prefer CIMD-compatible planning first, with DCR support considered later if needed.
 
 ## Open Risks / Assumptions
 
