@@ -137,7 +137,11 @@ test('pottery house billing block includes ai credits and organization billing s
 
   assert.match(sql, /INSERT OR REPLACE INTO ai_credits/)
   assert.match(sql, /INSERT OR REPLACE INTO organization_billing/)
+  assert.match(sql, /INSERT OR REPLACE INTO organization_entitlements/)
   assert.match(sql, /billing-org-pottery-house/)
+  assert.match(sql, /managed/)
+  assert.match(sql, /managed_service/)
+  assert.match(sql, /google_business/)
 })
 
 test('pottery house compiled media assets carry Cloudflare provider metadata for uploaded assets', () => {

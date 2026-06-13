@@ -1,5 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedSiteDefinition } from './contracts.ts'
+import { renderOrganizationBillingSql, renderOrganizationEntitlementsSql } from './billing-sql.ts'
 
 function escapeSql(value: string): string {
   return value.replace(/'/g, "''")
@@ -689,8 +690,8 @@ VALUES (${sqlValue(identity.organizationId)}, ${aiCredits.balance}, ${aiCredits.
   }
 
   if (organizationBilling) {
-    parts.push(`INSERT OR REPLACE INTO organization_billing (id, organization_id, status, plan)
-VALUES (${sqlValue(`billing-${identity.organizationId}`)}, ${sqlValue(identity.organizationId)}, ${sqlValue(organizationBilling.status)}, ${sqlValue(organizationBilling.plan)});`)
+    parts.push(renderOrganizationBillingSql(identity.organizationId, organizationBilling, sqlValue))
+    parts.push(renderOrganizationEntitlementsSql(identity.organizationId, organizationBilling.plan, sqlValue))
   }
 
   return `-- BEGIN GENERATED: kikuzuki_billing

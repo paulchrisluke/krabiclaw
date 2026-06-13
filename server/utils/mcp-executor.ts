@@ -1,4 +1,5 @@
 import { createError, type H3Event } from 'h3'
+import { hasEntitlement } from '~/server/utils/billing'
 import { requestImageUpload, buildImageUrl } from '~/server/utils/cloudflare-images'
 import { createMediaAsset, activateMediaAsset, deleteMediaAsset, getMediaAsset, listMediaAssets, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
 import { createLocation, deleteLocation, updateLocation } from '~/server/utils/location-management'
@@ -80,6 +81,10 @@ export async function executeMcpToolCall(
   const siteId = requiredString(rawArguments, 'site_id')
   const site = await requireMcpSite(event, siteId, tool.minimumRole)
   const args = omit(rawArguments, ['site_id'])
+
+  if (tool.requiredEntitlement && !(await hasEntitlement(site.env, site.db, site.organizationId, tool.requiredEntitlement))) {
+    throw createError({ statusCode: 403, statusMessage: `${humanizeEntitlement(tool.requiredEntitlement)} is not enabled for this organization.` })
+  }
 
   switch (toolName) {
     case 'get_site':
@@ -349,6 +354,13 @@ export async function executeMcpToolCall(
     default:
       throw mcpProtocolError(MCP_ERROR.methodNotFound, `Unhandled tool: ${toolName}`)
   }
+}
+
+function humanizeEntitlement(entitlement: string) {
+  return entitlement
+    .split('_')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 }
 
 function validateRequiredArguments(schema: Record<string, unknown>, args: Record<string, unknown>) {

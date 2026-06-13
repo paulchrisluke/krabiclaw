@@ -1,27 +1,16 @@
 import { expect, test } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { loginAs } from './helpers/auth'
+import { ensureSite } from './helpers/ensure-site'
+import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 
 test.describe('restaurant translations', () => {
   test('owner can draft and publish a locale translation without breaking public content reads', async ({ request, baseURL }) => {
-    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
-    expect(login.status()).toBeLessThan(400)
+    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
 
     const contextResponse = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextResponse.status()).toBe(200)
     const contextBody = await contextResponse.json()
-    const siteId = contextBody.restaurant?.id
-    if (!siteId) {
-      const draftAttempt = await request.post(`${baseURL}/api/dashboard/editor/content/draft`, {
-        data: {
-          page: 'home',
-          changes: { 'hero.title': `Translation test ${Date.now()}` },
-        },
-      })
-      expect(draftAttempt.status()).toBe(400)
-      const errorBody = await draftAttempt.json()
-      expect(String(errorBody.error || '')).toContain('Restaurant workspace has not been created yet')
-      return
-    }
+    const siteId = await ensureSite(request, baseURL!, contextBody.restaurant?.id ?? null)
 
     const localeCode = `qaa-${Date.now().toString(36).slice(-8)}`
     const sourceTitle = `Translation test ${Date.now()}`
