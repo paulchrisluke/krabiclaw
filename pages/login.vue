@@ -13,8 +13,8 @@
     <!-- Form side -->
     <div class="flex items-center justify-center px-8 py-12">
         <div class="w-full max-w-105">
-          <h1 class="text-[36px] font-extrabold tracking-tight text-default m-0 mb-2">Welcome back</h1>
-          <p class="text-[15px] text-muted mb-7">Sign in to manage your restaurant.</p>
+          <h1 class="text-[36px] font-extrabold tracking-tight text-default m-0 mb-2">{{ isOAuthFlow ? 'Connect your account' : 'Welcome back' }}</h1>
+          <p class="text-[15px] text-muted mb-7">{{ isOAuthFlow ? 'Sign in to grant access to an external application.' : 'Sign in to manage your restaurant.' }}</p>
 
           <UAlert v-if="error" color="error" variant="soft" :description="error" class="mb-4" />
 
@@ -78,6 +78,9 @@ definePageMeta({ layout: 'platform', auth: false })
 useSeoMeta({
   robots: 'noindex, nofollow'
 })
+
+const route = useRoute()
+const isOAuthFlow = computed(() => !!route.query.client_id)
 
 const loading = ref(false)
 const error = ref(null)

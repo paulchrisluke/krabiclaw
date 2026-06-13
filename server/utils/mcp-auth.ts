@@ -1,4 +1,5 @@
-import { createError, getHeaders, type H3Event } from 'h3'
+import { createError, getHeader, getHeaders, type H3Event } from 'h3'
+import { createLocalJWKSet, jwtVerify } from 'jose'
 import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 
 export type McpToolRole = 'owner' | 'admin' | 'editor'
@@ -29,6 +30,11 @@ export async function requireMcpUser(event: H3Event): Promise<McpUserContext> {
     throw createError({ statusCode: 500, statusMessage: 'Database not available' })
   }
 
+  const authHeader = getHeader(event, 'authorization')
+  if (authHeader?.startsWith('Bearer ')) {
+    return verifyBearerToken(authHeader.slice(7), env, db)
+  }
+
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) {
     throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
@@ -39,6 +45,54 @@ export async function requireMcpUser(event: H3Event): Promise<McpUserContext> {
     db,
     userId: session.user.id,
     isPlatformAdmin: (session.user as { role?: string }).role === 'admin',
+  }
+}
+
+async function verifyBearerToken(token: string, env: CloudflareEnv, db: D1Database): Promise<McpUserContext> {
+  const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+
+  const { results: keys } = await db
+    .prepare('SELECT id, publicKey, alg FROM jwks ORDER BY createdAt DESC')
+    .all<{ id: string; publicKey: string; alg: string | null }>()
+
+  if (!keys?.length) {
+    throw createError({ statusCode: 401, statusMessage: 'No signing keys configured' })
+  }
+
+  const jwks = createLocalJWKSet({
+    keys: keys.map(k => ({
+      ...JSON.parse(k.publicKey),
+      kid: k.id,
+      alg: k.alg ?? 'EdDSA',
+    })),
+  })
+
+  let userId: string
+  try {
+    const { payload } = await jwtVerify(token, jwks, {
+      issuer: baseUrl,
+      audience: [`${baseUrl}/api/mcp`, 'https://krabiclaw.com/api/mcp'],
+    })
+    if (!payload.sub) throw new Error('missing sub')
+    userId = payload.sub
+  } catch {
+    throw createError({ statusCode: 401, statusMessage: 'Invalid or expired token' })
+  }
+
+  const user = await db
+    .prepare('SELECT role FROM user WHERE id = ? LIMIT 1')
+    .bind(userId)
+    .first<{ role?: string }>()
+
+  if (!user) {
+    throw createError({ statusCode: 401, statusMessage: 'User not found' })
+  }
+
+  return {
+    env,
+    db,
+    userId,
+    isPlatformAdmin: user.role === 'admin',
   }
 }
 
