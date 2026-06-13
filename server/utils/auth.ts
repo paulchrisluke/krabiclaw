@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth'
-import { admin, organization, phoneNumber } from 'better-auth/plugins'
+import { admin, jwt, organization, phoneNumber } from 'better-auth/plugins'
+import { oauthProvider } from '@better-auth/oauth-provider'
 import { D1Dialect } from '@atinux/kysely-d1'
 import { Kysely } from 'kysely'
 import { getHeaders } from 'h3'
@@ -80,6 +81,24 @@ export function createAuth(env: CloudflareEnv) {
       }
     },
     plugins: [
+      jwt(),
+      oauthProvider({
+        loginPage: '/login',
+        consentPage: '/oauth/consent',
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+        scopes: ['openid', 'offline_access', 'tenant'],
+        validAudiences: [
+          ...(env.BETTER_AUTH_URL ? [`${env.BETTER_AUTH_URL}/api/mcp`] : []),
+          'https://krabiclaw.com/api/mcp',
+        ],
+        // Well-known metadata is served at /api/auth/.well-known/* by the plugin's
+        // onRequest hook. Root-level /.well-known/* are covered by Nitro routes.
+        silenceWarnings: {
+          oauthAuthServerConfig: true,
+          openidConfig: true,
+        },
+      }),
       organization(),
       admin({
         adminRoles: ['admin'],

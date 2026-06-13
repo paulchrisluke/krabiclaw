@@ -152,8 +152,10 @@ test('demo billing block includes ai credits and organization billing state', ()
 
   assert.match(sql, /INSERT OR REPLACE INTO ai_credits/)
   assert.match(sql, /INSERT OR REPLACE INTO organization_billing/)
+  assert.match(sql, /INSERT OR REPLACE INTO organization_entitlements/)
   assert.match(sql, /127/)
   assert.match(sql, /billing-org-demo/)
+  assert.match(sql, /ent-org-demo-plan/)
 })
 
 test('demo core seed block includes generated site, locale, domain, and location rows', () => {

@@ -1,8 +1,7 @@
 // POST save draft
 import { cloudflareEnv, jsonResponse } from '../../../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { upsertDraftContent } from '../../../../../utils/content-management'
-import { getFieldDef } from '~/config/content-registry'
+import { saveContentDraft } from '~/server/utils/mcp-workflows'
 
 interface DraftRequest {
   page: string
@@ -56,107 +55,16 @@ export default defineEventHandler(async (event) => {
     }
 
     const locationId = getQuery(event).locationId as string || undefined
-    const draftIdPrefix = [
-      'draft',
-      site.organization_id,
-      siteId,
-      locationId || 'site',
-      page
-    ].join('::')
-
-    // For the location page, hero image/video are stored directly on business_locations
-    // (the source of truth the public page reads). Write them there immediately and skip
-    // the draft/publish cycle for those two fields only.
-    const isLocationHeroPage = page === 'location' && !!locationId
-    const locationHeroImageId = isLocationHeroPage && 'hero.image' in changes
-      ? (changes['hero.image'] || null)
-      : undefined
-    const locationHeroVideoId = isLocationHeroPage && 'hero.video' in changes
-      ? (changes['hero.video'] || null)
-      : undefined
-
-    if (locationHeroImageId !== undefined || locationHeroVideoId !== undefined) {
-      // Validate that non-null asset IDs belong to this organization before writing
-      if (locationHeroImageId) {
-        const asset = await db.prepare(
-          `SELECT id FROM media_assets WHERE id = ? AND organization_id = ? AND status = 'active' LIMIT 1`
-        ).bind(locationHeroImageId, site.organization_id).first()
-        if (!asset) return jsonResponse({ error: 'Invalid or unauthorized hero image asset' }, { status: 400 })
-      }
-      if (locationHeroVideoId) {
-        const asset = await db.prepare(
-          `SELECT id FROM media_assets WHERE id = ? AND organization_id = ? AND status = 'active' LIMIT 1`
-        ).bind(locationHeroVideoId, site.organization_id).first()
-        if (!asset) return jsonResponse({ error: 'Invalid or unauthorized hero video asset' }, { status: 400 })
-      }
-
-      const setClauses: string[] = []
-      const bindParams: (string | null)[] = []
-      const now = new Date().toISOString()
-      if (locationHeroImageId !== undefined) { setClauses.push('hero_image_asset_id = ?'); bindParams.push(locationHeroImageId) }
-      if (locationHeroVideoId !== undefined) { setClauses.push('hero_video_asset_id = ?'); bindParams.push(locationHeroVideoId) }
-      setClauses.push('updated_at = ?')
-      bindParams.push(now, locationId!, siteId)
-      await db.prepare(
-        `UPDATE business_locations SET ${setClauses.join(', ')} WHERE id = ? AND site_id = ?`
-      ).bind(...bindParams).run()
-    }
-
-    const heroFields = ['hero.title', 'hero.subtitle']
-    const heroChange: Record<string, string | undefined> = {}
-    let hasHeroChange = false
-
-    for (const [field, value] of Object.entries(changes)) {
-      // hero.image / hero.video on a location page were already handled above
-      if (isLocationHeroPage && (field === 'hero.image' || field === 'hero.video')) continue
-
-      if (heroFields.includes(field) || field === 'hero.image' || field === 'hero.video') {
-        hasHeroChange = true
-        if (field === 'hero.title')    heroChange.hero_title = value || undefined
-        if (field === 'hero.subtitle') heroChange.hero_subtitle = value || undefined
-        if (field === 'hero.image')    heroChange.hero_image_asset_id = value || undefined
-        if (field === 'hero.video')    heroChange.hero_video_asset_id = value || undefined
-      } else {
-        const fieldDef = getFieldDef(page, field)
-        await upsertDraftContent(db, {
-          id: `${draftIdPrefix}::${field}`,
-          organization_id: site.organization_id,
-          site_id: siteId,
-          location_id: locationId,
-          page,
-          field,
-          value,
-          type: fieldDef?.type || 'text',
-          source: 'manual',
-          content: value,
-          hero_title: undefined,
-          hero_subtitle: undefined,
-          hero_image_asset_id: undefined,
-          hero_video_asset_id: undefined
-        })
-      }
-    }
-
-    // Handle hero text field changes (title/subtitle only — image/video routed above for location pages)
-    if (hasHeroChange) {
-      await upsertDraftContent(db, {
-        id: `${draftIdPrefix}::hero`,
-        organization_id: site.organization_id,
-        site_id: siteId,
-        location_id: locationId,
-        page,
-        field: 'hero',
-        type: 'text',
-        source: 'manual',
-        content: undefined,
-        ...heroChange
-      })
-    }
+    const result = await saveContentDraft(db, site.organization_id, siteId, session.user.id, {
+      page,
+      changes,
+      location_id: locationId,
+    })
     
     return jsonResponse({
       success: true,
       message: 'Draft saved successfully',
-      changesCount: Object.keys(changes).length
+      changesCount: result.changes_count,
     })
     
   } catch (error) {

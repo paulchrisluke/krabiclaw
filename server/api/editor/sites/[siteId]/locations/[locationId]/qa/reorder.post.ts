@@ -1,6 +1,7 @@
 // POST /api/editor/sites/[siteId]/locations/[locationId]/qa/reorder
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { reorderLocationQa } from '~/server/utils/mcp-workflows'
 
 interface ReorderUpdate {
   id: string
@@ -52,49 +53,11 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Two distinct Q&A reorder updates are required' }, { status: 400 })
   }
 
-  const now = new Date().toISOString()
-  const [first, second] = updates
-  const result = await db.prepare(`
-    UPDATE location_qa
-    SET sort_order = CASE id
-        WHEN ? THEN ?
-        WHEN ? THEN ?
-        ELSE sort_order
-      END,
-      updated_at = ?
-    WHERE location_id = ?
-      AND site_id = ?
-      AND organization_id = ?
-      AND id IN (?, ?)
-      AND (
-        SELECT COUNT(*)
-        FROM location_qa
-        WHERE location_id = ?
-          AND site_id = ?
-          AND organization_id = ?
-          AND id IN (?, ?)
-      ) = 2
-  `).bind(
-    first!.id,
-    first!.sort_order,
-    second!.id,
-    second!.sort_order,
-    now,
-    locationId,
-    siteId,
-    site.organization_id,
-    first!.id,
-    second!.id,
-    locationId,
-    siteId,
-    site.organization_id,
-    first!.id,
-    second!.id
-  ).run()
-
-  if (Number(result.meta.changes ?? 0) !== 2) {
-    return jsonResponse({ error: 'Q&A reorder targets not found' }, { status: 404 })
+  try {
+    const result = await reorderLocationQa(db, site.organization_id, siteId, locationId, updates)
+    return jsonResponse(result)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Q&A reorder failed'
+    return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
   }
-
-  return jsonResponse({ updated: true })
 })

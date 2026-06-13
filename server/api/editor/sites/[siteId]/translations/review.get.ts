@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { hasEntitlement } from '~/server/utils/billing'
 import type { TranslationInventoryStatus } from '~/server/utils/translation-inventory'
 import { listTranslationReviewItems } from '~/server/utils/translation-review'
 import { parseScope } from '~/server/utils/translation-helpers'
@@ -33,6 +34,10 @@ export default defineEventHandler(async (event) => {
   `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+
+  if (!(await hasEntitlement(env, db, site.organization_id, 'translation'))) {
+    return jsonResponse({ error: 'Translation requires a Growth plan or above.' }, { status: 403 })
+  }
 
   try {
     const review = await listTranslationReviewItems(db, site.organization_id, siteId, {

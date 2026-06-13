@@ -17,6 +17,25 @@ async function hmacSign(value: string, secret: string): Promise<string> {
   return btoa(String.fromCharCode(...new Uint8Array(sig)))
 }
 
+function validateDevUserId(rawUserId: unknown) {
+  if (typeof rawUserId !== 'string') {
+    throw createError({ statusCode: 400, statusMessage: 'userId must be a string' })
+  }
+
+  const userId = rawUserId.trim()
+  if (!userId) {
+    throw createError({ statusCode: 400, statusMessage: 'userId is required' })
+  }
+  if (userId.length > 120) {
+    throw createError({ statusCode: 400, statusMessage: 'userId is too long' })
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(userId)) {
+    throw createError({ statusCode: 400, statusMessage: 'userId contains invalid characters' })
+  }
+
+  return userId
+}
+
 export default defineEventHandler(async (event) => {
   assertDevRouteAllowed(event)
   const query = getQuery(event)
@@ -28,7 +47,7 @@ export default defineEventHandler(async (event) => {
   const auth = createAuth(env)
   const ctx = await auth.$context
 
-  const userId = query.userId as string | undefined
+  const userId = query.userId !== undefined ? validateDevUserId(query.userId) : undefined
 
   let user: { id: string; email: string; role?: string | null } | null = null
   if (userId) {
@@ -37,6 +56,32 @@ export default defineEventHandler(async (event) => {
       email: string
       role?: string | null
     } | null
+    if (!user) {
+      const now = new Date().toISOString()
+      const email = `${userId}@example.test`
+      try {
+        await db.prepare(`
+          INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
+          VALUES (?, ?, ?, 1, 'user', ?, ?)
+        `).bind(userId, userId, email, now, now).run()
+        user = { id: userId, email, role: 'user' }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (/PRIMARY KEY|UNIQUE constraint failed/i.test(message)) {
+          user = await db.prepare('SELECT id, email, role FROM user WHERE id = ? LIMIT 1').bind(userId).first() as {
+            id: string
+            email: string
+            role?: string | null
+          } | null
+        } else {
+          console.error(`Dev login user auto-create failed for ${userId}: ${message}`, error)
+          throw createError({ statusCode: 500, statusMessage: 'Failed to create dev login user' })
+        }
+      }
+      if (!user) {
+        throw createError({ statusCode: 500, statusMessage: 'Failed to load dev login user' })
+      }
+    }
   } else {
     const { results } = await db.prepare(`
       SELECT u.id, u.email, u.role,

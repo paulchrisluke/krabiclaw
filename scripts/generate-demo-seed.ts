@@ -16,6 +16,32 @@ import {
   renderCompiledDemoBillingBlock,
   renderDemoExperienceSeedBlock,
 } from '../seed-definitions/demo.ts'
+import { renderOrganizationBillingSql, renderOrganizationEntitlementsSql } from '../seed-definitions/billing-sql.ts'
+
+function escapeSql(value: string) {
+  return value.replace(/'/g, "''")
+}
+
+function sqlValue(value: string | number | boolean | null) {
+  if (value === null) return 'NULL'
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NULL'
+  if (typeof value === 'boolean') return value ? '1' : '0'
+  return `'${escapeSql(value)}'`
+}
+
+function renderMcpFixtureOrg(orgId: string, userId: string, name: string, slug: string, plan: 'free' | 'growth' | 'managed') {
+  return `INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
+VALUES (${sqlValue(userId)}, ${sqlValue(name)}, ${sqlValue(`${userId}@example.test`)}, 1, 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO organization (id, name, slug, createdAt)
+VALUES (${sqlValue(orgId)}, ${sqlValue(name)}, ${sqlValue(slug)}, CURRENT_TIMESTAMP);
+
+INSERT INTO member (id, organizationId, userId, role, createdAt)
+VALUES (${sqlValue(`member-${orgId}`)}, ${sqlValue(orgId)}, ${sqlValue(userId)}, 'owner', CURRENT_TIMESTAMP);
+
+${renderOrganizationBillingSql(orgId, { status: plan === 'free' ? 'free' : 'active', plan }, sqlValue)}
+${renderOrganizationEntitlementsSql(orgId, plan, sqlValue)}`
+}
 
 const isStdout = process.argv.includes('--stdout')
 const isRemote = process.argv.includes('--remote')
@@ -50,6 +76,8 @@ DELETE FROM user WHERE id IN ('user-demo', 'user_demo', 'Nfqw39lwLZ1vejIfYJv24xv
 
 -- Guard against legacy demo scripts that may have claimed the demo domains.
 DELETE FROM site_domains WHERE domain IN ('demo.localhost', 'demo.krabiclaw.com');
+DELETE FROM organization WHERE id IN ('org-mcp-free', 'org-mcp-growth', 'org-mcp-managed');
+DELETE FROM user WHERE id IN ('user-mcp-free', 'user-mcp-growth', 'user-mcp-managed');
 
 -- Users
 INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
@@ -65,6 +93,13 @@ VALUES ('org-transfer-recipient', 'Recipient Studio', 'recipient-studio', CURREN
 
 INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt)
 VALUES ('member-transfer-recipient', 'org-transfer-recipient', 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re', 'owner', CURRENT_TIMESTAMP);
+
+-- Standard paid/free fixture orgs for MCP and editor E2E tests.
+${renderMcpFixtureOrg('org-mcp-free', 'user-mcp-free', 'MCP Free Fixture', 'mcp-free-fixture', 'free')}
+
+${renderMcpFixtureOrg('org-mcp-growth', 'user-mcp-growth', 'MCP Growth Fixture', 'mcp-growth-fixture', 'growth')}
+
+${renderMcpFixtureOrg('org-mcp-managed', 'user-mcp-managed', 'MCP Managed Fixture', 'mcp-managed-fixture', 'managed')}
 
 -- Organization
 INSERT INTO organization (id, name, slug, createdAt)

@@ -1,6 +1,7 @@
 // PATCH /api/editor/sites/[siteId]/reservation-submissions/[submissionId]
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { updateReservationSubmissionStatus } from '~/server/utils/mcp-workflows'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -29,12 +30,11 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invalid status' }, { status: 400 })
   }
 
-  const result = await db.prepare(`
-    UPDATE reservation_submissions
-    SET status = ?
-    WHERE id = ? AND site_id = ?
-  `).bind(status, submissionId, siteId).run()
-
-  if (!result.meta.changes) return jsonResponse({ error: 'Reservation not found' }, { status: 404 })
-  return jsonResponse({ updated: true })
+  try {
+    const result = await updateReservationSubmissionStatus(db, siteId, submissionId, status)
+    return jsonResponse(result)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Reservation update failed'
+    return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
+  }
 })
