@@ -6,6 +6,7 @@ export interface McpToolDefinition {
   domain: string
   minimumRole: McpToolRole
   confirmRequired: boolean
+  requiredEntitlement?: string
   inputSchema: Record<string, unknown>
 }
 
@@ -25,6 +26,7 @@ function siteTool(definition: Omit<McpToolDefinition, 'inputSchema'> & { inputSc
     domain: definition.domain,
     minimumRole: definition.minimumRole,
     confirmRequired: definition.confirmRequired,
+    requiredEntitlement: definition.requiredEntitlement,
     inputSchema: {
       type: 'object',
       properties,
@@ -144,26 +146,26 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   siteTool({ name: 'list_locales', description: 'List enabled locales.', domain: 'locales', minimumRole: 'editor', confirmRequired: false }),
   siteTool({ name: 'upsert_locale', description: 'Create or update a locale.', domain: 'locales', minimumRole: 'editor', confirmRequired: false, inputSchema: { locale: { type: 'string' } }, required: ['locale'] }),
   siteTool({ name: 'delete_locale', description: 'Delete a locale.', domain: 'locales', minimumRole: 'editor', confirmRequired: true, inputSchema: { locale: { type: 'string' } }, required: ['locale'] }),
-  siteTool({ name: 'get_translation_inventory', description: 'Estimate translation scope and cost.', domain: 'translations', minimumRole: 'editor', confirmRequired: false, inputSchema: { locale: { type: 'string' }, scope: { type: 'string' } }, required: ['locale'] }),
-  siteTool({ name: 'start_translation_job', description: 'Create a translation job and run the first batch.', domain: 'translations', minimumRole: 'admin', confirmRequired: true, inputSchema: { locale: { type: 'string' }, scope: { type: 'string' }, includePublished: { type: 'boolean' } }, required: ['locale'] }),
-  siteTool({ name: 'list_translation_jobs', description: 'List translation jobs.', domain: 'translations', minimumRole: 'editor', confirmRequired: false }),
-  siteTool({ name: 'get_translation_job', description: 'Get a translation job and its items.', domain: 'translations', minimumRole: 'editor', confirmRequired: false, inputSchema: { job_id: { type: 'string' } }, required: ['job_id'] }),
-  siteTool({ name: 'run_translation_job_batch', description: 'Run another translation job batch.', domain: 'translations', minimumRole: 'admin', confirmRequired: true, inputSchema: { job_id: { type: 'string' } }, required: ['job_id'] }),
-  siteTool({ name: 'get_translation_review_items', description: 'List translation review items.', domain: 'translations', minimumRole: 'editor', confirmRequired: false, inputSchema: { locale: { type: 'string' }, scope: { type: 'string' }, status: { type: 'string' } }, required: ['locale'] }),
-  siteTool({ name: 'save_translation_review_item', description: 'Save manual translation review edits.', domain: 'translations', minimumRole: 'editor', confirmRequired: false, inputSchema: { locale: { type: 'string' }, entity_type: { type: 'string' }, entity_id: { type: 'string' }, field: { type: 'string' }, fields: { type: 'object' }, scope: { type: 'string' } }, required: ['locale', 'entity_type', 'entity_id', 'field', 'fields'] }),
-  siteTool({ name: 'publish_translations', description: 'Publish draft translations.', domain: 'translations', minimumRole: 'admin', confirmRequired: true, inputSchema: { locale: { type: 'string' }, scope: { type: 'string' } }, required: ['locale'] }),
+  siteTool({ name: 'get_translation_inventory', description: 'Estimate translation scope and cost.', domain: 'translations', minimumRole: 'editor', confirmRequired: false, requiredEntitlement: 'translation', inputSchema: { locale: { type: 'string' }, scope: { type: 'string' } }, required: ['locale'] }),
+  siteTool({ name: 'start_translation_job', description: 'Create a translation job and run the first batch.', domain: 'translations', minimumRole: 'admin', confirmRequired: true, requiredEntitlement: 'translation', inputSchema: { locale: { type: 'string' }, scope: { type: 'string' }, includePublished: { type: 'boolean' } }, required: ['locale'] }),
+  siteTool({ name: 'list_translation_jobs', description: 'List translation jobs.', domain: 'translations', minimumRole: 'editor', confirmRequired: false, requiredEntitlement: 'translation' }),
+  siteTool({ name: 'get_translation_job', description: 'Get a translation job and its items.', domain: 'translations', minimumRole: 'editor', confirmRequired: false, requiredEntitlement: 'translation', inputSchema: { job_id: { type: 'string' } }, required: ['job_id'] }),
+  siteTool({ name: 'run_translation_job_batch', description: 'Run another translation job batch.', domain: 'translations', minimumRole: 'admin', confirmRequired: true, requiredEntitlement: 'translation', inputSchema: { job_id: { type: 'string' } }, required: ['job_id'] }),
+  siteTool({ name: 'get_translation_review_items', description: 'List translation review items.', domain: 'translations', minimumRole: 'editor', confirmRequired: false, requiredEntitlement: 'translation', inputSchema: { locale: { type: 'string' }, scope: { type: 'string' }, status: { type: 'string' } }, required: ['locale'] }),
+  siteTool({ name: 'save_translation_review_item', description: 'Save manual translation review edits.', domain: 'translations', minimumRole: 'editor', confirmRequired: false, requiredEntitlement: 'translation', inputSchema: { locale: { type: 'string' }, entity_type: { type: 'string' }, entity_id: { type: 'string' }, field: { type: 'string' }, fields: { type: 'object' }, scope: { type: 'string' } }, required: ['locale', 'entity_type', 'entity_id', 'field', 'fields'] }),
+  siteTool({ name: 'publish_translations', description: 'Publish draft translations.', domain: 'translations', minimumRole: 'admin', confirmRequired: true, requiredEntitlement: 'translation', inputSchema: { locale: { type: 'string' }, scope: { type: 'string' } }, required: ['locale'] }),
   siteTool({ name: 'list_contact_submissions', description: 'List contact submissions.', domain: 'submissions', minimumRole: 'editor', confirmRequired: false }),
   siteTool({ name: 'update_contact_submission', description: 'Update contact submission triage status.', domain: 'submissions', minimumRole: 'editor', confirmRequired: false, inputSchema: { submission_id: { type: 'string' }, status: { type: 'string' } }, required: ['submission_id', 'status'] }),
   siteTool({ name: 'list_reservation_submissions', description: 'List reservation submissions.', domain: 'submissions', minimumRole: 'editor', confirmRequired: false }),
   siteTool({ name: 'update_reservation_submission', description: 'Update reservation submission triage status.', domain: 'submissions', minimumRole: 'editor', confirmRequired: false, inputSchema: { submission_id: { type: 'string' }, status: { type: 'string' } }, required: ['submission_id', 'status'] }),
   siteTool({ name: 'get_notification_settings', description: 'Get notification settings.', domain: 'notifications', minimumRole: 'admin', confirmRequired: false }),
   siteTool({ name: 'update_notification_settings', description: 'Update notification settings.', domain: 'notifications', minimumRole: 'admin', confirmRequired: false, inputSchema: { whatsapp_phone: { type: 'string' } }, required: ['whatsapp_phone'] }),
-  siteTool({ name: 'get_google_business_connection', description: 'Get a location Google Business connection.', domain: 'google_business', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' } }, required: ['location_id'] }),
-  siteTool({ name: 'get_google_business_auth_url', description: 'Start Google Business auth for a location.', domain: 'google_business', minimumRole: 'owner', confirmRequired: false, inputSchema: { location_id: { type: 'string' } }, required: ['location_id'] }),
-  siteTool({ name: 'list_google_business_accounts', description: 'List connected Google Business accounts and locations.', domain: 'google_business', minimumRole: 'editor', confirmRequired: false }),
-  siteTool({ name: 'sync_google_business_locations', description: 'Sync selected Google Business locations into the site.', domain: 'google_business', minimumRole: 'owner', confirmRequired: true, inputSchema: { account_id: { type: 'string' }, location_ids: { type: 'array' } }, required: ['account_id', 'location_ids'] }),
-  siteTool({ name: 'list_work_requests', description: 'List managed-service work requests.', domain: 'managed_service', minimumRole: 'editor', confirmRequired: false }),
-  siteTool({ name: 'create_work_request', description: 'Create a managed-service work request.', domain: 'managed_service', minimumRole: 'editor', confirmRequired: false, inputSchema: { type: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, priority: { type: 'string' } }, required: ['type', 'title'] }),
+  siteTool({ name: 'get_google_business_connection', description: 'Get a location Google Business connection.', domain: 'google_business', minimumRole: 'editor', confirmRequired: false, requiredEntitlement: 'google_business', inputSchema: { location_id: { type: 'string' } }, required: ['location_id'] }),
+  siteTool({ name: 'get_google_business_auth_url', description: 'Start Google Business auth for a location.', domain: 'google_business', minimumRole: 'owner', confirmRequired: false, requiredEntitlement: 'google_business', inputSchema: { location_id: { type: 'string' } }, required: ['location_id'] }),
+  siteTool({ name: 'list_google_business_accounts', description: 'List connected Google Business accounts and locations.', domain: 'google_business', minimumRole: 'editor', confirmRequired: false, requiredEntitlement: 'google_business' }),
+  siteTool({ name: 'sync_google_business_locations', description: 'Sync selected Google Business locations into the site.', domain: 'google_business', minimumRole: 'owner', confirmRequired: true, requiredEntitlement: 'google_business', inputSchema: { account_id: { type: 'string' }, location_ids: { type: 'array' } }, required: ['account_id', 'location_ids'] }),
+  siteTool({ name: 'list_work_requests', description: 'List managed-service work requests.', domain: 'managed_service', minimumRole: 'editor', confirmRequired: false, requiredEntitlement: 'work_requests' }),
+  siteTool({ name: 'create_work_request', description: 'Create a managed-service work request.', domain: 'managed_service', minimumRole: 'editor', confirmRequired: false, requiredEntitlement: 'work_requests', inputSchema: { type: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, priority: { type: 'string' } }, required: ['type', 'title'] }),
 ].sort((a, b) => a.name.localeCompare(b.name))
 
 export function getMcpTool(name: string) {

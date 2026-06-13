@@ -1,7 +1,7 @@
 import { createError } from 'h3'
 import { asMcpError, mcpFailure, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, protocolCache, readMcpRequest } from '~/server/utils/mcp-protocol'
 import { executeMcpToolCall } from '~/server/utils/mcp-executor'
-import { getVisibleRoleForSite, requireMcpUser, roleSatisfies } from '~/server/utils/mcp-auth'
+import { getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies } from '~/server/utils/mcp-auth'
 import { MCP_TOOLS } from '~/server/utils/mcp-tools'
 
 export default defineEventHandler(async (event) => {
@@ -25,15 +25,24 @@ export default defineEventHandler(async (event) => {
     }
 
     if (request.method === 'tools/list') {
-      await requireMcpUser(event)
+      const user = await requireMcpUser(event)
       const siteId = typeof request.params?.site_id === 'string' ? request.params.site_id : null
-      const visibleRole = siteId ? await getVisibleRoleForSite(event, siteId) : null
+      const siteCtx = siteId ? await getVisibleSiteContext(event, siteId) : null
+
+      const entitlementKeys = siteCtx
+        ? [...new Set(MCP_TOOLS.map(t => t.requiredEntitlement).filter(Boolean) as string[])]
+        : []
+      const activeEntitlements = siteCtx
+        ? await getActiveEntitlements(user.db, siteCtx.organizationId, entitlementKeys)
+        : new Set<string>()
 
       const tools = MCP_TOOLS
         .filter((tool) => {
           if (tool.name === 'list_sites' || tool.name === 'create_site') return true
-          if (!siteId || !visibleRole) return false
-          return roleSatisfies(visibleRole, tool.minimumRole)
+          if (!siteId || !siteCtx) return false
+          if (!roleSatisfies(siteCtx.role, tool.minimumRole)) return false
+          if (tool.requiredEntitlement && !activeEntitlements.has(tool.requiredEntitlement)) return false
+          return true
         })
         .map((tool) => ({
           name: tool.name,

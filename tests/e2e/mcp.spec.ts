@@ -955,6 +955,76 @@ test.describe('stateless MCP server', () => {
     expect(wrongSite.status()).toBe(404)
   })
 
+  test('translation tools are entitlement-gated — free plan gets 403 and tools are hidden from list', async ({ request, baseURL }) => {
+    await loginAsFreshMcpUser(request, baseURL!)
+    const siteId = await ensureSite(request, baseURL!)
+
+    const toolsList = await mcpRequest(request, baseURL!, {
+      method: 'tools/list',
+      siteId,
+    })
+    expect(toolsList.status()).toBe(200)
+    const toolsBody = await toolsList.json() as { result: { tools: Array<{ name: string }> } }
+    const toolNames = toolsBody.result.tools.map(t => t.name)
+    expect(toolNames).not.toContain('get_translation_inventory')
+    expect(toolNames).not.toContain('start_translation_job')
+    expect(toolNames).not.toContain('publish_translations')
+    expect(toolNames).not.toContain('list_google_business_accounts')
+    expect(toolNames).not.toContain('sync_google_business_locations')
+    expect(toolNames).not.toContain('list_work_requests')
+    expect(toolNames).not.toContain('create_work_request')
+
+    const inventoryCall = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'get_translation_inventory',
+      args: { site_id: siteId, locale: 'th' },
+    })
+    expect(inventoryCall.status()).toBe(403)
+
+    const startJobCall = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'start_translation_job',
+      args: { site_id: siteId, locale: 'th' },
+    })
+    expect(startJobCall.status()).toBe(403)
+
+    const gbConnectionCall = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'get_google_business_connection',
+      args: { site_id: siteId, location_id: 'loc-missing' },
+    })
+    expect(gbConnectionCall.status()).toBe(403)
+  })
+
+  test('cross-tenant isolation — owner of site A cannot read or mutate site B through MCP', async ({ request, baseURL }) => {
+    await loginAsFreshMcpUser(request, baseURL!)
+    const siteA = await ensureSite(request, baseURL!)
+
+    await loginAsFreshMcpUser(request, baseURL!)
+    const siteB = await ensureSite(request, baseURL!)
+
+    const crossRead = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'get_site',
+      args: { site_id: siteA },
+    })
+    expect(crossRead.status()).toBe(404)
+
+    const crossMutate = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'update_site_settings',
+      args: { site_id: siteA, brand_description: 'cross-tenant injection attempt' },
+    })
+    expect(crossMutate.status()).toBe(404)
+
+    const ownSiteRead = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'get_site',
+      args: { site_id: siteB },
+    })
+    expect(ownSiteRead.status()).toBe(200)
+  })
+
   test('review reply stays owner/admin only through MCP', async ({ request, baseURL }) => {
     await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)

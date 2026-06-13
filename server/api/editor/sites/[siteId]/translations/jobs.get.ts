@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { hasEntitlement } from '~/server/utils/billing'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -20,6 +21,10 @@ export default defineEventHandler(async (event) => {
   `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+
+  if (!(await hasEntitlement(env, db, site.organization_id, 'translation'))) {
+    return jsonResponse({ error: 'Translation requires a Growth plan or above.' }, { status: 403 })
+  }
 
   const { results } = await db.prepare(`
     SELECT id, source_locale, target_locale, scope, status, total_items, total_chars,

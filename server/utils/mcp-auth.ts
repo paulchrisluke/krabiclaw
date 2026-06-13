@@ -94,16 +94,26 @@ export async function requireMcpSite(
   }
 }
 
-export async function getVisibleRoleForSite(
+export async function getVisibleSiteContext(
   event: H3Event,
   siteId: string,
-): Promise<McpToolRole | null> {
+): Promise<{ role: McpToolRole; organizationId: string } | null> {
   try {
     const site = await requireMcpSite(event, siteId, 'editor')
-    return site.role
+    return { role: site.role, organizationId: site.organizationId }
   } catch {
     return null
   }
+}
+
+export async function getActiveEntitlements(db: D1Database, organizationId: string, keys: string[]): Promise<Set<string>> {
+  if (!keys.length) return new Set()
+  const placeholders = keys.map(() => '?').join(', ')
+  const { results } = await db.prepare(`
+    SELECT key FROM organization_entitlements
+    WHERE organization_id = ? AND key IN (${placeholders}) AND value = 'true'
+  `).bind(organizationId, ...keys).all<{ key: string }>()
+  return new Set((results ?? []).map(r => r.key))
 }
 
 export function roleSatisfies(actual: McpToolRole, minimum: McpToolRole) {
