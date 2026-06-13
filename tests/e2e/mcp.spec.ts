@@ -853,7 +853,9 @@ test.describe('stateless MCP server', () => {
       toolName: 'get_google_business_connection',
       args: { site_id: siteId, location_id: locationId },
     })
-    expect(googleConnection.status()).toBe(500)
+    expect(googleConnection.status()).toBe(200)
+    const googleConnectionBody = await googleConnection.json() as { result: { content: Array<{ json: { connection: unknown } }> } }
+    expect(googleConnectionBody.result.content[0]?.json.connection ?? null).toBeNull()
 
     const googleAccounts = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
