@@ -82,7 +82,7 @@ test.describe('review contract regressions', () => {
     const ownerBody = await ownerReplyRes.json() as { updated: boolean }
     expect(ownerBody.updated).toBe(true)
 
-    // Create an editor user in the pottery house org
+    // Create an editor user in the demo org / DEMO_ORG_ID
     const editorRes = await request.post(`${baseURL}/api/dev/test-member`, {
       data: { role: 'editor', organizationId: DEMO_ORG_ID },
       headers: devLoginHeaders(),
