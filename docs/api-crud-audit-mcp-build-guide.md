@@ -726,23 +726,26 @@ The MCP registry is now a shared source of truth for tool metadata and execution
 - Bearer JWT verification reads JWKS keys directly from D1, verifies with `jose`, checks issuer + audience against `/api/mcp`.
 - `/.well-known/oauth-protected-resource` served via [server/routes/.well-known/oauth-protected-resource.get.ts](server/routes/.well-known/oauth-protected-resource.get.ts).
 - `/.well-known/openid-configuration` proxied to the Better Auth plugin endpoint via [server/routes/.well-known/openid-configuration.get.ts](server/routes/.well-known/openid-configuration.get.ts).
-- `/.well-known/oauth-authorization-server` served by the `oauthProvider` plugin's `onRequest` hook at the auth basePath level.
+- `/.well-known/oauth-authorization-server` proxied to the Better Auth plugin endpoint via [server/routes/.well-known/oauth-authorization-server.get.ts](server/routes/.well-known/oauth-authorization-server.get.ts). Note: the `oauthProvider` plugin's `onRequest` hook only intercepts requests that go through `auth.handler()` (i.e., `/api/auth/**`); requests at root `/.well-known/*` must be served by Nitro routes that proxy to `/api/auth/.well-known/*`.
 - OAuth consent page at [pages/oauth/consent.vue](pages/oauth/consent.vue) — shows requesting app + scopes, calls `POST /api/auth/oauth2/consent`.
 - Login page detects OAuth context via `client_id` query param and adjusts headline copy.
 - D1 tables added (migration 0009): `jwks`, `oauthClient`, `oauthAccessToken`, `oauthRefreshToken`, `oauthConsent`.
-- `BETTER_AUTH_URL` added to `wrangler.toml` for preview and staging — required for `oauthProvider` init to parse the issuer URL.
+- `BETTER_AUTH_URL` added to `wrangler.toml` for `[vars]`, `[env.preview.vars]`, and `[env.staging.vars]` — required for `oauthProvider` init to parse the issuer URL without crashing.
+- `POST /api/mcp` returns `WWW-Authenticate: Bearer realm="...", resource_metadata="..."` on 401 so ChatGPT can discover which OAuth server to use.
 
 ### Known production requirement
 
-`BETTER_AUTH_URL = "https://krabiclaw.com"` must be set as a Cloudflare Worker secret (or in `[vars]` if not sensitive) for the production Worker. Without it the oauth-provider init throws and every auth request fails.
+`BETTER_AUTH_URL = "https://krabiclaw.com"` is set in `wrangler.toml [vars]`. Without it the oauth-provider init throws and every auth request fails.
 
 ### OAuth flow for ChatGPT remote MCP
 
-1. ChatGPT fetches `GET /.well-known/oauth-protected-resource` → discovers `authorization_servers: [baseUrl]`.
-2. ChatGPT fetches `GET /.well-known/openid-configuration` → gets auth/token endpoint URLs.
-3. ChatGPT initiates Authorization Code + PKCE flow → user redirected to `/login` then `/oauth/consent`.
-4. After consent, ChatGPT exchanges code for access token at `/api/auth/oauth2/token`.
-5. ChatGPT calls `POST /api/mcp` with `Authorization: Bearer <token>` — verified locally via D1 JWKS.
+1. ChatGPT calls `POST /api/mcp` with no auth → gets 401 with `WWW-Authenticate: Bearer resource_metadata="https://krabiclaw.com/.well-known/oauth-protected-resource"`.
+2. ChatGPT fetches `GET /.well-known/oauth-protected-resource` → discovers `authorization_servers: ["https://krabiclaw.com"]`.
+3. ChatGPT fetches `GET /.well-known/oauth-authorization-server` → gets auth/token/DCR endpoint URLs.
+4. ChatGPT registers itself via DCR: `POST /api/auth/oauth2/register`.
+5. ChatGPT initiates Authorization Code + PKCE flow → user redirected to `/login` then `/oauth/consent`.
+6. After consent, ChatGPT exchanges code for access token at `/api/auth/oauth2/token`.
+7. ChatGPT calls `POST /api/mcp` with `Authorization: Bearer <token>` — verified locally via D1 JWKS.
 
 ### Scopes
 
