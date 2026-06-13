@@ -9,8 +9,8 @@ export default defineEventHandler(async (event) => {
   // Call the oauthProvider-registered endpoint directly — no HTTP subrequest.
   // HTTP self-calls (fetch(${baseUrl}/api/auth/...)) time out in Cloudflare Workers.
   const api = auth.api as Record<string, (opts: { request: Request; asResponse: false }) => Promise<unknown>>
-  const metadata = await api.getOpenIdConfig({
-    request: new Request(`${baseUrl}/.well-known/openid-configuration`),
+  const metadata = await api.getOAuthServerConfig({
+    request: new Request(`${baseUrl}/.well-known/oauth-authorization-server`),
     asResponse: false,
   })
 

@@ -1,4 +1,4 @@
-import { createError } from 'h3'
+import { createError, setResponseHeader } from 'h3'
 import { asMcpError, mcpFailure, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, protocolCache, readMcpRequest } from '~/server/utils/mcp-protocol'
 import { executeMcpToolCall } from '~/server/utils/mcp-executor'
 import { getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies } from '~/server/utils/mcp-auth'
@@ -83,6 +83,12 @@ export default defineEventHandler(async (event) => {
       : mcpError.code === MCP_ERROR.parse ? 400
       : 500)
     setResponseStatus(event, status)
+    if (status === 401) {
+      const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
+      const baseUrl = (cfEnv?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+      setResponseHeader(event, 'WWW-Authenticate',
+        `Bearer realm="${baseUrl}/api/mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`)
+    }
     return mcpFailure(requestId, mcpError)
   }
 })
