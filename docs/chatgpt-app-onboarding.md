@@ -18,29 +18,54 @@ This is the real architecture — not a separate web app deployment.
 
 ### The rendering model
 
-1. A tool returns a response with three parts:
-   - `structuredContent` — the data (e.g., `{ sites: [...] }`)
+1. A **render tool** returns a response with three parts:
+   - `structuredContent` — the data object (e.g., `{ sites: [...] }`)
    - `content` — text fallback for clients that don't support widgets
-   - `_meta["openai/outputTemplate"]` — URI pointing to the widget
+   - `metadata._meta["openai/outputTemplate"]` — `ui://` URI pointing to the registered widget
 
-2. ChatGPT fetches the widget bundle from that URI and runs it in a sandboxed **iframe**.
+2. ChatGPT loads the widget (a compiled React bundle) and runs it in a sandboxed **iframe**.
 
 3. The iframe communicates with ChatGPT via **JSON-RPC 2.0 over `postMessage`** (the MCP Apps bridge).
 
-4. The widget can call tools back (`tools/call` via bridge) and, critically, inject data into
-   the conversation context via `ui/update-model-context`.
+4. The widget receives data via `ui/notifications/tool-result` and can call back to ChatGPT via:
+   - `tools/call` — invoke an MCP tool from a UI interaction
+   - `ui/message` — append a follow-up message to the conversation
+   - `ui/update-model-context` — inject state into the model's context (how we store site_id)
 
 ### Where the widget lives
 
-The widget is a **compiled React bundle** (esbuild → single `.js` file) registered as an **MCP resource**
-on our existing server. ChatGPT requests it the same way it requests any MCP resource. No separate
-deployment needed — it's served from the same Cloudflare Worker that hosts `/api/mcp`.
+The widget is a **compiled React bundle** (esbuild → single ESM `.js` file) registered as an **MCP resource**
+on our existing server. The `ui://site-picker` URI is resolved by ChatGPT against our server's registered
+resources — no separate deployment needed. It's served from the same Cloudflare Worker as `/api/mcp`.
+
+### Build command
+
+```bash
+esbuild widgets/site-picker/index.tsx --bundle --format=esm --outfile=widgets/dist/site-picker.js
+```
 
 ### Tool pattern: data tools vs render tools
 
-Separate the concerns:
-- **Data tool** — fetches and processes (e.g., `list_sites`) — text only, no widget
-- **Render tool** — fetches data, wraps it in `structuredContent`, returns template reference
+The recommended pattern separates concerns so the model can refine data before rendering:
+
+- **Data tool** (`list_sites`) — fetches/processes, returns text + `structuredContent`, no template
+- **Render tool** (`show_site_picker`) — receives data (or fetches it), returns `structuredContent` + template URI
+
+This lets ChatGPT optionally call `list_sites` first, then pass filtered results to `show_site_picker`.
+
+### Available pre-built component patterns (from OpenAI Apps SDK plan docs)
+
+OpenAI documents five canonical UI patterns in the apps-sdk-ui component library:
+
+| Component | Purpose |
+|-----------|---------|
+| **List** | Dynamic collections with empty-state handling — **this is our site picker** |
+| **Map** | Geographic data with marker clustering |
+| **Album** | Media grids with fullscreen transitions |
+| **Carousel** | Featured content with swipe gesture support |
+| **Shop** | Product browsing with checkout affordances |
+
+The site picker is a **List** with a selection action and empty state.
 
 ---
 
@@ -48,8 +73,9 @@ Separate the concerns:
 
 ### New render tool: `show_site_picker`
 
-Added to `mcp-tools.ts` and `mcp-executor.ts`. Internally calls `list_sites` workflow and
-returns the result as structured data with the widget template reference.
+Added to `mcp-tools.ts` and `mcp-executor.ts`. Internally calls `listSitesForUser` workflow
+(already exists in `mcp-workflows.ts`) and returns the result as structured data with the widget
+template reference.
 
 **Tool response shape:**
 
@@ -57,22 +83,36 @@ returns the result as structured data with the widget template reference.
 {
   "structuredContent": {
     "sites": [
-      { "id": "site-pottery-house-krabi", "name": "Pottery House Krabi", "subdomain": "pottery-house", "status": "live" }
+      { "id": "site-pottery-house-krabi", "name": "Pottery House Krabi", "subdomain": "pottery-house", "status": "live", "publicUrl": "https://pottery-house.krabiclaw.com" }
     ]
   },
-  "content": [{ "type": "text", "text": "You have 1 site: Pottery House Krabi. Select it to continue." }],
-  "_meta": {
-    "openai/outputTemplate": "mcp://resources/ui/site-picker"
+  "content": [{ "type": "text", "text": "You have 1 site: Pottery House Krabi. Working with it now." }],
+  "metadata": {
+    "_meta": {
+      "openai/outputTemplate": "ui://site-picker"
+    }
   }
 }
 ```
 
 ### MCP resource: the widget bundle
 
-Register a resource at `mcp://resources/ui/site-picker` (or served via a `/api/mcp/widgets/site-picker.js`
-endpoint) that returns the compiled React bundle.
+Register the compiled bundle as a resource named `ui://site-picker`. ChatGPT resolves this URI
+against our server's resource list. The bundle is served via a dedicated endpoint:
 
-`resources/list` currently returns `[]`. We update it to advertise the widget resources.
+```
+GET /api/mcp/widgets/site-picker.js   → returns widgets/dist/site-picker.js (ESM)
+```
+
+`resources/list` currently returns `[]`. We update it to advertise:
+
+```json
+{
+  "resources": [
+    { "uri": "ui://site-picker", "name": "Site Picker Widget", "mimeType": "application/javascript" }
+  ]
+}
+```
 
 ### Widget behavior
 
@@ -93,14 +133,38 @@ Multiple sites  → render clickable list
 
 ### Context injection
 
-After site selection, the widget calls `ui/update-model-context`:
+After site selection, the widget calls `ui/update-model-context` via the postMessage bridge:
 
 ```js
-window.openai.updateModelContext({ site_id: selectedSiteId, site_name: selectedSiteName })
+// Standard MCP Apps bridge call
+window.parent.postMessage({
+  jsonrpc: '2.0',
+  method: 'ui/update-model-context',
+  params: { context: { site_id: selectedSiteId, site_name: selectedSiteName } }
+}, '*')
+```
+
+Or via `window.openai` if the ChatGPT host provides it (it's optional):
+
+```js
+// ChatGPT-specific extension (available in ChatGPT, optional in other hosts)
+window.openai?.updateModelContext?.({ site_id: selectedSiteId, site_name: selectedSiteName })
 ```
 
 From that point in the conversation, ChatGPT has `site_id` in context and passes it to subsequent
 tool calls automatically. No server-side session storage needed.
+
+### Widget state (within-session only)
+
+To preserve selection state across tool calls within the same widget session (e.g., which row
+is highlighted before the user confirms):
+
+```js
+window.openai?.setWidgetState?.({ selectedSiteId })
+```
+
+This is local to the iframe — not model-visible. Use `ui/update-model-context` for anything the
+model should know about.
 
 ---
 
