@@ -70,8 +70,7 @@ async function verifyBearerToken(token: string, env: CloudflareEnv, db: D1Databa
   let userId: string
   try {
     const { payload } = await jwtVerify(token, jwks, {
-      // Better Auth sets iss = baseURL + basePath (e.g. https://krabiclaw.com/api/auth)
-      issuer: `${baseUrl}/api/auth`,
+      issuer: baseUrl,
       audience: [`${baseUrl}/api/mcp`, 'https://krabiclaw.com/api/mcp'],
     })
     if (!payload.sub) throw new Error('missing sub')
