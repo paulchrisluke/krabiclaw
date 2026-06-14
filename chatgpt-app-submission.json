@@ -1,0 +1,201 @@
+{
+  "generated_at": "2026-06-14",
+  "schema_note": "Best-effort draft generated from the repo and OpenAI public submission guidance. Review every field before upload because the exact import schema for chatgpt-app-submission.json is not published in the docs available here.",
+  "app": {
+    "name": "KrabiClaw",
+    "company_name": "KrabiClaw",
+    "website_url": "https://krabiclaw.com",
+    "description_short": "Manage your KrabiClaw business website and daily operations directly from ChatGPT.",
+    "description_long": "KrabiClaw empowers business owners to seamlessly manage their hosted websites and daily operations directly through ChatGPT. Authenticated users can update menus, draft blog posts, upload media, translate content, moderate reviews, and triage customer contacts all within their secure KrabiClaw workspace. Note: An active KrabiClaw account is required to use this integration.",
+    "logo_url": "https://krabiclaw.com/krabi-claw-logo.png",
+    "icon_url": "https://krabiclaw.com/favicon-96x96.png",
+    "support_email": "support@krabiclaw.com",
+    "contact_email": "hello@krabiclaw.com"
+  },
+  "distribution": {
+    "chatgpt_directory": true,
+    "codex_plugin_directory": true,
+    "primary_surface": "Remote MCP server",
+    "mcp_server_url": "https://krabiclaw.com/api/mcp"
+  },
+  "legal": {
+    "privacy_policy_url": "https://krabiclaw.com/privacy",
+    "terms_of_service_url": "https://krabiclaw.com/terms",
+    "privacy_contact_email": "privacy@krabiclaw.com",
+    "legal_contact_email": "legal@krabiclaw.com"
+  },
+  "authentication": {
+    "required": true,
+    "type": "OAuth 2.0 Authorization Code with PKCE and Dynamic Client Registration",
+    "resource_server_url": "https://krabiclaw.com/api/mcp",
+    "issuer": "https://krabiclaw.com",
+    "oauth_protected_resource_url": "https://krabiclaw.com/.well-known/oauth-protected-resource",
+    "openid_configuration_url": "https://krabiclaw.com/.well-known/openid-configuration",
+    "oauth_authorization_server_url": "https://krabiclaw.com/.well-known/oauth-authorization-server",
+    "authorization_endpoint": "https://krabiclaw.com/api/auth/oauth2/authorize",
+    "token_endpoint": "https://krabiclaw.com/api/auth/oauth2/token",
+    "dynamic_client_registration_endpoint": "https://krabiclaw.com/api/auth/oauth2/register",
+    "jwks_uri": "https://krabiclaw.com/api/auth/oauth2/jwks",
+    "scopes": [
+      {
+        "name": "openid",
+        "description": "Verify user identity."
+      },
+      {
+        "name": "offline_access",
+        "description": "Allow refresh token persistence."
+      },
+      {
+        "name": "tenant",
+        "description": "Access the user's KrabiClaw workspace via MCP tools."
+      }
+    ],
+    "pkce_code_challenge_methods_supported": [
+      "S256"
+    ],
+    "discovery_flow_summary": [
+      "Unauthenticated POST https://krabiclaw.com/api/mcp returns 401 with WWW-Authenticate Bearer resource_metadata.",
+      "ChatGPT can discover the authorization server from /.well-known/oauth-protected-resource.",
+      "The authorization server metadata is available from /.well-known/oauth-authorization-server.",
+      "OpenID metadata is available from /.well-known/openid-configuration.",
+      "OAuth consent is handled on https://krabiclaw.com/oauth/consent after login."
+    ]
+  },
+  "capabilities": {
+    "tool_count": 76,
+    "tool_domains": {
+      "sites": 5,
+      "locations": 5,
+      "menus": 11,
+      "posts": 6,
+      "media": 6,
+      "content": 6,
+      "qa": 5,
+      "reviews": 2,
+      "experiences": 7,
+      "locales": 3,
+      "translations": 8,
+      "submissions": 4,
+      "notifications": 2,
+      "google_business": 4,
+      "managed_service": 2
+    },
+    "core_use_cases": [
+      "List and manage a user's KrabiClaw sites and site settings.",
+      "Create, update, and organize locations, menus, menu items, and posts.",
+      "Upload and manage media assets and extract draft menus from images or PDFs.",
+      "Read, draft, publish, discard, and delete site content fields.",
+      "Manage location Q&A, view reviews, and write owner replies.",
+      "Manage experiences and booking statuses.",
+      "Estimate, run, review, and publish translation jobs.",
+      "Triage contact and reservation submissions.",
+      "View and update notification settings.",
+      "Connect and sync eligible Google Business data.",
+      "Create and review managed-service work requests."
+    ],
+    "user_value_summary": "KrabiClaw helps business owners and their staff operate their KrabiClaw-hosted website content and location data conversationally from ChatGPT without leaving the workspace context."
+  },
+  "tool_behavior": {
+    "read_operations_present": true,
+    "write_operations_present": true,
+    "destructive_operations_present": true,
+    "confirmation_model": "The MCP registry marks tools with confirmRequired metadata, and destructive actions such as deletes and publishing actions are flagged in tool annotations for client confirmation behavior.",
+    "safety_scope_summary": [
+      "The tool surface is tenant-safe and excludes admin-global, platform-content, and internal-only operations.",
+      "Site-scoped tools require a visible site context and are filtered by role and active entitlements.",
+      "Some tools require elevated roles such as admin or owner.",
+      "Entitlement-gated domains include translations, Google Business, and managed service features."
+    ]
+  },
+  "data_handling": {
+    "user_related_data_categories": [
+      "Account Data (Name, email address, authentication credentials)",
+      "Service Data (Uploaded content and website data)",
+      "Payment Data (Processed securely via Stripe)",
+      "Usage Data (IP addresses, browser types, interaction metrics)",
+      "Cookies (Essential cookies for authentication and platform functionality)",
+      "Workspace operational data returned by tools, such as site content, submissions, reviews, bookings, media metadata, and business profile connection state"
+    ],
+    "privacy_summary": "KrabiClaw states that it does not sell personal information and uses collected data solely to provide, maintain, and improve the services, process payments, and communicate with users. Data is shared only with essential third-party service providers or when required by law.",
+    "retention_summary": "Data is retained as long as necessary to provide the service and comply with legal obligations (e.g., GDPR, CCPA). Users can request to access, update, or delete their personal information at any time.",
+    "data_minimization_note": "Review live MCP tool responses before submission to confirm that only necessary user and workspace fields are returned and that internal-only identifiers or debug payloads are not exposed unnecessarily."
+  },
+  "review_readiness": {
+    "production_status": "OAuth discovery stack and remote MCP auth flow reported live on production as of 2026-06-14.",
+    "repo_status_note": "The repo guide notes the implementation on branch better-auth-oauth-provider and marks it pending merge; confirm production and main branch state are aligned before submission.",
+    "verification_evidence": [
+      "The repo contains end-to-end tests for /.well-known/oauth-protected-resource, /.well-known/openid-configuration, /.well-known/oauth-authorization-server, and unauthenticated MCP 401 discovery behavior.",
+      "POST /api/mcp advertises WWW-Authenticate with resource_metadata pointing at the protected resource metadata endpoint.",
+      "JWT bearer verification checks issuer and audience against the MCP resource server."
+    ],
+    "known_review_risks": [
+      "Because the app has a large write-capable tool surface, metadata and confirmation behavior must stay tightly aligned with actual tool behavior.",
+      "Reviewers may test destructive flows, publish flows, translations, and Google Business flows, so only submit if these are stable in production.",
+      "Screenshots and test prompts still need human curation and should reflect the current production UI and outputs."
+    ]
+  },
+  "test_cases": [
+    {
+      "title": "Discover accessible sites",
+      "prompt": "Show me the sites I can access in KrabiClaw.",
+      "expected_behavior": "The app authenticates the user if needed and calls list_sites. It returns only the sites visible to that user."
+    },
+    {
+      "title": "Review site settings",
+      "prompt": "Open my site settings for the KrabiClaw site I manage and summarize the editable branding fields.",
+      "expected_behavior": "The app identifies the chosen site, calls get_site_settings, and summarizes editable settings without changing data."
+    },
+    {
+      "title": "Create a draft blog post",
+      "prompt": "Create a draft post announcing our new summer tasting menu.",
+      "expected_behavior": "The app creates a draft post in the selected site and clearly indicates that this is a draft, not a published post."
+    },
+    {
+      "title": "Reply to a review",
+      "prompt": "Draft and save a polite owner reply to our latest 4-star review for the Ao Nang location.",
+      "expected_behavior": "The app lists or identifies reviews for the location, confirms the target review, and uses reply_to_review to save the reply."
+    },
+    {
+      "title": "Triage contact submissions",
+      "prompt": "Show me recent contact submissions and mark the newest one as in progress.",
+      "expected_behavior": "The app lists contact submissions for the selected site and updates the chosen submission status."
+    },
+    {
+      "title": "Publish content with confirmation",
+      "prompt": "Publish the current homepage draft for my site.",
+      "expected_behavior": "The app identifies the site and page, explains that publishing changes live content, and requires confirmation before calling publish_content_drafts. Reviewers should verify the confirmation prompt appears."
+    }
+  ],
+  "localization": {
+    "supported_locales_note": "The MCP surface includes locale management and translation workflows. The repo also contains English and Thai locale content.",
+    "submission_locales": [
+      "en"
+    ]
+  },
+  "assets_to_review_before_upload": {
+    "screenshots_needed": [
+      "Connector creation or app detail screen in ChatGPT",
+      "At least one successful authenticated tool workflow",
+      "Any UI screens required by the submission form"
+    ],
+    "branding_files_available_in_repo": [
+      "public/krabi-claw-logo.png",
+      "public/favicon-96x96.png",
+      "public/og-image.png"
+    ]
+  },
+  "reviewer_notes": {
+    "who_should_use_it": "Existing KrabiClaw customers and staff who manage business websites, locations, content, and related operational workflows in the KrabiClaw platform.",
+    "who_should_not_use_it": "Users who do not have a KrabiClaw account or who expect a general web publishing tool outside the KrabiClaw workspace.",
+    "important_limitations": [
+      "Access is limited to the authenticated user's visible organizations, sites, role permissions, and product entitlements.",
+      "Some advanced features are entitlement-gated and may not appear for every user.",
+      "The app is intended for managing KrabiClaw-hosted business workspaces, not arbitrary third-party websites."
+    ]
+  },
+  "sources_used_for_drafting": [
+    "Repo files: server/utils/mcp-tools.ts, server/api/mcp.post.ts, server/utils/auth.ts, tests/e2e/oauth-discovery.spec.ts, pages/privacy.vue, pages/terms.vue, docs/api-crud-audit-mcp-build-guide.md",
+    "OpenAI docs: https://developers.openai.com/apps-sdk/deploy/submission",
+    "OpenAI docs: https://developers.openai.com/apps-sdk/deploy/connect-chatgpt"
+  ]
+}
