@@ -77,9 +77,7 @@ export async function executeMcpToolCall(
 
   if (toolName === 'show_vertical_picker') {
     await requireMcpUser(event)
-    return renderWidget('welcome-list', {
-      verticals: ['restaurant', 'experience', 'retail', 'wellness', 'service'],
-    }, 'What type of business is this? Choose: restaurant, experience, retail, wellness, or service.')
+    return renderWidget('vertical-picker', {}, 'What type of business is this? Choose: restaurant, experience, retail, wellness, or service.')
   }
 
   if (toolName === 'import_from_maps') {
