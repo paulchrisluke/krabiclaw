@@ -37,7 +37,14 @@ export default defineEventHandler(async (event) => {
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: { name: 'krabiclaw-mcp', version: 'phase-5' },
-        instructions: 'Stateless tools-only MCP server for KrabiClaw tenant operations.',
+        instructions: `KrabiClaw — manage your restaurant or business website through this connection.
+
+Start every conversation by calling list_sites to discover which sites the user can access.
+- If they have exactly one site, use it automatically and confirm: "Working with [site name]."
+- If they have multiple sites, present them clearly and ask which to use before proceeding.
+All other tools require a site_id obtained from list_sites. Never guess or invent site IDs.
+
+Common workflows: update menus and items, draft and publish posts, triage contact and reservation submissions, manage page content drafts, upload media, translate content, reply to reviews, and manage experiences and bookings.`,
       })
     }
 
@@ -77,7 +84,7 @@ export default defineEventHandler(async (event) => {
           name: 'krabiclaw-mcp',
           version: 'phase-5',
         },
-        instructions: 'Stateless tools-only MCP server for tenant-safe customer operations.',
+        instructions: 'KrabiClaw MCP. Call list_sites first to establish site context, then use the returned site_id with all other tools.',
       }, 60_000))
     }
 
