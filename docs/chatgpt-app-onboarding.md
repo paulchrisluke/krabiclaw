@@ -3,58 +3,127 @@
 ## Problem
 
 When a user connects the KrabiClaw MCP connector to ChatGPT, the session starts cold. ChatGPT
-has no site context — it doesn't know which of the user's sites to target. Two things go wrong:
+has no site context — it doesn't know which of the user's sites to target. The user either has
+to say "my site is X" or hope ChatGPT proactively calls `list_sites` first.
 
-1. Users don't know they need to say "my site is X" or that a site selection step exists.
-2. ChatGPT waits for the user to initiate rather than proactively establishing context.
-
-The current mitigation is the `initialize` instructions field, which now tells ChatGPT to call
-`list_sites` at the start of every conversation and present sites to the user. That's the floor.
-
-## Two Tracks
-
-### Track 1 — MCP `initialize` instructions (live)
-
-The `initialize` response `instructions` string is injected as a system prompt for the AI.
-We updated it to direct ChatGPT to call `list_sites` first and present a clear site-selection
-prompt. This is text-only — no rich UI.
-
-**File:** `server/api/mcp.post.ts` → `initialize` handler.
-
-### Track 2 — ChatGPT App with welcome card UI (spec)
-
-A proper ChatGPT App (separate from the MCP connector) can render a React UI inside ChatGPT
-using `@openai/apps-sdk-ui`. This enables a branded welcome card, site picker, and persistent
-context — the right long-term experience.
+Current mitigation: the `initialize.instructions` field tells ChatGPT to call `list_sites` first.
+That works but produces a plain text list. The better experience is a rendered widget that lets
+the user click to select their site and have that choice injected into the conversation context.
 
 ---
 
-## Desired Welcome Flow (Track 2 target)
+## How ChatGPT App Widgets Actually Work
 
-```
-User opens KrabiClaw in ChatGPT
-         ↓
-App renders WelcomeCard (apps-sdk-ui components)
- - Shows user's name / avatar
- - Lists their accessible sites (from list_sites)
- - "Select a site to get started" or "Create your first site"
-         ↓
-User picks a site → site_id stored in session context
-         ↓
-ChatGPT conversation starts with site context already set
-All subsequent tool calls use the stored site_id automatically
-```
+This is the real architecture — not a separate web app deployment.
+
+### The rendering model
+
+1. A tool returns a response with three parts:
+   - `structuredContent` — the data (e.g., `{ sites: [...] }`)
+   - `content` — text fallback for clients that don't support widgets
+   - `_meta["openai/outputTemplate"]` — URI pointing to the widget
+
+2. ChatGPT fetches the widget bundle from that URI and runs it in a sandboxed **iframe**.
+
+3. The iframe communicates with ChatGPT via **JSON-RPC 2.0 over `postMessage`** (the MCP Apps bridge).
+
+4. The widget can call tools back (`tools/call` via bridge) and, critically, inject data into
+   the conversation context via `ui/update-model-context`.
+
+### Where the widget lives
+
+The widget is a **compiled React bundle** (esbuild → single `.js` file) registered as an **MCP resource**
+on our existing server. ChatGPT requests it the same way it requests any MCP resource. No separate
+deployment needed — it's served from the same Cloudflare Worker that hosts `/api/mcp`.
+
+### Tool pattern: data tools vs render tools
+
+Separate the concerns:
+- **Data tool** — fetches and processes (e.g., `list_sites`) — text only, no widget
+- **Render tool** — fetches data, wraps it in `structuredContent`, returns template reference
 
 ---
 
-## WelcomeCard Component Spec
+## Architecture for the Site Picker
 
-Built with `@openai/apps-sdk-ui` React components (same pattern as the `ReservationCard` example
-in the OpenAI SDK docs).
+### New render tool: `show_site_picker`
 
-### States
+Added to `mcp-tools.ts` and `mcp-executor.ts`. Internally calls `list_sites` workflow and
+returns the result as structured data with the widget template reference.
 
-**No sites:** Show `create_site` CTA.
+**Tool response shape:**
+
+```json
+{
+  "structuredContent": {
+    "sites": [
+      { "id": "site-pottery-house-krabi", "name": "Pottery House Krabi", "subdomain": "pottery-house", "status": "live" }
+    ]
+  },
+  "content": [{ "type": "text", "text": "You have 1 site: Pottery House Krabi. Select it to continue." }],
+  "_meta": {
+    "openai/outputTemplate": "mcp://resources/ui/site-picker"
+  }
+}
+```
+
+### MCP resource: the widget bundle
+
+Register a resource at `mcp://resources/ui/site-picker` (or served via a `/api/mcp/widgets/site-picker.js`
+endpoint) that returns the compiled React bundle.
+
+`resources/list` currently returns `[]`. We update it to advertise the widget resources.
+
+### Widget behavior
+
+```
+structuredContent.sites → render list
+
+No sites        → show "Create your first site" button
+                   → calls create_site tool via bridge
+                   → shows inline name/subdomain inputs
+
+One site        → auto-confirm, show site name/status badge
+                   → immediately calls ui/update-model-context with { site_id }
+
+Multiple sites  → render clickable list
+                   → user clicks → calls ui/update-model-context with { site_id }
+                   → calls ui/message with "Working with [site name]."
+```
+
+### Context injection
+
+After site selection, the widget calls `ui/update-model-context`:
+
+```js
+window.openai.updateModelContext({ site_id: selectedSiteId, site_name: selectedSiteName })
+```
+
+From that point in the conversation, ChatGPT has `site_id` in context and passes it to subsequent
+tool calls automatically. No server-side session storage needed.
+
+---
+
+## Component Spec (React + apps-sdk-ui)
+
+Our main app is Nuxt (Vue). The widget is a **separate React build target** — a small isolated
+bundle compiled by esbuild, not part of the Nuxt build.
+
+### File layout
+
+```
+widgets/
+  site-picker/
+    SitePicker.tsx          ← main component
+    index.tsx               ← entry point (esbuild target)
+    build.ts                ← esbuild build script
+  dist/
+    site-picker.js          ← compiled output, served as MCP resource
+```
+
+### Component states
+
+**No sites**
 
 ```
 ┌─────────────────────────────────────┐
@@ -66,27 +135,27 @@ in the OpenAI SDK docs).
 └─────────────────────────────────────┘
 ```
 
-**One site:** Auto-select and confirm.
+**One site (auto-confirm)**
 
 ```
 ┌─────────────────────────────────────┐
-│  KrabiClaw                    ● Live│
+│  KrabiClaw                  ● Live  │
+│  Pottery House Krabi                │
 │  pottery-house.krabiclaw.com        │
-│                                     │
-│  [ Open dashboard ]  [ Manage →  ] │
 └─────────────────────────────────────┘
 ```
+*(No button required — auto-calls `ui/update-model-context` on mount)*
 
-**Multiple sites:** List picker.
+**Multiple sites**
 
 ```
 ┌─────────────────────────────────────┐
 │  Your Sites                         │
 │                                     │
-│  ○ Pottery House Krabi              │
+│  ○ Pottery House Krabi      ● Live  │
 │    pottery-house.krabiclaw.com      │
 │                                     │
-│  ○ The Grotto                       │
+│  ○ The Grotto               ● Live  │
 │    the-grotto.krabiclaw.com         │
 │                                     │
 │  [  Select site  ]                  │
@@ -96,80 +165,68 @@ in the OpenAI SDK docs).
 ### Props
 
 ```ts
-interface WelcomeCardProps {
-  sites: Array<{
-    id: string
-    name: string
-    subdomain: string
-    status: 'live' | 'draft' | 'inactive'
-    publicUrl?: string
-  }>
-  onSelect: (siteId: string) => void
-  onCreate: () => void
+interface Site {
+  id: string
+  name: string
+  subdomain: string
+  publicUrl?: string
+  status: 'live' | 'draft' | 'inactive'
+}
+
+interface SitePickerProps {
+  sites: Site[]   // from structuredContent
 }
 ```
 
----
+### apps-sdk-ui components used
 
-## Technical Architecture
-
-### Frontend
-
-- Framework: React 18 (matches apps-sdk-ui requirements)
-- Styles: Tailwind 4 + `@openai/apps-sdk-ui/css`
-- Components: Badge (status), Button (CTA), Icon (Globe, Maps, etc.)
-- Router: React Router v7 (already in the Nuxt project via `AppsSDKUIProvider`)
-
-### Data layer
-
-The welcome card calls the MCP `list_sites` tool via the OAuth-authenticated session to populate
-the site list. No separate API needed.
-
-### Session context
-
-Once a site is selected, the `site_id` must be available to subsequent tool calls. Options:
-
-**Option A (simplest):** Store in ChatGPT conversation state — the welcome card emits a text
-message like "Working with site-pottery-house-krabi" that stays in context. ChatGPT references it
-for all subsequent calls. No server change required.
-
-**Option B (cleaner):** Add a `get_active_site` tool that returns the previously selected site_id
-from a server-side session store (e.g., a new `mcp_sessions` D1 table keyed by access token).
-ChatGPT calls this at the start of each conversation.
-
-**Option C (proper long-term):** OAuth-time site selection — during the OAuth consent flow,
-after login, redirect to a site-picker page. Store the selected `site_id` in the OAuth token
-claims or in a `mcp_sessions` table. The server reads it automatically on every tool call.
-
-Recommended path: start with Option A (zero server changes), revisit Option C when we have
-multi-site customers who find it annoying to re-select every session.
+- `Badge` — site status (● Live / Draft)
+- `Button` — "Select site", "Create your first site"
+- `Icon.Globe` or similar — site URL decoration
 
 ---
 
 ## Implementation Plan
 
-### Phase 1 — MCP instructions (done)
+### Phase 1 — MCP instructions (done ✅)
+
 - [x] Rewrite `initialize.instructions` to direct ChatGPT to call `list_sites` first
 - [x] Update `server/discover` instructions to the same effect
 
-### Phase 2 — Standalone welcome card (next)
-- [ ] Scaffold a React app in `apps/chatgpt-welcome/` using `@openai/apps-sdk-ui`
-- [ ] Build `WelcomeCard` component for the three states above
-- [ ] Wire to `list_sites` MCP tool call via authenticated fetch
-- [ ] Wire `onCreate` to `create_site` tool call
-- [ ] Deploy as a separate Cloudflare Worker or static Pages site
+### Phase 2 — Site picker widget
 
-### Phase 3 — Session context persistence (later)
-- [ ] Evaluate Option A vs C based on real user friction
-- [ ] If Option C: add `mcp_sessions` migration, update OAuth consent flow, update executor to
-  read default site_id from session when no site_id is provided in tool args
+- [ ] Add `show_site_picker` render tool to `mcp-tools.ts` (minimumRole: editor, no site_id required, global tool)
+- [ ] Add `show_site_picker` case to `mcp-executor.ts` — calls `listSitesForUser` workflow, returns `structuredContent` + `_meta` template ref
+- [ ] Update `resources/list` handler in `mcp.post.ts` to advertise the widget resource
+- [ ] Scaffold `widgets/site-picker/` with esbuild config
+- [ ] Build `SitePicker.tsx` using `@openai/apps-sdk-ui` components
+- [ ] Wire `ui/update-model-context` call on site selection
+- [ ] Serve `widgets/dist/site-picker.js` from a static asset endpoint (e.g. `GET /api/mcp/widgets/site-picker.js`)
+- [ ] Update `initialize.instructions` to say "call show_site_picker at the start of every conversation"
+- [ ] E2E test: `show_site_picker` returns correct `structuredContent` shape
+
+### Phase 3 — Create site inline (from widget)
+
+- [ ] Wire "Create your first site" button in the widget to call `create_site` via postMessage bridge
+- [ ] After creation, re-render widget with the new site selected
+
+---
+
+## What we do NOT need
+
+- A separate Cloudflare Worker or Pages deployment for the widget
+- A server-side session store for the selected site_id (handled by `ui/update-model-context`)
+- Any changes to the OAuth flow
+- Any changes to how existing tools work
 
 ---
 
 ## Reference
 
-- `server/api/mcp.post.ts` — `initialize` handler (instructions field)
-- `server/utils/mcp-tools.ts` — `list_sites` tool definition
+- `server/api/mcp.post.ts` — `initialize` handler, `resources/list` handler (to update)
+- `server/utils/mcp-tools.ts` — add `show_site_picker` global tool
+- `server/utils/mcp-executor.ts` — add `show_site_picker` case
+- `server/utils/mcp-workflows.ts` — `listSitesForUser` already exists, reuse it
 - `chatgpt-app-submission.json` — OpenAI app submission metadata
-- `@openai/apps-sdk-ui` — [GitHub](https://github.com/openai/apps-sdk-ui)
-- OpenAI Apps SDK docs — https://developers.openai.com/apps-sdk/deploy/submission
+- [`@openai/apps-sdk-ui`](https://github.com/openai/apps-sdk-ui) — React component library
+- OpenAI Apps SDK — [build/chatgpt-ui](https://developers.openai.com/apps-sdk/build/chatgpt-ui)
