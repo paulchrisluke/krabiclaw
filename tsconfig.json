@@ -11,5 +11,6 @@
     "allowImportingTsExtensions": true,
     "types": ["node", "@cloudflare/workers-types"],
     "skipLibCheck": true
-  }
+  },
+  "exclude": ["widgets"]
 }
