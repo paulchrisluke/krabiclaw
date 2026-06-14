@@ -97,7 +97,7 @@ async function accept() {
       method: 'POST',
       body: { accept: true, oauth_query: window.location.search.slice(1) },
     })
-    if (result?.redirect_uri) window.location.href = result.redirect_uri
+    if (result?.url) window.location.href = result.url
   } catch (err) {
     error.value = err?.data?.message ?? err?.message ?? 'Something went wrong. Please try again.'
   } finally {
@@ -113,7 +113,7 @@ async function deny() {
       method: 'POST',
       body: { accept: false, oauth_query: window.location.search.slice(1) },
     })
-    if (result?.redirect_uri) window.location.href = result.redirect_uri
+    if (result?.url) window.location.href = result.url
   } catch (err) {
     error.value = err?.data?.message ?? err?.message ?? 'Something went wrong. Please try again.'
   } finally {
