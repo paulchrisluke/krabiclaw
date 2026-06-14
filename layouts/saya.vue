@@ -37,7 +37,7 @@ const googleSiteVerification = computed(() => config.value?.google_site_verifica
 
 const ogTitle = computed(() => config.value?.brand_name || null)
 const ogDescription = computed(() => config.value?.brand_description || null)
-const ogImage = computed(() => (locations.value[0] as Record<string, unknown>)?.hero_image_public_url as string | null || null)
+const ogImage = computed(() => locations.value[0]?.hero_image_public_url || null)
 const faviconUrl = computed(() => config.value?.logo_url || null)
 
 function isValidGoogleAnalyticsId(id) {
