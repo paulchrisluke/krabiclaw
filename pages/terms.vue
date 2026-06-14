@@ -5,7 +5,7 @@
       <p class="text-lg text-muted mb-12">Our agreement with you</p>
 
       <article class="prose prose-lg max-w-none text-default">
-        <p><strong>Effective Date:</strong> October 21, 2024</p>
+        <p><strong>Effective Date:</strong> June 14, 2026</p>
 
         <p>By accessing or using KrabiClaw ("the Service"), you agree to these Terms and Conditions.</p>
 

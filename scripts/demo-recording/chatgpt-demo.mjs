@@ -102,7 +102,7 @@ async function main() {
     for (const [index, step] of prompts.entries()) {
       const title = step.title || `Step ${index + 1}`
       const prompt = step.prompt
-      const postWaitMs = Number(step.postWaitMs || 12000)
+      const postWaitMs = Number(step.postWaitMs) || 12000
 
       if (typeof prompt !== 'string' || !prompt.trim()) {
         throw new Error(`Prompt step ${index + 1} is missing a prompt string`)

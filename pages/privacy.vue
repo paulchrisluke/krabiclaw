@@ -5,7 +5,7 @@
       <p class="text-lg text-muted mb-12">How we protect your data</p>
 
       <article class="prose prose-lg max-w-none text-default">
-        <p><strong>Effective Date:</strong> October 21, 2024</p>
+        <p><strong>Effective Date:</strong> June 14, 2026</p>
 
         <p>This Privacy Policy describes how KrabiClaw ("we," "our," or "us") collects, uses, and shares your information when you use our website builder platform.</p>
 
