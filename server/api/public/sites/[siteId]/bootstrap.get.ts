@@ -94,7 +94,7 @@ export default defineEventHandler(async (event) => {
     db
       .prepare(
         `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name,
-                COALESCE(ma.public_url, s.logo_url) AS logo_url
+                s.brand_description, COALESCE(ma.public_url, s.logo_url) AS logo_url
            FROM sites s
            LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
           WHERE s.id = ? AND s.status = 'active' AND s.onboarding_status = 'active'
@@ -108,6 +108,7 @@ export default defineEventHandler(async (event) => {
         contact_email: string | null;
         contact_phone: string | null;
         brand_name: string | null;
+        brand_description: string | null;
         logo_url: string | null;
       }>(),
     locationSlug
@@ -408,6 +409,9 @@ export default defineEventHandler(async (event) => {
   config.default_currency = site.default_currency || "THB";
   if (site.contact_email) config.contact_email = site.contact_email;
   if (site.contact_phone) config.contact_phone = site.contact_phone;
+  if (site.brand_name) config.brand_name = site.brand_name;
+  if (site.brand_description) config.brand_description = site.brand_description;
+  if (site.logo_url) config.logo_url = site.logo_url;
 
   const primary =
     (locRows.results ?? []).find((l) => l.is_primary) ??

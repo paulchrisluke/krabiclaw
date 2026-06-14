@@ -17,7 +17,7 @@
 <script setup>
 if (import.meta.dev) useDebugLCP()
 
-const { config } = useBootstrap()
+const { config, locations } = useBootstrap()
 
 const brandColor = computed(() => config.value?.brand_color || null)
 const brandTextColor = computed(() => getContrastColor(brandColor.value))
@@ -35,6 +35,11 @@ const themeStyles = computed(() => {
 const googleAnalyticsId = computed(() => config.value?.google_analytics_measurement_id || null)
 const googleSiteVerification = computed(() => config.value?.google_site_verification || null)
 
+const ogTitle = computed(() => config.value?.brand_name || null)
+const ogDescription = computed(() => config.value?.brand_description || null)
+const ogImage = computed(() => locations.value[0]?.hero_image_public_url || null)
+const faviconUrl = computed(() => config.value?.logo_url || null)
+
 function isValidGoogleAnalyticsId(id) {
   if (!id || typeof id !== 'string') return false
   return /^G-[A-Z0-9]+$/.test(id) || /^UA-\d+-\d+$/.test(id)
@@ -47,7 +52,16 @@ const validGoogleAnalyticsId = computed(() => {
 
 useHead(() => {
   const meta = []
+  const link = []
   const script = []
+
+  meta.push({ property: 'og:type', content: 'website' })
+  meta.push({ name: 'twitter:card', content: 'summary_large_image' })
+  if (ogTitle.value) meta.push({ property: 'og:title', content: ogTitle.value })
+  if (ogDescription.value) meta.push({ property: 'og:description', content: ogDescription.value })
+  if (ogImage.value) meta.push({ property: 'og:image', content: ogImage.value })
+  if (faviconUrl.value) link.push({ rel: 'icon', href: faviconUrl.value })
+
   if (googleSiteVerification.value) {
     meta.push({
       name: 'google-site-verification',
@@ -68,6 +82,7 @@ useHead(() => {
 
   return {
     meta,
+    link,
     script,
     __dangerouslyDisableSanitizersByTagID: {
       'saya-google-analytics-init': ['innerHTML']

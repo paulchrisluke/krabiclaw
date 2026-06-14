@@ -1,6 +1,7 @@
 import { createError, getHeader, setResponseHeader } from 'h3'
 import { asMcpError, mcpFailure, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, protocolCache, readMcpRequest } from '~/server/utils/mcp-protocol'
 import { executeMcpToolCall } from '~/server/utils/mcp-executor'
+import { isMcpRenderResponse } from '~/server/utils/mcp-render'
 import { getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies } from '~/server/utils/mcp-auth'
 import { MCP_TOOLS } from '~/server/utils/mcp-tools'
 
@@ -138,6 +139,20 @@ Common workflows: update menus and items, draft and publish posts, triage contac
         : Object.fromEntries(Object.entries(request.params ?? {}).filter(([key]) => key !== 'name'))
 
       const result = await executeMcpToolCall(event, toolName, rawArgs)
+      if (isMcpRenderResponse(result)) {
+        const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
+        const baseUrl = (cfEnv?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+        return mcpSuccess(request.id, {
+          isError: false,
+          structuredContent: result.structuredContent,
+          content: [{ type: 'text', text: result.fallbackText ?? JSON.stringify(result.structuredContent, null, 2) }],
+          metadata: {
+            _meta: {
+              'openai/outputTemplate': `${baseUrl}/mcp-assets/${result.__widget}.html`,
+            },
+          },
+        })
+      }
       return mcpSuccess(request.id, {
         isError: false,
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],

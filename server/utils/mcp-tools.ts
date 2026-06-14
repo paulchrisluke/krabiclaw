@@ -42,6 +42,64 @@ function globalTool(definition: McpToolDefinition): McpToolDefinition {
 
 export const MCP_TOOLS: McpToolDefinition[] = [
   globalTool({
+    name: 'show_welcome',
+    description: 'Show the welcome screen. Lists existing sites or a "Create your first site" CTA for new users. Call this at the start of every conversation.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: { type: 'object', properties: {}, additionalProperties: true },
+  }),
+  globalTool({
+    name: 'show_vertical_picker',
+    description: 'Show a clickable business-type picker widget. The user taps one option and it is sent back to the model. Call this after the user clicks "Create a new site" but before asking for their Maps URL.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: { type: 'object', properties: {}, additionalProperties: true },
+  }),
+  globalTool({
+    name: 'import_from_maps',
+    description: 'Import business details from a Google Maps URL or share link. Returns business info and photos. Call this when the user provides a Maps URL during site creation.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        maps_url: { type: 'string', description: 'Google Maps URL or short share link (maps.app.goo.gl or google.com/maps/place/...).' },
+      },
+      required: ['maps_url'],
+      additionalProperties: true,
+    },
+  }),
+  globalTool({
+    name: 'show_generated_images',
+    description: 'Show a carousel of AI-generated hero images for the user to pick from. Pass the images array from request_media_upload / confirm_media_upload.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        images: {
+          type: 'array',
+          description: 'Array of { assetId, publicUrl } for generated images.',
+          items: { type: 'object', properties: { assetId: { type: 'string' }, publicUrl: { type: 'string' } } },
+        },
+        regenerate: { type: 'boolean', description: 'Set to true to signal the model to generate new images.' },
+      },
+      required: ['images'],
+      additionalProperties: true,
+    },
+  }),
+  siteTool({
+    name: 'show_site_preview',
+    description: 'Show a live iframe preview of the newly created site. Call after create_site + create_location succeed.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+  }),
+  globalTool({
     name: 'list_sites',
     description: 'List the caller’s accessible sites.',
     domain: 'sites',
