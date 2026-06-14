@@ -1,5 +1,5 @@
 import { createError, getHeader, setResponseHeader } from 'h3'
-import { asMcpError, mcpFailure, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, protocolCache, readMcpRequest } from '~/server/utils/mcp-protocol'
+import { asMcpError, mcpFailure, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, readMcpRequest } from '~/server/utils/mcp-protocol'
 import { executeMcpToolCall } from '~/server/utils/mcp-executor'
 import { isMcpRenderResponse } from '~/server/utils/mcp-render'
 import { getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies } from '~/server/utils/mcp-auth'
@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
         serverInfo: { name: 'krabiclaw-mcp', version: 'phase-5' },
         instructions: `KrabiClaw — manage your restaurant or business website through this connection.
 
-Start every conversation by calling show_welcome (or list_sites) to discover the user's sites.
+Start every conversation by calling show_welcome to discover the user's sites and display the interactive site picker widget.
 - If they have 0 sites, start the Onboarding Flow: 
   1. Ask for their Google Maps URL (or shortlink) to import their business details.
   2. Call import_from_maps.
@@ -86,15 +86,15 @@ Common workflows: update menus and items, draft and publish posts, triage contac
 
     if (request.method === 'server/discover') {
       await requireMcpUser(event)
-      return mcpSuccess(request.id, protocolCache('server/discover', {
+      return mcpSuccess(request.id, {
         supportedVersions: ['2026-07-28', '2025-11-25', '2025-03-26', '2024-11-05'],
         capabilities: { tools: {} },
         serverInfo: {
           name: 'krabiclaw-mcp',
           version: 'phase-5',
         },
-        instructions: 'KrabiClaw MCP. Call list_sites first to establish site context, then use the returned site_id with all other tools.',
-      }, 60_000))
+        instructions: 'KrabiClaw MCP. Call show_welcome at the start of every conversation to display the site picker and discover the user\'s sites. Use the site_id from that interaction with all other tools.',
+      })
     }
 
     if (request.method === 'tools/list') {
@@ -122,6 +122,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
           name: tool.name,
           description: tool.description,
           inputSchema: tool.inputSchema,
+          outputSchema: tool.outputSchema,
           annotations: {
             domain: tool.domain,
             minimumRole: tool.minimumRole,
@@ -129,7 +130,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
           },
         }))
 
-      return mcpSuccess(request.id, protocolCache('tools/list', { tools }, 30_000))
+      return mcpSuccess(request.id, { tools })
     }
 
     if (request.method === 'tools/call') {
@@ -146,10 +147,8 @@ Common workflows: update menus and items, draft and publish posts, triage contac
           isError: false,
           structuredContent: result.structuredContent,
           content: [{ type: 'text', text: result.fallbackText ?? JSON.stringify(result.structuredContent, null, 2) }],
-          metadata: {
-            _meta: {
-              'openai/outputTemplate': `${baseUrl}/mcp-assets/${result.__widget}.html`,
-            },
+          _meta: {
+            'openai/outputTemplate': `${baseUrl}/mcp-assets/${result.__widget}`,
           },
         })
       }

@@ -60,7 +60,7 @@ export async function executeMcpToolCall(
 
   validateRequiredArguments(tool.inputSchema, rawArguments)
 
-  if (toolName === 'show_welcome') {
+  if (toolName === 'show_welcome' || toolName === 'list_sites') {
     const user = await requireMcpUser(event)
     const allSites = await listSitesForUser(user.db, user.userId, user.isPlatformAdmin)
     const sites = allSites.map((s: Record<string, unknown>) => ({
@@ -167,10 +167,6 @@ export async function executeMcpToolCall(
     return renderWidget('image-carousel', { images }, `${images.length} AI-generated image${images.length !== 1 ? 's' : ''} ready to review.`)
   }
 
-  if (toolName === 'list_sites') {
-    const user = await requireMcpUser(event)
-    return { sites: await listSitesForUser(user.db, user.userId, user.isPlatformAdmin) }
-  }
 
   if (toolName === 'create_site') {
     const user = await requireMcpUser(event)
