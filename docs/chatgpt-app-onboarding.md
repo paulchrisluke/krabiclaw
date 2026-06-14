@@ -76,7 +76,7 @@ See [pizzaz-list example](https://github.com/openai/openai-apps-sdk-examples/tre
 |-----------|------------------|
 | **List** | Site picker with welcome header (Screen 1) |
 | **Album** | Imported photos from Google Maps (Screen 4) |
-| **Carousel** | Generated hero images (Screen 5) + site preview (Screen 7) |
+| **Carousel** | Generated hero images (Screen 5) |
 | **Map** | Imported location pin (optional, inside Album widget) |
 
 ---
@@ -106,19 +106,14 @@ import flow (see Phase 3 below).
 **The MCP `import_from_maps` tool is a direct port of this logic** — no new parsing algorithm.
 Short URLs are resolved server-side; the user never needs to know which format they used.
 
-### Site preview — already a solved pattern
+### Site preview — hero image card
 
-`pages/templates.vue` shows the live demo site in an iframe:
-```html
-<iframe :src="demoUrl" sandbox="allow-scripts allow-same-origin" />
-```
-where `demoUrl` = `https://demo.krabiclaw.com` (or `http://demo.localhost:3000` in dev).
+The `show_site_preview` MCP tool queries the primary location's `hero_image_public_url` (via
+a `LEFT JOIN media_assets`) and returns it as `ogImageUrl` in `structuredContent`. The widget
+renders a static `<img>` tag in a 3:2 card — no iframe, no headless browser, no screenshot service.
 
-The dashboard content editor (`pages/dashboard/[orgSlug]/[locationSlug]/content.vue`) uses
-the same pattern with a `?preview=true&token={previewToken}` query for draft previews.
-
-For the ChatGPT App "site created" widget, we do the same: iframe the live site URL
-`https://{subdomain}.krabiclaw.com`. No screenshots, no headless browser, no third-party service.
+If the site has no hero image yet (e.g. immediately after `create_site` before photos are added),
+the widget shows a styled link card with the site name and URL instead.
 
 ---
 
@@ -400,20 +395,19 @@ User confirms → model calls `create_site` then `create_location` with all coll
 
 ---
 
-### Screen 7 — Site preview (Carousel widget)
+### Screen 7 — Site preview (static image card)
 
 **Render tool:** `show_site_preview`  
 **Widget:** `widgets/src/site-preview/index.tsx`  
 **SDK pattern:** Carousel
 
-After `create_site` + `create_location` succeed, the model calls `show_site_preview`. To keep the experience lightning fast and reliable, this widget renders a highly-styled, simplified HTML/CSS preview of the new site directly inside the widget (using the chosen theme and generated hero images), rather than relying on slow headless browser screenshots.
+After `create_site` + `create_location` succeed, the model calls `show_site_preview`. The
+`show_site_preview` tool queries the primary location's hero image and returns it as `ogImageUrl`.
+The widget renders it as a static `<img>` card (aspect ratio 3:2). If no hero image exists yet,
+a styled link card shows the site name and URL instead.
 
-```html
-<iframe src="https://{subdomain}.krabiclaw.com" sandbox="allow-scripts allow-same-origin" />
-```
-
-No screenshots, no headless browser. The site is live at creation time, so the iframe just
-loads it. Each "slide" is a different page route: home (`/`), location (`/{slug}`), etc.
+The page navigation controls are still present — each page's `path` is appended to `publicUrl`
+when the user clicks "Open site".
 
 #### `structuredContent` shape
 
@@ -426,21 +420,22 @@ loads it. Each "slide" is a different page route: home (`/`), location (`/{slug}
     publicUrl: string   // https://{subdomain}.krabiclaw.com
   }
   pages: Array<{
-    label: string   // "Home", "Location", "Menu", etc.
-    path: string    // "/", "/{locationSlug}", "/{locationSlug}/menu"
+    label: string   // "Home", "Location", etc.
+    path: string    // "/", "/{locationSlug}"
   }>
+  ogImageUrl: string | null   // primary location hero_image_public_url, or null
 }
 ```
 
-#### Mockup
+#### Mockup — with hero image
 
 ```
 ┌─────────────────────────────────────────────┐
-│  ✓ Your site is live!         Home  1 / 3 →│
+│  ✓ Your site is live!         Home  1 / 2 →│
 │                                             │
 │  ┌─────────────────────────────────────┐   │
 │  │                                     │   │
-│  │  [iframe: pottery-house.krabiclaw.com]  │
+│  │   [hero image, 3:2 aspect ratio]    │   │
 │  │                                     │   │
 │  └─────────────────────────────────────┘   │
 │                                             │
@@ -450,7 +445,26 @@ loads it. Each "slide" is a different page route: home (`/`), location (`/{slug}
 └─────────────────────────────────────────────┘
 ```
 
-"Open site" calls `window.openai?.requestDisplayMode({ mode: 'fullscreen' })`.  
+#### Mockup — no hero image (link card fallback)
+
+```
+┌─────────────────────────────────────────────┐
+│  ✓ Your site is live!         Home  1 / 2 →│
+│                                             │
+│  ┌─────────────────────────────────────┐   │
+│  │                                     │   │
+│  │         Pottery House Krabi         │   │
+│  │   pottery-house.krabiclaw.com       │   │
+│  │                                     │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  pottery-house.krabiclaw.com               │
+│                                             │
+│  [ ↗ Open site ]   [ What's next? ]        │
+└─────────────────────────────────────────────┘
+```
+
+"Open site" opens `publicUrl + currentPage.path` in a new tab.  
 "What's next?" sends `ui/message("What else would you like to set up?")` → management mode.
 
 ---
@@ -497,10 +511,10 @@ and are called directly by the model (not as render tools).
 - [ ] Add `show_generated_images` render tool (input: `images[]`, output: Carousel widget)
 - [ ] Update `initialize.instructions` to guide the model to generate images when `missingPhotos: true`
 
-### Phase 5 — Site preview Carousel
-- [ ] Build `widgets/src/site-preview/index.tsx` — Carousel of `<iframe>` slides per page
-- [ ] Add `show_site_preview` render tool (input: `site_id`, output: Carousel widget)
-- [ ] E2E: `show_site_preview` for a live site returns a widget with at least 1 iframe slide
+### Phase 5 — Site preview static image card
+- [ ] Build `widgets/src/site-preview/index.tsx` — static `<img>` card (or link-card fallback) with page nav
+- [ ] Add `show_site_preview` render tool (input: `site_id`, output: widget with `ogImageUrl`)
+- [ ] E2E: `show_site_preview` for a live site returns `ogImageUrl` and correct pages array
 
 ---
 
@@ -508,7 +522,7 @@ and are called directly by the model (not as render tools).
 
 - A separate Cloudflare Worker or Pages deployment for widgets (served from existing Worker)
 - Server-side session storage (handled by `ui/update-model-context`)
-- A headless browser or screenshot service (live iframe from `{subdomain}.krabiclaw.com`)
+- A headless browser, screenshot service, or iframe (site preview uses the hero image from D1)
 - Any new Google Places API key (already configured as `GOOGLE_PLACES_API_KEY` secret)
 - New URL parsing code (already in `chowbot-agent.ts`, port it)
 
@@ -521,7 +535,7 @@ and are called directly by the model (not as render tools).
    `/v1/{name}/media?key=...&maxHeightPx=800`. Need to confirm billing tier and per-photo cost.
    Reference: [Places API photos](https://developers.google.com/maps/documentation/places/web-service/photos)
 
-2. **Screenshot mechanism for site preview** — [Resolved] We will render a simplified HTML preview in-widget to ensure speed and reliability.
+2. **Site preview mechanism** — [Resolved] The widget displays the primary location's `hero_image_public_url` as a static `<img>` card. No iframe, no headless browser needed.
 3. **Widget asset versioning** — should we commit `assets/` to the repo or build on deploy? (Recommend: build on deploy via `wrangler deploy` pre-step, not commit the hashes.)
 4. **Image generation cost** — `gpt-image-2` at `1536x1024` medium quality costs ~$0.04 per image. Budget per onboarding: 2–3 images = ~$0.12. Acceptable?
 5. **Short URL resolution** — [Resolved] We will accept both and transparently resolve `maps.app.goo.gl` on the server by following the redirect.
@@ -544,5 +558,5 @@ and are called directly by the model (not as render tools).
 | Places API — photos | https://developers.google.com/maps/documentation/places/web-service/photos |
 | `server/utils/google-places.ts` | Existing Places API client (`getPlaceDetails`, `syncPlaceToLocation`) |
 | `server/utils/chowbot-agent.ts` line ~2577 | `lookup_maps_url` handler — port this for `import_from_maps` |
-| `pages/templates.vue` | Live iframe preview pattern to reuse in `show_site_preview` widget |
+| `server/utils/mcp-executor.ts` | `show_site_preview` case — joins media_assets for `ogImageUrl` |
 | `chatgpt-app-submission.json` | OpenAI submission metadata |

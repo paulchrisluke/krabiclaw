@@ -15,6 +15,7 @@ interface SiteContent {
     publicUrl: string
   }
   pages: Page[]
+  ogImageUrl?: string | null
 }
 
 const PRIMARY = '#1F2547'
@@ -31,8 +32,10 @@ const styles = `
   .nav-btn { background: #f3f4f6; border: none; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; color: #555; transition: background 0.15s; }
   .nav-btn:hover { background: #e5e7eb; }
   .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-  .iframe-wrap { width: 100%; height: 360px; border-radius: 10px; overflow: hidden; border: 1px solid #e5e7eb; background: #f9fafb; }
-  .iframe-wrap iframe { width: 100%; height: 100%; border: none; }
+  .preview-img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 10px; border: 1px solid #e5e7eb; display: block; }
+  .link-card { width: 100%; aspect-ratio: 3 / 2; border-radius: 10px; border: 1px solid #e5e7eb; background: #f9fafb; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .link-card-name { font-size: 16px; font-weight: 700; color: #111; }
+  .link-card-url { font-size: 13px; color: #888; }
   .site-url { font-size: 12px; color: #888; margin-top: 8px; text-align: center; }
   .actions { display: flex; gap: 8px; margin-top: 12px; }
   .btn { flex: 1; padding: 11px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.15s; }
@@ -64,13 +67,12 @@ function App() {
     )
   }
 
-  const { site, pages } = content
+  const { site, pages, ogImageUrl } = content
   if (!pages.length) return null
   const currentPage = pages[pageIndex]!
-  const frameUrl = `${site.publicUrl}${currentPage.path}`
 
   const handleOpen = () => {
-    window.open(site.publicUrl, '_blank', 'noopener,noreferrer')
+    window.open(`${site.publicUrl}${currentPage.path}`, '_blank', 'noopener,noreferrer')
   }
 
   const handleWhatsNext = () => {
@@ -88,9 +90,15 @@ function App() {
           <button className="nav-btn" onClick={() => setPageIndex(i => i + 1)} disabled={pageIndex === pages.length - 1}>›</button>
         </div>
       </div>
-      <div className="iframe-wrap">
-        <iframe src={frameUrl} sandbox="allow-scripts allow-same-origin" title={currentPage.label} />
-      </div>
+      {ogImageUrl
+        ? <img src={ogImageUrl} className="preview-img" alt={site.name} />
+        : (
+          <div className="link-card">
+            <span className="link-card-name">{site.name}</span>
+            <span className="link-card-url">{site.publicUrl.replace('https://', '')}</span>
+          </div>
+        )
+      }
       <div className="site-url">{site.publicUrl.replace('https://', '')}</div>
       <div className="actions">
         <button className="btn btn-primary" onClick={handleOpen}>↗ Open site</button>

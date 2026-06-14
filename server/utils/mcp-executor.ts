@@ -202,13 +202,19 @@ export async function executeMcpToolCall(
       const subdomain = (siteRow as Record<string, unknown>).subdomain as string
       const publicUrl = subdomain ? `https://${subdomain}.krabiclaw.com` : ''
       const locationRows = await site.db.prepare(
-        `SELECT slug, title FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, title ASC LIMIT 5`,
-      ).bind(site.siteId).all<{ slug: string; title: string }>()
+        `SELECT bl.slug, bl.title, ma.public_url AS hero_image_public_url
+         FROM business_locations bl
+         LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
+         WHERE bl.site_id = ?
+         ORDER BY bl.is_primary DESC, bl.title ASC
+         LIMIT 5`,
+      ).bind(site.siteId).all<{ slug: string; title: string; hero_image_public_url: string | null }>()
       const locationPages = (locationRows.results ?? []).map(loc => ({
         label: loc.title,
         path: `/${loc.slug}`,
       }))
       const pages = [{ label: 'Home', path: '/' }, ...locationPages]
+      const ogImageUrl = locationRows.results?.[0]?.hero_image_public_url ?? null
       return renderWidget('site-preview', {
         site: {
           id: site.siteId,
@@ -217,6 +223,7 @@ export async function executeMcpToolCall(
           publicUrl,
         },
         pages,
+        ogImageUrl,
       }, `Your site is live at ${publicUrl}`)
     }
     case 'get_site':
