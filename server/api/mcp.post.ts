@@ -95,8 +95,9 @@ export default defineEventHandler(async (event) => {
 
       const tools = MCP_TOOLS
         .filter((tool) => {
-          if (tool.name === 'list_sites' || tool.name === 'create_site') return true
-          if (!siteId || !siteCtx) return false
+          // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
+          // the full capability set on first connection. Security is enforced at execution time.
+          if (!siteId || !siteCtx) return true
           if (!roleSatisfies(siteCtx.role, tool.minimumRole)) return false
           if (tool.requiredEntitlement && !activeEntitlements.has(tool.requiredEntitlement)) return false
           return true

@@ -130,7 +130,16 @@ test.describe('stateless MCP server', () => {
     const toolsList = await mcpRequest(request, baseURL!, { method: 'tools/list', id: 'list-no-site' })
     expect(toolsList.status()).toBe(200)
     const listBody = await toolsList.json() as { result: { tools: Array<{ name: string }> } }
-    expect(listBody.result.tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['list_sites', 'create_site']))
+    // Without site_id, all tools must be discoverable so AI clients (e.g. ChatGPT) see the full
+    // capability set on first connection. Security gates enforce at execution time, not at discovery.
+    const allToolNames = listBody.result.tools.map(tool => tool.name)
+    expect(allToolNames).toEqual(expect.arrayContaining([
+      'list_sites', 'create_site',
+      'get_site', 'list_locations', 'list_menus', 'list_posts', 'list_media_assets',
+      'get_page_content', 'list_experiences', 'list_contact_submissions',
+      'get_translation_inventory', 'list_work_requests', 'get_google_business_connection',
+    ]))
+    expect(allToolNames.length).toBeGreaterThan(50)
 
     const invalid = await mcpRequest(request, baseURL!, { method: 'bad/method', id: 'bad-method' })
     expect(invalid.status()).toBe(404)
