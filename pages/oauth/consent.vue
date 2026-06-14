@@ -4,8 +4,9 @@
       <UCard :ui="{ root: 'shadow-lg' }">
         <template #header>
           <div class="text-center py-2">
-            <div class="w-12 h-12 bg-(--kc-coral-50) rounded-full flex items-center justify-center mx-auto mb-4">
-              <UIcon name="i-lucide-link" class="w-6 h-6 text-(--kc-coral-600)" />
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-4 overflow-hidden bg-elevated">
+              <img v-if="clientIcon" :src="clientIcon" :alt="clientName" class="w-full h-full object-cover" />
+              <UIcon v-else name="i-lucide-link" class="w-7 h-7 text-(--kc-coral-600)" />
             </div>
             <h1 class="text-xl font-bold text-default">Connect your account</h1>
             <p class="text-sm text-muted mt-1">
@@ -49,12 +50,8 @@ definePageMeta({ layout: false, auth: false })
 
 const route = useRoute()
 
-const clientName = computed(() => {
-  const id = route.query.client_id
-  if (!id || typeof id !== 'string') return 'An external application'
-  if (id.toLowerCase().includes('chatgpt') || id.toLowerCase().includes('openai')) return 'ChatGPT'
-  return 'An external application'
-})
+const clientName = ref('An external application')
+const clientIcon = ref(null)
 
 const requestedScopes = computed(() => {
   const raw = route.query.scope
@@ -71,6 +68,22 @@ function scopeLabel(scope) {
   return labels[scope] ?? scope
 }
 
+// Fetch real client metadata so we show the registered name/icon, not a guess
+onMounted(async () => {
+  const clientId = route.query.client_id
+  if (!clientId || typeof clientId !== 'string') return
+  try {
+    const data = await $fetch('/api/auth/oauth2/public-client-prelogin', {
+      method: 'POST',
+      body: { client_id: clientId, oauth_query: window.location.search.slice(1) },
+    })
+    if (data?.client_name) clientName.value = data.client_name
+    if (data?.logo_uri) clientIcon.value = data.logo_uri
+  } catch {
+    // Fall back to client_id if the lookup fails — non-fatal
+  }
+})
+
 const accepting = ref(false)
 const denying = ref(false)
 const error = ref(null)
@@ -79,12 +92,14 @@ async function accept() {
   accepting.value = true
   error.value = null
   try {
-    const result = await authClient.api.oauth2Consent({ body: { accept: true } })
-    if (result?.data?.redirect_uri) {
-      window.location.href = result.data.redirect_uri
-    }
+    // authClient.api.* adds an extra /api/ segment; call the endpoint directly
+    const result = await $fetch('/api/auth/oauth2/consent', {
+      method: 'POST',
+      body: { accept: true, oauth_query: window.location.search.slice(1) },
+    })
+    if (result?.redirect_uri) window.location.href = result.redirect_uri
   } catch (err) {
-    error.value = err?.message ?? 'Something went wrong. Please try again.'
+    error.value = err?.data?.message ?? err?.message ?? 'Something went wrong. Please try again.'
   } finally {
     accepting.value = false
   }
@@ -94,12 +109,13 @@ async function deny() {
   denying.value = true
   error.value = null
   try {
-    const result = await authClient.api.oauth2Consent({ body: { accept: false } })
-    if (result?.data?.redirect_uri) {
-      window.location.href = result.data.redirect_uri
-    }
+    const result = await $fetch('/api/auth/oauth2/consent', {
+      method: 'POST',
+      body: { accept: false, oauth_query: window.location.search.slice(1) },
+    })
+    if (result?.redirect_uri) window.location.href = result.redirect_uri
   } catch (err) {
-    error.value = err?.message ?? 'Something went wrong. Please try again.'
+    error.value = err?.data?.message ?? err?.message ?? 'Something went wrong. Please try again.'
   } finally {
     denying.value = false
   }
