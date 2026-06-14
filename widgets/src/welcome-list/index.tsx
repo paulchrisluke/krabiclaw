@@ -27,7 +27,7 @@ const styles = `
   .divider { border: none; border-top: 1px solid #e5e7eb; margin: 14px 0; }
   .empty { text-align: center; padding: 8px 0 16px; }
   .empty-text { font-size: 14px; color: #666; margin-bottom: 14px; }
-  .site-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1.5px solid #e5e7eb; border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .site-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1.5px solid #e5e7eb; border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; width: 100%; background: #fff; text-align: left; }
   .site-row:hover { border-color: ${PRIMARY}; background: #f8f9ff; }
   .site-row.selected { border-color: ${PRIMARY}; background: #f0f3ff; }
   .site-name { font-size: 14px; font-weight: 600; color: #111; }
@@ -129,7 +129,7 @@ function App() {
       </div>
       <hr className="divider" />
       {sites.map(site => (
-        <div
+        <button
           key={site.id}
           className={`site-row${selected === site.id ? ' selected' : ''}`}
           onClick={() => handleSelect(site)}
@@ -139,7 +139,7 @@ function App() {
             <div className="site-url">{site.subdomain}.krabiclaw.com</div>
           </div>
           <StatusBadge status={site.status} />
-        </div>
+        </button>
       ))}
       <div className="actions">
         <button className="btn btn-primary" onClick={handleWhatsNext} disabled={!selected}>

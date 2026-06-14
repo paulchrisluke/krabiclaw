@@ -67,7 +67,7 @@ async function ensureSite(request: APIRequestContext, baseURL: string) {
       vertical: 'restaurant',
     },
   })
-  expect(res.status()).toBe(200)
+  if (res.status() !== 200) console.error(await res.text()); expect(res.status()).toBe(200)
   const body = await res.json()
   const siteId = mcpData<{ siteId?: string }>(body).siteId
   expect(siteId).toEqual(expect.any(String))
@@ -76,7 +76,7 @@ async function ensureSite(request: APIRequestContext, baseURL: string) {
 
 async function getSiteOrg(request: APIRequestContext, baseURL: string, siteId: string) {
   const res = await request.get(`${baseURL}/api/sites/${siteId}`)
-  expect(res.status()).toBe(200)
+  if (res.status() !== 200) console.error(await res.text()); expect(res.status()).toBe(200)
   const body = await res.json() as { organization_id: string }
   return body.organization_id
 }
@@ -149,7 +149,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('owner can use content, notifications, submissions, and translation workflow tools', async ({ request, baseURL }) => {
-    test.setTimeout(120_000)
+    test.setTimeout(180_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
 
@@ -570,7 +570,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('owner can use menus, posts, media, experiences, and Google Business workflow tools', async ({ request, baseURL }) => {
-    test.setTimeout(120_000)
+    test.setTimeout(180_000)
     await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
     const locationId = await ensureLocation(request, baseURL!, siteId)

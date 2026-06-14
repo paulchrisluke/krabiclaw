@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
         serverInfo: { name: 'krabiclaw-mcp', version: 'phase-5' },
         instructions: `KrabiClaw — manage your restaurant or business website through this connection.
 
-Start every conversation by calling show_welcome (or list_sites) to discover the user's sites.
+Start every conversation by calling show_welcome to discover the user's sites and display the interactive site picker widget.
 - If they have 0 sites, start the Onboarding Flow: 
   1. Ask for their Google Maps URL (or shortlink) to import their business details.
   2. Call import_from_maps.
@@ -93,7 +93,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
           name: 'krabiclaw-mcp',
           version: 'phase-5',
         },
-        instructions: 'KrabiClaw MCP. Call list_sites first to establish site context, then use the returned site_id with all other tools.',
+        instructions: 'KrabiClaw MCP. Call show_welcome at the start of every conversation to display the site picker and discover the user\'s sites. Use the site_id from that interaction with all other tools.',
       }, 60_000))
     }
 
@@ -148,7 +148,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
           content: [{ type: 'text', text: result.fallbackText ?? JSON.stringify(result.structuredContent, null, 2) }],
           metadata: {
             _meta: {
-              'openai/outputTemplate': `${baseUrl}/mcp-assets/${result.__widget}.html`,
+              'openai/outputTemplate': `${baseUrl}/mcp-assets/${result.__widget}`,
             },
           },
         })

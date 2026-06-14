@@ -51,7 +51,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   globalTool({
     name: 'show_vertical_picker',
-    description: 'Show a business-type picker (restaurant, experience, retail, wellness, service). Call before asking for a Maps URL when creating a new site.',
+    description: 'Show a clickable business-type picker widget. The user taps one option and it is sent back to the model. Call this after the user clicks "Create a new site" but before asking for their Maps URL.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,

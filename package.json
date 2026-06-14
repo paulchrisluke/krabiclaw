@@ -78,6 +78,8 @@
     "@types/dompurify": "^3.2.0",
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.17",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
     "autocannon": "^8.0.0",
@@ -108,8 +110,6 @@
     "kysely": "^0.28.17",
     "marked": "^18.0.3",
     "nuxt-schema-org": "^6.0.4",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
     "slugify": "^1.6.9",
     "stripe": "^22.1.0",
     "tailwind-variants": "^3.2.2"

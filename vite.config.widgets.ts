@@ -12,6 +12,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         'welcome-list': resolve(__dirname, 'widgets/welcome-list.html'),
+        'vertical-picker': resolve(__dirname, 'widgets/vertical-picker.html'),
         'photo-album': resolve(__dirname, 'widgets/photo-album.html'),
         'image-carousel': resolve(__dirname, 'widgets/image-carousel.html'),
         'site-preview': resolve(__dirname, 'widgets/site-preview.html'),
