@@ -122,6 +122,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
           name: tool.name,
           description: tool.description,
           inputSchema: tool.inputSchema,
+          outputSchema: tool.outputSchema,
           annotations: {
             domain: tool.domain,
             minimumRole: tool.minimumRole,
@@ -146,10 +147,8 @@ Common workflows: update menus and items, draft and publish posts, triage contac
           isError: false,
           structuredContent: result.structuredContent,
           content: [{ type: 'text', text: result.fallbackText ?? JSON.stringify(result.structuredContent, null, 2) }],
-          metadata: {
-            _meta: {
-              'openai/outputTemplate': `${baseUrl}/mcp-assets/${result.__widget}`,
-            },
+          _meta: {
+            'openai/outputTemplate': `${baseUrl}/mcp-assets/${result.__widget}`,
           },
         })
       }
