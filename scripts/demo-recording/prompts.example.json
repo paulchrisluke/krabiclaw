@@ -1,0 +1,32 @@
+[
+  {
+    "title": "Accessible sites",
+    "prompt": "Show me the KrabiClaw sites I can access.",
+    "postWaitMs": 12000,
+    "manualPause": true
+  },
+  {
+    "title": "Site settings summary",
+    "prompt": "Open the settings for my main KrabiClaw site and summarize the editable branding fields.",
+    "postWaitMs": 12000,
+    "manualPause": true
+  },
+  {
+    "title": "Draft blog post",
+    "prompt": "Create a draft post announcing our new summer tasting menu.",
+    "postWaitMs": 15000,
+    "manualPause": true
+  },
+  {
+    "title": "Contact triage",
+    "prompt": "Show me recent contact submissions and mark the newest one as in progress.",
+    "postWaitMs": 15000,
+    "manualPause": true
+  },
+  {
+    "title": "Publish confirmation flow",
+    "prompt": "Publish the current homepage draft for my site, but ask me for confirmation before doing anything live.",
+    "postWaitMs": 15000,
+    "manualPause": true
+  }
+]
