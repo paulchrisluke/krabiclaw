@@ -51,33 +51,7 @@ export async function requireMcpUser(event: H3Event): Promise<McpUserContext> {
 async function verifyBearerToken(token: string, env: CloudflareEnv, db: D1Database): Promise<McpUserContext> {
   const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
 
-  const { results: keys } = await db
-    .prepare('SELECT id, publicKey, alg FROM jwks ORDER BY createdAt DESC')
-    .all<{ id: string; publicKey: string; alg: string | null }>()
-
-  if (!keys?.length) {
-    throw createError({ statusCode: 401, statusMessage: 'No signing keys configured' })
-  }
-
-  const jwks = createLocalJWKSet({
-    keys: keys.map(k => ({
-      ...JSON.parse(k.publicKey),
-      kid: k.id,
-      alg: k.alg ?? 'EdDSA',
-    })),
-  })
-
-  let userId: string
-  try {
-    const { payload } = await jwtVerify(token, jwks, {
-      issuer: baseUrl,
-      audience: [`${baseUrl}/api/mcp`, 'https://krabiclaw.com/api/mcp'],
-    })
-    if (!payload.sub) throw new Error('missing sub')
-    userId = payload.sub
-  } catch {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid or expired token' })
-  }
+  const userId = await verifyJwtOrOpaqueToken(token, baseUrl, db)
 
   const user = await db
     .prepare('SELECT role FROM user WHERE id = ? LIMIT 1')
@@ -93,6 +67,84 @@ async function verifyBearerToken(token: string, env: CloudflareEnv, db: D1Databa
     db,
     userId,
     isPlatformAdmin: user.role === 'admin',
+  }
+}
+
+async function verifyJwtOrOpaqueToken(token: string, baseUrl: string, db: D1Database): Promise<string> {
+  const jwtUserId = await verifyJwtAccessToken(token, baseUrl, db)
+  if (jwtUserId) return jwtUserId
+
+  const opaqueUserId = await verifyOpaqueAccessToken(token, db)
+  if (opaqueUserId) return opaqueUserId
+
+  throw createError({ statusCode: 401, statusMessage: 'Invalid or expired token' })
+}
+
+async function verifyJwtAccessToken(token: string, baseUrl: string, db: D1Database): Promise<string | null> {
+  const { results: keys } = await db
+    .prepare('SELECT id, publicKey, alg FROM jwks ORDER BY createdAt DESC')
+    .all<{ id: string; publicKey: string; alg: string | null }>()
+
+  if (!keys?.length) return null
+
+  const jwks = createLocalJWKSet({
+    keys: keys.map(k => ({
+      ...JSON.parse(k.publicKey),
+      kid: k.id,
+      alg: k.alg ?? 'EdDSA',
+    })),
+  })
+
+  try {
+    const { payload } = await jwtVerify(token, jwks, {
+      issuer: baseUrl,
+      audience: [`${baseUrl}/api/mcp`, 'https://krabiclaw.com/api/mcp'],
+    })
+    return typeof payload.sub === 'string' ? payload.sub : null
+  } catch {
+    return null
+  }
+}
+
+async function verifyOpaqueAccessToken(token: string, db: D1Database): Promise<string | null> {
+  const hashedToken = await sha256Base64Url(token)
+  const accessToken = await db.prepare(`
+    SELECT oat.userId, oat.expiresAt, oat.scopes, oc.disabled AS client_disabled
+    FROM oauthAccessToken oat
+    LEFT JOIN oauthClient oc ON oc.clientId = oat.clientId
+    WHERE oat.token = ?
+    LIMIT 1
+  `).bind(hashedToken).first<{
+    userId: string | null
+    expiresAt: string | null
+    scopes: string | null
+    client_disabled: number | null
+  }>()
+
+  if (!accessToken?.userId || !accessToken.expiresAt) return null
+  if (accessToken.client_disabled) return null
+
+  const expiresAt = new Date(accessToken.expiresAt)
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) return null
+
+  const scopes = parseTokenScopes(accessToken.scopes)
+  if (!scopes.includes('tenant')) return null
+
+  return accessToken.userId
+}
+
+async function sha256Base64Url(value: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return Buffer.from(digest).toString('base64url')
+}
+
+function parseTokenScopes(scopes: string | null) {
+  if (!scopes) return []
+  try {
+    const parsed = JSON.parse(scopes)
+    return Array.isArray(parsed) ? parsed.filter((scope): scope is string => typeof scope === 'string') : []
+  } catch {
+    return scopes.split(' ').filter(Boolean)
   }
 }
 

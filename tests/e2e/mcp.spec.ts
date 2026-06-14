@@ -46,6 +46,16 @@ async function mcpRequest(
   })
 }
 
+// Extracts typed data from a tools/call result.
+// Handles both the current spec format { type: 'text', text: string }
+// and the legacy format { type: 'json', json: object }.
+function mcpData<T>(body: { result?: { content?: Array<{ type?: string; text?: string; json?: unknown }> } }): T {
+  const item = body.result?.content?.[0]
+  if (!item) return {} as T
+  if (item.type === 'text' && typeof item.text === 'string') return JSON.parse(item.text) as T
+  return (item.json ?? {}) as T
+}
+
 async function ensureSite(request: APIRequestContext, baseURL: string) {
   const suffix = Date.now()
   const res = await mcpRequest(request, baseURL, {
@@ -58,8 +68,8 @@ async function ensureSite(request: APIRequestContext, baseURL: string) {
     },
   })
   expect(res.status()).toBe(200)
-  const body = await res.json() as { result: { content: Array<{ json: { siteId?: string } }> } }
-  const siteId = body.result.content[0]?.json.siteId
+  const body = await res.json()
+  const siteId = mcpData<{ siteId?: string }>(body).siteId
   expect(siteId).toEqual(expect.any(String))
   return siteId as string
 }
@@ -78,8 +88,8 @@ async function ensureLocation(request: APIRequestContext, baseURL: string, siteI
     args: { site_id: siteId },
   })
   expect(locations.status()).toBe(200)
-  const locationsBody = await locations.json() as { result: { content: Array<{ json: { locations: Array<{ id: string }> } }> } }
-  let locationId = locationsBody.result.content[0]?.json.locations[0]?.id
+  const locationsBody = await locations.json()
+  let locationId = mcpData<{ locations?: Array<{ id: string }> }>(locationsBody).locations?.[0]?.id
   if (!locationId) {
     const createLocation = await mcpRequest(request, baseURL, {
       method: 'tools/call',
@@ -87,8 +97,9 @@ async function ensureLocation(request: APIRequestContext, baseURL: string, siteI
       args: { site_id: siteId, title: `MCP Location ${Date.now()}`, city: 'Krabi' },
     })
     expect(createLocation.status()).toBe(200)
-    const locationBody = await createLocation.json() as { result: { content: Array<{ json: { id?: string; location?: { id?: string } } }> } }
-    locationId = locationBody.result.content[0]?.json.id ?? locationBody.result.content[0]?.json.location?.id
+    const locationBody = await createLocation.json()
+    const locationData = mcpData<{ id?: string; location?: { id?: string } }>(locationBody)
+    locationId = locationData.id ?? locationData.location?.id
   }
   expect(locationId).toEqual(expect.any(String))
   return locationId as string
@@ -139,8 +150,8 @@ test.describe('stateless MCP server', () => {
       args: {},
     })
     expect(sitesList.status()).toBe(200)
-    const sitesListBody = await sitesList.json() as { result: { content: Array<{ json: { sites: Array<{ id: string }> } }> } }
-    expect(sitesListBody.result.content[0]?.json.sites.some(site => site.id === siteId)).toBe(true)
+    const sitesListBody = await sitesList.json()
+    expect(mcpData<{ sites: Array<{ id: string }> }>(sitesListBody).sites.some(site => site.id === siteId)).toBe(true)
 
     const siteRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -185,8 +196,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, page: 'home' },
     })
     expect(mergedContent.status()).toBe(200)
-    const mergedBody = await mergedContent.json() as { result: { content: Array<{ json: { content: Array<{ field: string; hero_title?: string }> } }> } }
-    const mergedHero = mergedBody.result.content[0]?.json.content.find(item => item.field === 'hero')
+    const mergedBody = await mergedContent.json()
+    const mergedHero = mcpData<{ content: Array<{ field: string; hero_title?: string }> }>(mergedBody).content.find(item => item.field === 'hero')
     expect(mergedHero?.hero_title).toContain('MCP Hero')
 
     const status = await mcpRequest(request, baseURL!, {
@@ -195,9 +206,10 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, page: 'home' },
     })
     expect(status.status()).toBe(200)
-    const statusBody = await status.json() as { result: { content: Array<{ json: { hasDrafts: boolean; count: number } }> } }
-    expect(statusBody.result.content[0]?.json.hasDrafts).toBe(true)
-    expect(statusBody.result.content[0]?.json.count).toBeGreaterThan(0)
+    const statusBody = await status.json()
+    const statusData = mcpData<{ hasDrafts: boolean; count: number }>(statusBody)
+    expect(statusData.hasDrafts).toBe(true)
+    expect(statusData.count).toBeGreaterThan(0)
 
     const settingsBefore = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -246,8 +258,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, page: 'about' },
     })
     expect(discardStatus.status()).toBe(200)
-    const discardStatusBody = await discardStatus.json() as { result: { content: Array<{ json: { hasDrafts: boolean; count: number } }> } }
-    expect(discardStatusBody.result.content[0]?.json.hasDrafts).toBe(false)
+    const discardStatusBody = await discardStatus.json()
+    expect(mcpData<{ hasDrafts: boolean }>(discardStatusBody).hasDrafts).toBe(false)
 
     const deleteFieldSeed = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -282,8 +294,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, whatsapp_phone: '+1 555 555 0101' },
     })
     expect(notifications.status()).toBe(200)
-    const notificationsBody = await notifications.json() as { result: { content: Array<{ json: { notifications: { whatsapp_phone: string } } }> } }
-    expect(notificationsBody.result.content[0]?.json.notifications.whatsapp_phone).toContain('+15555550101')
+    const notificationsBody = await notifications.json()
+    expect(mcpData<{ notifications: { whatsapp_phone: string } }>(notificationsBody).notifications.whatsapp_phone).toContain('+15555550101')
 
     const notificationsRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -314,8 +326,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId },
     })
     expect(listContacts.status()).toBe(200)
-    const contactsBody = await listContacts.json() as { result: { content: Array<{ json: { submissions: Array<{ id: string }> } }> } }
-    const contactSubmissionId = contactsBody.result.content[0]?.json.submissions[0]?.id
+    const contactsBody = await listContacts.json()
+    const contactSubmissionId = mcpData<{ submissions: Array<{ id: string }> }>(contactsBody).submissions[0]?.id
     expect(contactSubmissionId).toEqual(expect.any(String))
 
     const updateContact = await mcpRequest(request, baseURL!, {
@@ -331,8 +343,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId },
     })
     expect(listReservations.status()).toBe(200)
-    const reservationsBody = await listReservations.json() as { result: { content: Array<{ json: { submissions: Array<{ id: string }> } }> } }
-    const reservationSubmissionId = reservationsBody.result.content[0]?.json.submissions[0]?.id
+    const reservationsBody = await listReservations.json()
+    const reservationSubmissionId = mcpData<{ submissions: Array<{ id: string }> }>(reservationsBody).submissions[0]?.id
     expect(reservationSubmissionId).toEqual(expect.any(String))
 
     const updateReservation = await mcpRequest(request, baseURL!, {
@@ -370,8 +382,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, location_id: locationId, question: 'Do you have vegan options?', answer: 'Yes', is_owner_answer: true },
     })
     expect(qaCreate.status()).toBe(200)
-    const qaCreateBody = await qaCreate.json() as { result: { content: Array<{ json: { id?: string } }> } }
-    const qaId = qaCreateBody.result.content[0]?.json.id
+    const qaCreateBody = await qaCreate.json()
+    const qaId = mcpData<{ id?: string }>(qaCreateBody).id
     expect(qaId).toEqual(expect.any(String))
 
     const qaUpdate = await mcpRequest(request, baseURL!, {
@@ -394,8 +406,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, location_id: locationId, question: 'Are pets allowed?', answer: 'Yes, on the patio.', is_owner_answer: true },
     })
     expect(qaCreateSecond.status()).toBe(200)
-    const qaCreateSecondBody = await qaCreateSecond.json() as { result: { content: Array<{ json: { id?: string } }> } }
-    const qaIdSecond = qaCreateSecondBody.result.content[0]?.json.id
+    const qaCreateSecondBody = await qaCreateSecond.json()
+    const qaIdSecond = mcpData<{ id?: string }>(qaCreateSecondBody).id
     expect(qaIdSecond).toEqual(expect.any(String))
 
     const qaReorder = await mcpRequest(request, baseURL!, {
@@ -418,8 +430,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, locale: localeCode, scope: 'content' },
     })
     expect(inventory.status()).toBe(200)
-    const inventoryBody = await inventory.json() as { result: { content: Array<{ json: { estimate: { total_items: number } } }> } }
-    expect(inventoryBody.result.content[0]?.json.estimate.total_items).toBeGreaterThan(0)
+    const inventoryBody = await inventory.json()
+    expect(mcpData<{ estimate: { total_items: number } }>(inventoryBody).estimate.total_items).toBeGreaterThan(0)
 
     const translationJobs = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -434,21 +446,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, locale: localeCode, scope: 'content', status: 'all' },
     })
     expect(translationReview.status()).toBe(200)
-    const translationReviewBody = await translationReview.json() as {
-      result: {
-        content: Array<{
-          json: {
-            items: Array<{
-              entity_type: string
-              entity_id: string
-              field: string
-              source_fields: Record<string, string>
-            }>
-          }
-        }>
-      }
-    }
-    const reviewItem = translationReviewBody.result.content[0]?.json.items[0]
+    const translationReviewBody = await translationReview.json()
+    const reviewItem = mcpData<{ items: Array<{ entity_type: string; entity_id: string; field: string; source_fields: Record<string, string> }> }>(translationReviewBody).items[0]
     expect(reviewItem).toBeDefined()
 
     const translationFields = Object.fromEntries(
@@ -497,16 +496,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId },
     })
     expect(translationJobsAfterStart.status()).toBe(200)
-    const translationJobsAfterStartBody = await translationJobsAfterStart.json() as {
-      result: {
-        content: Array<{
-          json: {
-            jobs: Array<{ id: string; target_locale: string }>
-          }
-        }>
-      }
-    }
-    let startedJob = translationJobsAfterStartBody.result.content[0]?.json.jobs.find(job => job.target_locale === jobLocale)
+    const translationJobsAfterStartBody = await translationJobsAfterStart.json()
+    let startedJob = mcpData<{ jobs: Array<{ id: string; target_locale: string }> }>(translationJobsAfterStartBody).jobs.find(job => job.target_locale === jobLocale)
     if (!startedJob) {
       const seedTranslationJob = await request.post(`${baseURL}/api/editor/sites/${siteId}/translations/jobs`, {
         data: { locale: jobLocale, scope: 'content', includePublished: true },
@@ -581,8 +572,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, name: `MCP Menu ${Date.now()}` },
     })
     expect(menu.status()).toBe(200)
-    const menuBody = await menu.json() as { result: { content: Array<{ json: { menu: { id: string } } }> } }
-    const menuId = menuBody.result.content[0]?.json.menu.id
+    const menuBody = await menu.json()
+    const menuId = mcpData<{ menu: { id: string } }>(menuBody).menu.id
     expect(menuId).toEqual(expect.any(String))
 
     const menuItem = await mcpRequest(request, baseURL!, {
@@ -591,8 +582,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, menu_id: menuId, section: 'Mains', name: 'MCP Curry', price_amount: '12.50' },
     })
     expect(menuItem.status()).toBe(200)
-    const menuItemBody = await menuItem.json() as { result: { content: Array<{ json: { item: { id: string } } }> } }
-    const menuItemId = menuItemBody.result.content[0]?.json.item.id
+    const menuItemBody = await menuItem.json()
+    const menuItemId = mcpData<{ item: { id: string } }>(menuItemBody).item.id
     expect(menuItemId).toEqual(expect.any(String))
 
     const secondMenuItem = await mcpRequest(request, baseURL!, {
@@ -601,8 +592,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, menu_id: menuId, section: 'Mains', name: 'MCP Noodles', price_amount: '11.25', sort_order: 2 },
     })
     expect(secondMenuItem.status()).toBe(200)
-    const secondMenuItemBody = await secondMenuItem.json() as { result: { content: Array<{ json: { item: { id: string } } }> } }
-    const menuItemIdSecond = secondMenuItemBody.result.content[0]?.json.item.id
+    const secondMenuItemBody = await secondMenuItem.json()
+    const menuItemIdSecond = mcpData<{ item: { id: string } }>(secondMenuItemBody).item.id
     expect(menuItemIdSecond).toEqual(expect.any(String))
 
     const dessertMenuItem = await mcpRequest(request, baseURL!, {
@@ -618,8 +609,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, menu_id: menuId },
     })
     expect(menuRead.status()).toBe(200)
-    const menuReadBody = await menuRead.json() as { result: { content: Array<{ json: { menu: { items: Array<{ name: string }> } } }> } }
-    expect(menuReadBody.result.content[0]?.json.menu.items.some(item => item.name === 'MCP Curry')).toBe(true)
+    const menuReadBody = await menuRead.json()
+    expect(mcpData<{ menu: { items: Array<{ name: string }> } }>(menuReadBody).menu.items.some(item => item.name === 'MCP Curry')).toBe(true)
 
     const menusList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -683,8 +674,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, title: 'MCP Post', body: 'Created through MCP' },
     })
     expect(post.status()).toBe(200)
-    const postBody = await post.json() as { result: { content: Array<{ json: { post: { id: string } } }> } }
-    const postId = postBody.result.content[0]?.json.post.id
+    const postBody = await post.json()
+    const postId = mcpData<{ post: { id: string } }>(postBody).post.id
     expect(postId).toEqual(expect.any(String))
 
     const publishedPost = await mcpRequest(request, baseURL!, {
@@ -721,8 +712,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, title: 'Delete Me', body: 'Temporary post' },
     })
     expect(postDeleteCandidate.status()).toBe(200)
-    const postDeleteCandidateBody = await postDeleteCandidate.json() as { result: { content: Array<{ json: { post: { id: string } } }> } }
-    const postDeleteId = postDeleteCandidateBody.result.content[0]?.json.post.id
+    const postDeleteCandidateBody = await postDeleteCandidate.json()
+    const postDeleteId = mcpData<{ post: { id: string } }>(postDeleteCandidateBody).post.id
     expect(postDeleteId).toEqual(expect.any(String))
 
     const postDelete = await mcpRequest(request, baseURL!, {
@@ -748,8 +739,8 @@ test.describe('stateless MCP server', () => {
 
     let uploadedAssetId: string | null = null
     if (mediaUpload.status() === 200) {
-      const mediaUploadBody = await mediaUpload.json() as { result: { content: Array<{ json: { asset_id: string } }> } }
-      uploadedAssetId = mediaUploadBody.result.content[0]?.json.asset_id ?? null
+      const mediaUploadBody = await mediaUpload.json()
+      uploadedAssetId = mcpData<{ asset_id?: string }>(mediaUploadBody).asset_id ?? null
       expect(uploadedAssetId).toEqual(expect.any(String))
 
       const mediaConfirm = await mcpRequest(request, baseURL!, {
@@ -773,8 +764,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, title: 'MCP Kayak Tour', body: 'Half-day tour', status: 'active', time_slots: ['14:00'], max_capacity: 6 },
     })
     expect(experience.status()).toBe(200)
-    const experienceBody = await experience.json() as { result: { content: Array<{ json: { experience: { id: string } } }> } }
-    const experienceId = experienceBody.result.content[0]?.json.experience.id
+    const experienceBody = await experience.json()
+    const experienceId = mcpData<{ experience: { id: string } }>(experienceBody).experience.id
     expect(experienceId).toEqual(expect.any(String))
 
     const listedExperiences = await mcpRequest(request, baseURL!, {
@@ -783,8 +774,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId },
     })
     expect(listedExperiences.status()).toBe(200)
-    const experiencesBody = await listedExperiences.json() as { result: { content: Array<{ json: { experiences: Array<{ id: string }> } }> } }
-    expect(experiencesBody.result.content[0]?.json.experiences.some(item => item.id === experienceId)).toBe(true)
+    const experiencesBody = await listedExperiences.json()
+    expect(mcpData<{ experiences: Array<{ id: string }> }>(experiencesBody).experiences.some(item => item.id === experienceId)).toBe(true)
 
     const experienceRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -800,8 +791,8 @@ test.describe('stateless MCP server', () => {
     })
     expect(experienceUpdate.status()).toBe(200)
 
-    const experienceReadBody = await experienceRead.json() as { result: { content: Array<{ json: { experience: { slug: string } } }> } }
-    const experienceSlug = experienceReadBody.result.content[0]?.json.experience.slug
+    const experienceReadBody = await experienceRead.json()
+    const experienceSlug = mcpData<{ experience: { slug: string } }>(experienceReadBody).experience.slug
     expect(experienceSlug).toEqual(expect.any(String))
 
     const futureDate = new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -840,8 +831,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, title: 'Delete MCP Experience', body: 'Temporary experience', status: 'inactive' },
     })
     expect(deleteExperienceCandidate.status()).toBe(200)
-    const deleteExperienceCandidateBody = await deleteExperienceCandidate.json() as { result: { content: Array<{ json: { experience: { id: string } } }> } }
-    const deleteExperienceId = deleteExperienceCandidateBody.result.content[0]?.json.experience.id
+    const deleteExperienceCandidateBody = await deleteExperienceCandidate.json()
+    const deleteExperienceId = mcpData<{ experience: { id: string } }>(deleteExperienceCandidateBody).experience.id
     expect(deleteExperienceId).toEqual(expect.any(String))
 
     const deleteExperienceRes = await mcpRequest(request, baseURL!, {
@@ -866,8 +857,8 @@ test.describe('stateless MCP server', () => {
       args: { site_id: POTTERY_HOUSE_SITE_ID, location_id: POTTERY_HOUSE_LOCATION_ID },
     })
     expect(googleConnection.status()).toBe(200)
-    const googleConnectionBody = await googleConnection.json() as { result: { content: Array<{ json: { connection: unknown } }> } }
-    expect(googleConnectionBody.result.content[0]?.json.connection ?? null).toBeNull()
+    const googleConnectionBody = await googleConnection.json()
+    expect(mcpData<{ connection: unknown }>(googleConnectionBody).connection ?? null).toBeNull()
 
     const googleAccounts = await mcpRequest(request, baseURL!, {
       method: 'tools/call',

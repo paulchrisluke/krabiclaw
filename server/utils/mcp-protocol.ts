@@ -1,7 +1,7 @@
 import { getHeader, type H3Event } from 'h3'
 
-export const MCP_PROTOCOL_VERSION = '2025-03-26'
-const SUPPORTED_PROTOCOL_VERSIONS = new Set(['2025-03-26', '2024-11-05'])
+export const MCP_PROTOCOL_VERSION = '2025-11-25'
+const SUPPORTED_PROTOCOL_VERSIONS = new Set(['2026-07-28', '2025-11-25', '2025-03-26', '2024-11-05'])
 
 type JsonRpcId = string | number | null
 
@@ -47,11 +47,17 @@ export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
     throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Missing MCP method.')
   }
 
-  const version = headerVersion ?? metaString(request, 'io.modelcontextprotocol/version')
-  if (!version) {
+  // For `initialize`, the version lives in params.protocolVersion (body), not a header.
+  const bodyVersion = typeof (body as Record<string, unknown> & { params?: { protocolVersion?: unknown } })
+    ?.params?.protocolVersion === 'string'
+    ? (body as { params: { protocolVersion: string } }).params.protocolVersion
+    : null
+  const version = headerVersion ?? metaString(request, 'io.modelcontextprotocol/version') ?? bodyVersion
+  const isNotification = typeof method === 'string' && method.startsWith('notifications/')
+  if (!version && !isNotification) {
     throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Missing MCP protocol version.')
   }
-  if (!SUPPORTED_PROTOCOL_VERSIONS.has(version)) {
+  if (version && !SUPPORTED_PROTOCOL_VERSIONS.has(version)) {
     throw mcpProtocolError(MCP_ERROR.invalidRequest, `Unsupported MCP protocol version: ${version}`)
   }
 

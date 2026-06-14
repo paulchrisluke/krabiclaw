@@ -20,13 +20,58 @@ export default defineEventHandler(async (event) => {
     }
 
     const body = await readBody(event)
+
+    // ChatGPT occasionally sends an empty-body health probe — ignore silently.
+    if (!body || (typeof body === 'object' && Object.keys(body).length === 0)) {
+      setResponseStatus(event, 200)
+      return ''
+    }
+
     const request = readMcpRequest(event, body)
     requestId = request.id
+
+    // MCP protocol handshake — required before any tools/list or tools/call
+    if (request.method === 'initialize') {
+      await requireMcpUser(event)
+      return mcpSuccess(request.id, {
+        protocolVersion: MCP_PROTOCOL_VERSION,
+        capabilities: { tools: {}, resources: {}, prompts: {} },
+        serverInfo: { name: 'krabiclaw-mcp', version: 'phase-5' },
+        instructions: 'Stateless tools-only MCP server for KrabiClaw tenant operations.',
+      })
+    }
+
+    // Client acknowledgement after initialize — spec requires 202 with no body
+    if (request.method === 'notifications/initialized') {
+      setResponseStatus(event, 202)
+      return ''
+    }
+
+    // Standard ping
+    if (request.method === 'ping') {
+      return mcpSuccess(request.id, {})
+    }
+
+    // Resources and prompts — we are tools-only; return empty lists rather than 404
+    if (request.method === 'resources/list') {
+      await requireMcpUser(event)
+      return mcpSuccess(request.id, { resources: [] })
+    }
+
+    if (request.method === 'resources/templates/list') {
+      await requireMcpUser(event)
+      return mcpSuccess(request.id, { resourceTemplates: [] })
+    }
+
+    if (request.method === 'prompts/list') {
+      await requireMcpUser(event)
+      return mcpSuccess(request.id, { prompts: [] })
+    }
 
     if (request.method === 'server/discover') {
       await requireMcpUser(event)
       return mcpSuccess(request.id, protocolCache('server/discover', {
-        supportedVersions: [MCP_PROTOCOL_VERSION],
+        supportedVersions: ['2026-07-28', '2025-11-25', '2025-03-26', '2024-11-05'],
         capabilities: { tools: {} },
         serverInfo: {
           name: 'krabiclaw-mcp',
@@ -78,9 +123,8 @@ export default defineEventHandler(async (event) => {
 
       const result = await executeMcpToolCall(event, toolName, rawArgs)
       return mcpSuccess(request.id, {
-        resultType: 'tools/call',
         isError: false,
-        content: [{ type: 'json', json: result }],
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       })
     }
 
@@ -94,6 +138,8 @@ export default defineEventHandler(async (event) => {
       : mcpError.code === MCP_ERROR.invalidRequest || mcpError.code === MCP_ERROR.invalidParams ? 400
       : mcpError.code === MCP_ERROR.parse ? 400
       : 500)
+    // Temporary: log all MCP errors so wrangler tail can capture them
+    console.error('[MCP]', status, mcpError.code, mcpError.message, 'method:', requestId)
     setResponseStatus(event, status)
     if (status === 401) {
       const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined

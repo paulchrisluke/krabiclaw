@@ -24,6 +24,12 @@ playwright-report/
 .idea
 curl_output.html
 
+# AI tool local state (like .claude/ — never commit)
+.codex/
+
+# Playwright browser binaries (installed locally, not committed)
+.playwright/
+
 # Local env files
 .env
 .env.*
