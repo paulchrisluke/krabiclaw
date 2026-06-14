@@ -111,8 +111,10 @@ export async function executeMcpToolCall(
 
     const details = await getPlaceDetails(apiKey, placeId, true)
 
-    // Upload Google Photos to Cloudflare Images and create media_asset rows
-    const photos: Array<{ assetId: string; publicUrl: string }> = []
+    // Upload Google Photos to Cloudflare Images for stable preview URLs.
+    // We don't have an org/site yet, so we do NOT persist media_asset rows here.
+    // The returned cfImageId lets the model create proper media_assets after create_site.
+    const photos: Array<{ cfImageId: string; publicUrl: string }> = []
     const hasImagesConfig = (user.env as Record<string, unknown>).CLOUDFLARE_IMAGES_API_TOKEN
       && (user.env as Record<string, unknown>).CF_ACCOUNT_ID
 
@@ -129,30 +131,8 @@ export async function executeMcpToolCall(
             `maps-photo-${placeId}-${photos.length}.jpg`,
             contentType,
           )
-          const assetId = crypto.randomUUID()
-          await createMediaAsset(user.db, {
-            id: assetId,
-            organization_id: 'pending',
-            site_id: 'pending',
-            location_id: null,
-            kind: 'image',
-            provider: 'cloudflare_images',
-            source: 'external',
-            cloudflare_image_id: uploaded.imageId,
-            status: 'active',
-            file_name: `maps-photo-${photos.length + 1}.jpg`,
-            category: 'exterior',
-            public_url: uploaded.publicUrl,
-            thumbnail_url: uploaded.thumbnailUrl,
-            created_by_user_id: user.userId,
-          })
-          photos.push({ assetId, publicUrl: uploaded.publicUrl })
+          photos.push({ cfImageId: uploaded.imageId, publicUrl: uploaded.publicUrl })
         } catch { /* skip failed photos */ }
-      }
-    } else if (details.photos.length > 0) {
-      // No CF Images configured — return photo URLs directly for preview only
-      for (const photo of details.photos.slice(0, 10)) {
-        photos.push({ assetId: '', publicUrl: photo.photoUri })
       }
     }
 
@@ -177,10 +157,13 @@ export async function executeMcpToolCall(
 
   if (toolName === 'show_generated_images') {
     await requireMcpUser(event)
-    const images = objectArray(rawArguments.images, 'images').map(img => ({
-      assetId: String(img.assetId ?? ''),
-      publicUrl: String(img.publicUrl ?? ''),
-    }))
+    const raw = objectArray(rawArguments.images, 'images')
+    for (const img of raw) {
+      if (typeof img.assetId !== 'string' || !img.assetId || typeof img.publicUrl !== 'string' || !img.publicUrl) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, 'Each image must have a non-empty assetId and publicUrl.')
+      }
+    }
+    const images = raw.map(img => ({ assetId: img.assetId as string, publicUrl: img.publicUrl as string }))
     return renderWidget('image-carousel', { images }, `${images.length} AI-generated image${images.length !== 1 ? 's' : ''} ready to review.`)
   }
 
@@ -218,10 +201,14 @@ export async function executeMcpToolCall(
       const siteRow = await getSiteForMcp(site.db, site.siteId, site.userId)
       const subdomain = (siteRow as Record<string, unknown>).subdomain as string
       const publicUrl = subdomain ? `https://${subdomain}.krabiclaw.com` : ''
-      const pages = [
-        { label: 'Home', path: '/' },
-        { label: 'Location', path: '/location' },
-      ]
+      const locationRows = await site.db.prepare(
+        `SELECT slug, title FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, title ASC LIMIT 5`,
+      ).bind(site.siteId).all<{ slug: string; title: string }>()
+      const locationPages = (locationRows.results ?? []).map(loc => ({
+        label: loc.title,
+        path: `/${loc.slug}`,
+      }))
+      const pages = [{ label: 'Home', path: '/' }, ...locationPages]
       return renderWidget('site-preview', {
         site: {
           id: site.siteId,

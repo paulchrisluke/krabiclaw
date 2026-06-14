@@ -65,11 +65,12 @@ function App() {
   }
 
   const { site, pages } = content
-  const currentPage = pages[pageIndex] ?? { label: 'Home', path: '/' }
+  if (!pages.length) return null
+  const currentPage = pages[pageIndex]!
   const frameUrl = `${site.publicUrl}${currentPage.path}`
 
   const handleOpen = () => {
-    window.open(site.publicUrl, '_blank')
+    window.open(site.publicUrl, '_blank', 'noopener,noreferrer')
   }
 
   const handleWhatsNext = () => {

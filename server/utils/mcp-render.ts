@@ -13,5 +13,11 @@ export function renderWidget(
 }
 
 export function isMcpRenderResponse(value: unknown): value is McpRenderResponse {
-  return typeof value === 'object' && value !== null && '__widget' in value
+  return (
+    typeof value === 'object'
+    && value !== null
+    && '__widget' in value
+    && typeof (value as Record<string, unknown>).__widget === 'string'
+    && 'structuredContent' in value
+  )
 }
