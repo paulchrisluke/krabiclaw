@@ -7,7 +7,9 @@ const PLACES_BASE = 'https://places.googleapis.com/v1/places'
 // Field masks — controls billing tier. We fetch all useful fields in one call.
 // Basic: id, displayName, formattedAddress, location, googleMapsUri
 // Contact (+$0.003/1k): nationalPhoneNumber, internationalPhoneNumber, websiteUri
-// Atmosphere (+$0.005/1k): rating, userRatingCount, regularOpeningHours
+// Atmosphere (+$0.005/1k): rating, userRatingCount, regularOpeningHours, reviews
+// Photos: photos metadata is free in the detail response; fetching the actual image
+//   via /v1/{name}/media is billed at $0.007/photo (first 5,000/month free)
 const SEARCH_FIELD_MASK = [
   'places.id',
   'places.displayName',
@@ -34,6 +36,7 @@ const DETAIL_FIELD_MASK = [
   'userRatingCount',
   'regularOpeningHours',
   'reviews',
+  'photos',
 ].join(',')
 
 export interface PlaceSearchResult {
@@ -57,6 +60,13 @@ export interface PlaceReview {
   publishedAt: string | null
 }
 
+export interface PlacePhoto {
+  name: string          // e.g. "places/ChIJ.../photos/AUc7tXq..."
+  widthPx: number
+  heightPx: number
+  photoUri: string      // resolved CDN URL (fetched via /media?skipHttpRedirect=true)
+}
+
 export interface PlaceDetails {
   placeId: string
   name: string
@@ -71,6 +81,7 @@ export interface PlaceDetails {
   ratingCount: number | null
   openingHours: string[] | null
   reviews: PlaceReview[]
+  photos: PlacePhoto[]
 }
 
 interface RawReview {
@@ -79,6 +90,12 @@ interface RawReview {
   text?: { text?: string }
   authorAttribution?: { displayName?: string; photoUri?: string }
   publishTime?: string
+}
+
+interface RawPhoto {
+  name?: string
+  widthPx?: number
+  heightPx?: number
 }
 
 interface RawPlace {
@@ -95,6 +112,7 @@ interface RawPlace {
   regularOpeningHours?: { weekdayDescriptions?: string[] }
   addressComponents?: Array<{ longText?: string; types?: string[] }>
   reviews?: RawReview[]
+  photos?: RawPhoto[]
 }
 
 function extractCity(components?: RawPlace['addressComponents']): string | null {
@@ -121,7 +139,7 @@ function normalizeSearchResult(place: RawPlace): PlaceSearchResult {
   }
 }
 
-function normalizeDetail(place: RawPlace): PlaceDetails {
+function normalizeDetail(place: RawPlace): Omit<PlaceDetails, 'photos'> & { rawPhotos: RawPhoto[] } {
   return {
     placeId: place.id ?? '',
     name: place.displayName?.text ?? '',
@@ -143,7 +161,40 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
       text: r.text?.text ?? null,
       publishedAt: r.publishTime ?? null,
     })),
+    rawPhotos: place.photos ?? [],
   }
+}
+
+// Resolves up to `limit` photo CDN URLs from photo name references.
+// Uses skipHttpRedirect=true so we get the URI directly without following a redirect.
+// Billed at $0.007/photo after the free tier (5,000/month).
+export async function fetchPlacePhotoUrls(
+  apiKey: string,
+  rawPhotos: RawPhoto[],
+  limit = 10,
+): Promise<PlacePhoto[]> {
+  const fetch1Photo = async (raw: RawPhoto): Promise<PlacePhoto | null> => {
+    if (!raw.name) return null
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8_000)
+    try {
+      const url = `https://places.googleapis.com/v1/${raw.name}/media?key=${apiKey}&maxHeightPx=1600&maxWidthPx=1600&skipHttpRedirect=true`
+      const res = await fetch(url, { signal: controller.signal })
+      if (!res.ok) return null
+      const data = await res.json() as { photoUri?: string }
+      if (!data.photoUri) return null
+      return { name: raw.name, widthPx: raw.widthPx ?? 0, heightPx: raw.heightPx ?? 0, photoUri: data.photoUri }
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  const settled = await Promise.allSettled(rawPhotos.slice(0, limit).map(fetch1Photo))
+  return settled
+    .filter((r): r is PromiseFulfilledResult<PlacePhoto> => r.status === 'fulfilled' && r.value !== null)
+    .map(r => r.value)
 }
 
 export async function syncPlaceToLocation(
@@ -237,7 +288,7 @@ export async function searchPlaces(apiKey: string, query: string): Promise<Place
   return (data.places ?? []).map(normalizeSearchResult)
 }
 
-export async function getPlaceDetails(apiKey: string, placeId: string): Promise<PlaceDetails> {
+export async function getPlaceDetails(apiKey: string, placeId: string, fetchPhotos = true): Promise<PlaceDetails> {
   const response = await fetch(`${PLACES_BASE}/${encodeURIComponent(placeId)}`, {
     headers: {
       'X-Goog-Api-Key': apiKey,
@@ -251,5 +302,7 @@ export async function getPlaceDetails(apiKey: string, placeId: string): Promise<
   }
 
   const data = await response.json() as RawPlace
-  return normalizeDetail(data)
+  const { rawPhotos, ...detail } = normalizeDetail(data)
+  const photos = fetchPhotos ? await fetchPlacePhotoUrls(apiKey, rawPhotos) : []
+  return { ...detail, photos }
 }

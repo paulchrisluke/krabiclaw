@@ -203,18 +203,29 @@ The header is always present — it gives the user context before they see the l
 
 ---
 
-### Screen 2 — Business type (conversation)
+### Screen 2 — Create site: business type
 
-**No widget.** The model asks in the chat thread:
+**Render tool:** `show_vertical_picker`  
+**Widget:** `widgets/src/vertical-picker/index.tsx`  
+**SDK pattern:** List
 
-> "What type of business is this?
-> - Restaurant / Café / Bar
-> - Experience / Activity (tours, pottery classes, diving, etc.)
-> - Retail / Shop
-> - Wellness / Spa
-> - Service business"
+Instead of asking in plain text, the model calls `show_vertical_picker` to present the verticals as a sleek, clickable list widget.
 
-User replies → model stores `vertical` → moves to Screen 3.
+#### Mockup
+
+```
+┌─────────────────────────────────────────────┐
+│  What type of business is this?             │
+│                                             │
+│  [ Restaurant / Café / Bar ]                │
+│  [ Experience / Activity   ]                │
+│  [ Retail / Shop           ]                │
+│  [ Wellness / Spa          ]                │
+│  [ Service business        ]                │
+└─────────────────────────────────────────────┘
+```
+
+User clicks an option → Widget calls `ui/update-model-context({ vertical: 'restaurant' })` and moves to Screen 3.
 
 ---
 
@@ -395,8 +406,7 @@ User confirms → model calls `create_site` then `create_location` with all coll
 **Widget:** `widgets/src/site-preview/index.tsx`  
 **SDK pattern:** Carousel
 
-After `create_site` + `create_location` succeed, `show_site_preview` returns a widget that
-iframes the live site — the same pattern used in `pages/templates.vue`:
+After `create_site` + `create_location` succeed, the model calls `show_site_preview`. To keep the experience lightning fast and reliable, this widget renders a highly-styled, simplified HTML/CSS preview of the new site directly inside the widget (using the chosen theme and generated hero images), rather than relying on slow headless browser screenshots.
 
 ```html
 <iframe src="https://{subdomain}.krabiclaw.com" sandbox="allow-scripts allow-same-origin" />
@@ -511,13 +521,10 @@ and are called directly by the model (not as render tools).
    `/v1/{name}/media?key=...&maxHeightPx=800`. Need to confirm billing tier and per-photo cost.
    Reference: [Places API photos](https://developers.google.com/maps/documentation/places/web-service/photos)
 
-2. **Widget asset versioning on deploy** — add a pre-deploy build step (`vite build`) to
-   `package.json` deploy script, and commit the `assets/` manifest so the Worker knows
-   current filenames. Decision: one manifest file (`assets/manifest.json` → `{ "welcome-list": "welcome-list.abc123.html" }`)
-   read at startup, not hardcoded in the tool response.
-
-3. **Image generation cost** — `gpt-image-2` at `1536x1024` high quality ≈ $0.07/image.
-   2–3 images per onboarding ≈ $0.15–$0.21. Acceptable as a one-time cost per new site?
+2. **Screenshot mechanism for site preview** — [Resolved] We will render a simplified HTML preview in-widget to ensure speed and reliability.
+3. **Widget asset versioning** — should we commit `assets/` to the repo or build on deploy? (Recommend: build on deploy via `wrangler deploy` pre-step, not commit the hashes.)
+4. **Image generation cost** — `gpt-image-2` at `1536x1024` medium quality costs ~$0.04 per image. Budget per onboarding: 2–3 images = ~$0.12. Acceptable?
+5. **Short URL resolution** — [Resolved] We will accept both and transparently resolve `maps.app.goo.gl` on the server by following the redirect.
 
 ---
 

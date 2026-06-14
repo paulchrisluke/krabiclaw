@@ -39,9 +39,17 @@ export default defineEventHandler(async (event) => {
         serverInfo: { name: 'krabiclaw-mcp', version: 'phase-5' },
         instructions: `KrabiClaw — manage your restaurant or business website through this connection.
 
-Start every conversation by calling list_sites to discover which sites the user can access.
+Start every conversation by calling show_welcome (or list_sites) to discover the user's sites.
+- If they have 0 sites, start the Onboarding Flow: 
+  1. Ask for their Google Maps URL (or shortlink) to import their business details.
+  2. Call import_from_maps.
+  3. After import, ask for Required missing context: "What should the main button say (e.g., Book Now)?" and ask if they want to upload a Hero Image or have AI generate one.
+  4. Ask for Optional context: "What's the short story behind your business?" and "Do you have a logo to upload?" (let them skip these).
+  5. DO NOT ask for menus, detailed services, or social links yet (defer until the site is live).
+  6. Call create_site and create_location, then show_site_preview.
 - If they have exactly one site, use it automatically and confirm: "Working with [site name]."
-- If they have multiple sites, present them clearly and ask which to use before proceeding.
+- If they have multiple sites, present them clearly and ask which to use.
+
 All other tools require a site_id obtained from list_sites. Never guess or invent site IDs.
 
 Common workflows: update menus and items, draft and publish posts, triage contact and reservation submissions, manage page content drafts, upload media, translate content, reply to reviews, and manage experiences and bookings.`,

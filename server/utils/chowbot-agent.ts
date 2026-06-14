@@ -2633,7 +2633,7 @@ async function executeTool(
 
       if (placeId) {
         try {
-          const details = await getPlaceDetails(apiKey, placeId);
+          const details = await getPlaceDetails(apiKey, placeId, false);
           return {
             found: true,
             name: details.name,
