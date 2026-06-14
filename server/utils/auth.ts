@@ -81,7 +81,16 @@ export function createAuth(env: CloudflareEnv) {
       }
     },
     plugins: [
-      jwt(),
+      jwt({
+        jwt: {
+          // Explicit issuer so oauthProvider's getOAuthServerConfig advertises the
+          // same value as authorization_servers in /.well-known/oauth-protected-resource.
+          // Without this, oauth-provider falls back to ctx.context.baseURL
+          // (https://krabiclaw.com/api/auth) but jwt() signs with options.baseURL
+          // (https://krabiclaw.com) — the mismatch causes ChatGPT to reject the connector.
+          issuer: (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, ''),
+        },
+      }),
       oauthProvider({
         loginPage: '/login',
         consentPage: '/oauth/consent',
