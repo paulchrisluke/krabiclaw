@@ -9,6 +9,10 @@ export interface McpToolDefinition {
   requiredEntitlement?: string
   inputSchema: Record<string, unknown>
   outputSchema: Record<string, unknown>
+  /** Widget name served at ui://widget/{widgetName} — marks this as a render tool */
+  widgetName?: string
+  widgetInvoking?: string
+  widgetInvoked?: string
 }
 
 // --- reusable schema fragments ---
@@ -305,6 +309,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['sites'],
     },
+    widgetName: 'welcome-list',
+    widgetInvoking: 'Loading your sites…',
+    widgetInvoked: 'Sites loaded',
   }),
   globalTool({
     name: 'show_vertical_picker',
@@ -318,6 +325,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       description: 'Renders an interactive widget. The selected vertical is returned as a follow-up user message.',
       properties: {},
     },
+    widgetName: 'vertical-picker',
+    widgetInvoking: 'Loading business types…',
+    widgetInvoked: 'Choose your business type',
   }),
   globalTool({
     name: 'import_from_maps',
@@ -367,6 +377,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['business', 'photos', 'missingPhotos'],
     },
+    widgetName: 'photo-album',
+    widgetInvoking: 'Importing from Google Maps…',
+    widgetInvoked: 'Business imported',
   }),
   globalTool({
     name: 'show_generated_images',
@@ -405,6 +418,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['images'],
     },
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Loading generated images…',
+    widgetInvoked: 'Pick your hero image',
   }),
   globalTool({
     name: 'list_sites',
@@ -423,6 +439,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['sites'],
     },
+    widgetName: 'welcome-list',
+    widgetInvoking: 'Loading your sites…',
+    widgetInvoked: 'Sites loaded',
   }),
   globalTool({
     name: 'create_site',
@@ -486,6 +505,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['site', 'pages'],
     },
+    widgetName: 'site-preview',
+    widgetInvoking: 'Building your site preview…',
+    widgetInvoked: 'Your site is live!',
   }),
   siteTool({
     name: 'get_site',

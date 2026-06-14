@@ -1,5 +1,5 @@
 import { createError, getHeader, setResponseHeader } from 'h3'
-import { asMcpError, mcpFailure, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, readMcpRequest } from '~/server/utils/mcp-protocol'
+import { asMcpError, mcpFailure, mcpProtocolError, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, readMcpRequest } from '~/server/utils/mcp-protocol'
 import { executeMcpToolCall } from '~/server/utils/mcp-executor'
 import { isMcpRenderResponse } from '~/server/utils/mcp-render'
 import { getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies } from '~/server/utils/mcp-auth'
@@ -68,15 +68,67 @@ Common workflows: update menus and items, draft and publish posts, triage contac
       return mcpSuccess(request.id, {})
     }
 
-    // Resources and prompts — we are tools-only; return empty lists rather than 404
+    // Widget resources served as ui://widget/{name} with text/html+skybridge MIME type.
+    // ChatGPT fetches these when it sees openai/outputTemplate on a tool definition.
+    const WIDGETS = [
+      { name: 'welcome-list',    title: 'Site Picker' },
+      { name: 'vertical-picker', title: 'Business Type Picker' },
+      { name: 'photo-album',     title: 'Business Photos' },
+      { name: 'image-carousel',  title: 'Image Carousel' },
+      { name: 'site-preview',    title: 'Site Preview' },
+    ] as const
+
+    function widgetHtml(name: string, baseUrl: string) {
+      return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KrabiClaw</title>
+<script type="module" crossorigin src="${baseUrl}/mcp-assets/${name}.js"></script>
+<link rel="modulepreload" crossorigin href="${baseUrl}/mcp-assets/jsx-runtime-chunk.js">
+</head>
+<body><div id="app"></div></body>
+</html>`
+    }
+
     if (request.method === 'resources/list') {
       await requireMcpUser(event)
-      return mcpSuccess(request.id, { resources: [] })
+      return mcpSuccess(request.id, {
+        resources: WIDGETS.map(w => ({
+          uri: `ui://widget/${w.name}`,
+          name: w.title,
+          description: `${w.title} widget`,
+          mimeType: 'text/html+skybridge',
+        })),
+      })
     }
 
     if (request.method === 'resources/templates/list') {
       await requireMcpUser(event)
       return mcpSuccess(request.id, { resourceTemplates: [] })
+    }
+
+    if (request.method === 'resources/read') {
+      await requireMcpUser(event)
+      const uri = typeof request.params?.uri === 'string' ? request.params.uri : ''
+      const match = uri.match(/^ui:\/\/widget\/(.+)$/)
+      if (!match) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown resource: ${uri}`)
+      }
+      const widgetName = match[1]!
+      if (!WIDGETS.some(w => w.name === widgetName)) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown widget: ${widgetName}`)
+      }
+      const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
+      const baseUrl = (cfEnv?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+      return mcpSuccess(request.id, {
+        contents: [{
+          uri,
+          mimeType: 'text/html+skybridge',
+          text: widgetHtml(widgetName, baseUrl),
+        }],
+      })
     }
 
     if (request.method === 'prompts/list') {
@@ -128,6 +180,14 @@ Common workflows: update menus and items, draft and publish posts, triage contac
             minimumRole: tool.minimumRole,
             confirmRequired: tool.confirmRequired,
           },
+          ...(tool.widgetName ? {
+            _meta: {
+              'openai/outputTemplate': `ui://widget/${tool.widgetName}`,
+              'openai/widgetAccessible': true,
+              'openai/toolInvocation/invoking': tool.widgetInvoking ?? 'Loading…',
+              'openai/toolInvocation/invoked': tool.widgetInvoked ?? 'Done',
+            },
+          } : {}),
         }))
 
       return mcpSuccess(request.id, { tools })
@@ -141,14 +201,14 @@ Common workflows: update menus and items, draft and publish posts, triage contac
 
       const result = await executeMcpToolCall(event, toolName, rawArgs)
       if (isMcpRenderResponse(result)) {
-        const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
-        const baseUrl = (cfEnv?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+        const tool = MCP_TOOLS.find(t => t.name === toolName)
         return mcpSuccess(request.id, {
           isError: false,
           structuredContent: result.structuredContent,
           content: [{ type: 'text', text: result.fallbackText ?? JSON.stringify(result.structuredContent, null, 2) }],
           _meta: {
-            'openai/outputTemplate': `${baseUrl}/mcp-assets/${result.__widget}`,
+            'openai/toolInvocation/invoking': tool?.widgetInvoking ?? 'Loading…',
+            'openai/toolInvocation/invoked': tool?.widgetInvoked ?? 'Done',
           },
         })
       }
