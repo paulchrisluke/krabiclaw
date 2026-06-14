@@ -9,7 +9,8 @@ export default defineEventHandler(async (event) => {
   try {
     // Return 401 with WWW-Authenticate before any protocol parsing so OAuth
     // clients (e.g. ChatGPT) can discover the authorization server on first touch.
-    if (!getHeader(event, 'authorization')?.startsWith('Bearer ')) {
+    // Session-cookie requests (dashboard, E2E tests) have a Cookie header and skip this.
+    if (!getHeader(event, 'authorization')?.startsWith('Bearer ') && !getHeader(event, 'cookie')) {
       const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
       const baseUrl = (cfEnv?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
       setResponseStatus(event, 401)
