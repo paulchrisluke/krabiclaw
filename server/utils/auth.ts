@@ -92,7 +92,7 @@ export function createAuth(env: CloudflareEnv) {
         },
       }),
       oauthProvider({
-        loginPage: '/login',
+        loginPage: '/oauth/login',
         consentPage: '/oauth/consent',
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
