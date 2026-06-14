@@ -1,5 +1,5 @@
 import { createError, getHeader, setResponseHeader } from 'h3'
-import { asMcpError, mcpFailure, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, protocolCache, readMcpRequest } from '~/server/utils/mcp-protocol'
+import { asMcpError, mcpFailure, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, readMcpRequest } from '~/server/utils/mcp-protocol'
 import { executeMcpToolCall } from '~/server/utils/mcp-executor'
 import { isMcpRenderResponse } from '~/server/utils/mcp-render'
 import { getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies } from '~/server/utils/mcp-auth'
@@ -86,7 +86,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
 
     if (request.method === 'server/discover') {
       await requireMcpUser(event)
-      return mcpSuccess(request.id, protocolCache('server/discover', {
+      return mcpSuccess(request.id, {
         supportedVersions: ['2026-07-28', '2025-11-25', '2025-03-26', '2024-11-05'],
         capabilities: { tools: {} },
         serverInfo: {
@@ -94,7 +94,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
           version: 'phase-5',
         },
         instructions: 'KrabiClaw MCP. Call show_welcome at the start of every conversation to display the site picker and discover the user\'s sites. Use the site_id from that interaction with all other tools.',
-      }, 60_000))
+      })
     }
 
     if (request.method === 'tools/list') {
@@ -129,7 +129,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
           },
         }))
 
-      return mcpSuccess(request.id, protocolCache('tools/list', { tools }, 30_000))
+      return mcpSuccess(request.id, { tools })
     }
 
     if (request.method === 'tools/call') {
