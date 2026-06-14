@@ -1,4 +1,4 @@
-import { createError, setResponseHeader } from 'h3'
+import { createError, getHeader, setResponseHeader } from 'h3'
 import { asMcpError, mcpFailure, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, protocolCache, readMcpRequest } from '~/server/utils/mcp-protocol'
 import { executeMcpToolCall } from '~/server/utils/mcp-executor'
 import { getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies } from '~/server/utils/mcp-auth'
@@ -7,6 +7,18 @@ import { MCP_TOOLS } from '~/server/utils/mcp-tools'
 export default defineEventHandler(async (event) => {
   let requestId: string | number | null | undefined
   try {
+    // Return 401 with WWW-Authenticate before any protocol parsing so OAuth
+    // clients (e.g. ChatGPT) can discover the authorization server on first touch.
+    // Session-cookie requests (dashboard, E2E tests) have a Cookie header and skip this.
+    if (!getHeader(event, 'authorization')?.startsWith('Bearer ') && !getHeader(event, 'cookie')) {
+      const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
+      const baseUrl = (cfEnv?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+      setResponseStatus(event, 401)
+      setResponseHeader(event, 'WWW-Authenticate',
+        `Bearer realm="${baseUrl}/api/mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`)
+      return mcpFailure(null, { code: MCP_ERROR.invalidRequest, message: 'Authentication required.' })
+    }
+
     const body = await readBody(event)
     const request = readMcpRequest(event, body)
     requestId = request.id

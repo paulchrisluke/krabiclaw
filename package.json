@@ -58,7 +58,10 @@
     "secret:cron": "yarn wrangler secret put CRON_SECRET",
     "stripe:listen": "stripe listen --forward-to localhost:3000/api/billing/webhook",
     "benchmark": "node scripts/benchmark-bootstrap.mjs",
-    "benchmark:bootstrap": "node scripts/benchmark-bootstrap.mjs"
+    "benchmark:bootstrap": "node scripts/benchmark-bootstrap.mjs",
+    "demo:record:list-devices": "bash scripts/demo-recording/list-avfoundation-devices.sh",
+    "demo:record:web": "bash scripts/demo-recording/start-screen-recording.sh",
+    "demo:chatgpt:web": "node scripts/demo-recording/chatgpt-demo.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260503.1",

@@ -5,42 +5,33 @@
       <p class="text-lg text-muted mb-12">Our agreement with you</p>
 
       <article class="prose prose-lg max-w-none text-default">
-        <p><strong>Effective Date:</strong> October 21, 2024</p>
+        <p><strong>Effective Date:</strong> June 14, 2026</p>
 
-        <p>Welcome to <strong>KrabiClaw</strong>. By accessing or using our website builder platform and services, you agree to be bound by the following terms and conditions. Please read them carefully.</p>
+        <p>By accessing or using KrabiClaw ("the Service"), you agree to these Terms and Conditions.</p>
 
-        <h2>1. Use of Our Services</h2>
-        <ul>
-            <li>You must be at least 18 years old or have permission from a legal guardian to use our services.</li>
-            <li>You agree to use our website builder platform only for lawful purposes.</li>
-            <li>We reserve the right to refuse service to anyone for any reason at any time.</li>
-        </ul>
+        <h2>1. Account Responsibilities</h2>
+        <p>You must be at least 18 years old. You are responsible for maintaining the security of your account credentials and for all activities that occur under your account.</p>
 
-        <h2>2. Account Responsibilities</h2>
-        <ul>
-            <li>You are responsible for maintaining the confidentiality of your account credentials.</li>
-            <li>You are responsible for all activities that occur under your account.</li>
-            <li>You must notify us immediately of any unauthorized use of your account.</li>
-        </ul>
+        <h2>2. Acceptable Use</h2>
+        <p>You agree not to use the Service for any unlawful activities, to distribute malware, to send spam, or to host prohibited content. We reserve the right to suspend or terminate accounts that violate these terms.</p>
 
-        <h2>3. Intellectual Property</h2>
-        <ul>
-            <li>All content on this website, including text, graphics, logos, and images, is the property of KrabiClaw or its licensors.</li>
-            <li>You may not reproduce, distribute, or use any content without express permission.</li>
-            <li>You retain ownership of content you create using our platform.</li>
-        </ul>
+        <h2>3. Content Ownership</h2>
+        <p>You retain all rights to the content you create and upload. By using the Service, you grant us a license to host, display, and distribute your content solely as necessary to provide the Service.</p>
+        
+        <h2>4. Our Intellectual Property</h2>
+        <p>KrabiClaw retains all rights to the platform, website builder, templates, and underlying technology. You may not copy, modify, or resell our software.</p>
 
-        <h2>4. Limitation of Liability</h2>
-        <p>KrabiClaw will not be held liable for any indirect, incidental, or consequential damages resulting from the use of our services.</p>
+        <h2>5. Payments and Subscriptions</h2>
+        <p>Fees are billed in advance. Payments are non-refundable except as required by law. We may change pricing with prior notice.</p>
 
-        <h2>5. Governing Law</h2>
-        <p>These Terms and Conditions are governed by and construed in accordance with the laws of the jurisdiction in which the service operator is registered.</p>
+        <h2>6. Disclaimer of Warranties</h2>
+        <p>The Service is provided "AS IS" without warranties of any kind. We do not guarantee uninterrupted or error-free operation.</p>
 
-        <h2>6. Contact Us</h2>
-        <p>If you have any questions about these Terms and Conditions, please contact us at:</p>
-        <p><strong>KrabiClaw</strong><br>
-            Email: legal@krabiclaw.com <br>
-        </p>
+        <h2>7. Limitation of Liability</h2>
+        <p>To the maximum extent permitted by law, KrabiClaw shall not be liable for any indirect, incidental, or consequential damages arising from your use of the Service.</p>
+
+        <h2>8. Contact Us</h2>
+        <p>For legal inquiries, contact us at <strong>legal@krabiclaw.com</strong>.</p>
       </article>
     </div>
   </div>
