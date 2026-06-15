@@ -28,35 +28,92 @@ site copy, and generated hero images if photos are sparse. This spec designs tha
 
 ### How widgets render in ChatGPT
 
-1. An MCP render tool returns a response with `metadata._meta["openai/outputTemplate"]` pointing
-   to a versioned widget bundle URL.
-2. ChatGPT fetches the bundle (versioned HTML + JS + CSS in `assets/`) and renders it in an **iframe**.
-3. The iframe communicates with ChatGPT via **JSON-RPC 2.0 over `postMessage`** (MCP Apps bridge):
-   - Receive: `ui/notifications/tool-result` — tool data arrives
-   - Send: `tools/call` — invoke an MCP tool from a button click
-   - Send: `ui/update-model-context` — inject state the model should know (`site_id`, progress)
-   - Send: `ui/message` — append a follow-up message to the conversation
+1. A render tool's **tool descriptor** advertises the widget resource:
+   - Preferred MCP Apps key: `_meta.ui.resourceUri`
+   - ChatGPT compatibility alias: `_meta["openai/outputTemplate"]`
+2. The resource URI uses the `ui://widget/<name>.html` scheme and is returned from
+   `resources/read` with `mimeType: "text/html;profile=mcp-app"`.
+3. ChatGPT fetches the HTML resource, renders it in a ChatGPT-owned iframe, and injects
+   the Apps SDK component bridge as `window.openai`.
+4. The widget receives tool data through `window.openai.toolOutput` and sends actions
+   through `window.openai` helpers:
+   - `window.openai.callTool(name, args)` — invoke an MCP tool from a button click
+   - `window.openai.setWidgetState(state)` — persist widget state/model context
+   - `window.openai.sendFollowUpMessage({ prompt })` — append a follow-up user message
+   - `window.openai.openExternal({ href })` — open an external URL
+
+Do not build a custom parent iframe bridge for ChatGPT. The iframe exists, but ChatGPT owns it.
+Our code should serve an MCP Apps HTML resource and use the injected `window.openai` bridge.
 
 ### Build pipeline
 
 Widgets are built with **Vite** (see [`openai-apps-sdk-examples`](https://github.com/openai/openai-apps-sdk-examples)):
 - Source: `widgets/src/<widget-name>/index.tsx`
-- Output: versioned `assets/<widget-name>.<hash>.html` + `.js` + `.css`
-- Served from: `GET /api/mcp/assets/<filename>` on the Cloudflare Worker
+- Output: `public/mcp-assets/<widget-name>.html` + `.js` + shared chunks
+- HTML resource served by MCP `resources/read` at `ui://widget/<widget-name>.html`
+- JS/chunks served from `/mcp-assets/<filename>` on the same origin as `/api/mcp`
 
-The `assets/` directory is built on deploy — not committed with hashes.
+The widget bundle is built by `yarn build:widgets` before deploy.
 
-### Tool response format (render tool)
+### Tool descriptor format (render tool)
+
+Render tools must expose both the standard MCP Apps key and the ChatGPT compatibility alias:
 
 ```json
 {
-  "structuredContent": { },
-  "content": [{ "type": "text", "text": "fallback text for non-widget clients" }],
-  "metadata": {
-    "_meta": {
-      "openai/outputTemplate": "https://krabiclaw.com/api/mcp/assets/welcome-list.<hash>.html"
-    }
+  "name": "show_welcome",
+  "description": "Show the welcome screen.",
+  "inputSchema": { "type": "object", "properties": {} },
+  "outputSchema": { "type": "object" },
+  "_meta": {
+    "ui": {
+      "resourceUri": "ui://widget/welcome-list.html"
+    },
+    "openai/outputTemplate": "ui://widget/welcome-list.html",
+    "openai/widgetAccessible": true
   }
+}
+```
+
+### Resource format
+
+`resources/read` for `ui://widget/welcome-list.html` returns:
+
+```json
+{
+  "contents": [{
+    "uri": "ui://widget/welcome-list.html",
+    "mimeType": "text/html;profile=mcp-app",
+    "text": "<!DOCTYPE html>...",
+    "_meta": {
+      "ui": {
+        "prefersBorder": true,
+        "domain": "https://local.krabiclaw.com",
+        "csp": {
+          "connectDomains": ["https://local.krabiclaw.com"],
+          "resourceDomains": ["https://local.krabiclaw.com"]
+        }
+      },
+      "openai/widgetPrefersBorder": true,
+      "openai/widgetDomain": "https://local.krabiclaw.com"
+    }
+  }]
+}
+```
+
+Use the request origin for asset URLs in this HTML. Otherwise a local/tunnel connector can
+fetch the widget HTML from the branch but load JS from production, which produces blank UI
+and confusing test results.
+
+### Tool response format (render tool)
+
+Render tool calls return normal MCP tool results. The UI is selected from the tool descriptor;
+the result carries the data to render:
+
+```json
+{
+  "structuredContent": { "sites": [] },
+  "content": [{ "type": "text", "text": "{\"sites\":[]}" }]
 }
 ```
 
@@ -204,7 +261,7 @@ The header is always present — it gives the user context before they see the l
 **Widget:** `widgets/src/vertical-picker/index.tsx`  
 **SDK pattern:** List
 
-Instead of asking in plain text, the model calls `show_vertical_picker` to present the verticals as a sleek, clickable list widget.
+Instead of asking in plain text, the model calls `show_vertical_picker` to present the verticals as a simple clickable list. The cards use approved Cloudflare-hosted reference images: Kikuzuki for restaurant and Pottery House for experience/activity. Feature explanations should live in the assistant response, not inside the widget.
 
 #### Mockup
 
@@ -212,15 +269,12 @@ Instead of asking in plain text, the model calls `show_vertical_picker` to prese
 ┌─────────────────────────────────────────────┐
 │  What type of business is this?             │
 │                                             │
-│  [ Restaurant / Café / Bar ]                │
-│  [ Experience / Activity   ]                │
-│  [ Retail / Shop           ]                │
-│  [ Wellness / Spa          ]                │
-│  [ Service business        ]                │
+│  [img] Restaurant / Café / Bar              │
+│  [img] Experience / Activity                │
 └─────────────────────────────────────────────┘
 ```
 
-User clicks an option → Widget calls `ui/update-model-context({ vertical: 'restaurant' })` and moves to Screen 3.
+User clicks an option → Widget calls `window.openai.setWidgetState({ vertical })` and sends a follow-up message with the selected label.
 
 ---
 
@@ -406,8 +460,8 @@ After `create_site` + `create_location` succeed, the model calls `show_site_prev
 The widget renders it as a static `<img>` card (aspect ratio 3:2). If no hero image exists yet,
 a styled link card shows the site name and URL instead.
 
-The page navigation controls are still present — each page's `path` is appended to `publicUrl`
-when the user clicks "Open site".
+The preview image/card is clickable and opens the selected page. Each page's `path` is appended
+to `publicUrl` when the user clicks the card or the "Open site" button.
 
 #### `structuredContent` shape
 
@@ -516,12 +570,49 @@ and are called directly by the model (not as render tools).
 - [ ] Add `show_site_preview` render tool (input: `site_id`, output: widget with `ogImageUrl`)
 - [ ] E2E: `show_site_preview` for a live site returns `ogImageUrl` and correct pages array
 
+### Local verification
+
+Run this before testing in ChatGPT:
+
+```bash
+yarn build:widgets
+yarn dev --host 127.0.0.1 --port 3000
+yarn test:mcp:app --base-url http://127.0.0.1:3000
+```
+
+For ChatGPT developer-mode testing, expose the same local server over HTTPS:
+
+```bash
+BETTER_AUTH_URL=https://local.krabiclaw.com \
+NUXT_PUBLIC_PLATFORM_DOMAIN=https://local.krabiclaw.com \
+yarn dev --host 127.0.0.1 --port 3000
+
+cloudflared tunnel run krabiclaw-local
+
+MCP_DEV_LOGIN=1 yarn test:mcp:app --base-url https://local.krabiclaw.com
+```
+
+Only after the tunnel check passes, create/update the ChatGPT app with:
+
+```text
+https://local.krabiclaw.com/api/mcp
+```
+
+The checker validates the pieces that most often cause blank widgets:
+- unauthenticated OAuth challenge and `resource_metadata`
+- authenticated `initialize`, `tools/list`, `resources/list`, and `resources/read`
+- render tool `_meta.ui.resourceUri` and `openai/outputTemplate`
+- `text/html;profile=mcp-app` MIME type
+- widget resource CSP metadata
+- every widget JS asset referenced by the HTML loads from the same origin
+- `show_welcome` returns `structuredContent.sites`
+
 ---
 
 ## What we do NOT need
 
 - A separate Cloudflare Worker or Pages deployment for widgets (served from existing Worker)
-- Server-side session storage (handled by `ui/update-model-context`)
+- Server-side session storage (handled by `window.openai.setWidgetState`)
 - A headless browser, screenshot service, or iframe (site preview uses the hero image from D1)
 - Any new Google Places API key (already configured as `GOOGLE_PLACES_API_KEY` secret)
 - New URL parsing code (already in `chowbot-agent.ts`, port it)
@@ -547,8 +638,11 @@ and are called directly by the model (not as render tools).
 | Resource | Link |
 |----------|------|
 | OpenAI Apps SDK | https://developers.openai.com/apps-sdk |
+| Apps SDK — MCP server & tool descriptors | https://developers.openai.com/apps-sdk/build/mcp-server |
+| Apps SDK — reference (`_meta`, resources, bridge) | https://developers.openai.com/apps-sdk/reference |
 | Apps SDK — component patterns | https://developers.openai.com/apps-sdk/plan/components |
 | Apps SDK — ChatGPT UI / widget bridge | https://developers.openai.com/apps-sdk/build/chatgpt-ui |
+| Apps SDK — connect from ChatGPT | https://developers.openai.com/apps-sdk/deploy/connect-chatgpt |
 | Apps SDK — submission | https://developers.openai.com/apps-sdk/deploy/submission |
 | apps-sdk-ui component library | https://github.com/openai/apps-sdk-ui |
 | SDK examples repo | https://github.com/openai/openai-apps-sdk-examples |

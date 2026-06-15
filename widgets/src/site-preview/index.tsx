@@ -24,16 +24,13 @@ const styles = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #111; }
   .card { padding: 20px; }
-  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .header { margin-bottom: 10px; }
   .title { font-size: 15px; font-weight: 700; color: #16a34a; display: flex; align-items: center; gap: 5px; }
-  .page-nav { display: flex; gap: 6px; align-items: center; }
-  .page-label { font-size: 13px; color: #555; font-weight: 600; }
-  .counter { font-size: 12px; color: #aaa; }
-  .nav-btn { background: #f3f4f6; border: none; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; color: #555; transition: background 0.15s; }
-  .nav-btn:hover { background: #e5e7eb; }
-  .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-  .preview-img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 10px; border: 1px solid #e5e7eb; display: block; }
-  .link-card { width: 100%; aspect-ratio: 3 / 2; border-radius: 10px; border: 1px solid #e5e7eb; background: #f9fafb; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .preview-link { width: 100%; aspect-ratio: 3 / 2; border-radius: 10px; border: 1px solid #e5e7eb; display: block; overflow: hidden; background: #f9fafb; cursor: pointer; }
+  .preview-link:focus-visible { outline: 2px solid ${PRIMARY}; outline-offset: 3px; }
+  .preview-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.18s ease-out; }
+  .preview-link:hover .preview-img { transform: scale(1.015); }
+  .link-card { width: 100%; height: 100%; background: #f9fafb; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
   .link-card-name { font-size: 16px; font-weight: 700; color: #111; }
   .link-card-url { font-size: 13px; color: #888; }
   .site-url { font-size: 12px; color: #888; margin-top: 8px; text-align: center; }
@@ -47,14 +44,12 @@ const styles = `
 
 function App() {
   const [content, setContent] = useState<SiteContent | null>(null)
-  const [pageIndex, setPageIndex] = useState(0)
 
   useEffect(() => {
     onToolResult((result) => {
       const data = result as SiteContent
       if (data?.site) {
         setContent(data)
-        setPageIndex(0)
       }
     })
   }, [])
@@ -68,11 +63,10 @@ function App() {
   }
 
   const { site, pages, ogImageUrl } = content
-  if (!pages.length) return null
-  const currentPage = pages[pageIndex]!
+  const homePage = pages.find(page => page.path === '/') ?? pages[0] ?? { label: 'Home', path: '/' }
 
   const handleOpen = () => {
-    openExternal(`${site.publicUrl}${currentPage.path}`)
+    openExternal(`${site.publicUrl}${homePage.path}`)
   }
 
   const handleWhatsNext = () => {
@@ -83,20 +77,20 @@ function App() {
     <div className="card">
       <div className="header">
         <div className="title">✓ Your site is live!</div>
-        <div className="page-nav">
-          <span className="page-label">{currentPage.label}</span>
-          <span className="counter">{pageIndex + 1} / {pages.length}</span>
-          <button className="nav-btn" onClick={() => setPageIndex(i => i - 1)} disabled={pageIndex === 0}>‹</button>
-          <button className="nav-btn" onClick={() => setPageIndex(i => i + 1)} disabled={pageIndex === pages.length - 1}>›</button>
-        </div>
       </div>
       {ogImageUrl
-        ? <img src={ogImageUrl} className="preview-img" alt={site.name} />
+        ? (
+          <button type="button" className="preview-link" onClick={handleOpen} aria-label={`Open ${site.name}`}>
+            <img src={ogImageUrl} className="preview-img" alt={site.name} />
+          </button>
+        )
         : (
-          <div className="link-card">
-            <span className="link-card-name">{site.name}</span>
-            <span className="link-card-url">{site.publicUrl.replace('https://', '')}</span>
-          </div>
+          <button type="button" className="preview-link" onClick={handleOpen} aria-label={`Open ${site.name}`}>
+            <span className="link-card">
+              <span className="link-card-name">{site.name}</span>
+              <span className="link-card-url">{site.publicUrl.replace('https://', '')}</span>
+            </span>
+          </button>
         )
       }
       <div className="site-url">{site.publicUrl.replace('https://', '')}</div>

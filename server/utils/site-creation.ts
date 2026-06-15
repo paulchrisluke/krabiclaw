@@ -11,7 +11,7 @@ interface MemberRoleRow { role: string }
 interface SiteCountRow { count: number }
 interface SubdomainRow { subdomain: string }
 
-export const VALID_VERTICALS: SiteVertical[] = ['restaurant', 'experience', 'retail', 'wellness', 'service']
+export const VALID_VERTICALS: SiteVertical[] = ['restaurant', 'experience']
 
 export interface SiteCreationResult {
   status: number

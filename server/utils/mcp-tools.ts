@@ -454,7 +454,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         name: { type: 'string' },
         subdomain: { type: 'string' },
-        vertical: { type: 'string', enum: ['restaurant', 'experience', 'retail', 'wellness', 'service'] },
+        vertical: { type: 'string', enum: ['restaurant', 'experience'] },
       },
       required: ['name', 'subdomain', 'vertical'],
       additionalProperties: true,

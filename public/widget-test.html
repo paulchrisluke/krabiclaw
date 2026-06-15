@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Widget Dev Harness</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+
+    .topbar { display: flex; align-items: center; gap: 6px; padding: 10px 16px; background: #1F2547; flex-wrap: wrap; }
+    .topbar h1 { font-size: 13px; font-weight: 700; color: #fff; margin-right: 8px; white-space: nowrap; }
+    .tab { padding: 5px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 500; background: rgba(255,255,255,0.12); color: #cbd5e1; transition: all 0.15s; }
+    .tab:hover { background: rgba(255,255,255,0.2); color: #fff; }
+    .tab.active { background: #fff; color: #1F2547; }
+
+    .content { display: grid; grid-template-columns: 1fr 300px; gap: 16px; padding: 16px; max-width: 860px; margin: 0 auto; }
+
+    .preview-wrap { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
+    iframe { width: 100%; border: none; display: block; min-height: 360px; }
+
+    .panel { display: flex; flex-direction: column; gap: 12px; }
+    .panel-section { background: #1e293b; border-radius: 8px; padding: 12px; }
+    .panel-section h2 { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    textarea { width: 100%; height: 220px; font-family: 'Menlo', 'Monaco', monospace; font-size: 11px; padding: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; resize: vertical; line-height: 1.6; }
+    .apply-btn { width: 100%; padding: 8px; background: #1F2547; color: #fff; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .apply-btn:hover { background: #2d3a6b; }
+
+    .log-list { list-style: none; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+    .log-item { font-family: monospace; font-size: 11px; padding: 4px 8px; border-radius: 4px; background: #0f172a; border-left: 3px solid #334155; color: #94a3b8; word-break: break-all; line-height: 1.5; }
+    .log-item.send { border-left-color: #3b82f6; color: #93c5fd; }
+    .log-item.tool { border-left-color: #a855f7; color: #d8b4fe; }
+    .log-item.state { border-left-color: #10b981; color: #6ee7b7; }
+    .log-item.ext { border-left-color: #f59e0b; color: #fcd34d; }
+    .log-empty { font-size: 11px; color: #475569; text-align: center; padding: 12px 0; }
+    .clear-btn { font-size: 11px; color: #475569; background: none; border: none; cursor: pointer; }
+    .clear-btn:hover { color: #94a3b8; }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Widget Harness</h1>
+  <button class="tab active"        onclick="pick('welcome-list', this)">welcome-list</button>
+  <button class="tab"               onclick="pick('vertical-picker', this)">vertical-picker</button>
+  <button class="tab"               onclick="pick('photo-album', this)">photo-album</button>
+  <button class="tab"               onclick="pick('image-carousel', this)">image-carousel</button>
+  <button class="tab"               onclick="pick('site-preview', this)">site-preview</button>
+</div>
+
+<div class="content">
+  <div class="preview-wrap">
+    <iframe id="frame" title="Widget Preview"></iframe>
+  </div>
+
+  <div class="panel">
+    <div class="panel-section">
+      <h2>toolOutput</h2>
+      <textarea id="json"></textarea>
+      <button class="apply-btn" onclick="applyJson()">↺ Apply</button>
+    </div>
+    <div class="panel-section">
+      <h2>Actions <button class="clear-btn" onclick="clearLog()">clear</button></h2>
+      <ul class="log-list" id="log"><li class="log-empty">No actions yet</li></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+const FIXTURES = {
+  'welcome-list': {
+    sites: [
+      { id: 'site-pottery', name: 'Pottery House Krabi', subdomain: 'pottery-house', publicUrl: 'https://pottery-house.krabiclaw.com', status: 'live' },
+      { id: 'site-demo',    name: 'Demo Restaurant',     subdomain: 'demo',           publicUrl: 'https://demo.krabiclaw.com',           status: 'draft' },
+    ]
+  },
+  'vertical-picker': {},
+  'photo-album': {
+    business: { name: 'Pottery House Krabi', address: '123 Beach Rd, Ao Nang, Krabi 81000', phone: '+66 75 123 456', hours: ['Mon–Sun 9:00–18:00'], rating: 4.8, reviewCount: 312, placeId: 'ChIJexample', mapsUrl: 'https://maps.google.com' },
+    photos: [
+      { assetId: 'ph1', publicUrl: 'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=400&fit=crop' },
+      { assetId: 'ph2', publicUrl: 'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=400&fit=crop' },
+      { assetId: 'ph3', publicUrl: 'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=400&fit=crop' },
+    ],
+    missingPhotos: false,
+  },
+  'image-carousel': {
+    images: [
+      { assetId: 'img1', publicUrl: 'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=800&fit=crop' },
+      { assetId: 'img2', publicUrl: 'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=800&fit=crop' },
+    ]
+  },
+  'site-preview': {
+    site: { id: 'site-pottery', name: 'Pottery House Krabi', subdomain: 'pottery-house', publicUrl: 'https://pottery-house.krabiclaw.com' },
+    pages: [{ label: 'Home', path: '/' }, { label: 'About', path: '/about' }, { label: 'Experiences', path: '/experiences' }],
+    ogImageUrl: null,
+  },
+}
+
+let current = 'welcome-list'
+
+function pick(name, btn) {
+  current = name
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+  btn.classList.add('active')
+  const fixture = FIXTURES[name] || {}
+  document.getElementById('json').value = JSON.stringify(fixture, null, 2)
+  render(name, fixture)
+}
+
+function applyJson() {
+  try { render(current, JSON.parse(document.getElementById('json').value)) }
+  catch (e) { alert('Invalid JSON: ' + e.message) }
+}
+
+function render(name, toolOutput) {
+  document.getElementById('frame').srcdoc = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<script>
+window.openai={
+  toolOutput:${JSON.stringify(toolOutput)},
+  setWidgetState:function(s){parent.postMessage({t:'state',d:s},'*')},
+  sendFollowUpMessage:function(m){parent.postMessage({t:'send',d:m},'*')},
+  callTool:function(n,a){parent.postMessage({t:'tool',n:n,a:a},'*')},
+  openExternal:function(a){parent.postMessage({t:'ext',u:a?.href||a},'*')},
+}
+<\/script>
+<script type="module" src="./mcp-assets/${name}.js"><\/script>
+</head><body style="margin:0"><div id="app"></div></body></html>`
+}
+
+function log(cls, text) {
+  const ul = document.getElementById('log')
+  const empty = ul.querySelector('.log-empty')
+  if (empty) empty.remove()
+  const li = document.createElement('li')
+  li.className = 'log-item ' + cls
+  li.textContent = text
+  ul.prepend(li)
+}
+
+function clearLog() {
+  document.getElementById('log').innerHTML = '<li class="log-empty">No actions yet</li>'
+}
+
+window.addEventListener('message', e => {
+  const d = e.data
+  if (!d?.t) return
+  if (d.t === 'send')  log('send',  'sendFollowUpMessage → "' + d.d?.prompt + '"')
+  if (d.t === 'tool')  log('tool',  'callTool → ' + d.n + '(' + JSON.stringify(d.a) + ')')
+  if (d.t === 'state') log('state', 'setWidgetState → ' + JSON.stringify(d.d))
+  if (d.t === 'ext')   log('ext',   'openExternal → ' + d.u)
+})
+
+// Boot
+const init = FIXTURES['welcome-list']
+document.getElementById('json').value = JSON.stringify(init, null, 2)
+render('welcome-list', init)
+</script>
+</body>
+</html>

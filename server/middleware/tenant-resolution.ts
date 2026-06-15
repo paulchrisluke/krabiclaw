@@ -113,10 +113,16 @@ function isPlatformRoute(pathname: string): boolean {
     '/pricing',
     '/dashboard',
     '/api/auth',
+    '/api/mcp',
     '/api/dashboard',
     '/api/sites',
     '/api/admin',
     '/api/integrations',
+    '/api/dev',
+    '/api/post-login',
+    '/api/plans',
+    '/.well-known',
+    '/oauth',
     '/templates',
     '/features'
   ]
