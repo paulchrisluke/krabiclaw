@@ -106,23 +106,36 @@ const currentUser = ref(null)
 
 onMounted(async () => {
   const clientId = route.query.client_id
-  if (clientId && typeof clientId === 'string') {
-    try {
-      const data = await $fetch('/api/auth/oauth2/public-client-prelogin', {
-        method: 'POST',
-        body: { client_id: clientId, oauth_query: window.location.search.slice(1) },
-      })
-      if (data?.client_name) clientName.value = data.client_name
-    } catch {
-      // Non-fatal — fall back to generic copy
-    }
-  }
 
-  try {
-    const session = await authClient.getSession()
-    if (session?.data?.user) currentUser.value = session.data.user
-  } catch {
-    // No session — pill stays hidden
+  // Check session and pre-fetch client name in parallel
+  const [sessionResult] = await Promise.allSettled([
+    authClient.getSession(),
+    clientId && typeof clientId === 'string'
+      ? $fetch('/api/auth/oauth2/public-client-prelogin', {
+          method: 'POST',
+          body: { client_id: clientId, oauth_query: window.location.search.slice(1) },
+        }).then((data) => { if (data?.client_name) clientName.value = data.client_name }).catch(() => {})
+      : Promise.resolve(),
+  ])
+
+  if (sessionResult.status === 'fulfilled' && sessionResult.value?.data?.user) {
+    currentUser.value = sessionResult.value.data.user
+    // Auto-accept when the user has already consented to this client.
+    // This makes "Always allow" re-auth in ChatGPT seamless — the consent page
+    // silently completes and redirects back without requiring another click.
+    if (clientId && typeof clientId === 'string') {
+      try {
+        const status = await $fetch<{ hasConsented: boolean }>('/api/auth/oauth2/consent-status', {
+          query: { client_id: clientId },
+        })
+        if (status.hasConsented) {
+          await accept()
+          return
+        }
+      } catch {
+        // Non-fatal — fall through to show manual UI
+      }
+    }
   }
 })
 

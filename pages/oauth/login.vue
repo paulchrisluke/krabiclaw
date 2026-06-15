@@ -218,14 +218,13 @@ const loading = ref(false)
 
 /**
  * User confirms they want to proceed with their current account.
- * Just send them on to the consent page with the same OAuth query intact.
+ * Route back through the authorize endpoint so Better Auth can re-run the
+ * prompt/consent checks with the now-active session (skips consent page when
+ * skipConsent=true or consent is already saved, handles prompt=consent correctly).
  */
 function continueWithSession() {
   loading.value = true
-  // Better Auth's oauthProvider redirects /oauth/login?<query> → /oauth/consent?<query>
-  // after confirming an active session. We replicate that by navigating to consent directly.
-  const consentUrl = `/oauth/consent${window.location.search}`
-  window.location.href = consentUrl
+  window.location.href = `/api/auth/oauth2/authorize${window.location.search}`
 }
 
 /**

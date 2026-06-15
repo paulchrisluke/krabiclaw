@@ -150,7 +150,7 @@ export async function executeMcpToolCall(
       {},
       "What type of business is this? Choose: restaurant or experience.",
     );
-  }
+  }  
 
   if (toolName === "import_from_maps") {
     const user = await requireMcpUser(event);
@@ -178,32 +178,76 @@ export async function executeMcpToolCall(
       );
     }
 
-    // Resolve short URLs (maps.app.goo.gl) via one redirect hop
+    // Resolve short URLs (maps.app.goo.gl).
+    // Use redirect:follow GET instead of redirect:manual HEAD —
+    // Cloudflare Workers blocks manual redirect fetches against goo.gl.
     let resolvedUrl = parsedUrl.toString();
-    try {
-      const probe = await fetch(parsedUrl.toString(), {
-        method: "HEAD",
-        redirect: "manual",
-        signal: AbortSignal.timeout(5000),
-      });
-      const location = probe.headers.get("location");
-      if (location) {
-        const redirected = new URL(location, parsedUrl);
-        if (isAllowedGoogleMapsHost(redirected.hostname))
-          resolvedUrl = redirected.toString();
+    if (parsedUrl.hostname === "maps.app.goo.gl") {
+      try {
+        const probe = await fetch(parsedUrl.toString(), {
+          method: "GET",
+          redirect: "follow",
+          signal: AbortSignal.timeout(8000),
+          headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        if (probe.url && isAllowedGoogleMapsHost(new URL(probe.url).hostname)) {
+          resolvedUrl = probe.url;
+        }
+      } catch {
+        /* keep original — will fall through to text search below */
       }
-    } catch {
-      /* keep original */
     }
 
-    const placeIdMatch = resolvedUrl.match(/!1s([^!&]+)/);
-    const placeId = placeIdMatch?.[1] ?? null;
-    if (!placeId)
-      throw mcpProtocolError(
-        MCP_ERROR.invalidParams,
-        "Could not extract place ID from Maps URL. Try the full Google Maps URL instead of a short link.",
-      );
+    // Extract place ID from resolved URL.
+    // The !1s data field in full Maps URLs can contain EITHER:
+    //   • A proper ChIJ... place ID  (directly usable by Places API v1)
+    //   • A legacy hex CID like 0x3051bfbadf33fdcb:0xd39e89e493b8a95b
+    //     (NOT accepted by Places API v1 — must resolve via text search)
+    const rawIdMatch = resolvedUrl.match(/!1s([^!&]+)/);
+    const rawId = rawIdMatch ? decodeURIComponent(rawIdMatch[1]!) : null;
+    const isHexCid = rawId ? /^0x[0-9a-f]+:0x[0-9a-f]+$/i.test(rawId) : false;
+    const isChijId = rawId ? /^ChIJ/.test(rawId) : false;
 
+    // Extract business name from the URL path for fallback text search
+    // e.g. /maps/place/BALIBAR/@... → "BALIBAR"
+    const nameFromPath = resolvedUrl.match(/\/maps\/place\/([^/@?]+)/)?.[1];
+    const nameHint = nameFromPath ? decodeURIComponent(nameFromPath.replace(/\+/g, " ")) : null;
+
+    // Extract lat/lng for geo-biased search fallback
+    const coordMatch = resolvedUrl.match(/@(-?[\d.]+),(-?[\d.]+)/);
+    const latHint = coordMatch?.[1] ?? null;
+    const lngHint = coordMatch?.[2] ?? null;
+
+    let placeId: string | null = null;
+
+    if (isChijId) {
+      // Best case — proper ChIJ ID directly from URL
+      placeId = rawId;
+    } else if (isHexCid || !rawId) {
+      // Hex CID or no ID at all — resolve via text search using name + coords
+      if (!nameHint) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "Could not extract place details from that Maps URL. Try copying the full Google Maps URL from the address bar.",
+        );
+      }
+      const query = latHint && lngHint
+        ? `${nameHint} near ${latHint},${lngHint}`
+        : nameHint;
+      const results = await searchPlaces(apiKey, query);
+      placeId = results[0]?.placeId ?? null;
+      if (!placeId) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          `Could not find "${nameHint}" in Google Places. Try the full Maps URL from the address bar.`,
+        );
+      }
+    } else {
+      // Non-ChIJ, non-hex — try it directly; Places API will 404 if invalid
+      placeId = rawId;
+    }
+
+    if (!placeId) throw mcpProtocolError(MCP_ERROR.invalidParams, "Could not resolve a place ID from that URL.")
     const details = await getPlaceDetails(apiKey, placeId, true);
 
     // Upload Google Photos to Cloudflare Images for stable preview URLs.
