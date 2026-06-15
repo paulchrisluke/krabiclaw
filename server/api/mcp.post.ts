@@ -7,12 +7,22 @@ import { MCP_TOOLS } from '~/server/utils/mcp-tools'
 
 const WIDGET_RESOURCE_MIME_TYPE = 'text/html;profile=mcp-app'
 
+// Increment this whenever widgets are changed to bust ChatGPT's ui:// cache.
+// ChatGPT caches widget resources by URI, so the same ui://widget/foo.html
+// URI will continue to serve the old widget until the URI changes.
+const WIDGET_VERSION = 'v3'
+
 function widgetResourceUri(name: string) {
-  return `ui://widget/${name}.html`
+  return `ui://widget/${name}@${WIDGET_VERSION}.html`
 }
 
-function requestOrigin(event: Parameters<typeof getRequestURL>[0]) {
-  return getRequestURL(event).origin.replace(/\/$/, '')
+// Prefer BETTER_AUTH_URL from Cloudflare env — it is set correctly per environment
+// (krabiclaw.com for prod, staging.krabiclaw.com for staging, etc.).
+// Falling back to the raw request URL origin can return a Workers internal hostname
+// on Cloudflare, which the ChatGPT sandbox then blocks in CSP.
+function resolveBaseUrl(event: Parameters<typeof getRequestURL>[0]): string {
+  const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
+  return (cfEnv?.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(/\/$/, '')
 }
 
 export default defineEventHandler(async (event) => {
@@ -122,7 +132,9 @@ Common workflows: update menus and items, draft and publish posts, triage contac
     if (request.method === 'resources/read') {
       await requireMcpUser(event)
       const uri = typeof request.params?.uri === 'string' ? request.params.uri : ''
-      const match = uri.match(/^ui:\/\/widget\/(.+?)(?:\.html)?$/)
+      // Accept both versioned (name@vN.html) and plain (name.html) forms so that
+      // older cached tool references from prior sessions can still resolve.
+      const match = uri.match(/^ui:\/\/widget\/([^@]+?)(?:@[^.]+)?(?:\.html)?$/)
       if (!match) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown resource: ${uri}`)
       }
@@ -130,7 +142,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
       if (!WIDGETS.some(w => w.name === widgetName)) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown widget: ${widgetName}`)
       }
-      const baseUrl = requestOrigin(event)
+      const baseUrl = resolveBaseUrl(event)
       return mcpSuccess(request.id, {
         contents: [{
           uri: widgetResourceUri(widgetName),
