@@ -3,20 +3,24 @@
     <div class="w-full max-w-xs">
 
       <!-- Header -->
-      <div class="text-center mb-6">
-        <p class="text-sm text-muted">Allow {{ clientName || 'this app' }} to connect to:</p>
-        <h1 class="text-3xl font-extrabold text-default tracking-tight mt-0.5">KrabiClaw</h1>
+      <div class="mb-6">
+        <img src="/krabi-claw-logo.png" alt="KrabiClaw Logo" class="h-8 mb-4">
+        <h1 class="text-2xl font-bold text-default tracking-tight mt-0.5">
+          {{ clientName || 'This app' }} wants to access your KrabiClaw Account.
+        </h1>
       </div>
 
       <!-- Signed-in account -->
-      <div v-if="currentUser" class="text-center mb-6">
-        <p class="text-sm text-default font-medium">{{ currentUser.name || currentUser.email }}</p>
-        <NuxtLink
-          :href="`/oauth/login${$route.fullPath.slice($route.path.length)}`"
-          class="text-sm text-primary hover:underline"
-        >
-          Not you?
-        </NuxtLink>
+      <div v-if="currentUser" class="mb-6">
+        <p class="text-sm text-muted">
+          Logged in as <span class="text-default font-medium">{{ currentUser.name || currentUser.email }}</span>.
+          <NuxtLink
+            :href="`/oauth/login${$route.fullPath.slice($route.path.length)}`"
+            class="text-primary hover:underline ml-1"
+          >
+            (Not you?)
+          </NuxtLink>
+        </p>
       </div>
 
       <!-- Permissions -->
@@ -77,11 +81,11 @@
       <div class="mt-6 space-y-2">
         <p class="text-xs text-dimmed">
           You can remove this access at any time in your
-          <NuxtLink href="/dashboard" class="underline underline-offset-2 hover:text-default transition-colors">account settings</NuxtLink>.
+          <NuxtLink href="/dashboard/account/settings" class="underline underline-offset-2 hover:text-default transition-colors">account settings</NuxtLink>.
         </p>
         <p class="text-xs text-dimmed">
-          For more information about how {{ clientName || 'this app' }} can use your personal data, please see
-          <NuxtLink href="/privacy" class="underline underline-offset-2 hover:text-default transition-colors">KrabiClaw's privacy policy</NuxtLink>.
+          To learn more about how {{ clientName || 'this app' }} collects, uses, shares and protects your personal data please read
+          <span class="font-medium">{{ clientName ? `${clientName}'s` : "the App's" }} Privacy Policy</span>.
         </p>
       </div>
 
@@ -153,13 +157,7 @@ const permissionGroups = computed(() => {
     })
   }
 
-  if (scopes.has('offline_access')) {
-    groups.push({
-      icon: 'i-lucide-refresh-cw',
-      title: 'Stay connected over time',
-      items: ['Maintain access without asking you to sign in again'],
-    })
-  }
+  // We hide offline_access from the UI (matching Spotify's transparent refresh token behavior)
 
   const known = new Set(['openid', 'tenant', 'offline_access'])
   const unknown = [...scopes].filter(s => !known.has(s))

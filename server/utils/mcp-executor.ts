@@ -1316,6 +1316,12 @@ function normalizeSiteCreationData(data: Record<string, unknown>) {
     : typeof data.id === "string"
       ? data.id
       : "";
+  if (!siteId.trim()) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      "Critical identifier siteId is empty or missing in site creation response",
+    );
+  }
   return {
     ...data,
     id: siteId,
