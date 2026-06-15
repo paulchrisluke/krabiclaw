@@ -121,57 +121,6 @@ const VERTICAL_QA: Partial<
       3,
     ],
   ],
-  retail: [
-    [
-      "Do you ship?",
-      "Contact us through the form below and we can discuss delivery or pickup options.",
-      1,
-    ],
-    [
-      "Are you open on public holidays?",
-      "Our hours may vary on public holidays — check our contact page for the most up-to-date hours.",
-      2,
-    ],
-    [
-      "Is there parking nearby?",
-      "Yes — there is parking available nearby. See our contact page for directions.",
-      3,
-    ],
-  ],
-  wellness: [
-    [
-      "How do I book a session?",
-      "You can book a session or appointment directly from our bookings page.",
-      1,
-    ],
-    [
-      "What should I bring?",
-      "Comfortable clothes and a water bottle. We provide any specialist equipment needed.",
-      2,
-    ],
-    [
-      "Is there parking nearby?",
-      "Yes — there is parking available nearby. See our contact page for directions.",
-      3,
-    ],
-  ],
-  service: [
-    [
-      "How do I request a quote?",
-      "You can submit a request through our contact form or book an appointment directly.",
-      1,
-    ],
-    [
-      "How long does a typical appointment take?",
-      "This depends on the service — we will confirm timing when you book.",
-      2,
-    ],
-    [
-      "Is there parking nearby?",
-      "Yes — there is parking available nearby. See our contact page for directions.",
-      3,
-    ],
-  ],
 };
 
 // Per-vertical site_content seeds
@@ -229,75 +178,6 @@ const VERTICAL_SITE_CONTENT: Partial<
       `${name} is a hands-on studio focused on doing a small number of things exceptionally well.\n\nAdd the milestones that shaped your studio: where you started, what changed along the way, and what guests can expect when they arrive.`,
     ],
     ["about", "cta.title", "Book a class"],
-  ],
-  retail: (name, storyMediaId) => [
-    ["home", "cta.title", "Come visit us."],
-    ["about", "hero.title", "About Us"],
-    [
-      "about",
-      "hero.subtitle",
-      `${name} is built around carefully chosen products, knowledgeable staff, and a shop worth coming back to.`,
-    ],
-    ["about", "story.image", storyMediaId, "media"],
-    ["about", "story.title", "Our Story"],
-    [
-      "about",
-      "story.body",
-      `${name} started with a simple idea: carry things worth buying, in a space worth visiting.\n\nToday, that same principle guides everything from our product selection to how we run the shop floor.`,
-    ],
-    ["about", "journey.title", "Our Journey"],
-    [
-      "about",
-      "journey.body",
-      `${name} is a retail shop focused on doing a small number of things exceptionally well.\n\nAdd the milestones that shaped your business: where you started, what changed along the way, and what customers can expect when they visit.`,
-    ],
-    ["about", "cta.title", "Visit us"],
-  ],
-  wellness: (name, storyMediaId) => [
-    ["home", "cta.title", "Book a session."],
-    ["about", "hero.title", "About Us"],
-    [
-      "about",
-      "hero.subtitle",
-      `${name} is built around restorative practice, qualified practitioners, and a space designed for your wellbeing.`,
-    ],
-    ["about", "story.image", storyMediaId, "media"],
-    ["about", "story.title", "Our Story"],
-    [
-      "about",
-      "story.body",
-      `${name} started with a simple idea: make expert wellness accessible, in an environment that puts you at ease.\n\nToday, that same intention shapes every session and service we offer.`,
-    ],
-    ["about", "journey.title", "Our Journey"],
-    [
-      "about",
-      "journey.body",
-      `${name} is a wellness studio focused on doing a small number of things exceptionally well.\n\nAdd the milestones that shaped your practice: where you started, what changed along the way, and what clients can expect when they arrive.`,
-    ],
-    ["about", "cta.title", "Book a session"],
-  ],
-  service: (name, storyMediaId) => [
-    ["home", "cta.title", "Book an appointment."],
-    ["about", "hero.title", "About Us"],
-    [
-      "about",
-      "hero.subtitle",
-      `${name} is built around skilled work, honest pricing, and service you can trust.`,
-    ],
-    ["about", "story.image", storyMediaId, "media"],
-    ["about", "story.title", "Our Story"],
-    [
-      "about",
-      "story.body",
-      `${name} started with a simple idea: do good work, be straight with clients, and let the results speak for themselves.\n\nToday, that same approach guides every job we take on.`,
-    ],
-    ["about", "journey.title", "Our Journey"],
-    [
-      "about",
-      "journey.body",
-      `${name} is a service business focused on doing a small number of things exceptionally well.\n\nAdd the milestones that shaped your business: where you started, what changed along the way, and what clients can expect when they work with you.`,
-    ],
-    ["about", "cta.title", "Book an appointment"],
   ],
 };
 

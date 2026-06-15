@@ -7,7 +7,7 @@ type OpenAiApi = {
   setWidgetState: (_state: Record<string, unknown>) => unknown;
   callTool: (_name: string, _args: Record<string, unknown>) => unknown;
   sendFollowUpMessage: (_args: { prompt: string }) => unknown;
-  openExternal?: (_url: string) => unknown;
+  openExternal?: (_args: { href: string; redirectUrl?: false }) => unknown;
 };
 
 declare global {
@@ -69,7 +69,7 @@ export function callTool(name: string, args: Record<string, unknown>) {
 
 export function openExternal(url: string) {
   if (window.openai?.openExternal) {
-    window.openai.openExternal(url);
+    window.openai.openExternal({ href: url });
   } else {
     window.open(url, "_blank", "noopener,noreferrer");
   }

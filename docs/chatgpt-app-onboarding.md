@@ -40,7 +40,7 @@ site copy, and generated hero images if photos are sparse. This spec designs tha
    - `window.openai.callTool(name, args)` — invoke an MCP tool from a button click
    - `window.openai.setWidgetState(state)` — persist widget state/model context
    - `window.openai.sendFollowUpMessage({ prompt })` — append a follow-up user message
-   - `window.openai.openExternal(url)` — open an external URL
+   - `window.openai.openExternal({ href })` — open an external URL
 
 Do not build a custom parent iframe bridge for ChatGPT. The iframe exists, but ChatGPT owns it.
 Our code should serve an MCP Apps HTML resource and use the injected `window.openai` bridge.
@@ -261,7 +261,7 @@ The header is always present — it gives the user context before they see the l
 **Widget:** `widgets/src/vertical-picker/index.tsx`  
 **SDK pattern:** List
 
-Instead of asking in plain text, the model calls `show_vertical_picker` to present the verticals as a sleek, clickable list widget.
+Instead of asking in plain text, the model calls `show_vertical_picker` to present the verticals as a simple clickable list. The cards use approved Cloudflare-hosted reference images: Kikuzuki for restaurant and Pottery House for experience/activity. Feature explanations should live in the assistant response, not inside the widget.
 
 #### Mockup
 
@@ -269,15 +269,12 @@ Instead of asking in plain text, the model calls `show_vertical_picker` to prese
 ┌─────────────────────────────────────────────┐
 │  What type of business is this?             │
 │                                             │
-│  [ Restaurant / Café / Bar ]                │
-│  [ Experience / Activity   ]                │
-│  [ Retail / Shop           ]                │
-│  [ Wellness / Spa          ]                │
-│  [ Service business        ]                │
+│  [img] Restaurant / Café / Bar              │
+│  [img] Experience / Activity                │
 └─────────────────────────────────────────────┘
 ```
 
-User clicks an option → Widget calls `ui/update-model-context({ vertical: 'restaurant' })` and moves to Screen 3.
+User clicks an option → Widget calls `window.openai.setWidgetState({ vertical })` and sends a follow-up message with the selected label.
 
 ---
 
@@ -463,8 +460,8 @@ After `create_site` + `create_location` succeed, the model calls `show_site_prev
 The widget renders it as a static `<img>` card (aspect ratio 3:2). If no hero image exists yet,
 a styled link card shows the site name and URL instead.
 
-The page navigation controls are still present — each page's `path` is appended to `publicUrl`
-when the user clicks "Open site".
+The preview image/card is clickable and opens the selected page. Each page's `path` is appended
+to `publicUrl` when the user clicks the card or the "Open site" button.
 
 #### `structuredContent` shape
 

@@ -123,7 +123,7 @@ window.openai={
   setWidgetState:function(s){parent.postMessage({t:'state',d:s},'*')},
   sendFollowUpMessage:function(m){parent.postMessage({t:'send',d:m},'*')},
   callTool:function(n,a){parent.postMessage({t:'tool',n:n,a:a},'*')},
-  openExternal:function(u){parent.postMessage({t:'ext',u:u},'*')},
+  openExternal:function(a){parent.postMessage({t:'ext',u:a?.href||a},'*')},
 }
 <\/script>
 <script type="module" src="./mcp-assets/${name}.js"><\/script>
