@@ -163,7 +163,7 @@ function timeAgo(dateStr: string) {
 
 onMounted(async () => {
   try {
-    if (!dashboardState.state.value) await dashboardState.refresh()
+    await dashboardState.refresh()
     if (!dashboardState.restaurant.value) {
       return
     }

@@ -72,7 +72,27 @@ import {
 import { replyToReview } from "~/server/utils/review-management";
 import { createWorkRequest } from "~/server/utils/work-request-management";
 import { runSiteCreation } from "~/server/utils/site-creation";
+import {
+  createCustomDomainPair,
+  deleteCustomDomain,
+  domainInstructions,
+  getSiteDomains,
+  hasCustomDomainsEntitlement,
+  setCanonicalDomain,
+  syncDomainWithCloudflare,
+  validateCustomDomain,
+} from "~/server/utils/domains";
 import { updateSiteSettingsFields } from "~/server/utils/site-settings";
+import {
+  getFacebookPagesConnection,
+  getFacebookPages,
+  getPageInfo,
+  getLinkedInstagramAccount,
+  publishToPage,
+  publishToInstagram,
+  storeFacebookPagesConnection,
+  syncPageInfoToLocation,
+} from "~/server/utils/facebook-pages";
 import { getMcpTool } from "~/server/utils/mcp-tools";
 import { requireMcpSite, requireMcpUser } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
@@ -213,6 +233,7 @@ export async function executeMcpToolCall(
       id: s.id,
       name: s.brand_name ?? s.slug,
       subdomain: s.subdomain,
+      orgSlug: s.slug,
       publicUrl: s.subdomain ? `https://${s.subdomain}.krabiclaw.com` : null,
       status: s.status ?? "draft",
     }));
@@ -765,25 +786,74 @@ export async function executeMcpToolCall(
           site.userId,
         ),
       };
-    case "publish_post":
+    case "publish_post": {
+      const channels = normalizeChannels(args.channels);
+      const postId = requiredString(args, "post_id");
+      const post = await publishPost(site.db, site.organizationId, site.siteId, postId, channels);
+      if (!post) throw createError({ statusCode: 404, statusMessage: "Post not found" });
+
+      const wantsFacebook = channels.includes("facebook");
+      const wantsInstagram = channels.includes("instagram");
+      const now = new Date().toISOString();
+
+      if (wantsFacebook || wantsInstagram) {
+        const connection = await getFacebookPagesConnection(site.env as never, site.organizationId, site.siteId).catch(() => null);
+        if (!connection?.facebook_page_id || !connection.encrypted_page_token) {
+          const msg = "No Facebook Page connected";
+          const stmts = [];
+          if (wantsFacebook) stmts.push(site.db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'facebook'`).bind(msg, postId));
+          if (wantsInstagram) stmts.push(site.db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind(msg, postId));
+          if (stmts.length) await site.db.batch(stmts);
+        } else {
+          const pageToken = connection.encrypted_page_token;
+          const pageId = connection.facebook_page_id;
+
+          let imageUrl: string | null = null;
+          if (post.image_asset_id) {
+            const asset = await site.db.prepare(`SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`).bind(post.image_asset_id).first<{ public_url: string | null }>();
+            imageUrl = asset?.public_url ?? null;
+          }
+
+          if (wantsFacebook) {
+            try {
+              const fbResult = await publishToPage(pageToken, pageId, { message: post.body });
+              await site.db.prepare(`UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'facebook'`).bind(fbResult.id, now, postId).run();
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : "Facebook publish failed";
+              await site.db.prepare(`UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'facebook'`).bind(msg, postId).run();
+            }
+          }
+
+          if (wantsInstagram) {
+            if (!imageUrl) {
+              await site.db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind("Instagram requires an image — add a photo to this post", postId).run();
+            } else {
+              try {
+                const igUserId = await getLinkedInstagramAccount(pageToken, pageId);
+                if (!igUserId) {
+                  await site.db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind("No Instagram Business account linked to this Facebook Page", postId).run();
+                } else {
+                  const igResult = await publishToInstagram(pageToken, igUserId, { caption: post.body, imageUrl });
+                  await site.db.prepare(`UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'instagram'`).bind(igResult.id, now, postId).run();
+                }
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : "Instagram publish failed";
+                await site.db.prepare(`UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind(msg, postId).run();
+              }
+            }
+          }
+        }
+      }
+
+      return { post: await getPost(site.db, site.organizationId, site.siteId, postId) };
+    }
+    case "delete_post": {
+      const postId = requiredString(args, "post_id");
       return {
-        post: await publishPost(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          requiredString(args, "post_id"),
-          normalizeChannels(args.channels),
-        ),
+        post_id: postId,
+        deleted: await deletePost(site.db, site.organizationId, site.siteId, postId),
       };
-    case "delete_post":
-      return {
-        deleted: await deletePost(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          requiredString(args, "post_id"),
-        ),
-      };
+    }
     case "list_media_assets":
       return {
         assets: await listMediaAssets(site.db, site.siteId, {
@@ -862,6 +932,91 @@ export async function executeMcpToolCall(
         site.siteId,
       );
       return { deleted: true };
+    case "get_facebook_connection": {
+      const connection = await getFacebookPagesConnection(site.env as never, site.organizationId, site.siteId);
+      if (!connection) return { connected: false };
+      return {
+        connected: true,
+        facebook_page_id: connection.facebook_page_id ?? null,
+        facebook_page_name: connection.facebook_page_name ?? null,
+        status: connection.status,
+      };
+    }
+    case "publish_to_facebook": {
+      const allowed = await hasEntitlement(site.env, site.db, site.organizationId, "managed_service");
+      if (!allowed) {
+        throw createError({ statusCode: 403, statusMessage: "Facebook publishing is included in the Managed plan and above." });
+      }
+      const connection = await getFacebookPagesConnection(site.env as never, site.organizationId, site.siteId);
+      if (!connection) throw createError({ statusCode: 404, statusMessage: "No Facebook connection found. Connect Facebook from the dashboard first." });
+      if (!connection.facebook_page_id || !connection.encrypted_page_token) {
+        throw createError({ statusCode: 400, statusMessage: "No Facebook Page selected. Sync a page from the dashboard first." });
+      }
+      const result = await publishToPage(
+        connection.encrypted_page_token,
+        connection.facebook_page_id,
+        {
+          message: requiredString(args, "message"),
+          link: optionalString(args, "link") ?? undefined,
+          published: args.published !== false,
+        },
+      );
+      return { success: true, post_id: result.id, page_name: connection.facebook_page_name };
+    }
+    case "sync_facebook_page": {
+      const allowed = await hasEntitlement(site.env, site.db, site.organizationId, "managed_service");
+      if (!allowed) {
+        throw createError({ statusCode: 403, statusMessage: "Facebook sync is included in the Managed plan and above." });
+      }
+      let connection = await getFacebookPagesConnection(site.env as never, site.organizationId, site.siteId);
+      if (!connection) throw createError({ statusCode: 404, statusMessage: "No Facebook connection found. Connect Facebook from the dashboard first." });
+
+      const requestedPageId = optionalString(args, "page_id");
+      let pageToken = connection.encrypted_page_token;
+      let pageId = requestedPageId ?? connection.facebook_page_id;
+
+      if (requestedPageId && requestedPageId !== connection.facebook_page_id) {
+        const pages = await getFacebookPages(connection.encrypted_user_token);
+        const selected = pages.find((p) => p.id === requestedPageId);
+        if (!selected) throw createError({ statusCode: 404, statusMessage: "Page not found in this connection." });
+        pageToken = selected.access_token;
+        pageId = selected.id;
+        await storeFacebookPagesConnection(site.env as never, {
+          ...connection,
+          facebook_page_id: selected.id,
+          facebook_page_name: selected.name,
+          encrypted_user_token: connection.encrypted_user_token,
+          encrypted_page_token: pageToken,
+          status: "active",
+        });
+      }
+
+      if (!pageToken || !pageId) {
+        throw createError({ statusCode: 400, statusMessage: "No Facebook Page selected. Pass page_id or sync a page from the dashboard first." });
+      }
+
+      const pageInfo = await getPageInfo(pageToken, pageId);
+      const locationId = optionalString(args, "location_id");
+      if (locationId) {
+        await syncPageInfoToLocation(site.env as never, pageInfo, connection.id, site.organizationId, site.siteId, locationId);
+      }
+
+      return {
+        success: true,
+        synced_to_location: !!locationId,
+        page: {
+          id: pageInfo.id,
+          name: pageInfo.name,
+          about: pageInfo.about ?? null,
+          phone: pageInfo.phone ?? null,
+          website: pageInfo.website ?? null,
+          city: pageInfo.location?.city ?? null,
+          fan_count: pageInfo.fan_count ?? null,
+          cover: pageInfo.cover?.source ?? null,
+          picture: pageInfo.picture?.data?.url ?? null,
+        },
+      };
+    }
     case "import_menu_from_media": {
       const { extractMenuFromMediaAsset } =
         await import("~/server/utils/chowbot-media");
@@ -1354,6 +1509,147 @@ export async function executeMcpToolCall(
         thumbnailUrl: uploaded.thumbnailUrl,
       };
     }
+    // ─── Domain management ──────────────────────────────────────────────────
+    case "list_domains": {
+      const domains = await getSiteDomains(site.db, site.siteId);
+      return {
+        domains: domains.map((d) => ({
+          id: d.id,
+          domain: d.domain,
+          type: d.type,
+          role: d.role,
+          status: d.status,
+          instructions: domainInstructions(d),
+        })),
+      };
+    }
+    case "create_domain": {
+      const hasEntitlement = await hasCustomDomainsEntitlement(site.db, site.organizationId);
+      if (!hasEntitlement) {
+        throw createError({ statusCode: 403, statusMessage: "Custom domains require the Growth plan or higher." });
+      }
+      const domain = requiredString(args, "domain");
+      const includeWww = args.include_www !== false;
+      const validation = validateCustomDomain(site.env as Parameters<typeof validateCustomDomain>[0], domain);
+      if (!validation.valid) {
+        throw createError({ statusCode: 400, statusMessage: validation.reason ?? "Invalid domain" });
+      }
+      const records = await createCustomDomainPair(
+        site.env as Parameters<typeof createCustomDomainPair>[0],
+        site.db,
+        {
+          siteId: site.siteId,
+          organizationId: site.organizationId,
+          domain,
+          includeWww,
+          actorId: site.userId,
+          actorType: "owner",
+        },
+      );
+      return {
+        domains: records.map((d) => ({
+          id: d.id,
+          domain: d.domain,
+          role: d.role,
+          status: d.status,
+          instructions: domainInstructions(d),
+        })),
+      };
+    }
+    case "set_canonical_domain": {
+      const domainId = requiredString(args, "domain_id");
+      const record = await setCanonicalDomain(site.db, site.siteId, domainId, "owner", site.userId);
+      return {
+        id: record.id,
+        domain: record.domain,
+        role: record.role,
+        status: record.status,
+      };
+    }
+    case "delete_domain": {
+      const domainId = requiredString(args, "domain_id");
+      await deleteCustomDomain(
+        site.env as Parameters<typeof deleteCustomDomain>[0],
+        site.db,
+        domainId,
+        "owner",
+        site.userId,
+      );
+      return { deleted: true, domain_id: domainId };
+    }
+    case "sync_domain": {
+      const domainId = requiredString(args, "domain_id");
+      const record = await syncDomainWithCloudflare(
+        site.env as Parameters<typeof syncDomainWithCloudflare>[0],
+        site.db,
+        domainId,
+        "owner",
+        site.userId,
+      );
+      return {
+        id: record.id,
+        domain: record.domain,
+        status: record.status,
+        ssl_status: record.cloudflare_ssl_status ?? null,
+        dns_status: record.dns_status ?? null,
+        instructions: domainInstructions(record),
+      };
+    }
+    // ─── Analytics ──────────────────────────────────────────────────────────
+    case "get_site_analytics": {
+      const startDate = optionalString(args, "start_date") ?? getDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+      const endDate = optionalString(args, "end_date") ?? getDateString(new Date());
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+        throw createError({ statusCode: 400, statusMessage: "Dates must be YYYY-MM-DD format" });
+      }
+      const dailyStats = await site.db.prepare(`
+        SELECT date, page_views, unique_sessions, COALESCE(avg_session_duration, 0) as avg_session_duration, top_pages
+        FROM site_analytics_daily
+        WHERE site_id = ? AND date BETWEEN ? AND ?
+        ORDER BY date ASC
+      `).bind(site.siteId, startDate, endDate).all();
+      const rows = (dailyStats.results || []) as Record<string, unknown>[];
+      const toNum = (v: unknown) => (typeof v === "number" ? v : Number(v || 0));
+      const summary = rows.reduce<{ pageViews: number; sessions: number; totalDuration: number }>(
+        (acc, row) => ({
+          pageViews: acc.pageViews + toNum(row.page_views),
+          sessions: acc.sessions + toNum(row.unique_sessions),
+          totalDuration: acc.totalDuration + toNum(row.avg_session_duration) * toNum(row.unique_sessions),
+        }),
+        { pageViews: 0, sessions: 0, totalDuration: 0 },
+      );
+      const avgSessionDuration = summary.sessions > 0 ? Math.round(summary.totalDuration / summary.sessions) : 0;
+      const topPageMap = new Map<string, number>();
+      for (const row of rows) {
+        if (!row.top_pages) continue;
+        try {
+          const parsed = JSON.parse(String(row.top_pages));
+          if (!Array.isArray(parsed)) continue;
+          for (const page of parsed as Record<string, unknown>[]) {
+            const path = String(page.path ?? page.pagePath ?? "/").trim() || "/";
+            const views = toNum(page.views ?? page.count);
+            if (views > 0) topPageMap.set(path, (topPageMap.get(path) ?? 0) + views);
+          }
+        } catch { /* skip malformed rows */ }
+      }
+      const topPages = Array.from(topPageMap.entries())
+        .map(([path, views]) => ({
+          path,
+          views,
+          percentOfTotal: summary.pageViews > 0 ? Math.round((views / summary.pageViews) * 100) : 0,
+        }))
+        .sort((a, b) => b.views - a.views)
+        .slice(0, 10);
+      return {
+        metrics: {
+          pageViews: summary.pageViews,
+          uniqueSessions: summary.sessions,
+          avgSessionDuration,
+        },
+        topPages,
+        period: { startDate, endDate },
+      };
+    }
     default:
       throw mcpProtocolError(
         MCP_ERROR.methodNotFound,
@@ -1443,6 +1739,11 @@ function omit(source: Record<string, unknown>, keys: string[]) {
   return Object.fromEntries(
     Object.entries(source).filter(([key]) => !keys.includes(key)),
   );
+}
+
+function getDateString(date: Date): string {
+  const [day] = date.toISOString().split("T");
+  return day ?? "";
 }
 
 function normalizeChannels(

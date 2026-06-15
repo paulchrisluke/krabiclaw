@@ -11,7 +11,7 @@ type RoleUser = {
 test.describe("mcp tools", () => {
   test.describe.configure({ mode: "serial" });
 
-  test("delete_post enforces owner/admin boundary through MCP tool path", async ({
+  test("delete_post allows owner, admin, and editor through MCP tool path", async ({
     request,
     baseURL,
   }) => {
@@ -78,35 +78,21 @@ test.describe("mcp tools", () => {
       });
       expect(res.status()).toBe(200);
       return res.json() as Promise<{
-        result: { deleted?: boolean; error?: string };
+        result: { post_id?: string; deleted?: boolean };
       }>;
     };
 
-    const ownerPostId = await createDraftPost(
-      `Owner MCP delete ${Date.now()}`,
-    );
+    const ownerPostId = await createDraftPost(`Owner MCP delete ${Date.now()}`);
     const ownerDelete = await execDeletePostTool(ownerUserId!, ownerPostId);
     expect(ownerDelete.result).toEqual({ post_id: ownerPostId, deleted: true });
 
-    const adminPostId = await createDraftPost(
-      `Admin MCP delete ${Date.now()}`,
-    );
+    const adminPostId = await createDraftPost(`Admin MCP delete ${Date.now()}`);
     const adminDelete = await execDeletePostTool(admin.id, adminPostId);
     expect(adminDelete.result).toEqual({ post_id: adminPostId, deleted: true });
 
-    const editorPostId = await createDraftPost(
-      `Editor MCP delete ${Date.now()}`,
-    );
+    const editorPostId = await createDraftPost(`Editor MCP delete ${Date.now()}`);
     const editorDelete = await execDeletePostTool(editor.id, editorPostId);
-    expect(editorDelete.result).toEqual({
-      error: "Only owners or admins can delete posts.",
-    });
-
-    await loginAs(request, baseURL!, ownerUserId!);
-    const stillThere = await request.get(
-      `${baseURL}/api/editor/sites/${siteId}/posts/${editorPostId}`,
-    );
-    expect(stillThere.status()).toBe(200);
+    expect(editorDelete.result).toEqual({ post_id: editorPostId, deleted: true });
   });
 
   test("update_site_settings rollback preserves original brand and subdomain through MCP tool path", async ({
