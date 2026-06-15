@@ -246,7 +246,11 @@ const error = ref(null)
 
 // Must be absolute: Better Auth validates relative callbackURLs with a regex that rejects `:`, which
 // appears when redirect_uri is unencoded. Absolute URLs are validated by origin only, not query string.
-const oauthCallbackUrl = computed(() => `${window.location.origin}/oauth/consent${window.location.search}`)
+const oauthCallbackUrl = computed(() =>
+  typeof window !== 'undefined'
+    ? `${window.location.origin}/oauth/consent${window.location.search}`
+    : ''
+)
 
 const handleGoogleSignIn = async () => {
   loading.value = true

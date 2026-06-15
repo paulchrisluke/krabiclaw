@@ -33,4 +33,39 @@ test.describe('site creation contracts', () => {
       error: 'vertical is required and must be one of: restaurant, experience',
     })
   })
+
+  test('an authenticated user can create multiple site workspaces', async ({ request, baseURL }) => {
+    const ownerLogin = await request.get(devLoginUrl(baseURL!), {
+      headers: devLoginHeaders(),
+      maxRedirects: 0,
+    })
+    expect(ownerLogin.status()).toBe(302)
+
+    const suffix = Date.now()
+    const firstRes = await request.post(`${baseURL}/api/sites`, {
+      data: {
+        name: `Multi Site One ${suffix}`,
+        subdomain: `multi-site-one-${suffix}`,
+        vertical: 'restaurant',
+      },
+    })
+    expect(firstRes.status()).toBe(200)
+    const first = await firstRes.json() as { siteId: string; organizationId: string; subdomain: string }
+
+    const secondRes = await request.post(`${baseURL}/api/sites`, {
+      data: {
+        name: `Multi Site Two ${suffix}`,
+        subdomain: `multi-site-two-${suffix}`,
+        vertical: 'experience',
+      },
+    })
+    expect(secondRes.status()).toBe(200)
+    const second = await secondRes.json() as { siteId: string; organizationId: string; subdomain: string }
+
+    expect(first.siteId).toEqual(expect.any(String))
+    expect(second.siteId).toEqual(expect.any(String))
+    expect(second.siteId).not.toBe(first.siteId)
+    expect(second.organizationId).not.toBe(first.organizationId)
+    expect(second.subdomain).toBe(`multi-site-two-${suffix}`)
+  })
 })

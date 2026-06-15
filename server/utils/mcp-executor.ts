@@ -300,7 +300,7 @@ export async function executeMcpToolCall(
       vertical: requiredString(rawArguments, "vertical") as SiteVertical,
     });
     assertDomainSuccess(result);
-    return result.data;
+    return normalizeSiteCreationData(result.data);
   }
 
   const siteId = requiredString(rawArguments, "site_id");
@@ -1308,4 +1308,18 @@ function assertDomainSuccess(result: {
     statusMessage: String(result.data.error ?? "Request failed"),
     data: result.data,
   });
+}
+
+function normalizeSiteCreationData(data: Record<string, unknown>) {
+  const siteId = typeof data.siteId === "string"
+    ? data.siteId
+    : typeof data.id === "string"
+      ? data.id
+      : "";
+  return {
+    ...data,
+    id: siteId,
+    siteId,
+    status: typeof data.status === "string" ? data.status : "active",
+  };
 }

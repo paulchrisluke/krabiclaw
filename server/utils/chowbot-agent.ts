@@ -2485,8 +2485,14 @@ async function executeTool(
       if (!title) return { error: "title is required." };
       if (input.rating !== undefined && getToolNumber(input, "rating") === undefined)
         return { error: "rating must be a valid number." };
+      const ratingCreate = getToolNumber(input, "rating");
+      if (ratingCreate !== undefined && ratingCreate !== null && (ratingCreate < 0 || ratingCreate > 5))
+        return { error: "rating must be between 0 and 5." };
       if (input.review_count !== undefined && getToolInteger(input, "review_count") === undefined)
         return { error: "review_count must be a valid integer." };
+      const reviewCountCreate = getToolInteger(input, "review_count");
+      if (reviewCountCreate !== undefined && reviewCountCreate !== null && reviewCountCreate < 0)
+        return { error: "review_count must be non-negative." };
       const result = await createLocation(
         env,
         db,
@@ -2541,8 +2547,14 @@ async function executeTool(
       }
       if (input.rating !== undefined && getToolNumber(input, "rating") === undefined)
         return { error: "rating must be a valid number." };
+      const ratingUpdate = getToolNumber(input, "rating");
+      if (ratingUpdate !== undefined && ratingUpdate !== null && (ratingUpdate < 0 || ratingUpdate > 5))
+        return { error: "rating must be between 0 and 5." };
       if (input.review_count !== undefined && getToolInteger(input, "review_count") === undefined)
         return { error: "review_count must be a valid integer." };
+      const reviewCountUpdate = getToolInteger(input, "review_count");
+      if (reviewCountUpdate !== undefined && reviewCountUpdate !== null && reviewCountUpdate < 0)
+        return { error: "review_count must be non-negative." };
       const result = await updateLocation(
         db,
         orgId,
