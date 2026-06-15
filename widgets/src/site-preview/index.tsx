@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { useState, useEffect } from 'react'
-import { onToolResult, sendUiMessage, injectStyles } from '../bridge'
+import { onToolResult, sendUiMessage, openExternal, injectStyles } from '../bridge'
 
 interface Page {
   label: string
@@ -72,7 +72,7 @@ function App() {
   const currentPage = pages[pageIndex]!
 
   const handleOpen = () => {
-    window.open(`${site.publicUrl}${currentPage.path}`, '_blank', 'noopener,noreferrer')
+    openExternal(`${site.publicUrl}${currentPage.path}`)
   }
 
   const handleWhatsNext = () => {

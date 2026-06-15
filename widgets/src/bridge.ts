@@ -1,4 +1,18 @@
-// Bridge between widget iframe and ChatGPT via JSON-RPC 2.0 postMessage.
+// OpenAI Apps SDK bridge — data via window.openai.toolOutput, actions via window.openai.*
+
+type OpenAiApi = {
+  toolOutput?: Record<string, unknown> | null
+  toolInput?: Record<string, unknown>
+  widgetState?: Record<string, unknown>
+  setWidgetState: (state: Record<string, unknown>) => void | Promise<void>
+  callTool: (name: string, args: Record<string, unknown>) => void | Promise<unknown>
+  sendFollowUpMessage: (args: { prompt: string }) => void | Promise<void>
+  openExternal?: (url: string) => void
+}
+
+declare global {
+  interface Window { openai?: OpenAiApi }
+}
 
 export function injectStyles(css: string) {
   const el = document.createElement('style')
@@ -6,37 +20,54 @@ export function injectStyles(css: string) {
   document.head.appendChild(el)
 }
 
-let _msgId = 1
+export function onToolResult(callback: (result: unknown) => void) {
+  function tryRead() {
+    const output = window.openai?.toolOutput
+    if (output !== undefined && output !== null) {
+      callback(output)
+      return true
+    }
+    return false
+  }
 
-export function sendUiMessage(text: string) {
-  window.parent.postMessage({
-    jsonrpc: '2.0',
-    method: 'ui/message',
-    params: { content: [{ type: 'text', text }] },
-  }, '*')
+  if (tryRead()) return
+
+  // ChatGPT dispatches this event when globals are ready
+  const handler = (e: Event) => {
+    const detail = (e as CustomEvent).detail
+    if (detail?.globals?.toolOutput != null) {
+      callback(detail.globals.toolOutput)
+      window.removeEventListener('openai:set_globals', handler)
+    }
+  }
+  window.addEventListener('openai:set_globals', handler)
+
+  // Fallback poll for up to 10 seconds
+  let checks = 40
+  const timer = setInterval(() => {
+    if (tryRead() || --checks <= 0) {
+      clearInterval(timer)
+      window.removeEventListener('openai:set_globals', handler)
+    }
+  }, 250)
 }
 
-export function updateModelContext(context: Record<string, unknown>) {
-  window.parent.postMessage({
-    jsonrpc: '2.0',
-    method: 'ui/update-model-context',
-    params: { context },
-  }, '*')
+export function sendUiMessage(text: string) {
+  window.openai?.sendFollowUpMessage({ prompt: text })
+}
+
+export function updateModelContext(state: Record<string, unknown>) {
+  window.openai?.setWidgetState(state)
 }
 
 export function callTool(name: string, args: Record<string, unknown>) {
-  window.parent.postMessage({
-    jsonrpc: '2.0',
-    id: _msgId++,
-    method: 'tools/call',
-    params: { name, arguments: args },
-  }, '*')
+  window.openai?.callTool(name, args)
 }
 
-export function onToolResult(callback: (result: unknown) => void) {
-  window.addEventListener('message', (e) => {
-    if (e.data?.method === 'ui/notifications/tool-result') {
-      callback(e.data?.params?.result ?? e.data?.params)
-    }
-  })
+export function openExternal(url: string) {
+  if (window.openai?.openExternal) {
+    window.openai.openExternal(url)
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
 }
