@@ -1,4 +1,4 @@
-import { getFieldDef } from '~/config/content-registry'
+import { contentRegistry, getFieldDef } from '~/config/content-registry'
 import { hasEntitlement } from '~/server/utils/billing'
 import { getGoogleBusinessAccounts, getGoogleBusinessAuthUrl, getGoogleBusinessConnection, getGoogleBusinessLocations, syncGoogleLocations } from '~/server/utils/google-business'
 import { normalizePhone, getOrgWhatsAppPhone, setOrgWhatsAppPhone } from '~/server/utils/whatsapp'
@@ -6,6 +6,7 @@ import { upsertDraftContent, getDraftStatus, publishAllDrafts, publishDrafts, di
 import type { SiteContent } from '~/server/utils/content-management'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { signOAuthState } from '~/server/utils/encryption'
+import { updateLocation } from '~/server/utils/location-management'
 
 export async function listSitesForUser(db: D1Database, userId: string, isPlatformAdmin: boolean) {
   if (isPlatformAdmin) {
@@ -40,18 +41,116 @@ export async function listSitesForUser(db: D1Database, userId: string, isPlatfor
   return rows.results ?? []
 }
 
-export async function getSiteForMcp(db: D1Database, siteId: string, userId: string) {
-  const site = await db.prepare(`
-    SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
-           s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
-    FROM sites s
-    JOIN member m ON s.organization_id = m.organizationId
-    WHERE s.id = ? AND m.userId = ?
-    LIMIT 1
-  `).bind(siteId, userId).first()
+export async function getSiteForMcp(
+  db: D1Database,
+  siteId: string,
+  userId: string,
+  isPlatformAdmin = false,
+) {
+  const site = isPlatformAdmin
+    ? await db.prepare(`
+      SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
+             s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
+      FROM sites s
+      WHERE s.id = ?
+      LIMIT 1
+    `).bind(siteId).first()
+    : await db.prepare(`
+      SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
+             s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
+      FROM sites s
+      JOIN member m ON s.organization_id = m.organizationId
+      WHERE s.id = ? AND m.userId = ?
+      LIMIT 1
+    `).bind(siteId, userId).first()
 
   if (!site) throw new Error('Site not found or access denied')
   return site
+}
+
+const HERO_FIELD_ALIASES: Record<string, 'hero.title' | 'hero.subtitle' | 'hero.image' | 'hero.video'> = {
+  hero_heading: 'hero.title',
+  hero_title: 'hero.title',
+  'hero.title': 'hero.title',
+  hero_subheading: 'hero.subtitle',
+  hero_subtitle: 'hero.subtitle',
+  'hero.subtitle': 'hero.subtitle',
+  hero_image_asset_id: 'hero.image',
+  'hero.image': 'hero.image',
+  hero_video_asset_id: 'hero.video',
+  'hero.video': 'hero.video',
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function editableFieldKeys(page: string) {
+  return Object.keys(contentRegistry[page]?.fields ?? {})
+}
+
+function normalizeDraftString(value: unknown, field: string) {
+  if (typeof value !== 'string') {
+    throw new Error(`Field "${field}" must be a string.`)
+  }
+  return value
+}
+
+function normalizeContentChanges(page: string, changes: Record<string, unknown>) {
+  const normalizedFields = new Map<string, string>()
+  const heroChange: Partial<SiteContent> = {}
+  let hasHeroChange = false
+
+  for (const [rawField, rawValue] of Object.entries(changes)) {
+    if (rawField === 'hero') {
+      if (!isRecord(rawValue)) {
+        throw new Error('Field "hero" must be an object with hero_title/hero_subtitle/media asset IDs.')
+      }
+
+      const heroTitle = rawValue.hero_title
+      const heroSubtitle = rawValue.hero_subtitle
+      const heroImageAssetId = rawValue.hero_image_asset_id
+      const heroVideoAssetId = rawValue.hero_video_asset_id
+
+      if (heroTitle !== undefined) heroChange.hero_title = normalizeDraftString(heroTitle, 'hero.hero_title') || undefined
+      if (heroSubtitle !== undefined) heroChange.hero_subtitle = normalizeDraftString(heroSubtitle, 'hero.hero_subtitle') || undefined
+      if (heroImageAssetId !== undefined) heroChange.hero_image_asset_id = normalizeDraftString(heroImageAssetId, 'hero.hero_image_asset_id') || undefined
+      if (heroVideoAssetId !== undefined) heroChange.hero_video_asset_id = normalizeDraftString(heroVideoAssetId, 'hero.hero_video_asset_id') || undefined
+
+      if (
+        heroTitle !== undefined
+        || heroSubtitle !== undefined
+        || heroImageAssetId !== undefined
+        || heroVideoAssetId !== undefined
+      ) {
+        hasHeroChange = true
+      }
+      continue
+    }
+
+    const heroAlias = HERO_FIELD_ALIASES[rawField]
+    if (heroAlias) {
+      const value = normalizeDraftString(rawValue, rawField)
+      hasHeroChange = true
+      if (heroAlias === 'hero.title') heroChange.hero_title = value || undefined
+      if (heroAlias === 'hero.subtitle') heroChange.hero_subtitle = value || undefined
+      if (heroAlias === 'hero.image') heroChange.hero_image_asset_id = value || undefined
+      if (heroAlias === 'hero.video') heroChange.hero_video_asset_id = value || undefined
+      continue
+    }
+
+    const fieldDef = getFieldDef(page, rawField)
+    if (!fieldDef) {
+      const supported = editableFieldKeys(page)
+      throw new Error(
+        `Field "${rawField}" is not editable on page "${page}". Supported fields: ${supported.join(', ')}${supported.length ? ', ' : ''}hero.title, hero.subtitle, hero.image, hero.video.`,
+      )
+    }
+
+    normalizedFields.set(rawField, normalizeDraftString(rawValue, rawField))
+  }
+
+  return { normalizedFields, heroChange, hasHeroChange }
 }
 
 export async function getLocationForMcp(
@@ -304,26 +403,15 @@ export async function saveContentDraft(
   userId: string,
   input: {
     page: string
-    changes: Record<string, string>
+    changes: Record<string, unknown>
     location_id?: string | null
   },
 ) {
   const locationId = input.location_id ?? undefined
   const draftIdPrefix = ['draft', organizationId, siteId, locationId || 'site', input.page].join('::')
-  const heroFields = ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video']
-  const heroChange: Record<string, string | undefined> = {}
-  let hasHeroChange = false
+  const { normalizedFields, heroChange, hasHeroChange } = normalizeContentChanges(input.page, input.changes)
 
-  for (const [field, value] of Object.entries(input.changes)) {
-    if (heroFields.includes(field)) {
-      hasHeroChange = true
-      if (field === 'hero.title') heroChange.hero_title = value || undefined
-      if (field === 'hero.subtitle') heroChange.hero_subtitle = value || undefined
-      if (field === 'hero.image') heroChange.hero_image_asset_id = value || undefined
-      if (field === 'hero.video') heroChange.hero_video_asset_id = value || undefined
-      continue
-    }
-
+  for (const [field, value] of normalizedFields.entries()) {
     const fieldDef = getFieldDef(input.page, field)
     await upsertDraftContent(db, {
       id: `${draftIdPrefix}::${field}`,
@@ -359,7 +447,7 @@ export async function saveContentDraft(
     } as Omit<SiteContent, 'updated_at'>)
   }
 
-  return { success: true, page: input.page, changes_count: Object.keys(input.changes).length }
+  return { success: true, page: input.page, changes_count: normalizedFields.size + (hasHeroChange ? 1 : 0) }
 }
 
 export async function getMergedEditorContent(
@@ -430,12 +518,32 @@ export async function getMergedEditorContent(
     }
   }
 
+  const editableKeys = editableFieldKeys(page)
+  const content = mergedContent.map((item) => {
+    const isStructuredHero = item.field === 'hero'
+    const isEditableField = isStructuredHero || Boolean(getFieldDef(page, item.field))
+    return {
+      ...item,
+      render_status: isEditableField ? 'rendered' : 'orphan',
+      editable_keys: isStructuredHero
+        ? ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video']
+        : getFieldDef(page, item.field)
+          ? [item.field]
+          : [],
+    }
+  })
+
   return {
-    content: mergedContent,
+    content,
     hasDrafts: drafts.length > 0,
     siteId,
     locationId,
     page,
+    editableSchema: {
+      page,
+      fields: editableKeys,
+      structured: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'],
+    },
   }
 }
 
@@ -463,6 +571,86 @@ export async function publishContentDrafts(
   if (!input.page) throw new Error('page is required unless all=true')
   await publishDrafts(db, organizationId, siteId, input.page, input.location_id ?? undefined)
   return { success: true, page: input.page, location_id: input.location_id ?? null }
+}
+
+export async function updateHomeHero(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  userId: string,
+  input: {
+    title?: string | null
+    subtitle?: string | null
+    image_asset_id?: string | null
+    video_asset_id?: string | null
+    location_id?: string | null
+    publish?: boolean
+  },
+) {
+  const changes: Record<string, unknown> = {
+    hero: {
+      ...(input.title !== undefined ? { hero_title: input.title ?? '' } : {}),
+      ...(input.subtitle !== undefined ? { hero_subtitle: input.subtitle ?? '' } : {}),
+      ...(input.image_asset_id !== undefined ? { hero_image_asset_id: input.image_asset_id ?? '' } : {}),
+      ...(input.video_asset_id !== undefined ? { hero_video_asset_id: input.video_asset_id ?? '' } : {}),
+    },
+  }
+
+  const draft = await saveContentDraft(db, organizationId, siteId, userId, {
+    page: 'home',
+    changes,
+    location_id: input.location_id,
+  })
+
+  if (input.publish) {
+    await publishContentDrafts(db, organizationId, siteId, {
+      page: 'home',
+      location_id: input.location_id,
+    })
+  }
+
+  return {
+    success: true,
+    page: 'home',
+    published: input.publish === true,
+    changes_count: draft.changes_count,
+  }
+}
+
+export async function hydrateSeededLocationForOnboarding(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  userId: string,
+  updates: Record<string, unknown>,
+) {
+  const rows = await db.prepare(`
+    SELECT id, slug
+    FROM business_locations
+    WHERE organization_id = ? AND site_id = ? AND status = 'active'
+    ORDER BY is_primary DESC, created_at ASC
+  `).bind(organizationId, siteId).all<{ id: string; slug: string }>()
+
+  const locations = rows.results ?? []
+  if (locations.length !== 1) {
+    throw new Error('Location limit reached and no single seeded location was available to hydrate.')
+  }
+
+  const location = locations[0]!
+  const result = await updateLocation(
+    db,
+    organizationId,
+    siteId,
+    location.id,
+    updates,
+    userId,
+  )
+
+  return {
+    ...result.data,
+    hydrated_seed_location: true,
+    previous_slug: location.slug,
+  }
 }
 
 export async function discardContentDrafts(

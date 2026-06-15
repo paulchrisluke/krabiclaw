@@ -11,8 +11,8 @@ interface SiteRow {
   organization_id: string
 }
 
-const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other'])
-type MediaCategory = 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other'
+const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo'])
+type MediaCategory = 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo'
 
 export default defineEventHandler(async (event) => {
   try {

@@ -119,6 +119,8 @@ import {
   reorderLocationQa,
   saveContentDraft,
   syncGoogleBusinessLocationsForMcp,
+  hydrateSeededLocationForOnboarding,
+  updateHomeHero,
   updateContactSubmissionStatus,
   updateLocationQa,
   updateNotificationsSettings,
@@ -135,6 +137,65 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
       Math.cos(lat2 * (Math.PI / 180)) *
       Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function resolveGeneratedImageUpload(
+  imageData: string,
+): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
+  const dataUrlMatch = imageData.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (dataUrlMatch) {
+    const contentType = dataUrlMatch[1] || "image/png";
+    const base64 = dataUrlMatch[2] || "";
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const extension = contentType.split("/")[1] ?? "png";
+    return {
+      buffer: bytes.buffer as ArrayBuffer,
+      contentType,
+      filename: `ai-generated.${extension}`,
+    };
+  }
+
+  if (imageData.startsWith("/")) {
+    const { relative, resolve } = await import("node:path");
+    const resolvedPath = resolve(imageData);
+    const allowedRoots = ["/mnt/data", "/tmp"];
+    const isAllowedPath = allowedRoots.some((root) => {
+      const relativePath = relative(root, resolvedPath);
+      return relativePath !== ""
+        && !relativePath.startsWith("..")
+        && !relativePath.includes("/../")
+        && !relativePath.includes("\\..\\");
+    });
+
+    if (!isAllowedPath) {
+      throw new Error("Generated image path must be within an approved temp directory.");
+    }
+
+    const { readFile } = await import("node:fs/promises");
+    const bytes = await readFile(resolvedPath);
+    const extension = imageData.split(".").pop()?.toLowerCase() ?? "png";
+    const contentType =
+      extension === "jpg" || extension === "jpeg"
+        ? "image/jpeg"
+        : extension === "webp"
+          ? "image/webp"
+          : "image/png";
+    return {
+      buffer: bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ),
+      contentType,
+      filename: imageData.split("/").pop() || `ai-generated.${extension}`,
+    };
+  }
+
+  const bytes = Uint8Array.from(atob(imageData), (c) => c.charCodeAt(0));
+  return {
+    buffer: bytes.buffer as ArrayBuffer,
+    contentType: "image/png",
+    filename: `ai-generated-${Date.now()}.png`,
+  };
 }
 
 interface GoogleMapsSignals {
@@ -224,6 +285,10 @@ export async function executeMcpToolCall(
 
   if (toolName === "show_welcome" || toolName === "list_sites") {
     const user = await requireMcpUser(event);
+    const userRecord = await user.db
+      .prepare(`SELECT id, email, name, role FROM user WHERE id = ? LIMIT 1`)
+      .bind(user.userId)
+      .first<{ id: string; email: string | null; name: string | null; role: string | null }>();
     const allSites = await listSitesForUser(
       user.db,
       user.userId,
@@ -237,13 +302,44 @@ export async function executeMcpToolCall(
       publicUrl: s.subdomain ? `https://${s.subdomain}.krabiclaw.com` : null,
       status: s.status ?? "draft",
     }));
+    const currentUser = {
+      id: user.userId,
+      email: userRecord?.email ?? null,
+      name: userRecord?.name ?? null,
+      role: userRecord?.role ?? null,
+      isPlatformAdmin: user.isPlatformAdmin,
+    };
     return renderWidget(
       "welcome-list",
-      { sites },
+      { sites, currentUser },
       sites.length === 0
         ? "Welcome to KrabiClaw. You have no sites yet — let's create one."
         : `You have ${sites.length} site${sites.length > 1 ? "s" : ""}: ${sites.map((s: { name: unknown }) => s.name).join(", ")}.`,
     );
+  }
+
+  if (toolName === "get_current_user") {
+    const user = await requireMcpUser(event);
+    const currentUser = await user.db
+      .prepare(`
+        SELECT id, email, name, role
+        FROM user
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(user.userId)
+      .first<{ id: string; email: string | null; name: string | null; role: string | null }>();
+
+    if (!currentUser) {
+      throw createError({ statusCode: 404, statusMessage: "Current user not found" });
+    }
+
+    return {
+      user: {
+        ...currentUser,
+        isPlatformAdmin: user.isPlatformAdmin,
+      },
+    };
   }
 
   if (toolName === "show_vertical_picker") {
@@ -510,7 +606,7 @@ export async function executeMcpToolCall(
 
   switch (toolName) {
     case "show_site_preview": {
-      const siteRow = await getSiteForMcp(site.db, site.siteId, site.userId);
+      const siteRow = await getSiteForMcp(site.db, site.siteId, site.userId, site.isPlatformAdmin);
       const subdomain = (siteRow as Record<string, unknown>)
         .subdomain as string;
       const publicUrl = subdomain ? `https://${subdomain}.krabiclaw.com` : "";
@@ -552,7 +648,7 @@ export async function executeMcpToolCall(
       );
     }
     case "get_site":
-      return { site: await getSiteForMcp(site.db, site.siteId, site.userId) };
+      return { site: await getSiteForMcp(site.db, site.siteId, site.userId, site.isPlatformAdmin) };
     case "get_site_settings":
       return {
         settings: await loadSiteSettings(
@@ -609,6 +705,18 @@ export async function executeMcpToolCall(
         args as never,
         site.userId,
       );
+      if (
+        result.status === 402 &&
+        (result.data as { code?: string } | undefined)?.code === "LOCATION_LIMIT_REACHED"
+      ) {
+        return await hydrateSeededLocationForOnboarding(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          site.userId,
+          args,
+        );
+      }
       assertDomainSuccess(result);
       return result.data;
     }
@@ -1048,6 +1156,21 @@ export async function executeMcpToolCall(
           location_id: optionalString(args, "location_id"),
         },
       );
+    case "update_home_hero":
+      return await updateHomeHero(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        site.userId,
+        {
+          title: optionalString(args, "title"),
+          subtitle: optionalString(args, "subtitle"),
+          image_asset_id: optionalString(args, "image_asset_id"),
+          video_asset_id: optionalString(args, "video_asset_id"),
+          location_id: optionalString(args, "location_id"),
+          publish: args.publish === true,
+        },
+      );
     case "get_content_draft_status":
       return await getContentDraftStatus(
         site.db,
@@ -1475,16 +1598,13 @@ export async function executeMcpToolCall(
         throw new Error("Cloudflare Images not configured");
       const imageData = requiredString(args, "image_data");
       const prompt = optionalString(args, "prompt") ?? null;
-
-      // imageData is base64 from image_generation_call.result (Responses API)
-      const bytes = Uint8Array.from(atob(imageData), (c) => c.charCodeAt(0));
-      const buffer = bytes.buffer as ArrayBuffer;
+      const upload = await resolveGeneratedImageUpload(imageData);
 
       const uploaded = await uploadImageBuffer(
         site.env as Parameters<typeof uploadImageBuffer>[0],
-        buffer,
-        `ai-hero-${Date.now()}.png`,
-        "image/png",
+        upload.buffer,
+        upload.filename,
+        upload.contentType,
       );
 
       const assetId = crypto.randomUUID();

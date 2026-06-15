@@ -11,8 +11,8 @@ const MAX_BYTES = 50 * 1024 * 1024
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'])
 const IMAGE_MIME_TYPES = new Set(['image/avif'])
 const ALLOWED_MIME_TYPES = new Set([...VIDEO_MIME_TYPES, ...IMAGE_MIME_TYPES, 'application/pdf', 'image/svg+xml'])
-const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other'])
-type MediaCategory = 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other'
+const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo'])
+type MediaCategory = 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo'
 
 function sanitizeFilename(raw: string | undefined): string {
   const sanitized = (raw ?? '')

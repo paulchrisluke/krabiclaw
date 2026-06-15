@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { useState, useEffect } from 'react'
-import { onToolResult, sendUiMessage, updateModelContext, injectStyles } from '../bridge'
+import { callTool, onToolResult, sendUiMessage, updateModelContext, injectStyles } from '../bridge'
 
 interface Site {
   id: string
@@ -12,6 +12,10 @@ interface Site {
 
 interface Content {
   sites: Site[]
+  currentUser?: {
+    email?: string | null
+    name?: string | null
+  }
 }
 
 const PRIMARY = '#1F2547'
@@ -94,7 +98,7 @@ function App() {
   }
 
   const handleCreate = () => {
-    sendUiMessage("Let's create a new site.")
+    callTool('show_vertical_picker', {})
   }
 
   const handleWhatsNext = () => {

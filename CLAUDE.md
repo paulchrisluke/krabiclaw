@@ -7,31 +7,69 @@ When an internal API returns errors, nulls, or malformed data, fix the API contr
 ## Platform Strategy — ChatGPT MCP App Native
 
 KrabiClaw is a **ChatGPT MCP app**. All content creation and editing flows through the MCP server (`server/api/mcp.post.ts`). The dashboard is limited to:
+
 - Billing and plan management
-- Organization settings (domains, members, general)
-- Inbox triage (contact submissions, reservations, reviews)
+- Organization settings: domains, members, general
+- Inbox triage: contact submissions, reservations, reviews
 - Work requests and support
 - Analytics overview
 
-**ChowBot is fully decommissioned.** Do not add back `chowbot-agent.ts`, `chowbot-conversations.ts`, `/api/ai/[siteId]/agent`, WhatsApp webhook, or any ChowBot composable/component. The only remaining ChowBot-adjacent file is `server/utils/chowbot-media.ts` (kept for the `import_menu_from_media` MCP tool; rename when refactoring).
+**ChowBot is fully decommissioned.** Do not add back `chowbot-agent.ts`, `chowbot-conversations.ts`, `/api/ai/[siteId]/agent`, WhatsApp webhook, or any ChowBot composable/component.
 
-**Image generation** uses ChatGPT's native `image_generation` Responses API tool (model: `gpt-image-1` / `gpt-image-2`, **not DALL-E**). The output is base64 in `image_generation_call.result`. MCP flow: generate natively → call `save_generated_image` with base64 → call `show_generated_images` with returned `assetId` + `publicUrl`.
+The only remaining ChowBot-adjacent file is `server/utils/chowbot-media.ts`, kept for the `import_menu_from_media` MCP tool. Rename it when refactoring.
 
-**Dashboard CMS pages** (content editor, menus, media, posts, photos, pages) are candidates for future removal once the MCP path is fully validated as the primary editing surface. Do not invest in new features for these pages.
+**Image generation** uses ChatGPT's native `image_generation` Responses API tool.
+
+- Model: `gpt-image-1` or `gpt-image-2`
+- Do not use DALL-E
+- Output is base64 in `image_generation_call.result`
+- MCP flow:
+  1. Generate natively
+  2. Call `save_generated_image` with base64
+  3. Call `show_generated_images` with returned `assetId` and `publicUrl`
+
+**Dashboard CMS pages** are candidates for future removal once the MCP path is fully validated as the primary editing surface. Do not invest in new features for:
+
+- Content editor
+- Menus
+- Media
+- Posts
+- Photos
+- Pages
 
 ---
 
 ## Database Schema Workflow
 
-Migrations are managed via **wrangler D1 migrations** — applied automatically on every deploy.
+Migrations are managed via **wrangler D1 migrations** and are applied automatically on every deploy.
 
-1. To change the schema, create a new migration: `wrangler d1 migrations create DB <description>`
-2. Edit the generated file in `migrations/` — write only the delta (ALTER TABLE, CREATE TABLE, etc.)
-3. Apply locally to test: `yarn schema:local`
-4. Migrations run automatically on deploy: `yarn deploy` runs `wrangler d1 migrations apply DB --remote` before uploading the Worker
-5. Never write ad-hoc SQL files in `scripts/` for schema changes — they will not be tracked and will cause production outages
-6. Better Auth tables must use exact camelCase column names; app tables use snake_case
-7. Any schema change must be checked against current server queries before finishing
+1. To change the schema, create a new migration:
+
+   ```bash
+   wrangler d1 migrations create DB <description>
+   ```
+
+2. Edit the generated file in `migrations/`. Write only the delta: `ALTER TABLE`, `CREATE TABLE`, etc.
+
+3. Apply locally to test:
+
+   ```bash
+   yarn schema:local
+   ```
+
+4. Migrations run automatically on deploy. `yarn deploy` runs:
+
+   ```bash
+   wrangler d1 migrations apply DB --remote
+   ```
+
+   before uploading the Worker.
+
+5. Never write ad-hoc SQL files in `scripts/` for schema changes. They will not be tracked and can cause production outages.
+
+6. Better Auth tables must use exact camelCase column names. App tables use snake_case.
+
+7. Any schema change must be checked against current server queries before finishing.
 
 The current canonical schema is `migrations/0001_initial.sql`. Each subsequent migration file is the source of truth for its delta.
 
@@ -39,14 +77,19 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 ## Multi-Tenancy
 
-- Organizations map 1:1 with restaurant brands/workspaces (Better Auth `organization` plugin)
-- One site per org — enforced by unique index on `sites(organization_id)`
-- Multiple physical locations live under `business_locations` (not separate orgs)
-- Dashboard route shape: `/dashboard/{orgSlug}` (restaurant workspace), `/dashboard/{orgSlug}/{locationSlug}` (location workspace), `/dashboard/{orgSlug}/~/settings/*` (org settings), `/dashboard/account/settings` (personal)
-- Tenant resolution: `server/middleware/tenant-resolution.ts`
+- Organizations map 1:1 with restaurant brands/workspaces using Better Auth’s `organization` plugin.
+- One site per org, enforced by the unique index on `sites(organization_id)`.
+- Multiple physical locations live under `business_locations`, not separate orgs.
+- Dashboard route shape:
+  - `/dashboard/{orgSlug}` — restaurant workspace
+  - `/dashboard/{orgSlug}/{locationSlug}` — location workspace
+  - `/dashboard/{orgSlug}/~/settings/*` — org settings
+  - `/dashboard/account/settings` — personal settings
+
+- Tenant resolution lives in `server/middleware/tenant-resolution.ts`:
   - `localhost` / `krabiclaw.com` = platform routes
   - `*.krabiclaw.com` or custom domains = tenant sites
-  - On `*.workers.dev` preview Workers: `x-preview-tenant: <slug>` header carries tenant identity (browser can't spoof subdomain against single-level wildcard cert)
+  - On `*.workers.dev` preview Workers, `x-preview-tenant: <slug>` header carries tenant identity because the browser cannot spoof subdomains against a single-level wildcard cert.
 
 ---
 
@@ -57,102 +100,325 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - `server/middleware/tenant-resolution.ts` — runs on every request
 - `lib/auth-client.ts` — client-side Better Auth instance
 - `composables/` — Nuxt auto-imported
-- `migrations/` — canonical D1 schema (numbered files; `0001_initial.sql` is the base)
+- `migrations/` — canonical D1 schema, numbered files; `0001_initial.sql` is the base
 - `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo tenant
 - `scripts/generate-demo-seed.ts` — ephemeral demo seed generator; applies from `/tmp`, never from a checked-in SQL file
 - `scripts/archive/` — historical one-off migration scripts only; do not wire archived tooling back into package scripts or routine workflows
-- Layout name for Saya theme pages: `layout: 'saya'` — `tenant` is dead
+- Layout name for Saya theme pages: `layout: 'saya'`
+- `tenant` layout is dead
+
+---
 
 ## Media Contract
 
-- Images must use the Cloudflare Images flow: request an upload URL from `/api/editor/sites/[siteId]/media/request-upload`, upload directly from the browser, then persist `provider = 'cloudflare_images'`
-- Videos and other files must use the Worker-streamed `/api/editor/sites/[siteId]/media/upload` path and persist `provider = 'cloudflare_r2'`
-- Do not use `external_url` for curated fixtures, approved client imports, or template-generated tenant media
-- Do not commit tenant media under `public/images/*` or `public/videos/*`
-- Demo/reference assets may start from external sources during research, but seeded or imported tenant state must download them, upload them to Cloudflare, and serve the Cloudflare URL only
-- Seeded tenant-facing URLs include `media_assets`, `site_content` image/video fields, review avatars, post thumbnails, and any similar content blocks
+- Images must use the Cloudflare Images flow:
+  1. Request an upload URL from `/api/editor/sites/[siteId]/media/request-upload`
+  2. Upload directly from the browser
+  3. Persist `provider = 'cloudflare_images'`
+
+- Videos and other files must use the Worker-streamed `/api/editor/sites/[siteId]/media/upload` path and persist `provider = 'cloudflare_r2'`.
+- Do not use `external_url` for curated fixtures, approved client imports, or template-generated tenant media.
+- Do not commit tenant media under `public/images/*` or `public/videos/*`.
+- Demo/reference assets may start from external sources during research, but seeded or imported tenant state must download them, upload them to Cloudflare, and serve the Cloudflare URL only.
+- Seeded tenant-facing URLs include:
+  - `media_assets`
+  - `site_content` image/video fields
+  - Review avatars
+  - Post thumbnails
+  - Any similar content blocks
 
 ---
 
 ## Local Testing
 
-- Dev login (bypasses OAuth): `http://localhost:3000/api/dev/login` — only works in `import.meta.dev`, creates session for first local D1 user
-- Dev login in CI/E2E: `GET /api/dev/login` with `x-dev-route-secret` header — enabled by `E2E_ALLOW_DEV_ROUTES=true` + `E2E_DEV_ROUTE_SECRET` in `wrangler.toml [env.preview.vars]` and `[env.staging.vars]`. Never pass the secret in query params.
-- To test `/admin` locally, promote a user: `yarn wrangler d1 execute DB --local --command "UPDATE user SET role = 'admin' WHERE lower(email) = 'your@email.com';"`
-- Stripe webhooks: run `yarn stripe:listen` in a second terminal; use the CLI-output signing secret as `STRIPE_WEBHOOK_SECRET` in `.env` during local dev only
+- Dev login bypasses OAuth:
+
+  ```text
+  http://localhost:3000/api/dev/login
+  ```
+
+  This only works in `import.meta.dev` and creates a session for the first local D1 user.
+
+- Dev login in CI/E2E:
+
+  ```http
+  GET /api/dev/login
+  ```
+
+  with `x-dev-route-secret` header.
+
+  Enabled by:
+  - `E2E_ALLOW_DEV_ROUTES=true`
+  - `E2E_DEV_ROUTE_SECRET`
+
+  in `wrangler.toml [env.preview.vars]` and `[env.staging.vars]`.
+
+  Never pass the secret in query params.
+
+- To test `/admin` locally, promote a user:
+
+  ```bash
+  yarn wrangler d1 execute DB --local --command "UPDATE user SET role = 'admin' WHERE lower(email) = 'your@email.com';"
+  ```
+
+- Stripe webhooks:
+
+  ```bash
+  yarn stripe:listen
+  ```
+
+  Run this in a second terminal. Use the CLI-output signing secret as `STRIPE_WEBHOOK_SECRET` in `.env` during local dev only.
 
 ---
 
 ## CI / E2E Architecture
 
-Three tiers, each with a dedicated Worker and URL:
+Three tiers exist, each with a dedicated Worker and URL.
 
-- **e2e-smoke** (every PR): builds → `wrangler deploy --env preview` → seeds `krabiclaw-db-preview` → full E2E suite against `preview.krabiclaw.com`. `PLAYWRIGHT_PREVIEW_URL` is hardcoded to that URL; `playwright.config.ts` skips `webServer` when it is set.
-- **e2e-staging** (push to `staging` branch): builds → `wrangler deploy --env staging` → seeds `krabiclaw-db-staging` → full E2E suite against `staging.krabiclaw.com`. Pre-production gate before staging is merged to main. Keep real assertions here; only fix staging-only false negatives, do not casually trim coverage.
-- **prod-deploy** (push to `main`): applies D1 migrations → `wrangler deploy` (production `krabiclaw`) → `prod-smoke` and canaries run after, testing production routes/domains that are intentionally live.
-- Cloudflare creds (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) are scoped to the specific steps that perform Cloudflare actions (`wrangler deploy`, `wrangler d1 *`, canaries), never the top-level job `env:`.
-- All E2E jobs require `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` — without them billing API calls 503 and console-error assertions fail.
-- Remote staging seeds must be idempotent. Repeated runs should be able to reseed without unique-key collisions like `sites.subdomain`.
-- Production smoke must not include intentionally disabled paid customer domains. As of June 9, 2026, `www.potteryhousekrabi.com` is intentionally disabled and excluded from `prod-smoke`; the free tenant host `pottery-house.krabiclaw.com` remains covered.
+### e2e-smoke
+
+Runs on every PR.
+
+Flow:
+
+1. Build
+2. `wrangler deploy --env preview`
+3. Seed `krabiclaw-db-preview`
+4. Run the full E2E suite against `preview.krabiclaw.com`
+
+`PLAYWRIGHT_PREVIEW_URL` is hardcoded to that URL. `playwright.config.ts` skips `webServer` when it is set.
+
+### e2e-staging
+
+Runs on push to the `staging` branch.
+
+Flow:
+
+1. Build
+2. `wrangler deploy --env staging`
+3. Seed `krabiclaw-db-staging`
+4. Run the full E2E suite against `staging.krabiclaw.com`
+
+This is the pre-production gate before staging is merged to main. Keep real assertions here. Only fix staging-only false negatives. Do not casually trim coverage.
+
+### prod-deploy
+
+Runs on push to `main`.
+
+Flow:
+
+1. Apply D1 migrations
+2. `wrangler deploy` to production `krabiclaw`
+3. Run `prod-smoke`
+4. Run canaries against production routes/domains that are intentionally live
+
+### CI Environment Rules
+
+- Cloudflare credentials are scoped only to the specific steps that perform Cloudflare actions:
+  - `wrangler deploy`
+  - `wrangler d1 *`
+  - Canaries
+
+- Never put `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` in the top-level job `env:`.
+- All E2E jobs require:
+  - `STRIPE_SECRET_KEY`
+  - `STRIPE_WEBHOOK_SECRET`
+  - `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+
+- Without Stripe env vars, billing API calls return 503 and console-error assertions fail.
+- Remote staging seeds must be idempotent. Repeated runs must reseed without unique-key collisions like `sites.subdomain`.
+- Production smoke must not include intentionally disabled paid customer domains.
+- As of June 9, 2026, `www.potteryhousekrabi.com` is intentionally disabled and excluded from `prod-smoke`.
+- The free tenant host `pottery-house.krabiclaw.com` remains covered.
 
 ---
 
 ## MCP
 
-- Nuxt UI MCP server required for building UI components with Nuxt UI integration
+- Nuxt UI MCP server is required for building UI components with Nuxt UI integration.
+- Content creation and editing must go through the KrabiClaw MCP server.
+- Do not build parallel dashboard CMS flows when the equivalent MCP tool should be the primary surface.
 
 ---
 
 ## Plan System
 
-- Plans: `free` (Starter), `growth` ($49/mo), `managed` ($149/mo), `seo_accelerator` ($349/mo)
-- Stripe is the source of truth for plan names, prices, and `marketing_features` (feature bullets)
-- `server/utils/billing.ts` → `getPlanEntitlements(plan)` defines what each plan unlocks in D1
-- Entitlements stored per-org in `organization_entitlements` table, checked at API level
-- Key entitlement keys: `custom_domains`, `google_business`, `translation`, `translation_languages`, `ai_credits`, `managed_service`, `seo_accelerator`
-- `managed_service = true` on Managed and SEO Accelerator — gates Facebook sync (auth/publish/sync endpoints)
-- `plans.get.ts` — only Starter has a static definition; all paid plans come from Stripe exclusively. Returns 503 if `STRIPE_SECRET_KEY` not set.
-- `PLAN_CTA` map in `plans.get.ts` holds CTA labels/hrefs (app config, not Stripe data)
-- Seeder: `node scripts/seed-stripe.mjs` — idempotent, upserts products and updates `marketing_features`
+- Plans:
+  - `free` — Starter
+  - `growth` — $49/mo
+  - `managed` — $149/mo
+  - `seo_accelerator` — $349/mo
+
+- Stripe is the source of truth for plan names, prices, and `marketing_features`.
+- `server/utils/billing.ts` → `getPlanEntitlements(plan)` defines what each plan unlocks in D1.
+- Entitlements are stored per-org in the `organization_entitlements` table and checked at API level.
+- Key entitlement keys:
+  - `custom_domains`
+  - `google_business`
+  - `translation`
+  - `translation_languages`
+  - `ai_credits`
+  - `managed_service`
+  - `seo_accelerator`
+
+- `managed_service = true` on Managed and SEO Accelerator.
+- `managed_service` gates Facebook sync auth/publish/sync endpoints.
+- `plans.get.ts`:
+  - Only Starter has a static definition
+  - All paid plans come from Stripe exclusively
+  - Returns 503 if `STRIPE_SECRET_KEY` is not set
+
+- `PLAN_CTA` map in `plans.get.ts` holds CTA labels/hrefs. This is app config, not Stripe data.
+- Seeder:
+
+  ```bash
+  node scripts/seed-stripe.mjs
+  ```
+
+  The seeder is idempotent, upserts products, and updates `marketing_features`.
 
 ---
 
 ## Managed Service Queue
 
-- `work_requests` table: type, title, description, status, priority, source (dashboard/whatsapp/chowbot/admin), notes, assigned_to
-- `POST /api/dashboard/work-requests` — restaurant owners submit requests
-- `GET /api/admin/work-requests` + `PATCH /api/admin/work-requests/[id]` — admin manages queue
-- ChowBot has `create_work_request` tool — routes managed service intents to Paul & Julia instead of handling autonomously
-- Admin Work Queue tab shows all requests with type icons, priority badges, inline status dropdown
-- Dashboard Support page (`/dashboard/[orgSlug]/support`) — free plan sees upsell, paid plans see request form + history
+- `work_requests` table fields:
+  - `type`
+  - `title`
+  - `description`
+  - `status`
+  - `priority`
+  - `source`
+  - `notes`
+  - `assigned_to`
+
+- Restaurant owners submit requests through:
+
+  ```http
+  POST /api/dashboard/work-requests
+  ```
+
+- Admins manage the queue through:
+
+  ```http
+  GET /api/admin/work-requests
+  PATCH /api/admin/work-requests/[id]
+  ```
+
+- Admin Work Queue tab shows all requests with:
+  - Type icons
+  - Priority badges
+  - Inline status dropdown
+
+- Dashboard Support page:
+
+  ```text
+  /dashboard/[orgSlug]/support
+  ```
+
+  Free plan users see an upsell. Paid plan users see the request form and request history.
+
+- Do not route new managed-service behavior through ChowBot. ChowBot is decommissioned.
+
+- Managed-service intent handling belongs in the MCP-native flow or explicit dashboard work-request endpoints.
 
 ---
 
 ## Admin Workspace
 
-- `/admin` route — gated by `middleware/admin.ts` which calls `GET /api/auth/get-session` using `useRequestFetch()` to forward cookies during SSR
-- Access: `user.role = 'admin'` in DB, AND checked server-side via `isPlatformOwner()` against `PLATFORM_OWNER_EMAILS` env var
-- Admin navigation defined in `adminNavigation` computed in `layouts/dashboard.vue` — uses `i-lucide-*` icons and `?tab=` query params with explicit `active` computed
-- Tabs: Work Queue, Add-ons (service_addon_purchases), Clients, Members, Analytics, Domains, Users, Content, Blog
-- Post-login routing: `GET /api/post-login` — `isPlatformOwner` → `/admin`, else → `/dashboard/[orgSlug]`
-- Dev login: `GET /api/dev/login` → redirects to `/api/post-login`
+- `/admin` route is gated by `middleware/admin.ts`.
+
+- `middleware/admin.ts` calls:
+
+  ```http
+  GET /api/auth/get-session
+  ```
+
+  using `useRequestFetch()` to forward cookies during SSR.
+
+- Access requires both:
+  - `user.role = 'admin'` in DB
+  - Server-side `isPlatformOwner()` check against `PLATFORM_OWNER_EMAILS` env var
+
+- Admin navigation is defined in `adminNavigation` computed in `layouts/dashboard.vue`.
+
+- Admin nav uses:
+  - `i-lucide-*` icons
+  - `?tab=` query params
+  - Explicit `active` computed
+
+- Tabs:
+  - Work Queue
+  - Add-ons
+  - Clients
+  - Members
+  - Analytics
+  - Domains
+  - Users
+  - Content
+  - Blog
+
+- Add-ons are backed by `service_addon_purchases`.
+
+- Post-login routing:
+
+  ```http
+  GET /api/post-login
+  ```
+
+  - `isPlatformOwner` → `/admin`
+  - Else → `/dashboard/[orgSlug]`
+
+- Dev login:
+
+  ```http
+  GET /api/dev/login
+  ```
+
+  redirects to `/api/post-login`.
 
 ---
 
 ## Design System Enforcement
 
-- Never bypass Nuxt UI layout components (`UCard`, `UPage`, `UPageBody`) to write custom Tailwind `div` wrappers
-- UCard `:ui` prop only accepts: `root`, `header`, `title`, `description`, `body`, `footer` — use `class` on the element for all other styling (border, background, rounded, shadow)
-- Dashboard pages do NOT use `UPageHeader` — content goes directly in `UPageBody`
-- Admin nav uses `i-lucide-*` icons; keep consistent with the rest of the dashboard nav
-- Do not introduce custom `border` or `bg` classes that break the global theme inheritance
-- If a specific visual layout (like a flat Vercel card) is needed, use the Nuxt UI component and override specific tokens via the `:ui` prop (e.g., `<UCard :ui="{ shadow: '', rounded: 'rounded-xl', body: { padding: 'p-0' } }">`)
+- Never bypass Nuxt UI layout components to write custom Tailwind `div` wrappers.
+- Use:
+  - `UCard`
+  - `UPage`
+  - `UPageBody`
+
+- UCard `:ui` prop only accepts:
+  - `root`
+  - `header`
+  - `title`
+  - `description`
+  - `body`
+  - `footer`
+
+- Use `class` on the element for all other styling:
+  - Border
+  - Background
+  - Rounded
+  - Shadow
+
+- Dashboard pages do not use `UPageHeader`.
+- Dashboard page content goes directly in `UPageBody`.
+- Admin nav uses `i-lucide-*` icons and must stay consistent with the rest of the dashboard nav.
+- Do not introduce custom `border` or `bg` classes that break global theme inheritance.
+- If a specific visual layout is needed, such as a flat Vercel card, use the Nuxt UI component and override specific tokens through `:ui`.
+
+Example:
+
+```vue
+<UCard :ui="{ shadow: '', rounded: 'rounded-xl', body: { padding: 'p-0' } }">
+```
 
 ---
 
 ## Client Onboarding Pipeline
 
-**Canonical command** — use this for every new client. No manual SQL, no ad-hoc seeds.
+### Canonical Command
+
+Use this for every new client. No manual SQL. No ad-hoc seeds.
 
 ```bash
 yarn client:onboard \
@@ -172,7 +438,9 @@ Or load from a YAML intake file:
 yarn client:onboard --from client-intake/pottery-house-krabi.yml
 ```
 
-**Intake file format** — `client-intake/<slug>.yml`:
+### Intake File Format
+
+`client-intake/<slug>.yml`:
 
 ```yaml
 slug: pottery-house-krabi
@@ -187,30 +455,48 @@ notes: |
   Use client photos only. No restaurant copy.
 ```
 
-### LLM Operating Rule — Client Sites
+---
 
-**Never** manually seed, patch D1, invent client data, use stock images, leave tenant media on third-party hosts, or claim deployment success for a client site. A site is not complete until `client:verify` passes and `client-handoff.md` is generated.
+## LLM Operating Rule — Client Sites
 
-The required pipeline is:
+Never manually seed, patch D1, invent client data, use stock images, leave tenant media on third-party hosts, or claim deployment success for a client site.
+
+A site is not complete until `client:verify` passes and `client-handoff.md` is generated.
+
+Required pipeline:
 
 1. `client:import --dry-run` — fetch real data, scan real images, generate reviewable manifests
 2. Human review of `client-imports/<slug>/`
 3. `client:import --approve` — sign the manifest hash
 4. `client:import --apply` — execute only the approved seed
 5. `client:verify` — all checks must pass
-6. `client:deploy` — for production: seed remote D1, deploy Worker, verify live
+6. `client:deploy` — for production, seed remote D1, deploy Worker, verify live
 
-If any step fails, fix the source of truth (API data, schema, theme copy). Do not add frontend workarounds.
+If any step fails, fix the source of truth:
 
-### Pottery House Krabi — Canonical Regression Case
+- API data
+- Schema
+- Theme copy
 
-The Pottery House Krabi onboarding incident is the canonical failure reference. These failures must never recur:
+Do not add frontend workarounds.
+
+---
+
+## Pottery House Krabi — Canonical Regression Case
+
+The Pottery House Krabi onboarding incident is the canonical failure reference.
+
+These failures must never recur:
 
 - Stock photos when client photos exist
-- Restaurant copy on an experience vertical ("Come dine with us", "Reserve a table", "From the kitchen", etc.)
-- Saya fallback copy ("Also part of Saya") on any tenant page
+- Restaurant copy on an experience vertical:
+  - “Come dine with us”
+  - “Reserve a table”
+  - “From the kitchen”
+
+- Saya fallback copy, including “Also part of Saya,” on any tenant page
 - Wrong phone/email fallback from Saya demo data
-- Experience detail route rendering the index page (Nuxt nested routing conflict)
+- Experience detail route rendering the index page because of a Nuxt nested routing conflict
 - Image 404s serving from `bootstrap` response
 - Manual D1 mutations outside the approved `client:apply` path
 
@@ -221,21 +507,74 @@ Run the regression fixture before merging any PR that touches `scripts/` or `com
 yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-house-krabi
 ```
 
-### Custom Domains
+---
 
-Custom domain onboarding is automated via `POST /api/sites/[siteId]/domains`. The dashboard exposes this at `/dashboard/[orgSlug]/~/settings/domains`.
+## Custom Domains
 
-**Architecture (Cloudflare for SaaS + Workers):**
-- `customers.krabiclaw.com` — SaaS fallback origin, must be `A 192.0.2.1` proxied. Never a CNAME to `pages.dev` or `workers.dev` (causes error 1014). Never a Worker Custom Domain (causes Host header 403).
-- `*/*` Worker route in `wrangler.toml` — required for custom hostname traffic to hit the Worker. Without it, all custom hostname requests get 522. This route MUST stay in wrangler.toml or wrangler deploy will wipe it.
-- SSL validation — use direct TXT records at `_acme-challenge.www`. Do NOT use the DCV delegation CNAME (`*.dcv.cloudflare.com`) — that target times out.
-- After provisioning, set `site_domains.role = 'canonical'` for the custom domain and `'secondary'` for the krabiclaw subdomain. The tenant-routing middleware redirects to canonical; if the krabiclaw subdomain stays canonical the custom domain bounces back.
+Custom domain onboarding is automated through:
 
-**DNS instructions for clients (GoDaddy or any external registrar):**
+```http
+POST /api/sites/[siteId]/domains
+```
+
+The dashboard exposes this at:
+
+```text
+/dashboard/[orgSlug]/~/settings/domains
+```
+
+### Architecture — Cloudflare for SaaS + Workers
+
+- `customers.krabiclaw.com` is the SaaS fallback origin.
+
+- It must be:
+
+  ```text
+  A 192.0.2.1
+  ```
+
+  and proxied.
+
+- Never make `customers.krabiclaw.com` a CNAME to `pages.dev` or `workers.dev`. That causes error 1014.
+
+- Never make `customers.krabiclaw.com` a Worker Custom Domain. That causes Host header 403.
+
+- `*/*` Worker route in `wrangler.toml` is required for custom hostname traffic to hit the Worker.
+
+- Without the `*/*` Worker route, all custom hostname requests get 522.
+
+- This route must stay in `wrangler.toml`; otherwise `wrangler deploy` will wipe it.
+
+- SSL validation must use direct TXT records at `_acme-challenge.www`.
+
+- Do not use the DCV delegation CNAME, `*.dcv.cloudflare.com`; that target times out.
+
+- After provisioning, set:
+  - `site_domains.role = 'canonical'` for the custom domain
+  - `site_domains.role = 'secondary'` for the krabiclaw subdomain
+
+- Tenant-routing middleware redirects to canonical.
+
+- If the krabiclaw subdomain stays canonical, the custom domain bounces back.
+
+### DNS Instructions for Clients
+
+For GoDaddy or any external registrar:
+
 1. `CNAME www → customers.krabiclaw.com`
-2. `TXT _acme-challenge.www → <value1>` (from Cloudflare for SaaS API response)
-3. `TXT _acme-challenge.www → <value2>` (second value, same name)
-4. Apex (no www): use registrar HTTP forwarding `potteryhousekrabi.com → https://www.potteryhousekrabi.com` — registrar forwarding only works over HTTP; the browser handles the HTTPS hop after following the redirect.
-- Do NOT add a CNAME at the apex — most registrars block it.
-- Do NOT use the DCV delegation CNAME for SSL — it doesn't work.
-- After adding TXT records, do not touch DNS again until the cert issues. Every PATCH to the custom hostname rotates the ACME tokens.
+2. `TXT _acme-challenge.www → <value1>` from the Cloudflare for SaaS API response
+3. `TXT _acme-challenge.www → <value2>` second value, same name
+4. Apex without `www`: use registrar HTTP forwarding:
+
+   ```text
+   potteryhousekrabi.com → https://www.potteryhousekrabi.com
+   ```
+
+   Registrar forwarding only works over HTTP. The browser handles the HTTPS hop after following the redirect.
+
+Rules:
+
+- Do not add a CNAME at the apex. Most registrars block it.
+- Do not use the DCV delegation CNAME for SSL. It does not work.
+- After adding TXT records, do not touch DNS again until the cert issues.
+- Every PATCH to the custom hostname rotates the ACME tokens.

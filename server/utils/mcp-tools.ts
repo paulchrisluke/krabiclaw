@@ -114,6 +114,18 @@ const mediaAssetObject = {
   },
 }
 
+const currentUserObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    email: { type: ['string', 'null'] },
+    name: { type: ['string', 'null'] },
+    role: { type: ['string', 'null'] },
+    isPlatformAdmin: { type: 'boolean' },
+  },
+  required: ['id', 'isPlatformAdmin'],
+}
+
 const experienceObject = {
   type: 'object',
   properties: {
@@ -294,7 +306,7 @@ function globalTool(definition: McpToolDefinition): McpToolDefinition {
 export const MCP_TOOLS: McpToolDefinition[] = [
   globalTool({
     name: 'show_welcome',
-    description: 'Show the welcome screen. Lists existing sites or a "Create your first site" CTA for new users. Call this at the start of every conversation.',
+    description: 'Show the welcome screen. Lists existing sites, exposes the current authenticated account, and renders a site picker or a "Create your first site" CTA. Call this at the start of every conversation.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -307,12 +319,28 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           description: 'All sites the caller can access. Empty array means no sites yet.',
           items: siteListItem,
         },
+        currentUser: currentUserObject,
       },
-      required: ['sites'],
+      required: ['sites', 'currentUser'],
     },
     widgetName: 'welcome-list',
     widgetInvoking: 'Loading your sites…',
     widgetInvoked: 'Sites loaded',
+  }),
+  globalTool({
+    name: 'get_current_user',
+    description: 'Get the currently authenticated KrabiClaw account identity for debugging and workflow confirmation.',
+    domain: 'account',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: { type: 'object', properties: {}, additionalProperties: true },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        user: currentUserObject,
+      },
+      required: ['user'],
+    },
   }),
   globalTool({
     name: 'show_vertical_picker',
@@ -449,12 +477,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'save_generated_image',
-    description: 'Upload a ChatGPT natively-generated image (base64 from image_generation_call.result) to Cloudflare Images and persist a media_asset record. Returns assetId and publicUrl to pass to show_generated_images.',
+    description: 'Upload a ChatGPT natively-generated image to Cloudflare Images and persist a media_asset record. Accepts base64 from image_generation_call.result, a data URL, or the local generated file path exposed by the runtime. Returns assetId and publicUrl to pass to show_generated_images.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
     inputSchema: {
-      image_data: { type: 'string', description: 'Base64-encoded image data from image_generation_call.result.' },
+      image_data: { type: 'string', description: 'Base64-encoded image data from image_generation_call.result, a data URL, or a local generated image file path.' },
       prompt: { type: 'string', description: 'The prompt used to generate the image (stored as alt text).' },
     },
     required: ['image_data'],
@@ -470,7 +498,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   globalTool({
     name: 'list_sites',
-    description: 'List the caller\'s accessible sites.',
+    description: 'List the caller\'s accessible sites and current authenticated account identity.',
     domain: 'sites',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -482,8 +510,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           type: 'array',
           items: siteListItem,
         },
+        currentUser: currentUserObject,
       },
-      required: ['sites'],
+      required: ['sites', 'currentUser'],
     },
     widgetName: 'welcome-list',
     widgetInvoking: 'Loading your sites…',
@@ -1020,11 +1049,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'request_media_upload',
-    description: 'Create a pending image upload request.',
+    description: 'Create a pending image upload request. Use category "logo" for brand logos.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { filename: { type: 'string' }, location_id: { type: 'string' }, category: { type: 'string' } },
+    inputSchema: { filename: { type: 'string' }, location_id: { type: 'string' }, category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo'] } },
     outputSchema: {
       type: 'object',
       properties: {
@@ -1202,7 +1231,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'save_content_draft',
-    description: 'Save draft content changes.',
+    description: 'Save draft content changes. Validates field names against the page schema. For homepage hero edits, prefer hero.title / hero.subtitle / hero.image / hero.video or use update_home_hero.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1216,6 +1245,31 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         fields_updated: { type: 'number' },
       },
       required: ['saved'],
+    },
+  }),
+  siteTool({
+    name: 'update_home_hero',
+    description: 'Update the canonical homepage hero record that the public renderer uses. This avoids orphan scalar fields and can optionally publish immediately.',
+    domain: 'content',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      title: { type: 'string' },
+      subtitle: { type: 'string' },
+      image_asset_id: { type: 'string' },
+      video_asset_id: { type: 'string' },
+      location_id: { type: 'string' },
+      publish: { type: 'boolean' },
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        page: { type: 'string' },
+        published: { type: 'boolean' },
+        changes_count: { type: 'number' },
+      },
+      required: ['success', 'page', 'published'],
     },
   }),
   siteTool({
