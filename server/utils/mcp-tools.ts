@@ -463,11 +463,13 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       properties: {
         id: { type: 'string', description: 'New site ID — pass as site_id in all subsequent calls.' },
+        siteId: { type: 'string', description: 'New site ID — pass as site_id in all subsequent calls.' },
         subdomain: { type: 'string' },
         organizationId: { type: 'string' },
         status: { type: 'string' },
+        message: { type: 'string' },
       },
-      required: ['id', 'subdomain'],
+      required: ['id', 'siteId', 'subdomain'],
     },
   }),
   siteTool({

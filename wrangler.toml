@@ -98,9 +98,10 @@ remote = false
 binding = "AI"
 
 # Stable staging environment — uses dedicated non-production data/resources and
-# a fixed platform host for manual QA. Public tenant previews stay on workers.dev
-# because nested hosts like demo.staging.krabiclaw.com are not covered by the
-# zone's wildcard TLS certificate.
+# a fixed platform host for manual QA. NUXT_PUBLIC_FREE_SITE_DOMAIN is krabiclaw.com
+# (same as preview) because *.staging.krabiclaw.com is not covered by the zone's
+# wildcard TLS cert (Free plan, one level only). Tenant sites created from staging
+# get *.krabiclaw.com URLs (production-style); E2E tests access them via x-preview-tenant.
 [env.staging]
 routes = [
   { pattern = "staging.krabiclaw.com/*", zone_name = "krabiclaw.com" }
@@ -110,7 +111,7 @@ routes = [
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
 BETTER_AUTH_URL = "https://staging.krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://staging.krabiclaw.com"
-NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://staging.krabiclaw.com"
+NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw Staging"
 EMAIL_DELIVERY_MODE = "log_only"
 E2E_ALLOW_DEV_ROUTES = "true"

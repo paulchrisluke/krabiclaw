@@ -28,8 +28,14 @@ const REGISTER_URL = `${BASE_URL}/api/auth/oauth2/register`;
 const AUTHORIZE_URL = `${BASE_URL}/api/auth/oauth2/authorize`;
 const CONSENT_URL = `${BASE_URL}/api/auth/oauth2/consent`;
 
-const IS_STAGING =
-  BASE_URL.includes("staging") || BASE_URL.includes("localhost");
+const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? "2026-07-28";
+
+const IS_STAGING = (() => {
+  try {
+    const h = new URL(BASE_URL).hostname;
+    return h === "localhost" || h === "127.0.0.1" || h === "staging.krabiclaw.com";
+  } catch { return false; }
+})();
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -299,14 +305,14 @@ async function main() {
       id: 1,
       method: "initialize",
       params: {
-        protocolVersion: "2025-03-26",
+        protocolVersion: MCP_VERSION,
         capabilities: {},
         clientInfo: { name: "test-script", version: "1.0" },
       },
     },
     {
       Authorization: `Bearer ${accessToken}`,
-      "MCP-Protocol-Version": "2025-03-26",
+      "MCP-Protocol-Version": MCP_VERSION,
     },
   );
   if (initResp.status === 200 && initResp.body?.result?.protocolVersion) {
@@ -323,7 +329,7 @@ async function main() {
     { jsonrpc: "2.0", method: "notifications/initialized" },
     {
       Authorization: `Bearer ${accessToken}`,
-      "MCP-Protocol-Version": "2025-03-26",
+      "MCP-Protocol-Version": MCP_VERSION,
     },
   );
   if (notifResp.status === 200 || notifResp.status === 202)
@@ -337,7 +343,7 @@ async function main() {
     { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
     {
       Authorization: `Bearer ${accessToken}`,
-      "MCP-Protocol-Version": "2025-03-26",
+      "MCP-Protocol-Version": MCP_VERSION,
     },
   );
   if (listResp.status === 200 && Array.isArray(listResp.body?.result?.tools)) {
@@ -361,7 +367,7 @@ async function main() {
     },
     {
       Authorization: `Bearer ${accessToken}`,
-      "MCP-Protocol-Version": "2025-03-26",
+      "MCP-Protocol-Version": MCP_VERSION,
     },
   );
   if (callResp.status === 200 && !callResp.body?.result?.isError) {

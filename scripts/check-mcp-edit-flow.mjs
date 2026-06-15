@@ -11,7 +11,7 @@ const USER_ID = process.argv.includes('--user-id')
   : process.env.MCP_USER_ID
 const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2026-07-28'
 
-const isLocal = BASE_URL.includes('localhost') || BASE_URL.includes('127.0.0.1')
+const isLocal = (() => { try { const h = new URL(BASE_URL).hostname; return h === 'localhost' || h === '127.0.0.1'; } catch { return false; } })()
 const allowCreate = isLocal || process.env.MCP_ALLOW_CREATE === '1'
 let failed = false
 

@@ -7,9 +7,13 @@ import type { SiteVertical } from '~/utils/vertical-copy'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
-interface MemberRoleRow { role: string }
-interface SiteCountRow { count: number }
 interface SubdomainRow { subdomain: string }
+interface UserOrganizationSiteRow {
+  organization_id: string
+  member_role: string
+  site_id: string | null
+  onboarding_status: string | null
+}
 
 export const VALID_VERTICALS: SiteVertical[] = ['restaurant', 'experience']
 
@@ -29,70 +33,16 @@ export async function runSiteCreation(
   let siteId = ''
 
   try {
-    const userOrg = await db.prepare(`
-      SELECT o.id FROM organization o
-      JOIN member m ON o.id = m.organizationId
-      WHERE m.userId = ?
-      LIMIT 1
-    `).bind(userId).first<{ id: string }>()
+    const existingSubdomain = await db.prepare(`
+      SELECT id FROM sites WHERE subdomain = ? LIMIT 1
+    `).bind(normalizedSubdomain).first<{ id: string }>()
+    if (existingSubdomain) {
+      return { status: 409, data: { error: 'This subdomain is already taken' } }
+    }
 
-    let organizationId: string
-
-    if (userOrg) {
-      organizationId = userOrg.id
-
-      const memberRole = await db.prepare(
-        `SELECT role FROM member WHERE organizationId = ? AND userId = ?`
-      ).bind(organizationId, userId).first() as MemberRoleRow | null
-
-      const siteCount = await db.prepare(
-        `SELECT COUNT(*) as count FROM sites WHERE organization_id = ?`
-      ).bind(organizationId).first() as SiteCountRow | null
-
-      if (memberRole?.role === 'owner' && (siteCount?.count ?? 0) === 0) {
-        await db.prepare(`UPDATE organization SET name = ?, slug = ? WHERE id = ?`)
-          .bind(name, name.toLowerCase().replace(/[^a-z0-9]/g, '-'), organizationId)
-          .run()
-      }
-
-      const existingSite = await db.prepare(`
-        SELECT id, onboarding_status, subdomain FROM sites WHERE organization_id = ? LIMIT 1
-      `).bind(organizationId).first<{ id: string; onboarding_status: string; subdomain: string }>()
-
-      if (existingSite) {
-        if (existingSite.onboarding_status === 'active') {
-          return { status: 200, data: { siteId: existingSite.id, organizationId, subdomain: existingSite.subdomain, message: 'Site already exists' } }
-        }
-        if (existingSite.onboarding_status === 'pending' || existingSite.onboarding_status === 'failed') {
-          return await performSeeding(env, db, existingSite.id, organizationId, name, vertical, '')
-        }
-      }
-
-      const otherOrgSite = await db.prepare(`
-        SELECT id FROM sites WHERE subdomain = ? AND organization_id != ? LIMIT 1
-      `).bind(normalizedSubdomain, organizationId).first()
-      if (otherOrgSite) {
-        return { status: 409, data: { error: 'This subdomain is already taken' } }
-      }
-    } else {
-      organizationId = `org-${userId}-${Date.now()}`
-      try {
-        await db.prepare(`
-          INSERT INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)
-        `).bind(organizationId, name, name.toLowerCase().replace(/[^a-z0-9]/g, '-'), new Date().toISOString()).run()
-        await db.prepare(`
-          INSERT INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'owner', ?)
-        `).bind(`member-${organizationId}-${userId}-${Date.now()}`, organizationId, userId, new Date().toISOString()).run()
-      } catch (orgError) {
-        const raceOrg = await db.prepare(`
-          SELECT o.id FROM organization o JOIN member m ON o.id = m.organizationId WHERE m.userId = ? LIMIT 1
-        `).bind(userId).first<{ id: string }>()
-        if (raceOrg) {
-          organizationId = raceOrg.id
-        } else {
-          throw orgError
-        }
-      }
+    const { organizationId, existingRetrySiteId } = await resolveCreationOrganization(db, userId, name)
+    if (existingRetrySiteId) {
+      return await performSeeding(env, db, existingRetrySiteId, organizationId, name, vertical, '')
     }
 
     siteId = crypto.randomUUID()
@@ -120,6 +70,73 @@ export async function runSiteCreation(
     }
     return { status: 500, data: { error: 'Failed to create site. Please try again.' } }
   }
+}
+
+async function resolveCreationOrganization(
+  db: D1Database,
+  userId: string,
+  name: string
+): Promise<{ organizationId: string; existingRetrySiteId?: string }> {
+  const rows = await db.prepare(`
+    SELECT
+      o.id AS organization_id,
+      m.role AS member_role,
+      s.id AS site_id,
+      s.onboarding_status
+    FROM organization o
+    JOIN member m ON o.id = m.organizationId
+    LEFT JOIN sites s ON s.organization_id = o.id
+      WHERE m.userId = ?
+    ORDER BY o.createdAt ASC
+  `).bind(userId).all<UserOrganizationSiteRow>()
+
+  const orgs = rows.results ?? []
+  const retryOrg = orgs.find(row =>
+    row.site_id && (row.onboarding_status === 'pending' || row.onboarding_status === 'failed')
+  )
+  if (retryOrg?.site_id) {
+    return { organizationId: retryOrg.organization_id, existingRetrySiteId: retryOrg.site_id }
+  }
+
+  const emptyOwnerOrg = orgs.find(row => !row.site_id && row.member_role === 'owner')
+  if (emptyOwnerOrg) {
+    await db.prepare(`UPDATE organization SET name = ?, slug = ? WHERE id = ?`)
+      .bind(name, await uniqueOrganizationSlug(db, name), emptyOwnerOrg.organization_id)
+      .run()
+    return { organizationId: emptyOwnerOrg.organization_id }
+  }
+
+  return await createOrganizationForSite(db, userId, name)
+}
+
+async function createOrganizationForSite(db: D1Database, userId: string, name: string) {
+  const now = new Date().toISOString()
+  const organizationId = `org-${crypto.randomUUID()}`
+  await db.batch([
+    db.prepare(`
+      INSERT INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)
+    `).bind(organizationId, name, await uniqueOrganizationSlug(db, name), now),
+    db.prepare(`
+      INSERT INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'owner', ?)
+    `).bind(`member-${crypto.randomUUID()}`, organizationId, userId, now),
+  ])
+  return { organizationId }
+}
+
+async function uniqueOrganizationSlug(db: D1Database, name: string) {
+  const base = slugifyName(name)
+  for (let i = 0; i < 20; i++) {
+    const slug = i === 0 ? base : `${base}-${i + 1}`
+    const existing = await db.prepare(`SELECT id FROM organization WHERE slug = ? LIMIT 1`)
+      .bind(slug)
+      .first<{ id: string }>()
+    if (!existing) return slug
+  }
+  return `${base}-${crypto.randomUUID().slice(0, 8)}`
+}
+
+function slugifyName(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site'
 }
 
 async function performSeeding(

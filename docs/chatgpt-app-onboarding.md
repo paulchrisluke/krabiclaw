@@ -234,10 +234,10 @@ The header is always present — it gives the user context before they see the l
 #### Behavior
 
 - On mount: receives `structuredContent.sites` from `show_welcome`
-- **Single site:** auto-selects, calls `ui/update-model-context({ site_id, site_name })`
+- **Single site:** auto-selects, calls `updateModelContext({ site_id, site_name })`
 - **Multiple sites:** user clicks a row → same
-- **"Create" button:** calls `ui/message("Let's create a new site.")` → ChatGPT starts the create flow (Screens 2–7)
-- **"What's next?"** (returning user after selection): `ui/message("What would you like to do with [name]?")` → management mode
+- **"Create" button:** calls `sendUiMessage("Let's create a new site.")` → ChatGPT starts the create flow (Screens 2–7)
+- **"What's next?"** (returning user after selection): `sendUiMessage("What would you like to do with [name]?")` → management mode
 
 #### `structuredContent` shape
 
@@ -418,8 +418,8 @@ Style: editorial lifestyle photography. Aspect ratio 3:2.
 └─────────────────────────────────────────────┘
 ```
 
-"Use this one" calls `ui/update-model-context({ heroAssetId })` and closes the carousel.
-"Try again" calls `tools/call("show_generated_images", { regenerate: true })`.
+"Use this one" calls `updateModelContext({ heroAssetId })` and closes the carousel.
+"Try again" calls `callTool("show_generated_images", { regenerate: true })`.
 
 ---
 
@@ -519,7 +519,7 @@ to `publicUrl` when the user clicks the card or the "Open site" button.
 ```
 
 "Open site" opens `publicUrl + currentPage.path` in a new tab.  
-"What's next?" sends `ui/message("What else would you like to set up?")` → management mode.
+"What's next?" calls `sendUiMessage("What else would you like to set up?")` → management mode.
 
 ---
 
@@ -582,13 +582,20 @@ yarn test:mcp:app --base-url http://127.0.0.1:3000
 
 For ChatGPT developer-mode testing, expose the same local server over HTTPS:
 
+**Terminal 1 — dev server:**
 ```bash
 BETTER_AUTH_URL=https://local.krabiclaw.com \
 NUXT_PUBLIC_PLATFORM_DOMAIN=https://local.krabiclaw.com \
 yarn dev --host 127.0.0.1 --port 3000
+```
 
+**Terminal 2 — Cloudflare tunnel (runs in the foreground; keep this terminal open):**
+```bash
 cloudflared tunnel run krabiclaw-local
+```
 
+**Terminal 3 — once the tunnel is up, run the MCP checker:**
+```bash
 MCP_DEV_LOGIN=1 yarn test:mcp:app --base-url https://local.krabiclaw.com
 ```
 

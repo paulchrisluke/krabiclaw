@@ -10,6 +10,13 @@ type OpenAiApi = {
   openExternal?: (_args: { href: string; redirectUrl?: false }) => unknown;
 };
 
+type JsonRpcMessage = {
+  jsonrpc?: string;
+  id?: string | number;
+  method?: string;
+  params?: Record<string, unknown> | null;
+};
+
 declare global {
   interface Window {
     openai?: OpenAiApi;
@@ -34,37 +41,96 @@ export function onToolResult(callback: (_result: unknown) => void) {
 
   if (tryRead()) return;
 
+  const messageHandler = (event: MessageEvent) => {
+    if (event.source !== window.parent) return;
+    const message = event.data as JsonRpcMessage;
+    if (!message || message.jsonrpc !== "2.0") return;
+    if (message.method !== "ui/notifications/tool-result") return;
+
+    const params = message.params;
+    if (params && "structuredContent" in params) {
+      callback(params.structuredContent);
+      clearInterval(timer);
+      window.removeEventListener("message", messageHandler);
+      window.removeEventListener("openai:set_globals", globalsHandler);
+    }
+  };
+  window.addEventListener("message", messageHandler, { passive: true });
+
   // ChatGPT dispatches this event when globals are ready
-  const handler = (e: Event) => {
+  const globalsHandler = (e: Event) => {
     const detail = (e as CustomEvent).detail;
     if (detail?.globals?.toolOutput != null) {
       callback(detail.globals.toolOutput);
       clearInterval(timer);
-      window.removeEventListener("openai:set_globals", handler);
+      window.removeEventListener("message", messageHandler);
+      window.removeEventListener("openai:set_globals", globalsHandler);
     }
   };
-  window.addEventListener("openai:set_globals", handler);
+  window.addEventListener("openai:set_globals", globalsHandler);
 
   // Fallback poll for up to 10 seconds
   let checks = 40;
   const timer = setInterval(() => {
     if (tryRead() || --checks <= 0) {
       clearInterval(timer);
-      window.removeEventListener("openai:set_globals", handler);
+      window.removeEventListener("message", messageHandler);
+      window.removeEventListener("openai:set_globals", globalsHandler);
     }
   }, 250);
 }
 
 export function sendUiMessage(text: string) {
-  window.openai?.sendFollowUpMessage({ prompt: text });
+  if (window.openai?.sendFollowUpMessage) {
+    window.openai.sendFollowUpMessage({ prompt: text });
+    return;
+  }
+  window.parent.postMessage(
+    {
+      jsonrpc: "2.0",
+      method: "ui/message",
+      params: {
+        role: "user",
+        content: [{ type: "text", text }],
+      },
+    },
+    "*",
+  );
 }
 
 export function updateModelContext(state: Record<string, unknown>) {
-  window.openai?.setWidgetState(state);
+  if (window.openai?.setWidgetState) {
+    window.openai.setWidgetState(state);
+    return;
+  }
+  const text = Object.entries(state)
+    .map(([key, value]) => `${key}: ${String(value)}`)
+    .join("\n");
+  window.parent.postMessage(
+    {
+      jsonrpc: "2.0",
+      id: `ctx-${Date.now()}`,
+      method: "ui/update-model-context",
+      params: { content: [{ type: "text", text }] },
+    },
+    "*",
+  );
 }
 
 export function callTool(name: string, args: Record<string, unknown>) {
-  window.openai?.callTool(name, args);
+  if (window.openai?.callTool) {
+    window.openai.callTool(name, args);
+    return;
+  }
+  window.parent.postMessage(
+    {
+      jsonrpc: "2.0",
+      id: `tool-${Date.now()}`,
+      method: "tools/call",
+      params: { name, arguments: args },
+    },
+    "*",
+  );
 }
 
 export function openExternal(url: string) {

@@ -66,7 +66,9 @@ function App() {
   const homePage = pages.find(page => page.path === '/') ?? pages[0] ?? { label: 'Home', path: '/' }
 
   const handleOpen = () => {
-    openExternal(`${site.publicUrl}${homePage.path}`)
+    const base = site.publicUrl.replace(/\/$/, '')
+    const path = homePage.path.startsWith('/') ? homePage.path : `/${homePage.path}`
+    openExternal(`${base}${path}`)
   }
 
   const handleWhatsNext = () => {

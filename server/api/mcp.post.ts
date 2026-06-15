@@ -151,7 +151,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
             'openai/widgetCSP': {
               connect_domains: [baseUrl],
               resource_domains: [baseUrl],
-              redirect_domains: [baseUrl, 'https://krabiclaw.com'],
+              redirect_domains: [...new Set([baseUrl, (event.context.cloudflare?.env as { NUXT_PUBLIC_PLATFORM_DOMAIN?: string } | undefined)?.NUXT_PUBLIC_PLATFORM_DOMAIN?.replace(/\/$/, '') ?? 'https://krabiclaw.com'])],
             },
           },
         }],
@@ -242,6 +242,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
       }
       return mcpSuccess(request.id, {
         isError: false,
+        structuredContent: result,
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       })
     }

@@ -135,7 +135,7 @@ jobs:
       STRIPE_WEBHOOK_SECRET: "ci-stripe-webhook-secret-staging"
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://staging.krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://staging.krabiclaw.com
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
       NUXT_PUBLIC_TURNSTILE_ENABLED: "false"
       BETTER_AUTH_SECRET: test-secret-for-ci
