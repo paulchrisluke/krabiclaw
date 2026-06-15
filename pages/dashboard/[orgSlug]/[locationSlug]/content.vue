@@ -7,8 +7,8 @@
         <div class="min-w-0">
           <div class="flex items-center gap-2">
             <p class="truncate text-sm font-semibold text-highlighted ">{{ siteName }}</p>
-            <UBadge :color="serverHasDrafts || localHasChanges ? 'warning' : 'success'" variant="soft" size="xs">
-              {{ serverHasDrafts || localHasChanges ? 'Draft' : 'Live' }}
+            <UBadge :color="localHasChanges ? 'warning' : 'success'" variant="soft" size="xs">
+              {{ localHasChanges ? 'Unsaved' : 'Live' }}
             </UBadge>
           </div>
           <p class="truncate text-xs text-muted">{{ siteDomain }}</p>
@@ -55,22 +55,11 @@
         <UButton
           :disabled="!localHasChanges || saving"
           :loading="saving"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          @click="handleSaveDraft"
-        >
-          Save draft
-        </UButton>
-        <UButton
-          id="content-publish-btn"
-          :disabled="publishing || (!localHasChanges && !serverHasDrafts)"
-          :loading="publishing"
           color="primary"
           size="sm"
-          @click="handlePublish"
+          @click="handleSaveContent"
         >
-          Publish
+          Save
         </UButton>
       </div>
     </header>
@@ -140,7 +129,7 @@
         </div>
 
         <UAlert v-if="discardPending" color="error" variant="soft" class="m-3">
-          <template #title>Discard all draft changes?</template>
+          <template #title>Discard unsaved changes?</template>
           <template #actions>
             <UButton @click="handleDiscard" size="xs" color="error">Discard</UButton>
             <UButton @click="discardPending = false" size="xs" color="neutral" variant="ghost">Cancel</UButton>
@@ -205,7 +194,7 @@
 
         <div class="space-y-2 border-t border-default p-3 ">
           <UButton
-            v-if="localHasChanges || serverHasDrafts"
+            v-if="localHasChanges"
             block
             color="neutral"
             variant="ghost"
@@ -763,16 +752,18 @@ const applyField = async () => {
   localHasChanges.value = true
   
   // Automatically save and refresh preview for immediate feedback
-  await handleSaveDraft()
-  toast.add({ description: `"${activeFieldDef.value.label}" updated`, color: 'success' })
+  try {
+    await handleSaveContent()
+    toast.add({ description: `"${activeFieldDef.value.label}" updated`, color: 'success' })
+  } catch {
+    return
+  }
 }
 
 // ─── Content state ────────────────────────────────────────────────────
 const currentValues = ref<Record<string, string>>({})
 const localHasChanges = ref(false)
-const serverHasDrafts = ref(false)
 const saving = ref(false)
-const publishing = ref(false)
 const discardPending = ref(false)
 const contentLoading = ref(false)
 
@@ -799,7 +790,7 @@ const loadPageContent = async () => {
 
   contentLoading.value = true
   try {
-    const res = await $fetch<{ content: ApiRecord[]; hasDrafts: boolean }>(
+    const res = await $fetch<{ content: ApiRecord[] }>(
       endpointWithContentScope(`/api/dashboard/editor/content/${selectedPageId.value}`)
     )
     const map: Record<string, string> = {}
@@ -817,7 +808,6 @@ const loadPageContent = async () => {
       }
     }
     currentValues.value = map
-    serverHasDrafts.value = res.hasDrafts ?? false
   } catch (error) {
     console.error('Failed to load page content:', error)
     toast.add({ description: 'Failed to load content', color: 'error' })
@@ -834,47 +824,25 @@ onMounted(async () => {
 })
 
 // ─── Actions ──────────────────────────────────────────────────────────
-const handleSaveDraft = async () => {
+const handleSaveContent = async () => {
   if (!localHasChanges.value) return
   saving.value = true
   try {
-    await $fetch(`/api/dashboard/editor/content/draft`, {
+    await $fetch(`/api/dashboard/editor/content/save`, {
       method: 'POST',
       body: { page: selectedPageId.value, changes: currentValues.value },
       query: selectedLocationId.value ? { locationId: selectedLocationId.value } : {},
       credentials: 'include'
     })
     localHasChanges.value = false
-    serverHasDrafts.value = true
     iframeLoading.value = true
     previewReloadToken.value = Date.now()
   } catch (error) {
     const msg = getErrorMessage(error, 'Unknown error')
     toast.add({ description: `Save failed: ${msg}`, color: 'error' })
-    throw error instanceof Error ? error : new Error(String(error)) // Re-throw so callers like handlePublish know it failed
+    throw error instanceof Error ? error : new Error(String(error))
   } finally {
     saving.value = false
-  }
-}
-
-const handlePublish = async () => {
-  publishing.value = true
-  try {
-    if (localHasChanges.value) await handleSaveDraft()
-    await $fetch(`/api/dashboard/editor/content/publish`, {
-      method: 'POST',
-      body: { page: selectedPageId.value, locationId: selectedLocationId.value }
-    })
-    serverHasDrafts.value = false
-    localHasChanges.value = false
-    toast.add({ description: 'Published live!', color: 'success' })
-    iframeLoading.value = true
-    previewReloadToken.value = Date.now()
-  } catch (error) {
-    const msg = getErrorMessage(error, 'Unknown error')
-    toast.add({ description: `Publish failed: ${msg}`, color: 'error' })
-  } finally {
-    publishing.value = false
   }
 }
 
@@ -885,15 +853,9 @@ const handleDiscard = async () => {
   }
   discardPending.value = false
   try {
-    await $fetch(`/api/dashboard/editor/content/discard`, {
-      method: 'POST',
-      body: { page: selectedPageId.value },
-      query: selectedLocationId.value ? { locationId: selectedLocationId.value } : {}
-    })
     localHasChanges.value = false
-    serverHasDrafts.value = false
     await loadPageContent()
-    toast.add({ description: 'Drafts discarded', color: 'info' })
+    toast.add({ description: 'Unsaved changes discarded', color: 'info' })
     iframeLoading.value = true
     previewReloadToken.value = Date.now()
   } catch {

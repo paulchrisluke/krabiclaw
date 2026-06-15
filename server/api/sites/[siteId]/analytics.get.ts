@@ -2,12 +2,15 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { defineEventHandler, getRouterParam, getQuery } from 'h3'
+import { aggregateAnalyticsForDate } from '~/server/utils/analytics'
 
 interface AnalyticsSummary {
   pageViews: number
   uniqueSessions: number
   avgSessionDuration: number
   changePercent: number
+  reservations: number
+  experienceBookings: number
 }
 
 interface DailyData {
@@ -105,6 +108,16 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: err instanceof Error ? err.message : 'Invalid date' }, { status: 400 })
     }
 
+    // Opportunistically aggregate today's stats so the dashboard is up-to-date
+    const today = getDateString(new Date())
+    if (endDate >= today || startDate <= today) {
+      try {
+        await aggregateAnalyticsForDate(db, siteId, today)
+      } catch (e) {
+        console.warn('Opportunistic analytics aggregation failed:', e)
+      }
+    }
+
     // Get aggregated daily analytics
     const dailyStats = await db.prepare(`
       SELECT 
@@ -196,7 +209,32 @@ export default defineEventHandler(async (event) => {
       pageViews: currentPeriodStats.pageViews,
       uniqueSessions: currentPeriodStats.sessions,
       avgSessionDuration: avgDuration,
-      changePercent
+      changePercent,
+      reservations: 0,
+      experienceBookings: 0
+    }
+
+    // Fetch additional business metrics (Reservations and Experience Bookings)
+    try {
+      const startIso = `${startDate}T00:00:00.000Z`
+      const endIso = `${endDate}T23:59:59.999Z`
+
+      const resCount = await db.prepare(`
+        SELECT COUNT(*) as count 
+        FROM reservation_submissions 
+        WHERE site_id = ? AND created_at >= ? AND created_at <= ?
+      `).bind(siteId, startIso, endIso).first<{ count: number }>()
+
+      const expCount = await db.prepare(`
+        SELECT COUNT(*) as count 
+        FROM experience_bookings 
+        WHERE site_id = ? AND created_at >= ? AND created_at <= ?
+      `).bind(siteId, startIso, endIso).first<{ count: number }>()
+
+      metrics.reservations = toNumber(resCount?.count)
+      metrics.experienceBookings = toNumber(expCount?.count)
+    } catch (e) {
+      console.warn('Failed to fetch business metrics:', e)
     }
 
     return jsonResponse({

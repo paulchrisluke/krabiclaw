@@ -135,8 +135,8 @@ test.describe('stateless MCP server', () => {
     const allToolNames = listBody.result.tools.map(tool => tool.name)
     expect(allToolNames).toEqual(expect.arrayContaining([
       'list_sites', 'create_site',
-      'get_site', 'list_locations', 'list_menus', 'list_posts', 'list_media_assets',
-      'get_page_content', 'list_experiences', 'list_contact_submissions',
+      'get_site', 'list_locations', 'list_menus', 'list_posts', 'get_site_media_assets',
+      'get_page_content', 'list_experiences', 'get_contact_inquiries',
       'get_translation_inventory', 'list_work_requests', 'get_google_business_connection',
     ]))
     expect(allToolNames.length).toBeGreaterThan(50)
@@ -185,9 +185,9 @@ test.describe('stateless MCP server', () => {
     })
     expect(locationUpdate.status()).toBe(200)
 
-    const draft = await mcpRequest(request, baseURL!, {
+    const contentUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'save_content_draft',
+      toolName: 'update_page_content',
       args: {
         site_id: siteId,
         page: 'home',
@@ -197,28 +197,17 @@ test.describe('stateless MCP server', () => {
         },
       },
     })
-    expect(draft.status()).toBe(200)
+    expect(contentUpdate.status()).toBe(200)
 
-    const mergedContent = await mcpRequest(request, baseURL!, {
+    const contentRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_page_content',
       args: { site_id: siteId, page: 'home' },
     })
-    expect(mergedContent.status()).toBe(200)
-    const mergedBody = await mergedContent.json()
+    expect(contentRead.status()).toBe(200)
+    const mergedBody = await contentRead.json()
     const mergedHero = mcpData<{ content: Array<{ field: string; hero_title?: string }> }>(mergedBody).content.find(item => item.field === 'hero')
     expect(mergedHero?.hero_title).toContain('MCP Hero')
-
-    const status = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'get_content_draft_status',
-      args: { site_id: siteId, page: 'home' },
-    })
-    expect(status.status()).toBe(200)
-    const statusBody = await status.json()
-    const statusData = mcpData<{ hasDrafts: boolean; count: number }>(statusBody)
-    expect(statusData.hasDrafts).toBe(true)
-    expect(statusData.count).toBeGreaterThan(0)
 
     const settingsBefore = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -234,45 +223,9 @@ test.describe('stateless MCP server', () => {
     })
     expect(settingsUpdate.status()).toBe(200)
 
-    const publish = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'publish_content_drafts',
-      args: { site_id: siteId, page: 'home' },
-    })
-    expect(publish.status()).toBe(200)
-
-    const discardSeed = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'save_content_draft',
-      args: {
-        site_id: siteId,
-        page: 'about',
-        changes: {
-          'intro.body': `Discard me ${Date.now()}`,
-        },
-      },
-    })
-    expect(discardSeed.status()).toBe(200)
-
-    const discardDrafts = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'discard_content_drafts',
-      args: { site_id: siteId, page: 'about' },
-    })
-    expect(discardDrafts.status()).toBe(200)
-
-    const discardStatus = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'get_content_draft_status',
-      args: { site_id: siteId, page: 'about' },
-    })
-    expect(discardStatus.status()).toBe(200)
-    const discardStatusBody = await discardStatus.json()
-    expect(mcpData<{ hasDrafts: boolean }>(discardStatusBody).hasDrafts).toBe(false)
-
     const deleteFieldSeed = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'save_content_draft',
+      toolName: 'update_page_content',
       args: {
         site_id: siteId,
         page: 'about',
@@ -282,13 +235,6 @@ test.describe('stateless MCP server', () => {
       },
     })
     expect(deleteFieldSeed.status()).toBe(200)
-
-    const publishDeleteFieldSeed = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'publish_content_drafts',
-      args: { site_id: siteId, page: 'about' },
-    })
-    expect(publishDeleteFieldSeed.status()).toBe(200)
 
     const deleteField = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -331,7 +277,7 @@ test.describe('stateless MCP server', () => {
 
     const listContacts = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'list_contact_submissions',
+      toolName: 'get_contact_inquiries',
       args: { site_id: siteId },
     })
     expect(listContacts.status()).toBe(200)
@@ -348,7 +294,7 @@ test.describe('stateless MCP server', () => {
 
     const listReservations = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'list_reservation_submissions',
+      toolName: 'get_reservation_inquiries',
       args: { site_id: siteId },
     })
     expect(listReservations.status()).toBe(200)
@@ -734,7 +680,7 @@ test.describe('stateless MCP server', () => {
 
     const mediaList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'list_media_assets',
+      toolName: 'get_site_media_assets',
       args: { site_id: siteId },
     })
     expect(mediaList.status()).toBe(200)
@@ -944,7 +890,7 @@ test.describe('stateless MCP server', () => {
     expect(listForSite.status()).toBe(200)
     const toolsBody = await listForSite.json() as { result: { tools: Array<{ name: string }> } }
     const toolNames = toolsBody.result.tools.map(tool => tool.name)
-    expect(toolNames).toContain('save_content_draft')
+    expect(toolNames).toContain('update_page_content')
     expect(toolNames).not.toContain('update_notification_settings')
     expect(toolNames).not.toContain('get_google_business_auth_url')
 

@@ -16,7 +16,7 @@ test.describe('restaurant translations', () => {
     const sourceTitle = `Translation test ${Date.now()}`
     const editorBase = `${baseURL}/api/editor/sites/${siteId}`
 
-    const draftContent = await request.post(`${editorBase}/content/draft`, {
+    const saveContent = await request.post(`${editorBase}/content/save`, {
       data: {
         page: 'home',
         changes: {
@@ -25,12 +25,7 @@ test.describe('restaurant translations', () => {
         }
       }
     })
-    expect(draftContent.status()).toBe(200)
-
-    const publishContent = await request.post(`${editorBase}/content/publish`, {
-      data: { page: 'home' }
-    })
-    expect(publishContent.status()).toBe(200)
+    expect(saveContent.status()).toBe(200)
 
     const locale = await request.post(`${editorBase}/locales`, {
       data: {
@@ -84,7 +79,7 @@ test.describe('restaurant translations', () => {
     expect(hero).toBeDefined()
     expect(hero.hero_title).toContain('[TH]')
 
-    const changedSource = await request.post(`${editorBase}/content/draft`, {
+    const changedSource = await request.post(`${editorBase}/content/save`, {
       data: {
         page: 'home',
         changes: {
@@ -93,11 +88,6 @@ test.describe('restaurant translations', () => {
       }
     })
     expect(changedSource.status()).toBe(200)
-
-    const publishChangedSource = await request.post(`${editorBase}/content/publish`, {
-      data: { page: 'home' }
-    })
-    expect(publishChangedSource.status()).toBe(200)
 
     const staleInventory = await request.get(`${editorBase}/translations/inventory?locale=${localeCode}&scope=content&includePublished=true`)
     expect(staleInventory.status()).toBe(200)

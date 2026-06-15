@@ -4,6 +4,10 @@ interface CloudflareImagesEnv {
   CLOUDFLARE_IMAGES_VARIANT_BASE?: string
 }
 
+export function hasCloudflareImagesConfig(env: CloudflareImagesEnv): boolean {
+  return Boolean(env.CF_ACCOUNT_ID && env.CLOUDFLARE_IMAGES_API_TOKEN && env.CLOUDFLARE_IMAGES_VARIANT_BASE)
+}
+
 interface CloudflareImagesResponse {
   result?: {
     id?: string
@@ -86,5 +90,8 @@ export async function deleteImage(env: CloudflareImagesEnv, imageId: string): Pr
 
 /** Build a Cloudflare Images delivery URL for a given variant. */
 export function buildImageUrl(env: CloudflareImagesEnv, imageId: string, variant = 'public'): string {
+  if (!env.CLOUDFLARE_IMAGES_VARIANT_BASE) {
+    throw new Error('Cloudflare Images variant base not configured')
+  }
   return `${env.CLOUDFLARE_IMAGES_VARIANT_BASE}/${imageId}/${variant}`
 }

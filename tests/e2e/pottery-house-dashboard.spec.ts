@@ -35,12 +35,12 @@ test.describe('pottery house dashboard', () => {
     }
 
     // Otherwise, assert tenant isolation: this logged-in user cannot write to Pottery House directly.
-    const draftRes = await page.request.post(`${baseURL}/api/editor/sites/site-pottery-house/content/draft`, {
+    const saveRes = await page.request.post(`${baseURL}/api/editor/sites/site-pottery-house/content/save`, {
       data: {
         page: 'home',
         changes: { 'hero.title': `Unauthorized test ${Date.now()}` },
       },
     })
-    expect([401, 403, 404]).toContain(draftRes.status())
+    expect([401, 403, 404]).toContain(saveRes.status())
   })
 })

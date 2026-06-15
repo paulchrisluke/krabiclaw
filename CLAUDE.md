@@ -25,8 +25,14 @@ The only remaining ChowBot-adjacent file is `server/utils/chowbot-media.ts`, kep
 - Output is base64 in `image_generation_call.result`
 - MCP flow:
   1. Generate natively
-  2. Call `save_generated_image` with base64
+  2. Call `save_generated_image({ site_id, image_data_base64, prompt })`
   3. Call `show_generated_images` with returned `assetId` and `publicUrl`
+
+Canonical generated-image contracts:
+- Native generation: `save_generated_image({ site_id, image_data_base64, prompt })`
+- File or attachment flow: `save_generated_image_file({ site_id, attachment_id, prompt })`
+
+Do not pass raw local file paths like `/mnt/data/...` to MCP tools.
 
 **Dashboard CMS pages** are candidates for future removal once the MCP path is fully validated as the primary editing surface. Do not invest in new features for:
 

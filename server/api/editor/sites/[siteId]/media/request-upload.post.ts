@@ -3,7 +3,7 @@
 // Client uploads directly to uploadUrl (multipart form), then calls /confirm.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { deleteImage, requestImageUpload } from '~/server/utils/cloudflare-images'
+import { deleteImage, hasCloudflareImagesConfig, requestImageUpload } from '~/server/utils/cloudflare-images'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
 
 interface SiteRow {
@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
     `).bind(site.organization_id, session.user.id).first()
     if (!membership) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
-    if (!env.CLOUDFLARE_IMAGES_API_TOKEN || !env.CF_ACCOUNT_ID) {
+    if (!hasCloudflareImagesConfig(env)) {
       return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
     }
 

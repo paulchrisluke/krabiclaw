@@ -116,7 +116,6 @@ NUXT_PUBLIC_APP_NAME = "KrabiClaw Staging"
 EMAIL_DELIVERY_MODE = "log_only"
 E2E_ALLOW_DEV_ROUTES = "true"
 E2E_DEV_ROUTE_SECRET = "ci-dev-route-secret"
-STRIPE_WEBHOOK_SECRET = "ci-stripe-webhook-secret-staging"
 
 [[env.staging.d1_databases]]
 binding = "DB"

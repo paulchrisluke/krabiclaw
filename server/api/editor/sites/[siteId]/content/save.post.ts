@@ -1,15 +1,21 @@
-// GET draft status
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+// POST save content directly
+import { cloudflareEnv, jsonResponse } from '../../../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getDraftStatus } from '~/server/utils/content-management'
+import { updatePageContent } from '~/server/utils/mcp-workflows'
+
+interface SaveRequest {
+  page: string
+  changes: Record<string, string>
+}
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
-  const page = getQuery(event).page as string || undefined
+  const body = await readBody(event) as SaveRequest
+  const { page, changes } = body
   
-  if (!siteId) {
+  if (!siteId || !page || !changes) {
     return jsonResponse({ 
-      error: 'Site ID is required' 
+      error: 'Site ID, page, and changes are required' 
     }, { status: 400 })
   }
   
@@ -22,7 +28,6 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 
-  // Get authenticated user
   const session = await getAuthSession(event, env)
   
   if (!session?.user?.id) {
@@ -32,7 +37,6 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Verify user belongs to organization that owns the site
     const site = await db.prepare(`
       SELECT s.id, s.organization_id, s.status, s.onboarding_status
       FROM sites s
@@ -40,7 +44,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; name: string; status: string; onboarding_status: string | null }>()
+    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; status: string; onboarding_status: string | null }>()
     
     if (!site) {
       return jsonResponse({ 
@@ -49,21 +53,23 @@ export default defineEventHandler(async (event) => {
     }
 
     const locationId = getQuery(event).locationId as string || undefined
-
-    const status = await getDraftStatus(db, site.organization_id, siteId, page, locationId)
+    const result = await updatePageContent(db, site.organization_id, siteId, {
+      page,
+      changes,
+      location_id: locationId,
+    })
     
     return jsonResponse({
       success: true,
-      ...status,
-      siteId,
-      locationId,
-      page
+      message: 'Content saved successfully',
+      changesCount: result.changes_count,
+      publicPath: result.public_path,
     })
     
   } catch (error) {
-    console.error('Failed to get draft status:', error)
+    console.error('Failed to save content:', error)
     return jsonResponse({ 
-      error: 'Failed to get draft status' 
+      error: 'Failed to save content' 
     }, { status: 500 })
   }
 })

@@ -37,7 +37,6 @@ interface MetaMediaResponse {
 }
 
 export type WhatsAppTemplate =
-  | 'draft_published'
   | 'new_review'
   | 'ai_action_complete'
   | 'low_credits'
@@ -83,17 +82,6 @@ const TEMPLATES: Record<
   WhatsAppTemplate,
   (_vars: Record<string, string>) => { name: string; language: { code: string }; components: TemplateComponent[] }
 > = {
-  draft_published: (v) => ({
-    name: 'draft_published',
-    language: { code: 'en_US' },
-    components: [{
-      type: 'body',
-      parameters: [
-        { type: 'text', text: v.site_name ?? 'your site' },
-        { type: 'text', text: cleanTemplateText(v.url, DEFAULT_DASHBOARD_URL, 200) },
-      ],
-    }],
-  }),
   new_review: (v) => ({
     name: 'new_review',
     language: { code: 'en_US' },

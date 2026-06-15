@@ -65,7 +65,8 @@ Start every conversation by calling show_welcome to discover the user's sites an
   1. Ask for their Google Maps URL (or shortlink) to import their business details.
   2. Call import_from_maps.
   3. After import, ask for Required missing context: "What should the main button say (e.g., Book Now)?" and ask if they want to upload a Hero Image or have AI generate one.
-     - If AI generate: generate the image natively using the image_generation tool, then call save_generated_image with the site_id and the base64 result from image_generation_call.result or the local generated image path exposed by the runtime, then call show_generated_images with the returned assetId and publicUrl. Never call show_generated_images with an empty images array.
+     - If AI generate natively: generate the image using the image_generation tool, then call save_generated_image with site_id and image_data_base64 from image_generation_call.result, then call show_generated_images with the returned assetId and publicUrl.
+     - If the runtime provides a file/attachment handle instead of base64: call save_generated_image_file with site_id and attachment_id. Never pass raw local file paths to save_generated_image.
   4. Ask for Optional context: "What's the short story behind your business?" and "Do you have a logo to upload?" (let them skip these).
   5. DO NOT ask for menus, detailed services, or social links yet (defer until the site is live).
   6. Call create_site and create_location, then show_site_preview.
@@ -74,7 +75,7 @@ Start every conversation by calling show_welcome to discover the user's sites an
 
 All other tools require a site_id obtained from list_sites. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
 
-Common workflows: update menus and items, draft and publish posts, triage contact and reservation submissions, manage page content drafts, upload media, translate content, reply to reviews, and manage experiences and bookings.`,
+Common workflows: update menus and items, create and publish posts, triage contact and reservation submissions, update page content directly, upload media, translate content, reply to reviews, and manage experiences and bookings.`,
       })
     }
 
@@ -227,6 +228,11 @@ Common workflows: update menus and items, draft and publish posts, triage contac
               'openai/widgetAccessible': true,
               'openai/toolInvocation/invoking': tool.widgetInvoking ?? 'Loading…',
               'openai/toolInvocation/invoked': tool.widgetInvoked ?? 'Done',
+              ...(tool.fileParams?.length ? { 'openai/fileParams': tool.fileParams } : {}),
+            },
+          } : tool.fileParams?.length ? {
+            _meta: {
+              'openai/fileParams': tool.fileParams,
             },
           } : {}),
         }))

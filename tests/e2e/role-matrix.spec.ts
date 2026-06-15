@@ -62,35 +62,29 @@ test.describe('role permission matrix', () => {
       }
     }
 
-    const draftStatus = async () => request.post(`${baseURL}/api/editor/sites/${siteId}/content/draft`, {
+    const contentUpdateStatus = async () => request.post(`${baseURL}/api/editor/sites/${siteId}/content/save`, {
       data: {
         page: 'home',
         changes: { 'hero.title': `Role matrix ${Date.now()}` },
       },
     })
 
-    const publishStatus = async () => request.post(`${baseURL}/api/editor/sites/${siteId}/content/publish`, {
-      data: { page: 'home' },
-    })
-
     const assertRole = async (
       userId: string,
       expectedCheckout: 'owner' | 'non_owner',
-      expectedDraft?: number,
-      expectedPublish?: number,
+      expectedContentUpdate?: number,
     ) => {
       await asUser(userId)
       await checkoutStatus(expectedCheckout)
-      if (siteId && expectedDraft !== undefined && expectedPublish !== undefined) {
-        expect((await draftStatus()).status()).toBe(expectedDraft)
-        expect((await publishStatus()).status()).toBe(expectedPublish)
+      if (siteId && expectedContentUpdate !== undefined) {
+        expect((await contentUpdateStatus()).status()).toBe(expectedContentUpdate)
       }
     }
 
-    await assertRole(ownerUserId!, 'owner', 200, 200)
-    await assertRole(admin.id, 'non_owner', 200, 200)
-    await assertRole(editor.id, 'non_owner', 200, 404)
-    await assertRole(member.id, 'non_owner', 404, 404)
+    await assertRole(ownerUserId!, 'owner', 200)
+    await assertRole(admin.id, 'non_owner', 200)
+    await assertRole(editor.id, 'non_owner', 200)
+    await assertRole(member.id, 'non_owner', 404)
 
   })
 

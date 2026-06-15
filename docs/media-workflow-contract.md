@@ -48,13 +48,18 @@ Related workflow helpers:
 - Do not treat pending assets as usable by public-site workflows.
 - Menu extraction must only operate on confirmed or explicitly pending-media workflow inputs.
 - AI-generated images still end as normal media assets and must be visible through the canonical media listing surface.
+- Canonical MCP generated-image contracts are split by source:
+  - Native image-generation output: `save_generated_image({ site_id, image_data_base64, prompt })`
+  - Attachment or file-handoff output: `save_generated_image_file({ site_id, attachment_id, prompt })`
+- Do not pass raw local filesystem paths to MCP tools as a stand-in for attachment transport.
 - MCP tools should be coarse-grained and business-level:
   - `list_media`
   - `request_media_upload`
   - `confirm_media_upload`
   - `update_media_asset`
   - `delete_media_asset`
-  - `generate_image`
+  - `save_generated_image`
+  - `save_generated_image_file`
   - `import_menu_from_media`
 
 ## Auth boundary

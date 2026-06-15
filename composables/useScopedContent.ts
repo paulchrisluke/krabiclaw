@@ -47,7 +47,6 @@ export const useScopedContent = (siteId: string, page: string, locationId?: stri
       const response = await $fetch<{
         success: boolean
         content: SiteContent[]
-        hasDrafts: boolean
         siteId: string
         locationId: string | null
         page: string

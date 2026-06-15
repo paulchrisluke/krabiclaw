@@ -84,7 +84,7 @@
       "List and manage a user's KrabiClaw sites and site settings.",
       "Create, update, and organize locations, menus, menu items, and posts.",
       "Upload and manage media assets and extract draft menus from images or PDFs.",
-      "Read, draft, publish, discard, and delete site content fields.",
+      "Read, update, and delete live site content fields.",
       "Manage location Q&A, view reviews, and write owner replies.",
       "Manage experiences and booking statuses.",
       "Estimate, run, review, and publish translation jobs.",
@@ -161,9 +161,9 @@
       "expected_behavior": "The app lists contact submissions for the selected site and updates the chosen submission status."
     },
     {
-      "title": "Publish content with confirmation",
-      "prompt": "Publish the current homepage draft for my site.",
-      "expected_behavior": "The app identifies the site and page, explains that publishing changes live content, and requires confirmation before calling publish_content_drafts. Reviewers should verify the confirmation prompt appears."
+      "title": "Update homepage content directly",
+      "prompt": "Update the homepage hero for my site to say 'Summer pottery workshops now open'.",
+      "expected_behavior": "The app identifies the site and page, confirms the requested copy change, updates the live homepage content directly, and reports the affected page URL."
     }
   ],
   "localization": {

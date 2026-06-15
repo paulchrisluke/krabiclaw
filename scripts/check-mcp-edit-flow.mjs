@@ -140,7 +140,7 @@ async function main() {
   else fail('list_sites does not include editable site', { siteId, sites })
 
   const draftTitle = `MCP edit check ${Date.now()}`
-  const save = await mcp(headers, 'save_content_draft', {
+  const save = await mcp(headers, 'update_page_content', {
     site_id: siteId,
     page: 'home',
     changes: {
@@ -148,31 +148,13 @@ async function main() {
       'hero.subtitle': 'Edited through MCP edit-flow checker',
     },
   })
-  expectStatus('save_content_draft succeeds', save)
+  expectStatus('update_page_content succeeds', save)
 
-  const merged = await mcp(headers, 'get_page_content', { site_id: siteId, page: 'home' })
-  expectStatus('get_page_content succeeds', merged)
-  const hero = findHero(resultData(merged.body))
-  if (hero?.hero_title === draftTitle) pass('merged content includes draft hero title')
-  else fail('merged content did not include draft hero title', hero)
-
-  const draftStatus = await mcp(headers, 'get_content_draft_status', { site_id: siteId, page: 'home' })
-  expectStatus('get_content_draft_status succeeds', draftStatus)
-  const statusData = resultData(draftStatus.body)
-  if (statusData?.hasDrafts === true && Number(statusData?.count ?? 0) > 0) pass('draft status reports pending drafts')
-  else fail('draft status did not report pending drafts', statusData)
-
-  const publish = await mcp(headers, 'publish_content_drafts', { site_id: siteId, page: 'home' })
-  expectStatus('publish_content_drafts succeeds', publish)
-  const publishData = resultData(publish.body)
-  if (publishData?.success === true || Number(publishData?.published ?? 0) > 0) pass('publish_content_drafts reports success')
-  else fail('publish_content_drafts did not report success', publishData)
-
-  const afterPublish = await mcp(headers, 'get_content_draft_status', { site_id: siteId, page: 'home' })
-  expectStatus('post-publish draft status succeeds', afterPublish)
-  const afterData = resultData(afterPublish.body)
-  if (afterData?.hasDrafts === false) pass('draft status clears after publish')
-  else fail('draft status still shows drafts after publish', afterData)
+  const content = await mcp(headers, 'get_page_content', { site_id: siteId, page: 'home' })
+  expectStatus('get_page_content succeeds', content)
+  const hero = findHero(resultData(content.body))
+  if (hero?.hero_title === draftTitle) pass('canonical content includes updated hero title')
+  else fail('canonical content did not include updated hero title', hero)
 
   process.exit(failed ? 1 : 0)
 }

@@ -20,6 +20,7 @@ export interface McpUserContext {
 export interface McpSiteContext extends McpUserContext {
   siteId: string
   organizationId: string
+  organizationSlug?: string
   role: McpToolRole
 }
 
@@ -157,11 +158,12 @@ export async function requireMcpSite(
 
   if (user.isPlatformAdmin) {
     const site = await user.db.prepare(`
-      SELECT organization_id
-      FROM sites
-      WHERE id = ?
+      SELECT s.organization_id, o.slug as organization_slug
+      FROM sites s
+      LEFT JOIN organization o ON s.organization_id = o.id
+      WHERE s.id = ?
       LIMIT 1
-    `).bind(siteId).first<{ organization_id: string }>()
+    `).bind(siteId).first<{ organization_id: string; organization_slug: string | null }>()
 
     if (!site?.organization_id) {
       throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
@@ -171,17 +173,19 @@ export async function requireMcpSite(
       ...user,
       siteId,
       organizationId: site.organization_id,
+      organizationSlug: site.organization_slug || undefined,
       role: 'owner',
     }
   }
 
   const site = await user.db.prepare(`
-    SELECT s.organization_id, m.role
+    SELECT s.organization_id, m.role, o.slug as organization_slug
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
+    LEFT JOIN organization o ON s.organization_id = o.id
     WHERE s.id = ? AND m.userId = ?
     LIMIT 1
-  `).bind(siteId, user.userId).first<{ organization_id: string; role: string }>()
+  `).bind(siteId, user.userId).first<{ organization_id: string; role: string; organization_slug: string | null }>()
 
   if (!site?.organization_id || !site.role) {
     throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
@@ -196,6 +200,7 @@ export async function requireMcpSite(
     ...user,
     siteId,
     organizationId: site.organization_id,
+    organizationSlug: site.organization_slug || undefined,
     role,
   }
 }

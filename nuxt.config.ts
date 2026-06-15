@@ -252,7 +252,7 @@ export default defineNuxtConfig({
     scheduledTasks: enableNitroTasks ? {
       '*/5 * * * *': ['translation-jobs-process'],
       '*/10 * * * *': ['domain-reconciliation'],
-      '0 3 * * *': ['domain-reconciliation-daily'],
+      '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily'],
       '0 4 * * *': ['site-transfer-reminders'],
       '0 * * * *': ['instagram-sync-process', 'google-business-sync']
     } : {},

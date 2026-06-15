@@ -1,7 +1,7 @@
-// Get draft + published merged content for authenticated editor preview
+// Get canonical content for authenticated editor preview
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getMergedEditorContent } from '~/server/utils/mcp-workflows'
+import { getEditorContent } from '~/server/utils/mcp-workflows'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -49,11 +49,11 @@ export default defineEventHandler(async (event) => {
       }, { status: 404 })
     }
 
-    const merged = await getMergedEditorContent(db, site.organization_id, siteId, page, locationId)
+    const content = await getEditorContent(db, site.organization_id, siteId, page, locationId)
 
     return jsonResponse({
       success: true,
-      ...merged,
+      ...content,
     })
     
   } catch (error) {

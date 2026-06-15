@@ -1,7 +1,7 @@
-// POST delete a single content field from live and drafts
+// POST delete a single content field from live content
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { deleteSiteAndDraftContentField } from '~/server/utils/content-management'
+import { deleteSiteContentField } from '~/server/utils/content-management'
 
 interface DeleteFieldRequest {
   page: string
@@ -39,7 +39,7 @@ export default defineEventHandler(async (event) => {
   const locationId = location_id || undefined
 
   try {
-    await deleteSiteAndDraftContentField(db, site.organization_id, siteId, page, field, locationId)
+    await deleteSiteContentField(db, site.organization_id, siteId, page, field, locationId)
   } catch (err) {
     console.error('Failed to delete field:', err instanceof Error ? err.stack : String(err))
     return jsonResponse({ error: 'Failed to delete field' }, { status: 500 })
