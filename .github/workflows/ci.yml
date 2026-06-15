@@ -132,7 +132,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-      STRIPE_WEBHOOK_SECRET: "ci-stripe-webhook-secret-staging"
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://staging.krabiclaw.com
       NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
@@ -170,6 +169,12 @@ jobs:
           WRANGLER_LOG: debug
         run: |
           npx wrangler deploy --env staging || (echo "Deploy failed, retrying once..." && sleep 10 && npx wrangler deploy --env staging)
+      - name: Set staging webhook secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STRIPE_WEBHOOK_SECRET_STAGING: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
+        run: echo "$STRIPE_WEBHOOK_SECRET_STAGING" | npx wrangler secret put STRIPE_WEBHOOK_SECRET --env staging
       - run: npx playwright install --with-deps chromium
       - name: Warm up staging Worker
         run: |
