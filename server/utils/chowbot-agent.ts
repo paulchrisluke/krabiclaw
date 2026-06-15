@@ -2483,6 +2483,10 @@ async function executeTool(
     case "create_location": {
       const title = toSqlText(input.title)?.trim();
       if (!title) return { error: "title is required." };
+      if (input.rating !== undefined && getToolNumber(input, "rating") === undefined)
+        return { error: "rating must be a valid number." };
+      if (input.review_count !== undefined && getToolInteger(input, "review_count") === undefined)
+        return { error: "review_count must be a valid integer." };
       const result = await createLocation(
         env,
         db,
@@ -2535,6 +2539,10 @@ async function executeTool(
       if (!locationId) {
         return { error: "location_id is required." };
       }
+      if (input.rating !== undefined && getToolNumber(input, "rating") === undefined)
+        return { error: "rating must be a valid number." };
+      if (input.review_count !== undefined && getToolInteger(input, "review_count") === undefined)
+        return { error: "review_count must be a valid integer." };
       const result = await updateLocation(
         db,
         orgId,

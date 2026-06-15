@@ -183,6 +183,7 @@ export async function executeMcpToolCall(
       const probe = await fetch(parsedUrl.toString(), {
         method: "HEAD",
         redirect: "manual",
+        signal: AbortSignal.timeout(5000),
       });
       const location = probe.headers.get("location");
       if (location) {
@@ -215,9 +216,14 @@ export async function executeMcpToolCall(
     if (hasImagesConfig && details.photos.length > 0) {
       for (const photo of details.photos.slice(0, 10)) {
         try {
-          const imgRes = await fetch(photo.photoUri);
+          const imgRes = await fetch(photo.photoUri, {
+            signal: AbortSignal.timeout(15000),
+          });
           if (!imgRes.ok) continue;
+          const contentLength = Number(imgRes.headers.get("content-length"));
+          if (contentLength > 10 * 1024 * 1024) continue;
           const buffer = await imgRes.arrayBuffer();
+          if (buffer.byteLength > 10 * 1024 * 1024) continue;
           const contentType =
             imgRes.headers.get("content-type") ?? "image/jpeg";
           const uploaded = await uploadImageBuffer(
@@ -543,10 +549,20 @@ export async function executeMcpToolCall(
       await reorderMenuItems(
         site.db,
         requiredString(args, "menu_id"),
-        objectArray(args.updates, "updates").map((item) => ({
-          id: requiredString(item, "id"),
-          sort_order: Number(item.sort_order),
-        })),
+        objectArray(args.updates, "updates").map((item) => {
+          const sortOrder = item.sort_order;
+          if (
+            typeof sortOrder !== "number" ||
+            !Number.isFinite(sortOrder) ||
+            !Number.isInteger(sortOrder)
+          ) {
+            throw mcpProtocolError(
+              MCP_ERROR.invalidParams,
+              "Each update must have an integer sort_order",
+            );
+          }
+          return { id: requiredString(item, "id"), sort_order: sortOrder };
+        }),
       );
       return { updated: true };
     case "list_posts":
@@ -801,10 +817,20 @@ export async function executeMcpToolCall(
         site.organizationId,
         site.siteId,
         requiredString(args, "location_id"),
-        objectArray(args.updates, "updates").map((item) => ({
-          id: requiredString(item, "id"),
-          sort_order: Number(item.sort_order),
-        })),
+        objectArray(args.updates, "updates").map((item) => {
+          const sortOrder = item.sort_order;
+          if (
+            typeof sortOrder !== "number" ||
+            !Number.isFinite(sortOrder) ||
+            !Number.isInteger(sortOrder)
+          ) {
+            throw mcpProtocolError(
+              MCP_ERROR.invalidParams,
+              "Each update must have an integer sort_order",
+            );
+          }
+          return { id: requiredString(item, "id"), sort_order: sortOrder };
+        }),
       );
     case "list_location_reviews":
       return {
@@ -968,6 +994,12 @@ export async function executeMcpToolCall(
         )
         .bind(jobId, site.organizationId, site.siteId)
         .first();
+      if (!job) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          `Translation job not found: ${jobId}`,
+        );
+      }
       const items = await site.db
         .prepare(
           `
@@ -1116,6 +1148,7 @@ export async function executeMcpToolCall(
           title: requiredString(args, "title"),
           description: optionalString(args, "description"),
           priority: optionalString(args, "priority"),
+          source: "chowbot",
         },
       );
       assertDomainSuccess(result);
@@ -1199,6 +1232,9 @@ function objectRecord(value: unknown, key: string) {
 function objectArray(value: unknown, key: string) {
   if (!Array.isArray(value)) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}`);
+  }
+  if (value.some((el) => el === null || typeof el !== "object" || Array.isArray(el))) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}: each element must be an object`);
   }
   return value as Record<string, unknown>[];
 }

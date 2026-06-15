@@ -56,6 +56,8 @@
     "client:deploy": "node scripts/client-deploy.mjs",
     "test:mcp": "node scripts/test-mcp-oauth.mjs",
     "test:mcp:app": "node scripts/check-mcp-app-contract.mjs",
+    "test:mcp:edit": "node scripts/check-mcp-edit-flow.mjs",
+    "test:mcp:ops": "node scripts/check-mcp-ops-flow.mjs",
     "test:mcp:prod": "node scripts/test-mcp-oauth.mjs --base-url https://krabiclaw.com",
     "canary:prod": "node scripts/canary-prod.mjs",
     "canary:notifications": "node scripts/canary-notifications.mjs",

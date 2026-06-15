@@ -1,8 +1,13 @@
 #!/usr/bin/env node
 
-const BASE_URL = (process.argv.includes('--base-url')
+const _baseUrlArg = process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
-  : process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+  : undefined
+if (_baseUrlArg !== undefined && !_baseUrlArg) {
+  console.error('--base-url requires a non-empty URL value')
+  process.exit(1)
+}
+const BASE_URL = (_baseUrlArg ?? process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 
 const MCP_URL = `${BASE_URL}/api/mcp`
 const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2026-07-28'
@@ -143,9 +148,11 @@ async function main() {
     if (content?._meta?.ui?.csp?.resourceDomains?.length) pass(`${resource.uri} declares standard CSP metadata`)
     else fail(`${resource.uri} missing standard CSP metadata`, content?._meta)
 
+    const baseOrigin = new URL(BASE_URL).origin
     for (const src of scriptUrls(content?.text ?? '')) {
       const url = new URL(src, BASE_URL).toString()
-      const asset = await fetch(url, { headers })
+      const isSameOrigin = new URL(url).origin === baseOrigin
+      const asset = await fetch(url, isSameOrigin ? { headers } : {})
       if (asset.ok) pass(`${resource.uri} script loads: ${url}`)
       else fail(`${resource.uri} script failed: ${url} (${asset.status})`)
     }

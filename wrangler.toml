@@ -27,6 +27,9 @@ zone_name = "krabiclaw.com"
 [vars]
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
 BETTER_AUTH_URL = "https://krabiclaw.com"
+NUXT_PUBLIC_PLATFORM_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_APP_NAME = "KrabiClaw"
 # Internal cron/API endpoints use CRON_SECRET:
 #   yarn wrangler secret put CRON_SECRET
 
