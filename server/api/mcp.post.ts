@@ -1,9 +1,19 @@
-import { createError, getHeader, setResponseHeader } from 'h3'
+import { createError, getHeader, getRequestURL, setResponseHeader } from 'h3'
 import { asMcpError, mcpFailure, mcpProtocolError, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, readMcpRequest } from '~/server/utils/mcp-protocol'
 import { executeMcpToolCall } from '~/server/utils/mcp-executor'
 import { isMcpRenderResponse } from '~/server/utils/mcp-render'
 import { getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies } from '~/server/utils/mcp-auth'
 import { MCP_TOOLS } from '~/server/utils/mcp-tools'
+
+const WIDGET_RESOURCE_MIME_TYPE = 'text/html;profile=mcp-app'
+
+function widgetResourceUri(name: string) {
+  return `ui://widget/${name}.html`
+}
+
+function requestOrigin(event: Parameters<typeof getRequestURL>[0]) {
+  return getRequestURL(event).origin.replace(/\/$/, '')
+}
 
 export default defineEventHandler(async (event) => {
   let requestId: string | number | null | undefined
@@ -68,7 +78,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
       return mcpSuccess(request.id, {})
     }
 
-    // Widget resources served as ui://widget/{name} with text/html+skybridge MIME type.
+    // Widget resources served as ui://widget/{name}.html with the MCP Apps UI MIME type.
     // ChatGPT fetches these when it sees openai/outputTemplate on a tool definition.
     const WIDGETS = [
       { name: 'welcome-list',    title: 'Site Picker' },
@@ -96,10 +106,10 @@ Common workflows: update menus and items, draft and publish posts, triage contac
       await requireMcpUser(event)
       return mcpSuccess(request.id, {
         resources: WIDGETS.map(w => ({
-          uri: `ui://widget/${w.name}`,
+          uri: widgetResourceUri(w.name),
           name: w.title,
           description: `${w.title} widget`,
-          mimeType: 'text/html+skybridge',
+          mimeType: WIDGET_RESOURCE_MIME_TYPE,
         })),
       })
     }
@@ -112,7 +122,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
     if (request.method === 'resources/read') {
       await requireMcpUser(event)
       const uri = typeof request.params?.uri === 'string' ? request.params.uri : ''
-      const match = uri.match(/^ui:\/\/widget\/(.+)$/)
+      const match = uri.match(/^ui:\/\/widget\/(.+?)(?:\.html)?$/)
       if (!match) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown resource: ${uri}`)
       }
@@ -120,13 +130,30 @@ Common workflows: update menus and items, draft and publish posts, triage contac
       if (!WIDGETS.some(w => w.name === widgetName)) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown widget: ${widgetName}`)
       }
-      const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
-      const baseUrl = (cfEnv?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+      const baseUrl = requestOrigin(event)
       return mcpSuccess(request.id, {
         contents: [{
-          uri,
-          mimeType: 'text/html+skybridge',
+          uri: widgetResourceUri(widgetName),
+          mimeType: WIDGET_RESOURCE_MIME_TYPE,
           text: widgetHtml(widgetName, baseUrl),
+          _meta: {
+            ui: {
+              prefersBorder: true,
+              domain: baseUrl,
+              csp: {
+                connectDomains: [baseUrl],
+                resourceDomains: [baseUrl],
+              },
+            },
+            'openai/widgetDescription': `${WIDGETS.find(w => w.name === widgetName)?.title ?? 'KrabiClaw'} widget`,
+            'openai/widgetPrefersBorder': true,
+            'openai/widgetDomain': baseUrl,
+            'openai/widgetCSP': {
+              connect_domains: [baseUrl],
+              resource_domains: [baseUrl],
+              redirect_domains: [baseUrl, 'https://krabiclaw.com'],
+            },
+          },
         }],
       })
     }
@@ -182,7 +209,8 @@ Common workflows: update menus and items, draft and publish posts, triage contac
           },
           ...(tool.widgetName ? {
             _meta: {
-              'openai/outputTemplate': `ui://widget/${tool.widgetName}`,
+              ui: { resourceUri: widgetResourceUri(tool.widgetName) },
+              'openai/outputTemplate': widgetResourceUri(tool.widgetName),
               'openai/widgetAccessible': true,
               'openai/toolInvocation/invoking': tool.widgetInvoking ?? 'Loading…',
               'openai/toolInvocation/invoked': tool.widgetInvoked ?? 'Done',
@@ -205,7 +233,7 @@ Common workflows: update menus and items, draft and publish posts, triage contac
         return mcpSuccess(request.id, {
           isError: false,
           structuredContent: result.structuredContent,
-          content: [{ type: 'text', text: result.fallbackText ?? JSON.stringify(result.structuredContent, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify(result.structuredContent, null, 2) }],
           _meta: {
             'openai/toolInvocation/invoking': tool?.widgetInvoking ?? 'Loading…',
             'openai/toolInvocation/invoked': tool?.widgetInvoked ?? 'Done',

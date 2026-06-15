@@ -244,8 +244,9 @@ async function switchAccount() {
 // ── Sign-in options (no existing session) ────────────────────────────────────
 const error = ref(null)
 
-// After a successful sign-in we want to land on /oauth/consent, not /api/post-login
-const oauthCallbackUrl = computed(() => `/oauth/consent${window.location.search}`)
+// Must be absolute: Better Auth validates relative callbackURLs with a regex that rejects `:`, which
+// appears when redirect_uri is unencoded. Absolute URLs are validated by origin only, not query string.
+const oauthCallbackUrl = computed(() => `${window.location.origin}/oauth/consent${window.location.search}`)
 
 const handleGoogleSignIn = async () => {
   loading.value = true
