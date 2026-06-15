@@ -2,6 +2,25 @@
 
 When an internal API returns errors, nulls, or malformed data, fix the API contract/source of truth first. Do not add frontend fallbacks, guards, or workaround logic unless the API behavior is intentionally nullable and documented.
 
+---
+
+## Platform Strategy — ChatGPT MCP App Native
+
+KrabiClaw is a **ChatGPT MCP app**. All content creation and editing flows through the MCP server (`server/api/mcp.post.ts`). The dashboard is limited to:
+- Billing and plan management
+- Organization settings (domains, members, general)
+- Inbox triage (contact submissions, reservations, reviews)
+- Work requests and support
+- Analytics overview
+
+**ChowBot is fully decommissioned.** Do not add back `chowbot-agent.ts`, `chowbot-conversations.ts`, `/api/ai/[siteId]/agent`, WhatsApp webhook, or any ChowBot composable/component. The only remaining ChowBot-adjacent file is `server/utils/chowbot-media.ts` (kept for the `import_menu_from_media` MCP tool; rename when refactoring).
+
+**Image generation** uses ChatGPT's native `image_generation` Responses API tool (model: `gpt-image-1` / `gpt-image-2`, **not DALL-E**). The output is base64 in `image_generation_call.result`. MCP flow: generate natively → call `save_generated_image` with base64 → call `show_generated_images` with returned `assetId` + `publicUrl`.
+
+**Dashboard CMS pages** (content editor, menus, media, posts, photos, pages) are candidates for future removal once the MCP path is fully validated as the primary editing surface. Do not invest in new features for these pages.
+
+---
+
 ## Database Schema Workflow
 
 Migrations are managed via **wrangler D1 migrations** — applied automatically on every deploy.

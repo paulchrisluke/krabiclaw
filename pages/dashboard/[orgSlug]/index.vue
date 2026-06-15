@@ -1,7 +1,9 @@
 <template>
   <UPage class="h-full">
-    <UPageBody v-if="!loading && !hasRestaurant" class="h-[calc(100vh-4rem)] p-0 sm:p-0">
-      <ChowBot embedded setup-mode />
+    <UPageBody v-if="!loading && !hasRestaurant">
+      <div class="py-12 text-center text-muted">
+        <p class="text-sm">Connect your ChatGPT account to get started.</p>
+      </div>
     </UPageBody>
 
     <UPageBody v-else>

@@ -77,7 +77,7 @@ import { getMcpTool } from "~/server/utils/mcp-tools";
 import { requireMcpSite, requireMcpUser } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
 import { renderWidget } from "~/server/utils/mcp-render";
-import { getPlaceDetails } from "~/server/utils/google-places";
+import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
 import type { SiteVertical } from "~/utils/vertical-copy";
 import {
   deleteContentField,
@@ -104,6 +104,88 @@ import {
   updateNotificationsSettings,
   updateReservationSubmissionStatus,
 } from "~/server/utils/mcp-workflows";
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLng = (lng2 - lng1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+interface GoogleMapsSignals {
+  nameHint: string | null;
+  lat: number | null;
+  lng: number | null;
+  rawId: string | null;
+  isHexCid: boolean;
+  isChijId: boolean;
+  hasStrongSignals: boolean;
+}
+
+function extractGoogleMapsSignals(resolvedUrl: string): GoogleMapsSignals {
+  const rawIdMatch = resolvedUrl.match(/!1s([^!&]+)/);
+  const rawId = rawIdMatch ? decodeURIComponent(rawIdMatch[1]!) : null;
+  const isHexCid = rawId ? /^0x[0-9a-f]+:0x[0-9a-f]+$/i.test(rawId) : false;
+  const isChijId = rawId ? /^ChIJ/.test(rawId) : false;
+
+  const nameFromPath = resolvedUrl.match(/\/maps\/place\/([^/@?]+)/)?.[1];
+  const nameHint = nameFromPath
+    ? decodeURIComponent(nameFromPath.replace(/\+/g, " "))
+    : null;
+
+  // !3d/!4d are the exact business coords; @ is the map viewport (less precise)
+  const lat3d = resolvedUrl.match(/!3d(-?[\d.]+)/)?.[1];
+  const lng4d = resolvedUrl.match(/!4d(-?[\d.]+)/)?.[1];
+  const viewportMatch = resolvedUrl.match(/@(-?[\d.]+),(-?[\d.]+)/);
+  const latRaw = lat3d ?? viewportMatch?.[1] ?? null;
+  const lngRaw = lng4d ?? viewportMatch?.[2] ?? null;
+  const lat = latRaw != null ? Number(latRaw) : null;
+  const lng = lngRaw != null ? Number(lngRaw) : null;
+
+  const hasStrongSignals = (lat != null && lng != null) && (isChijId || isHexCid);
+
+  return { nameHint, lat, lng, rawId, isHexCid, isChijId, hasStrongSignals };
+}
+
+interface ParsedHint {
+  name_hint?: string;
+  lat?: number;
+  lng?: number;
+  feature_id?: string;
+  internal_id?: string;
+  expected_country?: string;
+  expected_region?: string;
+}
+
+interface MatchingPolicy {
+  allow_name_only_fallback: boolean;
+  require_coordinate_match: boolean;
+  max_distance_km: number;
+  prefer_backend_extraction: boolean;
+}
+
+const DEFAULT_MATCHING_POLICY: MatchingPolicy = {
+  allow_name_only_fallback: false,
+  require_coordinate_match: true,
+  max_distance_km: 5,
+  prefer_backend_extraction: true,
+};
+
+function resolveMatchingPolicy(raw: unknown): MatchingPolicy {
+  if (!raw || typeof raw !== "object") return DEFAULT_MATCHING_POLICY;
+  const p = raw as Partial<MatchingPolicy>;
+  return {
+    allow_name_only_fallback: p.allow_name_only_fallback ?? DEFAULT_MATCHING_POLICY.allow_name_only_fallback,
+    require_coordinate_match: p.require_coordinate_match ?? DEFAULT_MATCHING_POLICY.require_coordinate_match,
+    max_distance_km: typeof p.max_distance_km === "number" ? p.max_distance_km : DEFAULT_MATCHING_POLICY.max_distance_km,
+    prefer_backend_extraction: p.prefer_backend_extraction ?? DEFAULT_MATCHING_POLICY.prefer_backend_extraction,
+  };
+}
 
 export async function executeMcpToolCall(
   event: H3Event,
@@ -178,6 +260,9 @@ export async function executeMcpToolCall(
       );
     }
 
+    const hint = (rawArguments.parsed_hint ?? null) as ParsedHint | null;
+    const policy = resolveMatchingPolicy(rawArguments.matching_policy);
+
     // Resolve short URLs (maps.app.goo.gl).
     // Use redirect:follow GET instead of redirect:manual HEAD —
     // Cloudflare Workers blocks manual redirect fetches against goo.gl.
@@ -198,25 +283,28 @@ export async function executeMcpToolCall(
       }
     }
 
-    // Extract place ID from resolved URL.
-    // The !1s data field in full Maps URLs can contain EITHER:
-    //   • A proper ChIJ... place ID  (directly usable by Places API v1)
-    //   • A legacy hex CID like 0x3051bfbadf33fdcb:0xd39e89e493b8a95b
-    //     (NOT accepted by Places API v1 — must resolve via text search)
-    const rawIdMatch = resolvedUrl.match(/!1s([^!&]+)/);
-    const rawId = rawIdMatch ? decodeURIComponent(rawIdMatch[1]!) : null;
-    const isHexCid = rawId ? /^0x[0-9a-f]+:0x[0-9a-f]+$/i.test(rawId) : false;
-    const isChijId = rawId ? /^ChIJ/.test(rawId) : false;
+    // Backend is parser of record. Extract signals deterministically from the resolved URL.
+    const backendParsed = extractGoogleMapsSignals(resolvedUrl);
 
-    // Extract business name from the URL path for fallback text search
-    // e.g. /maps/place/BALIBAR/@... → "BALIBAR"
-    const nameFromPath = resolvedUrl.match(/\/maps\/place\/([^/@?]+)/)?.[1];
-    const nameHint = nameFromPath ? decodeURIComponent(nameFromPath.replace(/\+/g, " ")) : null;
+    // If a hint was provided, warn when it diverges from backend extraction (>1 km).
+    // Hint is informational only — backend extraction takes precedence.
+    if (hint?.lat != null && hint?.lng != null && backendParsed.lat != null && backendParsed.lng != null) {
+      const divergenceKm = haversineKm(hint.lat, hint.lng, backendParsed.lat, backendParsed.lng);
+      if (divergenceKm > 1) {
+        console.warn("[import_from_maps] parsed_hint diverges from backend extraction", {
+          hint: { lat: hint.lat, lng: hint.lng },
+          backendParsed: { lat: backendParsed.lat, lng: backendParsed.lng },
+          divergenceKm: Math.round(divergenceKm * 10) / 10,
+        });
+      }
+    }
 
-    // Extract lat/lng for geo-biased search fallback
-    const coordMatch = resolvedUrl.match(/@(-?[\d.]+),(-?[\d.]+)/);
-    const latHint = coordMatch?.[1] ?? null;
-    const lngHint = coordMatch?.[2] ?? null;
+    // Use backend extraction as authoritative. Fall back to hint only for fields the
+    // backend could not extract (e.g. a short link that failed to resolve).
+    const nameHint = backendParsed.nameHint ?? hint?.name_hint ?? null;
+    const lat = backendParsed.lat ?? (hint?.lat != null ? hint.lat : null);
+    const lng = backendParsed.lng ?? (hint?.lng != null ? hint.lng : null);
+    const { rawId, isHexCid, isChijId } = backendParsed;
 
     let placeId: string | null = null;
 
@@ -224,24 +312,51 @@ export async function executeMcpToolCall(
       // Best case — proper ChIJ ID directly from URL
       placeId = rawId;
     } else if (isHexCid || !rawId) {
-      // Hex CID or no ID at all — resolve via text search using name + coords
+      // Hex CID or no ID — resolve via coordinate-biased text search
       if (!nameHint) {
         throw mcpProtocolError(
           MCP_ERROR.invalidParams,
           "Could not extract place details from that Maps URL. Try copying the full Google Maps URL from the address bar.",
         );
       }
-      const query = latHint && lngHint
-        ? `${nameHint} near ${latHint},${lngHint}`
-        : nameHint;
-      const results = await searchPlaces(apiKey, query);
-      placeId = results[0]?.placeId ?? null;
-      if (!placeId) {
+      if (!policy.allow_name_only_fallback && lat == null) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "This URL does not contain location coordinates. Paste the full Google Maps URL from the address bar so the place can be identified precisely.",
+        );
+      }
+      const locationBias =
+        lat != null && lng != null
+          ? { latitude: lat, longitude: lng }
+          : undefined;
+      const results = await searchPlaces(apiKey, nameHint, locationBias);
+      const candidate = results[0];
+      if (!candidate?.placeId) {
         throw mcpProtocolError(
           MCP_ERROR.invalidParams,
           `Could not find "${nameHint}" in Google Places. Try the full Maps URL from the address bar.`,
         );
       }
+      if (
+        policy.require_coordinate_match &&
+        locationBias &&
+        candidate.lat != null &&
+        candidate.lng != null
+      ) {
+        const distKm = haversineKm(
+          locationBias.latitude,
+          locationBias.longitude,
+          candidate.lat,
+          candidate.lng,
+        );
+        if (distKm > policy.max_distance_km) {
+          throw mcpProtocolError(
+            MCP_ERROR.invalidParams,
+            `The top search result for "${nameHint}" is ${Math.round(distKm)} km from the location in that URL. Paste the full Google Maps URL from the address bar so the exact place can be identified.`,
+          );
+        }
+      }
+      placeId = candidate.placeId;
     } else {
       // Non-ChIJ, non-hex — try it directly; Places API will 404 if invalid
       placeId = rawId;
@@ -312,6 +427,12 @@ export async function executeMcpToolCall(
   if (toolName === "show_generated_images") {
     await requireMcpUser(event);
     const raw = objectArray(rawArguments.images, "images");
+    if (raw.length === 0) {
+      throw mcpProtocolError(
+        MCP_ERROR.invalidParams,
+        "images must be non-empty. Call save_generated_image first to get an assetId and publicUrl, then pass the result here.",
+      );
+    }
     for (const img of raw) {
       if (
         typeof img.assetId !== "string" ||
@@ -321,7 +442,7 @@ export async function executeMcpToolCall(
       ) {
         throw mcpProtocolError(
           MCP_ERROR.invalidParams,
-          "Each image must have a non-empty assetId and publicUrl.",
+          "Each image must have a non-empty assetId and publicUrl. Call save_generated_image first.",
         );
       }
     }
@@ -1193,6 +1314,45 @@ export async function executeMcpToolCall(
       );
       assertDomainSuccess(result);
       return result.data;
+    }
+    case "save_generated_image": {
+      if (!site.env.CLOUDFLARE_IMAGES_API_TOKEN || !site.env.CF_ACCOUNT_ID)
+        throw new Error("Cloudflare Images not configured");
+      const imageData = requiredString(args, "image_data");
+      const prompt = optionalString(args, "prompt") ?? null;
+
+      // imageData is base64 from image_generation_call.result (Responses API)
+      const bytes = Uint8Array.from(atob(imageData), (c) => c.charCodeAt(0));
+      const buffer = bytes.buffer as ArrayBuffer;
+
+      const uploaded = await uploadImageBuffer(
+        site.env as Parameters<typeof uploadImageBuffer>[0],
+        buffer,
+        `ai-hero-${Date.now()}.png`,
+        "image/png",
+      );
+
+      const assetId = crypto.randomUUID();
+      await createMediaAsset(site.db, {
+        id: assetId,
+        organization_id: site.organizationId,
+        site_id: site.siteId,
+        kind: "image",
+        provider: "cloudflare_images",
+        source: "generated",
+        cloudflare_image_id: uploaded.imageId,
+        public_url: uploaded.publicUrl,
+        thumbnail_url: uploaded.thumbnailUrl,
+        alt_text: prompt ?? "AI-generated hero image",
+        status: "active",
+        created_by_user_id: site.userId,
+      });
+
+      return {
+        assetId,
+        publicUrl: uploaded.publicUrl,
+        thumbnailUrl: uploaded.thumbnailUrl,
+      };
     }
     default:
       throw mcpProtocolError(

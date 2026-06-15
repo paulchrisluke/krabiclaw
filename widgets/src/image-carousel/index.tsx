@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { useState, useEffect } from 'react'
-import { onToolResult, updateModelContext, callTool, injectStyles } from '../bridge'
+import { onToolResult, updateModelContext, injectStyles } from '../bridge'
 
 interface ImageItem {
   assetId: string
@@ -65,7 +65,7 @@ function App() {
   }
 
   const handleRetry = () => {
-    callTool('show_generated_images', { regenerate: true })
+    updateModelContext({ action: 'regenerate_hero_image' })
   }
 
   return (

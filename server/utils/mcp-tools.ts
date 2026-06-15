@@ -339,9 +339,34 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       properties: {
         maps_url: { type: 'string', description: 'Google Maps URL or short share link (maps.app.goo.gl or google.com/maps/place/...).' },
+        parsed_hint: {
+          type: 'object',
+          description: 'Optional, non-authoritative hints from LLM URL parsing. Backend always re-extracts independently and logs divergence >1 km.',
+          properties: {
+            name_hint: { type: 'string' },
+            lat: { type: 'number' },
+            lng: { type: 'number' },
+            feature_id: { type: 'string' },
+            internal_id: { type: 'string' },
+            expected_country: { type: 'string' },
+            expected_region: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        matching_policy: {
+          type: 'object',
+          description: 'Controls how strictly the backend validates the Places API result. Defaults to strict coordinate matching.',
+          properties: {
+            allow_name_only_fallback: { type: 'boolean', description: 'If false (default), reject when no coordinates are available to bias the search.' },
+            require_coordinate_match: { type: 'boolean', description: 'If true (default), reject any Places result more than max_distance_km from URL coordinates.' },
+            max_distance_km: { type: 'number', description: 'Rejection threshold in km. Default 5.' },
+            prefer_backend_extraction: { type: 'boolean', description: 'If true (default), backend URL extraction takes precedence over parsed_hint.' },
+          },
+          additionalProperties: false,
+        },
       },
       required: ['maps_url'],
-      additionalProperties: true,
+      additionalProperties: false,
     },
     outputSchema: {
       type: 'object',
@@ -383,7 +408,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   globalTool({
     name: 'show_generated_images',
-    description: 'Show a carousel of AI-generated hero images for the user to pick from. Pass the images array from request_media_upload / confirm_media_upload.',
+    description: 'Show a carousel of AI-generated hero images for the user to pick from. Call save_generated_image first to persist each image, then pass the resulting assetId and publicUrl here.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -392,10 +417,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         images: {
           type: 'array',
-          description: 'Array of { assetId, publicUrl } for generated images.',
+          description: 'Array of { assetId, publicUrl } returned by save_generated_image.',
           items: { type: 'object', properties: { assetId: { type: 'string' }, publicUrl: { type: 'string' } } },
         },
-        regenerate: { type: 'boolean', description: 'Set to true to signal the model to generate new images.' },
       },
       required: ['images'],
       additionalProperties: true,
@@ -421,6 +445,27 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     widgetName: 'image-carousel',
     widgetInvoking: 'Loading generated images…',
     widgetInvoked: 'Pick your hero image',
+  }),
+  siteTool({
+    name: 'save_generated_image',
+    description: 'Upload a ChatGPT natively-generated image (base64 from image_generation_call.result) to Cloudflare Images and persist a media_asset record. Returns assetId and publicUrl to pass to show_generated_images.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      image_data: { type: 'string', description: 'Base64-encoded image data from image_generation_call.result.' },
+      prompt: { type: 'string', description: 'The prompt used to generate the image (stored as alt text).' },
+    },
+    required: ['image_data'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        assetId: { type: 'string' },
+        publicUrl: { type: 'string' },
+        thumbnailUrl: { type: 'string' },
+      },
+      required: ['assetId', 'publicUrl'],
+    },
   }),
   globalTool({
     name: 'list_sites',
