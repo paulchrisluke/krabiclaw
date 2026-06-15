@@ -68,7 +68,6 @@ import { SUPPORTED_CURRENCIES } from "~/shared/currencies";
 import type { MenuItem, UpdateMenuItemRequest } from "~/server/types/menu";
 
 const MAX_ITERATIONS = 10;
-const MAX_SLUG_ATTEMPTS = 10;
 const HERO_FIELDS = new Set([
   "hero.title",
   "hero.subtitle",
@@ -291,7 +290,6 @@ function isEmptyHeroState(state: {
     !state.hero_video_asset_id
   );
 }
-
 
 function getComponentFromField(field: string): string | null {
   // Direct mapping for specific fields
@@ -568,7 +566,8 @@ const TOOLS: AiTool[] = [
         },
         body: {
           type: "string",
-          description: "New post body (max 400 chars). Omit to leave unchanged.",
+          description:
+            "New post body (max 400 chars). Omit to leave unchanged.",
         },
         image_asset_id: {
           type: "string",
@@ -2484,34 +2483,50 @@ async function executeTool(
     case "create_location": {
       const title = toSqlText(input.title)?.trim();
       if (!title) return { error: "title is required." };
-      const result = await createLocation(env, db, orgId, siteId, {
-        title,
-        city: toSqlText(input.city) ?? null,
-        neighborhood: toSqlText(input.neighborhood) ?? null,
-        phone: toSqlText(input.phone) ?? null,
-        email: toSqlText(input.email) ?? null,
-        website_url: toSqlText(input.website_url) ?? null,
-        maps_url: toSqlText(input.maps_url) ?? null,
-        google_place_id: toSqlText(input.google_place_id) ?? null,
-        description: toSqlText(input.description) ?? null,
-        short_description: toSqlText(input.short_description) ?? null,
-        address: toSqlText(input.address) ?? null,
-        opening_hours: toSqlText(input.opening_hours) ?? null,
-        rating: getToolNumber(input, "rating") ?? null,
-        review_count: getToolInteger(input, "review_count") ?? null,
-        price_level: toSqlText(input.price_level) ?? null,
-        facebook_url: toSqlText(input.facebook_url) ?? null,
-        instagram_url: toSqlText(input.instagram_url) ?? null,
-        tiktok_url: toSqlText(input.tiktok_url) ?? null,
-        grab_url: toSqlText(input.grab_url) ?? null,
-        uber_eats_url: toSqlText(input.uber_eats_url) ?? null,
-        foodpanda_url: toSqlText(input.foodpanda_url) ?? null,
-        hero_image_asset_id: toSqlText(input.hero_image_asset_id) ?? null,
-        hero_video_asset_id: toSqlText(input.hero_video_asset_id) ?? null,
-        is_primary: getToolBoolean(input, "is_primary") === true,
-      }, userId);
+      const result = await createLocation(
+        env,
+        db,
+        orgId,
+        siteId,
+        {
+          title,
+          city: toSqlText(input.city) ?? null,
+          neighborhood: toSqlText(input.neighborhood) ?? null,
+          phone: toSqlText(input.phone) ?? null,
+          email: toSqlText(input.email) ?? null,
+          website_url: toSqlText(input.website_url) ?? null,
+          maps_url: toSqlText(input.maps_url) ?? null,
+          google_place_id: toSqlText(input.google_place_id) ?? null,
+          description: toSqlText(input.description) ?? null,
+          short_description: toSqlText(input.short_description) ?? null,
+          address: toSqlText(input.address) ?? null,
+          opening_hours: toSqlText(input.opening_hours) ?? null,
+          rating: getToolNumber(input, "rating") ?? null,
+          review_count: getToolInteger(input, "review_count") ?? null,
+          price_level: toSqlText(input.price_level) ?? null,
+          facebook_url: toSqlText(input.facebook_url) ?? null,
+          instagram_url: toSqlText(input.instagram_url) ?? null,
+          tiktok_url: toSqlText(input.tiktok_url) ?? null,
+          grab_url: toSqlText(input.grab_url) ?? null,
+          uber_eats_url: toSqlText(input.uber_eats_url) ?? null,
+          foodpanda_url: toSqlText(input.foodpanda_url) ?? null,
+          hero_image_asset_id: toSqlText(input.hero_image_asset_id) ?? null,
+          hero_video_asset_id: toSqlText(input.hero_video_asset_id) ?? null,
+          is_primary: getToolBoolean(input, "is_primary") === true,
+        },
+        userId,
+      );
       if (result.status >= 400) return result.data;
-      const location = (result.data as { location?: { id: string; title: string; slug: string; status: string } }).location;
+      const location = (
+        result.data as {
+          location?: {
+            id: string;
+            title: string;
+            slug: string;
+            status: string;
+          };
+        }
+      ).location;
       return location ?? { error: "Location could not be created." };
     }
 
@@ -2520,44 +2535,53 @@ async function executeTool(
       if (!locationId) {
         return { error: "location_id is required." };
       }
-      const result = await updateLocation(db, orgId, siteId, locationId, {
-        title: toSqlText(input.title) ?? undefined,
-        slug: toSqlText(input.slug) ?? undefined,
-        city: toSqlText(input.city) ?? undefined,
-        neighborhood: toSqlText(input.neighborhood) ?? undefined,
-        phone: toSqlText(input.phone) ?? undefined,
-        email: toSqlText(input.email) ?? undefined,
-        description: toSqlText(input.description) ?? undefined,
-        short_description: toSqlText(input.short_description) ?? undefined,
-        price_level: toSqlText(input.price_level) ?? undefined,
-        facebook_url: toSqlText(input.facebook_url) ?? undefined,
-        instagram_url: toSqlText(input.instagram_url) ?? undefined,
-        tiktok_url: toSqlText(input.tiktok_url) ?? undefined,
-        grab_url: toSqlText(input.grab_url) ?? undefined,
-        uber_eats_url: toSqlText(input.uber_eats_url) ?? undefined,
-        foodpanda_url: toSqlText(input.foodpanda_url) ?? undefined,
-        website_url: toSqlText(input.website_url) ?? undefined,
-        maps_url: toSqlText(input.maps_url) ?? undefined,
-        google_place_id: toSqlText(input.google_place_id) ?? undefined,
-        hero_image_asset_id: toSqlText(input.hero_image_asset_id) ?? undefined,
-        hero_video_asset_id: toSqlText(input.hero_video_asset_id) ?? undefined,
-        address: toSqlText(input.address) ?? undefined,
-        opening_hours: toSqlText(input.opening_hours) ?? undefined,
-        rating:
-          input.rating !== undefined
-            ? (getToolNumber(input, "rating") ?? null)
-            : undefined,
-        review_count:
-          input.review_count !== undefined
-            ? (getToolInteger(input, "review_count") ?? null)
-            : undefined,
-        is_primary: getToolBoolean(input, "is_primary"),
-        status:
-          typeof input.status === "string" &&
-          ["active", "inactive", "sync_error"].includes(input.status)
-            ? (input.status as "active" | "inactive" | "sync_error")
-            : undefined,
-      }, userId);
+      const result = await updateLocation(
+        db,
+        orgId,
+        siteId,
+        locationId,
+        {
+          title: toSqlText(input.title) ?? undefined,
+          slug: toSqlText(input.slug) ?? undefined,
+          city: toSqlText(input.city) ?? undefined,
+          neighborhood: toSqlText(input.neighborhood) ?? undefined,
+          phone: toSqlText(input.phone) ?? undefined,
+          email: toSqlText(input.email) ?? undefined,
+          description: toSqlText(input.description) ?? undefined,
+          short_description: toSqlText(input.short_description) ?? undefined,
+          price_level: toSqlText(input.price_level) ?? undefined,
+          facebook_url: toSqlText(input.facebook_url) ?? undefined,
+          instagram_url: toSqlText(input.instagram_url) ?? undefined,
+          tiktok_url: toSqlText(input.tiktok_url) ?? undefined,
+          grab_url: toSqlText(input.grab_url) ?? undefined,
+          uber_eats_url: toSqlText(input.uber_eats_url) ?? undefined,
+          foodpanda_url: toSqlText(input.foodpanda_url) ?? undefined,
+          website_url: toSqlText(input.website_url) ?? undefined,
+          maps_url: toSqlText(input.maps_url) ?? undefined,
+          google_place_id: toSqlText(input.google_place_id) ?? undefined,
+          hero_image_asset_id:
+            toSqlText(input.hero_image_asset_id) ?? undefined,
+          hero_video_asset_id:
+            toSqlText(input.hero_video_asset_id) ?? undefined,
+          address: toSqlText(input.address) ?? undefined,
+          opening_hours: toSqlText(input.opening_hours) ?? undefined,
+          rating:
+            input.rating !== undefined
+              ? (getToolNumber(input, "rating") ?? null)
+              : undefined,
+          review_count:
+            input.review_count !== undefined
+              ? (getToolInteger(input, "review_count") ?? null)
+              : undefined,
+          is_primary: getToolBoolean(input, "is_primary"),
+          status:
+            typeof input.status === "string" &&
+            ["active", "inactive", "sync_error"].includes(input.status)
+              ? (input.status as "active" | "inactive" | "sync_error")
+              : undefined,
+        },
+        userId,
+      );
 
       if (result.status >= 400) return result.data;
       return (
@@ -2570,8 +2594,17 @@ async function executeTool(
     case "delete_location": {
       const locationId = toSqlText(input.location_id);
       if (!locationId) return { error: "location_id is required." };
-      const result = await deleteLocation(env, db, orgId, siteId, locationId, userId);
-      return result.status >= 400 ? result.data : { location_id: locationId, deleted: true };
+      const result = await deleteLocation(
+        env,
+        db,
+        orgId,
+        siteId,
+        locationId,
+        userId,
+      );
+      return result.status >= 400
+        ? result.data
+        : { location_id: locationId, deleted: true };
     }
 
     case "lookup_maps_url": {
@@ -2852,11 +2885,17 @@ async function executeTool(
         .bind(input.location_id, orgId, siteId)
         .first();
       if (!loc) return { error: "Location not found." };
-      const result = await createLocationQa(db, orgId, siteId, input.location_id, {
-        question: String(input.question ?? ""),
-        answer: toSqlText(input.answer) ?? null,
-        is_owner_answer: true,
-      });
+      const result = await createLocationQa(
+        db,
+        orgId,
+        siteId,
+        input.location_id,
+        {
+          question: String(input.question ?? ""),
+          answer: toSqlText(input.answer) ?? null,
+          is_owner_answer: true,
+        },
+      );
       return result.status >= 400
         ? result.data
         : { ...(result.data as object), added: true };
