@@ -742,16 +742,39 @@ export async function updateMenuItem(
 // Delete menu item
 export async function deleteMenuItem(
   db: D1Database,
-  menuItemId: string
-): Promise<void> {
-  const result = await db.prepare(`
-    DELETE FROM menu_items 
-    WHERE id = ?
-  `).bind(menuItemId).run()
+  menuItemId: string,
+  organizationId: string,
+  siteId: string,
+  updatedBy?: string,
+): Promise<boolean> {
+  const existing = await db.prepare(
+    `SELECT mi.menu_id, mi.section
+     FROM menu_items mi
+     JOIN menus m ON mi.menu_id = m.id
+     WHERE mi.id = ? AND m.organization_id = ? AND m.site_id = ?
+     LIMIT 1`
+  ).bind(menuItemId, organizationId, siteId).first<{ menu_id: string; section: string | null }>()
+
+  if (!existing) return false
+
+  const result = await db.prepare(`DELETE FROM menu_items WHERE id = ?`).bind(menuItemId).run()
 
   if (!result.success) {
     throw new Error('Failed to delete menu item')
   }
+
+  if (existing?.menu_id && existing.section) {
+    const remaining = await db.prepare(
+      `SELECT COUNT(*) as count FROM menu_items WHERE menu_id = ? AND section = ?`
+    ).bind(existing.menu_id, existing.section).first<{ count: number }>()
+
+    if (remaining && remaining.count === 0) {
+      const sectionOrder = await getMenuSectionOrder(db, existing.menu_id)
+      await saveMenuSectionOrder(db, existing.menu_id, sectionOrder.filter(s => s !== existing.section), updatedBy)
+    }
+  }
+
+  return true
 }
 
 // Rename a menu section by updating every item that belongs to it

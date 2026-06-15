@@ -230,7 +230,7 @@ test.describe('stateless MCP server', () => {
         site_id: siteId,
         page: 'about',
         changes: {
-          'promo.note': `Delete me ${Date.now()}`,
+          'story.title': `Delete me ${Date.now()}`,
         },
       },
     })
@@ -239,7 +239,7 @@ test.describe('stateless MCP server', () => {
     const deleteField = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'delete_content_field',
-      args: { site_id: siteId, page: 'about', field: 'promo.note' },
+      args: { site_id: siteId, page: 'about', field: 'story.title' },
     })
     expect(deleteField.status()).toBe(200)
 

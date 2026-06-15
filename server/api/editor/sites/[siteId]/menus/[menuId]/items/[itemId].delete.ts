@@ -75,7 +75,7 @@ export default defineEventHandler(async (event) => {
       }, { status: 404 })
     }
 
-    await deleteMenuItem(db, itemId)
+    await deleteMenuItem(db, itemId, site.organization_id as string, siteId)
     
     return jsonResponse({
       success: true,

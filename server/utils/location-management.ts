@@ -16,8 +16,8 @@ export interface CreateLocationInput {
   google_place_id?: string | null
   description?: string | null
   short_description?: string | null
-  address?: string | null
-  opening_hours?: string | null
+  address?: string | Record<string, unknown> | null
+  opening_hours?: string | unknown[] | Record<string, unknown> | null
   price_level?: string | null
   rating?: number | null
   review_count?: number | null
@@ -104,6 +104,10 @@ function normalizeOrderingUrl(value: string | null | undefined, field: string) {
   }
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function normalizeAddressLines(value: string) {
   return value
     .split(/\r?\n/)
@@ -111,14 +115,22 @@ function normalizeAddressLines(value: string) {
     .filter(Boolean)
 }
 
-function serializeAddress(value: string | null | undefined) {
+function serializeAddress(value: unknown) {
   if (value === undefined || value === null) return null
+  if (typeof value !== 'string') {
+    if (!isPlainObject(value) && !Array.isArray(value)) return null
+    return JSON.stringify(value)
+  }
   const addressLines = normalizeAddressLines(value)
   return addressLines.length ? JSON.stringify({ addressLines }) : null
 }
 
-function serializeOpeningHours(value: string | null | undefined) {
+function serializeOpeningHours(value: unknown) {
   if (value === undefined || value === null) return null
+  if (typeof value !== 'string') {
+    if (!isPlainObject(value) && !Array.isArray(value)) return null
+    return JSON.stringify(value)
+  }
   const weekdayDescriptions = value
     .split(/\r?\n/)
     .map((line) => line.trim())

@@ -12,6 +12,10 @@ const WIDGET_RESOURCE_MIME_TYPE = 'text/html;profile=mcp-app'
 // URI will continue to serve the old widget until the URI changes.
 const WIDGET_VERSION = 'v4'
 
+// Disable ChatGPT widget UI rendering until interactivity is stable.
+// Set to true to re-enable openai/outputTemplate and widget _meta in tool responses.
+const WIDGETS_ENABLED = false
+
 function widgetResourceUri(name: string) {
   return `ui://widget/${name}@${WIDGET_VERSION}.html`
 }
@@ -60,13 +64,13 @@ export default defineEventHandler(async (event) => {
         serverInfo: { name: 'krabiclaw-mcp', version: 'phase-5' },
         instructions: `KrabiClaw — manage your restaurant or business website through this connection.
 
-Start every conversation by calling show_welcome to discover the user's sites and display the interactive site picker widget.
+Start every conversation by calling show_welcome to discover the user's sites and present the available sites as a text list.
 - If they have 0 sites, start the Onboarding Flow: 
   1. Ask for their Google Maps URL (or shortlink) to import their business details.
   2. Call import_from_maps.
   3. After import, ask for Required missing context: "What should the main button say (e.g., Book Now)?" and ask if they want to upload a Hero Image or have AI generate one.
-     - If AI generate natively: generate the image using the image_generation tool, then call save_generated_image with site_id and image_data_base64 from image_generation_call.result, then call show_generated_images with the returned assetId and publicUrl.
-     - If the runtime provides a file/attachment handle instead of base64: call save_generated_image_file with site_id and attachment_id. Never pass raw local file paths to save_generated_image.
+     - If AI generate natively: generate the image using the image_generation tool, then call save_generated_image_file with site_id and the generated image as attachment_id (file reference), then call show_generated_images with the returned assetId and publicUrl. Do NOT extract base64 from image_generation_call.result and pass it to save_generated_image — that will be blocked by safety checks.
+     - Never pass raw local file paths like /mnt/data/... to any save tool.
   4. Ask for Optional context: "What's the short story behind your business?" and "Do you have a logo to upload?" (let them skip these).
   5. DO NOT ask for menus, detailed services, or social links yet (defer until the site is live).
   6. Call create_site and create_location, then show_site_preview.
@@ -221,7 +225,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
             minimumRole: tool.minimumRole,
             confirmRequired: tool.confirmRequired,
           },
-          ...(tool.widgetName ? {
+          ...(WIDGETS_ENABLED && tool.widgetName ? {
             _meta: {
               ui: { resourceUri: widgetResourceUri(tool.widgetName) },
               'openai/outputTemplate': widgetResourceUri(tool.widgetName),
@@ -247,22 +251,18 @@ Common workflows: update menus and items, create and publish posts, triage conta
         : Object.fromEntries(Object.entries(request.params ?? {}).filter(([key]) => key !== 'name'))
 
       const result = await executeMcpToolCall(event, toolName, rawArgs)
-      if (isMcpRenderResponse(result)) {
-        const tool = MCP_TOOLS.find(t => t.name === toolName)
-        return mcpSuccess(request.id, {
-          isError: false,
-          structuredContent: result.structuredContent,
-          content: [{ type: 'text', text: JSON.stringify(result.structuredContent, null, 2) }],
-          _meta: {
-            'openai/toolInvocation/invoking': tool?.widgetInvoking ?? 'Loading…',
-            'openai/toolInvocation/invoked': tool?.widgetInvoked ?? 'Done',
-          },
-        })
-      }
+      const structuredContent = isMcpRenderResponse(result) ? result.structuredContent : result
+      const tool = WIDGETS_ENABLED && isMcpRenderResponse(result) ? MCP_TOOLS.find(t => t.name === toolName) : null
       return mcpSuccess(request.id, {
         isError: false,
-        structuredContent: result,
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        structuredContent,
+        content: [{ type: 'text', text: JSON.stringify(structuredContent, null, 2) }],
+        ...(tool ? {
+          _meta: {
+            'openai/toolInvocation/invoking': tool.widgetInvoking ?? 'Loading…',
+            'openai/toolInvocation/invoked': tool.widgetInvoked ?? 'Done',
+          },
+        } : {}),
       })
     }
 

@@ -323,47 +323,27 @@ export async function reorderLocationQa(
   locationId: string,
   updates: Array<{ id: string; sort_order: number }>,
 ) {
-  if (updates.length !== 2 || updates[0]?.id === updates[1]?.id) {
-    throw new Error('Two distinct Q&A reorder updates are required')
-  }
-
-  const [first, second] = updates
-  const firstSortOrder = Number(first?.sort_order)
-  const secondSortOrder = Number(second?.sort_order)
-  if (!Number.isInteger(firstSortOrder) || !Number.isInteger(secondSortOrder)) {
-    throw new Error('Invalid sort_order for Q&A reorder')
+  if (!updates.length) {
+    throw new Error('At least one Q&A update is required')
   }
 
   const now = new Date().toISOString()
-  const result = await db.prepare(`
-    UPDATE location_qa
-    SET sort_order = CASE id
-        WHEN ? THEN ?
-        WHEN ? THEN ?
-        ELSE sort_order
-      END,
-      updated_at = ?
-    WHERE location_id = ?
-      AND site_id = ?
-      AND organization_id = ?
-      AND id IN (?, ?)
-  `).bind(
-    first!.id,
-    firstSortOrder,
-    second!.id,
-    secondSortOrder,
-    now,
-    locationId,
-    siteId,
-    organizationId,
-    first!.id,
-    second!.id,
-  ).run()
+  let updated = 0
 
-  if (Number(result.meta.changes ?? 0) !== 2) {
-    throw new Error('Q&A reorder targets not found')
+  for (const update of updates) {
+    const result = await db.prepare(`
+      UPDATE location_qa
+      SET sort_order = ?, updated_at = ?
+      WHERE id = ? AND location_id = ? AND site_id = ? AND organization_id = ?
+    `).bind(update.sort_order, now, update.id, locationId, siteId, organizationId).run()
+    updated += Number(result.meta.changes ?? 0)
   }
-  return { updated: true }
+
+  if (updated !== updates.length) {
+    throw new Error(`Q&A reorder failed: expected ${updates.length} item(s) to update but only ${updated} matched. Some items may not exist or do not belong to this location.`)
+  }
+
+  return { updated }
 }
 
 export async function listLocationReviews(db: D1Database, siteId: string, locationId: string) {
@@ -568,12 +548,12 @@ export async function getEditorContent(
   })
 
   return {
-    content,
+    fields: content,
     siteId,
     locationId,
     page,
     public_path: await resolvePublicPath(db, siteId, page, locationId),
-    editableSchema: {
+    schema: {
       page,
       fields: editableKeys,
       structured: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'],

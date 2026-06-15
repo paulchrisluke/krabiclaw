@@ -755,13 +755,15 @@ export async function executeMcpToolCall(
         ),
       };
     case "update_site_settings": {
+      const { forceSubdomainRegistrationFailure, ...updates } = args as Record<string, unknown>;
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,
         site.siteId,
         site.organizationId,
-        args as Record<string, unknown>,
+        updates,
         site.userId,
+        { forceSubdomainRegistrationFailure: Boolean(forceSubdomainRegistrationFailure) },
       );
       assertDomainSuccess(result);
       return result.data;
@@ -909,12 +911,8 @@ export async function executeMcpToolCall(
         ),
       };
     case "delete_menu_item":
-      return {
-        deleted: await deleteMenuItem(
-          site.db,
-          requiredString(args, "menu_item_id"),
-        ),
-      };
+      await deleteMenuItem(site.db, requiredString(args, "menu_item_id"), site.organizationId, site.siteId, site.userId);
+      return { deleted: true };
     case "rename_menu_section":
       return {
         updated: await renameMenuSection(
@@ -1391,7 +1389,8 @@ export async function executeMcpToolCall(
         menuName: optionalString(args, "menu_name") ?? undefined,
       });
     }
-    case "get_page_content":
+    case "get_page_fields":
+      console.error("[MCP] get_page_fields invoked page=%s site=%s", args.page, site.siteId);
       return await getEditorContent(
         site.db,
         site.organizationId,

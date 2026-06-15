@@ -974,38 +974,10 @@ export function renderCompiledPotteryHouseCoreSeedBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
-  const locationRows = compiledPotteryHouseSeed.locations
-    .map((location) => `  (${[
-      sqlValue(location.id),
-      sqlValue(compiledPotteryHouseSeed.identity.organizationId),
-      sqlValue(compiledPotteryHouseSeed.identity.siteId),
-      sqlValue(location.slug),
-      sqlValue(location.title),
-      sqlValue(location.city),
-      sqlJson(location.address),
-      sqlValue(location.phone),
-      sqlValue(location.email),
-      sqlValue(location.mapsUrl),
-      sqlValue(location.latitude),
-      sqlValue(location.longitude),
-      sqlValue(location.description),
-      sqlValue(location.shortDescription),
-      sqlJson(location.openingHours),
-      sqlValue(location.rating),
-      sqlValue(location.reviewCount),
-      sqlValue(location.priceLevel),
-      sqlJson(location.categories),
-      sqlValue(location.instagramUrl),
-      sqlValue(location.facebookUrl),
-      sqlValue(location.isPrimary),
-      sqlValue(location.status),
-    ].join(', ')})`)
-    .join(',\n')
-
   const { site, identity } = compiledPotteryHouseSeed
   return `-- BEGIN GENERATED: pottery_core
 -- Pottery House Krabi core generated from the curated fixture contract.
-INSERT INTO sites (
+INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
   status, plan, onboarding_status, url_structure, primary_location_id,
@@ -1032,33 +1004,18 @@ INSERT INTO sites (
   ${sqlValue(site.mediaSource)}
 );
 
-INSERT INTO site_config (organization_id, site_id, key, value)
+INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
 VALUES
 ${siteConfigRows};
 
-INSERT INTO site_locales
+INSERT OR REPLACE INTO site_locales
   (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
 VALUES
 ${siteLocaleRows};
 
-INSERT INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status)
+INSERT OR REPLACE INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status)
 VALUES
 ${siteDomainRows};
-
-INSERT INTO business_locations (
-  id, organization_id, site_id, slug, title, city,
-  address, phone, email, maps_url,
-  latitude, longitude,
-  description, short_description,
-  opening_hours,
-  rating, review_count,
-  price_level, categories,
-  instagram_url, facebook_url,
-  is_primary, status
-) VALUES
-${locationRows};
-
-UPDATE sites SET primary_location_id = ${sqlValue(site.primaryLocationId)} WHERE id = ${sqlValue(identity.siteId)};
 -- END GENERATED: pottery_core`
 }
 
@@ -1084,15 +1041,35 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
-  const heroUpdates = compiledPotteryHouseSeed.locations
-    .filter((loc) => loc.heroImageAssetId || loc.heroVideoAssetId)
-    .map((loc) => {
-      const parts: string[] = []
-      if (loc.heroImageAssetId) parts.push(`hero_image_asset_id = ${sqlValue(loc.heroImageAssetId)}`)
-      if (loc.heroVideoAssetId) parts.push(`hero_video_asset_id = ${sqlValue(loc.heroVideoAssetId)}`)
-      return `UPDATE business_locations SET ${parts.join(', ')} WHERE id = ${sqlValue(loc.id)};`
-    })
-    .join('\n')
+  const locationRows = compiledPotteryHouseSeed.locations
+    .map((location) => `  (${[
+      sqlValue(location.id),
+      sqlValue(compiledPotteryHouseSeed.identity.organizationId),
+      sqlValue(compiledPotteryHouseSeed.identity.siteId),
+      sqlValue(location.slug),
+      sqlValue(location.title),
+      sqlValue(location.city),
+      sqlJson(location.address),
+      sqlValue(location.phone),
+      sqlValue(location.email),
+      sqlValue(location.mapsUrl),
+      sqlValue(location.latitude),
+      sqlValue(location.longitude),
+      sqlValue(location.description),
+      sqlValue(location.shortDescription),
+      sqlJson(location.openingHours),
+      sqlValue(location.rating),
+      sqlValue(location.reviewCount),
+      sqlValue(location.priceLevel),
+      sqlJson(location.categories),
+      sqlValue(location.instagramUrl),
+      sqlValue(location.facebookUrl),
+      sqlValue(location.isPrimary),
+      sqlValue(location.status),
+      sqlValue(location.heroImageAssetId ?? null),
+      sqlValue(location.heroVideoAssetId ?? null),
+    ].join(', ')})`)
+    .join(',\n')
 
   return `-- BEGIN GENERATED: pottery_media
 -- All media assets for Pottery House Krabi.
@@ -1104,8 +1081,21 @@ INSERT OR REPLACE INTO media_assets
 VALUES
 ${mediaRows};
 
-UPDATE sites SET logo_asset_id = ${sqlValue(compiledPotteryHouseSeed.site.logoAssetId ?? null)} WHERE id = ${sqlValue(compiledPotteryHouseSeed.identity.siteId)};
-${heroUpdates}
+INSERT OR REPLACE INTO business_locations (
+  id, organization_id, site_id, slug, title, city,
+  address, phone, email, maps_url,
+  latitude, longitude,
+  description, short_description,
+  opening_hours,
+  rating, review_count,
+  price_level, categories,
+  instagram_url, facebook_url,
+  is_primary, status,
+  hero_image_asset_id, hero_video_asset_id
+) VALUES
+${locationRows};
+
+UPDATE sites SET logo_asset_id = ${sqlValue(compiledPotteryHouseSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledPotteryHouseSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledPotteryHouseSeed.identity.siteId)};
 -- END GENERATED: pottery_media`
 }
 
@@ -1169,7 +1159,7 @@ export function renderCompiledPotteryHouseReviewsBlock(): string {
 
   return `-- BEGIN GENERATED: pottery_reviews
 -- Reviews for Pottery House Krabi.
-INSERT INTO reviews
+INSERT OR IGNORE INTO reviews
   (id, organization_id, site_id, location_id,
    author_name, reviewer_photo_url, rating, content,
    owner_reply, owner_reply_at,
@@ -1200,7 +1190,7 @@ export function renderCompiledPotteryHouseQaBlock(): string {
 
   return `-- BEGIN GENERATED: pottery_qa
 -- Location Q&A for Pottery House Krabi.
-INSERT INTO location_qa
+INSERT OR IGNORE INTO location_qa
   (id, organization_id, site_id, location_id,
    question, question_author, answer, answer_author,
    is_owner_answer, upvote_count, source, status, sort_order)
@@ -1240,14 +1230,14 @@ export function renderCompiledPotteryHousePostsBlock(): string {
 
   return `-- BEGIN GENERATED: pottery_posts
 -- Posts and channel jobs for Pottery House Krabi.
-INSERT INTO posts
+INSERT OR IGNORE INTO posts
   (id, organization_id, site_id, location_id,
    post_type, title, body, image_asset_id,
    status, published_at, created_by)
 VALUES
 ${postRows};
 
-INSERT INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
+INSERT OR IGNORE INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
 VALUES
 ${channelJobRows};
 -- END GENERATED: pottery_posts`
@@ -1274,7 +1264,7 @@ export function renderCompiledPotteryHouseContentBlock(): string {
 
   return `-- BEGIN GENERATED: pottery_content
 -- Site content for Pottery House Krabi.
-INSERT INTO site_content
+INSERT OR IGNORE INTO site_content
   (id, organization_id, site_id, location_id,
    page, field, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id,
    type, source)
@@ -1325,12 +1315,12 @@ export function renderCompiledPotteryHouseTranslationsBlock(): string {
     .join(',\n')
 
   return `-- BEGIN GENERATED: pottery_translations
-INSERT INTO site_content_translations
+INSERT OR IGNORE INTO site_content_translations
   (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, reviewed_at)
 VALUES
 ${siteContentTranslationRows};
 
-INSERT INTO business_location_translations
+INSERT OR IGNORE INTO business_location_translations
   (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, reviewed_at)
 VALUES
 ${businessLocationTranslationRows};

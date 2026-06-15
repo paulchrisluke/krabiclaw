@@ -22,15 +22,15 @@ The only remaining ChowBot-adjacent file is `server/utils/chowbot-media.ts`, kep
 
 - Model: `gpt-image-1` or `gpt-image-2`
 - Do not use DALL-E
-- Output is base64 in `image_generation_call.result`
+- Output is base64 in `image_generation_call.result`, but do NOT pass that base64 to MCP tools — OpenAI's safety scanner blocks tool calls carrying raw base64 image data
 - MCP flow:
-  1. Generate natively
-  2. Call `save_generated_image({ site_id, image_data_base64, prompt })`
+  1. Generate natively with `image_generation`
+  2. Call `save_generated_image_file({ site_id, attachment_id: <file-reference>, prompt })` — pass the generated image as a file reference (not raw base64)
   3. Call `show_generated_images` with returned `assetId` and `publicUrl`
 
 Canonical generated-image contracts:
-- Native generation: `save_generated_image({ site_id, image_data_base64, prompt })`
-- File or attachment flow: `save_generated_image_file({ site_id, attachment_id, prompt })`
+- Native generation: `save_generated_image_file({ site_id, attachment_id, prompt })` — always use this after `image_generation`; passing base64 to `save_generated_image` is blocked by OpenAI safety checks
+- Raw base64 (non-native, rare): `save_generated_image({ site_id, image_data_base64, prompt })`
 
 Do not pass raw local file paths like `/mnt/data/...` to MCP tools.
 
@@ -108,8 +108,18 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - `composables/` — Nuxt auto-imported
 - `migrations/` — canonical D1 schema, numbered files; `0001_initial.sql` is the base
 - `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo tenant
+- `seed-definitions/pottery-house.ts`, `seed-definitions/kikuzuki.ts` — client site seed definitions
 - `scripts/generate-demo-seed.ts` — ephemeral demo seed generator; applies from `/tmp`, never from a checked-in SQL file
 - `scripts/archive/` — historical one-off migration scripts only; do not wire archived tooling back into package scripts or routine workflows
+
+### Seed Insert Strategy
+
+Seeds use a two-tier insert strategy so that MCP edits survive a reseed:
+
+- **Structure tables** (`sites`, `site_config`, `site_locales`, `site_domains`, `media_assets`, `business_locations`, `menus`, `experiences`) → `INSERT OR REPLACE` — idempotent config, safe to overwrite
+- **Content tables** (`site_content`, `menu_items`, `reviews`, `location_qa`, `posts`, `post_channel_jobs`, `*_translations`) → `INSERT OR IGNORE` — first seed wins; MCP changes are never overwritten by a reseed
+
+Production is never reseeded (only migrated), so this only affects local dev, preview, and staging. If you need to force-push updated content from a seed definition to an already-seeded environment, delete the affected rows first or use an MCP tool call directly.
 - Layout name for Saya theme pages: `layout: 'saya'`
 - `tenant` layout is dead
 

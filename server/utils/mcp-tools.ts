@@ -498,7 +498,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'save_generated_image',
-    description: 'Upload a ChatGPT natively-generated image to Cloudflare Images and persist a media_asset record. Accepts base64 from image_generation_call.result or a base64 data URL. Returns assetId and publicUrl to pass to show_generated_images.',
+    description: 'Upload a base64-encoded image to Cloudflare Images and persist a media_asset record. Use ONLY when you already have a raw base64 string (e.g. from an external API). For ChatGPT native image_generation output, use save_generated_image_file instead — passing image_generation_call.result base64 here will be blocked by safety checks.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -519,7 +519,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'save_generated_image_file',
-    description: 'Canonical attachment/file-based generated-image handoff. Use this when the runtime has a real attachment handle instead of base64 image_generation output.',
+    description: 'Primary path for saving a ChatGPT natively-generated image. After calling image_generation, pass the resulting image as attachment_id (a file reference). This avoids safety blocks that occur when raw base64 is passed to save_generated_image.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -772,11 +772,15 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'update_location',
-    description: 'Update a location.',
+    description: 'Update a location\'s details or assign a hero image/video. To assign a hero image: call get_site_media_assets first to find the asset id, then pass it as hero_image_asset_id here. Only provided fields are changed — omitting hero_image_asset_id leaves the existing one intact.',
     domain: 'locations',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { location_id: { type: 'string' } },
+    inputSchema: {
+      location_id: { type: 'string' },
+      hero_image_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero image for this location.' },
+      hero_video_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero video for this location.' },
+    },
     required: ['location_id'],
     outputSchema: {
       ...locationMutationResultObject,
@@ -1071,11 +1075,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_site_media_assets',
-    description: 'List media assets (images and videos) for a site. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}/media — orgSlug comes from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
+    description: 'List media assets (images and videos) for a site. Use this first to find asset IDs before assigning a hero image — call it, pick the right asset from the results, then pass its id to update_home_hero(image_asset_id=...) or update_location(hero_image_asset_id=...). Filter by kind="image" to narrow results. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}/media — orgSlug comes from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { kind: { type: 'string' }, location_id: { type: 'string' } },
+    inputSchema: { kind: { type: 'string', description: 'Filter by asset type: "image" or "video".' }, location_id: { type: 'string' } },
     outputSchema: {
       type: 'object',
       properties: { assets: { type: 'array', items: mediaAssetObject } },
@@ -1246,8 +1250,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
-    name: 'get_page_content',
-    description: 'Get the canonical page content used by the public renderer for one page.',
+    name: 'get_page_fields',
+    description: 'Get editable field definitions and current values for a page. Call this before update_page_content to see which fields exist and what they are set to.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1260,10 +1264,28 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         siteId: { type: 'string' },
         locationId: { type: ['string', 'null'] },
         public_path: { type: 'string' },
-        content: { type: 'array', items: { type: 'object' } },
-        editableSchema: { type: 'object' },
+        fields: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              field: { type: 'string' },
+              value: { type: ['string', 'null'] },
+              render_status: { type: 'string', enum: ['rendered', 'orphan'] },
+              editable_keys: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+        schema: {
+          type: 'object',
+          properties: {
+            page: { type: 'string' },
+            fields: { type: 'array', items: { type: 'string' } },
+            structured: { type: 'array', items: { type: 'string' } },
+          },
+        },
       },
-      required: ['page', 'siteId', 'content'],
+      required: ['page', 'siteId', 'fields'],
     },
   }),
   siteTool({
@@ -1288,7 +1310,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'update_home_hero',
-    description: 'Update the canonical homepage hero record that the public renderer uses. This avoids orphan scalar fields and writes directly to live content.',
+    description: 'Update the homepage hero (title, subtitle, hero image, or hero video). To assign an existing media asset as the hero image: call get_site_media_assets first to get its id, then pass it as image_asset_id here. Only provided fields are changed — omitting image_asset_id leaves the existing hero image intact.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1426,7 +1448,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'reply_to_review',
     description: 'Add or update the owner reply for a review.',
     domain: 'reviews',
-    minimumRole: 'editor',
+    minimumRole: 'owner',
     confirmRequired: false,
     inputSchema: { review_id: { type: 'string' }, reply: { type: 'string' } },
     required: ['review_id', 'reply'],
