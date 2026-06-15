@@ -78,6 +78,7 @@ import { requireMcpSite, requireMcpUser } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
 import { renderWidget } from "~/server/utils/mcp-render";
 import { getPlaceDetails } from "~/server/utils/google-places";
+import type { SiteVertical } from "~/utils/vertical-copy";
 import {
   deleteContentField,
   discardContentDrafts,
@@ -147,7 +148,7 @@ export async function executeMcpToolCall(
     return renderWidget(
       "vertical-picker",
       {},
-      "What type of business is this? Choose: restaurant, experience, retail, wellness, or service.",
+      "What type of business is this? Choose: restaurant or experience.",
     );
   }
 
@@ -296,12 +297,7 @@ export async function executeMcpToolCall(
     const result = await runSiteCreation(user.env, user.db, user.userId, {
       name: requiredString(rawArguments, "name"),
       subdomain: requiredString(rawArguments, "subdomain"),
-      vertical: requiredString(rawArguments, "vertical") as
-        | "restaurant"
-        | "experience"
-        | "retail"
-        | "wellness"
-        | "service",
+      vertical: requiredString(rawArguments, "vertical") as SiteVertical,
     });
     assertDomainSuccess(result);
     return result.data;

@@ -18,7 +18,7 @@ test.describe('site creation contracts', () => {
     })
     expect(missingVerticalRes.status()).toBe(400)
     expect(await missingVerticalRes.json()).toEqual({
-      error: 'vertical is required and must be one of: restaurant, experience, retail, wellness, service',
+      error: 'vertical is required and must be one of: restaurant, experience',
     })
 
     const invalidVerticalRes = await request.post(`${baseURL}/api/dashboard/restaurant`, {
@@ -30,7 +30,7 @@ test.describe('site creation contracts', () => {
     })
     expect(invalidVerticalRes.status()).toBe(400)
     expect(await invalidVerticalRes.json()).toEqual({
-      error: 'vertical is required and must be one of: restaurant, experience, retail, wellness, service',
+      error: 'vertical is required and must be one of: restaurant, experience',
     })
   })
 })
