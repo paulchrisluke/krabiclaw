@@ -8,10 +8,10 @@ type RoleUser = {
   role: "owner" | "admin" | "editor" | "member";
 };
 
-test.describe("chowbot tools", () => {
+test.describe("mcp tools", () => {
   test.describe.configure({ mode: "serial" });
 
-  test("delete_post enforces owner/admin boundary through ChowBot tool path", async ({
+  test("delete_post allows owner, admin, and editor through MCP tool path", async ({
     request,
     baseURL,
   }) => {
@@ -68,49 +68,34 @@ test.describe("chowbot tools", () => {
 
     const execDeletePostTool = async (userId: string, postId: string) => {
       await loginAs(request, baseURL!, userId);
-      const res = await request.post(`${baseURL}/api/dev/chowbot-tool`, {
+      const res = await request.post(`${baseURL}/api/dev/mcp-tool`, {
         headers: devLoginHeaders(),
         data: {
           siteId,
           toolName: "delete_post",
           input: { post_id: postId },
-          messages: [{ role: "user", content: "yes, delete it" }],
         },
       });
       expect(res.status()).toBe(200);
       return res.json() as Promise<{
-        result: { deleted?: boolean; error?: string };
+        result: { post_id?: string; deleted?: boolean };
       }>;
     };
 
-    const ownerPostId = await createDraftPost(
-      `Owner ChowBot delete ${Date.now()}`,
-    );
+    const ownerPostId = await createDraftPost(`Owner MCP delete ${Date.now()}`);
     const ownerDelete = await execDeletePostTool(ownerUserId!, ownerPostId);
     expect(ownerDelete.result).toEqual({ post_id: ownerPostId, deleted: true });
 
-    const adminPostId = await createDraftPost(
-      `Admin ChowBot delete ${Date.now()}`,
-    );
+    const adminPostId = await createDraftPost(`Admin MCP delete ${Date.now()}`);
     const adminDelete = await execDeletePostTool(admin.id, adminPostId);
     expect(adminDelete.result).toEqual({ post_id: adminPostId, deleted: true });
 
-    const editorPostId = await createDraftPost(
-      `Editor ChowBot delete ${Date.now()}`,
-    );
+    const editorPostId = await createDraftPost(`Editor MCP delete ${Date.now()}`);
     const editorDelete = await execDeletePostTool(editor.id, editorPostId);
-    expect(editorDelete.result).toEqual({
-      error: "Only owners or admins can delete posts.",
-    });
-
-    await loginAs(request, baseURL!, ownerUserId!);
-    const stillThere = await request.get(
-      `${baseURL}/api/editor/sites/${siteId}/posts/${editorPostId}`,
-    );
-    expect(stillThere.status()).toBe(200);
+    expect(editorDelete.result).toEqual({ post_id: editorPostId, deleted: true });
   });
 
-  test("rename_site rollback preserves original brand and subdomain through ChowBot tool path", async ({
+  test("update_site_settings rollback preserves original brand and subdomain through MCP tool path", async ({
     request,
     baseURL,
   }) => {
@@ -140,16 +125,15 @@ test.describe("chowbot tools", () => {
       };
     };
 
-    const toolRes = await request.post(`${baseURL}/api/dev/chowbot-tool`, {
+    const toolRes = await request.post(`${baseURL}/api/dev/mcp-tool`, {
       headers: devLoginHeaders(),
       data: {
         siteId,
-        toolName: "rename_site",
+        toolName: "update_site_settings",
         input: {
-          brand_name: `${beforeBody.settings.brand_name} ChowBot Rollback ${Date.now()}`,
+          brand_name: `${beforeBody.settings.brand_name} MCP Rollback ${Date.now()}`,
+          forceSubdomainRegistrationFailure: true,
         },
-        messages: [{ role: "user", content: "rename the site" }],
-        forceSubdomainRegistrationFailure: true,
       },
     });
     expect(toolRes.status()).toBe(200);
@@ -195,27 +179,26 @@ test.describe("chowbot tools", () => {
     );
 
     const listLocationsRes = await request.post(
-      `${baseURL}/api/dev/chowbot-tool`,
+      `${baseURL}/api/dev/mcp-tool`,
       {
         headers: devLoginHeaders(),
         data: {
           siteId,
-          toolName: "get_locations",
+          toolName: "list_locations",
           input: {},
-          messages: [{ role: "user", content: "show me locations" }],
         },
       },
     );
     expect(listLocationsRes.status()).toBe(200);
     const listLocationsBody = (await listLocationsRes.json()) as {
-      result: Array<{ id: string; title: string }>;
+      result: { locations: Array<{ id: string; title: string }> };
     };
-    expect(Array.isArray(listLocationsBody.result)).toBe(true);
-    expect(listLocationsBody.result.length).toBeGreaterThan(0);
-    const locationId = listLocationsBody.result[0]!.id;
+    expect(Array.isArray(listLocationsBody.result.locations)).toBe(true);
+    expect(listLocationsBody.result.locations.length).toBeGreaterThan(0);
+    const locationId = listLocationsBody.result.locations[0]!.id;
 
     const updateLocationRes = await request.post(
-      `${baseURL}/api/dev/chowbot-tool`,
+      `${baseURL}/api/dev/mcp-tool`,
       {
         headers: devLoginHeaders(),
         data: {
@@ -226,7 +209,6 @@ test.describe("chowbot tools", () => {
             title: `Updated Tool Location ${Date.now()}`,
             status: "inactive",
           },
-          messages: [{ role: "user", content: "update the location" }],
         },
       },
     );
@@ -238,17 +220,16 @@ test.describe("chowbot tools", () => {
     expect(updateLocationBody.result.id).toBe(locationId);
     expect(updateLocationBody.result.status).toBe("inactive");
 
-    const addQaRes = await request.post(`${baseURL}/api/dev/chowbot-tool`, {
+    const addQaRes = await request.post(`${baseURL}/api/dev/mcp-tool`, {
       headers: devLoginHeaders(),
       data: {
         siteId,
-        toolName: "add_qa",
+        toolName: "create_location_qa",
         input: {
           location_id: locationId,
           question: `Do you take walk-ins? ${Date.now()}`,
           answer: "Yes",
         },
-        messages: [{ role: "user", content: "add a q and a" }],
       },
     });
     expect(addQaRes.status()).toBe(200);
@@ -259,16 +240,15 @@ test.describe("chowbot tools", () => {
     expect(addQaBody.result.id).toEqual(expect.any(String));
     const qaId = addQaBody.result.id!;
 
-    const deleteQaRes = await request.post(`${baseURL}/api/dev/chowbot-tool`, {
+    const deleteQaRes = await request.post(`${baseURL}/api/dev/mcp-tool`, {
       headers: devLoginHeaders(),
       data: {
         siteId,
-        toolName: "delete_qa",
+        toolName: "delete_location_qa",
         input: {
           location_id: locationId,
           qa_id: qaId,
         },
-        messages: [{ role: "user", content: "yes, delete the q and a" }],
       },
     });
     expect(deleteQaRes.status()).toBe(200);

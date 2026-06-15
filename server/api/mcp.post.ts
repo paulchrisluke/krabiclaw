@@ -10,7 +10,7 @@ const WIDGET_RESOURCE_MIME_TYPE = 'text/html;profile=mcp-app'
 // Increment this whenever widgets are changed to bust ChatGPT's ui:// cache.
 // ChatGPT caches widget resources by URI, so the same ui://widget/foo.html
 // URI will continue to serve the old widget until the URI changes.
-const WIDGET_VERSION = 'v3'
+const WIDGET_VERSION = 'v4'
 
 function widgetResourceUri(name: string) {
   return `ui://widget/${name}@${WIDGET_VERSION}.html`
@@ -65,6 +65,7 @@ Start every conversation by calling show_welcome to discover the user's sites an
   1. Ask for their Google Maps URL (or shortlink) to import their business details.
   2. Call import_from_maps.
   3. After import, ask for Required missing context: "What should the main button say (e.g., Book Now)?" and ask if they want to upload a Hero Image or have AI generate one.
+     - If AI generate: generate the image natively using the image_generation tool, then call save_generated_image with the site_id and the base64 result from image_generation_call.result, then call show_generated_images with the returned assetId and publicUrl. Never call show_generated_images with an empty images array.
   4. Ask for Optional context: "What's the short story behind your business?" and "Do you have a logo to upload?" (let them skip these).
   5. DO NOT ask for menus, detailed services, or social links yet (defer until the site is live).
   6. Call create_site and create_location, then show_site_preview.

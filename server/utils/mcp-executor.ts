@@ -72,12 +72,32 @@ import {
 import { replyToReview } from "~/server/utils/review-management";
 import { createWorkRequest } from "~/server/utils/work-request-management";
 import { runSiteCreation } from "~/server/utils/site-creation";
+import {
+  createCustomDomainPair,
+  deleteCustomDomain,
+  domainInstructions,
+  getSiteDomains,
+  hasCustomDomainsEntitlement,
+  setCanonicalDomain,
+  syncDomainWithCloudflare,
+  validateCustomDomain,
+} from "~/server/utils/domains";
 import { updateSiteSettingsFields } from "~/server/utils/site-settings";
+import {
+  getFacebookPagesConnection,
+  getFacebookPages,
+  getPageInfo,
+  getLinkedInstagramAccount,
+  publishToPage,
+  publishToInstagram,
+  storeFacebookPagesConnection,
+  syncPageInfoToLocation,
+} from "~/server/utils/facebook-pages";
 import { getMcpTool } from "~/server/utils/mcp-tools";
 import { requireMcpSite, requireMcpUser } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
 import { renderWidget } from "~/server/utils/mcp-render";
-import { getPlaceDetails } from "~/server/utils/google-places";
+import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
 import type { SiteVertical } from "~/utils/vertical-copy";
 import {
   deleteContentField,
@@ -105,6 +125,88 @@ import {
   updateReservationSubmissionStatus,
 } from "~/server/utils/mcp-workflows";
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLng = (lng2 - lng1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+interface GoogleMapsSignals {
+  nameHint: string | null;
+  lat: number | null;
+  lng: number | null;
+  rawId: string | null;
+  isHexCid: boolean;
+  isChijId: boolean;
+  hasStrongSignals: boolean;
+}
+
+function extractGoogleMapsSignals(resolvedUrl: string): GoogleMapsSignals {
+  const rawIdMatch = resolvedUrl.match(/!1s([^!&]+)/);
+  const rawId = rawIdMatch ? decodeURIComponent(rawIdMatch[1]!) : null;
+  const isHexCid = rawId ? /^0x[0-9a-f]+:0x[0-9a-f]+$/i.test(rawId) : false;
+  const isChijId = rawId ? /^ChIJ/.test(rawId) : false;
+
+  const nameFromPath = resolvedUrl.match(/\/maps\/place\/([^/@?]+)/)?.[1];
+  const nameHint = nameFromPath
+    ? decodeURIComponent(nameFromPath.replace(/\+/g, " "))
+    : null;
+
+  // !3d/!4d are the exact business coords; @ is the map viewport (less precise)
+  const lat3d = resolvedUrl.match(/!3d(-?[\d.]+)/)?.[1];
+  const lng4d = resolvedUrl.match(/!4d(-?[\d.]+)/)?.[1];
+  const viewportMatch = resolvedUrl.match(/@(-?[\d.]+),(-?[\d.]+)/);
+  const latRaw = lat3d ?? viewportMatch?.[1] ?? null;
+  const lngRaw = lng4d ?? viewportMatch?.[2] ?? null;
+  const lat = latRaw != null ? Number(latRaw) : null;
+  const lng = lngRaw != null ? Number(lngRaw) : null;
+
+  const hasStrongSignals = (lat != null && lng != null) && (isChijId || isHexCid);
+
+  return { nameHint, lat, lng, rawId, isHexCid, isChijId, hasStrongSignals };
+}
+
+interface ParsedHint {
+  name_hint?: string;
+  lat?: number;
+  lng?: number;
+  feature_id?: string;
+  internal_id?: string;
+  expected_country?: string;
+  expected_region?: string;
+}
+
+interface MatchingPolicy {
+  allow_name_only_fallback: boolean;
+  require_coordinate_match: boolean;
+  max_distance_km: number;
+  prefer_backend_extraction: boolean;
+}
+
+const DEFAULT_MATCHING_POLICY: MatchingPolicy = {
+  allow_name_only_fallback: false,
+  require_coordinate_match: true,
+  max_distance_km: 5,
+  prefer_backend_extraction: true,
+};
+
+function resolveMatchingPolicy(raw: unknown): MatchingPolicy {
+  if (!raw || typeof raw !== "object") return DEFAULT_MATCHING_POLICY;
+  const p = raw as Partial<MatchingPolicy>;
+  return {
+    allow_name_only_fallback: p.allow_name_only_fallback ?? DEFAULT_MATCHING_POLICY.allow_name_only_fallback,
+    require_coordinate_match: p.require_coordinate_match ?? DEFAULT_MATCHING_POLICY.require_coordinate_match,
+    max_distance_km: typeof p.max_distance_km === "number" ? p.max_distance_km : DEFAULT_MATCHING_POLICY.max_distance_km,
+    prefer_backend_extraction: p.prefer_backend_extraction ?? DEFAULT_MATCHING_POLICY.prefer_backend_extraction,
+  };
+}
+
 export async function executeMcpToolCall(
   event: H3Event,
   toolName: string,
@@ -131,6 +233,7 @@ export async function executeMcpToolCall(
       id: s.id,
       name: s.brand_name ?? s.slug,
       subdomain: s.subdomain,
+      orgSlug: s.slug,
       publicUrl: s.subdomain ? `https://${s.subdomain}.krabiclaw.com` : null,
       status: s.status ?? "draft",
     }));
@@ -178,6 +281,9 @@ export async function executeMcpToolCall(
       );
     }
 
+    const hint = (rawArguments.parsed_hint ?? null) as ParsedHint | null;
+    const policy = resolveMatchingPolicy(rawArguments.matching_policy);
+
     // Resolve short URLs (maps.app.goo.gl).
     // Use redirect:follow GET instead of redirect:manual HEAD —
     // Cloudflare Workers blocks manual redirect fetches against goo.gl.
@@ -198,25 +304,28 @@ export async function executeMcpToolCall(
       }
     }
 
-    // Extract place ID from resolved URL.
-    // The !1s data field in full Maps URLs can contain EITHER:
-    //   • A proper ChIJ... place ID  (directly usable by Places API v1)
-    //   • A legacy hex CID like 0x3051bfbadf33fdcb:0xd39e89e493b8a95b
-    //     (NOT accepted by Places API v1 — must resolve via text search)
-    const rawIdMatch = resolvedUrl.match(/!1s([^!&]+)/);
-    const rawId = rawIdMatch ? decodeURIComponent(rawIdMatch[1]!) : null;
-    const isHexCid = rawId ? /^0x[0-9a-f]+:0x[0-9a-f]+$/i.test(rawId) : false;
-    const isChijId = rawId ? /^ChIJ/.test(rawId) : false;
+    // Backend is parser of record. Extract signals deterministically from the resolved URL.
+    const backendParsed = extractGoogleMapsSignals(resolvedUrl);
 
-    // Extract business name from the URL path for fallback text search
-    // e.g. /maps/place/BALIBAR/@... → "BALIBAR"
-    const nameFromPath = resolvedUrl.match(/\/maps\/place\/([^/@?]+)/)?.[1];
-    const nameHint = nameFromPath ? decodeURIComponent(nameFromPath.replace(/\+/g, " ")) : null;
+    // If a hint was provided, warn when it diverges from backend extraction (>1 km).
+    // Hint is informational only — backend extraction takes precedence.
+    if (hint?.lat != null && hint?.lng != null && backendParsed.lat != null && backendParsed.lng != null) {
+      const divergenceKm = haversineKm(hint.lat, hint.lng, backendParsed.lat, backendParsed.lng);
+      if (divergenceKm > 1) {
+        console.warn("[import_from_maps] parsed_hint diverges from backend extraction", {
+          hint: { lat: hint.lat, lng: hint.lng },
+          backendParsed: { lat: backendParsed.lat, lng: backendParsed.lng },
+          divergenceKm: Math.round(divergenceKm * 10) / 10,
+        });
+      }
+    }
 
-    // Extract lat/lng for geo-biased search fallback
-    const coordMatch = resolvedUrl.match(/@(-?[\d.]+),(-?[\d.]+)/);
-    const latHint = coordMatch?.[1] ?? null;
-    const lngHint = coordMatch?.[2] ?? null;
+    // Use backend extraction as authoritative. Fall back to hint only for fields the
+    // backend could not extract (e.g. a short link that failed to resolve).
+    const nameHint = backendParsed.nameHint ?? hint?.name_hint ?? null;
+    const lat = backendParsed.lat ?? (hint?.lat != null ? hint.lat : null);
+    const lng = backendParsed.lng ?? (hint?.lng != null ? hint.lng : null);
+    const { rawId, isHexCid, isChijId } = backendParsed;
 
     let placeId: string | null = null;
 
@@ -224,24 +333,51 @@ export async function executeMcpToolCall(
       // Best case — proper ChIJ ID directly from URL
       placeId = rawId;
     } else if (isHexCid || !rawId) {
-      // Hex CID or no ID at all — resolve via text search using name + coords
+      // Hex CID or no ID — resolve via coordinate-biased text search
       if (!nameHint) {
         throw mcpProtocolError(
           MCP_ERROR.invalidParams,
           "Could not extract place details from that Maps URL. Try copying the full Google Maps URL from the address bar.",
         );
       }
-      const query = latHint && lngHint
-        ? `${nameHint} near ${latHint},${lngHint}`
-        : nameHint;
-      const results = await searchPlaces(apiKey, query);
-      placeId = results[0]?.placeId ?? null;
-      if (!placeId) {
+      if (!policy.allow_name_only_fallback && lat == null) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "This URL does not contain location coordinates. Paste the full Google Maps URL from the address bar so the place can be identified precisely.",
+        );
+      }
+      const locationBias =
+        lat != null && lng != null
+          ? { latitude: lat, longitude: lng }
+          : undefined;
+      const results = await searchPlaces(apiKey, nameHint, locationBias);
+      const candidate = results[0];
+      if (!candidate?.placeId) {
         throw mcpProtocolError(
           MCP_ERROR.invalidParams,
           `Could not find "${nameHint}" in Google Places. Try the full Maps URL from the address bar.`,
         );
       }
+      if (
+        policy.require_coordinate_match &&
+        locationBias &&
+        candidate.lat != null &&
+        candidate.lng != null
+      ) {
+        const distKm = haversineKm(
+          locationBias.latitude,
+          locationBias.longitude,
+          candidate.lat,
+          candidate.lng,
+        );
+        if (distKm > policy.max_distance_km) {
+          throw mcpProtocolError(
+            MCP_ERROR.invalidParams,
+            `The top search result for "${nameHint}" is ${Math.round(distKm)} km from the location in that URL. Paste the full Google Maps URL from the address bar so the exact place can be identified.`,
+          );
+        }
+      }
+      placeId = candidate.placeId;
     } else {
       // Non-ChIJ, non-hex — try it directly; Places API will 404 if invalid
       placeId = rawId;
@@ -312,6 +448,12 @@ export async function executeMcpToolCall(
   if (toolName === "show_generated_images") {
     await requireMcpUser(event);
     const raw = objectArray(rawArguments.images, "images");
+    if (raw.length === 0) {
+      throw mcpProtocolError(
+        MCP_ERROR.invalidParams,
+        "images must be non-empty. Call save_generated_image first to get an assetId and publicUrl, then pass the result here.",
+      );
+    }
     for (const img of raw) {
       if (
         typeof img.assetId !== "string" ||
@@ -321,7 +463,7 @@ export async function executeMcpToolCall(
       ) {
         throw mcpProtocolError(
           MCP_ERROR.invalidParams,
-          "Each image must have a non-empty assetId and publicUrl.",
+          "Each image must have a non-empty assetId and publicUrl. Call save_generated_image first.",
         );
       }
     }
@@ -644,25 +786,74 @@ export async function executeMcpToolCall(
           site.userId,
         ),
       };
-    case "publish_post":
+    case "publish_post": {
+      const channels = normalizeChannels(args.channels);
+      const postId = requiredString(args, "post_id");
+      const post = await publishPost(site.db, site.organizationId, site.siteId, postId, channels);
+      if (!post) throw createError({ statusCode: 404, statusMessage: "Post not found" });
+
+      const wantsFacebook = channels.includes("facebook");
+      const wantsInstagram = channels.includes("instagram");
+      const now = new Date().toISOString();
+
+      if (wantsFacebook || wantsInstagram) {
+        const connection = await getFacebookPagesConnection(site.env as never, site.organizationId, site.siteId).catch(() => null);
+        if (!connection?.facebook_page_id || !connection.encrypted_page_token) {
+          const msg = "No Facebook Page connected";
+          const stmts = [];
+          if (wantsFacebook) stmts.push(site.db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'facebook'`).bind(msg, postId));
+          if (wantsInstagram) stmts.push(site.db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind(msg, postId));
+          if (stmts.length) await site.db.batch(stmts);
+        } else {
+          const pageToken = connection.encrypted_page_token;
+          const pageId = connection.facebook_page_id;
+
+          let imageUrl: string | null = null;
+          if (post.image_asset_id) {
+            const asset = await site.db.prepare(`SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`).bind(post.image_asset_id).first<{ public_url: string | null }>();
+            imageUrl = asset?.public_url ?? null;
+          }
+
+          if (wantsFacebook) {
+            try {
+              const fbResult = await publishToPage(pageToken, pageId, { message: post.body });
+              await site.db.prepare(`UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'facebook'`).bind(fbResult.id, now, postId).run();
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : "Facebook publish failed";
+              await site.db.prepare(`UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'facebook'`).bind(msg, postId).run();
+            }
+          }
+
+          if (wantsInstagram) {
+            if (!imageUrl) {
+              await site.db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind("Instagram requires an image — add a photo to this post", postId).run();
+            } else {
+              try {
+                const igUserId = await getLinkedInstagramAccount(pageToken, pageId);
+                if (!igUserId) {
+                  await site.db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind("No Instagram Business account linked to this Facebook Page", postId).run();
+                } else {
+                  const igResult = await publishToInstagram(pageToken, igUserId, { caption: post.body, imageUrl });
+                  await site.db.prepare(`UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'instagram'`).bind(igResult.id, now, postId).run();
+                }
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : "Instagram publish failed";
+                await site.db.prepare(`UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind(msg, postId).run();
+              }
+            }
+          }
+        }
+      }
+
+      return { post: await getPost(site.db, site.organizationId, site.siteId, postId) };
+    }
+    case "delete_post": {
+      const postId = requiredString(args, "post_id");
       return {
-        post: await publishPost(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          requiredString(args, "post_id"),
-          normalizeChannels(args.channels),
-        ),
+        post_id: postId,
+        deleted: await deletePost(site.db, site.organizationId, site.siteId, postId),
       };
-    case "delete_post":
-      return {
-        deleted: await deletePost(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          requiredString(args, "post_id"),
-        ),
-      };
+    }
     case "list_media_assets":
       return {
         assets: await listMediaAssets(site.db, site.siteId, {
@@ -741,6 +932,91 @@ export async function executeMcpToolCall(
         site.siteId,
       );
       return { deleted: true };
+    case "get_facebook_connection": {
+      const connection = await getFacebookPagesConnection(site.env as never, site.organizationId, site.siteId);
+      if (!connection) return { connected: false };
+      return {
+        connected: true,
+        facebook_page_id: connection.facebook_page_id ?? null,
+        facebook_page_name: connection.facebook_page_name ?? null,
+        status: connection.status,
+      };
+    }
+    case "publish_to_facebook": {
+      const allowed = await hasEntitlement(site.env, site.db, site.organizationId, "managed_service");
+      if (!allowed) {
+        throw createError({ statusCode: 403, statusMessage: "Facebook publishing is included in the Managed plan and above." });
+      }
+      const connection = await getFacebookPagesConnection(site.env as never, site.organizationId, site.siteId);
+      if (!connection) throw createError({ statusCode: 404, statusMessage: "No Facebook connection found. Connect Facebook from the dashboard first." });
+      if (!connection.facebook_page_id || !connection.encrypted_page_token) {
+        throw createError({ statusCode: 400, statusMessage: "No Facebook Page selected. Sync a page from the dashboard first." });
+      }
+      const result = await publishToPage(
+        connection.encrypted_page_token,
+        connection.facebook_page_id,
+        {
+          message: requiredString(args, "message"),
+          link: optionalString(args, "link") ?? undefined,
+          published: args.published !== false,
+        },
+      );
+      return { success: true, post_id: result.id, page_name: connection.facebook_page_name };
+    }
+    case "sync_facebook_page": {
+      const allowed = await hasEntitlement(site.env, site.db, site.organizationId, "managed_service");
+      if (!allowed) {
+        throw createError({ statusCode: 403, statusMessage: "Facebook sync is included in the Managed plan and above." });
+      }
+      let connection = await getFacebookPagesConnection(site.env as never, site.organizationId, site.siteId);
+      if (!connection) throw createError({ statusCode: 404, statusMessage: "No Facebook connection found. Connect Facebook from the dashboard first." });
+
+      const requestedPageId = optionalString(args, "page_id");
+      let pageToken = connection.encrypted_page_token;
+      let pageId = requestedPageId ?? connection.facebook_page_id;
+
+      if (requestedPageId && requestedPageId !== connection.facebook_page_id) {
+        const pages = await getFacebookPages(connection.encrypted_user_token);
+        const selected = pages.find((p) => p.id === requestedPageId);
+        if (!selected) throw createError({ statusCode: 404, statusMessage: "Page not found in this connection." });
+        pageToken = selected.access_token;
+        pageId = selected.id;
+        await storeFacebookPagesConnection(site.env as never, {
+          ...connection,
+          facebook_page_id: selected.id,
+          facebook_page_name: selected.name,
+          encrypted_user_token: connection.encrypted_user_token,
+          encrypted_page_token: pageToken,
+          status: "active",
+        });
+      }
+
+      if (!pageToken || !pageId) {
+        throw createError({ statusCode: 400, statusMessage: "No Facebook Page selected. Pass page_id or sync a page from the dashboard first." });
+      }
+
+      const pageInfo = await getPageInfo(pageToken, pageId);
+      const locationId = optionalString(args, "location_id");
+      if (locationId) {
+        await syncPageInfoToLocation(site.env as never, pageInfo, connection.id, site.organizationId, site.siteId, locationId);
+      }
+
+      return {
+        success: true,
+        synced_to_location: !!locationId,
+        page: {
+          id: pageInfo.id,
+          name: pageInfo.name,
+          about: pageInfo.about ?? null,
+          phone: pageInfo.phone ?? null,
+          website: pageInfo.website ?? null,
+          city: pageInfo.location?.city ?? null,
+          fan_count: pageInfo.fan_count ?? null,
+          cover: pageInfo.cover?.source ?? null,
+          picture: pageInfo.picture?.data?.url ?? null,
+        },
+      };
+    }
     case "import_menu_from_media": {
       const { extractMenuFromMediaAsset } =
         await import("~/server/utils/chowbot-media");
@@ -1194,6 +1470,186 @@ export async function executeMcpToolCall(
       assertDomainSuccess(result);
       return result.data;
     }
+    case "save_generated_image": {
+      if (!site.env.CLOUDFLARE_IMAGES_API_TOKEN || !site.env.CF_ACCOUNT_ID)
+        throw new Error("Cloudflare Images not configured");
+      const imageData = requiredString(args, "image_data");
+      const prompt = optionalString(args, "prompt") ?? null;
+
+      // imageData is base64 from image_generation_call.result (Responses API)
+      const bytes = Uint8Array.from(atob(imageData), (c) => c.charCodeAt(0));
+      const buffer = bytes.buffer as ArrayBuffer;
+
+      const uploaded = await uploadImageBuffer(
+        site.env as Parameters<typeof uploadImageBuffer>[0],
+        buffer,
+        `ai-hero-${Date.now()}.png`,
+        "image/png",
+      );
+
+      const assetId = crypto.randomUUID();
+      await createMediaAsset(site.db, {
+        id: assetId,
+        organization_id: site.organizationId,
+        site_id: site.siteId,
+        kind: "image",
+        provider: "cloudflare_images",
+        source: "generated",
+        cloudflare_image_id: uploaded.imageId,
+        public_url: uploaded.publicUrl,
+        thumbnail_url: uploaded.thumbnailUrl,
+        alt_text: prompt ?? "AI-generated hero image",
+        status: "active",
+        created_by_user_id: site.userId,
+      });
+
+      return {
+        assetId,
+        publicUrl: uploaded.publicUrl,
+        thumbnailUrl: uploaded.thumbnailUrl,
+      };
+    }
+    // ─── Domain management ──────────────────────────────────────────────────
+    case "list_domains": {
+      const domains = await getSiteDomains(site.db, site.siteId);
+      return {
+        domains: domains.map((d) => ({
+          id: d.id,
+          domain: d.domain,
+          type: d.type,
+          role: d.role,
+          status: d.status,
+          instructions: domainInstructions(d),
+        })),
+      };
+    }
+    case "create_domain": {
+      const hasEntitlement = await hasCustomDomainsEntitlement(site.db, site.organizationId);
+      if (!hasEntitlement) {
+        throw createError({ statusCode: 403, statusMessage: "Custom domains require the Growth plan or higher." });
+      }
+      const domain = requiredString(args, "domain");
+      const includeWww = args.include_www !== false;
+      const validation = validateCustomDomain(site.env as Parameters<typeof validateCustomDomain>[0], domain);
+      if (!validation.valid) {
+        throw createError({ statusCode: 400, statusMessage: validation.reason ?? "Invalid domain" });
+      }
+      const records = await createCustomDomainPair(
+        site.env as Parameters<typeof createCustomDomainPair>[0],
+        site.db,
+        {
+          siteId: site.siteId,
+          organizationId: site.organizationId,
+          domain,
+          includeWww,
+          actorId: site.userId,
+          actorType: "owner",
+        },
+      );
+      return {
+        domains: records.map((d) => ({
+          id: d.id,
+          domain: d.domain,
+          role: d.role,
+          status: d.status,
+          instructions: domainInstructions(d),
+        })),
+      };
+    }
+    case "set_canonical_domain": {
+      const domainId = requiredString(args, "domain_id");
+      const record = await setCanonicalDomain(site.db, site.siteId, domainId, "owner", site.userId);
+      return {
+        id: record.id,
+        domain: record.domain,
+        role: record.role,
+        status: record.status,
+      };
+    }
+    case "delete_domain": {
+      const domainId = requiredString(args, "domain_id");
+      await deleteCustomDomain(
+        site.env as Parameters<typeof deleteCustomDomain>[0],
+        site.db,
+        domainId,
+        "owner",
+        site.userId,
+      );
+      return { deleted: true, domain_id: domainId };
+    }
+    case "sync_domain": {
+      const domainId = requiredString(args, "domain_id");
+      const record = await syncDomainWithCloudflare(
+        site.env as Parameters<typeof syncDomainWithCloudflare>[0],
+        site.db,
+        domainId,
+        "owner",
+        site.userId,
+      );
+      return {
+        id: record.id,
+        domain: record.domain,
+        status: record.status,
+        ssl_status: record.cloudflare_ssl_status ?? null,
+        dns_status: record.dns_status ?? null,
+        instructions: domainInstructions(record),
+      };
+    }
+    // ─── Analytics ──────────────────────────────────────────────────────────
+    case "get_site_analytics": {
+      const startDate = optionalString(args, "start_date") ?? getDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+      const endDate = optionalString(args, "end_date") ?? getDateString(new Date());
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+        throw createError({ statusCode: 400, statusMessage: "Dates must be YYYY-MM-DD format" });
+      }
+      const dailyStats = await site.db.prepare(`
+        SELECT date, page_views, unique_sessions, COALESCE(avg_session_duration, 0) as avg_session_duration, top_pages
+        FROM site_analytics_daily
+        WHERE site_id = ? AND date BETWEEN ? AND ?
+        ORDER BY date ASC
+      `).bind(site.siteId, startDate, endDate).all();
+      const rows = (dailyStats.results || []) as Record<string, unknown>[];
+      const toNum = (v: unknown) => (typeof v === "number" ? v : Number(v || 0));
+      const summary = rows.reduce<{ pageViews: number; sessions: number; totalDuration: number }>(
+        (acc, row) => ({
+          pageViews: acc.pageViews + toNum(row.page_views),
+          sessions: acc.sessions + toNum(row.unique_sessions),
+          totalDuration: acc.totalDuration + toNum(row.avg_session_duration) * toNum(row.unique_sessions),
+        }),
+        { pageViews: 0, sessions: 0, totalDuration: 0 },
+      );
+      const avgSessionDuration = summary.sessions > 0 ? Math.round(summary.totalDuration / summary.sessions) : 0;
+      const topPageMap = new Map<string, number>();
+      for (const row of rows) {
+        if (!row.top_pages) continue;
+        try {
+          const parsed = JSON.parse(String(row.top_pages));
+          if (!Array.isArray(parsed)) continue;
+          for (const page of parsed as Record<string, unknown>[]) {
+            const path = String(page.path ?? page.pagePath ?? "/").trim() || "/";
+            const views = toNum(page.views ?? page.count);
+            if (views > 0) topPageMap.set(path, (topPageMap.get(path) ?? 0) + views);
+          }
+        } catch { /* skip malformed rows */ }
+      }
+      const topPages = Array.from(topPageMap.entries())
+        .map(([path, views]) => ({
+          path,
+          views,
+          percentOfTotal: summary.pageViews > 0 ? Math.round((views / summary.pageViews) * 100) : 0,
+        }))
+        .sort((a, b) => b.views - a.views)
+        .slice(0, 10);
+      return {
+        metrics: {
+          pageViews: summary.pageViews,
+          uniqueSessions: summary.sessions,
+          avgSessionDuration,
+        },
+        topPages,
+        period: { startDate, endDate },
+      };
+    }
     default:
       throw mcpProtocolError(
         MCP_ERROR.methodNotFound,
@@ -1283,6 +1739,11 @@ function omit(source: Record<string, unknown>, keys: string[]) {
   return Object.fromEntries(
     Object.entries(source).filter(([key]) => !keys.includes(key)),
   );
+}
+
+function getDateString(date: Date): string {
+  const [day] = date.toISOString().split("T");
+  return day ?? "";
 }
 
 function normalizeChannels(

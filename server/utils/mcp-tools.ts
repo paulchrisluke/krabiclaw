@@ -247,10 +247,11 @@ const siteListItem = {
     id: { type: 'string' },
     name: { type: 'string', description: 'Brand name or subdomain slug.' },
     subdomain: { type: 'string' },
+    orgSlug: { type: 'string', description: 'Organization slug — use with locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}' },
     publicUrl: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'live', 'paused'] },
   },
-  required: ['id', 'name', 'subdomain', 'status'],
+  required: ['id', 'name', 'subdomain', 'orgSlug', 'status'],
 }
 
 // ---
@@ -339,9 +340,34 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       properties: {
         maps_url: { type: 'string', description: 'Google Maps URL or short share link (maps.app.goo.gl or google.com/maps/place/...).' },
+        parsed_hint: {
+          type: 'object',
+          description: 'Optional, non-authoritative hints from LLM URL parsing. Backend always re-extracts independently and logs divergence >1 km.',
+          properties: {
+            name_hint: { type: 'string' },
+            lat: { type: 'number' },
+            lng: { type: 'number' },
+            feature_id: { type: 'string' },
+            internal_id: { type: 'string' },
+            expected_country: { type: 'string' },
+            expected_region: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        matching_policy: {
+          type: 'object',
+          description: 'Controls how strictly the backend validates the Places API result. Defaults to strict coordinate matching.',
+          properties: {
+            allow_name_only_fallback: { type: 'boolean', description: 'If false (default), reject when no coordinates are available to bias the search.' },
+            require_coordinate_match: { type: 'boolean', description: 'If true (default), reject any Places result more than max_distance_km from URL coordinates.' },
+            max_distance_km: { type: 'number', description: 'Rejection threshold in km. Default 5.' },
+            prefer_backend_extraction: { type: 'boolean', description: 'If true (default), backend URL extraction takes precedence over parsed_hint.' },
+          },
+          additionalProperties: false,
+        },
       },
       required: ['maps_url'],
-      additionalProperties: true,
+      additionalProperties: false,
     },
     outputSchema: {
       type: 'object',
@@ -383,7 +409,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   globalTool({
     name: 'show_generated_images',
-    description: 'Show a carousel of AI-generated hero images for the user to pick from. Pass the images array from request_media_upload / confirm_media_upload.',
+    description: 'Show a carousel of AI-generated hero images for the user to pick from. Call save_generated_image first to persist each image, then pass the resulting assetId and publicUrl here.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -392,10 +418,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         images: {
           type: 'array',
-          description: 'Array of { assetId, publicUrl } for generated images.',
+          description: 'Array of { assetId, publicUrl } returned by save_generated_image.',
           items: { type: 'object', properties: { assetId: { type: 'string' }, publicUrl: { type: 'string' } } },
         },
-        regenerate: { type: 'boolean', description: 'Set to true to signal the model to generate new images.' },
       },
       required: ['images'],
       additionalProperties: true,
@@ -421,6 +446,27 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     widgetName: 'image-carousel',
     widgetInvoking: 'Loading generated images…',
     widgetInvoked: 'Pick your hero image',
+  }),
+  siteTool({
+    name: 'save_generated_image',
+    description: 'Upload a ChatGPT natively-generated image (base64 from image_generation_call.result) to Cloudflare Images and persist a media_asset record. Returns assetId and publicUrl to pass to show_generated_images.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      image_data: { type: 'string', description: 'Base64-encoded image data from image_generation_call.result.' },
+      prompt: { type: 'string', description: 'The prompt used to generate the image (stored as alt text).' },
+    },
+    required: ['image_data'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        assetId: { type: 'string' },
+        publicUrl: { type: 'string' },
+        thumbnailUrl: { type: 'string' },
+      },
+      required: ['assetId', 'publicUrl'],
+    },
   }),
   globalTool({
     name: 'list_sites',
@@ -821,7 +867,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'delete_menu_item',
     description: 'Delete a menu item.',
     domain: 'menus',
-    minimumRole: 'admin',
+    minimumRole: 'editor',
     confirmRequired: true,
     inputSchema: { menu_item_id: { type: 'string' } },
     required: ['menu_item_id'],
@@ -851,7 +897,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'delete_menu_section',
     description: 'Delete a menu section.',
     domain: 'menus',
-    minimumRole: 'admin',
+    minimumRole: 'editor',
     confirmRequired: true,
     inputSchema: { menu_id: { type: 'string' }, section_name: { type: 'string' } },
     required: ['menu_id', 'section_name'],
@@ -934,11 +980,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'publish_post',
-    description: 'Publish a post.',
+    description: 'Publish a post to one or more channels. channels defaults to ["site"]. Pass ["site","facebook"] or ["site","instagram"] or all three to simultaneously publish to social — requires a connected Facebook Page (get_facebook_connection). Instagram additionally requires the post to have an image.',
     domain: 'posts',
     minimumRole: 'editor',
     confirmRequired: true,
-    inputSchema: { post_id: { type: 'string' }, channels: { type: 'array' } },
+    inputSchema: { post_id: { type: 'string' }, channels: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram', 'gmb'] }, description: 'Channels to publish to. Defaults to ["site"].' } },
     required: ['post_id'],
     outputSchema: {
       type: 'object',
@@ -948,21 +994,20 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'delete_post',
-    description: 'Delete a post.',
+    description: 'Delete a post. Only owners and admins can delete posts.',
     domain: 'posts',
-    minimumRole: 'admin',
+    minimumRole: 'editor',
     confirmRequired: true,
     inputSchema: { post_id: { type: 'string' } },
     required: ['post_id'],
     outputSchema: {
       type: 'object',
-      properties: { deleted: { type: 'boolean' } },
-      required: ['deleted'],
+      properties: { post_id: { type: 'string' }, deleted: { type: 'boolean' }, error: { type: 'string' } },
     },
   }),
   siteTool({
     name: 'list_media_assets',
-    description: 'List media assets.',
+    description: 'List media assets (images and videos) for a site. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}/media — orgSlug comes from list_sites, locationSlug from list_locations. After the user uploads, call list_media_assets to get the public_url and place it on the page.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1035,6 +1080,80 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       properties: { deleted: { type: 'boolean' } },
       required: ['deleted'],
+    },
+  }),
+  siteTool({
+    name: 'get_facebook_connection',
+    description: 'Check whether a Facebook Page is connected to this site. If not connected, direct the user to the dashboard integrations page to connect: https://krabiclaw.com/dashboard/{orgSlug}/~/settings/integrations',
+    domain: 'integrations',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    outputSchema: {
+      type: 'object',
+      properties: {
+        connected: { type: 'boolean' },
+        facebook_page_id: { type: ['string', 'null'] },
+        facebook_page_name: { type: ['string', 'null'] },
+        status: { type: 'string', enum: ['active', 'disabled', 'error'] },
+      },
+      required: ['connected'],
+    },
+  }),
+  siteTool({
+    name: 'publish_to_facebook',
+    description: 'Publish a post to the connected Facebook Page. Requires the Managed plan. Call get_facebook_connection first to confirm a page is connected.',
+    domain: 'integrations',
+    minimumRole: 'editor',
+    confirmRequired: true,
+    requiredEntitlement: 'managed_service',
+    inputSchema: {
+      message: { type: 'string', description: 'Post text content.' },
+      link: { type: 'string', description: 'Optional URL to attach to the post.' },
+      published: { type: 'boolean', description: 'Publish immediately (true, default) or save as draft (false).' },
+    },
+    required: ['message'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        post_id: { type: 'string', description: 'Facebook post ID.' },
+        page_name: { type: ['string', 'null'] },
+      },
+      required: ['success', 'post_id'],
+    },
+  }),
+  siteTool({
+    name: 'sync_facebook_page',
+    description: 'Pull business info (phone, hours, website, city, description, cover photo) from the connected Facebook Page and write it into the business location record, updating the tenant site. Requires the Managed plan. Optionally pass location_id to target a specific location, and page_id to switch which Facebook Page is connected.',
+    domain: 'integrations',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    requiredEntitlement: 'managed_service',
+    inputSchema: {
+      location_id: { type: 'string', description: 'Location to sync page info into. Required to actually update the tenant site.' },
+      page_id: { type: 'string', description: 'Switch to a different Facebook Page by ID. Omit to use the currently connected page.' },
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        synced_to_location: { type: 'boolean' },
+        page: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            name: { type: 'string' },
+            about: { type: ['string', 'null'] },
+            phone: { type: ['string', 'null'] },
+            website: { type: ['string', 'null'] },
+            city: { type: ['string', 'null'] },
+            fan_count: { type: ['number', 'null'] },
+            cover: { type: ['string', 'null'] },
+            picture: { type: ['string', 'null'] },
+          },
+        },
+      },
+      required: ['success', 'synced_to_location', 'page'],
     },
   }),
   siteTool({
@@ -1120,7 +1239,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'publish_content_drafts',
     description: 'Publish content drafts.',
     domain: 'content',
-    minimumRole: 'admin',
+    minimumRole: 'editor',
     confirmRequired: true,
     inputSchema: { page: { type: 'string' }, location_id: { type: 'string' }, all: { type: 'boolean' } },
     outputSchema: {
@@ -1261,7 +1380,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'reply_to_review',
     description: 'Add or update the owner reply for a review.',
     domain: 'reviews',
-    minimumRole: 'admin',
+    minimumRole: 'editor',
     confirmRequired: false,
     inputSchema: { review_id: { type: 'string' }, reply: { type: 'string' } },
     required: ['review_id', 'reply'],
@@ -1465,7 +1584,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'start_translation_job',
     description: 'Create a translation job and run the first batch.',
     domain: 'translations',
-    minimumRole: 'admin',
+    minimumRole: 'editor',
     confirmRequired: true,
     requiredEntitlement: 'translation',
     inputSchema: { locale: { type: 'string' }, scope: { type: 'string' }, includePublished: { type: 'boolean' } },
@@ -1536,7 +1655,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'run_translation_job_batch',
     description: 'Run another translation job batch.',
     domain: 'translations',
-    minimumRole: 'admin',
+    minimumRole: 'editor',
     confirmRequired: true,
     requiredEntitlement: 'translation',
     inputSchema: { job_id: { type: 'string' } },
@@ -1608,7 +1727,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'publish_translations',
     description: 'Publish draft translations.',
     domain: 'translations',
-    minimumRole: 'admin',
+    minimumRole: 'editor',
     confirmRequired: true,
     requiredEntitlement: 'translation',
     inputSchema: { locale: { type: 'string' }, scope: { type: 'string' } },
@@ -1849,6 +1968,171 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       properties: workRequestObject.properties,
       required: ['id', 'type', 'title', 'status'],
+    },
+  }),
+  // ─── Domain management ───────────────────────────────────────────────────────
+  siteTool({
+    name: 'list_domains',
+    description: 'List all domains (subdomains and custom domains) for the site, including their status and DNS setup instructions.',
+    domain: 'settings',
+    minimumRole: 'owner',
+    confirmRequired: false,
+    outputSchema: {
+      type: 'object',
+      properties: {
+        domains: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              domain: { type: 'string' },
+              type: { type: 'string', description: "'subdomain' or 'custom'" },
+              role: { type: 'string', description: "'canonical' or 'secondary'" },
+              status: { type: 'string', description: "'pending', 'active', 'failed', etc." },
+              instructions: { type: 'object', description: 'DNS setup instructions for custom domains.' },
+            },
+            required: ['id', 'domain', 'type', 'role', 'status'],
+          },
+        },
+      },
+      required: ['domains'],
+    },
+  }),
+  siteTool({
+    name: 'create_domain',
+    description: 'Add a custom domain to the site. Provisions Cloudflare for SaaS hostnames and returns DNS records the client must add at their registrar. Requires the custom_domains entitlement (Growth plan or higher).',
+    domain: 'settings',
+    minimumRole: 'owner',
+    confirmRequired: true,
+    inputSchema: {
+      domain: { type: 'string', description: 'Custom domain to add, e.g. "www.example.com" or "example.com".' },
+      include_www: { type: 'boolean', description: 'If true (default), provision both www and the apex domain as a pair.' },
+    },
+    required: ['domain'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        domains: {
+          type: 'array',
+          description: 'Newly created domain records (www + apex pair).',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              domain: { type: 'string' },
+              role: { type: 'string' },
+              status: { type: 'string' },
+              instructions: { type: 'object', description: 'DNS records to add at the registrar.' },
+            },
+            required: ['id', 'domain', 'role', 'status'],
+          },
+        },
+      },
+      required: ['domains'],
+    },
+  }),
+  siteTool({
+    name: 'set_canonical_domain',
+    description: 'Make an active custom domain the canonical (primary) URL for the site. All other domains become secondary redirects.',
+    domain: 'settings',
+    minimumRole: 'owner',
+    confirmRequired: true,
+    inputSchema: {
+      domain_id: { type: 'string', description: 'ID of the domain to promote to canonical.' },
+    },
+    required: ['domain_id'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        domain: { type: 'string' },
+        role: { type: 'string' },
+        status: { type: 'string' },
+      },
+      required: ['id', 'domain', 'role', 'status'],
+    },
+  }),
+  siteTool({
+    name: 'delete_domain',
+    description: 'Remove a custom domain from the site and deprovision it from Cloudflare. Cannot delete subdomain entries.',
+    domain: 'settings',
+    minimumRole: 'owner',
+    confirmRequired: true,
+    inputSchema: {
+      domain_id: { type: 'string', description: 'ID of the custom domain to delete.' },
+    },
+    required: ['domain_id'],
+    outputSchema: {
+      type: 'object',
+      properties: { deleted: { type: 'boolean' }, domain_id: { type: 'string' } },
+      required: ['deleted', 'domain_id'],
+    },
+  }),
+  siteTool({
+    name: 'sync_domain',
+    description: 'Refresh the SSL/DNS status for a custom domain by re-querying Cloudflare. Use this after the client adds DNS records to check if the domain is now active.',
+    domain: 'settings',
+    minimumRole: 'owner',
+    confirmRequired: false,
+    inputSchema: {
+      domain_id: { type: 'string', description: 'ID of the domain to sync.' },
+    },
+    required: ['domain_id'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        domain: { type: 'string' },
+        status: { type: 'string' },
+        ssl_status: { type: 'string' },
+        dns_status: { type: 'string' },
+        instructions: { type: 'object' },
+      },
+      required: ['id', 'domain', 'status'],
+    },
+  }),
+  // ─── Analytics ────────────────────────────────────────────────────────────────
+  siteTool({
+    name: 'get_site_analytics',
+    description: 'Get traffic analytics for the site: page views, sessions, top pages. Ask "how many visitors this month?" or "what pages are most popular?"',
+    domain: 'analytics',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      start_date: { type: 'string', description: 'Start of period in YYYY-MM-DD format. Defaults to 30 days ago.' },
+      end_date: { type: 'string', description: 'End of period in YYYY-MM-DD format. Defaults to today.' },
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        metrics: {
+          type: 'object',
+          properties: {
+            pageViews: { type: 'number' },
+            uniqueSessions: { type: 'number' },
+            avgSessionDuration: { type: 'number', description: 'Average session duration in seconds.' },
+            changePercent: { type: 'number', description: 'Percent change versus the previous equivalent period.' },
+          },
+          required: ['pageViews', 'uniqueSessions'],
+        },
+        topPages: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string' },
+              views: { type: 'number' },
+              percentOfTotal: { type: 'number' },
+            },
+          },
+        },
+        period: {
+          type: 'object',
+          properties: { startDate: { type: 'string' }, endDate: { type: 'string' } },
+        },
+      },
+      required: ['metrics', 'period'],
     },
   }),
 ].sort((a, b) => a.name.localeCompare(b.name))

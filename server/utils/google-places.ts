@@ -268,7 +268,20 @@ export async function syncPlaceToLocation(
   return { place, reviewsUpserted }
 }
 
-export async function searchPlaces(apiKey: string, query: string): Promise<PlaceSearchResult[]> {
+export async function searchPlaces(
+  apiKey: string,
+  query: string,
+  locationBias?: { latitude: number; longitude: number; radiusMeters?: number },
+): Promise<PlaceSearchResult[]> {
+  const body: Record<string, unknown> = { textQuery: query, maxResultCount: 5 }
+  if (locationBias) {
+    body.locationBias = {
+      circle: {
+        center: { latitude: locationBias.latitude, longitude: locationBias.longitude },
+        radius: locationBias.radiusMeters ?? 500,
+      },
+    }
+  }
   const response = await fetch(`${PLACES_BASE}:searchText`, {
     method: 'POST',
     headers: {
@@ -276,7 +289,7 @@ export async function searchPlaces(apiKey: string, query: string): Promise<Place
       'X-Goog-Api-Key': apiKey,
       'X-Goog-FieldMask': SEARCH_FIELD_MASK,
     },
-    body: JSON.stringify({ textQuery: query, maxResultCount: 5 }),
+    body: JSON.stringify(body),
   })
 
   if (!response.ok) {
