@@ -164,13 +164,24 @@ export default defineNuxtConfig({
     '/assets/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
     '/_nuxt/**':  { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
 
+    // OAuth consent + login pages — anti-framing required by OpenAI MCP CSP spec.
+    // frame-ancestors 'none' prevents clickjacking on the consent/auth flow.
+    // X-Frame-Options: DENY is the legacy fallback for older browsers.
+    '/oauth/**': {
+      headers: {
+        'cache-control': 'no-store',
+        'content-security-policy': "frame-ancestors 'none'",
+        'x-frame-options': 'DENY',
+      },
+    },
+
     // Auth/API/dashboard — never cache
     '/api/**':       { headers: { 'cache-control': 'no-store' } },
     '/dashboard/**': { headers: { 'cache-control': 'no-store' } },
     '/admin/**':     { headers: { 'cache-control': 'no-store' } },
     '/auth/**':      { headers: { 'cache-control': 'no-store' } },
-    '/signup':       { headers: { 'cache-control': 'no-store' } },
-    '/login':        { headers: { 'cache-control': 'no-store' } },
+    '/signup':       { headers: { 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" } },
+    '/login':        { headers: { 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" } },
 
     // Public pages — detectBrowserLanguage is disabled so / is safe to cache.
     // Explicit '/' rule overrides any cache-control the i18n module injects internally.
