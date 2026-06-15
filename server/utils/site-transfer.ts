@@ -17,7 +17,6 @@ const SITE_SCOPED_TABLES = [
   'google_business_events',
   'facebook_pages_connections',
   'site_content',
-  'site_content_drafts',
   'site_config',
   'site_locales',
   'site_content_translations',

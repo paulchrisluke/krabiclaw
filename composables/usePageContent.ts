@@ -133,8 +133,6 @@ export const usePageContent = (pageName?: string) => {
     }, {} as Record<string, ContentRow>)
   })
 
-  const hasDrafts = computed(() => (data.value as ApiValue)?.hasDrafts === true)
-
   /**
    * Get a field value from the DB.
    * Returns the DB value if it exists, otherwise the provided defaultValue.
@@ -191,7 +189,6 @@ export const usePageContent = (pageName?: string) => {
 return {
     page,
     contentMap,
-    hasDrafts,
     getField,
     getFieldStr,
     getHero,

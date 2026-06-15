@@ -69,7 +69,7 @@ test.describe('dashboard functional smoke', () => {
     expect(Array.isArray(requestsBody.requests)).toBe(true)
   })
 
-  test('owner can draft and publish content via dashboard API', async ({ request, baseURL }) => {
+  test('owner can update content directly via dashboard API', async ({ request, baseURL }) => {
     const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
     expect(login.status()).toBeLessThan(400)
 
@@ -82,7 +82,7 @@ test.describe('dashboard functional smoke', () => {
     const uniqueTitle = `Dashboard E2E ${Date.now()}`
 
     if (!hasRestaurant) {
-      const draftRes = await request.post(`${baseURL}/api/dashboard/editor/content/draft`, {
+      const saveRes = await request.post(`${baseURL}/api/dashboard/editor/content/save`, {
         data: {
           page: 'home',
           changes: {
@@ -90,13 +90,13 @@ test.describe('dashboard functional smoke', () => {
           },
         },
       })
-      expect(draftRes.status()).toBe(400)
-      const draftBody = await draftRes.json()
-      expect(String(draftBody.error || '')).toContain('Restaurant workspace has not been created yet')
+      expect(saveRes.status()).toBe(400)
+      const saveBody = await saveRes.json()
+      expect(String(saveBody.error || '')).toContain('Restaurant workspace has not been created yet')
       return
     }
 
-    const draftRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/draft`, {
+    const saveRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/save`, {
       data: {
         page: 'home',
         changes: {
@@ -104,17 +104,15 @@ test.describe('dashboard functional smoke', () => {
         },
       },
     })
-    expect(draftRes.status()).toBe(200)
-    const draftBody = await draftRes.json()
-    expect(draftBody.success).toBe(true)
+    expect(saveRes.status()).toBe(200)
+    const saveBody = await saveRes.json()
+    expect(saveBody.success).toBe(true)
 
-    const publishRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/publish`, {
-      data: { page: 'home' },
-    })
-    expect(publishRes.status()).toBe(200)
-    const publishBody = await publishRes.json()
-    expect(publishBody.success).toBe(true)
-    expect(publishBody.page).toBe('home')
+    const contentRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/content/home`)
+    expect(contentRes.status()).toBe(200)
+    const contentBody = await contentRes.json() as { content: Array<{ field: string; hero_title?: string }> }
+    const hero = contentBody.content.find((entry) => entry.field === 'hero')
+    expect(hero?.hero_title).toBe(uniqueTitle)
   })
 
   test('support work-request submission is enforced by plan entitlement', async ({ request, baseURL }) => {

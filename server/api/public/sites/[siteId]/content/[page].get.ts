@@ -1,6 +1,6 @@
 // Get published content for public tenant rendering (no auth required)
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getDraftContent, getPublishedPageContentForLocale } from '~/server/utils/content-management'
+import { getPublishedPageContentForLocale } from '~/server/utils/content-management'
 import { verifyPreviewToken } from '~/server/utils/preview-token'
 import { resolveSiteLocale } from '~/server/utils/site-i18n'
 
@@ -88,22 +88,11 @@ export default defineEventHandler(async (event) => {
       locationId,
     })
     
-    // In preview mode, also fetch and merge drafts
+    // In preview mode, translation previews may still merge draft translations.
     let content = publishedContent
     if (isPreviewAuthorized) {
       content = [...publishedContent]
-      if (localeState.effectiveLocale === localeState.sourceLocale) {
-        // Source locale preview: merge drafts from site_content_drafts
-        const drafts = await getDraftContent(db, site.organization_id, siteId, page, locationId)
-        for (const draft of drafts) {
-          const index = content.findIndex(c => c.field === draft.field)
-          if (index !== -1) {
-            content[index] = { ...content[index], ...draft }
-          } else {
-            content.push(draft)
-          }
-        }
-      } else {
+      if (localeState.effectiveLocale !== localeState.sourceLocale) {
         // Translation locale preview: merge drafts from site_content_translations where status = 'draft'
         let transQuery = `
           SELECT field, content, value, type, hero_title, hero_subtitle, updated_at

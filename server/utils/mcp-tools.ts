@@ -9,6 +9,7 @@ export interface McpToolDefinition {
   requiredEntitlement?: string
   inputSchema: Record<string, unknown>
   outputSchema: Record<string, unknown>
+  fileParams?: string[]
   /** Widget name served at ui://widget/{widgetName} — marks this as a render tool */
   widgetName?: string
   widgetInvoking?: string
@@ -42,6 +43,15 @@ const locationObject = {
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
+}
+
+const locationMutationResultObject = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    location: locationObject,
+  },
+  required: ['success', 'location'],
 }
 
 const menuItemObject = {
@@ -124,6 +134,17 @@ const currentUserObject = {
     isPlatformAdmin: { type: 'boolean' },
   },
   required: ['id', 'isPlatformAdmin'],
+}
+
+const fileReferenceObject = {
+  type: 'object',
+  properties: {
+    download_url: { type: 'string' },
+    file_id: { type: 'string' },
+    mime_type: { type: 'string' },
+    file_name: { type: 'string' },
+  },
+  required: ['download_url', 'file_id'],
 }
 
 const experienceObject = {
@@ -477,15 +498,37 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'save_generated_image',
-    description: 'Upload a ChatGPT natively-generated image to Cloudflare Images and persist a media_asset record. Accepts base64 from image_generation_call.result, a data URL, or the local generated file path exposed by the runtime. Returns assetId and publicUrl to pass to show_generated_images.',
+    description: 'Upload a ChatGPT natively-generated image to Cloudflare Images and persist a media_asset record. Accepts base64 from image_generation_call.result or a base64 data URL. Returns assetId and publicUrl to pass to show_generated_images.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
     inputSchema: {
-      image_data: { type: 'string', description: 'Base64-encoded image data from image_generation_call.result, a data URL, or a local generated image file path.' },
+      image_data_base64: { type: 'string', description: 'Base64-encoded image data from image_generation_call.result, or a base64 data URL.' },
       prompt: { type: 'string', description: 'The prompt used to generate the image (stored as alt text).' },
     },
-    required: ['image_data'],
+    required: ['image_data_base64'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        assetId: { type: 'string' },
+        publicUrl: { type: 'string' },
+        thumbnailUrl: { type: 'string' },
+      },
+      required: ['assetId', 'publicUrl'],
+    },
+  }),
+  siteTool({
+    name: 'save_generated_image_file',
+    description: 'Canonical attachment/file-based generated-image handoff. Use this when the runtime has a real attachment handle instead of base64 image_generation output.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      attachment_id: { ...fileReferenceObject, description: 'Authorized file reference supplied by ChatGPT for the generated image attachment.' },
+      prompt: { type: 'string', description: 'The prompt used to generate the image (stored as alt text).' },
+    },
+    required: ['attachment_id'],
+    fileParams: ['attachment_id'],
     outputSchema: {
       type: 'object',
       properties: {
@@ -719,15 +762,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: { title: { type: 'string' } },
     required: ['title'],
     outputSchema: {
-      type: 'object',
+      ...locationMutationResultObject,
       properties: {
-        id: { type: 'string' },
-        slug: { type: 'string' },
-        title: { type: 'string' },
-        site_id: { type: 'string' },
-        organization_id: { type: 'string' },
+        ...locationMutationResultObject.properties,
+        hydrated_seed_location: { type: 'boolean' },
+        previous_slug: { type: ['string', 'null'] },
       },
-      required: ['id', 'slug', 'title'],
     },
   }),
   siteTool({
@@ -739,12 +779,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: { location_id: { type: 'string' } },
     required: ['location_id'],
     outputSchema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        updated: { type: 'boolean' },
-      },
-      required: ['id'],
+      ...locationMutationResultObject,
     },
   }),
   siteTool({
@@ -1035,8 +1070,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
-    name: 'list_media_assets',
-    description: 'List media assets (images and videos) for a site. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}/media — orgSlug comes from list_sites, locationSlug from list_locations. After the user uploads, call list_media_assets to get the public_url and place it on the page.',
+    name: 'get_site_media_assets',
+    description: 'List media assets (images and videos) for a site. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}/media — orgSlug comes from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1212,7 +1247,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_page_content',
-    description: 'Get merged published plus draft content for one page.',
+    description: 'Get the canonical page content used by the public renderer for one page.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1222,16 +1257,18 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       properties: {
         page: { type: 'string' },
-        content: { type: 'object', description: 'Published content key-value pairs.' },
-        draft: { type: 'object', description: 'Unsaved draft overrides.' },
-        hasDraft: { type: 'boolean' },
+        siteId: { type: 'string' },
+        locationId: { type: ['string', 'null'] },
+        public_path: { type: 'string' },
+        content: { type: 'array', items: { type: 'object' } },
+        editableSchema: { type: 'object' },
       },
-      required: ['page'],
+      required: ['page', 'siteId', 'content'],
     },
   }),
   siteTool({
-    name: 'save_content_draft',
-    description: 'Save draft content changes. Validates field names against the page schema. For homepage hero edits, prefer hero.title / hero.subtitle / hero.image / hero.video or use update_home_hero.',
+    name: 'update_page_content',
+    description: 'Update canonical page content directly. Validates field names against the page schema and writes live renderer-bound content immediately.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1240,16 +1277,18 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     outputSchema: {
       type: 'object',
       properties: {
-        saved: { type: 'boolean' },
+        success: { type: 'boolean' },
         page: { type: 'string' },
-        fields_updated: { type: 'number' },
+        location_id: { type: ['string', 'null'] },
+        changes_count: { type: 'number' },
+        public_path: { type: 'string' },
       },
-      required: ['saved'],
+      required: ['success', 'page', 'changes_count'],
     },
   }),
   siteTool({
     name: 'update_home_hero',
-    description: 'Update the canonical homepage hero record that the public renderer uses. This avoids orphan scalar fields and can optionally publish immediately.',
+    description: 'Update the canonical homepage hero record that the public renderer uses. This avoids orphan scalar fields and writes directly to live content.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1259,69 +1298,21 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       image_asset_id: { type: 'string' },
       video_asset_id: { type: 'string' },
       location_id: { type: 'string' },
-      publish: { type: 'boolean' },
     },
     outputSchema: {
       type: 'object',
       properties: {
         success: { type: 'boolean' },
         page: { type: 'string' },
-        published: { type: 'boolean' },
         changes_count: { type: 'number' },
+        public_path: { type: 'string' },
       },
-      required: ['success', 'page', 'published'],
-    },
-  }),
-  siteTool({
-    name: 'get_content_draft_status',
-    description: 'Get content draft status.',
-    domain: 'content',
-    minimumRole: 'editor',
-    confirmRequired: false,
-    inputSchema: { page: { type: 'string' }, location_id: { type: 'string' } },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        hasDraft: { type: 'boolean' },
-        count: { type: 'number', description: 'Number of draft fields pending publish.' },
-        pages: { type: 'array', items: { type: 'string' }, description: 'Pages that have unpublished drafts.' },
-      },
-      required: ['hasDraft'],
-    },
-  }),
-  siteTool({
-    name: 'publish_content_drafts',
-    description: 'Publish content drafts.',
-    domain: 'content',
-    minimumRole: 'editor',
-    confirmRequired: true,
-    inputSchema: { page: { type: 'string' }, location_id: { type: 'string' }, all: { type: 'boolean' } },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        published: { type: 'number', description: 'Number of draft fields published.' },
-      },
-      required: ['published'],
-    },
-  }),
-  siteTool({
-    name: 'discard_content_drafts',
-    description: 'Discard content drafts.',
-    domain: 'content',
-    minimumRole: 'editor',
-    confirmRequired: true,
-    inputSchema: { page: { type: 'string' }, location_id: { type: 'string' }, all: { type: 'boolean' } },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        discarded: { type: 'number', description: 'Number of draft fields discarded.' },
-      },
-      required: ['discarded'],
+      required: ['success', 'page', 'changes_count'],
     },
   }),
   siteTool({
     name: 'delete_content_field',
-    description: 'Delete a content field from live and draft content.',
+    description: 'Delete a canonical content field from live page content.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: true,
@@ -1332,6 +1323,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         deleted: { type: 'boolean' },
         field: { type: 'string' },
+        public_path: { type: 'string' },
       },
       required: ['deleted'],
     },
@@ -1796,7 +1788,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
-    name: 'list_contact_submissions',
+    name: 'get_contact_inquiries',
     description: 'List contact submissions.',
     domain: 'submissions',
     minimumRole: 'editor',
@@ -1826,7 +1818,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
-    name: 'list_reservation_submissions',
+    name: 'get_reservation_inquiries',
     description: 'List reservation submissions.',
     domain: 'submissions',
     minimumRole: 'editor',
@@ -2026,7 +2018,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   // ─── Domain management ───────────────────────────────────────────────────────
   siteTool({
-    name: 'list_domains',
+    name: 'get_site_domains',
     description: 'List all domains (subdomains and custom domains) for the site, including their status and DNS setup instructions.',
     domain: 'settings',
     minimumRole: 'owner',

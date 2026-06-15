@@ -14,9 +14,7 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
   const editMode = computed(() => route.query.edit === 'true')
   const hasChanges = ref(false)
   const pendingChanges = ref<PendingChanges>({})
-  const hasDrafts = ref(false)
   const saving = ref(false)
-  const publishing = ref(false)
   const discarding = ref(false)
 
   // Use provided locationId or fall back to current scope
@@ -51,7 +49,7 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
     hasChanges.value = true
   }
 
-  const saveDraft = async () => {
+  const saveContent = async () => {
     if (!hasChanges.value) return
 
     saving.value = true
@@ -67,103 +65,32 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
         queryParams.set('locationId', effectiveLocationId.value)
       }
 
-      await $fetch(`/api/dashboard/editor/content/draft?${queryParams.toString()}`, {
+      await $fetch(`/api/dashboard/editor/content/save?${queryParams.toString()}`, {
         method: 'POST',
         body: { 
           page: currentPage.value,
           changes: pendingChanges.value
         }
       })
-      // Clear local pending state; draft now persists server-side
+      // Clear local pending state; direct writes are live immediately.
       pendingChanges.value = {}
       hasChanges.value = false
-      hasDrafts.value = true
     } catch {
-      addToast('Failed to save draft', 'error')
+      addToast('Failed to save changes', 'error')
     } finally {
       saving.value = false
     }
   }
 
-  const publishChanges = async () => {
-    publishing.value = true
-    try {
-      // Flush any local changes first
-      if (hasChanges.value) await saveDraft()
-
-      // Get site context from tenant
-      const tenant = await useTenantSite()
-      if (!tenant.siteId) {
-        throw new Error('No site context available')
-      }
-
-      const publishQueryParams = new URLSearchParams()
-      if (effectiveLocationId.value) {
-        publishQueryParams.set('locationId', effectiveLocationId.value)
-      }
-
-      await $fetch(`/api/dashboard/editor/content/publish?${publishQueryParams.toString()}`, {
-        method: 'POST',
-        body: { page: currentPage.value }
-      })
-      hasDrafts.value = false
-      addToast('Published successfully!', 'success')
-    } catch {
-      addToast('Failed to publish', 'error')
-    } finally {
-      publishing.value = false
-    }
-  }
-
-  const publishAll = async () => {
-    publishing.value = true
-    try {
-      if (hasChanges.value) await saveDraft()
-      
-      // Get site context from tenant
-      const tenant = await useTenantSite()
-      if (!tenant.siteId) {
-        throw new Error('No site context available')
-      }
-
-      await $fetch(`/api/dashboard/editor/content/publish`, {
-        method: 'POST',
-        body: { all: true }
-      })
-      hasDrafts.value = false
-      addToast('All pages published!', 'success')
-    } catch {
-      addToast('Failed to publish all', 'error')
-    } finally {
-      publishing.value = false
-    }
-  }
-
   const discardChanges = async () => {
-    const confirmed = confirm('Discard all unsaved drafts for this page?')
+    const confirmed = confirm('Discard all unsaved local changes for this page?')
     if (!confirmed) return
 
     discarding.value = true
     try {
-      // Get site context from tenant
-      const tenant = await useTenantSite()
-      if (!tenant.siteId) {
-        throw new Error('No site context available')
-      }
-
-      const discardQueryParams = new URLSearchParams()
-      if (effectiveLocationId.value) {
-        discardQueryParams.set('locationId', effectiveLocationId.value)
-      }
-
-      await $fetch(`/api/dashboard/editor/content/discard?${discardQueryParams.toString()}`, {
-        method: 'POST',
-        body: { page: currentPage.value }
-      })
       pendingChanges.value = {}
       hasChanges.value = false
-      hasDrafts.value = false
-      addToast('Drafts discarded', 'info')
+      addToast('Unsaved changes discarded', 'info')
     } catch {
       addToast('Failed to discard', 'error')
     } finally {
@@ -179,13 +106,6 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
         return // silently ignore - no site context
       }
 
-      const statusQueryParams = new URLSearchParams({ page: currentPage.value })
-      if (effectiveLocationId.value) {
-        statusQueryParams.set('locationId', effectiveLocationId.value)
-      }
-
-      const status = await $fetch<{ hasDrafts: boolean }>(`/api/dashboard/editor/content/status?${statusQueryParams.toString()}`)
-      hasDrafts.value = status.hasDrafts
     } catch {
       // silently ignore — not critical
     }
@@ -195,9 +115,7 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
     editMode,
     hasChanges,
     pendingChanges,
-    hasDrafts,
     saving,
-    publishing,
     discarding,
     currentPage,
     effectiveLocationId,
@@ -205,9 +123,7 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
     exitEditMode,
     toggleEditMode,
     queueChange,
-    saveDraft,
-    publishChanges,
-    publishAll,
+    saveContent,
     discardChanges,
     checkDraftStatus
   }

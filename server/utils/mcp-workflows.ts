@@ -2,7 +2,7 @@ import { contentRegistry, getFieldDef } from '~/config/content-registry'
 import { hasEntitlement } from '~/server/utils/billing'
 import { getGoogleBusinessAccounts, getGoogleBusinessAuthUrl, getGoogleBusinessConnection, getGoogleBusinessLocations, syncGoogleLocations } from '~/server/utils/google-business'
 import { normalizePhone, getOrgWhatsAppPhone, setOrgWhatsAppPhone } from '~/server/utils/whatsapp'
-import { upsertDraftContent, getDraftStatus, publishAllDrafts, publishDrafts, discardAllDrafts, discardDrafts, deleteSiteAndDraftContentField, getDraftContent, getPageContent } from '~/server/utils/content-management'
+import { deleteSiteContentField, getPageContent, upsertSiteContent } from '~/server/utils/content-management'
 import type { SiteContent } from '~/server/utils/content-management'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { signOAuthState } from '~/server/utils/encryption'
@@ -396,11 +396,51 @@ export async function listWorkRequestsForOrganization(db: D1Database, organizati
   return rows.results ?? []
 }
 
-export async function saveContentDraft(
+function buildContentId(
+  organizationId: string,
+  siteId: string,
+  page: string,
+  field: string,
+  locationId?: string,
+) {
+  return `content::${organizationId}::${siteId}::${locationId ?? 'site'}::${page}::${field}`
+}
+
+async function resolvePublicPath(
+  db: D1Database,
+  siteId: string,
+  page: string,
+  locationId?: string,
+) {
+  if (page === 'location' && locationId) {
+    const location = await db.prepare(`
+      SELECT slug
+      FROM business_locations
+      WHERE id = ? AND site_id = ?
+      LIMIT 1
+    `).bind(locationId, siteId).first<{ slug: string }>()
+
+    return location?.slug ? `/locations/${location.slug}` : '/locations'
+  }
+
+  if (page === 'menu' && locationId) {
+    const location = await db.prepare(`
+      SELECT slug
+      FROM business_locations
+      WHERE id = ? AND site_id = ?
+      LIMIT 1
+    `).bind(locationId, siteId).first<{ slug: string }>()
+
+    return location?.slug ? `/locations/${location.slug}/menu` : '/menu'
+  }
+
+  return contentRegistry[page]?.path ?? '/'
+}
+
+export async function updatePageContent(
   db: D1Database,
   organizationId: string,
   siteId: string,
-  userId: string,
   input: {
     page: string
     changes: Record<string, unknown>
@@ -408,13 +448,12 @@ export async function saveContentDraft(
   },
 ) {
   const locationId = input.location_id ?? undefined
-  const draftIdPrefix = ['draft', organizationId, siteId, locationId || 'site', input.page].join('::')
   const { normalizedFields, heroChange, hasHeroChange } = normalizeContentChanges(input.page, input.changes)
 
   for (const [field, value] of normalizedFields.entries()) {
     const fieldDef = getFieldDef(input.page, field)
-    await upsertDraftContent(db, {
-      id: `${draftIdPrefix}::${field}`,
+    await upsertSiteContent(db, {
+      id: buildContentId(organizationId, siteId, input.page, field, locationId),
       organization_id: organizationId,
       site_id: siteId,
       location_id: locationId,
@@ -432,8 +471,8 @@ export async function saveContentDraft(
   }
 
   if (hasHeroChange) {
-    await upsertDraftContent(db, {
-      id: `${draftIdPrefix}::hero`,
+    await upsertSiteContent(db, {
+      id: buildContentId(organizationId, siteId, input.page, 'hero', locationId),
       organization_id: organizationId,
       site_id: siteId,
       location_id: locationId,
@@ -447,28 +486,23 @@ export async function saveContentDraft(
     } as Omit<SiteContent, 'updated_at'>)
   }
 
-  return { success: true, page: input.page, changes_count: normalizedFields.size + (hasHeroChange ? 1 : 0) }
+  return {
+    success: true,
+    page: input.page,
+    location_id: locationId ?? null,
+    changes_count: normalizedFields.size + (hasHeroChange ? 1 : 0),
+    public_path: await resolvePublicPath(db, siteId, input.page, locationId),
+  }
 }
 
-export async function getMergedEditorContent(
+export async function getEditorContent(
   db: D1Database,
   organizationId: string,
   siteId: string,
   page: string,
   locationId?: string,
 ) {
-  const publishedContent = await getPageContent(db, organizationId, siteId, page, locationId)
-  const drafts = await getDraftContent(db, organizationId, siteId, page, locationId)
-
-  const mergedContent = [...publishedContent]
-  for (const draft of drafts) {
-    const index = mergedContent.findIndex((content) => content.field === draft.field)
-    if (index !== -1) {
-      mergedContent[index] = { ...mergedContent[index], ...draft }
-    } else {
-      mergedContent.push(draft)
-    }
-  }
+  const mergedContent = await getPageContent(db, organizationId, siteId, page, locationId)
 
   if (page === 'location' && locationId) {
     const locHero = await db.prepare(`
@@ -535,10 +569,10 @@ export async function getMergedEditorContent(
 
   return {
     content,
-    hasDrafts: drafts.length > 0,
     siteId,
     locationId,
     page,
+    public_path: await resolvePublicPath(db, siteId, page, locationId),
     editableSchema: {
       page,
       fields: editableKeys,
@@ -547,44 +581,16 @@ export async function getMergedEditorContent(
   }
 }
 
-export async function getContentDraftStatus(
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  page?: string,
-  locationId?: string,
-) {
-  return getDraftStatus(db, organizationId, siteId, page, locationId)
-}
-
-export async function publishContentDrafts(
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  input: { page?: string; location_id?: string | null; all?: boolean },
-) {
-  if (input.all) {
-    await publishAllDrafts(db, organizationId, siteId)
-    return { success: true, scope: 'all' }
-  }
-
-  if (!input.page) throw new Error('page is required unless all=true')
-  await publishDrafts(db, organizationId, siteId, input.page, input.location_id ?? undefined)
-  return { success: true, page: input.page, location_id: input.location_id ?? null }
-}
-
 export async function updateHomeHero(
   db: D1Database,
   organizationId: string,
   siteId: string,
-  userId: string,
   input: {
     title?: string | null
     subtitle?: string | null
     image_asset_id?: string | null
     video_asset_id?: string | null
     location_id?: string | null
-    publish?: boolean
   },
 ) {
   const changes: Record<string, unknown> = {
@@ -596,24 +602,17 @@ export async function updateHomeHero(
     },
   }
 
-  const draft = await saveContentDraft(db, organizationId, siteId, userId, {
+  const result = await updatePageContent(db, organizationId, siteId, {
     page: 'home',
     changes,
     location_id: input.location_id,
   })
 
-  if (input.publish) {
-    await publishContentDrafts(db, organizationId, siteId, {
-      page: 'home',
-      location_id: input.location_id,
-    })
-  }
-
   return {
     success: true,
     page: 'home',
-    published: input.publish === true,
-    changes_count: draft.changes_count,
+    changes_count: result.changes_count,
+    public_path: result.public_path,
   }
 }
 
@@ -653,29 +652,20 @@ export async function hydrateSeededLocationForOnboarding(
   }
 }
 
-export async function discardContentDrafts(
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  input: { page?: string; location_id?: string | null; all?: boolean },
-) {
-  if (input.all) {
-    await discardAllDrafts(db, organizationId, siteId)
-    return { success: true, scope: 'all' }
-  }
-  if (!input.page) throw new Error('page is required unless all=true')
-  await discardDrafts(db, organizationId, siteId, input.page, input.location_id ?? undefined)
-  return { success: true, page: input.page, location_id: input.location_id ?? null }
-}
-
 export async function deleteContentField(
   db: D1Database,
   organizationId: string,
   siteId: string,
   input: { page: string; field: string; location_id?: string | null },
 ) {
-  await deleteSiteAndDraftContentField(db, organizationId, siteId, input.page, input.field, input.location_id ?? undefined)
-  return { deleted: true, page: input.page, field: input.field }
+  const locationId = input.location_id ?? undefined
+  await deleteSiteContentField(db, organizationId, siteId, input.page, input.field, locationId)
+  return {
+    deleted: true,
+    page: input.page,
+    field: input.field,
+    public_path: await resolvePublicPath(db, siteId, input.page, locationId),
+  }
 }
 
 export async function getGoogleBusinessLocationConnectionForMcp(

@@ -335,8 +335,6 @@ const organization = dashboard.organization
 const restaurant = dashboard.restaurant
 const selectedLocation = dashboard.selectedLocation
 const locations = dashboard.locations
-const activeSiteId = dashboard.siteId
-
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined

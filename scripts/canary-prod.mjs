@@ -65,7 +65,6 @@ async function main() {
   }
 
   const before = {
-    drafts: Number(d1Query(`SELECT COUNT(*) as c FROM site_content_drafts WHERE site_id = '${sqlEscape(expectedSiteId)}'`)[0]?.c ?? 0),
     reservations: Number(d1Query(`SELECT COUNT(*) as c FROM reservation_submissions WHERE site_id = '${sqlEscape(expectedSiteId)}'`)[0]?.c ?? 0),
     contacts: Number(d1Query(`SELECT COUNT(*) as c FROM contact_submissions WHERE site_id = '${sqlEscape(expectedSiteId)}'`)[0]?.c ?? 0),
   }
@@ -143,7 +142,6 @@ async function main() {
     }
 
     const after = {
-      drafts: Number(d1Query(`SELECT COUNT(*) as c FROM site_content_drafts WHERE site_id = '${sqlEscape(expectedSiteId)}'`)[0]?.c ?? 0),
       reservations: Number(d1Query(`SELECT COUNT(*) as c FROM reservation_submissions WHERE site_id = '${sqlEscape(expectedSiteId)}'`)[0]?.c ?? 0),
       contacts: Number(d1Query(`SELECT COUNT(*) as c FROM contact_submissions WHERE site_id = '${sqlEscape(expectedSiteId)}'`)[0]?.c ?? 0),
     }

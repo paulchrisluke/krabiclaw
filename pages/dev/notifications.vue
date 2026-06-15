@@ -220,7 +220,6 @@ const statusOptions = [
 ]
 
 const OWNER_TEMPLATES = new Set([
-  'draft_published',
   'ai_action_complete',
   'low_credits',
   'new_contact_msg',

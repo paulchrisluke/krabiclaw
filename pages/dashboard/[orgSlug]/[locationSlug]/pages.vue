@@ -14,12 +14,7 @@
                 <UIcon :name="page.icon" class="size-4 text-muted" />
                 <h2 class="font-semibold text-highlighted">{{ page.label }}</h2>
                 <UBadge :label="page.scope" color="neutral" variant="soft" size="xs" />
-                <UBadge
-                  :label="page.draftCount ? `${page.draftCount} draft edits` : 'Live'"
-                  :color="page.draftCount ? 'warning' : 'success'"
-                  variant="soft"
-                  size="xs"
-                />
+                <UBadge label="Live" color="success" variant="soft" size="xs" />
               </div>
               <p class="mt-1 text-sm text-muted">{{ page.description }}</p>
             </div>
@@ -44,7 +39,6 @@ definePageMeta({ layout: 'dashboard' })
 
 const siteId = await useDashboardSiteId()
 const sitePublicUrl = ref<string | null>(null)
-const draftCounts = ref<Record<string, number>>({})
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 
 const contentUrl = (page: string) => `${paths.value.content}?page=${page}`
@@ -76,7 +70,6 @@ const pageRows = computed(() => [
     label: 'Home',
     icon: 'i-heroicons-home',
     scope: 'Brand',
-    draftCount: draftCounts.value.home ?? 0,
     description: 'Hero media, story, primary CTA, featured locations, and first impression.',
     actions: [
       { label: 'Edit page', icon: 'i-heroicons-pencil-square', to: contentUrl('home'), color: 'primary' as const, variant: 'soft' as const },
@@ -89,7 +82,6 @@ const pageRows = computed(() => [
     label: 'About',
     icon: 'i-heroicons-book-open',
     scope: 'Brand',
-    draftCount: draftCounts.value.about ?? 0,
     description: 'Restaurant story, editorial imagery, journey copy, and brand-level CTA.',
     actions: [
       { label: 'Edit page', icon: 'i-heroicons-pencil-square', to: contentUrl('about'), color: 'primary' as const, variant: 'soft' as const },
@@ -101,7 +93,6 @@ const pageRows = computed(() => [
     label: 'Locations',
     icon: 'i-heroicons-map-pin',
     scope: 'Location',
-    draftCount: draftCounts.value.location ?? 0,
     description: 'Location directory, location home pages, local hours, address, maps, and hero media.',
     actions: [
       { label: 'Manage locations', icon: 'i-heroicons-map-pin', to: paths.value.locations, color: 'primary' as const, variant: 'soft' as const },
@@ -114,7 +105,6 @@ const pageRows = computed(() => [
     label: 'Menu',
     icon: 'i-heroicons-list-bullet',
     scope: 'Location',
-    draftCount: draftCounts.value.menu ?? 0,
     description: 'Menu page hero copy plus menu sections, items, prices, photos, and availability.',
     actions: [
       { label: 'Manage menu', icon: 'i-heroicons-list-bullet', to: paths.value.menu, color: 'primary' as const, variant: 'soft' as const },
@@ -127,7 +117,6 @@ const pageRows = computed(() => [
     label: 'Reviews',
     icon: 'i-heroicons-star',
     scope: 'Location',
-    draftCount: 0,
     description: 'Review cards, ratings, owner replies, moderation, and Google/manual sources.',
     actions: [
       { label: 'Manage reviews', icon: 'i-heroicons-star', to: paths.value.reviews, color: 'primary' as const, variant: 'soft' as const },
@@ -139,7 +128,6 @@ const pageRows = computed(() => [
     label: 'Photos',
     icon: 'i-heroicons-photo',
     scope: 'Location',
-    draftCount: 0,
     description: 'Guest-facing galleries, location media, hero assets, and uploaded or generated images.',
     actions: [
       { label: 'Manage photos', icon: 'i-heroicons-photo', to: paths.value.photos, color: 'primary' as const, variant: 'soft' as const },
@@ -152,7 +140,6 @@ const pageRows = computed(() => [
     label: 'Q&A',
     icon: 'i-heroicons-question-mark-circle',
     scope: 'Location',
-    draftCount: 0,
     description: 'Public questions and owner answers for each location.',
     actions: [
       { label: 'Manage Q&A', icon: 'i-heroicons-question-mark-circle', to: paths.value.qa, color: 'primary' as const, variant: 'soft' as const },
@@ -164,7 +151,6 @@ const pageRows = computed(() => [
     label: 'Contact',
     icon: 'i-heroicons-envelope',
     scope: 'Brand + Location',
-    draftCount: draftCounts.value.contact ?? 0,
     description: 'Contact page copy, maps, location contact details, and guest messages.',
     actions: [
       { label: 'Edit page', icon: 'i-heroicons-pencil-square', to: contentUrl('contact'), color: 'primary' as const, variant: 'soft' as const },
@@ -177,7 +163,6 @@ const pageRows = computed(() => [
     label: 'Reservations',
     icon: 'i-heroicons-calendar-days',
     scope: 'Brand',
-    draftCount: draftCounts.value.reservations ?? 0,
     description: 'Reservation page copy, policy text, contact details, and incoming booking requests.',
     actions: [
       { label: 'Manage reservations', icon: 'i-heroicons-calendar-days', to: paths.value.reservations, color: 'primary' as const, variant: 'soft' as const },
@@ -190,7 +175,6 @@ const pageRows = computed(() => [
     label: 'Order Online',
     icon: 'i-heroicons-shopping-bag',
     scope: 'Location',
-    draftCount: draftCounts.value.order ?? 0,
     description: 'Delivery links, order page copy, and location-specific ordering options.',
     actions: [
       { label: 'Manage order', icon: 'i-heroicons-shopping-bag', to: paths.value.order, color: 'primary' as const, variant: 'soft' as const },
@@ -205,24 +189,8 @@ async function loadSettings() {
   sitePublicUrl.value = res.settings.public_url
 }
 
-async function loadDraftStatuses() {
-  const pages = ['home', 'about', 'location', 'menu', 'contact', 'reservations', 'order']
-  const results = await Promise.allSettled(pages.map(async (page) => {
-    const res = await $fetch<{ count: number }>(`/api/dashboard/editor/content/status`, { query: { page } })
-    return [page, res.count] as const
-  }))
-  const entries = results.map((result, index) => {
-    const page = pages[index]!
-    if (result.status === 'fulfilled') return result.value
-    console.warn('draft_status_load_failed', { page, error: result.reason })
-    return [page, 0] as const
-  })
-  draftCounts.value = Object.fromEntries(entries)
-}
-
 onMounted(() => {
   loadSettings().catch(() => {})
-  loadDraftStatuses().catch(() => {})
 })
 
 useSeoMeta({ title: 'Pages | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

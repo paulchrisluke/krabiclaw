@@ -4,6 +4,7 @@ import {
   requestImageUpload,
   buildImageUrl,
   uploadImageBuffer,
+  hasCloudflareImagesConfig,
 } from "~/server/utils/cloudflare-images";
 import {
   createMediaAsset,
@@ -101,11 +102,9 @@ import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
 import type { SiteVertical } from "~/utils/vertical-copy";
 import {
   deleteContentField,
-  discardContentDrafts,
-  getContentDraftStatus,
+  getEditorContent,
   getGoogleBusinessLocationAuthUrlForMcp,
   getGoogleBusinessLocationConnectionForMcp,
-  getMergedEditorContent,
   getLocationForMcp,
   getNotificationsSettings,
   getSiteForMcp,
@@ -115,11 +114,10 @@ import {
   listReservationSubmissions,
   listSitesForUser,
   listWorkRequestsForOrganization,
-  publishContentDrafts,
   reorderLocationQa,
-  saveContentDraft,
   syncGoogleBusinessLocationsForMcp,
   hydrateSeededLocationForOnboarding,
+  updatePageContent,
   updateHomeHero,
   updateContactSubmissionStatus,
   updateLocationQa,
@@ -127,7 +125,12 @@ import {
   updateReservationSubmissionStatus,
 } from "~/server/utils/mcp-workflows";
 
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+function haversineKm(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLng = (lng2 - lng1) * (Math.PI / 180);
@@ -142,7 +145,9 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 async function resolveGeneratedImageUpload(
   imageData: string,
 ): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
-  const dataUrlMatch = imageData.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  const dataUrlMatch = imageData.match(
+    /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/,
+  );
   if (dataUrlMatch) {
     const contentType = dataUrlMatch[1] || "image/png";
     const base64 = dataUrlMatch[2] || "";
@@ -156,38 +161,10 @@ async function resolveGeneratedImageUpload(
   }
 
   if (imageData.startsWith("/")) {
-    const { relative, resolve } = await import("node:path");
-    const resolvedPath = resolve(imageData);
-    const allowedRoots = ["/mnt/data", "/tmp"];
-    const isAllowedPath = allowedRoots.some((root) => {
-      const relativePath = relative(root, resolvedPath);
-      return relativePath !== ""
-        && !relativePath.startsWith("..")
-        && !relativePath.includes("/../")
-        && !relativePath.includes("\\..\\");
-    });
-
-    if (!isAllowedPath) {
-      throw new Error("Generated image path must be within an approved temp directory.");
-    }
-
-    const { readFile } = await import("node:fs/promises");
-    const bytes = await readFile(resolvedPath);
-    const extension = imageData.split(".").pop()?.toLowerCase() ?? "png";
-    const contentType =
-      extension === "jpg" || extension === "jpeg"
-        ? "image/jpeg"
-        : extension === "webp"
-          ? "image/webp"
-          : "image/png";
-    return {
-      buffer: bytes.buffer.slice(
-        bytes.byteOffset,
-        bytes.byteOffset + bytes.byteLength,
-      ),
-      contentType,
-      filename: imageData.split("/").pop() || `ai-generated.${extension}`,
-    };
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      "save_generated_image only accepts base64 image data or a data URL. Use save_generated_image_file for attachment-based uploads.",
+    );
   }
 
   const bytes = Uint8Array.from(atob(imageData), (c) => c.charCodeAt(0));
@@ -196,6 +173,75 @@ async function resolveGeneratedImageUpload(
     contentType: "image/png",
     filename: `ai-generated-${Date.now()}.png`,
   };
+}
+
+interface ToolFileReference {
+  download_url: string;
+  file_id: string;
+  mime_type?: string;
+  file_name?: string;
+}
+
+function toolFileReference(value: unknown, key: string): ToolFileReference {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}`);
+  }
+
+  const record = value as Record<string, unknown>;
+  const downloadUrl = record.download_url;
+  const fileId = record.file_id;
+  if (typeof downloadUrl !== "string" || !downloadUrl.trim()) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `Invalid ${key}.download_url`,
+    );
+  }
+  if (typeof fileId !== "string" || !fileId.trim()) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}.file_id`);
+  }
+
+  return {
+    download_url: downloadUrl.trim(),
+    file_id: fileId.trim(),
+    mime_type:
+      typeof record.mime_type === "string" && record.mime_type.trim()
+        ? record.mime_type.trim()
+        : undefined,
+    file_name:
+      typeof record.file_name === "string" && record.file_name.trim()
+        ? record.file_name.trim()
+        : undefined,
+  };
+}
+
+async function resolveGeneratedImageFile(
+  file: ToolFileReference,
+): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
+  const response = await fetch(file.download_url, {
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Failed to download attachment ${file.file_id}: ${response.status}`,
+    });
+  }
+
+  const contentType =
+    file.mime_type ??
+    response.headers.get("content-type") ??
+    "application/octet-stream";
+  if (!contentType.startsWith("image/")) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `Attachment ${file.file_id} is not an image.`,
+    );
+  }
+
+  const buffer = await response.arrayBuffer();
+  const filename =
+    file.file_name ?? `${file.file_id}.${contentType.split("/")[1] ?? "png"}`;
+  return { buffer, contentType, filename };
 }
 
 interface GoogleMapsSignals {
@@ -228,7 +274,7 @@ function extractGoogleMapsSignals(resolvedUrl: string): GoogleMapsSignals {
   const lat = latRaw != null ? Number(latRaw) : null;
   const lng = lngRaw != null ? Number(lngRaw) : null;
 
-  const hasStrongSignals = (lat != null && lng != null) && (isChijId || isHexCid);
+  const hasStrongSignals = lat != null && lng != null && (isChijId || isHexCid);
 
   return { nameHint, lat, lng, rawId, isHexCid, isChijId, hasStrongSignals };
 }
@@ -261,10 +307,19 @@ function resolveMatchingPolicy(raw: unknown): MatchingPolicy {
   if (!raw || typeof raw !== "object") return DEFAULT_MATCHING_POLICY;
   const p = raw as Partial<MatchingPolicy>;
   return {
-    allow_name_only_fallback: p.allow_name_only_fallback ?? DEFAULT_MATCHING_POLICY.allow_name_only_fallback,
-    require_coordinate_match: p.require_coordinate_match ?? DEFAULT_MATCHING_POLICY.require_coordinate_match,
-    max_distance_km: typeof p.max_distance_km === "number" ? p.max_distance_km : DEFAULT_MATCHING_POLICY.max_distance_km,
-    prefer_backend_extraction: p.prefer_backend_extraction ?? DEFAULT_MATCHING_POLICY.prefer_backend_extraction,
+    allow_name_only_fallback:
+      p.allow_name_only_fallback ??
+      DEFAULT_MATCHING_POLICY.allow_name_only_fallback,
+    require_coordinate_match:
+      p.require_coordinate_match ??
+      DEFAULT_MATCHING_POLICY.require_coordinate_match,
+    max_distance_km:
+      typeof p.max_distance_km === "number"
+        ? p.max_distance_km
+        : DEFAULT_MATCHING_POLICY.max_distance_km,
+    prefer_backend_extraction:
+      p.prefer_backend_extraction ??
+      DEFAULT_MATCHING_POLICY.prefer_backend_extraction,
   };
 }
 
@@ -288,7 +343,12 @@ export async function executeMcpToolCall(
     const userRecord = await user.db
       .prepare(`SELECT id, email, name, role FROM user WHERE id = ? LIMIT 1`)
       .bind(user.userId)
-      .first<{ id: string; email: string | null; name: string | null; role: string | null }>();
+      .first<{
+        id: string;
+        email: string | null;
+        name: string | null;
+        role: string | null;
+      }>();
     const allSites = await listSitesForUser(
       user.db,
       user.userId,
@@ -321,17 +381,27 @@ export async function executeMcpToolCall(
   if (toolName === "get_current_user") {
     const user = await requireMcpUser(event);
     const currentUser = await user.db
-      .prepare(`
+      .prepare(
+        `
         SELECT id, email, name, role
         FROM user
         WHERE id = ?
         LIMIT 1
-      `)
+      `,
+      )
       .bind(user.userId)
-      .first<{ id: string; email: string | null; name: string | null; role: string | null }>();
+      .first<{
+        id: string;
+        email: string | null;
+        name: string | null;
+        role: string | null;
+      }>();
 
     if (!currentUser) {
-      throw createError({ statusCode: 404, statusMessage: "Current user not found" });
+      throw createError({
+        statusCode: 404,
+        statusMessage: "Current user not found",
+      });
     }
 
     return {
@@ -349,7 +419,7 @@ export async function executeMcpToolCall(
       {},
       "What type of business is this? Choose: restaurant or experience.",
     );
-  }  
+  }
 
   if (toolName === "import_from_maps") {
     const user = await requireMcpUser(event);
@@ -405,14 +475,27 @@ export async function executeMcpToolCall(
 
     // If a hint was provided, warn when it diverges from backend extraction (>1 km).
     // Hint is informational only — backend extraction takes precedence.
-    if (hint?.lat != null && hint?.lng != null && backendParsed.lat != null && backendParsed.lng != null) {
-      const divergenceKm = haversineKm(hint.lat, hint.lng, backendParsed.lat, backendParsed.lng);
+    if (
+      hint?.lat != null &&
+      hint?.lng != null &&
+      backendParsed.lat != null &&
+      backendParsed.lng != null
+    ) {
+      const divergenceKm = haversineKm(
+        hint.lat,
+        hint.lng,
+        backendParsed.lat,
+        backendParsed.lng,
+      );
       if (divergenceKm > 1) {
-        console.warn("[import_from_maps] parsed_hint diverges from backend extraction", {
-          hint: { lat: hint.lat, lng: hint.lng },
-          backendParsed: { lat: backendParsed.lat, lng: backendParsed.lng },
-          divergenceKm: Math.round(divergenceKm * 10) / 10,
-        });
+        console.warn(
+          "[import_from_maps] parsed_hint diverges from backend extraction",
+          {
+            hint: { lat: hint.lat, lng: hint.lng },
+            backendParsed: { lat: backendParsed.lat, lng: backendParsed.lng },
+            divergenceKm: Math.round(divergenceKm * 10) / 10,
+          },
+        );
       }
     }
 
@@ -479,16 +562,18 @@ export async function executeMcpToolCall(
       placeId = rawId;
     }
 
-    if (!placeId) throw mcpProtocolError(MCP_ERROR.invalidParams, "Could not resolve a place ID from that URL.")
+    if (!placeId)
+      throw mcpProtocolError(
+        MCP_ERROR.invalidParams,
+        "Could not resolve a place ID from that URL.",
+      );
     const details = await getPlaceDetails(apiKey, placeId, true);
 
     // Upload Google Photos to Cloudflare Images for stable preview URLs.
     // We don't have an org/site yet, so we do NOT persist media_asset rows here.
     // The returned cfImageId lets the model create proper media_assets after create_site.
     const photos: Array<{ cfImageId: string; publicUrl: string }> = [];
-    const hasImagesConfig =
-      (user.env as Record<string, unknown>).CLOUDFLARE_IMAGES_API_TOKEN &&
-      (user.env as Record<string, unknown>).CF_ACCOUNT_ID;
+    const hasImagesConfig = hasCloudflareImagesConfig(user.env);
 
     if (hasImagesConfig && details.photos.length > 0) {
       for (const photo of details.photos.slice(0, 10)) {
@@ -606,7 +691,12 @@ export async function executeMcpToolCall(
 
   switch (toolName) {
     case "show_site_preview": {
-      const siteRow = await getSiteForMcp(site.db, site.siteId, site.userId, site.isPlatformAdmin);
+      const siteRow = await getSiteForMcp(
+        site.db,
+        site.siteId,
+        site.userId,
+        site.isPlatformAdmin,
+      );
       const subdomain = (siteRow as Record<string, unknown>)
         .subdomain as string;
       const publicUrl = subdomain ? `https://${subdomain}.krabiclaw.com` : "";
@@ -648,7 +738,14 @@ export async function executeMcpToolCall(
       );
     }
     case "get_site":
-      return { site: await getSiteForMcp(site.db, site.siteId, site.userId, site.isPlatformAdmin) };
+      return {
+        site: await getSiteForMcp(
+          site.db,
+          site.siteId,
+          site.userId,
+          site.isPlatformAdmin,
+        ),
+      };
     case "get_site_settings":
       return {
         settings: await loadSiteSettings(
@@ -707,7 +804,8 @@ export async function executeMcpToolCall(
       );
       if (
         result.status === 402 &&
-        (result.data as { code?: string } | undefined)?.code === "LOCATION_LIMIT_REACHED"
+        (result.data as { code?: string } | undefined)?.code ===
+          "LOCATION_LIMIT_REACHED"
       ) {
         return await hydrateSeededLocationForOnboarding(
           site.db,
@@ -897,20 +995,45 @@ export async function executeMcpToolCall(
     case "publish_post": {
       const channels = normalizeChannels(args.channels);
       const postId = requiredString(args, "post_id");
-      const post = await publishPost(site.db, site.organizationId, site.siteId, postId, channels);
-      if (!post) throw createError({ statusCode: 404, statusMessage: "Post not found" });
+      const post = await publishPost(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        postId,
+        channels,
+      );
+      if (!post)
+        throw createError({ statusCode: 404, statusMessage: "Post not found" });
 
       const wantsFacebook = channels.includes("facebook");
       const wantsInstagram = channels.includes("instagram");
       const now = new Date().toISOString();
 
       if (wantsFacebook || wantsInstagram) {
-        const connection = await getFacebookPagesConnection(site.env as never, site.organizationId, site.siteId).catch(() => null);
+        const connection = await getFacebookPagesConnection(
+          site.env as never,
+          site.organizationId,
+          site.siteId,
+        ).catch(() => null);
         if (!connection?.facebook_page_id || !connection.encrypted_page_token) {
           const msg = "No Facebook Page connected";
           const stmts = [];
-          if (wantsFacebook) stmts.push(site.db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'facebook'`).bind(msg, postId));
-          if (wantsInstagram) stmts.push(site.db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind(msg, postId));
+          if (wantsFacebook)
+            stmts.push(
+              site.db
+                .prepare(
+                  `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'facebook'`,
+                )
+                .bind(msg, postId),
+            );
+          if (wantsInstagram)
+            stmts.push(
+              site.db
+                .prepare(
+                  `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`,
+                )
+                .bind(msg, postId),
+            );
           if (stmts.length) await site.db.batch(stmts);
         } else {
           const pageToken = connection.encrypted_page_token;
@@ -918,51 +1041,112 @@ export async function executeMcpToolCall(
 
           let imageUrl: string | null = null;
           if (post.image_asset_id) {
-            const asset = await site.db.prepare(`SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`).bind(post.image_asset_id).first<{ public_url: string | null }>();
+            const asset = await site.db
+              .prepare(
+                `SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`,
+              )
+              .bind(post.image_asset_id)
+              .first<{ public_url: string | null }>();
             imageUrl = asset?.public_url ?? null;
           }
 
           if (wantsFacebook) {
             try {
-              const fbResult = await publishToPage(pageToken, pageId, { message: post.body });
-              await site.db.prepare(`UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'facebook'`).bind(fbResult.id, now, postId).run();
+              const fbResult = await publishToPage(pageToken, pageId, {
+                message: post.body,
+              });
+              await site.db
+                .prepare(
+                  `UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'facebook'`,
+                )
+                .bind(fbResult.id, now, postId)
+                .run();
             } catch (err) {
-              const msg = err instanceof Error ? err.message : "Facebook publish failed";
-              await site.db.prepare(`UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'facebook'`).bind(msg, postId).run();
+              const msg =
+                err instanceof Error ? err.message : "Facebook publish failed";
+              await site.db
+                .prepare(
+                  `UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'facebook'`,
+                )
+                .bind(msg, postId)
+                .run();
             }
           }
 
           if (wantsInstagram) {
             if (!imageUrl) {
-              await site.db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind("Instagram requires an image — add a photo to this post", postId).run();
+              await site.db
+                .prepare(
+                  `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`,
+                )
+                .bind(
+                  "Instagram requires an image — add a photo to this post",
+                  postId,
+                )
+                .run();
             } else {
               try {
-                const igUserId = await getLinkedInstagramAccount(pageToken, pageId);
+                const igUserId = await getLinkedInstagramAccount(
+                  pageToken,
+                  pageId,
+                );
                 if (!igUserId) {
-                  await site.db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind("No Instagram Business account linked to this Facebook Page", postId).run();
+                  await site.db
+                    .prepare(
+                      `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`,
+                    )
+                    .bind(
+                      "No Instagram Business account linked to this Facebook Page",
+                      postId,
+                    )
+                    .run();
                 } else {
-                  const igResult = await publishToInstagram(pageToken, igUserId, { caption: post.body, imageUrl });
-                  await site.db.prepare(`UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'instagram'`).bind(igResult.id, now, postId).run();
+                  const igResult = await publishToInstagram(
+                    pageToken,
+                    igUserId,
+                    { caption: post.body, imageUrl },
+                  );
+                  await site.db
+                    .prepare(
+                      `UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'instagram'`,
+                    )
+                    .bind(igResult.id, now, postId)
+                    .run();
                 }
               } catch (err) {
-                const msg = err instanceof Error ? err.message : "Instagram publish failed";
-                await site.db.prepare(`UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind(msg, postId).run();
+                const msg =
+                  err instanceof Error
+                    ? err.message
+                    : "Instagram publish failed";
+                await site.db
+                  .prepare(
+                    `UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'instagram'`,
+                  )
+                  .bind(msg, postId)
+                  .run();
               }
             }
           }
         }
       }
 
-      return { post: await getPost(site.db, site.organizationId, site.siteId, postId) };
+      return {
+        post: await getPost(site.db, site.organizationId, site.siteId, postId),
+      };
     }
     case "delete_post": {
       const postId = requiredString(args, "post_id");
       return {
         post_id: postId,
-        deleted: await deletePost(site.db, site.organizationId, site.siteId, postId),
+        deleted: await deletePost(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          postId,
+        ),
       };
     }
-    case "list_media_assets":
+    case "get_site_media_assets":
       return {
         assets: await listMediaAssets(site.db, site.siteId, {
           kind: optionalString(args, "kind") ?? undefined,
@@ -970,7 +1154,7 @@ export async function executeMcpToolCall(
         }),
       };
     case "request_media_upload": {
-      if (!site.env.CLOUDFLARE_IMAGES_API_TOKEN || !site.env.CF_ACCOUNT_ID)
+      if (!hasCloudflareImagesConfig(site.env))
         throw new Error("Cloudflare Images not configured");
       const assetId = crypto.randomUUID();
       const upload = await requestImageUpload(site.env);
@@ -1041,8 +1225,20 @@ export async function executeMcpToolCall(
       );
       return { deleted: true };
     case "get_facebook_connection": {
-      const connection = await getFacebookPagesConnection(site.env as never, site.organizationId, site.siteId);
-      if (!connection) return { connected: false };
+      const connection = await getFacebookPagesConnection(
+        site.env as never,
+        site.organizationId,
+        site.siteId,
+      );
+      if (!connection) {
+        const platformDomain =
+          site.env.NUXT_PUBLIC_PLATFORM_DOMAIN || "https://krabiclaw.com";
+        const orgSlug = site.organizationSlug || site.organizationId;
+        return {
+          connected: false,
+          connectUrl: `${platformDomain}/dashboard/${orgSlug}/~/settings/integrations`,
+        };
+      }
       return {
         connected: true,
         facebook_page_id: connection.facebook_page_id ?? null,
@@ -1051,14 +1247,36 @@ export async function executeMcpToolCall(
       };
     }
     case "publish_to_facebook": {
-      const allowed = await hasEntitlement(site.env, site.db, site.organizationId, "managed_service");
+      const allowed = await hasEntitlement(
+        site.env,
+        site.db,
+        site.organizationId,
+        "managed_service",
+      );
       if (!allowed) {
-        throw createError({ statusCode: 403, statusMessage: "Facebook publishing is included in the Managed plan and above." });
+        throw createError({
+          statusCode: 403,
+          statusMessage:
+            "Facebook publishing is included in the Managed plan and above.",
+        });
       }
-      const connection = await getFacebookPagesConnection(site.env as never, site.organizationId, site.siteId);
-      if (!connection) throw createError({ statusCode: 404, statusMessage: "No Facebook connection found. Connect Facebook from the dashboard first." });
+      const connection = await getFacebookPagesConnection(
+        site.env as never,
+        site.organizationId,
+        site.siteId,
+      );
+      if (!connection)
+        throw createError({
+          statusCode: 404,
+          statusMessage:
+            "No Facebook connection found. Connect Facebook from the dashboard first.",
+        });
       if (!connection.facebook_page_id || !connection.encrypted_page_token) {
-        throw createError({ statusCode: 400, statusMessage: "No Facebook Page selected. Sync a page from the dashboard first." });
+        throw createError({
+          statusCode: 400,
+          statusMessage:
+            "No Facebook Page selected. Sync a page from the dashboard first.",
+        });
       }
       const result = await publishToPage(
         connection.encrypted_page_token,
@@ -1069,15 +1287,37 @@ export async function executeMcpToolCall(
           published: args.published !== false,
         },
       );
-      return { success: true, post_id: result.id, page_name: connection.facebook_page_name };
+      return {
+        success: true,
+        post_id: result.id,
+        page_name: connection.facebook_page_name,
+      };
     }
     case "sync_facebook_page": {
-      const allowed = await hasEntitlement(site.env, site.db, site.organizationId, "managed_service");
+      const allowed = await hasEntitlement(
+        site.env,
+        site.db,
+        site.organizationId,
+        "managed_service",
+      );
       if (!allowed) {
-        throw createError({ statusCode: 403, statusMessage: "Facebook sync is included in the Managed plan and above." });
+        throw createError({
+          statusCode: 403,
+          statusMessage:
+            "Facebook sync is included in the Managed plan and above.",
+        });
       }
-      let connection = await getFacebookPagesConnection(site.env as never, site.organizationId, site.siteId);
-      if (!connection) throw createError({ statusCode: 404, statusMessage: "No Facebook connection found. Connect Facebook from the dashboard first." });
+      const connection = await getFacebookPagesConnection(
+        site.env as never,
+        site.organizationId,
+        site.siteId,
+      );
+      if (!connection)
+        throw createError({
+          statusCode: 404,
+          statusMessage:
+            "No Facebook connection found. Connect Facebook from the dashboard first.",
+        });
 
       const requestedPageId = optionalString(args, "page_id");
       let pageToken = connection.encrypted_page_token;
@@ -1086,7 +1326,11 @@ export async function executeMcpToolCall(
       if (requestedPageId && requestedPageId !== connection.facebook_page_id) {
         const pages = await getFacebookPages(connection.encrypted_user_token);
         const selected = pages.find((p) => p.id === requestedPageId);
-        if (!selected) throw createError({ statusCode: 404, statusMessage: "Page not found in this connection." });
+        if (!selected)
+          throw createError({
+            statusCode: 404,
+            statusMessage: "Page not found in this connection.",
+          });
         pageToken = selected.access_token;
         pageId = selected.id;
         await storeFacebookPagesConnection(site.env as never, {
@@ -1100,13 +1344,24 @@ export async function executeMcpToolCall(
       }
 
       if (!pageToken || !pageId) {
-        throw createError({ statusCode: 400, statusMessage: "No Facebook Page selected. Pass page_id or sync a page from the dashboard first." });
+        throw createError({
+          statusCode: 400,
+          statusMessage:
+            "No Facebook Page selected. Pass page_id or sync a page from the dashboard first.",
+        });
       }
 
       const pageInfo = await getPageInfo(pageToken, pageId);
       const locationId = optionalString(args, "location_id");
       if (locationId) {
-        await syncPageInfoToLocation(site.env as never, pageInfo, connection.id, site.organizationId, site.siteId, locationId);
+        await syncPageInfoToLocation(
+          site.env as never,
+          pageInfo,
+          connection.id,
+          site.organizationId,
+          site.siteId,
+          locationId,
+        );
       }
 
       return {
@@ -1137,70 +1392,40 @@ export async function executeMcpToolCall(
       });
     }
     case "get_page_content":
-      return await getMergedEditorContent(
+      return await getEditorContent(
         site.db,
         site.organizationId,
         site.siteId,
         requiredString(args, "page"),
         optionalString(args, "location_id") ?? undefined,
       );
-    case "save_content_draft":
-      return await saveContentDraft(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        site.userId,
-        {
-          page: requiredString(args, "page"),
-          changes: objectRecord(args.changes, "changes"),
-          location_id: optionalString(args, "location_id"),
-        },
-      );
+    case "update_page_content":
+      try {
+        return await updatePageContent(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          {
+            page: requiredString(args, "page"),
+            changes: objectRecord(args.changes, "changes"),
+            location_id: optionalString(args, "location_id"),
+          },
+        );
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
     case "update_home_hero":
-      return await updateHomeHero(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        site.userId,
-        {
+      try {
+        return await updateHomeHero(site.db, site.organizationId, site.siteId, {
           title: optionalString(args, "title"),
           subtitle: optionalString(args, "subtitle"),
           image_asset_id: optionalString(args, "image_asset_id"),
           video_asset_id: optionalString(args, "video_asset_id"),
           location_id: optionalString(args, "location_id"),
-          publish: args.publish === true,
-        },
-      );
-    case "get_content_draft_status":
-      return await getContentDraftStatus(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        optionalString(args, "page") ?? undefined,
-        optionalString(args, "location_id") ?? undefined,
-      );
-    case "publish_content_drafts":
-      return await publishContentDrafts(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        {
-          page: optionalString(args, "page") ?? undefined,
-          location_id: optionalString(args, "location_id"),
-          all: args.all === true,
-        },
-      );
-    case "discard_content_drafts":
-      return await discardContentDrafts(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        {
-          page: optionalString(args, "page") ?? undefined,
-          location_id: optionalString(args, "location_id"),
-          all: args.all === true,
-        },
-      );
+        });
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
     case "delete_content_field":
       return await deleteContentField(
         site.db,
@@ -1495,7 +1720,7 @@ export async function executeMcpToolCall(
         parseScope(optionalString(args, "scope") ?? undefined),
         site.userId,
       );
-    case "list_contact_submissions":
+    case "get_contact_inquiries":
       return {
         submissions: await listContactSubmissions(site.db, site.siteId),
       };
@@ -1506,7 +1731,7 @@ export async function executeMcpToolCall(
         requiredString(args, "submission_id"),
         requiredString(args, "status"),
       );
-    case "list_reservation_submissions":
+    case "get_reservation_inquiries":
       return {
         submissions: await listReservationSubmissions(site.db, site.siteId),
       };
@@ -1594,9 +1819,9 @@ export async function executeMcpToolCall(
       return result.data;
     }
     case "save_generated_image": {
-      if (!site.env.CLOUDFLARE_IMAGES_API_TOKEN || !site.env.CF_ACCOUNT_ID)
+      if (!hasCloudflareImagesConfig(site.env))
         throw new Error("Cloudflare Images not configured");
-      const imageData = requiredString(args, "image_data");
+      const imageData = requiredString(args, "image_data_base64");
       const prompt = optionalString(args, "prompt") ?? null;
       const upload = await resolveGeneratedImageUpload(imageData);
 
@@ -1629,8 +1854,46 @@ export async function executeMcpToolCall(
         thumbnailUrl: uploaded.thumbnailUrl,
       };
     }
+    case "save_generated_image_file": {
+      if (!hasCloudflareImagesConfig(site.env))
+        throw new Error("Cloudflare Images not configured");
+      const attachment = toolFileReference(args.attachment_id, "attachment_id");
+      const prompt = optionalString(args, "prompt") ?? null;
+      const upload = await resolveGeneratedImageFile(attachment);
+      const uploaded = await uploadImageBuffer(
+        site.env as Parameters<typeof uploadImageBuffer>[0],
+        upload.buffer,
+        upload.filename,
+        upload.contentType,
+      );
+
+      const assetId = crypto.randomUUID();
+      await createMediaAsset(site.db, {
+        id: assetId,
+        organization_id: site.organizationId,
+        site_id: site.siteId,
+        kind: "image",
+        provider: "cloudflare_images",
+        source: "generated",
+        cloudflare_image_id: uploaded.imageId,
+        public_url: uploaded.publicUrl,
+        thumbnail_url: uploaded.thumbnailUrl,
+        alt_text:
+          prompt ?? attachment.file_name ?? "AI-generated image attachment",
+        mime_type: upload.contentType,
+        file_name: upload.filename,
+        status: "active",
+        created_by_user_id: site.userId,
+      });
+
+      return {
+        assetId,
+        publicUrl: uploaded.publicUrl,
+        thumbnailUrl: uploaded.thumbnailUrl,
+      };
+    }
     // ─── Domain management ──────────────────────────────────────────────────
-    case "list_domains": {
+    case "get_site_domains": {
       const domains = await getSiteDomains(site.db, site.siteId);
       return {
         domains: domains.map((d) => ({
@@ -1644,15 +1907,27 @@ export async function executeMcpToolCall(
       };
     }
     case "create_domain": {
-      const hasEntitlement = await hasCustomDomainsEntitlement(site.db, site.organizationId);
+      const hasEntitlement = await hasCustomDomainsEntitlement(
+        site.db,
+        site.organizationId,
+      );
       if (!hasEntitlement) {
-        throw createError({ statusCode: 403, statusMessage: "Custom domains require the Growth plan or higher." });
+        throw createError({
+          statusCode: 403,
+          statusMessage: "Custom domains require the Growth plan or higher.",
+        });
       }
       const domain = requiredString(args, "domain");
       const includeWww = args.include_www !== false;
-      const validation = validateCustomDomain(site.env as Parameters<typeof validateCustomDomain>[0], domain);
+      const validation = validateCustomDomain(
+        site.env as Parameters<typeof validateCustomDomain>[0],
+        domain,
+      );
       if (!validation.valid) {
-        throw createError({ statusCode: 400, statusMessage: validation.reason ?? "Invalid domain" });
+        throw createError({
+          statusCode: 400,
+          statusMessage: validation.reason ?? "Invalid domain",
+        });
       }
       const records = await createCustomDomainPair(
         site.env as Parameters<typeof createCustomDomainPair>[0],
@@ -1678,7 +1953,13 @@ export async function executeMcpToolCall(
     }
     case "set_canonical_domain": {
       const domainId = requiredString(args, "domain_id");
-      const record = await setCanonicalDomain(site.db, site.siteId, domainId, "owner", site.userId);
+      const record = await setCanonicalDomain(
+        site.db,
+        site.siteId,
+        domainId,
+        "owner",
+        site.userId,
+      );
       return {
         id: record.id,
         domain: record.domain,
@@ -1717,28 +1998,52 @@ export async function executeMcpToolCall(
     }
     // ─── Analytics ──────────────────────────────────────────────────────────
     case "get_site_analytics": {
-      const startDate = optionalString(args, "start_date") ?? getDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
-      const endDate = optionalString(args, "end_date") ?? getDateString(new Date());
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-        throw createError({ statusCode: 400, statusMessage: "Dates must be YYYY-MM-DD format" });
+      const startDate =
+        optionalString(args, "start_date") ??
+        getDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+      const endDate =
+        optionalString(args, "end_date") ?? getDateString(new Date());
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
+      ) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: "Dates must be YYYY-MM-DD format",
+        });
       }
-      const dailyStats = await site.db.prepare(`
+      const dailyStats = await site.db
+        .prepare(
+          `
         SELECT date, page_views, unique_sessions, COALESCE(avg_session_duration, 0) as avg_session_duration, top_pages
         FROM site_analytics_daily
         WHERE site_id = ? AND date BETWEEN ? AND ?
         ORDER BY date ASC
-      `).bind(site.siteId, startDate, endDate).all();
+      `,
+        )
+        .bind(site.siteId, startDate, endDate)
+        .all();
       const rows = (dailyStats.results || []) as Record<string, unknown>[];
-      const toNum = (v: unknown) => (typeof v === "number" ? v : Number(v || 0));
-      const summary = rows.reduce<{ pageViews: number; sessions: number; totalDuration: number }>(
+      const toNum = (v: unknown) =>
+        typeof v === "number" ? v : Number(v || 0);
+      const summary = rows.reduce<{
+        pageViews: number;
+        sessions: number;
+        totalDuration: number;
+      }>(
         (acc, row) => ({
           pageViews: acc.pageViews + toNum(row.page_views),
           sessions: acc.sessions + toNum(row.unique_sessions),
-          totalDuration: acc.totalDuration + toNum(row.avg_session_duration) * toNum(row.unique_sessions),
+          totalDuration:
+            acc.totalDuration +
+            toNum(row.avg_session_duration) * toNum(row.unique_sessions),
         }),
         { pageViews: 0, sessions: 0, totalDuration: 0 },
       );
-      const avgSessionDuration = summary.sessions > 0 ? Math.round(summary.totalDuration / summary.sessions) : 0;
+      const avgSessionDuration =
+        summary.sessions > 0
+          ? Math.round(summary.totalDuration / summary.sessions)
+          : 0;
       const topPageMap = new Map<string, number>();
       for (const row of rows) {
         if (!row.top_pages) continue;
@@ -1746,17 +2051,24 @@ export async function executeMcpToolCall(
           const parsed = JSON.parse(String(row.top_pages));
           if (!Array.isArray(parsed)) continue;
           for (const page of parsed as Record<string, unknown>[]) {
-            const path = String(page.path ?? page.pagePath ?? "/").trim() || "/";
+            const path =
+              String(page.path ?? page.pagePath ?? "/").trim() || "/";
             const views = toNum(page.views ?? page.count);
-            if (views > 0) topPageMap.set(path, (topPageMap.get(path) ?? 0) + views);
+            if (views > 0)
+              topPageMap.set(path, (topPageMap.get(path) ?? 0) + views);
           }
-        } catch { /* skip malformed rows */ }
+        } catch {
+          /* skip malformed rows */
+        }
       }
       const topPages = Array.from(topPageMap.entries())
         .map(([path, views]) => ({
           path,
           views,
-          percentOfTotal: summary.pageViews > 0 ? Math.round((views / summary.pageViews) * 100) : 0,
+          percentOfTotal:
+            summary.pageViews > 0
+              ? Math.round((views / summary.pageViews) * 100)
+              : 0,
         }))
         .sort((a, b) => b.views - a.views)
         .slice(0, 10);
@@ -1842,15 +2154,35 @@ function objectRecord(value: unknown, key: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}`);
   }
-  return value as Record<string, string>;
+  return value as Record<string, unknown>;
+}
+
+function rethrowAsInvalidParams(error: unknown): never {
+  if (!(error instanceof Error)) throw error;
+  const message = error.message;
+  if (
+    message.startsWith('Field "') ||
+    message.includes("must be a string") ||
+    message.includes("must be an object with hero_title/hero_subtitle")
+  ) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, message);
+  }
+  throw error;
 }
 
 function objectArray(value: unknown, key: string) {
   if (!Array.isArray(value)) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}`);
   }
-  if (value.some((el) => el === null || typeof el !== "object" || Array.isArray(el))) {
-    throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}: each element must be an object`);
+  if (
+    value.some(
+      (el) => el === null || typeof el !== "object" || Array.isArray(el),
+    )
+  ) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `Invalid ${key}: each element must be an object`,
+    );
   }
   return value as Record<string, unknown>[];
 }
@@ -1936,11 +2268,12 @@ function assertDomainSuccess(result: {
 }
 
 function normalizeSiteCreationData(data: Record<string, unknown>) {
-  const siteId = typeof data.siteId === "string"
-    ? data.siteId
-    : typeof data.id === "string"
-      ? data.id
-      : "";
+  const siteId =
+    typeof data.siteId === "string"
+      ? data.siteId
+      : typeof data.id === "string"
+        ? data.id
+        : "";
   if (!siteId.trim()) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,

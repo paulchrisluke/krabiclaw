@@ -3,7 +3,7 @@
 // Marks the asset active and resolves the public URL.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { buildImageUrl } from '~/server/utils/cloudflare-images'
+import { buildImageUrl, hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
 import { activateMediaAsset, getMediaAsset } from '~/server/utils/media-asset-manager'
 
 async function verifySiteAccess(db: D1Database, userId: string, siteId: string): Promise<boolean> {
@@ -38,6 +38,7 @@ export default defineEventHandler(async (event) => {
   if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
   if (asset.status !== 'pending') return jsonResponse({ error: 'Asset already confirmed' }, { status: 409 })
   if (!asset.cloudflare_image_id) return jsonResponse({ error: 'Asset has no Cloudflare image ID' }, { status: 422 })
+  if (!hasCloudflareImagesConfig(env)) return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
 
   const publicUrl = buildImageUrl(env, asset.cloudflare_image_id, 'public')
   const thumbnailUrl = buildImageUrl(env, asset.cloudflare_image_id, 'thumbnail')

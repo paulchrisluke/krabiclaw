@@ -15,7 +15,7 @@ what's left to add before each dashboard page can be removed.
 ## MCP Gaps to Fill (before decommissioning corresponding UI)
 
 ### 1. Domain Management — DONE ✓
-Added June 2026: `list_domains`, `create_domain`, `set_canonical_domain`, `delete_domain`, `sync_domain`.
+Added June 2026: `get_site_domains`, `create_domain`, `set_canonical_domain`, `delete_domain`, `sync_domain`.
 All backed by `server/utils/domains.ts` utility functions. Entitlement checked on `create_domain`.
 Dashboard page `settings/domains.vue` can now be removed or redirected to ChatGPT.
 
@@ -48,9 +48,8 @@ ChatGPT cannot receive binary file uploads, so video upload must go through the 
 both paths (images → Cloudflare Images up to 10 MB, videos → R2 up to 50 MB) with
 drag-and-drop, grid browser, and delete. No new portal or pre-signed URL tool is needed.
 
-MCP tools `list_media_assets`, `update_media_asset`, and `delete_media_asset` already exist.
-Workflow: ChatGPT directs the user to their media library URL to upload the video, then calls
-`list_media_assets` to get the returned `public_url` and places it on the page.
+MCP tools `get_site_media_assets`, `update_media_asset`, and `delete_media_asset` already exist.
+The intention is that for heavy assets (videos/PDFs), the user uploads through the native dashboard library (`/dashboard/.../media`). The agent can poll/query `get_site_media_assets` to get the returned `public_url` and places it on the page.
 
 **Decision**: keep `[locationSlug]/media.vue` permanently for video/bulk upload. It is the
 intentional upload surface — not a temporary workaround.
@@ -83,7 +82,7 @@ each workflow end-to-end in staging.
 | `settings/members.vue` | Intentionally kept in CMS (user decision) |
 | `settings/billing.vue` | Stripe billing is dashboard-only by design — no MCP |
 | `settings/general.vue` | Keep as settings fallback; MCP covers `update_site_settings` already |
-| `[locationSlug]/media.vue` | Keep permanently — intentional upload surface for video/bulk (MCP handles browsing via `list_media_assets`) |
+| `[locationSlug]/media.vue` | Keep permanently — intentional upload surface for video/bulk (MCP handles browsing via `get_site_media_assets`) |
 
 ### Keep permanently (correct scope for dashboard)
 
@@ -157,3 +156,213 @@ Before removing any dashboard page:
 - Run `yarn e2e:staging` and verify no regressions in MCP spec
 - The editor API routes are NOT deleted when the dashboard UI is removed —
   they remain as the backend the MCP tools call into
+
+---
+
+## Draft/Publish Audit (June 15, 2026)
+
+### Summary
+
+The current split is not "MCP vs dashboard". The real split is:
+
+- **Direct-write domain models**: menus, menu items, locations, Q&A, experiences, media metadata, work requests, site settings
+- **Draft-backed content models**: `site_content` via `site_content_drafts`
+- **Hybrid post model**: posts write directly to `posts` with `status = 'draft'`, then explicitly publish through `publish_post`
+
+That means `update_menu_item` succeeding does **not** validate the page-content draft pipeline. It bypasses it entirely.
+
+### Strong Likely Cause of the Current MCP 502s
+
+The MCP content-draft tool contracts do not match their actual return payloads.
+
+Examples:
+
+- `get_page_content` schema says `{ page, content, draft, hasDraft }`, but executor returns merged content plus `hasDrafts`, `editableSchema`, `siteId`, `locationId`
+- `save_content_draft` schema says `{ saved, page, fields_updated }`, but executor returns `{ success, page, changes_count }`
+- `get_content_draft_status` schema says `{ hasDraft, count, pages }`, but executor returns `{ hasDrafts, count }`
+- `publish_content_drafts` schema says `{ published }`, but executor returns `{ success, scope }` or `{ success, page, location_id }`
+- `discard_content_drafts` schema says `{ discarded }`, but executor returns `{ success, scope }` or `{ success, page, location_id }`
+
+The server does not validate output schemas before returning, but ChatGPT MCP clients may still depend on those contracts. Even if the write path is also broken, these mismatches need to be fixed or removed.
+
+### Endpoint Matrix
+
+| Surface | Current backing path | Current behavior | Recommendation |
+|---|---|---|---|
+| `get_page_content` | `server/utils/mcp-workflows.ts#getMergedEditorContent` + `site_content` + `site_content_drafts` | Returns published content merged with drafts | **Keep**, but change semantics to read canonical live content only, or expose explicit `pending_changes` only if we keep any transient edit layer |
+| `save_content_draft` | `server/utils/mcp-workflows.ts#saveContentDraft` -> `server/utils/content-management.ts#upsertDraftContent` -> `site_content_drafts` | Writes page-field drafts | **Remove** for ChatGPT-native MCP; replace with direct atomic update tools |
+| `update_home_hero` | `server/utils/mcp-workflows.ts#updateHomeHero` -> `saveContentDraft` -> optional `publishContentDrafts` | Drafts hero, optionally publishes | **Keep name or replace**, but rewrite to direct canonical write to `site_content` |
+| `get_content_draft_status` | `server/utils/content-management.ts#getDraftStatus` -> `site_content_drafts` | Counts unpublished content drafts | **Remove** |
+| `publish_content_drafts` | `server/utils/mcp-workflows.ts#publishContentDrafts` -> `publishDrafts` / `publishAllDrafts` | Copies drafts into `site_content` then deletes drafts | **Remove** |
+| `discard_content_drafts` | `server/utils/mcp-workflows.ts#discardContentDrafts` -> `discardDrafts` / `discardAllDrafts` | Deletes draft rows | **Remove** |
+| `delete_content_field` | `deleteSiteAndDraftContentField` | Deletes live plus draft copies | **Keep**, but simplify to delete canonical live content only |
+| `create_post` | `server/utils/post-management.ts#createPost` -> `posts` | Direct insert into normalized posts table with `status = 'draft'` | **Keep** |
+| `update_post` | `server/utils/post-management.ts#updatePost` -> `posts` | Direct update | **Keep** |
+| `publish_post` | `server/utils/post-management.ts#publishPost` + channel jobs | Explicit publish step for site/social | **Keep**; posts are a legitimate publishable channel model |
+| `update_menu_item` | `server/utils/menu-management.ts#updateMenuItem` | Direct update to normalized menu tables | **Keep** |
+| `update_location` | `server/utils/location-management.ts#updateLocation` | Direct update to canonical location records | **Keep** |
+| `update_site_settings` | `server/utils/site-settings.ts#updateSiteSettingsFields` | Direct update | **Keep** |
+
+### Recommended MCP Shape After Draft Removal
+
+For renderer-bound site content, prefer direct tools that validate, write canonical data, and return the public URL affected.
+
+Suggested MCP set:
+
+- `update_home_hero`
+- `update_story_section`
+- `update_cta`
+- `update_business_info`
+- `update_contact_page`
+- `update_reservations_page`
+- `update_order_page`
+- `update_site_logo`
+- `update_location`
+- `update_menu_item`
+
+Rules:
+
+- No silent draft creation
+- No separate publish step for `site_content`
+- No orphan fields outside the content registry
+- Tool returns should include the updated canonical record and affected public path
+- Keep explicit publish flows only where the domain actually has publish semantics: posts, translations, social channel jobs
+
+### What Still Uses the Draft System Today
+
+#### MCP tools
+
+- `get_page_content`
+- `save_content_draft`
+- `update_home_hero`
+- `get_content_draft_status`
+- `publish_content_drafts`
+- `discard_content_drafts`
+- `delete_content_field`
+
+#### Shared server utilities
+
+- `server/utils/content-management.ts`
+  - `getDraftContent`
+  - `buildUpsertDraftStmt`
+  - `upsertDraftContent`
+  - `publishDrafts`
+  - `publishAllDrafts`
+  - `discardDrafts`
+  - `discardAllDrafts`
+  - `getDraftStatus`
+  - `deleteDraftContentField`
+  - `deleteSiteAndDraftContentField`
+- `server/utils/mcp-workflows.ts`
+  - `saveContentDraft`
+  - `getMergedEditorContent`
+  - `getContentDraftStatus`
+  - `publishContentDrafts`
+  - `updateHomeHero`
+  - `discardContentDrafts`
+  - `deleteContentField`
+
+#### Dashboard/editor API routes
+
+- `server/api/editor/sites/[siteId]/content/[page].get.ts`
+- `server/api/editor/sites/[siteId]/content/draft.post.ts`
+- `server/api/editor/sites/[siteId]/content/publish.post.ts`
+- `server/api/editor/sites/[siteId]/content/discard.post.ts`
+- `server/api/editor/sites/[siteId]/content/status.get.ts`
+- `server/api/editor/sites/[siteId]/content/delete-field.post.ts`
+
+#### Public preview path
+
+- `server/api/public/sites/[siteId]/content/[page].get.ts`
+  - In preview mode, source-locale previews merge from `site_content_drafts`
+
+#### Dashboard UI
+
+- `pages/dashboard/[orgSlug]/[locationSlug]/content.vue`
+- `pages/dashboard/[orgSlug]/[locationSlug]/pages.vue`
+
+#### Tests / scripts / canaries / transfer
+
+- `tests/e2e/mcp.spec.ts`
+- `scripts/check-mcp-edit-flow.mjs`
+- `scripts/canary-prod.mjs`
+- `server/utils/site-transfer.ts`
+
+#### Schema
+
+- `migrations/0001_initial.sql`
+  - `site_content_drafts`
+  - `idx_site_content_drafts_site_level_unique`
+- `migrations/0004_add_component_field_to_site_content.sql`
+  - Adds `component` to `site_content_drafts`
+
+### Code Removal Plan If We Delete Draft/Publish for Site Content
+
+#### Remove entirely
+
+- MCP tools:
+  - `save_content_draft`
+  - `get_content_draft_status`
+  - `publish_content_drafts`
+  - `discard_content_drafts`
+- Utility functions tied only to `site_content_drafts`
+- Dashboard content editor routes that only exist for draft lifecycle
+- Draft-count UI in `pages/dashboard/[orgSlug]/[locationSlug]/pages.vue`
+- Preview-token draft overlay behavior for source-locale page previews
+- Tests/scripts that assert draft-save, publish, and discard behavior
+
+#### Rewrite, not remove
+
+- `get_page_content`
+  - Stop merging drafts; return canonical content only
+- `update_home_hero`
+  - Write directly to canonical content rows
+- `delete_content_field`
+  - Delete only canonical content rows
+- `server/api/editor/sites/[siteId]/content/[page].get.ts`
+  - Read canonical content only if the editor remains temporarily
+- `server/api/public/sites/[siteId]/content/[page].get.ts`
+  - Keep translation preview behavior if translations still use draft review; remove site-content draft merging
+
+#### Keep as-is
+
+- Post draft/publish flow in `posts`
+  - This is a real domain state machine, not an editor workaround
+- Menu status publish/unpublish
+  - Backed by normalized menu tables, separate from page content drafts
+- Translation review/publish flow
+  - Separate workflow and entitlement surface
+
+### Files Most Likely to Be Deleted in a Draft-System Removal PR
+
+- `server/api/editor/sites/[siteId]/content/draft.post.ts`
+- `server/api/editor/sites/[siteId]/content/publish.post.ts`
+- `server/api/editor/sites/[siteId]/content/discard.post.ts`
+- `server/api/editor/sites/[siteId]/content/status.get.ts`
+- `pages/dashboard/[orgSlug]/[locationSlug]/content.vue`
+
+### Files That Would Need Significant Surgery
+
+- `server/utils/content-management.ts`
+- `server/utils/mcp-workflows.ts`
+- `server/utils/mcp-executor.ts`
+- `server/utils/mcp-tools.ts`
+- `server/api/public/sites/[siteId]/content/[page].get.ts`
+- `server/api/editor/sites/[siteId]/content/[page].get.ts`
+- `tests/e2e/mcp.spec.ts`
+- `scripts/check-mcp-edit-flow.mjs`
+- `scripts/canary-prod.mjs`
+- `migrations/0001_initial.sql`
+- `migrations/0004_add_component_field_to_site_content.sql`
+
+### Recommendation
+
+Remove draft/publish for `site_content`, but **do not** collapse every domain into direct-write:
+
+- Collapse page-content drafts into direct canonical writes
+- Keep explicit publish where the domain genuinely needs staged or multi-channel release:
+  - posts
+  - translations
+  - social publishing jobs
+
+This is the cleanest fit for the ChatGPT-native editing model and removes the most fragile surface now causing production MCP failures.

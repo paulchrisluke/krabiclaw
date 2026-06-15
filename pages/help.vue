@@ -119,7 +119,7 @@ const sections = [
       },
       {
         q: 'What is the draft/publish workflow?',
-        a: 'Every page has a draft state. Changes you make in the editor are saved as a draft and only visible to you in preview. Click Publish to make them live — so you can edit freely without showing unfinished content to customers.'
+        a: 'Page content updates save directly to the live site. Posts still use draft and publish states because they are separate publishing objects.'
       }
     ]
   },
