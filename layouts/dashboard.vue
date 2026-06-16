@@ -496,7 +496,8 @@ const navbarTitle = computed(() => {
     reservations: 'Reservations',
     reviews: 'Reviews',
     settings: 'Settings',
-    setup: 'Setup'
+    setup: 'Setup',
+    support: 'Support'
   }
   return labels[segment] ?? 'Dashboard'
 })
