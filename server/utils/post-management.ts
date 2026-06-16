@@ -181,6 +181,10 @@ export async function publishPost(
   postId: string,
   channels: Array<'site' | 'gmb' | 'instagram' | 'facebook'>
 ): Promise<PostWithChannels | null> {
+  if (!channels.length) {
+    throw new Error('At least one publish channel is required')
+  }
+
   const now = new Date().toISOString()
 
   await db.prepare(`

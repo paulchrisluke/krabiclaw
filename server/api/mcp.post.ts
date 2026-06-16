@@ -1,23 +1,36 @@
-import { createError, getHeader, getRequestURL, setResponseHeader } from 'h3'
-import { asMcpError, mcpFailure, mcpProtocolError, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, readMcpRequest } from '~/server/utils/mcp-protocol'
-import { executeMcpToolCall } from '~/server/utils/mcp-executor'
-import { isMcpRenderResponse } from '~/server/utils/mcp-render'
-import { getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies } from '~/server/utils/mcp-auth'
-import { MCP_TOOLS } from '~/server/utils/mcp-tools'
+import { createError, getHeader, getRequestURL, setResponseHeader } from "h3";
+import {
+  asMcpError,
+  mcpFailure,
+  mcpProtocolError,
+  mcpSuccess,
+  MCP_ERROR,
+  MCP_PROTOCOL_VERSION,
+  readMcpRequest,
+} from "~/server/utils/mcp-protocol";
+import { executeMcpToolCall } from "~/server/utils/mcp-executor";
+import { isMcpRenderResponse } from "~/server/utils/mcp-render";
+import {
+  getActiveEntitlements,
+  getVisibleSiteContext,
+  requireMcpUser,
+  roleSatisfies,
+} from "~/server/utils/mcp-auth";
+import { MCP_TOOLS } from "~/server/utils/mcp-tools";
 
-const WIDGET_RESOURCE_MIME_TYPE = 'text/html;profile=mcp-app'
+const WIDGET_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 
 // Increment this whenever widgets are changed to bust ChatGPT's ui:// cache.
 // ChatGPT caches widget resources by URI, so the same ui://widget/foo.html
 // URI will continue to serve the old widget until the URI changes.
-const WIDGET_VERSION = 'v4'
+const WIDGET_VERSION = "v4";
 
 // Disable ChatGPT widget UI rendering until interactivity is stable.
 // Set to true to re-enable openai/outputTemplate and widget _meta in tool responses.
-const WIDGETS_ENABLED = false
+const WIDGETS_ENABLED = false;
 
 function widgetResourceUri(name: string) {
-  return `ui://widget/${name}@${WIDGET_VERSION}.html`
+  return `ui://widget/${name}@${WIDGET_VERSION}.html`;
 }
 
 // Prefer BETTER_AUTH_URL from Cloudflare env — it is set correctly per environment
@@ -25,43 +38,61 @@ function widgetResourceUri(name: string) {
 // Falling back to the raw request URL origin can return a Workers internal hostname
 // on Cloudflare, which the ChatGPT sandbox then blocks in CSP.
 function resolveBaseUrl(event: Parameters<typeof getRequestURL>[0]): string {
-  const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
-  return (cfEnv?.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(/\/$/, '')
+  const cfEnv = event.context.cloudflare?.env as
+    | { BETTER_AUTH_URL?: string }
+    | undefined;
+  return (cfEnv?.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(
+    /\/$/,
+    "",
+  );
 }
 
 export default defineEventHandler(async (event) => {
-  let requestId: string | number | null | undefined
+  let requestId: string | number | null | undefined;
   try {
     // Return 401 with WWW-Authenticate before any protocol parsing so OAuth
     // clients (e.g. ChatGPT) can discover the authorization server on first touch.
     // Session-cookie requests (dashboard, E2E tests) have a Cookie header and skip this.
-    if (!getHeader(event, 'authorization')?.startsWith('Bearer ') && !getHeader(event, 'cookie')) {
-      const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
-      const baseUrl = (cfEnv?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
-      setResponseStatus(event, 401)
-      setResponseHeader(event, 'WWW-Authenticate',
-        `Bearer realm="${baseUrl}/api/mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`)
-      return mcpFailure(null, { code: MCP_ERROR.invalidRequest, message: 'Authentication required.' })
+    if (
+      !getHeader(event, "authorization")?.startsWith("Bearer ") &&
+      !getHeader(event, "cookie")
+    ) {
+      const cfEnv = event.context.cloudflare?.env as
+        | { BETTER_AUTH_URL?: string }
+        | undefined;
+      const baseUrl = (
+        cfEnv?.BETTER_AUTH_URL ?? "https://krabiclaw.com"
+      ).replace(/\/$/, "");
+      setResponseStatus(event, 401);
+      setResponseHeader(
+        event,
+        "WWW-Authenticate",
+        `Bearer realm="${baseUrl}/api/mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
+      );
+      return mcpFailure(null, {
+        code: MCP_ERROR.invalidRequest,
+        message: "Authentication required.",
+      });
     }
 
-    const body = await readBody(event)
+    const body = await readBody(event);
 
     // ChatGPT occasionally sends an empty-body health probe — ignore silently.
-    if (!body || (typeof body === 'object' && Object.keys(body).length === 0)) {
-      setResponseStatus(event, 200)
-      return ''
+    if (!body || (typeof body === "object" && Object.keys(body).length === 0)) {
+      setResponseStatus(event, 200);
+      return "";
     }
 
-    const request = readMcpRequest(event, body)
-    requestId = request.id
+    const request = readMcpRequest(event, body);
+    requestId = request.id;
 
     // MCP protocol handshake — required before any tools/list or tools/call
-    if (request.method === 'initialize') {
-      await requireMcpUser(event)
+    if (request.method === "initialize") {
+      await requireMcpUser(event);
       return mcpSuccess(request.id, {
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: {}, resources: {}, prompts: {} },
-        serverInfo: { name: 'krabiclaw-mcp', version: 'phase-5' },
+        serverInfo: { name: "krabiclaw-mcp", version: "phase-5" },
         instructions: `KrabiClaw — manage your restaurant or business website through this connection.
 
 Start every conversation by calling show_welcome to discover the user's sites and present the available sites as a text list.
@@ -80,29 +111,29 @@ Start every conversation by calling show_welcome to discover the user's sites an
 All other tools require a site_id obtained from list_sites. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
 
 Common workflows: update menus and items, create and publish posts, triage contact and reservation submissions, update page content directly, upload media, translate content, reply to reviews, and manage experiences and bookings.`,
-      })
+      });
     }
 
     // Client acknowledgement after initialize — spec requires 202 with no body
-    if (request.method === 'notifications/initialized') {
-      setResponseStatus(event, 202)
-      return ''
+    if (request.method === "notifications/initialized") {
+      setResponseStatus(event, 202);
+      return "";
     }
 
     // Standard ping
-    if (request.method === 'ping') {
-      return mcpSuccess(request.id, {})
+    if (request.method === "ping") {
+      return mcpSuccess(request.id, {});
     }
 
     // Widget resources served as ui://widget/{name}.html with the MCP Apps UI MIME type.
     // ChatGPT fetches these when it sees openai/outputTemplate on a tool definition.
     const WIDGETS = [
-      { name: 'welcome-list',    title: 'Site Picker' },
-      { name: 'vertical-picker', title: 'Business Type Picker' },
-      { name: 'photo-album',     title: 'Business Photos' },
-      { name: 'image-carousel',  title: 'Image Carousel' },
-      { name: 'site-preview',    title: 'Site Preview' },
-    ] as const
+      { name: "welcome-list", title: "Site Picker" },
+      { name: "vertical-picker", title: "Business Type Picker" },
+      { name: "photo-album", title: "Business Photos" },
+      { name: "image-carousel", title: "Image Carousel" },
+      { name: "site-preview", title: "Site Preview" },
+    ] as const;
 
     function widgetHtml(name: string, baseUrl: string) {
       return `<!DOCTYPE html>
@@ -115,176 +146,283 @@ Common workflows: update menus and items, create and publish posts, triage conta
 <link rel="modulepreload" crossorigin href="${baseUrl}/mcp-assets/jsx-runtime-chunk.js">
 </head>
 <body><div id="app"></div></body>
-</html>`
+</html>`;
     }
 
-    if (request.method === 'resources/list') {
-      await requireMcpUser(event)
+    if (request.method === "resources/list") {
+      await requireMcpUser(event);
       return mcpSuccess(request.id, {
-        resources: WIDGETS.map(w => ({
+        resources: WIDGETS.map((w) => ({
           uri: widgetResourceUri(w.name),
           name: w.title,
           description: `${w.title} widget`,
           mimeType: WIDGET_RESOURCE_MIME_TYPE,
         })),
-      })
+      });
     }
 
-    if (request.method === 'resources/templates/list') {
-      await requireMcpUser(event)
-      return mcpSuccess(request.id, { resourceTemplates: [] })
+    if (request.method === "resources/templates/list") {
+      await requireMcpUser(event);
+      return mcpSuccess(request.id, { resourceTemplates: [] });
     }
 
-    if (request.method === 'resources/read') {
-      await requireMcpUser(event)
-      const uri = typeof request.params?.uri === 'string' ? request.params.uri : ''
+    if (request.method === "resources/read") {
+      await requireMcpUser(event);
+      const uri =
+        typeof request.params?.uri === "string" ? request.params.uri : "";
       // Accept both versioned (name@vN.html) and plain (name.html) forms so that
       // older cached tool references from prior sessions can still resolve.
-      const match = uri.match(/^ui:\/\/widget\/([^@]+?)(?:@[^.]+)?(?:\.html)?$/)
+      const match = uri.match(
+        /^ui:\/\/widget\/([^@]+?)(?:@[^.]+)?(?:\.html)?$/,
+      );
       if (!match) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown resource: ${uri}`)
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          `Unknown resource: ${uri}`,
+        );
       }
-      const widgetName = match[1]!
-      if (!WIDGETS.some(w => w.name === widgetName)) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown widget: ${widgetName}`)
+      const widgetName = match[1]!;
+      if (!WIDGETS.some((w) => w.name === widgetName)) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          `Unknown widget: ${widgetName}`,
+        );
       }
-      const baseUrl = resolveBaseUrl(event)
+      const baseUrl = resolveBaseUrl(event);
       return mcpSuccess(request.id, {
-        contents: [{
-          uri: widgetResourceUri(widgetName),
-          mimeType: WIDGET_RESOURCE_MIME_TYPE,
-          text: widgetHtml(widgetName, baseUrl),
-          _meta: {
-            ui: {
-              prefersBorder: true,
-              domain: baseUrl,
-              csp: {
-                connectDomains: [baseUrl],
-                resourceDomains: [baseUrl],
+        contents: [
+          {
+            uri: widgetResourceUri(widgetName),
+            mimeType: WIDGET_RESOURCE_MIME_TYPE,
+            text: widgetHtml(widgetName, baseUrl),
+            _meta: {
+              ui: {
+                prefersBorder: true,
+                domain: baseUrl,
+                csp: {
+                  connectDomains: [baseUrl],
+                  resourceDomains: [baseUrl],
+                },
+              },
+              "openai/widgetDescription": `${WIDGETS.find((w) => w.name === widgetName)?.title ?? "KrabiClaw"} widget`,
+              "openai/widgetPrefersBorder": true,
+              "openai/widgetDomain": baseUrl,
+              "openai/widgetCSP": {
+                connect_domains: [baseUrl],
+                resource_domains: [baseUrl],
+                redirect_domains: [
+                  ...new Set([
+                    baseUrl,
+                    (
+                      event.context.cloudflare?.env as
+                        | { NUXT_PUBLIC_PLATFORM_DOMAIN?: string }
+                        | undefined
+                    )?.NUXT_PUBLIC_PLATFORM_DOMAIN?.replace(/\/$/, "") ??
+                      "https://krabiclaw.com",
+                  ]),
+                ],
               },
             },
-            'openai/widgetDescription': `${WIDGETS.find(w => w.name === widgetName)?.title ?? 'KrabiClaw'} widget`,
-            'openai/widgetPrefersBorder': true,
-            'openai/widgetDomain': baseUrl,
-            'openai/widgetCSP': {
-              connect_domains: [baseUrl],
-              resource_domains: [baseUrl],
-              redirect_domains: [...new Set([baseUrl, (event.context.cloudflare?.env as { NUXT_PUBLIC_PLATFORM_DOMAIN?: string } | undefined)?.NUXT_PUBLIC_PLATFORM_DOMAIN?.replace(/\/$/, '') ?? 'https://krabiclaw.com'])],
-            },
           },
-        }],
-      })
+        ],
+      });
     }
 
-    if (request.method === 'prompts/list') {
-      await requireMcpUser(event)
-      return mcpSuccess(request.id, { prompts: [] })
+    if (request.method === "prompts/list") {
+      await requireMcpUser(event);
+      return mcpSuccess(request.id, { prompts: [] });
     }
 
-    if (request.method === 'server/discover') {
-      await requireMcpUser(event)
+    if (request.method === "server/discover") {
+      await requireMcpUser(event);
       return mcpSuccess(request.id, {
-        supportedVersions: ['2026-07-28', '2025-11-25', '2025-03-26', '2024-11-05'],
+        supportedVersions: [
+          "2026-07-28",
+          "2025-11-25",
+          "2025-03-26",
+          "2024-11-05",
+        ],
         capabilities: { tools: {} },
         serverInfo: {
-          name: 'krabiclaw-mcp',
-          version: 'phase-5',
+          name: "krabiclaw-mcp",
+          version: "phase-5",
         },
-        instructions: 'KrabiClaw MCP. Call show_welcome at the start of every conversation to display the site picker and discover the user\'s sites. Use the site_id from that interaction with all other tools.',
-      })
+        instructions:
+          "KrabiClaw MCP. Call show_welcome at the start of every conversation to display the site picker and discover the user's sites. Use the site_id from that interaction with all other tools.",
+      });
     }
 
-    if (request.method === 'tools/list') {
-      const user = await requireMcpUser(event)
-      const siteId = typeof request.params?.site_id === 'string' ? request.params.site_id : null
-      const siteCtx = siteId ? await getVisibleSiteContext(event, siteId) : null
+    if (request.method === "tools/list") {
+      const user = await requireMcpUser(event);
+      const siteId =
+        typeof request.params?.site_id === "string"
+          ? request.params.site_id
+          : null;
+      const siteCtx = siteId
+        ? await getVisibleSiteContext(event, siteId)
+        : null;
 
       const entitlementKeys = siteCtx
-        ? [...new Set(MCP_TOOLS.map(t => t.requiredEntitlement).filter(Boolean) as string[])]
-        : []
+        ? [
+            ...new Set(
+              MCP_TOOLS.map((t) => t.requiredEntitlement).filter(
+                Boolean,
+              ) as string[],
+            ),
+          ]
+        : [];
       const activeEntitlements = siteCtx
-        ? await getActiveEntitlements(user.db, siteCtx.organizationId, entitlementKeys)
-        : new Set<string>()
+        ? await getActiveEntitlements(
+            user.db,
+            siteCtx.organizationId,
+            entitlementKeys,
+          )
+        : new Set<string>();
 
-      const tools = MCP_TOOLS
-        .filter((tool) => {
-          // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
-          // the full capability set on first connection. Security is enforced at execution time.
-          if (!siteId || !siteCtx) return true
-          if (!roleSatisfies(siteCtx.role, tool.minimumRole)) return false
-          if (tool.requiredEntitlement && !activeEntitlements.has(tool.requiredEntitlement)) return false
-          return true
-        })
-        .map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-          outputSchema: tool.outputSchema,
-          annotations: {
-            domain: tool.domain,
-            minimumRole: tool.minimumRole,
-            confirmRequired: tool.confirmRequired,
-          },
-          ...(WIDGETS_ENABLED && tool.widgetName ? {
-            _meta: {
-              ui: { resourceUri: widgetResourceUri(tool.widgetName) },
-              'openai/outputTemplate': widgetResourceUri(tool.widgetName),
-              'openai/widgetAccessible': true,
-              'openai/toolInvocation/invoking': tool.widgetInvoking ?? 'Loading…',
-              'openai/toolInvocation/invoked': tool.widgetInvoked ?? 'Done',
-              ...(tool.fileParams?.length ? { 'openai/fileParams': tool.fileParams } : {}),
-            },
-          } : tool.fileParams?.length ? {
-            _meta: {
-              'openai/fileParams': tool.fileParams,
-            },
-          } : {}),
-        }))
+      const tools = MCP_TOOLS.filter((tool) => {
+        // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
+        // the full capability set on first connection. Security is enforced at execution time.
+        if (!siteId || !siteCtx) return true;
+        if (!roleSatisfies(siteCtx.role, tool.minimumRole)) return false;
+        if (
+          tool.requiredEntitlement &&
+          !activeEntitlements.has(tool.requiredEntitlement)
+        )
+          return false;
+        return true;
+      }).map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        outputSchema: tool.outputSchema,
+        annotations: tool.annotations,
+        ...(WIDGETS_ENABLED && tool.widgetName
+          ? {
+              _meta: {
+                "krabiclaw/toolInfo": {
+                  domain: tool.domain,
+                  minimumRole: tool.minimumRole,
+                  confirmRequired: tool.confirmRequired,
+                },
+                ui: { resourceUri: widgetResourceUri(tool.widgetName) },
+                "openai/outputTemplate": widgetResourceUri(tool.widgetName),
+                "openai/widgetAccessible": true,
+                "openai/toolInvocation/invoking":
+                  tool.widgetInvoking ?? "Loading…",
+                "openai/toolInvocation/invoked": tool.widgetInvoked ?? "Done",
+                ...(tool.fileParams?.length
+                  ? { "openai/fileParams": tool.fileParams }
+                  : {}),
+              },
+            }
+          : tool.fileParams?.length
+            ? {
+                _meta: {
+                  "krabiclaw/toolInfo": {
+                    domain: tool.domain,
+                    minimumRole: tool.minimumRole,
+                    confirmRequired: tool.confirmRequired,
+                  },
+                  "openai/fileParams": tool.fileParams,
+                },
+              }
+            : {
+                _meta: {
+                  "krabiclaw/toolInfo": {
+                    domain: tool.domain,
+                    minimumRole: tool.minimumRole,
+                    confirmRequired: tool.confirmRequired,
+                  },
+                },
+              }),
+      }));
 
-      return mcpSuccess(request.id, { tools })
+      return mcpSuccess(request.id, { tools });
     }
 
-    if (request.method === 'tools/call') {
-      const toolName = typeof request.params?.name === 'string' ? request.params.name : ''
-      const rawArgs = (request.params?.arguments && typeof request.params.arguments === 'object' && !Array.isArray(request.params.arguments))
-        ? request.params.arguments as Record<string, unknown>
-        : Object.fromEntries(Object.entries(request.params ?? {}).filter(([key]) => key !== 'name'))
+    if (request.method === "tools/call") {
+      const toolName =
+        typeof request.params?.name === "string" ? request.params.name : "";
+      const rawArgs =
+        request.params?.arguments &&
+        typeof request.params.arguments === "object" &&
+        !Array.isArray(request.params.arguments)
+          ? (request.params.arguments as Record<string, unknown>)
+          : Object.fromEntries(
+              Object.entries(request.params ?? {}).filter(
+                ([key]) => key !== "name",
+              ),
+            );
 
-      const result = await executeMcpToolCall(event, toolName, rawArgs)
-      const structuredContent = isMcpRenderResponse(result) ? result.structuredContent : result
-      const tool = WIDGETS_ENABLED && isMcpRenderResponse(result) ? MCP_TOOLS.find(t => t.name === toolName) : null
+      const result = await executeMcpToolCall(event, toolName, rawArgs);
+      const structuredContent = isMcpRenderResponse(result)
+        ? result.structuredContent
+        : result;
+      const tool =
+        WIDGETS_ENABLED && isMcpRenderResponse(result)
+          ? MCP_TOOLS.find((t) => t.name === toolName)
+          : null;
       return mcpSuccess(request.id, {
         isError: false,
         structuredContent,
-        content: [{ type: 'text', text: JSON.stringify(structuredContent, null, 2) }],
-        ...(tool ? {
-          _meta: {
-            'openai/toolInvocation/invoking': tool.widgetInvoking ?? 'Loading…',
-            'openai/toolInvocation/invoked': tool.widgetInvoked ?? 'Done',
-          },
-        } : {}),
-      })
+        content: [
+          { type: "text", text: JSON.stringify(structuredContent, null, 2) },
+        ],
+        ...(tool
+          ? {
+              _meta: {
+                "openai/toolInvocation/invoking":
+                  tool.widgetInvoking ?? "Loading…",
+                "openai/toolInvocation/invoked": tool.widgetInvoked ?? "Done",
+              },
+            }
+          : {}),
+      });
     }
 
-    throw createError({ statusCode: 404, statusMessage: `Unsupported MCP method: ${request.method}` })
+    throw createError({
+      statusCode: 404,
+      statusMessage: `Unsupported MCP method: ${request.method}`,
+    });
   } catch (error) {
-    const mcpError = asMcpError(error)
-    const errorStatus = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
-      ? Number((error as { statusCode: number }).statusCode)
-      : null
-    const status = errorStatus ?? (mcpError.code === MCP_ERROR.methodNotFound ? 404
-      : mcpError.code === MCP_ERROR.invalidRequest || mcpError.code === MCP_ERROR.invalidParams ? 400
-      : mcpError.code === MCP_ERROR.parse ? 400
-      : 500)
+    const mcpError = asMcpError(error);
+    const errorStatus =
+      typeof (error as { statusCode?: unknown })?.statusCode === "number"
+        ? Number((error as { statusCode: number }).statusCode)
+        : null;
+    const status =
+      errorStatus ??
+      (mcpError.code === MCP_ERROR.methodNotFound
+        ? 404
+        : mcpError.code === MCP_ERROR.invalidRequest ||
+            mcpError.code === MCP_ERROR.invalidParams
+          ? 400
+          : mcpError.code === MCP_ERROR.parse
+            ? 400
+            : 500);
     // Temporary: log all MCP errors so wrangler tail can capture them
-    console.error('[MCP]', status, mcpError.code, mcpError.message, 'method:', requestId)
-    setResponseStatus(event, status)
+    console.error(
+      "[MCP]",
+      status,
+      mcpError.code,
+      mcpError.message,
+      "method:",
+      requestId,
+    );
+    setResponseStatus(event, status);
     if (status === 401) {
-      const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
-      const baseUrl = (cfEnv?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
-      setResponseHeader(event, 'WWW-Authenticate',
-        `Bearer realm="${baseUrl}/api/mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`)
+      const cfEnv = event.context.cloudflare?.env as
+        | { BETTER_AUTH_URL?: string }
+        | undefined;
+      const baseUrl = (
+        cfEnv?.BETTER_AUTH_URL ?? "https://krabiclaw.com"
+      ).replace(/\/$/, "");
+      setResponseHeader(
+        event,
+        "WWW-Authenticate",
+        `Bearer realm="${baseUrl}/api/mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
+      );
     }
-    return mcpFailure(requestId, mcpError)
+    return mcpFailure(requestId, mcpError);
   }
-})
+});

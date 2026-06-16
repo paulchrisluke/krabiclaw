@@ -145,14 +145,15 @@ function haversineKm(
 async function resolveGeneratedImageUpload(
   imageData: string,
 ): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
+  const normalizedData = normalizeBase64Payload(imageData);
   const dataUrlMatch = imageData.match(
     /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/,
   );
   if (dataUrlMatch) {
     const contentType = dataUrlMatch[1] || "image/png";
-    const base64 = dataUrlMatch[2] || "";
+    const base64 = normalizeBase64Payload(dataUrlMatch[2] || "");
     const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-    const extension = contentType.split("/")[1] ?? "png";
+    const extension = extensionForContentType(contentType);
     return {
       buffer: bytes.buffer as ArrayBuffer,
       contentType,
@@ -167,11 +168,13 @@ async function resolveGeneratedImageUpload(
     );
   }
 
-  const bytes = Uint8Array.from(atob(imageData), (c) => c.charCodeAt(0));
+  const bytes = Uint8Array.from(atob(normalizedData), (c) => c.charCodeAt(0));
+  const contentType = detectImageContentType(bytes) ?? "image/png";
+  const extension = extensionForContentType(contentType);
   return {
     buffer: bytes.buffer as ArrayBuffer,
-    contentType: "image/png",
-    filename: `ai-generated-${Date.now()}.png`,
+    contentType,
+    filename: `ai-generated-${Date.now()}.${extension}`,
   };
 }
 
@@ -755,7 +758,10 @@ export async function executeMcpToolCall(
         ),
       };
     case "update_site_settings": {
-      const { forceSubdomainRegistrationFailure, ...updates } = args as Record<string, unknown>;
+      const { forceSubdomainRegistrationFailure, ...updates } = args as Record<
+        string,
+        unknown
+      >;
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,
@@ -763,7 +769,11 @@ export async function executeMcpToolCall(
         site.organizationId,
         updates,
         site.userId,
-        { forceSubdomainRegistrationFailure: Boolean(forceSubdomainRegistrationFailure) },
+        {
+          forceSubdomainRegistrationFailure: Boolean(
+            forceSubdomainRegistrationFailure,
+          ),
+        },
       );
       assertDomainSuccess(result);
       return result.data;
@@ -868,7 +878,11 @@ export async function executeMcpToolCall(
           site.db,
           site.organizationId,
           site.siteId,
-          args as never,
+          {
+            name: requiredString(args, "name"),
+            description: optionalString(args, "description") ?? undefined,
+            locationId: optionalString(args, "location_id") ?? null,
+          },
           site.userId,
         ),
       };
@@ -884,14 +898,8 @@ export async function executeMcpToolCall(
         ),
       };
     case "delete_menu":
-      return {
-        deleted: await deleteMenu(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          requiredString(args, "menu_id"),
-        ),
-      };
+      await deleteMenu(site.db, site.organizationId, site.siteId, requiredString(args, "menu_id"));
+      return { deleted: true };
     case "create_menu_item":
       return {
         item: await createMenuItem(
@@ -911,7 +919,13 @@ export async function executeMcpToolCall(
         ),
       };
     case "delete_menu_item":
-      await deleteMenuItem(site.db, requiredString(args, "menu_item_id"), site.organizationId, site.siteId, site.userId);
+      await deleteMenuItem(
+        site.db,
+        requiredString(args, "menu_item_id"),
+        site.organizationId,
+        site.siteId,
+        site.userId,
+      );
       return { deleted: true };
     case "rename_menu_section":
       return {
@@ -991,8 +1005,26 @@ export async function executeMcpToolCall(
         ),
       };
     case "publish_post": {
-      const channels = normalizeChannels(args.channels);
+      const channels = normalizeChannelsInput(args);
       const postId = requiredString(args, "post_id");
+      const wantsFacebook = channels.includes("facebook");
+      const wantsInstagram = channels.includes("instagram");
+
+      if (wantsFacebook || wantsInstagram) {
+        const connection = await getFacebookPagesConnection(
+          site.env as never,
+          site.organizationId,
+          site.siteId,
+        ).catch(() => null);
+        if (!connection?.facebook_page_id || !connection.encrypted_page_token) {
+          throw createError({
+            statusCode: 409,
+            statusMessage:
+              "Connect a Facebook Page before publishing to Facebook or Instagram.",
+          });
+        }
+      }
+
       const post = await publishPost(
         site.db,
         site.organizationId,
@@ -1002,9 +1034,6 @@ export async function executeMcpToolCall(
       );
       if (!post)
         throw createError({ statusCode: 404, statusMessage: "Post not found" });
-
-      const wantsFacebook = channels.includes("facebook");
-      const wantsInstagram = channels.includes("instagram");
       const now = new Date().toISOString();
 
       if (wantsFacebook || wantsInstagram) {
@@ -1390,7 +1419,11 @@ export async function executeMcpToolCall(
       });
     }
     case "get_page_fields":
-      console.error("[MCP] get_page_fields invoked page=%s site=%s", args.page, site.siteId);
+      console.error(
+        "[MCP] get_page_fields invoked page=%s site=%s",
+        args.page,
+        site.siteId,
+      );
       return await getEditorContent(
         site.db,
         site.organizationId,
@@ -1504,12 +1537,14 @@ export async function executeMcpToolCall(
         ),
       };
     case "reply_to_review": {
+      const reply =
+        args.reply === null ? null : requiredString(args, "reply");
       const result = await replyToReview(
         site.db,
         site.organizationId,
         site.siteId,
         requiredString(args, "review_id"),
-        requiredString(args, "reply"),
+        reply,
       );
       assertDomainSuccess(result);
       return result.data;
@@ -1822,7 +1857,14 @@ export async function executeMcpToolCall(
         throw new Error("Cloudflare Images not configured");
       const imageData = requiredString(args, "image_data_base64");
       const prompt = optionalString(args, "prompt") ?? null;
-      const upload = await resolveGeneratedImageUpload(imageData);
+      let upload: Awaited<ReturnType<typeof resolveGeneratedImageUpload>>;
+      try {
+        upload = await resolveGeneratedImageUpload(imageData);
+      } catch (err) {
+        console.error("[MCP] save_generated_image base64 decode error:", err);
+        throw err;
+      }
+      console.error("[MCP] save_generated_image uploading bytes=%d contentType=%s", upload.buffer.byteLength, upload.contentType);
 
       const uploaded = await uploadImageBuffer(
         site.env as Parameters<typeof uploadImageBuffer>[0],
@@ -2101,11 +2143,20 @@ function validateRequiredArguments(
   args: Record<string, unknown>,
 ) {
   const required = Array.isArray(schema.required) ? schema.required : [];
+  const properties =
+    schema.properties && typeof schema.properties === "object"
+      ? (schema.properties as Record<string, unknown>)
+      : {};
   for (const key of required) {
+    const propertySchema =
+      properties[key] && typeof properties[key] === "object"
+        ? (properties[key] as Record<string, unknown>)
+        : null;
+    const allowsNull = propertyAllowsNull(propertySchema);
     if (
       !(key in args) ||
       args[key] === undefined ||
-      args[key] === null ||
+      (args[key] === null && !allowsNull) ||
       args[key] === ""
     ) {
       throw mcpProtocolError(
@@ -2114,6 +2165,14 @@ function validateRequiredArguments(
       );
     }
   }
+}
+
+function propertyAllowsNull(schema: Record<string, unknown> | null) {
+  if (!schema) return false;
+  const type = schema.type;
+  if (type === "null") return true;
+  if (Array.isArray(type)) return type.includes("null");
+  return false;
 }
 
 function isAllowedGoogleMapsHost(hostname: string): boolean {
@@ -2197,17 +2256,113 @@ function getDateString(date: Date): string {
   return day ?? "";
 }
 
-function normalizeChannels(
+function normalizeBase64Payload(value: string) {
+  return value.trim().replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+}
+
+function detectImageContentType(bytes: Uint8Array): string | null {
+  if (bytes.length >= 8 &&
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47 &&
+      bytes[4] === 0x0d &&
+      bytes[5] === 0x0a &&
+      bytes[6] === 0x1a &&
+      bytes[7] === 0x0a) {
+    return "image/png";
+  }
+  if (bytes.length >= 3 &&
+      bytes[0] === 0xff &&
+      bytes[1] === 0xd8 &&
+      bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (bytes.length >= 12 &&
+      bytes[0] === 0x52 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x46 &&
+      bytes[8] === 0x57 &&
+      bytes[9] === 0x45 &&
+      bytes[10] === 0x42 &&
+      bytes[11] === 0x50) {
+    return "image/webp";
+  }
+  if (bytes.length >= 6) {
+    const header = String.fromCharCode(...bytes.slice(0, 6));
+    if (header === "GIF87a" || header === "GIF89a") {
+      return "image/gif";
+    }
+  }
+  return null;
+}
+
+function extensionForContentType(contentType: string) {
+  switch (contentType) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/webp":
+      return "webp";
+    case "image/gif":
+      return "gif";
+    case "image/png":
+    default:
+      return "png";
+  }
+}
+
+function normalizeChannelsInput(
+  args: Record<string, unknown>,
+): Array<"site" | "gmb" | "instagram" | "facebook"> {
+  const rawChannels = args.channels;
+  const rawTargets = args.targets;
+
+  if (rawChannels !== undefined && rawTargets !== undefined) {
+    const normalizedChannels = normalizeChannelArray(rawChannels);
+    const normalizedTargets = normalizeChannelArray(rawTargets);
+    const channelSignature = [...normalizedChannels].sort().join(",");
+    const targetSignature = [...normalizedTargets].sort().join(",");
+    if (channelSignature !== targetSignature) {
+      throw mcpProtocolError(
+        MCP_ERROR.invalidParams,
+        "Provide either channels or targets, not conflicting values for both.",
+      );
+    }
+    return normalizedChannels;
+  }
+
+  if (rawChannels !== undefined) return normalizeChannelArray(rawChannels);
+  if (rawTargets !== undefined) return normalizeChannelArray(rawTargets);
+  return ["site"];
+}
+
+function normalizeChannelArray(
   value: unknown,
 ): Array<"site" | "gmb" | "instagram" | "facebook"> {
-  if (!Array.isArray(value) || !value.length) return ["site"];
-  return value.filter(
+  if (!Array.isArray(value) || !value.length) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      "channels must be a non-empty array when provided.",
+    );
+  }
+
+  const normalized = value.filter(
     (item): item is "site" | "gmb" | "instagram" | "facebook" =>
       item === "site" ||
       item === "gmb" ||
       item === "instagram" ||
       item === "facebook",
   );
+
+  if (normalized.length !== value.length) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      "channels may only contain site, facebook, instagram, or gmb.",
+    );
+  }
+
+  return [...new Set(normalized)];
 }
 
 async function loadSiteSettings(

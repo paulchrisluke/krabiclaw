@@ -6,6 +6,7 @@ export interface McpToolDefinition {
   domain: string
   minimumRole: McpToolRole
   confirmRequired: boolean
+  annotations: McpToolAnnotations
   requiredEntitlement?: string
   inputSchema: Record<string, unknown>
   outputSchema: Record<string, unknown>
@@ -14,6 +15,13 @@ export interface McpToolDefinition {
   widgetName?: string
   widgetInvoking?: string
   widgetInvoked?: string
+}
+
+export interface McpToolAnnotations {
+  readOnlyHint: boolean
+  openWorldHint?: boolean
+  destructiveHint?: boolean
+  idempotentHint?: boolean
 }
 
 // --- reusable schema fragments ---
@@ -293,7 +301,7 @@ const siteIdSchema = {
   site_id: { type: 'string', description: 'Site ID.' },
 }
 
-function siteTool(definition: Omit<McpToolDefinition, 'inputSchema' | 'outputSchema'> & {
+function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'outputSchema'> & {
   inputSchema?: Record<string, unknown>
   required?: string[]
   outputSchema?: Record<string, unknown>
@@ -303,7 +311,7 @@ function siteTool(definition: Omit<McpToolDefinition, 'inputSchema' | 'outputSch
     ...(definition.inputSchema ?? {}),
   }
   const required = ['site_id', ...(definition.required ?? [])]
-  return {
+  return withToolAnnotations({
     name: definition.name,
     description: definition.description,
     domain: definition.domain,
@@ -317,15 +325,187 @@ function siteTool(definition: Omit<McpToolDefinition, 'inputSchema' | 'outputSch
       additionalProperties: true,
     },
     outputSchema: definition.outputSchema ?? { type: 'object' },
+  })
+}
+
+function globalTool(definition: RawMcpToolDefinition): McpToolDefinition {
+  return withToolAnnotations(definition)
+}
+
+type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations'>
+
+const READ_ONLY_DEFAULT: McpToolAnnotations = Object.freeze({
+  readOnlyHint: true,
+  idempotentHint: true,
+})
+
+function boundedWriteAnnotations(): McpToolAnnotations {
+  return { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
+}
+
+function openWorldWriteAnnotations(): McpToolAnnotations {
+  return { readOnlyHint: false, openWorldHint: true, destructiveHint: false }
+}
+
+function boundedDestructiveAnnotations(): McpToolAnnotations {
+  return { readOnlyHint: false, openWorldHint: false, destructiveHint: true }
+}
+
+function openWorldDestructiveAnnotations(): McpToolAnnotations {
+  return { readOnlyHint: false, openWorldHint: true, destructiveHint: true }
+}
+
+const READ_ONLY_TOOL_NAMES = [
+  'show_welcome',
+  'get_current_user',
+  'show_vertical_picker',
+  'import_from_maps',
+  'show_generated_images',
+  'list_sites',
+  'show_site_preview',
+  'get_site',
+  'get_site_settings',
+  'list_locations',
+  'get_location',
+  'list_menus',
+  'get_menu',
+  'list_posts',
+  'get_post',
+  'get_site_media_assets',
+  'get_facebook_connection',
+  'get_page_fields',
+  'list_location_qa',
+  'list_location_reviews',
+  'list_experiences',
+  'get_experience',
+  'list_experience_bookings',
+  'list_locales',
+  'get_translation_inventory',
+  'list_translation_jobs',
+  'get_translation_job',
+  'get_translation_review_items',
+  'get_contact_inquiries',
+  'get_reservation_inquiries',
+  'get_notification_settings',
+  'get_google_business_connection',
+  'get_google_business_auth_url',
+  'list_google_business_accounts',
+  'list_work_requests',
+  'get_site_domains',
+  'get_site_analytics',
+] as const
+
+const BOUNDED_WRITE_TOOL_NAMES = [
+  'save_generated_image',
+  'save_generated_image_file',
+  'create_site',
+  'create_post',
+  'update_post',
+  'request_media_upload',
+  'confirm_media_upload',
+  'update_media_asset',
+  'import_menu_from_media',
+  'update_experience_booking',
+  'upsert_locale',
+  'start_translation_job',
+  'run_translation_job_batch',
+  'save_translation_review_item',
+  'update_contact_submission',
+  'update_reservation_submission',
+  'update_notification_settings',
+  'create_work_request',
+] as const
+
+const OPEN_WORLD_WRITE_TOOL_NAMES = [
+  'update_site_settings',
+  'create_location',
+  'update_location',
+  'create_menu',
+  'update_menu',
+  'create_menu_item',
+  'update_menu_item',
+  'rename_menu_section',
+  'reorder_menu_items',
+  'publish_post',
+  'publish_to_facebook',
+  'sync_facebook_page',
+  'update_page_content',
+  'update_home_hero',
+  'create_location_qa',
+  'update_location_qa',
+  'reorder_location_qa',
+  'reply_to_review',
+  'create_experience',
+  'update_experience',
+  'publish_translations',
+  'sync_google_business_locations',
+  'create_domain',
+  'set_canonical_domain',
+  'sync_domain',
+] as const
+
+const BOUNDED_DESTRUCTIVE_TOOL_NAMES = [
+  'delete_media_asset',
+] as const
+
+const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
+  'delete_location',
+  'delete_menu',
+  'delete_menu_item',
+  'delete_menu_section',
+  'delete_post',
+  'delete_content_field',
+  'delete_location_qa',
+  'delete_experience',
+  'delete_locale',
+  'delete_domain',
+] as const
+
+function buildToolAnnotationsByName() {
+  const groups = [
+    { names: READ_ONLY_TOOL_NAMES, annotations: READ_ONLY_DEFAULT },
+    { names: BOUNDED_WRITE_TOOL_NAMES, annotations: boundedWriteAnnotations() },
+    { names: OPEN_WORLD_WRITE_TOOL_NAMES, annotations: openWorldWriteAnnotations() },
+    { names: BOUNDED_DESTRUCTIVE_TOOL_NAMES, annotations: boundedDestructiveAnnotations() },
+    { names: OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES, annotations: openWorldDestructiveAnnotations() },
+  ] as const
+
+  const map = new Map<string, McpToolAnnotations>()
+  for (const group of groups) {
+    for (const name of group.names) {
+      if (map.has(name)) {
+        throw new Error(`Duplicate MCP tool annotation classification for "${name}".`)
+      }
+      map.set(name, group.annotations)
+    }
+  }
+  return map
+}
+
+const TOOL_ANNOTATIONS_BY_NAME = buildToolAnnotationsByName()
+
+function withToolAnnotations(definition: RawMcpToolDefinition): McpToolDefinition {
+  const annotations = TOOL_ANNOTATIONS_BY_NAME.get(definition.name)
+  if (!annotations) {
+    throw new Error(`Missing MCP tool annotation classification for "${definition.name}".`)
+  }
+
+  if (annotations.readOnlyHint === false) {
+    if (typeof annotations.openWorldHint !== 'boolean' || typeof annotations.destructiveHint !== 'boolean') {
+      throw new Error(`Write tool "${definition.name}" must declare openWorldHint and destructiveHint.`)
+    }
+  } else if (definition.confirmRequired) {
+    throw new Error(`Read-only MCP tool "${definition.name}" cannot require confirmation.`)
+  }
+
+  return {
+    ...definition,
+    annotations,
   }
 }
 
-function globalTool(definition: McpToolDefinition): McpToolDefinition {
-  return definition
-}
-
 export const MCP_TOOLS: McpToolDefinition[] = [
-  globalTool({
+  globalTool(withToolAnnotations({
     name: 'show_welcome',
     description: 'Show the welcome screen. Lists existing sites, exposes the current authenticated account, and renders a site picker or a "Create your first site" CTA. Call this at the start of every conversation.',
     domain: 'onboarding',
@@ -347,8 +527,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     widgetName: 'welcome-list',
     widgetInvoking: 'Loading your sites…',
     widgetInvoked: 'Sites loaded',
-  }),
-  globalTool({
+  })),
+  globalTool(withToolAnnotations({
     name: 'get_current_user',
     description: 'Get the currently authenticated KrabiClaw account identity for debugging and workflow confirmation.',
     domain: 'account',
@@ -362,8 +542,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['user'],
     },
-  }),
-  globalTool({
+  })),
+  globalTool(withToolAnnotations({
     name: 'show_vertical_picker',
     description: 'Show a clickable business-type picker widget. The user taps one option and it is sent back to the model. Call this after the user clicks "Create a new site" but before asking for their Maps URL.',
     domain: 'onboarding',
@@ -378,8 +558,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     widgetName: 'vertical-picker',
     widgetInvoking: 'Loading business types…',
     widgetInvoked: 'Choose your business type',
-  }),
-  globalTool({
+  })),
+  globalTool(withToolAnnotations({
     name: 'import_from_maps',
     description: 'Import business details from a Google Maps URL or share link. Returns business info and photos. Call this when the user provides a Maps URL during site creation.',
     domain: 'onboarding',
@@ -455,8 +635,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     widgetName: 'photo-album',
     widgetInvoking: 'Importing from Google Maps…',
     widgetInvoked: 'Business imported',
-  }),
-  globalTool({
+  })),
+  globalTool(withToolAnnotations({
     name: 'show_generated_images',
     description: 'Show a carousel of AI-generated hero images for the user to pick from. Call save_generated_image first to persist each image, then pass the resulting assetId and publicUrl here.',
     domain: 'onboarding',
@@ -495,7 +675,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     widgetName: 'image-carousel',
     widgetInvoking: 'Loading generated images…',
     widgetInvoked: 'Pick your hero image',
-  }),
+  })),
   siteTool({
     name: 'save_generated_image',
     description: 'Upload a base64-encoded image to Cloudflare Images and persist a media_asset record. Use ONLY when you already have a raw base64 string (e.g. from an external API). For ChatGPT native image_generation output, use save_generated_image_file instead — passing image_generation_call.result base64 here will be blocked by safety checks.',
@@ -539,7 +719,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       required: ['assetId', 'publicUrl'],
     },
   }),
-  globalTool({
+  globalTool(withToolAnnotations({
     name: 'list_sites',
     description: 'List the caller\'s accessible sites and current authenticated account identity.',
     domain: 'sites',
@@ -560,8 +740,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     widgetName: 'welcome-list',
     widgetInvoking: 'Loading your sites…',
     widgetInvoked: 'Sites loaded',
-  }),
-  globalTool({
+  })),
+  globalTool(withToolAnnotations({
     name: 'create_site',
     description: 'Create a new site in the caller\'s organization.',
     domain: 'sites',
@@ -589,7 +769,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['id', 'siteId', 'subdomain'],
     },
-  }),
+  })),
   siteTool({
     name: 'show_site_preview',
     description: 'Show a live iframe preview of the newly created site. Call after create_site + create_location succeed.',
@@ -1048,11 +1228,15 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'publish_post',
-    description: 'Publish a post to one or more channels. channels defaults to ["site"]. Pass ["site","facebook"] or ["site","instagram"] or all three to simultaneously publish to social — requires a connected Facebook Page (get_facebook_connection). Instagram additionally requires the post to have an image.',
+    description: 'Publish a post to one or more channels. channels defaults to ["site"]. Pass ["site","facebook"] or ["site","instagram"] or all three to simultaneously publish to social — requires a connected Facebook Page (get_facebook_connection). Instagram additionally requires the post to have an image. targets is accepted as a deprecated alias for channels.',
     domain: 'posts',
     minimumRole: 'editor',
     confirmRequired: true,
-    inputSchema: { post_id: { type: 'string' }, channels: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram', 'gmb'] }, description: 'Channels to publish to. Defaults to ["site"].' } },
+    inputSchema: {
+      post_id: { type: 'string' },
+      channels: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram', 'gmb'] }, description: 'Channels to publish to. Defaults to ["site"].' },
+      targets: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram', 'gmb'] }, description: 'Deprecated alias for channels. Prefer channels.' },
+    },
     required: ['post_id'],
     outputSchema: {
       type: 'object',
@@ -1446,20 +1630,22 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'reply_to_review',
-    description: 'Add or update the owner reply for a review.',
+    description: 'Add, update, or clear the owner reply for a review. Pass reply: null to clear an existing reply.',
     domain: 'reviews',
     minimumRole: 'owner',
     confirmRequired: false,
-    inputSchema: { review_id: { type: 'string' }, reply: { type: 'string' } },
+    inputSchema: { review_id: { type: 'string' }, reply: { type: ['string', 'null'] } },
     required: ['review_id', 'reply'],
     outputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'string' },
-        reply: { type: 'string' },
+        review_id: { type: 'string' },
+        reply: { type: ['string', 'null'] },
+        replied: { type: 'boolean' },
+        cleared: { type: 'boolean' },
         updated_at: { type: 'string' },
       },
-      required: ['id', 'reply'],
+      required: ['review_id', 'replied', 'cleared', 'updated_at'],
     },
   }),
   siteTool({
@@ -1832,11 +2018,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     outputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'string' },
+        updated: { type: 'boolean' },
+        submission_id: { type: 'string' },
         status: { type: 'string' },
-        updated_at: { type: 'string' },
       },
-      required: ['id', 'status'],
+      required: ['updated', 'submission_id', 'status'],
     },
   }),
   siteTool({
@@ -1862,11 +2048,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     outputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'string' },
+        updated: { type: 'boolean' },
+        submission_id: { type: 'string' },
         status: { type: 'string' },
-        updated_at: { type: 'string' },
       },
-      required: ['id', 'status'],
+      required: ['updated', 'submission_id', 'status'],
     },
   }),
   siteTool({
@@ -2204,6 +2390,15 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
 ].sort((a, b) => a.name.localeCompare(b.name))
+
+{
+  const toolNames = new Set(MCP_TOOLS.map((tool) => tool.name))
+  for (const name of TOOL_ANNOTATIONS_BY_NAME.keys()) {
+    if (!toolNames.has(name)) {
+      throw new Error(`MCP tool annotation classification exists for unknown tool "${name}".`)
+    }
+  }
+}
 
 export function getMcpTool(name: string) {
   return MCP_TOOLS.find((tool) => tool.name === name) ?? null

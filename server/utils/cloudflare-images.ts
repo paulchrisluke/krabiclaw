@@ -1,11 +1,17 @@
 interface CloudflareImagesEnv {
   CF_ACCOUNT_ID?: string
+  CLOUDFLARE_ACCOUNT_ID?: string
+  CLOUDFLARE_IMAGES_ACCOUNT_ID?: string
   CLOUDFLARE_IMAGES_API_TOKEN?: string
   CLOUDFLARE_IMAGES_VARIANT_BASE?: string
 }
 
+function accountId(env: CloudflareImagesEnv): string {
+  return env.CLOUDFLARE_IMAGES_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID || env.CF_ACCOUNT_ID || ''
+}
+
 export function hasCloudflareImagesConfig(env: CloudflareImagesEnv): boolean {
-  return Boolean(env.CF_ACCOUNT_ID && env.CLOUDFLARE_IMAGES_API_TOKEN && env.CLOUDFLARE_IMAGES_VARIANT_BASE)
+  return Boolean(accountId(env) && env.CLOUDFLARE_IMAGES_API_TOKEN && env.CLOUDFLARE_IMAGES_VARIANT_BASE)
 }
 
 interface CloudflareImagesResponse {
@@ -16,7 +22,7 @@ interface CloudflareImagesResponse {
 }
 
 function apiBase(env: CloudflareImagesEnv): string {
-  return `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/images`
+  return `https://api.cloudflare.com/client/v4/accounts/${accountId(env)}/images`
 }
 
 function authHeader(env: CloudflareImagesEnv): Record<string, string> {
@@ -56,7 +62,11 @@ export async function uploadImageBuffer(
     headers: authHeader(env),
     body: form,
   })
-  if (!res.ok) throw new Error(`CF Images upload error ${res.status}: ${await res.text()}`)
+  if (!res.ok) {
+    const body = await res.text()
+    console.error(`[CF Images] upload error ${res.status}: ${body}`)
+    throw new Error(`CF Images upload error ${res.status}: ${body}`)
+  }
   const data = await res.json() as CloudflareImagesResponse
   const id = typeof data?.result?.id === 'string' ? data.result.id : ''
   if (!id) {

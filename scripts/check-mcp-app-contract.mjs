@@ -121,7 +121,7 @@ async function main() {
   const toolList = tools.body?.result?.tools ?? []
   const renderTools = toolList.filter(tool => tool?._meta?.ui?.resourceUri || tool?._meta?.['openai/outputTemplate'])
   if (renderTools.length > 0) pass(`found ${renderTools.length} render tools`)
-  else fail('no render tools advertised', tools.body)
+  else skip('no render tools advertised; widgets are currently disabled by design')
 
   for (const tool of renderTools) {
     const standardUri = tool._meta?.ui?.resourceUri
