@@ -377,8 +377,12 @@ If `missingPhotos: true`, the widget adds below the grid:
 
 **How it works:** ChatGPT calls the native `image_generation` tool (built into ChatGPT via the
 [Responses API](https://developers.openai.com/api/docs/guides/image-generation)) — no MCP tool
-needed for generation. The model generates 2–3 images, then calls our existing MCP tools to
-persist them (`request_media_upload` → upload → `confirm_media_upload`).
+needed for generation. The model generates 2–3 images, persists them with
+`save_generated_image_file` when the image came from native ChatGPT generation or
+`save_generated_image` when we already have raw base64 from a non-native source, then renders
+the picker with `show_generated_images`. After the user approves one, the model assigns it with a
+business-level tool such as `set_home_hero_image`, `set_logo`, `set_story_image`,
+`set_location_hero_image`, `set_post_image`, or `set_experience_image`.
 
 The model uses a prompt it constructs from the imported business data:
 ```
@@ -444,8 +448,10 @@ Importing from Google Maps:
 Ready to build?
 ```
 
-User confirms → model calls `create_site` then `create_location` with all collected data
-(including `maps_url`, `google_place_id`, `hero_image_asset_id` if generated).
+User confirms → model calls `create_site` then `create_location` with all collected data.
+If the user already approved a generated image, assign it immediately after creation with
+`set_home_hero_image` or `set_location_hero_image` instead of threading raw image payloads
+through the site creation call.
 
 ---
 
@@ -530,10 +536,12 @@ to `publicUrl` when the user clicks the card or the "Open site" button.
 | `show_welcome` | render | Wraps `listSitesForUser` from `mcp-workflows.ts` |
 | `import_from_maps` | data + render | Ports `lookup_maps_url` from `chowbot-agent.ts` + adds photo download + Cloudflare Images upload |
 | `show_generated_images` | render | New widget only; image generation done by ChatGPT natively |
+| `set_logo` / `set_home_hero_image` / `set_story_image` / `set_location_hero_image` / `set_post_image` / `set_experience_image` | data | Thin MCP wrappers over existing site/content/location/post/experience updates |
 | `show_site_preview` | render | New widget; iframe pattern from `templates.vue` |
 
-`create_site`, `create_location`, `request_media_upload`, `confirm_media_upload` already exist
-and are called directly by the model (not as render tools).
+`create_site`, `create_location`, `save_generated_image`, `save_generated_image_file`,
+`request_media_upload`, and `confirm_media_upload` already exist and are called directly by the
+model (not as render tools).
 
 ---
 

@@ -49,9 +49,12 @@ Related workflow helpers:
 - Menu extraction must only operate on confirmed or explicitly pending-media workflow inputs.
 - AI-generated images still end as normal media assets and must be visible through the canonical media listing surface.
 - Canonical MCP generated-image contracts are split by source:
-  - Native image-generation output: `save_generated_image({ site_id, image_data_base64, prompt })`
-  - Attachment or file-handoff output: `save_generated_image_file({ site_id, attachment_id, prompt })`
+  - ChatGPT native image-generation output: `save_generated_image_file({ site_id, attachment_id, prompt })`
+  - Raw base64 from a non-native image source: `save_generated_image({ site_id, image_data_base64, prompt })`
 - Do not pass raw local filesystem paths to MCP tools as a stand-in for attachment transport.
+- Prefer business-level image workflows over generic file handoff when the user intent is domain-specific:
+  - Generate into KrabiClaw first, persist to Cloudflare Images immediately, then assign by `assetId`
+  - Assignment should happen through the canonical entity mutation tools such as `set_logo`, `set_home_hero_image`, `set_story_image`, `set_location_hero_image`, `set_menu_item_image`, `set_post_image`, and `set_experience_image`
 - MCP tools should be coarse-grained and business-level:
   - `list_media`
   - `request_media_upload`

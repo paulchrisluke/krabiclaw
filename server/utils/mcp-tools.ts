@@ -179,7 +179,8 @@ const experienceObject = {
     capacity: { type: ['number', 'null'] },
     status: { type: 'string', enum: [...EXPERIENCE_STATUSES] },
     location_id: { type: ['string', 'null'] },
-    hero_image_asset_id: { type: ['string', 'null'] },
+    image_asset_id: { type: ['string', 'null'] },
+    video_asset_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
@@ -442,6 +443,16 @@ const READ_ONLY_TOOL_NAMES = [
 const BOUNDED_WRITE_TOOL_NAMES = [
   'save_generated_image',
   'save_generated_image_file',
+  'set_logo',
+  'set_home_hero_image',
+  'set_home_hero_video',
+  'set_story_image',
+  'set_location_hero_image',
+  'set_location_hero_video',
+  'set_menu_item_image',
+  'set_post_image',
+  'set_experience_image',
+  'set_experience_video',
   'create_site',
   'create_post',
   'update_post',
@@ -681,7 +692,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   })),
   globalTool(withToolAnnotations({
     name: 'show_generated_images',
-    description: 'Show a carousel of AI-generated hero images for the user to pick from. Call save_generated_image first to persist each image, then pass the resulting assetId and publicUrl here.',
+    description: 'Show a carousel of AI-generated hero images for the user to pick from. First persist each image with save_generated_image or save_generated_image_file, then pass the resulting assetId and publicUrl here.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -690,7 +701,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         images: {
           type: 'array',
-          description: 'Array of { assetId, publicUrl } returned by save_generated_image.',
+          description: 'Array of { assetId, publicUrl } returned by save_generated_image or save_generated_image_file.',
           items: { type: 'object', properties: { assetId: { type: 'string' }, publicUrl: { type: 'string' } } },
         },
       },
@@ -949,6 +960,26 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
+    name: 'set_logo',
+    description: 'Assign a saved media asset as the site logo. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id.',
+    domain: 'sites',
+    minimumRole: 'admin',
+    confirmRequired: false,
+    inputSchema: {
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        updated: { type: 'boolean' },
+        logo_asset_id: { type: 'string' },
+      },
+      required: ['id', 'updated', 'logo_asset_id'],
+    },
+  }),
+  siteTool({
     name: 'list_locations',
     description: 'List site locations.',
     domain: 'locations',
@@ -1005,6 +1036,36 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       hero_video_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero video for this location.' },
     },
     required: ['location_id'],
+    outputSchema: {
+      ...locationMutationResultObject,
+    },
+  }),
+  siteTool({
+    name: 'set_location_hero_image',
+    description: 'Assign a saved media asset as a location hero image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target location_id.',
+    domain: 'locations',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      location_id: { type: 'string' },
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['location_id', 'asset_id'],
+    outputSchema: {
+      ...locationMutationResultObject,
+    },
+  }),
+  siteTool({
+    name: 'set_location_hero_video',
+    description: 'Assign a saved video asset as a location hero video. Upload the video via the dashboard media library first, then call get_site_media_assets to find its asset id.',
+    domain: 'locations',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      location_id: { type: 'string' },
+      asset_id: { type: 'string', description: 'Active video asset id from get_site_media_assets.' },
+    },
+    required: ['location_id', 'asset_id'],
     outputSchema: {
       ...locationMutationResultObject,
     },
@@ -1155,6 +1216,23 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
+    name: 'set_menu_item_image',
+    description: 'Assign a saved media asset as a menu item image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target menu_item_id.',
+    domain: 'menus',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      menu_item_id: { type: 'string' },
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['menu_item_id', 'asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: { item: menuItemObject },
+      required: ['item'],
+    },
+  }),
+  siteTool({
     name: 'delete_menu_item',
     description: 'Delete a menu item.',
     domain: 'menus',
@@ -1270,6 +1348,23 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
+    name: 'set_post_image',
+    description: 'Assign a saved media asset as a post image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target post_id.',
+    domain: 'posts',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      post_id: { type: 'string' },
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['post_id', 'asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: { post: postObject },
+      required: ['post'],
+    },
+  }),
+  siteTool({
     name: 'publish_post',
     description: 'Publish a post to one or more channels. channels defaults to ["site"]. Pass ["site","facebook"] or ["site","instagram"] or all three to simultaneously publish to social — requires a connected Facebook Page (get_facebook_connection). Instagram additionally requires the post to have an image. targets is accepted as a deprecated alias for channels.',
     domain: 'posts',
@@ -1302,7 +1397,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_site_media_assets',
-    description: 'List media assets (images and videos) for a site. Use this first to find asset IDs before assigning a hero image — call it, pick the right asset from the results, then pass its id to update_home_hero(image_asset_id=...) or update_location(hero_image_asset_id=...). Filter by kind="image" to narrow results. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}/media — orgSlug comes from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
+    description: 'List media assets (images and videos) for a site. Use this first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}/media — orgSlug comes from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1560,6 +1655,71 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
+    name: 'set_home_hero_image',
+    description: 'Assign a saved media asset as the homepage hero image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id.',
+    domain: 'content',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+      location_id: { type: 'string', description: 'Optional location scope when the homepage content is location-specific.' },
+    },
+    required: ['asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        page: { type: 'string' },
+        changes_count: { type: 'number' },
+        public_path: { type: 'string' },
+      },
+      required: ['success', 'page', 'changes_count'],
+    },
+  }),
+  siteTool({
+    name: 'set_home_hero_video',
+    description: 'Assign a saved video asset as the homepage hero video. Upload the video via the dashboard media library first, then call get_site_media_assets to find its asset id.',
+    domain: 'content',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      asset_id: { type: 'string', description: 'Active video asset id from get_site_media_assets.' },
+      location_id: { type: 'string', description: 'Optional location scope when the homepage content is location-specific.' },
+    },
+    required: ['asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        page: { type: 'string' },
+        changes_count: { type: 'number' },
+        public_path: { type: 'string' },
+      },
+      required: ['success', 'page', 'changes_count'],
+    },
+  }),
+  siteTool({
+    name: 'set_story_image',
+    description: 'Assign a saved media asset as the About page story image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id.',
+    domain: 'content',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        page: { type: 'string' },
+        changes_count: { type: 'number' },
+        public_path: { type: 'string' },
+      },
+      required: ['success', 'page', 'changes_count'],
+    },
+  }),
+  siteTool({
     name: 'delete_content_field',
     description: 'Delete a canonical content field from live page content.',
     domain: 'content',
@@ -1740,6 +1900,40 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     confirmRequired: false,
     inputSchema: { experience_id: { type: 'string' }, ...experienceWriteSchema },
     required: ['experience_id'],
+    outputSchema: {
+      type: 'object',
+      properties: { experience: experienceObject },
+      required: ['experience'],
+    },
+  }),
+  siteTool({
+    name: 'set_experience_image',
+    description: 'Assign a saved media asset as an experience image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target experience_id.',
+    domain: 'experiences',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      experience_id: { type: 'string' },
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['experience_id', 'asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: { experience: experienceObject },
+      required: ['experience'],
+    },
+  }),
+  siteTool({
+    name: 'set_experience_video',
+    description: 'Assign a saved video asset as an experience video. Upload the video via the dashboard media library first, then call get_site_media_assets to find its asset id.',
+    domain: 'experiences',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      experience_id: { type: 'string' },
+      asset_id: { type: 'string', description: 'Active video asset id from get_site_media_assets.' },
+    },
+    required: ['experience_id', 'asset_id'],
     outputSchema: {
       type: 'object',
       properties: { experience: experienceObject },

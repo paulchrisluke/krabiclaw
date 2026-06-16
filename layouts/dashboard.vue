@@ -407,7 +407,6 @@ const mainNavigation = computed(() => [
     { label: 'Restaurant', icon: 'i-lucide-layout-dashboard', to: orgBase.value ?? '/dashboard' },
   ],
   [
-    { label: 'Translations', icon: 'i-lucide-languages', to: orgBase.value ? `${orgBase.value}/translations` : '/dashboard' },
     { label: 'Support', icon: 'i-lucide-headphones', to: orgBase.value ? `${orgBase.value}/support` : '/dashboard' },
   ],
   [
@@ -423,9 +422,6 @@ const locationNavigation = computed(() => {
       { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: project },
     ],
     [
-      { label: 'Menu', icon: 'i-lucide-utensils', to: `${project}/menu` },
-      { label: 'Content', icon: 'i-lucide-files', to: `${project}/content?page=location` },
-      { label: 'Posts', icon: 'i-lucide-newspaper', to: `${project}/posts` },
       { label: 'Media', icon: 'i-lucide-images', to: `${project}/media` },
       { label: 'Pages', icon: 'i-lucide-file-text', to: `${project}/pages` },
     ],
@@ -433,10 +429,6 @@ const locationNavigation = computed(() => {
       { label: 'Reviews', icon: 'i-lucide-star', to: `${project}/reviews` },
       { label: 'Inbox', icon: 'i-lucide-inbox', to: `${project}/inbox` },
       { label: 'Reservations', icon: 'i-lucide-calendar-check', to: `${project}/reservations` },
-      { label: 'Orders', icon: 'i-lucide-shopping-bag', to: `${project}/order` },
-    ],
-    [
-      { label: 'Experiences', icon: 'i-lucide-ticket', to: `${project}/experiences` },
     ],
   ]
 })
@@ -470,7 +462,6 @@ const orgSettingsNavigation = computed(() => {
   if (!org) return [[]]
   return [[
     { label: 'General', icon: 'i-lucide-sliders', to: `${org}/general` },
-    { label: 'Domains', icon: 'i-lucide-globe', to: `${org}/domains` },
     { label: 'Billing', icon: 'i-lucide-credit-card', to: `${org}/billing` },
     { label: 'Members', icon: 'i-lucide-users', to: `${org}/members` },
   ]]
@@ -496,23 +487,16 @@ const navbarTitle = computed(() => {
   const labels: Record<string, string> = {
     account: 'Account',
     billing: 'Billing',
-    content: 'Content',
-    experiences: 'Experiences',
     help: 'Help',
     inbox: 'Inbox',
     locations: 'Locations',
     media: 'Media',
-    menu: 'Menu',
-    order: 'Orders',
     pages: 'Pages',
     photos: 'Photos',
-    posts: 'Posts',
-    qa: 'Q&A',
     reservations: 'Reservations',
     reviews: 'Reviews',
     settings: 'Settings',
-    setup: 'Setup',
-    translations: 'Translations'
+    setup: 'Setup'
   }
   return labels[segment] ?? 'Dashboard'
 })

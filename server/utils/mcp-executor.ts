@@ -159,7 +159,11 @@ async function resolveGeneratedImageUpload(
     };
   }
 
-  if (imageData.startsWith("/")) {
+  if (
+    /^\/mnt\/data\//.test(imageData) ||
+    /^\/tmp\//.test(imageData) ||
+    /^file:\/\//.test(imageData)
+  ) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
       "save_generated_image only accepts base64 image data or a data URL. Use save_generated_image_file for attachment-based uploads.",
@@ -174,6 +178,60 @@ async function resolveGeneratedImageUpload(
     contentType,
     filename: `ai-generated-${Date.now()}.${extension}`,
   };
+}
+
+function validateGeneratedImageBuffer(
+  bytes: Uint8Array,
+  sourceLabel: string,
+): string {
+  if (bytes.byteLength < 1024) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Invalid generated image payload from ${sourceLabel}: payload too small.`,
+    });
+  }
+
+  const detectedContentType = detectImageContentType(bytes);
+  if (!detectedContentType) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `Invalid generated image payload from ${sourceLabel}: unsupported or unrecognized image bytes.`,
+    );
+  }
+
+  return detectedContentType;
+}
+
+async function requireActiveImageAsset(
+  db: D1Database,
+  siteId: string,
+  assetId: string,
+  fieldName: string,
+) {
+  const asset = await getMediaAsset(db, assetId, siteId);
+  if (!asset || asset.status !== "active" || asset.kind !== "image") {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `${fieldName} must reference an active image asset from this site.`,
+    );
+  }
+  return asset;
+}
+
+async function requireActiveVideoAsset(
+  db: D1Database,
+  siteId: string,
+  assetId: string,
+  fieldName: string,
+) {
+  const asset = await getMediaAsset(db, assetId, siteId);
+  if (!asset || asset.status !== "active" || asset.kind !== "video") {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `${fieldName} must reference an active video asset from this site. Upload the video via the dashboard media library first, then call get_site_media_assets to find its asset id.`,
+    );
+  }
+  return asset;
 }
 
 interface ToolFileReference {
@@ -240,9 +298,15 @@ async function resolveGeneratedImageFile(
   }
 
   const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const detectedContentType = validateGeneratedImageBuffer(
+    bytes,
+    `attachment ${file.file_id}`,
+  );
   const filename =
-    file.file_name ?? `${file.file_id}.${contentType.split("/")[1] ?? "png"}`;
-  return { buffer, contentType, filename };
+    file.file_name ??
+    `${file.file_id}.${detectedContentType.split("/")[1] ?? "png"}`;
+  return { buffer, contentType: detectedContentType, filename };
 }
 
 interface GoogleMapsSignals {
@@ -633,7 +697,7 @@ export async function executeMcpToolCall(
     if (raw.length === 0) {
       throw mcpProtocolError(
         MCP_ERROR.invalidParams,
-        "images must be non-empty. Call save_generated_image first to get an assetId and publicUrl, then pass the result here.",
+        "images must be non-empty. First persist each image with save_generated_image or save_generated_image_file, then pass the assetId and publicUrl here.",
       );
     }
     for (const img of raw) {
@@ -645,7 +709,7 @@ export async function executeMcpToolCall(
       ) {
         throw mcpProtocolError(
           MCP_ERROR.invalidParams,
-          "Each image must have a non-empty assetId and publicUrl. Call save_generated_image first.",
+          "Each image must have a non-empty assetId and publicUrl returned by save_generated_image or save_generated_image_file.",
         );
       }
     }
@@ -776,6 +840,24 @@ export async function executeMcpToolCall(
       assertDomainSuccess(result);
       return result.data;
     }
+    case "set_logo": {
+      const assetId = requiredString(args, "asset_id");
+      await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+      const result = await updateSiteSettingsFields(
+        site.db,
+        site.env,
+        site.siteId,
+        site.organizationId,
+        { logo_asset_id: assetId },
+        site.userId,
+      );
+      assertDomainSuccess(result);
+      return {
+        id: site.siteId,
+        updated: true,
+        logo_asset_id: assetId,
+      };
+    }
     case "list_locations": {
       const rows = await site.db
         .prepare(
@@ -835,6 +917,34 @@ export async function executeMcpToolCall(
         site.siteId,
         requiredString(args, "location_id"),
         omit(args, ["location_id"]) as never,
+        site.userId,
+      );
+      assertDomainSuccess(result);
+      return result.data;
+    }
+    case "set_location_hero_image": {
+      const assetId = requiredString(args, "asset_id");
+      await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+      const result = await updateLocation(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        requiredString(args, "location_id"),
+        { hero_image_asset_id: assetId } as never,
+        site.userId,
+      );
+      assertDomainSuccess(result);
+      return result.data;
+    }
+    case "set_location_hero_video": {
+      const assetId = requiredString(args, "asset_id");
+      await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
+      const result = await updateLocation(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        requiredString(args, "location_id"),
+        { hero_video_asset_id: assetId } as never,
         site.userId,
       );
       assertDomainSuccess(result);
@@ -916,6 +1026,18 @@ export async function executeMcpToolCall(
           site.userId,
         ),
       };
+    case "set_menu_item_image": {
+      const assetId = requiredString(args, "asset_id");
+      await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+      return {
+        item: await updateMenuItem(
+          site.db,
+          requiredString(args, "menu_item_id"),
+          { image_asset_id: assetId } as never,
+          site.userId,
+        ),
+      };
+    }
     case "delete_menu_item":
       await deleteMenuItem(
         site.db,
@@ -1002,6 +1124,20 @@ export async function executeMcpToolCall(
           site.userId,
         ),
       };
+    case "set_post_image": {
+      const assetId = requiredString(args, "asset_id");
+      await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+      return {
+        post: await updatePost(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          requiredString(args, "post_id"),
+          { image_asset_id: assetId },
+          site.userId,
+        ),
+      };
+    }
     case "publish_post": {
       const channels = normalizeChannelsInput(args);
       const postId = requiredString(args, "post_id");
@@ -1456,6 +1592,45 @@ export async function executeMcpToolCall(
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
+    case "set_home_hero_image":
+      try {
+        const assetId = requiredString(args, "asset_id");
+        await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+        return await updateHomeHero(site.db, site.organizationId, site.siteId, {
+          image_asset_id: assetId,
+          location_id: optionalString(args, "location_id"),
+        });
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "set_home_hero_video":
+      try {
+        const assetId = requiredString(args, "asset_id");
+        await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
+        return await updateHomeHero(site.db, site.organizationId, site.siteId, {
+          video_asset_id: assetId,
+          location_id: optionalString(args, "location_id"),
+        });
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "set_story_image":
+      try {
+        const assetId = requiredString(args, "asset_id");
+        await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+        return await updatePageContent(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          {
+            page: "about",
+            changes: { "story.image": assetId },
+            location_id: null,
+          },
+        );
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
     case "delete_content_field":
       return await deleteContentField(
         site.db,
@@ -1580,6 +1755,30 @@ export async function executeMcpToolCall(
           omit(args, ["experience_id"]) as never,
         ),
       };
+    case "set_experience_image": {
+      const assetId = requiredString(args, "asset_id");
+      await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+      return {
+        experience: await updateExperience(
+          site.db,
+          site.siteId,
+          requiredString(args, "experience_id"),
+          { image_asset_id: assetId },
+        ),
+      };
+    }
+    case "set_experience_video": {
+      const assetId = requiredString(args, "asset_id");
+      await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
+      return {
+        experience: await updateExperience(
+          site.db,
+          site.siteId,
+          requiredString(args, "experience_id"),
+          { video_asset_id: assetId },
+        ),
+      };
+    }
     case "delete_experience":
       return {
         deleted: await deleteExperience(
@@ -1848,13 +2047,17 @@ export async function executeMcpToolCall(
         console.error("[MCP] save_generated_image base64 decode error:", err);
         throw err;
       }
+      const detectedContentType = validateGeneratedImageBuffer(
+        new Uint8Array(upload.buffer),
+        "base64 input",
+      );
       console.error("[MCP] save_generated_image uploading bytes=%d contentType=%s", upload.buffer.byteLength, upload.contentType);
 
       const uploaded = await uploadImageBuffer(
         site.env as Parameters<typeof uploadImageBuffer>[0],
         upload.buffer,
         upload.filename,
-        upload.contentType,
+        detectedContentType,
       );
 
       const assetId = crypto.randomUUID();

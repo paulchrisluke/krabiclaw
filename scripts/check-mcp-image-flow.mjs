@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import sharp from 'sharp'
+import crypto from 'node:crypto'
+
 const BASE_URL = (process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
   : process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
@@ -14,9 +17,6 @@ const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2026-07-28'
 const isLocal = BASE_URL.includes('localhost') || BASE_URL.includes('127.0.0.1')
 const allowCreate = isLocal || process.env.MCP_ALLOW_CREATE === '1'
 let failed = false
-
-const RAW_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC'
-const DATA_URL_PNG = `data:image/png;base64,${RAW_PNG_BASE64}`
 
 function pass(message) {
   console.log(`ok  ${message}`)
@@ -122,6 +122,23 @@ async function getOrCreateSite(headers) {
   return siteId
 }
 
+async function buildFixtureImageBase64() {
+  const width = 320
+  const height = 180
+  const noisyImageBuffer = await sharp(crypto.randomBytes(width * height * 3), {
+    raw: {
+      width,
+      height,
+      channels: 3,
+    },
+  }).jpeg({ quality: 92 }).toBuffer()
+
+  return {
+    rawBase64: noisyImageBuffer.toString('base64'),
+    dataUrl: `data:image/jpeg;base64,${noisyImageBuffer.toString('base64')}`,
+  }
+}
+
 async function assertResolvableImage(url, label) {
   const res = await fetch(url, { method: 'HEAD' })
   expectValue(`${label} resolves`, res.status === 200, { url, status: res.status })
@@ -144,6 +161,73 @@ async function assertSavedImage(headers, siteId, imageData, label) {
   expectValue(`${label} returns thumbnailUrl`, typeof payload?.thumbnailUrl === 'string' && payload.thumbnailUrl.startsWith('https://'), payload)
   if (payload?.publicUrl) await assertResolvableImage(payload.publicUrl, `${label} publicUrl`)
   if (payload?.thumbnailUrl) await assertResolvableImage(payload.thumbnailUrl, `${label} thumbnailUrl`)
+  return payload
+}
+
+async function createLocation(headers, siteId) {
+  const response = await mcp(headers, 'create_location', {
+    site_id: siteId,
+    title: `MCP Image Check Location ${Date.now()}`,
+  })
+  expectStatus('create_location succeeds', response)
+  const locationId = data(response.body)?.location?.id
+  expectValue('create_location returns location id', Boolean(locationId), response.body)
+  return locationId
+}
+
+async function createMenuAndItem(headers, siteId) {
+  const menu = await mcp(headers, 'create_menu', {
+    site_id: siteId,
+    name: `MCP Image Menu ${Date.now()}`,
+  })
+  expectStatus('create_menu succeeds', menu)
+  const menuId = data(menu.body)?.menu?.id
+  expectValue('create_menu returns menu id', Boolean(menuId), menu.body)
+
+  const item = await mcp(headers, 'create_menu_item', {
+    site_id: siteId,
+    menu_id: menuId,
+    name: 'MCP Image Dish',
+    description: 'Used for image tool coverage',
+    section: 'Main',
+    price_amount: '12.00',
+  })
+  expectStatus('create_menu_item succeeds', item)
+  const itemId = data(item.body)?.item?.id
+  expectValue('create_menu_item returns item id', Boolean(itemId), item.body)
+  return { itemId }
+}
+
+async function createPost(headers, siteId) {
+  const response = await mcp(headers, 'create_post', {
+    site_id: siteId,
+    title: 'MCP Image Post',
+    body: 'Post used for image tool coverage',
+  })
+  expectStatus('create_post succeeds', response)
+  const postId = data(response.body)?.post?.id
+  expectValue('create_post returns post id', Boolean(postId), response.body)
+  return postId
+}
+
+async function createExperience(headers, siteId) {
+  const response = await mcp(headers, 'create_experience', {
+    site_id: siteId,
+    title: 'MCP Image Experience',
+    body: 'Experience used for image tool coverage',
+    status: 'active',
+  })
+  expectStatus('create_experience succeeds', response)
+  const experienceId = data(response.body)?.experience?.id
+  expectValue('create_experience returns experience id', Boolean(experienceId), response.body)
+  return experienceId
+}
+
+async function assertImageAssignmentTool(headers, name, args, expectation) {
+  const response = await mcp(headers, name, args)
+  expectStatus(`${name} succeeds`, response)
+  const payload = data(response.body)
+  expectation(payload, response.body)
 }
 
 async function main() {
@@ -152,8 +236,69 @@ async function main() {
   const siteId = await getOrCreateSite(headers)
   if (!siteId) process.exit(1)
 
-  await assertSavedImage(headers, siteId, RAW_PNG_BASE64, 'raw-base64')
-  await assertSavedImage(headers, siteId, DATA_URL_PNG, 'data-url')
+  const fixture = await buildFixtureImageBase64()
+  const rawBase64Image = await assertSavedImage(headers, siteId, fixture.rawBase64, 'raw-base64')
+  const dataUrlImage = await assertSavedImage(headers, siteId, fixture.dataUrl, 'data-url')
+  const assetId = rawBase64Image?.assetId
+  expectValue('saved image fixture returns reusable assetId', Boolean(assetId), rawBase64Image)
+
+  const locationId = await createLocation(headers, siteId)
+  const { itemId } = await createMenuAndItem(headers, siteId)
+  const postId = await createPost(headers, siteId)
+  const experienceId = await createExperience(headers, siteId)
+
+  await assertImageAssignmentTool(headers, 'set_logo', {
+    site_id: siteId,
+    asset_id: assetId,
+  }, (payload) => {
+    expectValue('set_logo returns logo asset id', payload?.logo_asset_id === assetId, payload)
+  })
+
+  await assertImageAssignmentTool(headers, 'set_home_hero_image', {
+    site_id: siteId,
+    asset_id: assetId,
+  }, (payload) => {
+    expectValue('set_home_hero_image updates home page', payload?.page === 'home', payload)
+  })
+
+  await assertImageAssignmentTool(headers, 'set_story_image', {
+    site_id: siteId,
+    asset_id: dataUrlImage?.assetId,
+  }, (payload) => {
+    expectValue('set_story_image updates about page', payload?.page === 'about', payload)
+  })
+
+  await assertImageAssignmentTool(headers, 'set_location_hero_image', {
+    site_id: siteId,
+    location_id: locationId,
+    asset_id: assetId,
+  }, (payload) => {
+    expectValue('set_location_hero_image updates location hero', payload?.location?.hero_image_asset_id === assetId, payload)
+  })
+
+  await assertImageAssignmentTool(headers, 'set_menu_item_image', {
+    site_id: siteId,
+    menu_item_id: itemId,
+    asset_id: assetId,
+  }, (payload) => {
+    expectValue('set_menu_item_image updates menu item image', payload?.item?.image_asset_id === assetId, payload)
+  })
+
+  await assertImageAssignmentTool(headers, 'set_post_image', {
+    site_id: siteId,
+    post_id: postId,
+    asset_id: assetId,
+  }, (payload) => {
+    expectValue('set_post_image updates post image', payload?.post?.image_asset_id === assetId, payload)
+  })
+
+  await assertImageAssignmentTool(headers, 'set_experience_image', {
+    site_id: siteId,
+    experience_id: experienceId,
+    asset_id: assetId,
+  }, (payload) => {
+    expectValue('set_experience_image updates experience image', payload?.experience?.image_asset_id === assetId, payload)
+  })
 
   process.exit(failed ? 1 : 0)
 }
