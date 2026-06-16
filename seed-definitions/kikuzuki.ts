@@ -247,6 +247,19 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
   ],
   siteContent: [
     {
+      id: 'sc-kiku-home-hero',
+      locationId: null,
+      page: 'home',
+      field: 'hero',
+      content: null,
+      heroTitle: null,
+      heroSubtitle: null,
+      heroImageAssetId: 'media-kiku-about',
+      heroVideoAssetId: 'media-kiku-hero-video',
+      type: 'text',
+      source: 'manual',
+    },
+    {
       id: 'sc-kiku-about-hero',
       locationId: null,
       page: 'about',
