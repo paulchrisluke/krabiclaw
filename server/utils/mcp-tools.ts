@@ -1,4 +1,5 @@
 import type { McpToolRole } from '~/server/utils/mcp-auth'
+import { EXPERIENCE_STATUSES } from '~/server/utils/experiences'
 
 export interface McpToolDefinition {
   name: string
@@ -7,6 +8,7 @@ export interface McpToolDefinition {
   minimumRole: McpToolRole
   confirmRequired: boolean
   annotations: McpToolAnnotations
+  securitySchemes: McpToolSecurityScheme[]
   requiredEntitlement?: string
   inputSchema: Record<string, unknown>
   outputSchema: Record<string, unknown>
@@ -23,6 +25,15 @@ export interface McpToolAnnotations {
   destructiveHint?: boolean
   idempotentHint?: boolean
 }
+
+export interface McpToolSecurityScheme {
+  type: 'oauth2'
+  scopes: string[]
+}
+
+export const MCP_TOOL_SECURITY_SCHEMES: McpToolSecurityScheme[] = [
+  { type: 'oauth2', scopes: ['tenant'] },
+]
 
 // --- reusable schema fragments ---
 
@@ -166,13 +177,46 @@ const experienceObject = {
     price: { type: ['string', 'null'] },
     currency: { type: ['string', 'null'] },
     capacity: { type: ['number', 'null'] },
-    status: { type: 'string' },
+    status: { type: 'string', enum: [...EXPERIENCE_STATUSES] },
     location_id: { type: ['string', 'null'] },
     hero_image_asset_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
 }
+
+const experienceStatusSchema = { type: 'string', enum: [...EXPERIENCE_STATUSES] }
+
+const experienceWriteSchema = {
+  title: { type: 'string' },
+  tagline: { type: ['string', 'null'] },
+  body: { type: ['string', 'null'] },
+  image_asset_id: { type: ['string', 'null'] },
+  video_asset_id: { type: ['string', 'null'] },
+  images: {
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        url: { type: 'string' },
+        kind: { type: 'string', enum: ['image', 'video'] },
+      },
+      required: ['url', 'kind'],
+    },
+  },
+  price: { type: ['string', 'null'] },
+  duration_minutes: { type: ['number', 'null'] },
+  max_capacity: { type: ['number', 'null'] },
+  time_slots: { type: ['array', 'null'], items: { type: 'string' } },
+  available_note: { type: ['string', 'null'] },
+  status: experienceStatusSchema,
+  sort_order: { type: 'number' },
+  featured: { type: 'boolean' },
+  featured_sort_order: { type: 'number' },
+  location_id: { type: ['string', 'null'] },
+  seo_title: { type: ['string', 'null'] },
+  seo_description: { type: ['string', 'null'] },
+} as const
 
 const bookingObject = {
   type: 'object',
@@ -332,7 +376,7 @@ function globalTool(definition: RawMcpToolDefinition): McpToolDefinition {
   return withToolAnnotations(definition)
 }
 
-type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations'>
+type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'securitySchemes'>
 
 const READ_ONLY_DEFAULT: McpToolAnnotations = Object.freeze({
   readOnlyHint: true,
@@ -410,8 +454,6 @@ const BOUNDED_WRITE_TOOL_NAMES = [
   'start_translation_job',
   'run_translation_job_batch',
   'save_translation_review_item',
-  'update_contact_submission',
-  'update_reservation_submission',
   'update_notification_settings',
   'create_work_request',
 ] as const
@@ -500,6 +542,7 @@ function withToolAnnotations(definition: RawMcpToolDefinition): McpToolDefinitio
 
   return {
     ...definition,
+    securitySchemes: MCP_TOOL_SECURITY_SCHEMES,
     annotations,
   }
 }
@@ -1677,11 +1720,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'create_experience',
-    description: 'Create an experience.',
+    description: `Create an experience. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}.`,
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { title: { type: 'string' } },
+    inputSchema: experienceWriteSchema,
     required: ['title'],
     outputSchema: {
       type: 'object',
@@ -1691,11 +1734,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'update_experience',
-    description: 'Update an experience.',
+    description: `Update an experience. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}.`,
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { experience_id: { type: 'string' } },
+    inputSchema: { experience_id: { type: 'string' }, ...experienceWriteSchema },
     required: ['experience_id'],
     outputSchema: {
       type: 'object',
@@ -2008,24 +2051,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
-    name: 'update_contact_submission',
-    description: 'Update contact submission triage status.',
-    domain: 'submissions',
-    minimumRole: 'editor',
-    confirmRequired: false,
-    inputSchema: { submission_id: { type: 'string' }, status: { type: 'string' } },
-    required: ['submission_id', 'status'],
-    outputSchema: {
-      type: 'object',
-      properties: {
-        updated: { type: 'boolean' },
-        submission_id: { type: 'string' },
-        status: { type: 'string' },
-      },
-      required: ['updated', 'submission_id', 'status'],
-    },
-  }),
-  siteTool({
     name: 'get_reservation_inquiries',
     description: 'List reservation submissions.',
     domain: 'submissions',
@@ -2035,24 +2060,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       properties: { submissions: { type: 'array', items: reservationSubmissionObject } },
       required: ['submissions'],
-    },
-  }),
-  siteTool({
-    name: 'update_reservation_submission',
-    description: 'Update reservation submission triage status.',
-    domain: 'submissions',
-    minimumRole: 'editor',
-    confirmRequired: false,
-    inputSchema: { submission_id: { type: 'string' }, status: { type: 'string' } },
-    required: ['submission_id', 'status'],
-    outputSchema: {
-      type: 'object',
-      properties: {
-        updated: { type: 'boolean' },
-        submission_id: { type: 'string' },
-        status: { type: 'string' },
-      },
-      required: ['updated', 'submission_id', 'status'],
     },
   }),
   siteTool({

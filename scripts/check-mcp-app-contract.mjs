@@ -105,6 +105,20 @@ async function main() {
   if (wwwAuth.includes('resource_metadata=')) pass('WWW-Authenticate includes resource_metadata')
   else fail('WWW-Authenticate missing resource_metadata', wwwAuth)
 
+  const unauthTool = await request('tools/call', { name: 'show_welcome', arguments: {} })
+  expectStatus('unauthenticated tools/call returns 401', unauthTool.res.status, 401)
+  const toolChallenge = unauthTool.body?.result?._meta?.['mcp/www_authenticate']?.[0] ?? ''
+  if (
+    unauthTool.body?.result?.isError === true
+    && toolChallenge.includes('resource_metadata=')
+    && toolChallenge.includes('error=')
+    && toolChallenge.includes('error_description=')
+  ) {
+    pass('unauthenticated tools/call includes mcp/www_authenticate challenge')
+  } else {
+    fail('unauthenticated tools/call missing mcp/www_authenticate challenge', unauthTool.body)
+  }
+
   const headers = await authHeaders()
   if (!headers) {
     skip('authenticated checks need MCP_BEARER_TOKEN, localhost dev login, or MCP_DEV_LOGIN=1 for a local tunnel')
@@ -119,6 +133,16 @@ async function main() {
   const tools = await request('tools/list', {}, headers)
   expectStatus('tools/list succeeds', tools.res.status, 200)
   const toolList = tools.body?.result?.tools ?? []
+  for (const tool of toolList) {
+    const securitySchemes = tool.securitySchemes ?? []
+    const metaSecuritySchemes = tool._meta?.securitySchemes ?? []
+    const hasTenantOauth = securitySchemes.some(scheme =>
+      scheme?.type === 'oauth2' && Array.isArray(scheme.scopes) && scheme.scopes.includes('tenant')
+    )
+    const metaMatches = JSON.stringify(securitySchemes) === JSON.stringify(metaSecuritySchemes)
+    if (hasTenantOauth && metaMatches) pass(`${tool.name} declares tenant OAuth security scheme`)
+    else fail(`${tool.name} missing tenant OAuth security scheme`, { securitySchemes, metaSecuritySchemes })
+  }
   const renderTools = toolList.filter(tool => tool?._meta?.ui?.resourceUri || tool?._meta?.['openai/outputTemplate'])
   if (renderTools.length > 0) pass(`found ${renderTools.length} render tools`)
   else skip('no render tools advertised; widgets are currently disabled by design')

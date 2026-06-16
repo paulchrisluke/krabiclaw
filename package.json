@@ -55,6 +55,7 @@
     "client:verify": "node scripts/client-verify.mjs",
     "client:deploy": "node scripts/client-deploy.mjs",
     "test:mcp": "node scripts/test-mcp-oauth.mjs",
+    "test:mcp:auth-registration": "node scripts/check-mcp-auth-registration.mjs",
     "test:mcp:app": "node scripts/check-mcp-app-contract.mjs",
     "test:mcp:edit": "node scripts/check-mcp-edit-flow.mjs",
     "test:mcp:image": "node scripts/check-mcp-image-flow.mjs",

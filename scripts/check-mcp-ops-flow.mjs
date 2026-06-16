@@ -231,6 +231,13 @@ async function main() {
   const experienceId = data(experience.body)?.experience?.id
   expectValue('create_experience returns experience id', Boolean(experienceId), experience.body)
 
+  const invalidExperience = await mcp(headers, 'create_experience', {
+    site_id: siteId,
+    title: 'Invalid MCP Experience Status',
+    status: 'draft',
+  })
+  expectStatus('create_experience rejects invalid status', invalidExperience, 400)
+
   const experienceUpdate = await mcp(headers, 'update_experience', {
     site_id: siteId,
     experience_id: experienceId,

@@ -47,28 +47,58 @@ function resolveBaseUrl(event: Parameters<typeof getRequestURL>[0]): string {
   );
 }
 
+function oauthChallenge(baseUrl: string, error = "invalid_token", description = "Connect KrabiClaw to continue.") {
+  return `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource", error="${error}", error_description="${description}"`
+}
+
+function setMcpAuthChallenge(event: Parameters<typeof getRequestURL>[0], challenge: string) {
+  setResponseHeader(event, "WWW-Authenticate", challenge)
+}
+
+function mcpAuthRequiredResult(challenge: string) {
+  return {
+    isError: true,
+    content: [
+      {
+        type: "text",
+        text: "Authentication required: connect KrabiClaw to continue.",
+      },
+    ],
+    _meta: {
+      "mcp/www_authenticate": [challenge],
+    },
+  }
+}
+
 export default defineEventHandler(async (event) => {
   let requestId: string | number | null | undefined;
+  let requestMethod: string | undefined;
   try {
     // Return 401 with WWW-Authenticate before any protocol parsing so OAuth
     // clients (e.g. ChatGPT) can discover the authorization server on first touch.
     // Session-cookie requests (dashboard, E2E tests) have a Cookie header and skip this.
+    const cfEnv = event.context.cloudflare?.env as
+      | { BETTER_AUTH_URL?: string }
+      | undefined;
+    const baseUrl = (
+      cfEnv?.BETTER_AUTH_URL ?? "https://krabiclaw.com"
+    ).replace(/\/$/, "");
+    const authChallenge = oauthChallenge(baseUrl);
     if (
       !getHeader(event, "authorization")?.startsWith("Bearer ") &&
       !getHeader(event, "cookie")
     ) {
-      const cfEnv = event.context.cloudflare?.env as
-        | { BETTER_AUTH_URL?: string }
-        | undefined;
-      const baseUrl = (
-        cfEnv?.BETTER_AUTH_URL ?? "https://krabiclaw.com"
-      ).replace(/\/$/, "");
+      const body = await readBody(event);
+      const request = body && typeof body === "object" && Object.keys(body).length
+        ? readMcpRequest(event, body)
+        : null;
+      requestId = request?.id;
+      requestMethod = request?.method;
       setResponseStatus(event, 401);
-      setResponseHeader(
-        event,
-        "WWW-Authenticate",
-        `Bearer realm="${baseUrl}/api/mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
-      );
+      setMcpAuthChallenge(event, authChallenge);
+      if (request?.method === "tools/call") {
+        return mcpSuccess(request.id, mcpAuthRequiredResult(authChallenge));
+      }
       return mcpFailure(null, {
         code: MCP_ERROR.invalidRequest,
         message: "Authentication required.",
@@ -85,6 +115,7 @@ export default defineEventHandler(async (event) => {
 
     const request = readMcpRequest(event, body);
     requestId = request.id;
+    requestMethod = request.method;
 
     // MCP protocol handshake — required before any tools/list or tools/call
     if (request.method === "initialize") {
@@ -296,9 +327,11 @@ Common workflows: update menus and items, create and publish posts, triage conta
         inputSchema: tool.inputSchema,
         outputSchema: tool.outputSchema,
         annotations: tool.annotations,
+        securitySchemes: tool.securitySchemes,
         ...(WIDGETS_ENABLED && tool.widgetName
           ? {
               _meta: {
+                securitySchemes: tool.securitySchemes,
                 "krabiclaw/toolInfo": {
                   domain: tool.domain,
                   minimumRole: tool.minimumRole,
@@ -318,6 +351,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
           : tool.fileParams?.length
             ? {
                 _meta: {
+                  securitySchemes: tool.securitySchemes,
                   "krabiclaw/toolInfo": {
                     domain: tool.domain,
                     minimumRole: tool.minimumRole,
@@ -328,6 +362,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
               }
             : {
                 _meta: {
+                  securitySchemes: tool.securitySchemes,
                   "krabiclaw/toolInfo": {
                     domain: tool.domain,
                     minimumRole: tool.minimumRole,
@@ -417,11 +452,11 @@ Common workflows: update menus and items, create and publish posts, triage conta
       const baseUrl = (
         cfEnv?.BETTER_AUTH_URL ?? "https://krabiclaw.com"
       ).replace(/\/$/, "");
-      setResponseHeader(
-        event,
-        "WWW-Authenticate",
-        `Bearer realm="${baseUrl}/api/mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
-      );
+      const authChallenge = oauthChallenge(baseUrl);
+      setMcpAuthChallenge(event, authChallenge);
+      if (requestMethod === "tools/call") {
+        return mcpSuccess(requestId, mcpAuthRequiredResult(authChallenge));
+      }
     }
     return mcpFailure(requestId, mcpError);
   }

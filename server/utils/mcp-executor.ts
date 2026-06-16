@@ -119,10 +119,8 @@ import {
   hydrateSeededLocationForOnboarding,
   updatePageContent,
   updateHomeHero,
-  updateContactSubmissionStatus,
   updateLocationQa,
   updateNotificationsSettings,
-  updateReservationSubmissionStatus,
 } from "~/server/utils/mcp-workflows";
 
 function haversineKm(
@@ -1758,24 +1756,10 @@ export async function executeMcpToolCall(
       return {
         submissions: await listContactSubmissions(site.db, site.siteId),
       };
-    case "update_contact_submission":
-      return await updateContactSubmissionStatus(
-        site.db,
-        site.siteId,
-        requiredString(args, "submission_id"),
-        requiredString(args, "status"),
-      );
     case "get_reservation_inquiries":
       return {
         submissions: await listReservationSubmissions(site.db, site.siteId),
       };
-    case "update_reservation_submission":
-      return await updateReservationSubmissionStatus(
-        site.db,
-        site.siteId,
-        requiredString(args, "submission_id"),
-        requiredString(args, "status"),
-      );
     case "get_notification_settings":
       return {
         notifications: await getNotificationsSettings(

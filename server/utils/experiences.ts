@@ -27,6 +27,9 @@ export interface Experience {
   updated_at: string
 }
 
+export const EXPERIENCE_STATUSES = ['active', 'inactive', 'sold_out'] as const
+export type ExperienceStatus = (typeof EXPERIENCE_STATUSES)[number]
+
 interface ExperienceRow {
   id: string
   organization_id: string
@@ -172,13 +175,23 @@ export interface CreateExperienceInput {
   max_capacity?: number | null
   time_slots?: string[] | null
   available_note?: string | null
-  status?: 'active' | 'inactive' | 'sold_out'
+  status?: ExperienceStatus
   sort_order?: number
   featured?: boolean
   featured_sort_order?: number
   location_id?: string | null
   seo_title?: string | null
   seo_description?: string | null
+}
+
+function assertExperienceStatus(value: unknown, fieldName: string): ExperienceStatus {
+  if (typeof value !== 'string' || !EXPERIENCE_STATUSES.includes(value as ExperienceStatus)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `${fieldName} must be one of: ${EXPERIENCE_STATUSES.join(', ')}`,
+    })
+  }
+  return value as ExperienceStatus
 }
 
 export async function createExperience(
@@ -193,6 +206,7 @@ export async function createExperience(
   const now = new Date().toISOString()
   const slotsJson = input.time_slots?.length ? JSON.stringify(input.time_slots) : null
   const imagesJson = input.images?.length ? JSON.stringify(input.images) : null
+  const status = input.status ? assertExperienceStatus(input.status, 'status') : 'active'
 
   const result = await db
     .prepare(
@@ -218,7 +232,7 @@ export async function createExperience(
       input.max_capacity ?? null,
       slotsJson,
       input.available_note ?? null,
-      input.status ?? 'active',
+      status,
       input.sort_order ?? 0,
       input.featured ? 1 : 0,
       input.featured_sort_order ?? 0,
@@ -276,7 +290,10 @@ export async function updateExperience(
     params.push(input.time_slots?.length ? JSON.stringify(input.time_slots) : null)
   }
   if (input.available_note !== undefined) { sets.push('available_note = ?'); params.push(input.available_note ?? null) }
-  if (input.status !== undefined) { sets.push('status = ?'); params.push(input.status) }
+  if (input.status !== undefined) {
+    sets.push('status = ?')
+    params.push(assertExperienceStatus(input.status, 'status'))
+  }
   if (input.sort_order !== undefined) { sets.push('sort_order = ?'); params.push(input.sort_order) }
   if (input.featured !== undefined) { sets.push('featured = ?'); params.push(input.featured ? 1 : 0) }
   if (input.featured_sort_order !== undefined) { sets.push('featured_sort_order = ?'); params.push(input.featured_sort_order) }
