@@ -45,14 +45,6 @@
         </nav>
 
         <div class="flex items-center justify-end gap-2 col-start-3">
-          <!-- Language switcher -->
-          <UDropdownMenu :items="languageItems" :ui="{ content: 'saya-theme' }">
-            <UButton variant="ghost" color="neutral" size="sm">
-              <span>{{ getCurrentLocaleFlag() }}</span>
-              <span class="hidden sm:inline">{{ currentLocale }}</span>
-            </UButton>
-          </UDropdownMenu>
-
           <!-- Primary CTA: Order Now if delivery links exist, otherwise dynamic Reserve/Book -->
           <UButton
             :to="primaryCtaPath"
@@ -184,36 +176,19 @@ onUnmounted(() => {
   window.removeEventListener('resize', syncHeaderHeight)
 })
 
-const currentLocale = computed(() => i18n.locale.value)
-const getLocaleFlag = (code: string) =>
-  ({ en: '🇺🇸', th: '🇹🇭', fr: '🇫🇷', ja: '🇯🇵', 'zh-CN': '🇨🇳', ko: '🇰🇷', es: '🇪🇸', de: '🇩🇪', it: '🇮🇹', ar: '🇸🇦' }[code] ?? '🌐')
-const getCurrentLocaleFlag = () => getLocaleFlag(currentLocale.value)
-
 const restaurantName = computed(() => (site as Site | null)?.brand_name || 'Saya')
 const logoUrl = computed(() => (site as Site | null)?.logo_url || null)
 
 useUpgradeModal()
 
 // Shared bootstrap — same key as page component + footer → single SSR request
-const { locations: bootstrapLocations, locales: bootstrapLocales, hasExperiences, menu } = useBootstrap()
+const { locations: bootstrapLocations, hasExperiences, menu } = useBootstrap()
 
 const hasMenu = computed(() => {
   const m = menu.value as { items?: unknown[] } | null
   return !!(m && m.items && m.items.length > 0)
 })
 
-const availableLocales = computed(() =>
-  bootstrapLocales.value.length
-    ? bootstrapLocales.value.map(l => ({ code: l.code, name: l.label || l.code }))
-    : (i18n.locales?.value ?? []).map((l: { code: string; name: string }) => ({ code: l.code, name: l.name }))
-)
-
-const languageItems = computed(() =>
-  availableLocales.value.map((l: { code: string; name: string }) => ({
-    label: `${getLocaleFlag(l.code)} ${l.name}`,
-    onSelect: () => i18n.setLocale(l.code)
-  }))
-)
 
 const locations = computed(() => bootstrapLocations.value)
 const hasOrderLinks = computed(() =>

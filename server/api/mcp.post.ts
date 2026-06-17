@@ -23,11 +23,21 @@ const WIDGET_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 // Increment this whenever widgets are changed to bust ChatGPT's ui:// cache.
 // ChatGPT caches widget resources by URI, so the same ui://widget/foo.html
 // URI will continue to serve the old widget until the URI changes.
-const WIDGET_VERSION = "v4";
+const WIDGET_VERSION = "v9";
 
-// Disable ChatGPT widget UI rendering until interactivity is stable.
-// Set to true to re-enable openai/outputTemplate and widget _meta in tool responses.
+// Keep global widget rendering conservative, then selectively enable stable tools below.
 const WIDGETS_ENABLED = false;
+const ENABLED_WIDGET_TOOLS = new Set([
+  "request_photo_upload",
+  "show_generated_images",
+  "generate_logo",
+  "generate_home_hero_image",
+  "generate_story_image",
+  "generate_location_hero_image",
+  "generate_post_image",
+  "generate_menu_item_image",
+  "generate_experience_image",
+]);
 
 function widgetResourceUri(name: string) {
   return `ui://widget/${name}@${WIDGET_VERSION}.html`;
@@ -126,22 +136,71 @@ export default defineEventHandler(async (event) => {
         serverInfo: { name: "krabiclaw-mcp", version: "phase-5" },
         instructions: `KrabiClaw — manage your restaurant or business website through this connection.
 
+## Image work — applies at any point in the conversation
+Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience cover, story image, or any content section):
+
+**AI-generated (user asks you to generate or create an image):**
+1. Call image_generation natively with model gpt-image-1 and a detailed prompt tailored to the business.
+2. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
+3. Call show_generated_images with the assetId and publicUrl returned by save_generated_image_file.
+4. After the user approves, assign with the appropriate tool: set_home_hero_image, set_logo, set_story_image, set_location_hero_image, set_post_image, or set_experience_image.
+5. If the user wants changes, call image_generation again with a revised prompt and repeat from step 2.
+
+This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
+
+**Guaranteed KrabiClaw fallback and end-to-end path:**
+- If native image_generation is unavailable, or if the user wants KrabiClaw to handle generation inside the app from start to finish, call the specific backend tool instead: generate_logo, generate_home_hero_image, generate_story_image, generate_location_hero_image, generate_post_image, generate_menu_item_image, or generate_experience_image.
+- Those tools generate several options on KrabiClaw's backend, save them into the site media library, and open a picker widget that can apply the selected image directly.
+
+**User-uploaded (user provides their own photo):**
+- Primary happy path:
+  1. When the user has already attached an image in ChatGPT, inspect it visually first. Do not upload or mutate anything yet.
+  2. If the intended use is obvious, describe it briefly and ask the user to confirm the target site, the target placement, and that the attached image should be used.
+  3. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
+  4. After confirmation, call upload_user_photo({ site_id, file: <attached local file argument>, category, description }).
+  5. The file argument is the primary contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not fabricate download URLs or wrap fake file objects.
+  6. After upload_user_photo returns assetId/publicUrl, call the appropriate assignment tool such as set_home_hero_image, set_logo, set_story_image, set_location_hero_image, set_post_image, or set_experience_image.
+  7. Reply with the exact site, placement, assetId, and publicUrl that were updated.
+- Secondary fallback only:
+  - If the user wants to provide an image but has not attached one in ChatGPT, call request_photo_upload({ site_id, category }) to open the in-chat file picker widget.
+  - Use file_id-only upload_user_photo calls only when the file argument rewrite path is unavailable.
+
+## Session start
 Start every conversation by calling show_welcome to discover the user's sites and present the available sites as a text list.
-- If they have 0 sites, start the Onboarding Flow: 
+- If they have 0 sites, start the Onboarding Flow:
   1. Ask for their Google Maps URL (or shortlink) to import their business details.
   2. Call import_from_maps.
-  3. After import, ask for Required missing context: "What should the main button say (e.g., Book Now)?" and ask if they want to upload a Hero Image or have AI generate one.
-     - If AI generate natively: generate the image using the image_generation tool, then call save_generated_image_file with site_id and the generated image as attachment_id (file reference), then call show_generated_images with the returned assetId and publicUrl. After the user approves one, assign it with a business-level image tool such as set_home_hero_image, set_logo, set_story_image, set_location_hero_image, set_post_image, or set_experience_image. Do NOT extract base64 from image_generation_call.result and pass it to save_generated_image — that will be blocked by safety checks.
-     - Never pass raw local file paths like /mnt/data/... to any save tool.
+  3. After import, ask for Required missing context: "What should the main button say (e.g., Book Now)?" and ask if they want to upload a Hero Image or have AI generate one. Follow the Image work rules above.
   4. Ask for Optional context: "What's the short story behind your business?" and "Do you have a logo to upload?" (let them skip these).
   5. DO NOT ask for menus, detailed services, or social links yet (defer until the site is live).
   6. Call create_site and create_location, then show_site_preview.
-- If they have exactly one site, use it automatically and confirm: "Working with [site name]."
-- If they have multiple sites, present them clearly and ask which to use.
+- If they have exactly one site, the widget confirms it automatically. Say "Working with [site name]." in your first reply before doing anything else.
+- If they have multiple sites, present them clearly and wait for the user to select one — do not assume or guess.
 
-All other tools require a site_id obtained from list_sites. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
+## Site confirmation policy — enforced before every mutation
 
-Common workflows: update menus and items, create and publish posts, triage contact and reservation submissions, update page content directly, upload media, translate content, reply to reviews, and manage experiences and bookings.`,
+Before calling any mutating tool, the active site must be confirmed for this conversation.
+
+A site is confirmed when:
+- 0 sites: onboarding completed and create_site succeeded
+- 1 site: you have said "Working with [site name]." in this conversation (the widget confirms automatically)
+- Multiple sites: the user explicitly chose one via the show_welcome widget
+
+Tool categories:
+- **Read-only** (list_*, get_*, show_*) — safe to call once show_welcome returns
+- **Preview/generate** (generate_*, show_generated_images) — require a confirmed site
+- **Mutating** (set_*, update_*, create_*, delete_*, publish_*) — require a confirmed site
+
+If the user asks you to mutate content before a site is confirmed, call show_welcome first, confirm the active site, then proceed.
+
+When calling show_generated_images after native image_generation, always include the active site name in the labels:
+- use_label: "Use as homepage hero for [site name]"  (or the appropriate placement)
+- subtitle: can reference the site name to make the target obvious
+After applying, always confirm: "[Placement] updated for [site name]." — never leave the target ambiguous.
+
+All other tools require a site_id obtained from list_sites or show_welcome. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
+
+Common workflows: update menus and items, create and publish posts, triage contact and reservation submissions, update page content directly, upload media, translate content, reply to reviews, manage experiences and bookings, and generate or replace images for any content section.`,
       });
     }
 
@@ -164,6 +223,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
       { name: "photo-album", title: "Business Photos" },
       { name: "image-carousel", title: "Image Carousel" },
       { name: "site-preview", title: "Site Preview" },
+      { name: "photo-upload", title: "Photo Upload" },
     ] as const;
 
     function widgetHtml(name: string, baseUrl: string) {
@@ -173,6 +233,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>KrabiClaw</title>
+<script>window.__KC_WIDGET_VERSION__="${WIDGET_VERSION}";</script>
 <script type="module" crossorigin src="${baseUrl}/mcp-assets/${name}.js"></script>
 <link rel="modulepreload" crossorigin href="${baseUrl}/mcp-assets/jsx-runtime-chunk.js">
 </head>
@@ -231,16 +292,18 @@ Common workflows: update menus and items, create and publish posts, triage conta
                 prefersBorder: true,
                 domain: baseUrl,
                 csp: {
-                  connectDomains: [baseUrl],
-                  resourceDomains: [baseUrl],
+                  connectDomains: [baseUrl, "https://upload.imagedelivery.net", "https://imagedelivery.net"],
+                  resourceDomains: [baseUrl, "https://imagedelivery.net"],
+                  imageDomains: ["https://imagedelivery.net"],
                 },
               },
               "openai/widgetDescription": `${WIDGETS.find((w) => w.name === widgetName)?.title ?? "KrabiClaw"} widget`,
               "openai/widgetPrefersBorder": true,
               "openai/widgetDomain": baseUrl,
               "openai/widgetCSP": {
-                connect_domains: [baseUrl],
-                resource_domains: [baseUrl],
+                connect_domains: [baseUrl, "https://upload.imagedelivery.net", "https://imagedelivery.net"],
+                resource_domains: [baseUrl, "https://imagedelivery.net"],
+                image_domains: ["https://imagedelivery.net"],
                 redirect_domains: [
                   ...new Set([
                     baseUrl,
@@ -328,7 +391,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
         outputSchema: tool.outputSchema,
         annotations: tool.annotations,
         securitySchemes: tool.securitySchemes,
-        ...(WIDGETS_ENABLED && tool.widgetName
+        ...((WIDGETS_ENABLED || ENABLED_WIDGET_TOOLS.has(tool.name)) && tool.widgetName
           ? {
               _meta: {
                 securitySchemes: tool.securitySchemes,
@@ -390,18 +453,20 @@ Common workflows: update menus and items, create and publish posts, triage conta
             );
 
       const result = await executeMcpToolCall(event, toolName, rawArgs);
-      const structuredContent = isMcpRenderResponse(result)
-        ? result.structuredContent
-        : result;
+      const isRender = isMcpRenderResponse(result);
+      const structuredContent = isRender ? result.structuredContent : result;
+      const modelText = isRender && result.fallbackText
+        ? result.fallbackText
+        : JSON.stringify(structuredContent, null, 2);
       const tool =
-        WIDGETS_ENABLED && isMcpRenderResponse(result)
+        (WIDGETS_ENABLED || ENABLED_WIDGET_TOOLS.has(toolName)) && isRender
           ? MCP_TOOLS.find((t) => t.name === toolName)
           : null;
       return mcpSuccess(request.id, {
         isError: false,
         structuredContent,
         content: [
-          { type: "text", text: JSON.stringify(structuredContent, null, 2) },
+          { type: "text", text: modelText },
         ],
         ...(tool
           ? {
@@ -409,6 +474,9 @@ Common workflows: update menus and items, create and publish posts, triage conta
                 "openai/toolInvocation/invoking":
                   tool.widgetInvoking ?? "Loading…",
                 "openai/toolInvocation/invoked": tool.widgetInvoked ?? "Done",
+                ...(isRender && result.privateMeta
+                  ? { "krabiclaw/widgetData": result.privateMeta }
+                  : {}),
               },
             }
           : {}),

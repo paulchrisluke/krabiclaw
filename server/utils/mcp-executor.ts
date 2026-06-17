@@ -1,4 +1,4 @@
-import { createError, type H3Event } from "h3";
+import { createError, getRequestURL, type H3Event } from "h3";
 import { hasEntitlement } from "~/server/utils/billing";
 import {
   requestImageUpload,
@@ -99,6 +99,7 @@ import { requireMcpSite, requireMcpUser } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
 import { renderWidget } from "~/server/utils/mcp-render";
 import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
+import { generateImageViaGateway } from "~/server/utils/ai-gateway";
 import type { SiteVertical } from "~/utils/vertical-copy";
 import {
   deleteContentField,
@@ -180,14 +181,14 @@ async function resolveGeneratedImageUpload(
   };
 }
 
-function validateGeneratedImageBuffer(
+function validateImageBuffer(
   bytes: Uint8Array,
   sourceLabel: string,
 ): string {
   if (bytes.byteLength < 1024) {
     throw createError({
       statusCode: 400,
-      statusMessage: `Invalid generated image payload from ${sourceLabel}: payload too small.`,
+      statusMessage: `Invalid image payload from ${sourceLabel}: payload too small.`,
     });
   }
 
@@ -195,7 +196,7 @@ function validateGeneratedImageBuffer(
   if (!detectedContentType) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
-      `Invalid generated image payload from ${sourceLabel}: unsupported or unrecognized image bytes.`,
+      `Invalid image payload from ${sourceLabel}: unsupported or unrecognized image bytes.`,
     );
   }
 
@@ -216,6 +217,513 @@ async function requireActiveImageAsset(
     );
   }
   return asset;
+}
+
+function resolveMcpBaseUrl(event: H3Event): string {
+  const cfEnv = event.context.cloudflare?.env as
+    | { BETTER_AUTH_URL?: string }
+    | undefined;
+  return (cfEnv?.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(
+    /\/$/,
+    "",
+  );
+}
+
+type GeneratedImageTarget =
+  | "logo"
+  | "home_hero"
+  | "story_image"
+  | "location_hero"
+  | "post_image"
+  | "menu_item_image"
+  | "experience_image";
+
+interface GeneratedImagePickerConfig {
+  title: string;
+  subtitle: string | null;
+  useLabel: string | null;
+  regenerateLabel: string | null;
+  assignTool: string | null;
+  assignArgs: Record<string, unknown> | null;
+  regenerateTool: string | null;
+  regenerateArgs: Record<string, unknown> | null;
+  successMessage: string | null;
+}
+
+interface GeneratedImageContext {
+  siteName: string;
+  target: GeneratedImageTarget;
+  prompt: string | null;
+  locationTitle?: string | null;
+  locationCity?: string | null;
+  locationDescription?: string | null;
+  menuItemName?: string | null;
+  menuItemDescription?: string | null;
+  menuName?: string | null;
+  postTitle?: string | null;
+  postBody?: string | null;
+  experienceTitle?: string | null;
+  experienceTagline?: string | null;
+  experienceBody?: string | null;
+}
+
+function cleanPromptSnippet(value: string | null | undefined, max = 220) {
+  if (!value) return null;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  return normalized.length > max
+    ? `${normalized.slice(0, max - 1).trimEnd()}…`
+    : normalized;
+}
+
+function generatedImageTargetFromToolName(toolName: string): GeneratedImageTarget | null {
+  switch (toolName) {
+    case "generate_logo":
+      return "logo";
+    case "generate_home_hero_image":
+      return "home_hero";
+    case "generate_story_image":
+      return "story_image";
+    case "generate_location_hero_image":
+      return "location_hero";
+    case "generate_post_image":
+      return "post_image";
+    case "generate_menu_item_image":
+      return "menu_item_image";
+    case "generate_experience_image":
+      return "experience_image";
+    default:
+      return null;
+  }
+}
+
+function assignmentForGeneratedTarget(
+  target: GeneratedImageTarget,
+  args: Record<string, unknown>,
+  siteName?: string | null,
+): {
+  assignTool: string;
+  assignArgs: Record<string, unknown>;
+  title: string;
+  subtitle: string | null;
+  useLabel: string;
+  successMessage: string;
+} {
+  const siteId = requiredString(args, "site_id");
+  const forSite = siteName ? ` for ${siteName}` : "";
+  switch (target) {
+    case "logo":
+      return {
+        assignTool: "set_logo",
+        assignArgs: { site_id: siteId },
+        title: "Logo Concepts",
+        subtitle: "Choose the mark that feels most like the brand.",
+        useLabel: `Use as logo${forSite}`,
+        successMessage: `Logo updated${forSite}.`,
+      };
+    case "home_hero":
+      return {
+        assignTool: "set_home_hero_image",
+        assignArgs: { site_id: siteId },
+        title: "Homepage Hero Images",
+        subtitle: "Choose the image that best sets the tone for the homepage.",
+        useLabel: `Use as homepage hero${forSite}`,
+        successMessage: `Homepage hero image updated${forSite}.`,
+      };
+    case "story_image":
+      return {
+        assignTool: "set_story_image",
+        assignArgs: { site_id: siteId },
+        title: "Story Images",
+        subtitle: "Choose the image that best tells the brand story.",
+        useLabel: `Use as story image${forSite}`,
+        successMessage: `Story image updated${forSite}.`,
+      };
+    case "location_hero": {
+      const locationId = requiredString(args, "location_id");
+      return {
+        assignTool: "set_location_hero_image",
+        assignArgs: { site_id: siteId, location_id: locationId },
+        title: "Location Hero Images",
+        subtitle: "Choose the image that best represents this location.",
+        useLabel: `Use as location hero${forSite}`,
+        successMessage: `Location hero image updated${forSite}.`,
+      };
+    }
+    case "post_image": {
+      const postId = requiredString(args, "post_id");
+      return {
+        assignTool: "set_post_image",
+        assignArgs: { site_id: siteId, post_id: postId },
+        title: "Post Images",
+        subtitle: "Choose the image that best fits this post.",
+        useLabel: `Use for this post${forSite}`,
+        successMessage: `Post image updated${forSite}.`,
+      };
+    }
+    case "menu_item_image": {
+      const menuItemId = requiredString(args, "menu_item_id");
+      return {
+        assignTool: "set_menu_item_image",
+        assignArgs: { site_id: siteId, menu_item_id: menuItemId },
+        title: "Menu Item Images",
+        subtitle: "Choose the image that best sells this item.",
+        useLabel: `Use for this menu item${forSite}`,
+        successMessage: `Menu item image updated${forSite}.`,
+      };
+    }
+    case "experience_image": {
+      const experienceId = requiredString(args, "experience_id");
+      return {
+        assignTool: "set_experience_image",
+        assignArgs: { site_id: siteId, experience_id: experienceId },
+        title: "Experience Images",
+        subtitle: "Choose the image that best captures the experience.",
+        useLabel: `Use for this experience${forSite}`,
+        successMessage: `Experience image updated${forSite}.`,
+      };
+    }
+  }
+}
+
+function generationOptionsForTarget(target: GeneratedImageTarget) {
+  switch (target) {
+    case "logo":
+    case "menu_item_image":
+      return { size: "1024x1024", quality: "medium" as const };
+    default:
+      return { size: "1536x1024", quality: "medium" as const };
+  }
+}
+
+function buildGeneratedImagePrompt(context: GeneratedImageContext) {
+  const details: string[] = [];
+  const brief = cleanPromptSnippet(context.prompt);
+  const locationTitle = cleanPromptSnippet(context.locationTitle);
+  const locationCity = cleanPromptSnippet(context.locationCity);
+  const locationDescription = cleanPromptSnippet(context.locationDescription);
+  const menuItemName = cleanPromptSnippet(context.menuItemName);
+  const menuItemDescription = cleanPromptSnippet(context.menuItemDescription);
+  const menuName = cleanPromptSnippet(context.menuName);
+  const postTitle = cleanPromptSnippet(context.postTitle);
+  const postBody = cleanPromptSnippet(context.postBody);
+  const experienceTitle = cleanPromptSnippet(context.experienceTitle);
+  const experienceTagline = cleanPromptSnippet(context.experienceTagline);
+  const experienceBody = cleanPromptSnippet(context.experienceBody);
+
+  switch (context.target) {
+    case "logo":
+      details.push(
+        `Create a premium, text-free logo mark for ${context.siteName}.`,
+        "Symbol only. No words, no letters, no monograms, no typography, no mockup presentation.",
+        "It should feel distinctive, memorable, and usable as a restaurant or hospitality brand mark."
+      );
+      break;
+    case "home_hero":
+      details.push(
+        `Create a homepage hero image for ${context.siteName}.`,
+        "The result should feel authentic, premium, and specific to the business.",
+        "Leave calm negative space for a website headline overlay. No text or UI elements in the image."
+      );
+      break;
+    case "story_image":
+      details.push(
+        `Create an editorial storytelling image for ${context.siteName}.`,
+        "The image should communicate atmosphere, craft, and a sense of backstory.",
+        "No text or graphic overlays."
+      );
+      break;
+    case "location_hero":
+      details.push(
+        `Create a location hero image for ${context.siteName}${locationTitle ? ` at ${locationTitle}` : ""}${locationCity ? ` in ${locationCity}` : ""}.`,
+        "Make it feel like a premium real-world brand image rather than a stock photo.",
+        "Leave subtle negative space for website copy."
+      );
+      break;
+    case "post_image":
+      details.push(
+        `Create a social-ready promotional image for ${context.siteName}.`,
+        "The image should feel polished and campaign-worthy, but contain no text.",
+      );
+      if (postTitle) details.push(`Post title/theme: ${postTitle}.`);
+      if (postBody) details.push(`Post message: ${postBody}.`);
+      break;
+    case "menu_item_image":
+      details.push(
+        `Create an appetizing menu item image for ${context.siteName}.`,
+        "This should look like professional food photography, natural and premium, not synthetic clipart.",
+        "No text, menus, pricing, labels, hands holding signs, or graphic frames."
+      );
+      if (menuItemName) details.push(`Dish: ${menuItemName}.`);
+      if (menuItemDescription) details.push(`Description: ${menuItemDescription}.`);
+      if (menuName) details.push(`Menu context: ${menuName}.`);
+      break;
+    case "experience_image":
+      details.push(
+        `Create a compelling experience cover image for ${context.siteName}.`,
+        "Show the activity in a way that feels aspirational, authentic, and bookable.",
+        "No text or poster layout."
+      );
+      if (experienceTitle) details.push(`Experience: ${experienceTitle}.`);
+      if (experienceTagline) details.push(`Tagline: ${experienceTagline}.`);
+      if (experienceBody) details.push(`Details: ${experienceBody}.`);
+      break;
+  }
+
+  if (locationDescription && context.target === "location_hero") {
+    details.push(`Location details: ${locationDescription}.`);
+  }
+  if (brief) {
+    details.push(`Creative direction from the user: ${brief}.`);
+  }
+
+  details.push(
+    "Use realistic lighting and strong composition.",
+    "Avoid collage layouts, split screens, screenshots, watermarks, and visible written language."
+  );
+  return details.join(" ");
+}
+
+async function createGeneratedMediaAsset(
+  site: Awaited<ReturnType<typeof requireMcpSite>>,
+  image: { imageBuffer: ArrayBuffer; contentType: string; filename: string },
+  altText: string,
+) {
+  const uploaded = await uploadImageBuffer(
+    site.env as Parameters<typeof uploadImageBuffer>[0],
+    image.imageBuffer,
+    image.filename,
+    image.contentType,
+  );
+
+  const assetId = crypto.randomUUID();
+  await createMediaAsset(site.db, {
+    id: assetId,
+    organization_id: site.organizationId,
+    site_id: site.siteId,
+    kind: "image",
+    provider: "cloudflare_images",
+    source: "generated",
+    cloudflare_image_id: uploaded.imageId,
+    public_url: uploaded.publicUrl,
+    thumbnail_url: uploaded.thumbnailUrl,
+    alt_text: altText,
+    mime_type: image.contentType,
+    file_name: image.filename,
+    status: "active",
+    created_by_user_id: site.userId,
+  });
+
+  return {
+    assetId,
+    publicUrl: uploaded.publicUrl,
+    thumbnailUrl: uploaded.thumbnailUrl,
+  };
+}
+
+async function buildGeneratedImageContext(
+  site: Awaited<ReturnType<typeof requireMcpSite>>,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<GeneratedImageContext> {
+  const siteRow = await getSiteForMcp(
+    site.db,
+    site.siteId,
+    site.userId,
+    site.isPlatformAdmin,
+  ) as Record<string, unknown>;
+  const siteName =
+    (typeof siteRow.brand_name === "string" && siteRow.brand_name.trim())
+      ? siteRow.brand_name.trim()
+      : site.siteId;
+  const target = generatedImageTargetFromToolName(toolName);
+  if (!target) {
+    throw new Error(`Unsupported generated image tool: ${toolName}`);
+  }
+
+  const context: GeneratedImageContext = {
+    siteName,
+    target,
+    prompt: optionalString(args, "prompt"),
+  };
+
+  if (target === "location_hero") {
+    const location = await getLocationForMcp(
+      site.db,
+      site.organizationId,
+      site.siteId,
+      requiredString(args, "location_id"),
+    ) as Record<string, unknown>;
+    context.locationTitle = typeof location.title === "string" ? location.title : null;
+    context.locationCity = typeof location.city === "string" ? location.city : null;
+    context.locationDescription = typeof location.description === "string" ? location.description : null;
+  }
+
+  if (target === "menu_item_image") {
+    const row = await site.db.prepare(`
+      SELECT mi.name, mi.description, m.name AS menu_name
+      FROM menu_items mi
+      JOIN menus m ON m.id = mi.menu_id
+      WHERE mi.id = ? AND m.site_id = ? AND m.organization_id = ?
+      LIMIT 1
+    `).bind(
+      requiredString(args, "menu_item_id"),
+      site.siteId,
+      site.organizationId,
+    ).first<{ name: string; description: string | null; menu_name: string | null }>();
+    if (!row) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "Menu item not found",
+      });
+    }
+    context.menuItemName = row.name;
+    context.menuItemDescription = row.description;
+    context.menuName = row.menu_name;
+  }
+
+  if (target === "post_image") {
+    const post = await getPost(
+      site.db,
+      site.organizationId,
+      site.siteId,
+      requiredString(args, "post_id"),
+    );
+    if (!post) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "Post not found",
+      });
+    }
+    context.postTitle = post.title;
+    context.postBody = post.body;
+  }
+
+  if (target === "experience_image") {
+    const experience = await getExperienceById(
+      site.db,
+      site.siteId,
+      requiredString(args, "experience_id"),
+    );
+    if (!experience) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "Experience not found",
+      });
+    }
+    context.experienceTitle = experience.title;
+    context.experienceTagline = experience.tagline;
+    context.experienceBody = experience.body;
+  }
+
+  return context;
+}
+
+async function generatePickerImagesForTool(
+  site: Awaited<ReturnType<typeof requireMcpSite>>,
+  toolName: string,
+  args: Record<string, unknown>,
+) {
+  const context = await buildGeneratedImageContext(site, toolName, args);
+  const target = context.target;
+  const pickerBase = assignmentForGeneratedTarget(target, args, context.siteName);
+  const prompt = buildGeneratedImagePrompt(context);
+  const generated = await generateImageViaGateway(site.env as Record<string, unknown>, prompt, {
+    ...generationOptionsForTarget(target),
+    n: 1,
+    outputFormat: "jpeg",
+    outputCompression: 88,
+  });
+  const images = await Promise.all(
+    generated.images.map((image) =>
+      createGeneratedMediaAsset(site, image, prompt),
+    ),
+  );
+
+  const picker: GeneratedImagePickerConfig = {
+    title: pickerBase.title,
+    subtitle: pickerBase.subtitle,
+    useLabel: pickerBase.useLabel,
+    regenerateLabel: "Try again",
+    assignTool: pickerBase.assignTool,
+    assignArgs: pickerBase.assignArgs,
+    regenerateTool: toolName,
+    regenerateArgs: args,
+    successMessage: pickerBase.successMessage,
+  };
+
+  const isDebug = args.debug === true;
+  return renderWidget(
+    "image-carousel",
+    {
+      title: picker.title,
+      subtitle: picker.subtitle,
+      images: images.map((image) => ({
+        assetId: image.assetId,
+        publicUrl: image.publicUrl,
+      })),
+      useLabel: picker.useLabel,
+      regenerateLabel: picker.regenerateLabel,
+      assignTool: picker.assignTool,
+      assignArgs: picker.assignArgs,
+      regenerateTool: picker.regenerateTool,
+      regenerateArgs: picker.regenerateArgs,
+      successMessage: picker.successMessage,
+      ...(isDebug ? {
+        debug: true,
+        debugLabel: `${toolName} debug`,
+        debugExpectedImageDomain: "https://imagedelivery.net",
+      } : {}),
+    },
+    `${images.length} AI-generated image option${images.length !== 1 ? "s" : ""} ready to review.`,
+  );
+}
+
+function pickerConfigFromShowGeneratedImages(
+  rawArguments: Record<string, unknown>,
+  siteName?: string | null,
+): GeneratedImagePickerConfig {
+  const title = optionalString(rawArguments, "title");
+  const subtitle = optionalString(rawArguments, "subtitle");
+  const useLabel = optionalString(rawArguments, "use_label");
+  const regenerateLabel = optionalString(rawArguments, "regenerate_label");
+  const successMessage = optionalString(rawArguments, "success_message");
+  const VALID_TARGETS = new Set<string>([
+    "logo", "home_hero", "story_image", "location_hero",
+    "post_image", "menu_item_image", "experience_image",
+  ]);
+  const rawTargetStr = optionalString(rawArguments, "target");
+  if (rawTargetStr !== null && !VALID_TARGETS.has(rawTargetStr)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid target: ${rawTargetStr}`);
+  }
+  const rawTarget = rawTargetStr as GeneratedImageTarget | null;
+
+  if (!rawTarget) {
+    return {
+      title: title ?? "Generated Images",
+      subtitle,
+      useLabel,
+      regenerateLabel,
+      assignTool: null,
+      assignArgs: null,
+      regenerateTool: null,
+      regenerateArgs: null,
+      successMessage,
+    };
+  }
+
+  const assignment = assignmentForGeneratedTarget(rawTarget, rawArguments, siteName);
+  return {
+    title: title ?? assignment.title,
+    subtitle: subtitle ?? assignment.subtitle,
+    useLabel: useLabel ?? assignment.useLabel,
+    regenerateLabel,
+    assignTool: assignment.assignTool,
+    assignArgs: assignment.assignArgs,
+    regenerateTool: null,
+    regenerateArgs: null,
+    successMessage: successMessage ?? assignment.successMessage,
+  };
 }
 
 async function requireActiveVideoAsset(
@@ -242,6 +750,13 @@ interface ToolFileReference {
 }
 
 function toolFileReference(value: unknown, key: string): ToolFileReference {
+  if (typeof value === "string" && value.trim()) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `${key} must be sent as a ChatGPT file argument so the host rewrites the local path into an authorized file reference before KrabiClaw receives it.`,
+    );
+  }
+
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}`);
   }
@@ -273,6 +788,65 @@ function toolFileReference(value: unknown, key: string): ToolFileReference {
   };
 }
 
+async function resolveUserUploadedImageFile(
+  fileId: string,
+  env: ApiRecord,
+): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
+  const accountId = env.CF_ACCOUNT_ID as string | undefined;
+  const gatewayName = env.CF_GATEWAY_NAME as string | undefined;
+  const aigToken = env.CLOUDFLARE_API_TOKEN as string | undefined;
+
+  if (!accountId || !gatewayName || !aigToken) {
+    throw new Error(
+      "CF AI Gateway env vars not configured (CF_ACCOUNT_ID, CF_GATEWAY_NAME, CLOUDFLARE_API_TOKEN)",
+    );
+  }
+
+  const normalizedFileId = fileId
+    .trim()
+    .replace(/^sediment:\/\//i, "")
+    .replace(/^file:\/\//i, "")
+    .replace(/^\/+/, "");
+
+  if (!normalizedFileId || !/^[a-zA-Z0-9_-]+$/.test(normalizedFileId)) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      "file_id must be a valid uploaded file identifier.",
+    );
+  }
+
+  const url = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayName}/openai/v1/files/${normalizedFileId}/content`;
+  const response = await fetch(url, {
+    headers: { "cf-aig-authorization": `Bearer ${aigToken}` },
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!response.ok) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Failed to fetch uploaded file ${normalizedFileId} via AI Gateway: ${response.status}`,
+    });
+  }
+
+  const contentType =
+    response.headers.get("content-type") ?? "application/octet-stream";
+  if (!contentType.startsWith("image/")) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `File ${normalizedFileId} is not an image.`,
+    );
+  }
+
+  const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const detectedContentType = validateImageBuffer(
+    bytes,
+    `file ${normalizedFileId}`,
+  );
+  const filename = `${normalizedFileId}.${detectedContentType.split("/")[1] ?? "png"}`;
+  return { buffer, contentType: detectedContentType, filename };
+}
+
 async function resolveGeneratedImageFile(
   file: ToolFileReference,
 ): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
@@ -299,7 +873,7 @@ async function resolveGeneratedImageFile(
 
   const buffer = await response.arrayBuffer();
   const bytes = new Uint8Array(buffer);
-  const detectedContentType = validateGeneratedImageBuffer(
+  const detectedContentType = validateImageBuffer(
     bytes,
     `attachment ${file.file_id}`,
   );
@@ -717,9 +1291,46 @@ export async function executeMcpToolCall(
       assetId: img.assetId as string,
       publicUrl: img.publicUrl as string,
     }));
+
+    let activeSiteName: string | null = null;
+    const rawSiteId = optionalString(rawArguments, "site_id");
+    const rawTargetForName = optionalString(rawArguments, "target");
+    if (rawTargetForName && rawSiteId) {
+      const authorizedSite = await requireMcpSite(event, rawSiteId, "editor");
+      const siteRow = await authorizedSite.db
+        .prepare(`
+          SELECT brand_name, subdomain
+          FROM sites
+          WHERE id = ? AND organization_id = ?
+          LIMIT 1
+        `)
+        .bind(authorizedSite.siteId, authorizedSite.organizationId)
+        .first<{ brand_name: string | null; subdomain: string | null }>();
+      const nameVal = siteRow?.brand_name?.trim();
+      activeSiteName = (nameVal ? nameVal : siteRow?.subdomain) ?? null;
+    }
+
+    const picker = pickerConfigFromShowGeneratedImages(rawArguments, activeSiteName);
+    const isDebug = rawArguments.debug === true;
     return renderWidget(
       "image-carousel",
-      { images },
+      {
+        title: picker.title,
+        subtitle: picker.subtitle,
+        images,
+        useLabel: picker.useLabel,
+        regenerateLabel: picker.regenerateLabel,
+        assignTool: picker.assignTool,
+        assignArgs: picker.assignArgs,
+        regenerateTool: picker.regenerateTool,
+        regenerateArgs: picker.regenerateArgs,
+        successMessage: picker.successMessage,
+        ...(isDebug ? {
+          debug: true,
+          debugLabel: "show_generated_images debug",
+          debugExpectedImageDomain: "https://imagedelivery.net",
+        } : {}),
+      },
       `${images.length} AI-generated image${images.length !== 1 ? "s" : ""} ready to review.`,
     );
   }
@@ -755,6 +1366,18 @@ export async function executeMcpToolCall(
   }
 
   switch (toolName) {
+    case "generate_logo":
+    case "generate_home_hero_image":
+    case "generate_story_image":
+    case "generate_location_hero_image":
+    case "generate_post_image":
+    case "generate_menu_item_image":
+    case "generate_experience_image": {
+      if (!hasCloudflareImagesConfig(site.env)) {
+        throw new Error("Cloudflare Images not configured");
+      }
+      return generatePickerImagesForTool(site, toolName, { ...args, site_id: site.siteId });
+    }
     case "show_site_preview": {
       const siteRow = await getSiteForMcp(
         site.db,
@@ -1314,9 +1937,18 @@ export async function executeMcpToolCall(
           locationId: optionalString(args, "location_id") ?? undefined,
         }),
       };
-    case "request_media_upload": {
+    case "request_media_upload":
+    case "request_photo_upload": {
       if (!hasCloudflareImagesConfig(site.env))
         throw new Error("Cloudflare Images not configured");
+      if (toolName === "request_photo_upload") {
+        return renderWidget(
+          "photo-upload",
+          { status: "awaiting_user_upload" },
+          "Photo upload widget is open. Wait for the user to select and upload their photo — the widget will return the assetId and publicUrl via model context when the upload completes. Do not call set_logo or any image assignment tool until you receive that context.",
+        );
+      }
+
       const assetId = crypto.randomUUID();
       const upload = await requestImageUpload(site.env);
       await createMediaAsset(site.db, {
@@ -1333,11 +1965,15 @@ export async function executeMcpToolCall(
         category: (optionalString(args, "category") as never) ?? null,
         created_by_user_id: site.userId,
       });
-      return {
+      const baseUrl = resolveMcpBaseUrl(event);
+      const uploadPayload = {
         asset_id: assetId,
         upload_url: upload.uploadUrl,
         image_id: upload.imageId,
+        site_id: site.siteId,
+        activate_url: `${baseUrl}/api/mcp/media/${assetId}/activate`,
       };
+      return uploadPayload;
     }
     case "confirm_media_upload": {
       const assetId = requiredString(args, "asset_id");
@@ -2047,7 +2683,7 @@ export async function executeMcpToolCall(
         console.error("[MCP] save_generated_image base64 decode error:", err);
         throw err;
       }
-      const detectedContentType = validateGeneratedImageBuffer(
+      const detectedContentType = validateImageBuffer(
         new Uint8Array(upload.buffer),
         "base64 input",
       );
@@ -2108,6 +2744,58 @@ export async function executeMcpToolCall(
         thumbnail_url: uploaded.thumbnailUrl,
         alt_text:
           prompt ?? attachment.file_name ?? "AI-generated image attachment",
+        mime_type: upload.contentType,
+        file_name: upload.filename,
+        status: "active",
+        created_by_user_id: site.userId,
+      });
+
+      return {
+        assetId,
+        publicUrl: uploaded.publicUrl,
+        thumbnailUrl: uploaded.thumbnailUrl,
+      };
+    }
+    case "upload_user_photo": {
+      if (!hasCloudflareImagesConfig(site.env))
+        throw new Error("Cloudflare Images not configured");
+      const description = optionalString(args, "description") ?? null;
+      const fileReferenceValue = args.file;
+      const fileReference =
+        fileReferenceValue !== undefined
+          ? toolFileReference(fileReferenceValue, "file")
+          : null;
+      const fileId = optionalString(args, "file_id") ?? null;
+
+      if (!fileReference && !fileId) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "upload_user_photo requires either file or file_id.",
+        );
+      }
+
+      const upload = fileReference
+        ? await resolveGeneratedImageFile(fileReference)
+        : await resolveUserUploadedImageFile(fileId!, site.env);
+      const uploaded = await uploadImageBuffer(
+        site.env as Parameters<typeof uploadImageBuffer>[0],
+        upload.buffer,
+        upload.filename,
+        upload.contentType,
+      );
+
+      const assetId = crypto.randomUUID();
+      await createMediaAsset(site.db, {
+        id: assetId,
+        organization_id: site.organizationId,
+        site_id: site.siteId,
+        kind: "image",
+        provider: "cloudflare_images",
+        source: "uploaded",
+        cloudflare_image_id: uploaded.imageId,
+        public_url: uploaded.publicUrl,
+        thumbnail_url: uploaded.thumbnailUrl,
+        alt_text: description ?? fileReference?.file_name ?? fileId,
         mime_type: upload.contentType,
         file_name: upload.filename,
         status: "active",

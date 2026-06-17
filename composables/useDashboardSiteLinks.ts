@@ -90,7 +90,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
   }))
 
   const overviewLink = computed<DashboardActionLink>(() => ({
-    label: 'Restaurant',
+    label: 'Site',
     icon: 'i-heroicons-home',
     to: paths.value.org,
     color: 'neutral',

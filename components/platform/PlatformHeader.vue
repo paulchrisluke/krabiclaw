@@ -98,6 +98,7 @@
 const { isAuthenticated } = useAuth()
 
 const navItems = [
+  { label: 'Plugin', to: '/plugin' },
   { label: 'Features', to: '/features' },
   { label: 'Pricing', to: '/pricing' },
   { label: 'Templates', to: '/templates' },

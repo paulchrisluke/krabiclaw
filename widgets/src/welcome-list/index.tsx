@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import { useState, useEffect } from 'react'
 import { callTool, onToolResult, sendUiMessage, updateModelContext, injectStyles } from '../bridge'
+import { themeColors, sharedStyles } from '../theme'
 
 interface Site {
   id: string
@@ -18,34 +19,27 @@ interface Content {
   }
 }
 
-const PRIMARY = '#1F2547'
-const GREEN = '#16a34a'
+const GREEN = themeColors.success
 
 const styles = `
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #111; }
-  .card { padding: 20px; }
   .header { margin-bottom: 16px; }
-  .title { font-size: 20px; font-weight: 700; color: ${PRIMARY}; line-height: 1.2; }
-  .subtitle { font-size: 14px; color: #666; margin-top: 4px; line-height: 1.4; }
-  .divider { border: none; border-top: 1px solid #e5e7eb; margin: 14px 0; }
+  .title { font-size: 20px; font-weight: 700; color: var(--ui-text); line-height: 1.2; }
+  .subtitle { font-size: 14px; color: var(--ui-text-muted); margin-top: 4px; line-height: 1.4; }
+  .divider { border: none; border-top: 1px solid var(--ui-border); margin: 14px 0; }
   .empty { text-align: center; padding: 8px 0 16px; }
-  .empty-text { font-size: 14px; color: #666; margin-bottom: 14px; }
-  .site-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1.5px solid #e5e7eb; border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; width: 100%; background: #fff; text-align: left; }
-  .site-row:hover { border-color: ${PRIMARY}; background: #f8f9ff; }
-  .site-row.selected { border-color: ${PRIMARY}; background: #f0f3ff; }
-  .site-name { font-size: 14px; font-weight: 600; color: #111; }
-  .site-url { font-size: 12px; color: #888; margin-top: 1px; }
+  .empty-text { font-size: 14px; color: var(--ui-text-muted); margin-bottom: 14px; }
+  .site-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1.5px solid var(--ui-border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; width: 100%; background: var(--ui-bg-elevated); text-align: left; }
+  .site-row:hover { border-color: var(--ui-text); background: var(--ui-bg-muted); }
+  .site-row.selected { border-color: var(--ui-text); background: var(--ui-bg-muted); }
+  .site-name { font-size: 14px; font-weight: 600; color: var(--ui-text); }
+  .site-url { font-size: 12px; color: var(--ui-text-muted); margin-top: 1px; }
   .status-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; }
   .dot { width: 7px; height: 7px; border-radius: 50%; }
   .dot-live { background: ${GREEN}; }
   .dot-draft { background: #f59e0b; }
   .dot-inactive { background: #9ca3af; }
   .actions { display: flex; gap: 8px; margin-top: 14px; }
-  .btn { flex: 1; padding: 11px 14px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.15s; }
-  .btn:hover { opacity: 0.85; }
-  .btn-primary { background: ${PRIMARY}; color: #fff; }
-  .btn-outline { background: #fff; color: ${PRIMARY}; border: 1.5px solid ${PRIMARY}; }
+  .btn { flex: 1; }
 `
 
 function StatusBadge({ status }: { status: Site['status'] }) {
@@ -69,9 +63,10 @@ function App() {
       if (data?.sites) {
         setContent({ sites: data.sites })
         if (data.sites.length === 1) {
-          const site = data.sites[0]
+          const site = data.sites[0]!
           setSelected(site.id)
           updateModelContext({ site_id: site.id, site_name: site.name })
+          sendUiMessage(`Working with ${site.name}.`)
         }
       }
     })
@@ -103,7 +98,7 @@ function App() {
 
   const handleWhatsNext = () => {
     if (selectedSite) {
-      sendUiMessage(`What would you like to do with ${selectedSite.name}?`)
+      sendUiMessage(`Working with ${selectedSite.name}. What would you like to do?`)
     }
   }
 
@@ -147,7 +142,7 @@ function App() {
       ))}
       <div className="actions">
         <button className="btn btn-primary" onClick={handleWhatsNext} disabled={!selected}>
-          What's next?
+          {selectedSite ? `Work with ${selectedSite.name}` : 'Select a site'}
         </button>
         <button className="btn btn-outline" onClick={handleCreate}>
           + New site
@@ -157,6 +152,6 @@ function App() {
   )
 }
 
-injectStyles(styles)
+injectStyles(sharedStyles + styles)
 const root = document.getElementById('app')!
 createRoot(root).render(<App />)

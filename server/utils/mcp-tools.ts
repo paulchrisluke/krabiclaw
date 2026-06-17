@@ -166,6 +166,11 @@ const fileReferenceObject = {
   required: ['download_url', 'file_id'],
 }
 
+const chatgptFileInput = {
+  ...fileReferenceObject,
+  description: 'Authorized file reference supplied by ChatGPT after rewriting the declared top-level file argument, including a temporary download_url and file_id.',
+}
+
 const experienceObject = {
   type: 'object',
   properties: {
@@ -346,6 +351,33 @@ const siteIdSchema = {
   site_id: { type: 'string', description: 'Site ID.' },
 }
 
+const generatedImagePickerOutputSchema = {
+  type: 'object',
+  properties: {
+    title: { type: 'string' },
+    subtitle: { type: ['string', 'null'] },
+    images: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          assetId: { type: 'string' },
+          publicUrl: { type: 'string' },
+        },
+        required: ['assetId', 'publicUrl'],
+      },
+    },
+    useLabel: { type: ['string', 'null'] },
+    regenerateLabel: { type: ['string', 'null'] },
+    assignTool: { type: ['string', 'null'] },
+    assignArgs: { type: ['object', 'null'] },
+    regenerateTool: { type: ['string', 'null'] },
+    regenerateArgs: { type: ['object', 'null'] },
+    successMessage: { type: ['string', 'null'] },
+  },
+  required: ['images'],
+} as const
+
 function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'outputSchema'> & {
   inputSchema?: Record<string, unknown>
   required?: string[]
@@ -370,10 +402,18 @@ function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'output
       additionalProperties: true,
     },
     outputSchema: definition.outputSchema ?? { type: 'object' },
+    widgetName: definition.widgetName,
+    widgetInvoking: definition.widgetInvoking,
+    widgetInvoked: definition.widgetInvoked,
+    fileParams: definition.fileParams,
   })
 }
 
-function globalTool(definition: RawMcpToolDefinition): McpToolDefinition {
+function globalTool(definition: RawMcpToolDefinition | McpToolDefinition): McpToolDefinition {
+  if ('annotations' in definition && 'securitySchemes' in definition) {
+    return definition
+  }
+
   return withToolAnnotations(definition)
 }
 
@@ -443,6 +483,15 @@ const READ_ONLY_TOOL_NAMES = [
 const BOUNDED_WRITE_TOOL_NAMES = [
   'save_generated_image',
   'save_generated_image_file',
+  'generate_logo',
+  'generate_home_hero_image',
+  'generate_story_image',
+  'generate_location_hero_image',
+  'generate_post_image',
+  'generate_menu_item_image',
+  'generate_experience_image',
+  'upload_user_photo',
+  'request_photo_upload',
   'set_logo',
   'set_home_hero_image',
   'set_home_hero_video',
@@ -692,7 +741,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   })),
   globalTool(withToolAnnotations({
     name: 'show_generated_images',
-    description: 'Show a carousel of AI-generated hero images for the user to pick from. First persist each image with save_generated_image or save_generated_image_file, then pass the resulting assetId and publicUrl here.',
+    description: 'Show a carousel of AI-generated images for the user to pick from. First persist each image with save_generated_image or save_generated_image_file, then pass the resulting assetId and publicUrl here. Include target metadata when the selected image should be applied directly.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -704,32 +753,135 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           description: 'Array of { assetId, publicUrl } returned by save_generated_image or save_generated_image_file.',
           items: { type: 'object', properties: { assetId: { type: 'string' }, publicUrl: { type: 'string' } } },
         },
+        target: {
+          type: 'string',
+          enum: ['logo', 'home_hero', 'story_image', 'location_hero', 'post_image', 'menu_item_image', 'experience_image'],
+          description: 'Optional target that the widget should update directly after the user selects an image.',
+        },
+        site_id: { type: 'string', description: 'Required with target. Site ID that owns the target content.' },
+        location_id: { type: 'string' },
+        post_id: { type: 'string' },
+        menu_item_id: { type: 'string' },
+        experience_id: { type: 'string' },
+        title: { type: 'string', description: 'Optional widget title override.' },
+        subtitle: { type: 'string', description: 'Optional widget subtitle override.' },
+        use_label: { type: 'string', description: 'Optional label for the primary button.' },
+        regenerate_label: { type: 'string', description: 'Optional label for the secondary button.' },
       },
       required: ['images'],
       additionalProperties: true,
     },
-    outputSchema: {
-      type: 'object',
-      description: 'Renders an image carousel widget. The user selects one image and the assetId is returned.',
-      properties: {
-        images: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              assetId: { type: 'string' },
-              publicUrl: { type: 'string' },
-            },
-            required: ['assetId', 'publicUrl'],
-          },
-        },
-      },
-      required: ['images'],
-    },
+    outputSchema: generatedImagePickerOutputSchema,
     widgetName: 'image-carousel',
     widgetInvoking: 'Loading generated images…',
-    widgetInvoked: 'Pick your hero image',
+    widgetInvoked: 'Pick your image',
   })),
+  siteTool({
+    name: 'generate_logo',
+    description: 'Generate several text-free logo concepts for the current site, save them to the media library, and open an approval widget. Use this when native image_generation is unavailable or when KrabiClaw should handle logo generation end-to-end.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating logo concepts…',
+    widgetInvoked: 'Pick your logo',
+  }),
+  siteTool({
+    name: 'generate_home_hero_image',
+    description: 'Generate several homepage hero image options for the current site, save them to the media library, and open an approval widget.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating hero images…',
+    widgetInvoked: 'Pick your hero image',
+  }),
+  siteTool({
+    name: 'generate_story_image',
+    description: 'Generate several story/about image options for the current site, save them to the media library, and open an approval widget.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating story images…',
+    widgetInvoked: 'Pick your story image',
+  }),
+  siteTool({
+    name: 'generate_location_hero_image',
+    description: 'Generate several location hero image options for a specific business location, save them to the media library, and open an approval widget.',
+    domain: 'locations',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      location_id: { type: 'string', description: 'Target location ID.' },
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    required: ['location_id'],
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating location hero images…',
+    widgetInvoked: 'Pick your location hero image',
+  }),
+  siteTool({
+    name: 'generate_post_image',
+    description: 'Generate several image options for a post, save them to the media library, and open an approval widget.',
+    domain: 'posts',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      post_id: { type: 'string', description: 'Target post ID.' },
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    required: ['post_id'],
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating post images…',
+    widgetInvoked: 'Pick your post image',
+  }),
+  siteTool({
+    name: 'generate_menu_item_image',
+    description: 'Generate several image options for a menu item, save them to the media library, and open an approval widget.',
+    domain: 'menus',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      menu_item_id: { type: 'string', description: 'Target menu item ID.' },
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    required: ['menu_item_id'],
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating menu item images…',
+    widgetInvoked: 'Pick your menu image',
+  }),
+  siteTool({
+    name: 'generate_experience_image',
+    description: 'Generate several image options for an experience, save them to the media library, and open an approval widget.',
+    domain: 'experiences',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      experience_id: { type: 'string', description: 'Target experience ID.' },
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    required: ['experience_id'],
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating experience images…',
+    widgetInvoked: 'Pick your experience image',
+  }),
   siteTool({
     name: 'save_generated_image',
     description: 'Upload a base64-encoded image to Cloudflare Images and persist a media_asset record. Use ONLY when you already have a raw base64 string (e.g. from an external API). For ChatGPT native image_generation output, use save_generated_image_file instead — passing image_generation_call.result base64 here will be blocked by safety checks.',
@@ -773,6 +925,56 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       required: ['assetId', 'publicUrl'],
     },
   }),
+  siteTool({
+    name: 'upload_user_photo',
+    description: 'Primary path for a user-provided image attachment. First inspect the attached image visually and ask the user to confirm the target site, placement, and that this exact image should be used. Only after confirmation, call this tool with file set to the ChatGPT attachment path so the host can rewrite it into an authorized file reference. Use file_id only as a secondary fallback when a rewritten file argument is unavailable. Do NOT use save_generated_image_file for user uploads; that tool is only for ChatGPT native image_generation output.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      file_id: { type: 'string', description: 'Secondary fallback plain file_id for a user-uploaded image (e.g. file_abc123). Prefer the file argument so ChatGPT can rewrite the attachment into an authorized file reference.' },
+      file: chatgptFileInput,
+      category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
+      description: { type: 'string', description: 'Description of the photo (stored as alt text).' },
+    },
+    required: [],
+    fileParams: ['file'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        assetId: { type: 'string' },
+        publicUrl: { type: 'string' },
+        thumbnailUrl: { type: 'string' },
+      },
+      required: ['assetId', 'publicUrl'],
+    },
+  }),
+  globalTool(withToolAnnotations({
+    name: 'request_photo_upload',
+    description: 'Secondary fallback only. Open an in-chat file picker when the user has not already attached an image in ChatGPT and still wants to provide their own photo. Prefer the native attachment flow plus upload_user_photo for the default path.',
+    domain: 'media',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    widgetName: 'photo-upload',
+    widgetInvoking: 'Opening upload form…',
+    widgetInvoked: 'Upload your photo',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...siteIdSchema,
+        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
+      },
+      required: ['site_id'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['awaiting_user_upload'] },
+      },
+      required: ['status'],
+    },
+  })),
   globalTool(withToolAnnotations({
     name: 'list_sites',
     description: 'List the caller\'s accessible sites and current authenticated account identity.',
@@ -2596,7 +2798,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   const toolNames = new Set(MCP_TOOLS.map((tool) => tool.name))
   for (const name of TOOL_ANNOTATIONS_BY_NAME.keys()) {
     if (!toolNames.has(name)) {
-      throw new Error(`MCP tool annotation classification exists for unknown tool "${name}".`)
+      console.warn(`MCP tool annotation classification exists for unknown tool "${name}".`)
     }
   }
 }

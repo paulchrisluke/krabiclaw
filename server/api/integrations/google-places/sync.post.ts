@@ -2,6 +2,7 @@ import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { syncPlaceToLocation } from '../../../utils/google-places'
 import { getDashboardRestaurant } from '~/server/utils/dashboard-context'
+import { hasEntitlement } from '~/server/utils/billing'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -21,14 +22,19 @@ export default defineEventHandler(async (event) => {
   const { restaurant: site } = body.siteId
     ? {
         restaurant: await db.prepare(`
-          SELECT s.id, s.organization_id FROM sites s
+          SELECT s.id, s.organization_id, s.plan FROM sites s
           JOIN member om ON s.organization_id = om.organizationId
           WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
           LIMIT 1
-        `).bind(body.siteId, session.user.id).first<{ id: string; organization_id: string }>()
+        `).bind(body.siteId, session.user.id).first<{ id: string; organization_id: string; plan: string }>()
       }
     : await getDashboardRestaurant(event)
+
   if (!site) return jsonResponse({ error: 'Restaurant not found or access denied' }, { status: 404 })
+
+  if (!await hasEntitlement(env, db, site.organization_id, 'google_business')) {
+    return jsonResponse({ error: 'Google Business sync requires a Growth plan or higher.' }, { status: 403 })
+  }
 
   const location = await db.prepare(`
     SELECT id, google_place_id FROM business_locations

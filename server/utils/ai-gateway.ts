@@ -135,16 +135,32 @@ export function documentBlock(base64Data: string): ApiValue {
   }
 }
 
-export const IMAGE_MODEL = 'dall-e-3'
+export const IMAGE_MODEL = 'gpt-image-2'
 export const IMAGE_SIZE = '1024x1024'
-export const IMAGE_QUALITY = 'standard'
+export const IMAGE_QUALITY = 'medium'
 const IMAGE_GENERATION_TIMEOUT_MS = 240_000
 
-export interface AiImageGenerationResult {
+export interface GeneratedGatewayImage {
   imageBuffer: ArrayBuffer
+  contentType: 'image/png' | 'image/jpeg' | 'image/webp'
+  filename: string
+}
+
+export interface AiImageGenerationResult {
+  images: GeneratedGatewayImage[]
   cfLogId: string | null
   inputTokens: number
   outputTokens: number
+}
+
+export interface AiImageGenerationOptions {
+  size?: string
+  quality?: 'low' | 'medium' | 'high' | 'auto'
+  background?: 'opaque' | 'auto'
+  outputFormat?: 'png' | 'jpeg' | 'webp'
+  outputCompression?: number
+  moderation?: 'auto' | 'low'
+  n?: number
 }
 
 /**
@@ -154,7 +170,8 @@ export interface AiImageGenerationResult {
  */
 export async function generateImageViaGateway(
   env: ApiRecord,
-  prompt: string
+  prompt: string,
+  opts: AiImageGenerationOptions = {},
 ): Promise<AiImageGenerationResult> {
   const accountId = env.CF_ACCOUNT_ID
   const gatewayName = env.CF_GATEWAY_NAME
@@ -165,6 +182,7 @@ export async function generateImageViaGateway(
   }
 
   const url = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayName}/openai/v1/images/generations`
+  const outputFormat = opts.outputFormat ?? 'jpeg'
 
   let timeoutHandle: ReturnType<typeof setTimeout> | null = null
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -184,10 +202,15 @@ export async function generateImageViaGateway(
       body: JSON.stringify({
         model: IMAGE_MODEL,
         prompt: `${prompt}. No text, no words, no labels, no typography, no writing of any kind in the image.`,
-        n: 1,
-        size: IMAGE_SIZE,
-        quality: IMAGE_QUALITY,
-        response_format: 'b64_json',
+        n: opts.n ?? 1,
+        size: opts.size ?? IMAGE_SIZE,
+        quality: opts.quality ?? IMAGE_QUALITY,
+        background: opts.background ?? 'opaque',
+        output_format: outputFormat,
+        ...(typeof opts.outputCompression === 'number'
+          ? { output_compression: opts.outputCompression }
+          : {}),
+        moderation: opts.moderation ?? 'auto',
       }),
     }),
     timeoutPromise,
@@ -207,12 +230,32 @@ export async function generateImageViaGateway(
     data?: Array<{ b64_json?: string }>
     usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number }
   }
-  const b64Json = data?.data?.[0]?.b64_json ?? ''
-  if (!b64Json) throw new Error('AI image generation returned no image data')
+  const images = (data?.data ?? [])
+    .map((item, index) => {
+      const b64Json = item?.b64_json ?? ''
+      if (!b64Json) return null
+      const bytes = Uint8Array.from(atob(b64Json), c => c.charCodeAt(0))
+      const contentType = outputFormat === 'png'
+        ? 'image/png'
+        : outputFormat === 'webp'
+          ? 'image/webp'
+          : 'image/jpeg'
+      const extension = outputFormat === 'png'
+        ? 'png'
+        : outputFormat === 'webp'
+          ? 'webp'
+          : 'jpg'
+      return {
+        imageBuffer: bytes.buffer,
+        contentType,
+        filename: `ai-generated-${Date.now()}-${index + 1}.${extension}`,
+      } satisfies GeneratedGatewayImage
+    })
+    .filter((item): item is GeneratedGatewayImage => Boolean(item))
+  if (!images.length) throw new Error('AI image generation returned no image data')
 
   const inputTokens = data.usage?.input_tokens ?? 0
   const outputTokens = data.usage?.output_tokens ?? 0
 
-  const bytes = Uint8Array.from(atob(b64Json), c => c.charCodeAt(0))
-  return { imageBuffer: bytes.buffer, cfLogId, inputTokens, outputTokens }
+  return { images, cfLogId, inputTokens, outputTokens }
 }

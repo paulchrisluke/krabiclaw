@@ -541,7 +541,9 @@ to `publicUrl` when the user clicks the card or the "Open site" button.
 
 `create_site`, `create_location`, `save_generated_image`, `save_generated_image_file`,
 `request_media_upload`, and `confirm_media_upload` already exist and are called directly by the
-model (not as render tools).
+model (not as render tools). For user-provided images, the default path should be direct ChatGPT
+attachment plus explicit confirmation, then `upload_user_photo({ site_id, file, ... })`. Use
+`request_photo_upload` only as a fallback when the user has not already attached an image.
 
 ---
 

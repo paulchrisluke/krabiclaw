@@ -113,6 +113,12 @@
       <div class="flex flex-wrap items-center justify-between gap-4 pt-6 text-xs text-inverted/40">
         <div>© {{ year }} {{ restaurantName }}</div>
         <div class="flex items-center gap-6">
+          <UDropdownMenu :items="languageItems" :ui="{ content: 'saya-theme' }">
+            <UButton variant="ghost" color="neutral" size="sm">
+              <span>{{ getCurrentLocaleFlag() }}</span>
+              <span class="hidden sm:inline">{{ currentLocale }}</span>
+            </UButton>
+          </UDropdownMenu>
           <UColorModeButton variant="ghost" color="neutral" size="sm" />
           <NuxtLink to="/privacy" class="transition hover:text-inverted/70">Privacy</NuxtLink>
           <NuxtLink to="/terms" class="transition hover:text-inverted/70">Terms</NuxtLink>
@@ -140,7 +146,33 @@ const { isPlatform, site } = useTenantSite()
 const copy = computed(() => getVerticalCopy((site as { vertical?: string } | null)?.vertical))
 
 // Shared bootstrap — same key as the page → zero extra SSR requests
-const { locations: bootstrapLocations, error: bootstrapError, config: siteConfig, menu, hasExperiences } = useBootstrap()
+interface I18nComposable {
+  locale: Ref<string>
+  locales: Ref<Array<{ code: string; name: string }>>
+  setLocale: (_code: string) => void
+  t: (_key: string, _named?: Record<string, unknown>) => string
+}
+
+const { locations: bootstrapLocations, locales: bootstrapLocales, error: bootstrapError, config: siteConfig, menu, hasExperiences } = useBootstrap()
+
+const i18n = useI18n() as ApiValue as I18nComposable
+const currentLocale = computed(() => i18n.locale.value)
+const getLocaleFlag = (code: string) =>
+  ({ en: '🇺🇸', th: '🇹🇭', fr: '🇫🇷', ja: '🇯🇵', 'zh-CN': '🇨🇳', ko: '🇰🇷', es: '🇪🇸', de: '🇩🇪', it: '🇮🇹', ar: '🇸🇦' }[code] ?? '🌐')
+const getCurrentLocaleFlag = () => getLocaleFlag(currentLocale.value)
+
+const availableLocales = computed(() =>
+  bootstrapLocales.value.length
+    ? bootstrapLocales.value.map(l => ({ code: l.code, name: l.label || l.code }))
+    : (i18n.locales?.value ?? []).map((l: { code: string; name: string }) => ({ code: l.code, name: l.name }))
+)
+
+const languageItems = computed(() =>
+  availableLocales.value.map((l: { code: string; name: string }) => ({
+    label: `${getLocaleFlag(l.code)} ${l.name}`,
+    onSelect: () => i18n.setLocale(l.code)
+  }))
+)
 const locationsError = computed(() => bootstrapError.value)
 
 const hasMenu = computed(() => {

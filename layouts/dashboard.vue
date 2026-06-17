@@ -26,7 +26,7 @@
                 color="neutral"
                 variant="ghost"
                 size="sm"
-                aria-label="Back to Restaurant"
+                aria-label="Back to Site"
               />
             </div>
             <NuxtLink
@@ -364,7 +364,7 @@ const inSettingsWorkspace = computed(() => {
   if (orgSettingsBase.value && route.path.startsWith(orgSettingsBase.value)) return true
   return /^\/dashboard\/[^/]+\/~\/settings/.test(route.path)
 })
-const organizationLabel = computed(() => organization.value?.name ?? 'Restaurant')
+const organizationLabel = computed(() => organization.value?.name ?? 'Site')
 const organizationAvatar = computed(() => ({
   src: organization.value?.logo ?? undefined,
   alt: organizationLabel.value,
@@ -380,7 +380,7 @@ const organizationMenuItems = computed(() => [
   })),
   [
     {
-      label: 'Create restaurant',
+      label: 'Create site',
       icon: 'i-heroicons-plus',
       to: orgBase.value ?? '/dashboard'
     }
@@ -404,7 +404,7 @@ const locationMenuItems = computed(() => [
 
 const mainNavigation = computed(() => [
   [
-    { label: 'Restaurant', icon: 'i-lucide-layout-dashboard', to: orgBase.value ?? '/dashboard' },
+    { label: 'Site', icon: 'i-lucide-layout-dashboard', to: orgBase.value ?? '/dashboard' },
   ],
   [
     { label: 'Support', icon: 'i-lucide-headphones', to: orgBase.value ? `${orgBase.value}/support` : '/dashboard' },

@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import { useState, useEffect } from 'react'
 import { onToolResult, sendUiMessage, updateModelContext, injectStyles } from '../bridge'
+import { sharedStyles } from '../theme'
 
 interface Photo {
   assetId: string
@@ -24,27 +25,19 @@ interface Content {
   missingPhotos: boolean
 }
 
-const PRIMARY = '#1F2547'
-
 const styles = `
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #111; }
-  .card { padding: 20px; }
-  .biz-name { font-size: 18px; font-weight: 700; color: ${PRIMARY}; }
-  .biz-meta { font-size: 13px; color: #666; margin-top: 3px; }
+  .biz-name { font-size: 18px; font-weight: 700; color: var(--ui-text); }
+  .biz-meta { font-size: 13px; color: var(--ui-text-muted); margin-top: 3px; }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 14px 0; }
-  .grid-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: #f3f4f6; }
-  .grid-placeholder { width: 100%; aspect-ratio: 1; border-radius: 6px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 11px; }
-  .detail { font-size: 13px; color: #555; margin-bottom: 5px; display: flex; gap: 6px; }
-  .detail-label { font-weight: 600; color: #333; min-width: 50px; }
-  .warn { background: #fef9c3; border: 1px solid #fde047; border-radius: 8px; padding: 10px 12px; margin-top: 12px; font-size: 13px; color: #713f12; }
+  .grid-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: var(--ui-bg-muted); }
+  .grid-placeholder { width: 100%; aspect-ratio: 1; border-radius: 6px; background: var(--ui-bg-muted); display: flex; align-items: center; justify-content: center; color: var(--ui-text-muted); font-size: 11px; }
+  .detail { font-size: 13px; color: var(--ui-text-muted); margin-bottom: 5px; display: flex; gap: 6px; }
+  .detail-label { font-weight: 600; color: var(--ui-text); min-width: 50px; }
+  .warn { background: rgba(253, 224, 71, 0.1); border: 1px solid #fde047; border-radius: 8px; padding: 10px 12px; margin-top: 12px; font-size: 13px; color: #fde047; }
   .warn-title { font-weight: 600; margin-bottom: 6px; }
   .actions { display: flex; gap: 8px; margin-top: 14px; }
-  .btn { flex: 1; padding: 11px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.15s; }
-  .btn:hover { opacity: 0.85; }
-  .btn-primary { background: ${PRIMARY}; color: #fff; }
-  .btn-outline { background: #fff; color: ${PRIMARY}; border: 1.5px solid ${PRIMARY}; }
-  .loading { text-align: center; padding: 40px 20px; color: #888; font-size: 14px; }
+  .btn { flex: 1; }
+  .loading { text-align: center; padding: 40px 20px; color: var(--ui-text-muted); font-size: 14px; }
 `
 
 function Stars({ rating }: { rating: number }) {
@@ -135,6 +128,6 @@ function App() {
   )
 }
 
-injectStyles(styles)
+injectStyles(sharedStyles + styles)
 const root = document.getElementById('app')!
 createRoot(root).render(<App />)

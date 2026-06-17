@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import { useState, useEffect } from 'react'
 import { onToolResult, sendUiMessage, openExternal, injectStyles } from '../bridge'
+import { sharedStyles } from '../theme'
 
 interface Page {
   label: string
@@ -18,28 +19,20 @@ interface SiteContent {
   ogImageUrl?: string | null
 }
 
-const PRIMARY = '#1F2547'
-
 const styles = `
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #111; }
-  .card { padding: 20px; }
   .header { margin-bottom: 10px; }
-  .title { font-size: 15px; font-weight: 700; color: #16a34a; display: flex; align-items: center; gap: 5px; }
-  .preview-link { width: 100%; aspect-ratio: 3 / 2; border-radius: 10px; border: 1px solid #e5e7eb; display: block; overflow: hidden; background: #f9fafb; cursor: pointer; }
-  .preview-link:focus-visible { outline: 2px solid ${PRIMARY}; outline-offset: 3px; }
+  .title { font-size: 15px; font-weight: 700; color: var(--kc-success); display: flex; align-items: center; gap: 5px; }
+  .preview-link { width: 100%; aspect-ratio: 3 / 2; border-radius: 10px; border: 1px solid var(--ui-border); display: block; overflow: hidden; background: var(--ui-bg-muted); cursor: pointer; }
+  .preview-link:focus-visible { outline: 2px solid var(--ui-text); outline-offset: 3px; }
   .preview-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.18s ease-out; }
   .preview-link:hover .preview-img { transform: scale(1.015); }
-  .link-card { width: 100%; height: 100%; background: #f9fafb; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
-  .link-card-name { font-size: 16px; font-weight: 700; color: #111; }
-  .link-card-url { font-size: 13px; color: #888; }
-  .site-url { font-size: 12px; color: #888; margin-top: 8px; text-align: center; }
+  .link-card { width: 100%; height: 100%; background: var(--ui-bg-muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .link-card-name { font-size: 16px; font-weight: 700; color: var(--ui-text); }
+  .link-card-url { font-size: 13px; color: var(--ui-text-muted); }
+  .site-url { font-size: 12px; color: var(--ui-text-muted); margin-top: 8px; text-align: center; }
   .actions { display: flex; gap: 8px; margin-top: 12px; }
-  .btn { flex: 1; padding: 11px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.15s; }
-  .btn:hover { opacity: 0.85; }
-  .btn-primary { background: ${PRIMARY}; color: #fff; }
-  .btn-outline { background: #fff; color: ${PRIMARY}; border: 1.5px solid ${PRIMARY}; }
-  .loading { text-align: center; padding: 40px 20px; color: #888; font-size: 14px; }
+  .btn { flex: 1; }
+  .loading { text-align: center; padding: 40px 20px; color: var(--ui-text-muted); font-size: 14px; }
 `
 
 function App() {
@@ -104,6 +97,6 @@ function App() {
   )
 }
 
-injectStyles(styles)
+injectStyles(sharedStyles + styles)
 const root = document.getElementById('app')!
 createRoot(root).render(<App />)

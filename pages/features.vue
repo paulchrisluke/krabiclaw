@@ -12,11 +12,11 @@
           The Ultimate Platform
         </span>
         <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[1.05] text-default m-0 text-balance">
-          Supercharge Your Business. <br class="hidden sm:inline" />
-          <span class="bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">Zero Middlemen.</span>
+          Everything your business needs. <br class="hidden sm:inline" />
+          <span class="bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">Edited through ChatGPT.</span>
         </h1>
         <p class="text-lg sm:text-xl text-muted leading-relaxed m-0 text-balance">
-          Say goodbye to expensive agencies, 30% commissions, and buggy plugins. KrabiClaw gives your business a high-converting storefront, direct bookings, and automated local SEO in one simple system.
+          Say goodbye to expensive agencies and clunky dashboards. KrabiClaw gives restaurants and experience businesses a high-converting site, direct bookings, and automated local SEO — managed through a ChatGPT conversation.
         </p>
         <div class="flex flex-wrap items-center justify-center gap-4 mt-2">
           <UButton to="/signup" size="lg" class="font-semibold bg-primary text-inverted rounded-[9px] hover:bg-primary/90 shadow-sm transition-transform hover:-translate-y-0.5">
@@ -41,8 +41,8 @@
           <div>
             <!-- Icon Wrapper -->
             <div
-              class="w-12 h-12 rounded-xl flex items-center justify-center mb-6 transition-all duration-300"
-              :class="feature.badgeColor"
+              class="w-12 h-12 rounded-xl flex items-center justify-center mb-6 shadow-sm"
+              style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%); box-shadow: 0 4px 12px rgba(31,37,71,0.15);"
             >
               <UIcon :name="feature.icon" class="size-6 text-white" />
             </div>
@@ -200,7 +200,7 @@ const currentPageUrl = useSeoUrl('/features')
 
 useSeoMeta({
   title: 'Platform Features | KrabiClaw',
-  description: 'KrabiClaw features: AI-built restaurant websites, reservations with notifications, Google Business sync, multi-language support, delivery link integration, and optional WhatsApp integration for ChowBot conversations.',
+  description: 'KrabiClaw features: edit your restaurant or experience site through ChatGPT, take bookings, sync with Google Business, translate to multiple languages, and track real-time analytics.',
   ogImage: sharedOgImage,
   ogUrl: currentPageUrl,
   ogType: 'website',
@@ -211,7 +211,6 @@ const detailedFeatures = [
     icon: 'i-heroicons-globe-alt',
     title: 'SEO & Custom Domains',
     description: 'Ensure local searchers find your site instantly. Our platform features edge performance and clean HTML optimized directly for search crawlers.',
-    badgeColor: 'bg-primary',
     docLink: '/docs/restaurant-seo-analytics-setup-guide',
     specs: [
       'Connect custom domains with automated SSL',
@@ -221,49 +220,45 @@ const detailedFeatures = [
     ]
   },
   {
+    icon: 'i-heroicons-chat-bubble-left-right',
+    title: 'Edit Everything Through ChatGPT',
+    description: 'Update menus, page content, photos, and posts by talking to ChatGPT. No CMS to learn — just describe what you want changed.',
+    docLink: '/plugin',
+    specs: [
+      'Edit menus, hero content & photos through conversation',
+      'Generate site images with ChatGPT image tools',
+      'Translate your site to multiple languages in one step',
+      'Publish posts to your site and Facebook simultaneously',
+    ]
+  },
+  {
     icon: 'i-heroicons-calendar-days',
-    title: 'Smart Reservations',
-    description: 'Accept customer table bookings 24/7. Keep seat turn rates high while automating guest confirmations without extra staff handling.',
-    badgeColor: 'bg-(--kc-coral)',
+    title: 'Bookings & Experience Reservations',
+    description: 'Accept table bookings and ticketed experience reservations 24/7. Automate confirmations so your team focuses on guests, not admin.',
     docLink: '/docs/launch-your-restaurant-website',
     specs: [
-      'Automated WhatsApp reservation confirmations',
-      'Seat & table limits based on busy time settings',
-      'Integrated real-time waitlist widget',
-      'No commissions or per-cover booking fees'
+      'Table reservations and ticketed experience bookings',
+      'Capacity and time-slot control per experience',
+      'Automated WhatsApp booking confirmations',
+      'No commissions or per-cover fees'
     ]
   },
   {
     icon: 'i-heroicons-document-text',
-    title: 'Digital Menus Customers Trust',
-    description: 'Create high-converting, accessible menus. Allow diners to easily discover dishes, filters, and dietary details on any device.',
-    badgeColor: 'bg-(--kc-teal)',
+    title: 'Menus, Experiences & Offerings',
+    description: 'Restaurants publish multi-section menus. Experience businesses list ticketed activities with pricing, capacity, and scheduling — all on the same platform.',
     docLink: '/docs/build-a-menu-customers-can-trust',
     specs: [
-      'Spice levels, allergen, and dietary filters',
-      'One-click WhatsApp menu import & sync',
-      'Fast scannable section navigation (Sticky mobile)',
-      'Beautiful responsive food photo galleries'
-    ]
-  },
-  {
-    icon: 'i-heroicons-sparkles',
-    title: 'ChowBot AI & Content Suite',
-    description: 'Unleash artificial intelligence on your operations. Generate descriptions, handle customer messages, and translate in one click.',
-    badgeColor: 'bg-indigo-600',
-    docLink: '/docs/set-up-restaurant-details',
-    specs: [
-      'Real-time automated WhatsApp conversations',
-      'Instant menu translation to multi-languages',
-      'AI dish description & copywriting generator',
-      'ChowBot-managed guest QA answering'
+      'Multi-section menus with allergen & dietary filters',
+      'Ticketed experiences with capacity and time slots',
+      'Beautiful photo galleries for food and activities',
+      'Fast, scannable navigation on any device'
     ]
   },
   {
     icon: 'i-heroicons-shopping-bag',
     title: 'Delivery & Order Links',
     description: 'Connect your Grab, Uber Eats, and FoodPanda pages so guests can order from the platform they already use — without leaving your site.',
-    badgeColor: 'bg-emerald-600',
     docLink: '/docs/launch-your-restaurant-website',
     specs: [
       'Grab, Uber Eats, and FoodPanda link integration',
@@ -275,34 +270,41 @@ const detailedFeatures = [
   {
     icon: 'i-heroicons-chart-bar',
     title: 'Real-Time Insights',
-    description: 'Understand exactly how your business is performing. Access a unified dashboard of diner behaviors, sales, and reviews.',
-    badgeColor: 'bg-amber-600',
+    description: 'See exactly how your business is performing. Ask ChatGPT for a summary, or check the analytics tab directly.',
     docLink: '/docs/connect-google-business-profile',
     specs: [
-      'Diner cover counts & busiest hour metrics',
-      'Google Review aggregation & prompt reply tools',
-      'Sales and popular dish analytics tracking',
-      'Audience traffic & reservation conversion logs'
+      'Visitor counts, top pages & busiest hours',
+      'Google Review aggregation & reply tools',
+      'Reservation and booking conversion tracking',
+      'Ask ChatGPT "how many visitors this month?"'
     ]
   }
 ]
 
 const faqItems = [
   {
+    q: 'How do I edit my site through ChatGPT?',
+    a: 'Sign up for a KrabiClaw account, then add the KrabiClaw MCP app in ChatGPT (Settings → Connectors → paste https://krabiclaw.com/api/mcp). Once connected, just tell ChatGPT what to change — menus, content, photos, posts.'
+  },
+  {
+    q: 'Does this work for experience businesses, not just restaurants?',
+    a: 'Yes. KrabiClaw supports both verticals. Restaurants get multi-section menus with dietary filters. Experience businesses get ticketed activities with capacity control, time slots, and booking management.'
+  },
+  {
     q: 'Can I map a custom domain?',
-    a: 'Absolutely. Every KrabiClaw site can easily connect to custom domains (like yourrestaurant.com). We provide full, free SSL certificates and global edge routing for speed.'
+    a: 'Absolutely. Every KrabiClaw site connects to a custom domain (like yourbusiness.com). We handle SSL and global edge routing automatically.'
   },
   {
     q: 'Are there any hidden booking fees?',
-    a: 'None. Unlike OpenTable or Resy, which charge per reservation cover, KrabiClaw is flat-rate. Whether you take 10 or 10,000 bookings, you pay the same low price.'
+    a: 'None. KrabiClaw is flat-rate. Whether you take 10 or 10,000 bookings or experience reservations, you pay the same monthly price — no per-cover or per-ticket commissions.'
   },
   {
-    q: 'How does the Google Business Profile sync work?',
-    a: 'Connect your Google Business account and KrabiClaw pulls in your verified hours, photos, reviews, and business details automatically. On Managed plans, we keep your Google Business profile up to date for you.'
+    q: 'How does Google Business Profile sync work?',
+    a: 'Connect your Google Business account and KrabiClaw pulls in your verified hours, photos, reviews, and details automatically. On Managed plans, we keep your Google Business profile up to date for you.'
   },
   {
     q: 'Is there a contract or setup fee?',
-    a: 'No contracts, no setup fees. Start free, and upgrade to Growth ($49/mo) or Managed ($149/mo) month-to-month. Cancel anytime.'
+    a: 'No contracts, no setup fees. Start free, upgrade to Growth ($49/mo) or Managed ($149/mo) month-to-month. Cancel anytime.'
   }
 ]
 </script>
