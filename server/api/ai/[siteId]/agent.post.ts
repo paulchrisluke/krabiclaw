@@ -44,6 +44,10 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
+  if (!body || typeof body !== 'object') {
+    return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
+  }
+
   const userText = latestUserText(body)
   if (!userText) return jsonResponse({ error: 'message is required' }, { status: 400 })
 
@@ -112,6 +116,7 @@ export default defineEventHandler(async (event) => {
         toolCalls: finalEvent?.toolCalls ?? [],
       }, session.user.id)
     } catch (error) {
+      console.error('[agent] Error processing request:', error)
       await createMessage(db, {
         conversationId: conversation.id,
         organizationId: site.organization_id,
@@ -119,9 +124,9 @@ export default defineEventHandler(async (event) => {
         userId: session.user.id,
         role: 'assistant',
         channel: 'dashboard',
-        content: error instanceof Error ? error.message : 'Something went wrong.',
+        content: 'Something went wrong while processing your request.',
         status: 'failed',
-        error: error instanceof Error ? error.message : 'Something went wrong.',
+        error: 'Something went wrong.',
       }, session.user.id)
       throw error
     }

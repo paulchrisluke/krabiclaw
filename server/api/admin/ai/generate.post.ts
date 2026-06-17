@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
       metadata: { action: 'platform_content_generation' },
     })
 
-    const contentBlock = aiResponse.content.find((b: ApiValue) => b.type === 'text')
+    const contentBlock = aiResponse.content.find((b) => b.type === 'text')
     const content = contentBlock?.text || ''
     
     return jsonResponse({ success: true, content })

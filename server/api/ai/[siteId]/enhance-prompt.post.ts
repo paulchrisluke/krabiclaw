@@ -62,16 +62,18 @@ export default defineEventHandler(async (event) => {
     const enhanced = response.content.find(b => b.type === 'text')?.text?.trim() ?? rawPrompt
 
     if (!isDev) {
-      chargeCredits(db, site.organization_id, {
-        siteId,
-        action: 'enhance_prompt',
-        model: ENHANCE_MODEL,
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-        cfGatewayLogId: response.cfLogId,
-      }).catch((err) => {
+      try {
+        await chargeCredits(db, site.organization_id, {
+          siteId,
+          action: 'enhance_prompt',
+          model: ENHANCE_MODEL,
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          cfGatewayLogId: response.cfLogId,
+        })
+      } catch (err) {
         console.error('enhance_prompt_charge_failed', { siteId, error: err instanceof Error ? err.message : err })
-      })
+      }
     }
 
     return jsonResponse({ enhanced })

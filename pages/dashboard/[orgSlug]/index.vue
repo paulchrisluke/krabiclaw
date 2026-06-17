@@ -105,6 +105,41 @@
                 </p>
               </div>
 
+              <div v-if="placePreview.photos?.length" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                  <div v-if="placePreview.photos[0]" class="overflow-hidden rounded-xl bg-muted aspect-[4/3]">
+                    <img
+                      :src="placePreview.photos[0].photoUri"
+                      :alt="`${placePreview.name} photo 1`"
+                      class="h-full w-full object-cover"
+                      loading="lazy"
+                    >
+                  </div>
+                  <div v-if="placePreview.photos[1]" class="overflow-hidden rounded-xl bg-muted aspect-[4/3]">
+                    <img
+                      :src="placePreview.photos[1].photoUri"
+                      :alt="`${placePreview.name} photo 2`"
+                      class="h-full w-full object-cover"
+                      loading="lazy"
+                    >
+                  </div>
+                </div>
+                <div v-if="placePreview.photos.length > 2" class="flex gap-3 overflow-x-auto pb-1">
+                  <div
+                    v-for="(photo, index) in placePreview.photos.slice(2, 5)"
+                    :key="photo.name"
+                    class="min-w-28 flex-1 overflow-hidden rounded-xl bg-muted aspect-square"
+                  >
+                    <img
+                      :src="photo.photoUri"
+                      :alt="`${placePreview.name} photo ${index + 3}`"
+                      class="h-full w-full object-cover"
+                      loading="lazy"
+                    >
+                  </div>
+                </div>
+              </div>
+
               <p v-if="applyError" class="text-sm text-error">{{ applyError }}</p>
               <div class="flex items-center justify-between pt-1">
                 <UButton variant="ghost" size="sm" class="text-muted" @click="placePreview = null; mapsUrl = ''">
@@ -159,6 +194,41 @@
               <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4 text-muted group-hover:text-primary transition-colors shrink-0" />
             </a>
 
+            <div v-if="heroImageUrl || locationHeroImageUrl || galleryPhotos.length" class="space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div v-if="heroImageUrl" class="overflow-hidden rounded-xl bg-muted aspect-[4/3]">
+                  <img
+                    :src="heroImageUrl"
+                    alt="Hero image"
+                    class="h-full w-full object-cover"
+                    loading="lazy"
+                  >
+                </div>
+                <div v-if="locationHeroImageUrl" class="overflow-hidden rounded-xl bg-muted aspect-[4/3]">
+                  <img
+                    :src="locationHeroImageUrl"
+                    alt="Location hero image"
+                    class="h-full w-full object-cover"
+                    loading="lazy"
+                  >
+                </div>
+              </div>
+              <div v-if="galleryPhotos.length" class="flex gap-3 overflow-x-auto pb-1">
+                <div
+                  v-for="photo in galleryPhotos"
+                  :key="photo.name"
+                  class="min-w-32 flex-1 overflow-hidden rounded-xl bg-muted aspect-square"
+                >
+                  <img
+                    :src="photo.photoUri"
+                    :alt="`${placePreview?.name ?? 'Business'} gallery photo`"
+                    class="h-full w-full object-cover"
+                    loading="lazy"
+                  >
+                </div>
+              </div>
+            </div>
+
             <!-- What was imported -->
             <div class="space-y-2">
               <p class="text-xs font-medium text-muted uppercase tracking-wide">Imported from Google Maps</p>
@@ -168,8 +238,8 @@
                   {{ fact }}
                 </li>
                 <li class="flex items-center gap-2 text-sm text-dimmed">
-                  <UIcon name="i-heroicons-sparkles" class="size-4 text-primary shrink-0" />
-                  Hero images & content — ChatGPT will add these
+                  <UIcon name="i-heroicons-photo" class="size-4 text-primary shrink-0" />
+                  The first 2 photos are saved as hero images
                 </li>
               </ul>
             </div>
@@ -443,6 +513,12 @@ const placePreview = ref<{
   rating: number | null
   ratingCount: number | null
   openingHours: string[] | null
+  photos: Array<{
+    name: string
+    widthPx: number
+    heightPx: number
+    photoUri: string
+  }>
 } | null>(null)
 
 const applyLoading = ref(false)
@@ -552,6 +628,10 @@ const liveSiteUrl = computed(() => {
   const sub = dashboardState.restaurant.value?.subdomain
   return sub ? `https://${sub}.krabiclaw.com` : '#'
 })
+
+const heroImageUrl = computed(() => dashboardState.restaurant.value?.heroImageUrl ?? placePreview.value?.photos?.[0]?.photoUri ?? null)
+const locationHeroImageUrl = computed(() => dashboardState.restaurant.value?.locationHeroImageUrl ?? placePreview.value?.photos?.[1]?.photoUri ?? null)
+const galleryPhotos = computed(() => placePreview.value?.photos.slice(2, 5) ?? [])
 
 const importedFacts = computed(() => {
   const facts: string[] = ['Name, address & hours']

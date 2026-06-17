@@ -440,6 +440,7 @@ async function handleSetupMessage(text: string) {
     })
 
     if (!validation.available) {
+      creatingRestaurant.value = false
       updateSetupLastMessage(validation.message ?? 'That site address is not available. Try another one.', true)
       return
     }
@@ -563,7 +564,7 @@ const processFile = async (file: File, caption = '') => {
     let httpOk = false
     let httpStatus = 0
     try {
-      const raw = await fetch(`/api/dashboard/ai/menu/extract`, { method: 'POST', body: formData })
+      const raw = await fetch(`/api/ai/${siteId.value}/menu/extract`, { method: 'POST', body: formData })
       httpOk = raw.ok
       httpStatus = raw.status
       json = await raw.json().catch(() => null)

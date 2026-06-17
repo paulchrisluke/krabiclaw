@@ -1,4 +1,6 @@
 import { createError, getRequestURL, type H3Event } from "h3";
+import { createPreviewToken } from "~/server/utils/preview-token";
+import { getFreeSiteDomain } from "~/server/utils/tenant-hosts";
 import { hasEntitlement } from "~/server/utils/billing";
 import {
   requestImageUpload,
@@ -1393,9 +1395,22 @@ export async function executeMcpToolCall(
         site.userId,
         site.isPlatformAdmin,
       );
-      const subdomain = (siteRow as Record<string, unknown>)
-        .subdomain as string;
-      const publicUrl = subdomain ? `https://${subdomain}.krabiclaw.com` : "";
+      const subdomain = (siteRow as Record<string, unknown>).subdomain as string | null | undefined;
+      const customDomain = (siteRow as Record<string, unknown>).custom_domain as string | null | undefined;
+      const platformDomain = (site.env as Record<string, unknown>).NUXT_PUBLIC_PLATFORM_DOMAIN as string | undefined
+        || "https://krabiclaw.com";
+      const freeSiteDomain = getFreeSiteDomain(site.env as { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string; NUXT_PUBLIC_PLATFORM_DOMAIN?: string });
+      const previewSecret = (site.env as Record<string, unknown>).PREVIEW_SECRET as string | undefined;
+      let previewUrl = `${platformDomain}/preview/site/${site.siteId}`;
+      if (previewSecret) {
+        const token = await createPreviewToken(previewSecret, site.siteId, Date.now() + 60 * 60 * 1000);
+        previewUrl = `${previewUrl}?preview=true&token=${token}`;
+      }
+      const publicUrl = customDomain
+        ? `https://${customDomain}`
+        : subdomain
+          ? `https://${subdomain}.${freeSiteDomain}`
+          : previewUrl;
       const locationRows = await site.db
         .prepare(
           `SELECT bl.slug, bl.title, ma.public_url AS hero_image_public_url
@@ -1413,24 +1428,26 @@ export async function executeMcpToolCall(
         }>();
       const locationPages = (locationRows.results ?? []).map((loc) => ({
         label: loc.title,
-        path: `/${loc.slug}`,
+        path: `/locations/${loc.slug}`,
       }));
       const pages = [{ label: "Home", path: "/" }, ...locationPages];
       const ogImageUrl =
         locationRows.results?.[0]?.hero_image_public_url ?? null;
+      const siteName = String((siteRow as Record<string, unknown>).brand_name ?? subdomain ?? site.siteId);
       return renderWidget(
         "site-preview",
         {
           site: {
             id: site.siteId,
-            name: (siteRow as Record<string, unknown>).brand_name ?? subdomain,
-            subdomain,
+            name: siteName,
+            subdomain: subdomain ?? null,
             publicUrl,
+            previewUrl,
           },
           pages,
           ogImageUrl,
         },
-        `Your site is live at ${publicUrl}`,
+        subdomain ? `Your site is live at ${publicUrl}` : `Your site preview is ready — ${siteName}`,
       );
     }
     case "get_site":

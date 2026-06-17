@@ -407,14 +407,9 @@ const previewToken = ref('')
 const siteName = computed(() => siteData.value?.brand_name || 'Loading...')
 const siteDomain = computed(() => siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : 'localhost:3000')
 const sitePreviewBaseUrl = computed(() => {
-  if (!siteData.value?.subdomain) return ''
-
-  const base = new URL(config.public.freeSiteDomain)
-  const hostname = base.hostname === 'localhost'
-    ? `${siteData.value.subdomain}.localhost`
-    : `${siteData.value.subdomain}.${base.hostname}`
-
-  return `${base.protocol}//${hostname}${base.port ? `:${base.port}` : ''}`
+  if (!siteData.value?.id) return ''
+  const platformBase = (config.public.platformDomain || config.public.freeSiteDomain).replace(/\/$/, '')
+  return `${platformBase}/preview/site/${siteData.value.id}`
 })
 
 // Load editor context
@@ -512,7 +507,11 @@ const previewReloadToken = ref(0)
 const iframeSrc = computed(() => {
   if (!sitePreviewBaseUrl.value) return ''
   if (currentPageIsLocationScoped.value && !selectedLocation.value) return ''
-  const url = new URL(previewPagePath.value, sitePreviewBaseUrl.value)
+  // sitePreviewBaseUrl includes the /preview/site/[siteId] path segment, so we
+  // must append the sub-path directly rather than using new URL(subpath, base)
+  // which would replace the path instead of appending to it.
+  const subPath = previewPagePath.value === '/' ? '' : previewPagePath.value
+  const url = new URL(sitePreviewBaseUrl.value + subPath)
   url.searchParams.set('preview', 'true')
   if (previewToken.value) url.searchParams.set('token', previewToken.value)
   if (currentPageIsLocationScoped.value && selectedLocation.value) url.searchParams.set('location', selectedLocation.value.slug)

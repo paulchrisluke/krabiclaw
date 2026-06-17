@@ -32,10 +32,19 @@ export default defineEventHandler(async (event) => {
 
   const { page, changes } = body as Partial<SaveRequest>;
 
-  if (!page || !changes) {
+  if (typeof page !== "string" || !page.trim()) {
     return jsonResponse(
       {
-        error: "Site ID, page, and changes are required",
+        error: "page is required and must be a string",
+      },
+      { status: 400 },
+    );
+  }
+
+  if (!changes || typeof changes !== "object" || Array.isArray(changes)) {
+    return jsonResponse(
+      {
+        error: "changes is required and must be an object",
       },
       { status: 400 },
     );

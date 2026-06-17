@@ -189,7 +189,14 @@ export default defineEventHandler(async (event) => {
 
   const extractedItems: ApiRecord[] = Array.isArray(parsed.items) ? parsed.items : []
 
-  if (extractedItems.length === 0) {
+  // Filter out invalid items before processing
+  const validItems = extractedItems.filter((item) => {
+    if (!item || typeof item !== 'object') return false
+    if (!item.name || typeof item.name !== 'string' || !item.name.trim()) return false
+    return true
+  })
+
+  if (validItems.length === 0) {
     return jsonResponse({
       success: true,
       menuItems: [],
@@ -202,8 +209,8 @@ export default defineEventHandler(async (event) => {
   let menuId = formData.get('menuId') as string | null
   if (menuId) {
     const existing = await db.prepare(
-      'SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1'
-    ).bind(menuId, orgId, siteId).first()
+      'SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? AND status = ? LIMIT 1'
+    ).bind(menuId, orgId, siteId, 'draft').first()
     if (!existing) menuId = null
   }
 
@@ -215,7 +222,7 @@ export default defineEventHandler(async (event) => {
 
   // Write items to draft menu (created_by marks them as AI-sourced)
   const createdItems = await Promise.all(
-    extractedItems.map((item: ApiValue) => {
+    validItems.map((item: ApiValue) => {
       const priceAmount = item.price_amount ?? item.price
       return createMenuItem(
         db,
@@ -244,7 +251,7 @@ export default defineEventHandler(async (event) => {
       template: 'ai_action_complete',
       vars: {
         action_summary: `${createdItems.length} menu item${createdItems.length === 1 ? '' : 's'} extracted and saved as draft`,
-        preview_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/menu`,
+        preview_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/${orgSlug}/menu`,
       },
     }).catch(console.error)
 

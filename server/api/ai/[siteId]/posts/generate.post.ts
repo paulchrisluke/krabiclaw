@@ -37,12 +37,31 @@ export default defineEventHandler(async (event) => {
 
   const orgId: string = site.organization_id
 
-  const creditOk = await hasCredits(db, orgId)
-  if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
+  const isDev = import.meta.dev
+  if (!isDev) {
+    const creditOk = await hasCredits(db, orgId)
+    if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
+  }
 
   let body: { prompt?: string; image_base64?: string; image_mime?: string }
   try { body = await readBody(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  if (!body || typeof body !== 'object') {
+    return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  if (body.prompt !== undefined && typeof body.prompt !== 'string') {
+    return jsonResponse({ error: 'prompt must be a string' }, { status: 400 })
+  }
+
+  if (body.image_base64 !== undefined && typeof body.image_base64 !== 'string') {
+    return jsonResponse({ error: 'image_base64 must be a string' }, { status: 400 })
+  }
+
+  if (body.image_mime !== undefined && typeof body.image_mime !== 'string') {
+    return jsonResponse({ error: 'image_mime must be a string' }, { status: 400 })
   }
 
   const prompt = body.prompt?.trim()

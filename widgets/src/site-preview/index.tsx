@@ -12,8 +12,9 @@ interface SiteContent {
   site: {
     id: string
     name: string
-    subdomain: string
+    subdomain?: string | null
     publicUrl: string
+    previewUrl: string
   }
   pages: Page[]
   ogImageUrl?: string | null
@@ -56,12 +57,21 @@ function App() {
   }
 
   const { site, pages, ogImageUrl } = content
+  const isLive = Boolean(site.subdomain)
+  // For launched sites use the public URL; for previews use the preview URL.
+  const openUrl = isLive ? site.publicUrl : site.previewUrl
+  const displayUrl = openUrl.replace(/^https?:\/\//, '').replace(/\?.*$/, '')
   const homePage = pages.find(page => page.path === '/') ?? pages[0] ?? { label: 'Home', path: '/' }
 
   const handleOpen = () => {
-    const base = site.publicUrl.replace(/\/$/, '')
     const path = homePage.path.startsWith('/') ? homePage.path : `/${homePage.path}`
-    openExternal(`${base}${path}`)
+    const dest = new URL(openUrl)
+    if (isLive) {
+      dest.pathname = path
+    } else if (path !== '/') {
+      dest.pathname = `${dest.pathname.replace(/\/$/, '')}${path}`
+    }
+    openExternal(dest.toString())
   }
 
   const handleWhatsNext = () => {
@@ -71,7 +81,7 @@ function App() {
   return (
     <div className="card">
       <div className="header">
-        <div className="title">✓ Your site is live!</div>
+        <div className="title">{isLive ? '✓ Your site is live!' : '✓ Site preview ready'}</div>
       </div>
       {ogImageUrl
         ? (
@@ -83,14 +93,14 @@ function App() {
           <button type="button" className="preview-link" onClick={handleOpen} aria-label={`Open ${site.name}`}>
             <span className="link-card">
               <span className="link-card-name">{site.name}</span>
-              <span className="link-card-url">{site.publicUrl.replace('https://', '')}</span>
+              <span className="link-card-url">{displayUrl}</span>
             </span>
           </button>
         )
       }
-      <div className="site-url">{site.publicUrl.replace('https://', '')}</div>
+      <div className="site-url">{displayUrl}</div>
       <div className="actions">
-        <button className="btn btn-primary" onClick={handleOpen}>↗ Open site</button>
+        <button className="btn btn-primary" onClick={handleOpen}>{isLive ? '↗ Open site' : '↗ Open preview'}</button>
         <button className="btn btn-outline" onClick={handleWhatsNext}>What's next?</button>
       </div>
     </div>

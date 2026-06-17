@@ -85,7 +85,7 @@ export default defineEventHandler(async (event) => {
       site_id: PLATFORM_MEDIA_SITE_ID,
       location_id: null,
       kind: 'image',
-      provider: 'chowbot',
+      provider: 'cloudflare_images',
       source: 'generated',
       cloudflare_image_id: imageId,
       public_url: publicUrl,

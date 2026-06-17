@@ -1,8 +1,10 @@
 <template>
   <UPage>
-    <UPageHeader title="Translations" :description="headerDescription" />
-
     <UPageBody>
+      <div class="mb-6 space-y-1">
+        <h1 class="text-2xl font-semibold text-highlighted">Translations</h1>
+        <p class="text-sm text-muted">{{ headerDescription }}</p>
+      </div>
       <div class="max-w-2xl space-y-6">
         <!-- No site yet -->
         <UAlert

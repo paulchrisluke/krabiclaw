@@ -2707,10 +2707,14 @@ async function executeTool(
       // Resolve one redirect hop safely for short URLs.
       let resolvedUrl = parsedRawUrl.toString();
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         const probe = await fetch(parsedRawUrl.toString(), {
           method: "HEAD",
           redirect: "manual",
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
         const location = probe.headers.get("location");
         if (location) {
           const redirected = new URL(location, parsedRawUrl);

@@ -136,13 +136,9 @@ test.describe("mcp tools", () => {
         },
       },
     });
-    expect(toolRes.status()).toBe(200);
-    expect(await toolRes.json()).toEqual({
-      result: {
-        error:
-          "Failed to register subdomain with Cloudflare. The rename was not applied.",
-      },
-    });
+    expect(toolRes.status()).toBe(400);
+    const body = await toolRes.json();
+    expect(body.data?.error).toBe("Failed to register subdomain with Cloudflare. The rename was not applied.");
 
     const afterRes = await request.get(
       `${baseURL}/api/sites/${siteId}/settings`,

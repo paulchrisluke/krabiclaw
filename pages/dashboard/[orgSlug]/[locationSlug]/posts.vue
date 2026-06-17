@@ -88,7 +88,7 @@
               </div>
             </div>
               <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium text-highlighted">{{ post.title || post.body.slice(0, 60) }}</p>
+                <p class="truncate text-sm font-medium text-highlighted">{{ post.title || post.body?.slice(0, 60) }}</p>
                 <p class="truncate text-xs text-muted">{{ formatDate(post.updated_at) }}</p>
               </div>
               <UBadge :color="post.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs" class="shrink-0">{{ post.status }}</UBadge>
@@ -155,7 +155,7 @@ const loadPosts = async () => {
   loading.value = true
   try {
     const status = activeTab.value === 'all' ? undefined : activeTab.value
-    const res = await $fetch<ApiRecord>(`/api/dashboard/editor/posts${status ? `?status=${status}` : ''}`)
+    const res = await $fetch<{ posts: ApiRecord[] }>(`/api/dashboard/editor/posts${status ? `?status=${status}` : ''}`)
     posts.value = res.posts ?? []
   } catch { posts.value = [] } finally { loading.value = false }
 }

@@ -100,7 +100,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const details = await getPlaceDetails(apiKey, placeId, false)
+    const details = await getPlaceDetails(apiKey, placeId)
     return jsonResponse({
       success: true,
       preview: {
@@ -112,6 +112,7 @@ export default defineEventHandler(async (event) => {
         rating: details.rating,
         ratingCount: details.ratingCount,
         openingHours: details.openingHours,
+        photos: details.photos,
       },
     })
   } catch (err) {

@@ -9,6 +9,7 @@ import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-business";
 import { getPublishedPageContentForLocale, type SiteContent } from "~/server/utils/content-management";
 import { getActiveMenu } from "~/server/utils/menu-management";
+import { verifyPreviewToken } from "~/server/utils/preview-token";
 import {
   getExperienceBySlug,
   listExperiences,
@@ -64,12 +65,6 @@ const parseJson = (raw: string | null) => {
 };
 
 export default defineEventHandler(async (event) => {
-  setHeader(
-    event,
-    "cache-control",
-    "public, max-age=60, stale-while-revalidate=300",
-  );
-
   const siteId = getRouterParam(event, "siteId");
   if (!siteId)
     return jsonResponse({ error: "siteId required" }, { status: 400 });
@@ -80,6 +75,20 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: "Database unavailable" }, { status: 503 });
 
   const query = getQuery(event);
+
+  const rawToken = typeof query.token === "string" ? query.token : null;
+  let isPreviewAuthorized = false;
+  if (rawToken && env.PREVIEW_SECRET) {
+    isPreviewAuthorized = await verifyPreviewToken(String(env.PREVIEW_SECRET), siteId, rawToken);
+  }
+
+  setHeader(
+    event,
+    "cache-control",
+    isPreviewAuthorized
+      ? "private, no-store"
+      : "public, max-age=60, stale-while-revalidate=300",
+  );
   const page = typeof query.page === "string" ? query.page : null;
   const locationSlug =
     typeof query.location === "string" ? query.location : null;
@@ -97,7 +106,7 @@ export default defineEventHandler(async (event) => {
                 s.brand_description, COALESCE(ma.public_url, s.logo_url) AS logo_url
            FROM sites s
            LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
-          WHERE s.id = ? AND s.status = 'active' AND s.onboarding_status = 'active'
+          WHERE s.id = ? AND s.status = 'active'${isPreviewAuthorized ? "" : " AND s.onboarding_status = 'active'"}
           LIMIT 1`,
       )
       .bind(siteId)

@@ -166,7 +166,7 @@ function startEdit(item: QaRow) {
 }
 
 async function saveQa() {
-  if (!formLocationId.value) return
+  if (!formLocationId.value || formLocationId.value === NO_LOCATION_SELECTED) return
   saving.value = true
   try {
     if (editingId.value) {

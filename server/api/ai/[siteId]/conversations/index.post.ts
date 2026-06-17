@@ -33,6 +33,16 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Internal server error' }, { status: 500 })
     }
 
+    // Validate locationId if provided
+    if (typeof body.locationId === 'string' && body.locationId) {
+      const location = await db.prepare(
+        'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1'
+      ).bind(body.locationId, siteId).first()
+      if (!location) {
+        return jsonResponse({ error: 'Invalid location ID' }, { status: 400 })
+      }
+    }
+
     const conversation = await createConversation(db, {
       organizationId: site.organization_id,
       siteId,

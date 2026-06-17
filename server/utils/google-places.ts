@@ -171,7 +171,7 @@ function normalizeDetail(place: RawPlace): Omit<PlaceDetails, 'photos'> & { rawP
 export async function fetchPlacePhotoUrls(
   apiKey: string,
   rawPhotos: RawPhoto[],
-  limit = 10,
+  limit = 5,
 ): Promise<PlacePhoto[]> {
   const fetch1Photo = async (raw: RawPhoto): Promise<PlacePhoto | null> => {
     if (!raw.name) return null
@@ -301,7 +301,12 @@ export async function searchPlaces(
   return (data.places ?? []).map(normalizeSearchResult)
 }
 
-export async function getPlaceDetails(apiKey: string, placeId: string, fetchPhotos = true): Promise<PlaceDetails> {
+export async function getPlaceDetails(
+  apiKey: string,
+  placeId: string,
+  fetchPhotos = true,
+  photoLimit = 5,
+): Promise<PlaceDetails> {
   const response = await fetch(`${PLACES_BASE}/${encodeURIComponent(placeId)}`, {
     headers: {
       'X-Goog-Api-Key': apiKey,
@@ -316,6 +321,6 @@ export async function getPlaceDetails(apiKey: string, placeId: string, fetchPhot
 
   const data = await response.json() as RawPlace
   const { rawPhotos, ...detail } = normalizeDetail(data)
-  const photos = fetchPhotos ? await fetchPlacePhotoUrls(apiKey, rawPhotos) : []
+  const photos = fetchPhotos ? await fetchPlacePhotoUrls(apiKey, rawPhotos, photoLimit) : []
   return { ...detail, photos }
 }

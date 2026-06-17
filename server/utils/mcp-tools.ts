@@ -411,7 +411,12 @@ function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'output
 
 function globalTool(definition: RawMcpToolDefinition | McpToolDefinition): McpToolDefinition {
   if ('annotations' in definition && 'securitySchemes' in definition) {
-    return definition
+    // Validate that both fields exist AND are properly structured
+    const hasValidAnnotations = definition.annotations && typeof definition.annotations === 'object'
+    const hasValidSecuritySchemes = definition.securitySchemes && Array.isArray(definition.securitySchemes) && definition.securitySchemes.length > 0
+    if (hasValidAnnotations && hasValidSecuritySchemes) {
+      return definition
+    }
   }
 
   return withToolAnnotations(definition)
@@ -1028,7 +1033,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   })),
   siteTool({
     name: 'show_site_preview',
-    description: 'Show a live iframe preview of the newly created site. Call after create_site + create_location succeed.',
+    description: 'Show a preview of the site. Call after create_site + create_location succeed. Works before the site is publicly launched.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1040,10 +1045,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           properties: {
             id: { type: 'string' },
             name: { type: 'string' },
-            subdomain: { type: 'string' },
+            subdomain: { type: ['string', 'null'] },
             publicUrl: { type: 'string' },
+            previewUrl: { type: 'string' },
           },
-          required: ['id', 'subdomain', 'publicUrl'],
+          required: ['id', 'publicUrl', 'previewUrl'],
         },
         pages: {
           type: 'array',
@@ -1063,7 +1069,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     widgetName: 'site-preview',
     widgetInvoking: 'Building your site preview…',
-    widgetInvoked: 'Your site is live!',
+    widgetInvoked: 'Site preview ready',
   }),
   siteTool({
     name: 'get_site',

@@ -248,8 +248,8 @@ export async function createMessage(db: D1Database, input: CreateMessageInput, a
   `).bind(
     id,
     input.conversationId,
-    input.organizationId,
-    input.siteId,
+    conversation.organization_id,
+    conversation.site_id,
     input.userId ?? null,
     input.role,
     input.channel,
@@ -261,6 +261,11 @@ export async function createMessage(db: D1Database, input: CreateMessageInput, a
     input.error ?? null,
     now
   ).run()
+
+  // Update conversation timestamp
+  await db.prepare(`
+    UPDATE chowbot_conversations SET updated_at = ? WHERE id = ?
+  `).bind(now, input.conversationId).run()
 
   const created = await db.prepare(`
     SELECT * FROM chowbot_messages WHERE id = ?

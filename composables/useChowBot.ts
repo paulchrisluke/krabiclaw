@@ -99,8 +99,11 @@ export const useChowBot = () => {
 
     if (target) {
       isLoading.value = true  // prevent overlay close during transition
-      await navigateTo(target)
-      isLoading.value = false
+      try {
+        await navigateTo(target)
+      } finally {
+        isLoading.value = false
+      }
     }
   }
 
@@ -161,7 +164,7 @@ export const useChowBot = () => {
     isLoading.value = true
 
     try {
-      const response = await fetch(`/api/dashboard/ai/agent`, {
+      const response = await fetch(`/api/ai/${siteId.value}/agent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

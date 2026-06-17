@@ -16,9 +16,18 @@ export interface BootstrapParams {
   menu: boolean;
   data: string | null; // 'reviews' | 'photos' | 'qa' — triggers full dataset in bootstrap
   locale: string | null;
+  token: string | null; // signed preview token — non-null only on /preview/site/... routes
 }
 
-function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"> {
+// Extracts the page sub-path from a platform preview route path.
+// Returns null if the path is not a preview route.
+function getPreviewSubpath(path: string): string | null {
+  const match = path.match(/^\/preview\/site\/[^/]+(\/.*)?$/)
+  if (!match) return null
+  return match[1] || '/'
+}
+
+function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "token"> {
 
   // Location sub-pages: /locations/[slug]/*
   const locationMatch = path.match(/^\/locations\/([^/]+)/);
@@ -162,10 +171,18 @@ export const useBootstrapParams = () => {
   const route = useRoute();
   const { locale } = useI18n();
 
-  return computed<BootstrapParams>(() => ({
-    ...getBootstrapParams(route.path),
-    locale: locale.value,
-  }));
+  return computed<BootstrapParams>(() => {
+    const previewSubpath = getPreviewSubpath(route.path)
+    const effectivePath = previewSubpath ?? route.path
+    const token = previewSubpath !== null && typeof route.query.token === 'string'
+      ? route.query.token
+      : null
+    return {
+      ...getBootstrapParams(effectivePath),
+      locale: locale.value,
+      token,
+    }
+  });
 };
 
 export const useBootstrapKey = (
@@ -185,6 +202,10 @@ export const useBootstrapUrl = (
   if (params.menu) qs.set("menu", "1");
   if (params.data) qs.set("data", params.data);
   if (params.locale) qs.set("locale", params.locale);
+  if (params.token) {
+    qs.set("preview", "true");
+    qs.set("token", params.token);
+  }
   const q = qs.toString();
   return `/api/public/sites/${siteId}/bootstrap${q ? `?${q}` : ""}`;
 };

@@ -40,6 +40,16 @@ export default defineEventHandler(async (event) => {
   const locationId = typeof body?.locationId === 'string' ? body.locationId : null
   if (!prompt) return jsonResponse({ error: 'prompt required' }, { status: 400 })
 
+  // Validate locationId if provided
+  if (locationId) {
+    const location = await db.prepare(
+      'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1'
+    ).bind(locationId, siteId).first()
+    if (!location) {
+      return jsonResponse({ error: 'Invalid location ID' }, { status: 400 })
+    }
+  }
+
   if (!env.CLOUDFLARE_IMAGES_API_TOKEN) {
     return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
   }
@@ -90,7 +100,7 @@ export default defineEventHandler(async (event) => {
       site_id: siteId,
       location_id: locationId,
       kind: 'image',
-      provider: 'chowbot',
+      provider: 'cloudflare_images',
       source: 'generated',
       cloudflare_image_id: imageId,
       public_url: publicUrl,

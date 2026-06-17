@@ -17,6 +17,7 @@ import {
 
 interface WhatsAppMessage {
   id: string
+  message_id?: string
   from: string
   timestamp?: string
   type: 'text' | 'image' | 'document' | string
@@ -180,6 +181,14 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
   }
 
   const existingState = await getChannelState(db, user.id, 'whatsapp')
+  
+  // Idempotency check: skip if this message was already processed
+  const messageId = message.id || message.message_id
+  if (existingState?.last_inbound_id === messageId) {
+    console.log('[whatsapp] Skipping duplicate message:', messageId)
+    return
+  }
+  
   let selectedSiteId = existingState?.selected_site_id ?? null
   let activeConversationId = existingState?.active_conversation_id ?? null
   const text = messageText(message)

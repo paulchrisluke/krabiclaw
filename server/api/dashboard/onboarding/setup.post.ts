@@ -6,6 +6,7 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getPlaceDetails } from '~/server/utils/google-places'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
 import { updateLocation } from '~/server/utils/location-management'
+import { setConfig } from '~/server/utils/site-config'
 
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
 
@@ -32,7 +33,7 @@ export default defineEventHandler(async (event) => {
     ? (body.vertical as 'restaurant' | 'experience')
     : 'restaurant'
 
-  const place = await getPlaceDetails(apiKey, placeId, false).catch(() => null)
+  const place = await getPlaceDetails(apiKey, placeId).catch(() => null)
   if (!place) return jsonResponse({ error: 'Could not fetch place details. Try again.' }, { status: 502 })
 
   // Resolve or create the site — mirrors MCP create_site using runSiteCreation
@@ -94,26 +95,38 @@ export default defineEventHandler(async (event) => {
     status: 'active',
   }, session.user.id)
 
+  const [heroImage, locationHeroImage] = place.photos
+  if (heroImage?.photoUri) {
+    await setConfig(db, organizationId, siteId, 'heroImageUrl', heroImage.photoUri)
+  }
+  if (locationHeroImage?.photoUri) {
+    await setConfig(db, organizationId, siteId, 'locationHeroImageUrl', locationHeroImage.photoUri)
+  }
+
   // Upsert reviews — INSERT OR IGNORE so MCP edits are never overwritten
   const now = new Date().toISOString()
   for (const review of place.reviews) {
     if (!review.reviewId || !review.rating) continue
-    await db.prepare(`
-      INSERT OR IGNORE INTO reviews
-        (id, organization_id, site_id, location_id, google_review_id,
-         author_name, reviewer_photo_url, rating, content,
-         status, source, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_places', ?, ?)
-    `).bind(
-      `gplaces-${review.reviewId.replace(/\//g, '-')}`,
-      organizationId, siteId, locationRow.id,
-      review.reviewId,
-      review.authorName,
-      review.authorPhotoUrl,
-      review.rating,
-      review.text,
-      review.publishedAt ?? now, now,
-    ).run().catch(() => {})
+    try {
+      await db.prepare(`
+        INSERT OR IGNORE INTO reviews
+          (id, organization_id, site_id, location_id, google_review_id,
+           author_name, reviewer_photo_url, rating, content,
+           status, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_places', ?, ?)
+      `).bind(
+        `${siteId}-${review.reviewId.replace(/\//g, '-')}`,
+        organizationId, siteId, locationRow.id,
+        review.reviewId,
+        review.authorName,
+        review.authorPhotoUrl,
+        review.rating,
+        review.text,
+        review.publishedAt ?? now, now,
+      ).run()
+    } catch (err) {
+      console.error('Failed to upsert review:', err)
+    }
   }
 
   // Return org slug so the frontend can redirect if a new site was created

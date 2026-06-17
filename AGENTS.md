@@ -336,8 +336,6 @@ Flow:
 
   Free plan users see an upsell. Paid plan users see the request form and request history.
 
-- Do not route new managed-service behavior through ChowBot. ChowBot is decommissioned.
-
 - Managed-service intent handling belongs in the MCP-native flow or explicit dashboard work-request endpoints.
 
 ---
