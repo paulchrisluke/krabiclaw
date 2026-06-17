@@ -158,8 +158,10 @@ export default defineEventHandler(async (event) => {
   }
 
   // Charge credits after successful call
+  let creditsCharged = 0
+  let newBalance = 0
   try {
-    await chargeCredits(db, orgId, {
+    const charged = await chargeCredits(db, orgId, {
       siteId,
       action: 'menu_extract',
       model: 'claude-sonnet-4-6',
@@ -167,6 +169,8 @@ export default defineEventHandler(async (event) => {
       outputTokens: aiResponse.usage.output_tokens,
       cfGatewayLogId: aiResponse.cfLogId,
     })
+    creditsCharged = charged.creditsCharged
+    newBalance = charged.newBalance
   } catch (err) {
     console.error('Failed to charge credits for menu extraction:', err)
   }

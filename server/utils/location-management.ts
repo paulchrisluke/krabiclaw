@@ -709,9 +709,10 @@ export async function deleteLocation(
       .bind(locationId, organizationId, siteId),
   ];
 
-  const [_, result] = await db.batch(statements);
+  const batchResults = await db.batch(statements);
+  const deleteResult = batchResults[2];
 
-  if (!result.meta.changes) {
+  if (!deleteResult?.meta.changes) {
     return { status: 404, data: { error: "Location not found." } };
   }
 

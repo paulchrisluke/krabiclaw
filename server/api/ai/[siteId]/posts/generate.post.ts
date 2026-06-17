@@ -92,8 +92,10 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'AI generation failed. Please try again.' }, { status: 502 })
   }
 
+  let creditsCharged = 0
+  let newBalance = 0
   try {
-    await chargeCredits(db, orgId, {
+    const charged = await chargeCredits(db, orgId, {
       siteId,
       action: 'post_generate',
       model: 'claude-sonnet-4-6',
@@ -101,6 +103,8 @@ export default defineEventHandler(async (event) => {
       outputTokens: aiResponse.usage.output_tokens,
       cfGatewayLogId: aiResponse.cfLogId,
     })
+    creditsCharged = charged.creditsCharged
+    newBalance = charged.newBalance
   } catch (err) {
     console.error('Failed to charge credits for post generation:', err)
   }
