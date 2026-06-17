@@ -75,55 +75,50 @@ export default defineEventHandler(async (event) => {
     LIMIT 1
   `).bind(siteId, organizationId).first<{ id: string }>()
 
-  if (locationRow?.id) {
-    // Update with place data via the same updateLocation path the MCP uses
-    await updateLocation(db, organizationId, siteId, locationRow.id, {
-      title: place.name,
-      slug: slugify(place.name),
-      phone: place.phone ?? undefined,
-      city: place.city ?? undefined,
-      maps_url: place.mapsUrl ?? undefined,
-      google_place_id: placeId,
-      website_url: place.websiteUrl ?? undefined,
-      opening_hours: place.openingHours ?? undefined,
-      rating: place.rating ?? undefined,
-      review_count: place.ratingCount ?? undefined,
-      status: 'active',
-    }, session.user.id)
+  if (!locationRow?.id) {
+    return jsonResponse({ error: 'No active location found for this site. Site creation may have failed.' }, { status: 500 })
+  }
 
-    // Upsert reviews — INSERT OR IGNORE so MCP edits are never overwritten
-    const now = new Date().toISOString()
-    for (const review of place.reviews) {
-      if (!review.reviewId || !review.rating) continue
-      await db.prepare(`
-        INSERT OR IGNORE INTO reviews
-          (id, organization_id, site_id, location_id, google_review_id,
-           author_name, reviewer_photo_url, rating, content,
-           status, source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_places', ?, ?)
-      `).bind(
-        `gplaces-${review.reviewId.replace(/\//g, '-')}`,
-        organizationId, siteId, locationRow.id,
-        review.reviewId,
-        review.authorName,
-        review.authorPhotoUrl,
-        review.rating,
-        review.text,
-        review.publishedAt ?? now, now,
-      ).run().catch(() => {})
-    }
+  // Update with place data via the same updateLocation path the MCP uses
+  await updateLocation(db, organizationId, siteId, locationRow.id, {
+    title: place.name,
+    slug: slugify(place.name),
+    phone: place.phone ?? undefined,
+    city: place.city ?? undefined,
+    maps_url: place.mapsUrl ?? undefined,
+    google_place_id: placeId,
+    website_url: place.websiteUrl ?? undefined,
+    opening_hours: place.openingHours ?? undefined,
+    rating: place.rating ?? undefined,
+    review_count: place.ratingCount ?? undefined,
+    status: 'active',
+  }, session.user.id)
+
+  // Upsert reviews — INSERT OR IGNORE so MCP edits are never overwritten
+  const now = new Date().toISOString()
+  for (const review of place.reviews) {
+    if (!review.reviewId || !review.rating) continue
+    await db.prepare(`
+      INSERT OR IGNORE INTO reviews
+        (id, organization_id, site_id, location_id, google_review_id,
+         author_name, reviewer_photo_url, rating, content,
+         status, source, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_places', ?, ?)
+    `).bind(
+      `gplaces-${review.reviewId.replace(/\//g, '-')}`,
+      organizationId, siteId, locationRow.id,
+      review.reviewId,
+      review.authorName,
+      review.authorPhotoUrl,
+      review.rating,
+      review.text,
+      review.publishedAt ?? now, now,
+    ).run().catch(() => {})
   }
 
   // Return org slug so the frontend can redirect if a new site was created
   const orgRow = await db.prepare(`SELECT slug FROM organization WHERE id = ? LIMIT 1`)
     .bind(organizationId).first<{ slug: string }>()
-
-  // Mark onboarding as completed for the newly created site
-  await db.prepare(`
-    UPDATE sites
-    SET onboarding_status = 'completed', updated_at = ?
-    WHERE id = ?
-  `).bind(new Date().toISOString(), siteId).run()
 
   return jsonResponse({ success: true, placeName: place.name, orgSlug: orgRow?.slug ?? null })
 })

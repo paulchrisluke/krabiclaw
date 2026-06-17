@@ -132,7 +132,7 @@
             <div class="px-6 py-4 grid grid-cols-3 sm:grid-cols-4 gap-4">
               <dt class="text-sm font-medium text-muted">Website</dt>
               <dd class="text-sm text-default col-span-2 sm:col-span-3">
-                <a href="https://krabiclaw.com" class="text-primary hover:underline" target="_blank">krabiclaw.com</a>
+                <a href="https://krabiclaw.com" class="text-primary hover:underline" target="_blank" rel="noopener noreferrer">krabiclaw.com</a>
               </dd>
             </div>
             <div class="px-6 py-4 grid grid-cols-3 sm:grid-cols-4 gap-4">

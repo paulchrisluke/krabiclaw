@@ -271,7 +271,7 @@ const featureScreenshots = [
   {
     icon: 'i-heroicons-list-bullet',
     label: 'Full offerings',
-    description: 'Sections, item photos, prices, details, and availability — all editable from the dashboard.'
+    description: 'Sections, item photos, prices, details, and availability — all editable through ChatGPT.'
   },
   {
     icon: 'i-heroicons-sparkles',

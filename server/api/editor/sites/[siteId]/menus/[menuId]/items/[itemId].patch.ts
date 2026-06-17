@@ -6,9 +6,12 @@ import { normalizePriceAmount } from '~/shared/money'
 import type { UpdateMenuItemRequest } from '~/server/types/menu'
 
 export default defineEventHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  const menuId = getRouterParam(event, 'menuId')
-  const itemId = getRouterParam(event, 'itemId')
+  const rawSiteId = getRouterParam(event, 'siteId')
+  const rawMenuId = getRouterParam(event, 'menuId')
+  const rawItemId = getRouterParam(event, 'itemId')
+  const siteId = typeof rawSiteId === 'string' ? rawSiteId : null
+  const menuId = typeof rawMenuId === 'string' ? rawMenuId : null
+  const itemId = typeof rawItemId === 'string' ? rawItemId : null
   const body = await readBody(event) as UpdateMenuItemRequest
   
   if (!siteId || !menuId || !itemId) {
@@ -50,7 +53,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
+    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
     
     if (!site) {
       return jsonResponse({ 
@@ -101,7 +104,7 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Invalid price amount' }, { status: 400 })
     }
 
-    const menuItem = await updateMenuItem(db, itemId, body, session.user.id)
+    const menuItem = await updateMenuItem(db, site.organization_id, siteId, itemId, body, session.user.id)
     
     return jsonResponse({
       success: true,

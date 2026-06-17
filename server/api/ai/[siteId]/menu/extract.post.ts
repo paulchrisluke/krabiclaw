@@ -219,6 +219,8 @@ export default defineEventHandler(async (event) => {
       const priceAmount = item.price_amount ?? item.price
       return createMenuItem(
         db,
+        orgId,
+        siteId!,
         menuId!,
         {
           section: String(item.section || 'Menu').slice(0, 100),

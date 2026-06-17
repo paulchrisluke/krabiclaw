@@ -231,7 +231,6 @@ async function main() {
       'Restaurant or experience site live in minutes',
       'Your own domain (yourbusiness.com)',
       'Edit menus, content & photos through ChatGPT',
-      'Auto-sync posts from Facebook & Instagram',
       'Bookings, ticketed experiences & delivery links',
       'WhatsApp booking & reservation notifications',
       '1 language translation included',

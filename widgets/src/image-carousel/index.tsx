@@ -230,11 +230,9 @@ function App() {
         )}
       </div>
       <div className="actions">
-        {content.regenerateTool ? (
-          <button className="btn btn-outline" onClick={handleRegenerate} disabled={isApplying || isRegenerating}>
-            {isRegenerating ? 'Generating…' : regenerateLabel}
-          </button>
-        ) : null}
+        <button className="btn btn-outline" onClick={handleRegenerate} disabled={isApplying || isRegenerating}>
+          {isRegenerating ? 'Generating…' : regenerateLabel}
+        </button>
         <button className="btn btn-primary" onClick={handleUse} disabled={isApplying || isRegenerating}>
           {isApplying ? 'Applying…' : useLabel}
         </button>

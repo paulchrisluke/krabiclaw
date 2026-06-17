@@ -107,7 +107,7 @@
               <!-- Subtle gradient top highlight on hover -->
               <div
                 class="absolute inset-x-0 top-0 h-px rounded-t-[18px] opacity-0 group-hover:opacity-100 transition-opacity"
-                style="background: linear-gradient(90deg, transparent, var(--kc-coral)/40, transparent);"
+                style="background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--kc-coral) 40%, transparent), transparent);"
               ></div>
 
               <div

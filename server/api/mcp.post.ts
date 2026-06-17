@@ -28,6 +28,7 @@ const WIDGET_VERSION = "v9";
 // Keep global widget rendering conservative, then selectively enable stable tools below.
 const WIDGETS_ENABLED = false;
 const ENABLED_WIDGET_TOOLS = new Set([
+  "show_welcome",
   "request_photo_upload",
   "show_generated_images",
   "generate_logo",
@@ -99,17 +100,19 @@ export default defineEventHandler(async (event) => {
       !getHeader(event, "cookie")
     ) {
       const body = await readBody(event);
-      const request = body && typeof body === "object" && Object.keys(body).length
-        ? readMcpRequest(event, body)
+      // Lenient extraction only — full validation happens after auth succeeds.
+      // readMcpRequest would throw on discovery payloads missing version/method.
+      const rawBody = body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
         : null;
-      requestId = request?.id;
-      requestMethod = request?.method;
+      requestId = rawBody?.id as string | number | undefined;
+      requestMethod = rawBody?.method as string | undefined;
       setResponseStatus(event, 401);
       setMcpAuthChallenge(event, authChallenge);
-      if (request?.method === "tools/call") {
-        return mcpSuccess(request.id, mcpAuthRequiredResult(authChallenge));
+      if (requestMethod === "tools/call") {
+        return mcpSuccess(requestId ?? null, mcpAuthRequiredResult(authChallenge));
       }
-      return mcpFailure(null, {
+      return mcpFailure(requestId ?? null, {
         code: MCP_ERROR.invalidRequest,
         message: "Authentication required.",
       });

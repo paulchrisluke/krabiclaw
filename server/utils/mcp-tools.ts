@@ -2662,6 +2662,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     domain: 'settings',
     minimumRole: 'owner',
     confirmRequired: true,
+    requiredEntitlement: 'custom_domains',
     inputSchema: {
       domain: { type: 'string', description: 'Custom domain to add, e.g. "www.example.com" or "example.com".' },
       include_www: { type: 'boolean', description: 'If true (default), provision both www and the apex domain as a pair.' },

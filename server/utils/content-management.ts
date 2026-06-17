@@ -131,10 +131,11 @@ async function resolveMediaFieldUrls(
     if (!assetId || /^https?:\/\//i.test(assetId)) return row
 
     const publicUrl = publicUrlByAssetId.get(assetId) ?? null
+    const fallbackValue = row.value && /^https?:\/\//i.test(row.value) ? row.value : undefined
     return {
       ...row,
       content: publicUrl ?? undefined,
-      value: publicUrl ?? undefined,
+      value: publicUrl ?? fallbackValue,
     }
   })
 }

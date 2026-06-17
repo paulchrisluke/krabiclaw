@@ -25,7 +25,11 @@ export default defineEventHandler(async (event) => {
   // Check business info populated (phone or maps_url set means Maps was applied)
   const businessInfo = await db.prepare(`
     SELECT COUNT(*) as c FROM business_locations
-    WHERE site_id = ? AND (phone IS NOT NULL OR maps_url IS NOT NULL OR google_place_id IS NOT NULL)
+    WHERE site_id = ? AND status = 'active' AND (
+      (phone IS NOT NULL AND phone != '')
+      OR (maps_url IS NOT NULL AND maps_url != '')
+      OR (google_place_id IS NOT NULL AND google_place_id != '')
+    )
   `).bind(siteId).first<{ c: number }>()
 
   // Check hero image on home page

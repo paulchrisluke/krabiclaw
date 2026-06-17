@@ -2243,6 +2243,8 @@ async function executeTool(
         try {
           const createdItem = await createMenuItem(
             db,
+            orgId,
+            siteId,
             menuId,
             {
               section,
@@ -2324,6 +2326,8 @@ async function executeTool(
           try {
             const updatedItem = await updateMenuItem(
               db,
+              orgId,
+              siteId,
               match.id,
               updates,
               userId,
@@ -2363,6 +2367,8 @@ async function executeTool(
         try {
           const createdItem = await createMenuItem(
             db,
+            orgId,
+            siteId,
             menuId,
             {
               section,
@@ -2394,6 +2400,8 @@ async function executeTool(
           if (touchedItemIds.has(item.id) || !item.available) continue;
           const updatedItem = await updateMenuItem(
             db,
+            orgId,
+            siteId,
             item.id,
             { available: false },
             userId,
@@ -2422,6 +2430,8 @@ async function executeTool(
     case "add_menu_item": {
       const item = await createMenuItem(
         db,
+        orgId,
+        siteId,
         input.menu_id,
         {
           section: input.section,
@@ -2459,7 +2469,7 @@ async function executeTool(
       ]) {
         if (input[f] !== undefined) updates[f] = input[f];
       }
-      const item = await updateMenuItem(db, input.item_id, updates, userId);
+      const item = await updateMenuItem(db, orgId, siteId, input.item_id, updates, userId);
       return {
         id: item.id,
         name: item.name,

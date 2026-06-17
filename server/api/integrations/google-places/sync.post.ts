@@ -16,9 +16,6 @@ export default defineEventHandler(async (event) => {
   const { locationId } = body
   if (!locationId) return jsonResponse({ error: 'locationId is required' }, { status: 400 })
 
-  const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
-  if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 500 })
-
   const { restaurant: site } = body.siteId
     ? {
         restaurant: await db.prepare(`
@@ -35,6 +32,9 @@ export default defineEventHandler(async (event) => {
   if (!await hasEntitlement(env, db, site.organization_id, 'google_business')) {
     return jsonResponse({ error: 'Google Business sync requires a Growth plan or higher.' }, { status: 403 })
   }
+
+  const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
+  if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 500 })
 
   const location = await db.prepare(`
     SELECT id, google_place_id FROM business_locations

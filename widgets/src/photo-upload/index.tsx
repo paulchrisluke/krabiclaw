@@ -84,8 +84,6 @@ function App() {
       setProgress(65)
       setState('confirming')
       const result = await new Promise<{ assetId: string; publicUrl: string }>((resolve, reject) => {
-        const timeout = window.setTimeout(() => reject(new Error('KrabiClaw did not confirm the uploaded photo in time.')), 30000)
-
         const handleMessage = (event: MessageEvent) => {
           if (event.source !== window.parent) return
           const message = event.data as {
@@ -118,6 +116,10 @@ function App() {
         }
 
         const toolCallId = `upload-user-photo-${Date.now()}`
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener('message', handleMessage)
+          reject(new Error('KrabiClaw did not confirm the uploaded photo in time.'))
+        }, 30000)
         window.addEventListener('message', handleMessage, { passive: true })
         window.parent.postMessage({
           jsonrpc: '2.0',

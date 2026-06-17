@@ -10,10 +10,29 @@ interface SaveRequest {
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, "siteId");
-  const body = (await readBody(event)) as SaveRequest;
-  const { page, changes } = body;
+  const body = await readBody(event);
 
-  if (!siteId || !page || !changes) {
+  if (!siteId || Array.isArray(siteId)) {
+    return jsonResponse(
+      {
+        error: "Site ID is required",
+      },
+      { status: 400 },
+    );
+  }
+
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return jsonResponse(
+      {
+        error: "Request body must be a valid object",
+      },
+      { status: 400 },
+    );
+  }
+
+  const { page, changes } = body as Partial<SaveRequest>;
+
+  if (!page || !changes) {
     return jsonResponse(
       {
         error: "Site ID, page, and changes are required",

@@ -181,6 +181,8 @@ async function resolveGeneratedImageUpload(
   };
 }
 
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB
+
 function validateImageBuffer(
   bytes: Uint8Array,
   sourceLabel: string,
@@ -189,6 +191,12 @@ function validateImageBuffer(
     throw createError({
       statusCode: 400,
       statusMessage: `Invalid image payload from ${sourceLabel}: payload too small.`,
+    });
+  }
+  if (bytes.byteLength > MAX_IMAGE_BYTES) {
+    throw createError({
+      statusCode: 413,
+      statusMessage: `Invalid image payload from ${sourceLabel}: payload exceeds 20 MB limit.`,
     });
   }
 
@@ -1635,6 +1643,8 @@ export async function executeMcpToolCall(
       return {
         item: await createMenuItem(
           site.db,
+          site.organizationId,
+          site.siteId,
           requiredString(args, "menu_id"),
           omit(args, ["menu_id"]) as never,
           site.userId,
@@ -1644,6 +1654,8 @@ export async function executeMcpToolCall(
       return {
         item: await updateMenuItem(
           site.db,
+          site.organizationId,
+          site.siteId,
           requiredString(args, "menu_item_id"),
           omit(args, ["menu_item_id"]) as never,
           site.userId,
@@ -1655,21 +1667,27 @@ export async function executeMcpToolCall(
       return {
         item: await updateMenuItem(
           site.db,
+          site.organizationId,
+          site.siteId,
           requiredString(args, "menu_item_id"),
           { image_asset_id: assetId } as never,
           site.userId,
         ),
       };
     }
-    case "delete_menu_item":
-      await deleteMenuItem(
+    case "delete_menu_item": {
+      const deleted = await deleteMenuItem(
         site.db,
         requiredString(args, "menu_item_id"),
         site.organizationId,
         site.siteId,
         site.userId,
       );
+      if (!deleted) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "Menu item not found or does not belong to this site.");
+      }
       return { deleted: true };
+    }
     case "rename_menu_section":
       return {
         updated: await renameMenuSection(

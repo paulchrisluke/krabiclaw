@@ -206,7 +206,7 @@ export async function createExperience(
   const now = new Date().toISOString()
   const slotsJson = input.time_slots?.length ? JSON.stringify(input.time_slots) : null
   const imagesJson = input.images?.length ? JSON.stringify(input.images) : null
-  const status = input.status ? assertExperienceStatus(input.status, 'status') : 'active'
+  const status = input.status !== undefined ? assertExperienceStatus(input.status, 'status') : 'active'
 
   const result = await db
     .prepare(

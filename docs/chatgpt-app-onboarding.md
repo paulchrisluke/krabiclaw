@@ -537,7 +537,7 @@ to `publicUrl` when the user clicks the card or the "Open site" button.
 | `import_from_maps` | data + render | Ports `lookup_maps_url` from `chowbot-agent.ts` + adds photo download + Cloudflare Images upload |
 | `show_generated_images` | render | New widget only; image generation done by ChatGPT natively |
 | `set_logo` / `set_home_hero_image` / `set_story_image` / `set_location_hero_image` / `set_post_image` / `set_experience_image` | data | Thin MCP wrappers over existing site/content/location/post/experience updates |
-| `show_site_preview` | render | New widget; iframe pattern from `templates.vue` |
+| `show_site_preview` | render | New widget; static image card rendering with a link-card fallback |
 
 `create_site`, `create_location`, `save_generated_image`, `save_generated_image_file`,
 `request_media_upload`, and `confirm_media_upload` already exist and are called directly by the

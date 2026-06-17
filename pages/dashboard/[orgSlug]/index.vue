@@ -571,11 +571,19 @@ async function copyMcpUrl() {
   setTimeout(() => { mcpCopied.value = false }, 2000)
 }
 
+async function loadDashboardData() {
+  const data = await $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[] }>('/api/dashboard/home')
+  locations.value = data.locations
+  credits.value = data.credits
+  events.value = data.events
+}
+
 async function completeOnboarding() {
   completeLoading.value = true
   try {
     await $fetch('/api/dashboard/onboarding/complete', { method: 'POST' })
     await dashboardState.refresh()
+    await loadDashboardData()
   } catch {
     // Still advance
   } finally {
@@ -639,10 +647,7 @@ onMounted(async () => {
   try {
     await dashboardState.refresh()
     if (showOnboarding.value) return
-    const data = await $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[] }>('/api/dashboard/home')
-    locations.value = data.locations
-    credits.value = data.credits
-    events.value = data.events
+    await loadDashboardData()
   } finally {
     loading.value = false
   }

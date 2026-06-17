@@ -215,7 +215,7 @@ export async function createLocation(
   if (
     input.review_count !== undefined &&
     input.review_count !== null &&
-    input.review_count < 0
+    (!Number.isInteger(input.review_count) || input.review_count < 0)
   ) {
     return {
       status: 400,
@@ -284,7 +284,7 @@ export async function createLocation(
     return {
       status: 402,
       data: {
-        error: "Location limit reached. Upgrade to Pro to add more locations.",
+        error: "Location limit reached. Upgrade to a paid plan to add more locations.",
         code: "LOCATION_LIMIT_REACHED",
       },
     };
@@ -433,7 +433,7 @@ export async function updateLocation(
   if (
     input.review_count !== undefined &&
     input.review_count !== null &&
-    input.review_count < 0
+    (!Number.isInteger(input.review_count) || input.review_count < 0)
   ) {
     return {
       status: 400,
