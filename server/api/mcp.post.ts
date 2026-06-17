@@ -17,6 +17,7 @@ import {
   roleSatisfies,
 } from "~/server/utils/mcp-auth";
 import { MCP_TOOLS } from "~/server/utils/mcp-tools";
+import { cloudflareEnv } from "~/server/utils/api-response";
 
 const WIDGET_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 
@@ -38,6 +39,9 @@ const ENABLED_WIDGET_TOOLS = new Set([
   "generate_post_image",
   "generate_menu_item_image",
   "generate_experience_image",
+  "show_vertical_picker",
+  "import_from_maps",
+  "show_site_preview",
 ]);
 
 function widgetResourceUri(name: string) {
@@ -49,10 +53,8 @@ function widgetResourceUri(name: string) {
 // Falling back to the raw request URL origin can return a Workers internal hostname
 // on Cloudflare, which the ChatGPT sandbox then blocks in CSP.
 function resolveBaseUrl(event: Parameters<typeof getRequestURL>[0]): string {
-  const cfEnv = event.context.cloudflare?.env as
-    | { BETTER_AUTH_URL?: string }
-    | undefined;
-  return (cfEnv?.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(
+  const cfEnv = cloudflareEnv(event);
+  return (cfEnv.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(
     /\/$/,
     "",
   );
@@ -88,11 +90,9 @@ export default defineEventHandler(async (event) => {
     // Return 401 with WWW-Authenticate before any protocol parsing so OAuth
     // clients (e.g. ChatGPT) can discover the authorization server on first touch.
     // Session-cookie requests (dashboard, E2E tests) have a Cookie header and skip this.
-    const cfEnv = event.context.cloudflare?.env as
-      | { BETTER_AUTH_URL?: string }
-      | undefined;
+    const cfEnv = cloudflareEnv(event);
     const baseUrl = (
-      cfEnv?.BETTER_AUTH_URL ?? "https://krabiclaw.com"
+      cfEnv.BETTER_AUTH_URL ?? "https://krabiclaw.com"
     ).replace(/\/$/, "");
     const authChallenge = oauthChallenge(baseUrl);
     if (
@@ -310,11 +310,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
                 redirect_domains: [
                   ...new Set([
                     baseUrl,
-                    (
-                      event.context.cloudflare?.env as
-                        | { NUXT_PUBLIC_PLATFORM_DOMAIN?: string }
-                        | undefined
-                    )?.NUXT_PUBLIC_PLATFORM_DOMAIN?.replace(/\/$/, "") ??
+                    cloudflareEnv(event).NUXT_PUBLIC_PLATFORM_DOMAIN?.replace(/\/$/, "") ??
                       "https://krabiclaw.com",
                   ]),
                 ],
@@ -517,11 +513,9 @@ Common workflows: update menus and items, create and publish posts, triage conta
     );
     setResponseStatus(event, status);
     if (status === 401) {
-      const cfEnv = event.context.cloudflare?.env as
-        | { BETTER_AUTH_URL?: string }
-        | undefined;
+      const cfEnv = cloudflareEnv(event);
       const baseUrl = (
-        cfEnv?.BETTER_AUTH_URL ?? "https://krabiclaw.com"
+        cfEnv.BETTER_AUTH_URL ?? "https://krabiclaw.com"
       ).replace(/\/$/, "");
       const authChallenge = oauthChallenge(baseUrl);
       setMcpAuthChallenge(event, authChallenge);

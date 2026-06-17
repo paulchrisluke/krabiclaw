@@ -97,7 +97,7 @@ function App() {
             error?: { message?: string }
           }
 
-          if (!message || message.jsonrpc !== '2.0' || message.id !== toolCallId) return
+          if (!message || message.jsonrpc !== '2.0' || String(message.id) !== toolCallId) return
           window.clearTimeout(timeout)
           window.removeEventListener('message', handleMessage)
 

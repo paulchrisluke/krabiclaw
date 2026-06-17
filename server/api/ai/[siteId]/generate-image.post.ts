@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event)
   const prompt = typeof body?.prompt === 'string' ? body.prompt.trim().slice(0, 1000) : ''
-  const locationId = typeof body?.locationId === 'string' ? body.locationId : null
+  const locationId = typeof body?.locationId === 'string' ? body.locationId.trim() || null : null
   if (!prompt) return jsonResponse({ error: 'prompt required' }, { status: 400 })
 
   // Validate locationId if provided

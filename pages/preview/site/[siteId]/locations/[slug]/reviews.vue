@@ -4,4 +4,8 @@
 
 <script setup lang="ts">
 import LocationReviewsPage from '~/pages/locations/[slug]/reviews.vue'
+
+definePageMeta({
+  layout: 'saya'
+})
 </script>

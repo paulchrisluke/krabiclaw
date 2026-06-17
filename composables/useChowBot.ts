@@ -180,7 +180,10 @@ export const useChowBot = () => {
         throw new Error(payload.error ?? `Error ${response.status}`)
       }
 
-      const reader = response.body!.getReader()
+      if (!response.body) {
+        throw new Error('Response body is null')
+      }
+      const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buf = ''
 

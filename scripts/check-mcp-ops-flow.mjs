@@ -210,7 +210,7 @@ async function main() {
   const socialOnlyPublish = await mcp(headers, 'publish_post', {
     site_id: siteId,
     post_id: postId,
-    targets: ['facebook'],
+    channels: ['facebook'],
   })
   expectStatus('publish_post with disconnected facebook returns 409', socialOnlyPublish, 409)
 

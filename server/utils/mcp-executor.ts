@@ -1,6 +1,7 @@
 import { createError, getRequestURL, type H3Event } from "h3";
 import { createPreviewToken } from "~/server/utils/preview-token";
 import { getFreeSiteDomain } from "~/server/utils/tenant-hosts";
+import { cloudflareEnv } from "~/server/utils/api-response";
 import { hasEntitlement } from "~/server/utils/billing";
 import {
   requestImageUpload,
@@ -16,6 +17,7 @@ import {
   listMediaAssets,
   updateMediaAssetMetadata,
 } from "~/server/utils/media-asset-manager";
+import { createMediaActivationToken } from "~/server/utils/media-activation-token";
 import {
   createLocation,
   deleteLocation,
@@ -230,10 +232,8 @@ async function requireActiveImageAsset(
 }
 
 function resolveMcpBaseUrl(event: H3Event): string {
-  const cfEnv = event.context.cloudflare?.env as
-    | { BETTER_AUTH_URL?: string }
-    | undefined;
-  return (cfEnv?.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(
+  const env = cloudflareEnv(event);
+  return (env.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(
     /\/$/,
     "",
   );
@@ -1803,6 +1803,13 @@ export async function executeMcpToolCall(
       const wantsInstagram = channels.includes("instagram");
 
       if (wantsFacebook || wantsInstagram) {
+        if (!hasEntitlement(site.env, site.db, site.organizationId, "managed_service")) {
+          throw createError({
+            statusCode: 403,
+            statusMessage:
+              "Facebook and Instagram publishing require a Managed or SEO Accelerator plan.",
+          });
+        }
         const connection = await getFacebookPagesConnection(
           site.env as never,
           site.organizationId,
@@ -2001,12 +2008,15 @@ export async function executeMcpToolCall(
         created_by_user_id: site.userId,
       });
       const baseUrl = resolveMcpBaseUrl(event);
+      const activationSecret = typeof site.env.CRON_SECRET === 'string' ? site.env.CRON_SECRET : '';
+      const activationToken = activationSecret ? await createMediaActivationToken(activationSecret, assetId, site.siteId) : '';
       const uploadPayload = {
         asset_id: assetId,
         upload_url: upload.uploadUrl,
         image_id: upload.imageId,
         site_id: site.siteId,
         activate_url: `${baseUrl}/api/mcp/media/${assetId}/activate`,
+        activation_token: activationToken,
       };
       return uploadPayload;
     }
@@ -2795,6 +2805,7 @@ export async function executeMcpToolCall(
       if (!hasCloudflareImagesConfig(site.env))
         throw new Error("Cloudflare Images not configured");
       const description = optionalString(args, "description") ?? null;
+      const category = optionalString(args, "category") ?? null;
       const fileReferenceValue = args.file;
       const fileReference =
         fileReferenceValue !== undefined
@@ -2833,6 +2844,7 @@ export async function executeMcpToolCall(
         alt_text: description ?? fileReference?.file_name ?? fileId,
         mime_type: upload.contentType,
         file_name: upload.filename,
+        category: (category as never) ?? null,
         status: "active",
         created_by_user_id: site.userId,
       });

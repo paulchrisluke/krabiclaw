@@ -189,7 +189,7 @@ export const useBootstrapKey = (
   siteId: string | null | undefined,
   params: BootstrapParams,
 ) =>
-  `bs-${siteId ?? "none"}-${params.page ?? ""}-${params.location ?? ""}-${params.experience ?? ""}-${params.menu ? "m" : ""}-${params.data ?? ""}-${params.locale ?? ""}`;
+  `bs-${siteId ?? "none"}-${params.page ?? ""}-${params.location ?? ""}-${params.experience ?? ""}-${params.menu ? "m" : ""}-${params.data ?? ""}-${params.locale ?? ""}-${params.token ?? ""}`;
 
 export const useBootstrapUrl = (
   siteId: string | null | undefined,

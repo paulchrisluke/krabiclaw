@@ -210,11 +210,11 @@ test.describe("mcp tools", () => {
     );
     expect(updateLocationRes.status()).toBe(200);
     const updateLocationBody = (await updateLocationRes.json()) as {
-      result: { id?: string; title?: string; status?: string; error?: string };
+      result: { location?: { id?: string; title?: string; status?: string }; error?: string };
     };
     expect(updateLocationBody.result.error).toBeUndefined();
-    expect(updateLocationBody.result.id).toBe(locationId);
-    expect(updateLocationBody.result.status).toBe("inactive");
+    expect(updateLocationBody.result.location?.id).toBe(locationId);
+    expect(updateLocationBody.result.location?.status).toBe("inactive");
 
     const addQaRes = await request.post(`${baseURL}/api/dev/mcp-tool`, {
       headers: devLoginHeaders(),

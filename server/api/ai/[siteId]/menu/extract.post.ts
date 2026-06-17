@@ -158,14 +158,18 @@ export default defineEventHandler(async (event) => {
   }
 
   // Charge credits after successful call
-  const { creditsCharged, newBalance } = await chargeCredits(db, orgId, {
-    siteId,
-    action: 'menu_extract',
-    model: 'claude-sonnet-4-6',
-    inputTokens: aiResponse.usage.input_tokens,
-    outputTokens: aiResponse.usage.output_tokens,
-    cfGatewayLogId: aiResponse.cfLogId,
-  })
+  try {
+    await chargeCredits(db, orgId, {
+      siteId,
+      action: 'menu_extract',
+      model: 'claude-sonnet-4-6',
+      inputTokens: aiResponse.usage.input_tokens,
+      outputTokens: aiResponse.usage.output_tokens,
+      cfGatewayLogId: aiResponse.cfLogId,
+    })
+  } catch (err) {
+    console.error('Failed to charge credits for menu extraction:', err)
+  }
 
   // Parse model response — strip markdown fences Claude sometimes adds
   const rawText = aiResponse.content.find((b) => b.type === 'text')?.text ?? ''

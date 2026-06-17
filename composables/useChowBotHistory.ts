@@ -72,6 +72,10 @@ export const useChowBotHistory = () => {
 
 function parseToolCalls(raw: string | null): ChowbotToolCall[] | undefined {
   if (!raw) return undefined
-  const parsed = JSON.parse(raw) as Array<{ name: string; input: unknown; result: unknown }>
-  return parsed.map((tool) => ({ ...tool, status: 'done' as const }))
+  try {
+    const parsed = JSON.parse(raw) as Array<{ name: string; input: unknown; result: unknown }>
+    return parsed.map((tool) => ({ ...tool, status: 'done' as const }))
+  } catch {
+    return undefined
+  }
 }

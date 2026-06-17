@@ -75,8 +75,10 @@ export default defineEventHandler(async (event) => {
   // Platform-hosted preview routes: /preview/site/[siteId]/...
   // Token verification is deferred to the bootstrap endpoint — the middleware
   // only resolves the site identity so composables see the correct tenant context.
+  // Only allow preview routes on platform hosts (localhost/krabiclaw.com) to prevent
+  // tenant/custom hosts from bypassing normal tenant resolution.
   const previewRouteMatch = url.pathname.match(/^\/preview\/site\/([^/?]+)/)
-  if (previewRouteMatch) {
+  if (previewRouteMatch && isPlatformHost(host, env)) {
     const previewSiteId = previewRouteMatch[1]!
     const db = (env as TenantResolutionEnv).DB
     if (db) {

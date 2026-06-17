@@ -92,14 +92,18 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'AI generation failed. Please try again.' }, { status: 502 })
   }
 
-  const { creditsCharged, newBalance } = await chargeCredits(db, orgId, {
-    siteId,
-    action: 'post_generate',
-    model: 'claude-sonnet-4-6',
-    inputTokens: aiResponse.usage.input_tokens,
-    outputTokens: aiResponse.usage.output_tokens,
-    cfGatewayLogId: aiResponse.cfLogId,
-  })
+  try {
+    await chargeCredits(db, orgId, {
+      siteId,
+      action: 'post_generate',
+      model: 'claude-sonnet-4-6',
+      inputTokens: aiResponse.usage.input_tokens,
+      outputTokens: aiResponse.usage.output_tokens,
+      cfGatewayLogId: aiResponse.cfLogId,
+    })
+  } catch (err) {
+    console.error('Failed to charge credits for post generation:', err)
+  }
 
   const rawText = aiResponse.content.find((b: ApiValue) => b.type === 'text')?.text ?? ''
   let parsed: { title: string | null; body: string }

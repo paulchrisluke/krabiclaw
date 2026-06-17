@@ -497,7 +497,7 @@ const dashboardState = useDashboardRestaurant()
 
 // ── Onboarding state ──────────────────────────────────────────────────────────
 
-const onboardStepLabels = ['Find your business', 'Your site is live', 'Notifications', 'Connect to ChatGPT']
+const onboardStepLabels = ['Find your business', 'Your site is live', 'Notifications', 'Connect to ChatGPT', 'Manage with ChatGPT']
 const onboardStep = ref(0)
 
 const { user: authUser } = useAuth()
@@ -646,9 +646,13 @@ function skipToConnect() {
 }
 
 async function copyMcpUrl() {
-  await navigator.clipboard.writeText('https://krabiclaw.com/api/mcp')
-  mcpCopied.value = true
-  setTimeout(() => { mcpCopied.value = false }, 2000)
+  try {
+    await navigator.clipboard.writeText('https://krabiclaw.com/api/mcp')
+    mcpCopied.value = true
+    setTimeout(() => { mcpCopied.value = false }, 2000)
+  } catch (err) {
+    console.error('Failed to copy text: ', err)
+  }
 }
 
 async function loadDashboardData() {

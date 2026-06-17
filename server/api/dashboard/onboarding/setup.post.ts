@@ -95,12 +95,14 @@ export default defineEventHandler(async (event) => {
     status: 'active',
   }, session.user.id)
 
-  const [heroImage, locationHeroImage] = place.photos
-  if (heroImage?.photoUri) {
-    await setConfig(db, organizationId, siteId, 'heroImageUrl', heroImage.photoUri)
-  }
-  if (locationHeroImage?.photoUri) {
-    await setConfig(db, organizationId, siteId, 'locationHeroImageUrl', locationHeroImage.photoUri)
+  if (place.photos && place.photos.length > 0) {
+    const [heroImage, locationHeroImage] = place.photos
+    if (heroImage?.photoUri) {
+      await setConfig(db, organizationId, siteId, 'heroImageUrl', heroImage.photoUri)
+    }
+    if (locationHeroImage?.photoUri) {
+      await setConfig(db, organizationId, siteId, 'locationHeroImageUrl', locationHeroImage.photoUri)
+    }
   }
 
   // Upsert reviews — INSERT OR IGNORE so MCP edits are never overwritten

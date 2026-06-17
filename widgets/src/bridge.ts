@@ -85,6 +85,18 @@ export function onToolResult(callback: (_result: unknown) => void) {
         : null;
     if (source !== undefined && source !== null) {
       const widgetData = extractWidgetData(source);
+      // Only invoke callback if toolResponseMetadata contains meaningful widget data.
+      // If it only has invocation labels without actual data, return false to continue polling.
+      if (api?.toolOutput == null && api?.toolResponseMetadata != null) {
+        const toolResult = extractWidgetToolResult(source);
+        const hasWidgetData = toolResult && typeof toolResult === "object" && (
+          "_meta" in toolResult ||
+          "structuredContent" in toolResult ||
+          "mcp_tool_result" in (api.toolResponseMetadata as Record<string, unknown>) ||
+          "call_tool_result" in (api.toolResponseMetadata as Record<string, unknown>)
+        );
+        if (!hasWidgetData) return false;
+      }
       callback(widgetData);
       return true;
     }
@@ -123,6 +135,18 @@ export function onToolResult(callback: (_result: unknown) => void) {
         : null;
     if (source === undefined || source === null) return;
     const widgetData = extractWidgetData(source);
+    // Only invoke callback if toolResponseMetadata contains meaningful widget data.
+    // If it only has invocation labels without actual data, return to continue polling.
+    if (globals.toolOutput == null && globals.toolResponseMetadata != null) {
+      const toolResult = extractWidgetToolResult(source);
+      const hasWidgetData = toolResult && typeof toolResult === "object" && (
+        "_meta" in toolResult ||
+        "structuredContent" in toolResult ||
+        "mcp_tool_result" in (globals.toolResponseMetadata as Record<string, unknown>) ||
+        "call_tool_result" in (globals.toolResponseMetadata as Record<string, unknown>)
+      );
+      if (!hasWidgetData) return;
+    }
     callback(widgetData);
     clearInterval(timer);
     window.removeEventListener("message", messageHandler);

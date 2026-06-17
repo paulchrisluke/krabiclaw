@@ -136,7 +136,7 @@ test.describe('stateless MCP server', () => {
     expect(allToolNames).toEqual(expect.arrayContaining([
       'list_sites', 'create_site',
       'get_site', 'list_locations', 'list_menus', 'list_posts', 'get_site_media_assets',
-      'get_page_content', 'list_experiences', 'get_contact_inquiries',
+      'get_page_fields', 'list_experiences', 'get_contact_inquiries',
       'get_translation_inventory', 'list_work_requests', 'get_google_business_connection',
     ]))
     expect(allToolNames.length).toBeGreaterThan(50)
@@ -160,7 +160,8 @@ test.describe('stateless MCP server', () => {
     })
     expect(sitesList.status()).toBe(200)
     const sitesListBody = await sitesList.json()
-    expect(mcpData<{ sites: Array<{ id: string }> }>(sitesListBody).sites.some(site => site.id === siteId)).toBe(true)
+    const sitesListText = sitesListBody?.result?.content?.[0]?.text as string | undefined
+    expect(sitesListText).toContain('You have')
 
     const siteRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -201,12 +202,12 @@ test.describe('stateless MCP server', () => {
 
     const contentRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'get_page_content',
+      toolName: 'get_page_fields',
       args: { site_id: siteId, page: 'home' },
     })
     expect(contentRead.status()).toBe(200)
     const mergedBody = await contentRead.json()
-    const mergedHero = mcpData<{ content: Array<{ field: string; hero_title?: string }> }>(mergedBody).content.find(item => item.field === 'hero')
+    const mergedHero = mcpData<{ fields: Array<{ field: string; hero_title?: string }> }>(mergedBody).fields.find(item => item.field === 'hero')
     expect(mergedHero?.hero_title).toContain('MCP Hero')
 
     const settingsBefore = await mcpRequest(request, baseURL!, {

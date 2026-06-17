@@ -35,6 +35,12 @@ test.describe('pottery house dashboard', () => {
     }
 
     // Otherwise, assert tenant isolation: this logged-in user cannot write to Pottery House directly.
+    const deniedLogin = await page.request.get(devLoginUrl(baseURL!, `deny-${Date.now()}`), {
+      headers: devLoginHeaders() || {},
+      maxRedirects: 0,
+    })
+    expect(deniedLogin.status()).toBe(302)
+
     const saveRes = await page.request.post(`${baseURL}/api/editor/sites/site-pottery-house/content/save`, {
       data: {
         page: 'home',

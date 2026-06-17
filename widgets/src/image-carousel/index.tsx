@@ -196,6 +196,11 @@ function App() {
         setImageLoadState('loading')
         setImageError(null)
         setStatus(null)
+      } else {
+        setStatus({
+          tone: 'error',
+          text: 'Regeneration failed: invalid response from server.',
+        })
       }
     } catch (error) {
       setStatus({

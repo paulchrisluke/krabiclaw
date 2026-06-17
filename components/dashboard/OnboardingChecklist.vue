@@ -31,7 +31,7 @@
 
       <!-- Items -->
       <ul class="space-y-2.5">
-        <li v-for="item in visibleItems" :key="item.key" class="flex items-start gap-3">
+        <li v-for="item in items" :key="item.key" class="flex items-start gap-3">
           <div :class="[
             'flex size-5 shrink-0 items-center justify-center rounded-full mt-0.5 transition-colors',
             item.complete ? 'bg-(--kc-teal)' : 'border-2 border-muted bg-transparent',
@@ -158,7 +158,6 @@ const items = computed(() => {
   ]
 })
 
-const visibleItems = items
 const completedCount = computed(() => items.value.filter(i => i.complete).length)
 const total = computed(() => items.value.length)
 const allDone = computed(() => completedCount.value === total.value)

@@ -4,4 +4,8 @@
 
 <script setup lang="ts">
 import LocationPhotosPage from '~/pages/locations/[slug]/photos.vue'
+
+definePageMeta({
+  layout: 'saya'
+})
 </script>

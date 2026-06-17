@@ -262,10 +262,10 @@ export async function createMessage(db: D1Database, input: CreateMessageInput, a
     now
   ).run()
 
-  // Update conversation timestamp
+  // Update conversation timestamp and active_channel to sync with latest message
   await db.prepare(`
-    UPDATE chowbot_conversations SET updated_at = ? WHERE id = ?
-  `).bind(now, input.conversationId).run()
+    UPDATE chowbot_conversations SET updated_at = ?, active_channel = ? WHERE id = ?
+  `).bind(now, input.channel, input.conversationId).run()
 
   const created = await db.prepare(`
     SELECT * FROM chowbot_messages WHERE id = ?
