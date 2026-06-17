@@ -215,7 +215,7 @@ export async function createLocation(
   if (
     input.review_count !== undefined &&
     input.review_count !== null &&
-    input.review_count < 0
+    (!Number.isInteger(input.review_count) || input.review_count < 0)
   ) {
     return {
       status: 400,
@@ -284,7 +284,7 @@ export async function createLocation(
     return {
       status: 402,
       data: {
-        error: "Location limit reached. Upgrade to Pro to add more locations.",
+        error: "Location limit reached. Upgrade to a paid plan to add more locations.",
         code: "LOCATION_LIMIT_REACHED",
       },
     };
@@ -433,7 +433,7 @@ export async function updateLocation(
   if (
     input.review_count !== undefined &&
     input.review_count !== null &&
-    input.review_count < 0
+    (!Number.isInteger(input.review_count) || input.review_count < 0)
   ) {
     return {
       status: 400,
@@ -676,17 +676,43 @@ export async function deleteLocation(
   locationId: string,
   userId: string,
 ) {
-  const result = await db
-    .prepare(
-      `
-    DELETE FROM business_locations
-    WHERE id = ? AND organization_id = ? AND site_id = ?
-  `,
-    )
-    .bind(locationId, organizationId, siteId)
-    .run();
+  // A location delete can cascade SET NULL into Google Business rows. If the
+  // site already has a site-level connection, that null transition can collide
+  // with the partial unique index on google_business_connections.
+  // Remove location-scoped connections up front so the hard delete stays
+  // deterministic and does not depend on SQLite's constraint ordering.
+  const statements = [
+    db
+      .prepare(
+        `
+      UPDATE media_assets
+      SET location_id = NULL
+      WHERE organization_id = ? AND site_id = ? AND location_id = ?
+    `,
+      )
+      .bind(organizationId, siteId, locationId),
+    db
+      .prepare(
+        `
+      DELETE FROM google_business_connections
+      WHERE organization_id = ? AND site_id = ? AND location_id = ?
+    `,
+      )
+      .bind(organizationId, siteId, locationId),
+    db
+      .prepare(
+        `
+      DELETE FROM business_locations
+      WHERE id = ? AND organization_id = ? AND site_id = ?
+    `,
+      )
+      .bind(locationId, organizationId, siteId),
+  ];
 
-  if (!result.meta.changes) {
+  const batchResults = await db.batch(statements);
+  const deleteResult = batchResults[2];
+
+  if (!deleteResult?.meta.changes) {
     return { status: 404, data: { error: "Location not found." } };
   }
 

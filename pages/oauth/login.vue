@@ -180,6 +180,12 @@ definePageMeta({ layout: false, auth: false })
 useSeoMeta({ robots: 'noindex, nofollow' })
 
 const route = useRoute()
+const oauthPrompt = computed(() =>
+  typeof route.query.prompt === 'string' ? route.query.prompt : ''
+)
+const isSelectAccountFlow = computed(() =>
+  oauthPrompt.value.split(' ').includes('select_account')
+)
 
 // ── Client metadata ───────────────────────────────────────────────────────────
 const clientName = ref('')
@@ -224,6 +230,24 @@ const loading = ref(false)
  */
 function continueWithSession() {
   loading.value = true
+  if (isSelectAccountFlow.value) {
+    $fetch('/api/auth/oauth2/continue', {
+      method: 'POST',
+      body: { selected: true },
+    })
+      .then((result) => {
+        if (result?.url) {
+          window.location.href = result.url
+          return
+        }
+        window.location.href = `/api/auth/oauth2/authorize${window.location.search}`
+      })
+      .catch(() => {
+        window.location.href = `/api/auth/oauth2/authorize${window.location.search}`
+      })
+    return
+  }
+
   window.location.href = `/api/auth/oauth2/authorize${window.location.search}`
 }
 

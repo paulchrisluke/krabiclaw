@@ -1,12 +1,70 @@
 <template>
   <UPage>
-    <UPageHeader
-      title="Settings"
-      description="Integrations and account preferences."
-    />
-
     <UPageBody>
+      <div class="mb-6 space-y-1">
+        <h1 class="text-2xl font-semibold text-highlighted">Settings</h1>
+        <p class="text-sm text-muted">Organization and account preferences for the dashboard.</p>
+      </div>
       <div class="grid gap-4 lg:grid-cols-2">
+        <UCard>
+          <template #header>
+            <h2 class="font-semibold text-highlighted">Profile</h2>
+          </template>
+
+          <div class="flex items-center gap-4">
+            <AppAvatar
+              :src="sessionData?.user?.image ?? undefined"
+              :name="sessionData?.user?.name || sessionData?.user?.email"
+              alt="User avatar"
+              size="lg"
+            />
+            <div class="min-w-0">
+              <p class="truncate font-medium text-highlighted">{{ sessionData?.user?.name }}</p>
+              <p class="truncate text-sm text-muted">{{ sessionData?.user?.email }}</p>
+            </div>
+          </div>
+        </UCard>
+
+        <UCard>
+          <template #header>
+            <h2 class="font-semibold text-highlighted">Organization</h2>
+          </template>
+
+          <div v-if="organization" class="space-y-3">
+            <div>
+              <p class="text-sm text-muted">Name</p>
+              <p class="mt-1 font-medium text-highlighted">{{ organization.name }}</p>
+            </div>
+            <div>
+              <p class="text-sm text-muted">Role</p>
+              <p class="mt-1 font-medium capitalize text-highlighted">{{ organizationRole }}</p>
+            </div>
+          </div>
+
+          <p v-else class="text-sm text-muted">No organization found.</p>
+        </UCard>
+
+        <UCard class="lg:col-span-2">
+          <template #header>
+            <h2 class="font-semibold text-highlighted">Workspace Boundaries</h2>
+          </template>
+
+          <div class="grid gap-4 md:grid-cols-3">
+            <div>
+              <p class="font-medium text-highlighted">Organization</p>
+              <p class="mt-1 text-sm text-muted">Billing, connected accounts, team ownership.</p>
+            </div>
+            <div>
+              <p class="font-medium text-highlighted">Website</p>
+              <p class="mt-1 text-sm text-muted">Brand, domain, theme, SEO defaults.</p>
+            </div>
+            <div>
+              <p class="font-medium text-highlighted">Location</p>
+              <p class="mt-1 text-sm text-muted">Address, hours, local menu, Google Business mapping.</p>
+            </div>
+          </div>
+        </UCard>
+
         <UCard>
           <template #header>
             <div class="flex items-center justify-between gap-3">
@@ -91,6 +149,7 @@
           </div>
         </UCard>
 
+        <!-- Danger Zone -->
         <UCard class="lg:col-span-2 border border-red-200 dark:border-red-900">
           <template #header>
             <h2 class="font-semibold text-red-600 dark:text-red-400">Danger Zone</h2>
@@ -110,6 +169,7 @@
     </UPageBody>
   </UPage>
 
+  <!-- Delete Account Modal -->
   <UModal v-model:open="deleteModalOpen" :ui="{ content: 'max-w-md' }" @close="resetDeleteModal">
     <template #content>
       <div class="p-6 space-y-4">
@@ -159,12 +219,23 @@
 
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
+import { useAuth } from '~/composables/useAuth'
 
 definePageMeta({ layout: 'dashboard' })
 
+const { data: sessionData } = useAuth()
 const route = useRoute()
 const toast = useToast()
 const dashboard = useDashboardRestaurant()
+const organizationsState = authClient.useListOrganizations()
+const organization = computed(() => unref(organizationsState)?.data?.[0] || null)
+const organizationRole = computed(() => {
+  const metadata = organization.value?.metadata
+  if (metadata && typeof metadata === 'object' && 'role' in metadata && typeof metadata.role === 'string' && metadata.role.trim()) {
+    return metadata.role.trim()
+  }
+  return 'Member'
+})
 
 const deleteModalOpen = ref(false)
 const deleteConfirmText = ref('')

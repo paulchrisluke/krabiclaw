@@ -46,9 +46,34 @@
       </div>
     </Teleport>
 
+    <!-- ── Page hero ─────────────────────────────────────────────────── -->
+    <section class="relative overflow-hidden py-16 lg:py-20">
+      <!-- Ambient gradient orbs -->
+      <div class="pointer-events-none absolute inset-0 -z-10">
+        <div class="absolute -top-20 right-1/4 w-[500px] h-[500px] rounded-full opacity-20 blur-3xl" style="background: radial-gradient(circle, var(--kc-coral-200) 0%, transparent 70%);"></div>
+        <div class="absolute -bottom-10 left-1/3 w-[400px] h-[400px] rounded-full opacity-15 blur-3xl" style="background: radial-gradient(circle, var(--kc-teal-100) 0%, transparent 70%);"></div>
+      </div>
+
+      <div class="mx-auto max-w-6xl px-4 sm:px-6 text-center">
+        <span class="inline-flex items-center gap-2 text-[11px] font-bold tracking-[0.3em] uppercase text-(--kc-teal-600) bg-(--kc-teal-100) px-3.5 py-1.5 rounded-full border border-(--kc-teal)/20 mb-5">
+          <span class="w-1.5 h-1.5 rounded-full bg-(--kc-teal) shrink-0" />
+          Themes
+        </span>
+        <h1 class="text-[clamp(32px,5vw,56px)] font-extrabold tracking-tight leading-[1.05] mb-4 m-0">
+          <span class="text-default">Beautiful templates,</span><br>
+          <span style="background: linear-gradient(135deg, var(--kc-coral) 0%, var(--kc-teal) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">ready to launch.</span>
+        </h1>
+        <p class="text-lg text-muted max-w-xl mx-auto">
+          Professional restaurant websites built for local businesses. Pick a theme, connect ChatGPT, go live.
+        </p>
+      </div>
+    </section>
+
     <!-- ── Theme preview card ─────────────────────────────────────────────── -->
-    <section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <div class="relative overflow-hidden rounded-2xl border border-default bg-elevated">
+    <section class="mx-auto max-w-6xl px-4 py-4 sm:px-6">
+      <div class="relative overflow-hidden rounded-2xl border border-default" style="background: var(--ui-bg-elevated);">
+        <!-- Top gradient strip -->
+        <div class="absolute top-0 inset-x-0 h-0.5" style="background: linear-gradient(90deg, var(--kc-coral) 0%, var(--kc-teal) 100%);"></div>
         <!-- Iframe preview of the live demo site -->
         <div class="relative aspect-[16/10] overflow-hidden bg-zinc-950">
           <iframe
@@ -61,12 +86,17 @@
         </div>
 
         <!-- Action bar -->
-        <div class="border-t border-default bg-elevated px-6 py-4">
+        <div class="border-t border-default px-6 py-4" style="background: var(--ui-bg-elevated);">
           <div class="flex items-center justify-between gap-4">
             <!-- Left: Theme name and Free stacked -->
-            <div>
-              <p class="text-sm font-semibold text-default">Saya</p>
-              <p class="text-xs text-muted">Free</p>
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold" style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%);">
+                S
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-default">Saya</p>
+                <p class="text-xs text-muted">Free on all plans</p>
+              </div>
             </div>
 
             <!-- Right: Open demo and Try buttons -->
@@ -81,9 +111,10 @@
               </button>
               <NuxtLink
                 to="/signup"
-                class="inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-primary px-4 text-sm font-semibold text-white no-underline transition hover:opacity-90"
+                class="inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold text-white no-underline transition hover:opacity-90"
+                style="background: linear-gradient(135deg, var(--kc-coral) 0%, #e0524c 100%); box-shadow: 0 3px 12px rgba(251,116,97,0.3);"
               >
-                Try
+                Try free
                 <UIcon name="i-lucide-arrow-right" class="size-4" />
               </NuxtLink>
             </div>
@@ -110,9 +141,12 @@
 
           <!-- Feature screenshots grid -->
           <div class="mt-10 grid gap-4 sm:grid-cols-2">
-            <div v-for="feature in featureScreenshots" :key="feature.label" class="overflow-hidden rounded-xl border border-default bg-elevated">
-              <div class="flex aspect-video items-center justify-center bg-muted">
-                <UIcon :name="feature.icon" class="size-10 text-muted" />
+            <div v-for="feature in featureScreenshots" :key="feature.label" class="group overflow-hidden rounded-xl border border-default bg-elevated hover:border-(--kc-coral)/30 hover:shadow-md transition-all duration-300">
+              <div class="relative flex aspect-video items-center justify-center overflow-hidden" style="background: linear-gradient(135deg, var(--ui-bg-muted) 0%, var(--ui-bg-elevated) 100%);">
+                <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity" style="background: linear-gradient(135deg, var(--kc-coral-50) 0%, var(--kc-teal-100)/30 100%);"></div>
+                <div class="relative w-14 h-14 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%); box-shadow: 0 8px 24px rgba(31,37,71,0.2);">
+                  <UIcon :name="feature.icon" class="size-6 text-white" />
+                </div>
               </div>
               <div class="p-4">
                 <p class="text-sm font-semibold text-default">{{ feature.label }}</p>
@@ -135,41 +169,45 @@
 
         <!-- Right: sticky sidebar -->
         <div class="lg:sticky lg:top-8 lg:self-start">
-          <div class="rounded-2xl border border-default bg-elevated p-6">
-            <SayaLogoMark
-              container-class="mb-4 size-12 rounded-lg text-inverted"
-              fallback-class="flex h-full w-full items-center justify-center rounded-xl bg-inverted text-lg font-bold"
-            />
-            <h3 class="text-xl font-bold text-default">Saya</h3>
-            <p class="mt-1 text-sm text-muted">Elegant &amp; Minimal Theme</p>
+          <div class="rounded-2xl border border-default overflow-hidden" style="background: var(--ui-bg-elevated); box-shadow: 0 8px 40px rgba(31,37,71,0.08);">
+            <!-- Gradient top strip -->
+            <div class="h-1" style="background: linear-gradient(90deg, var(--kc-coral) 0%, var(--kc-teal) 100%);"></div>
+            <div class="p-6">
+              <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white text-xl font-bold mb-4" style="background: linear-gradient(135deg, var(--kc-navy) 0%, var(--kc-navy-700) 100%); box-shadow: 0 4px 12px rgba(31,37,71,0.2);">
+                S
+              </div>
+              <h3 class="text-xl font-bold text-default">Saya</h3>
+              <p class="mt-1 text-sm text-muted">Elegant &amp; Minimal Theme</p>
 
-            <div class="mt-4 rounded-lg bg-primary/5 border border-primary/10 px-4 py-3">
-              <p class="text-sm font-semibold text-primary">Free on all plans</p>
-              <p class="mt-0.5 text-xs text-muted">No purchase needed — start building immediately</p>
-            </div>
+              <div class="mt-4 rounded-lg bg-primary/10 border border-primary/20 px-4 py-3">
+                <p class="text-sm font-semibold text-primary">Free on all plans</p>
+                <p class="mt-0.5 text-xs text-muted">No purchase needed — start building immediately</p>
+              </div>
 
-            <div class="mt-6 space-y-3">
-              <NuxtLink
-                to="/signup"
-                class="flex w-full items-center justify-center gap-2 rounded-full bg-inverted px-5 py-3 text-sm font-semibold text-inverted no-underline transition hover:opacity-90"
-              >
-                Get started free
-                <UIcon name="i-heroicons-arrow-right" class="size-4" />
-              </NuxtLink>
-              <button
-                type="button"
-                class="flex w-full items-center justify-center gap-2 rounded-full border border-default px-5 py-3 text-sm font-medium text-default no-underline transition hover:bg-elevated"
-                @click="openDemoPreview"
-              >
-                <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4" />
-                View live demo
-              </button>
-            </div>
+              <div class="mt-6 space-y-3">
+                <NuxtLink
+                  to="/signup"
+                  class="flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-white no-underline transition hover:opacity-90"
+                  style="background: linear-gradient(135deg, var(--kc-coral) 0%, #e0524c 100%); box-shadow: 0 4px 16px rgba(251,116,97,0.2);"
+                >
+                  Get started free
+                  <UIcon name="i-heroicons-arrow-right" class="size-4" />
+                </NuxtLink>
+                <button
+                  type="button"
+                  class="flex w-full items-center justify-center gap-2 rounded-full border border-default px-5 py-3 text-sm font-medium text-default no-underline transition hover:bg-elevated"
+                  @click="openDemoPreview"
+                >
+                  <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-4" />
+                  View live demo
+                </button>
+              </div>
 
-            <div class="mt-6 border-t border-default pt-6 space-y-2">
-              <div v-for="spec in specs" :key="spec.label" class="flex justify-between text-sm">
-                <span class="text-muted">{{ spec.label }}</span>
-                <span class="font-medium text-default">{{ spec.value }}</span>
+              <div class="mt-6 border-t border-default pt-6 space-y-2">
+                <div v-for="spec in specs" :key="spec.label" class="flex justify-between text-sm">
+                  <span class="text-muted">{{ spec.label }}</span>
+                  <span class="font-medium text-default">{{ spec.value }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -233,12 +271,12 @@ const featureScreenshots = [
   {
     icon: 'i-heroicons-list-bullet',
     label: 'Full offerings',
-    description: 'Sections, item photos, prices, details, and availability — all editable from the dashboard.'
+    description: 'Sections, item photos, prices, details, and availability — all editable through ChatGPT.'
   },
   {
     icon: 'i-heroicons-sparkles',
-    label: 'ChowBot AI',
-    description: 'Update content, generate descriptions, publish posts, and manage your site by chatting.'
+    label: 'ChatGPT Plugin',
+    description: 'Update content, generate descriptions, publish posts, and manage your site by chatting directly in ChatGPT.'
   }
 ]
 
@@ -246,7 +284,7 @@ const included = [
   'Homepage with hero, location grid, and review highlights',
   'Location sub-pages: offerings, reviews, photos, Q&A, contact',
   'Google Business data sync (Pro plan)',
-  'ChowBot AI content management',
+  'ChatGPT Plugin for content management',
   'Reservation form',
   'Brand story / about page',
   'SEO-optimised with schema markup',

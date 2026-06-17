@@ -23,6 +23,8 @@ export interface DashboardRestaurantRow {
   primary_location_id: string | null
   default_currency: string | null
   source_locale: string | null
+  heroImageUrl?: string | null
+  locationHeroImageUrl?: string | null
 }
 
 export interface DashboardLocationRow {
@@ -85,13 +87,28 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     throw createError({ statusCode: 404, message: 'Restaurant site not found' })
   }
 
+  const siteConfig = restaurant
+    ? await db.prepare(`
+        SELECT key, value
+        FROM site_config
+        WHERE organization_id = ? AND site_id = ?
+          AND key IN ('heroImageUrl', 'locationHeroImageUrl')
+      `).bind(organization.id, restaurant.id).all<{ key: string; value: string | null }>()
+    : { results: [] as { key: string; value: string | null }[] }
+
+  const configByKey = Object.fromEntries((siteConfig.results ?? []).map((row) => [row.key, row.value]))
+
   return {
     env,
     db,
     session,
     userId: session.user.id,
     organization,
-    restaurant: restaurant ?? null
+    restaurant: restaurant ? {
+      ...restaurant,
+      heroImageUrl: configByKey.heroImageUrl ?? null,
+      locationHeroImageUrl: configByKey.locationHeroImageUrl ?? null,
+    } : null
   }
 }
 

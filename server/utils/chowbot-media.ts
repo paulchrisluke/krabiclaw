@@ -180,6 +180,8 @@ export async function extractMenuFromMediaAsset(
       const priceAmount = item.price_amount ?? item.price
       const created = await createMenuItem(
         db,
+        opts.organizationId,
+        opts.siteId,
         menu.id,
         {
           section: String(item.section || 'Menu').slice(0, 100),

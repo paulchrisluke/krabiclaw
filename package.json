@@ -96,6 +96,7 @@
     "nitro-cloudflare-dev": "^0.2.2",
     "nuxt": "^4.4.2",
     "postcss": "^8.5.13",
+    "sharp": "^0.33.5",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",

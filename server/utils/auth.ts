@@ -94,6 +94,10 @@ export function createAuth(env: CloudflareEnv) {
       oauthProvider({
         loginPage: '/oauth/login',
         consentPage: '/oauth/consent',
+        selectAccount: {
+          page: '/oauth/login',
+          shouldRedirect: async () => true,
+        },
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
         scopes: ['openid', 'offline_access', 'tenant'],
@@ -150,7 +154,8 @@ export function createAuth(env: CloudflareEnv) {
     socialProviders: {
       google: {
         clientId: env.GOOGLE_CLIENT_ID,
-        clientSecret: env.GOOGLE_CLIENT_SECRET
+        clientSecret: env.GOOGLE_CLIENT_SECRET,
+        prompt: 'select_account',
       }
     },
     session: {

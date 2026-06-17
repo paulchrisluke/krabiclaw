@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { updateModelContext, sendUiMessage, injectStyles } from '../bridge'
+import { sharedStyles } from '../theme'
 
 const VERTICALS = [
   {
@@ -14,17 +15,12 @@ const VERTICALS = [
   },
 ]
 
-const PRIMARY = '#1F2547'
-
 const styles = `
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #111; }
-  .card { padding: 20px; }
-  .title { font-size: 16px; font-weight: 700; color: ${PRIMARY}; margin-bottom: 14px; }
-  .option { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 74px; padding: 8px; border: 1.5px solid #e5e7eb; border-radius: 10px; margin-bottom: 8px; background: #fff; cursor: pointer; color: #111; text-align: left; transition: border-color 0.15s, background 0.15s; }
-  .option:hover { border-color: ${PRIMARY}; background: #f8f9ff; color: ${PRIMARY}; }
-  .option:focus-visible { outline: 2px solid ${PRIMARY}; outline-offset: 3px; }
-  .option-img { width: 64px; height: 56px; border-radius: 7px; object-fit: cover; background: #f3f4f6; flex: 0 0 auto; }
+  .title { font-size: 16px; font-weight: 700; color: var(--ui-text); margin-bottom: 14px; }
+  .option { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 74px; padding: 8px; border: 1.5px solid var(--ui-border); border-radius: 10px; margin-bottom: 8px; background: var(--ui-bg-elevated); cursor: pointer; color: var(--ui-text); text-align: left; transition: border-color 0.15s, background 0.15s; }
+  .option:hover { border-color: var(--ui-text); background: var(--ui-bg-muted); color: var(--ui-text); }
+  .option:focus-visible { outline: 2px solid var(--ui-text); outline-offset: 3px; }
+  .option-img { width: 64px; height: 56px; border-radius: 7px; object-fit: cover; background: var(--ui-bg-muted); flex: 0 0 auto; }
   .option-label { font-size: 14px; font-weight: 600; line-height: 1.25; }
 `
 
@@ -47,6 +43,6 @@ function App() {
   )
 }
 
-injectStyles(styles)
+injectStyles(sharedStyles + styles)
 const root = document.getElementById('app')!
 createRoot(root).render(<App />)

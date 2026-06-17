@@ -88,6 +88,58 @@ export const getPageContent = async (db: D1Database, organizationId: string, sit
   return results ?? []
 }
 
+async function resolveMediaFieldUrls(
+  db: D1Database,
+  siteId: string,
+  rows: SiteContent[],
+): Promise<SiteContent[]> {
+  const isMediaAssetId = (value: string | null): value is string => {
+    return typeof value === 'string' && value.length > 0 && !/^https?:\/\//i.test(value)
+  }
+
+  const mediaAssetIds = Array.from(
+    new Set(
+      rows
+        .filter((row) => row.type === 'media')
+        .map((row) => row.content ?? row.value ?? null)
+        .filter(isMediaAssetId),
+    ),
+  )
+
+  if (!mediaAssetIds.length) return rows
+
+  const placeholders = mediaAssetIds.map(() => '?').join(', ')
+  const { results } = await db
+    .prepare(
+      `SELECT id, public_url
+       FROM media_assets
+       WHERE site_id = ?
+         AND status = 'active'
+         AND id IN (${placeholders})`,
+    )
+    .bind(siteId, ...mediaAssetIds)
+    .all<{ id: string; public_url: string | null }>()
+
+  const publicUrlByAssetId = new Map<string, string | null>(
+    (results ?? []).map((asset) => [asset.id, asset.public_url]),
+  )
+
+  return rows.map((row) => {
+    if (row.type !== 'media') return row
+
+    const assetId = row.content ?? row.value ?? null
+    if (!assetId || /^https?:\/\//i.test(assetId)) return row
+
+    const publicUrl = publicUrlByAssetId.get(assetId) ?? null
+    const fallbackValue = row.value && /^https?:\/\//i.test(row.value) ? row.value : undefined
+    return {
+      ...row,
+      content: publicUrl ?? undefined,
+      value: publicUrl ?? fallbackValue,
+    }
+  })
+}
+
 export const getPublishedPageContentForLocale = async (
   db: D1Database,
   organizationId: string,
@@ -101,7 +153,9 @@ export const getPublishedPageContentForLocale = async (
   } = {},
 ): Promise<SiteContent[]> => {
   const sourceContent = await getPageContent(db, organizationId, siteId, page, opts.locationId)
-  if (!opts.locale || opts.locale === opts.sourceLocale) return sourceContent
+  if (!opts.locale || opts.locale === opts.sourceLocale) {
+    return await resolveMediaFieldUrls(db, siteId, sourceContent)
+  }
 
   let query = `
     SELECT field, content, value, type, hero_title, hero_subtitle, component, updated_at
@@ -119,7 +173,10 @@ export const getPublishedPageContentForLocale = async (
 
   const { results } = await db.prepare(query).bind(...params).all<SiteContentTranslationRow>()
   const translations = results ?? []
-  if (!translations.length) return opts.fallbackEnabled === false ? [] : sourceContent
+  if (!translations.length) {
+    const baseRows = opts.fallbackEnabled === false ? [] : sourceContent
+    return await resolveMediaFieldUrls(db, siteId, baseRows)
+  }
 
   const sourceByField = new Map(sourceContent.map(row => [row.field, row]))
   const translatedFields = new Set<string>()
@@ -151,13 +208,21 @@ export const getPublishedPageContentForLocale = async (
   }
 
   if (opts.fallbackEnabled === false) {
-    return Array.from(translatedFields)
+    return await resolveMediaFieldUrls(
+      db,
+      siteId,
+      Array.from(translatedFields)
       .map(field => sourceByField.get(field))
       .filter((row): row is SiteContent => Boolean(row))
-      .sort((a, b) => a.field.localeCompare(b.field))
+      .sort((a, b) => a.field.localeCompare(b.field)),
+    )
   }
 
-  return Array.from(sourceByField.values()).sort((a, b) => a.field.localeCompare(b.field))
+  return await resolveMediaFieldUrls(
+    db,
+    siteId,
+    Array.from(sourceByField.values()).sort((a, b) => a.field.localeCompare(b.field)),
+  )
 }
 
 export const getSiteContentField = async (db: D1Database, organizationId: string, siteId: string, locationId: string | null, page: string, field: string): Promise<SiteContent | null> => {

@@ -72,6 +72,35 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // Platform-hosted preview routes: /preview/site/[siteId]/...
+  // Token verification is deferred to the bootstrap endpoint — the middleware
+  // only resolves the site identity so composables see the correct tenant context.
+  // Only allow preview routes on platform hosts (localhost/krabiclaw.com) to prevent
+  // tenant/custom hosts from bypassing normal tenant resolution.
+  const previewRouteMatch = url.pathname.match(/^\/preview\/site\/([^/?]+)/)
+  if (previewRouteMatch && isPlatformHost(host, env)) {
+    const previewSiteId = previewRouteMatch[1]!
+    const db = (env as TenantResolutionEnv).DB
+    if (db) {
+      const previewSite = await db.prepare(`
+        SELECT s.id, s.organization_id, s.theme_id, s.brand_name,
+               COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
+        FROM sites s
+        LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
+        WHERE s.id = ? AND s.status = 'active'
+        LIMIT 1
+      `).bind(previewSiteId).first() as Pick<TenantSiteRow, 'id' | 'organization_id' | 'theme_id' | 'brand_name' | 'logo_url' | 'vertical'> | null
+      if (previewSite) {
+        event.context.siteId = previewSite.id
+        event.context.organizationId = previewSite.organization_id
+        event.context.themeId = previewSite.theme_id
+        event.context.tenantType = 'tenant'
+        event.context.site = { brand_name: previewSite.brand_name || null, logo_url: previewSite.logo_url || null, vertical: previewSite.vertical || 'restaurant' }
+        return
+      }
+    }
+  }
+
   const isPlatform = isPlatformHost(host, env)
   const isPlatformPath = isPlatformRoute(url.pathname)
 

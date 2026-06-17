@@ -2,14 +2,16 @@ export interface McpRenderResponse {
   __widget: string
   structuredContent: unknown
   fallbackText?: string
+  privateMeta?: Record<string, unknown>
 }
 
 export function renderWidget(
   widgetName: string,
   structuredContent: unknown,
   fallbackText?: string,
+  privateMeta?: Record<string, unknown>,
 ): McpRenderResponse {
-  return { __widget: widgetName, structuredContent, fallbackText }
+  return { __widget: widgetName, structuredContent, fallbackText, privateMeta }
 }
 
 export function isMcpRenderResponse(value: unknown): value is McpRenderResponse {

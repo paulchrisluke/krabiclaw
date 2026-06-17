@@ -738,10 +738,18 @@ export async function deleteMenu(
 // Create menu item
 export async function createMenuItem(
   db: D1Database,
+  organizationId: string,
+  siteId: string,
   menuId: string,
   item: CreateMenuItemRequest,
   createdBy: string,
 ): Promise<MenuItem> {
+  const menuOwner = await db
+    .prepare(`SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`)
+    .bind(menuId, organizationId, siteId)
+    .first<{ id: string }>();
+  if (!menuOwner) throw createError({ statusCode: 404, statusMessage: "Menu not found" });
+
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const slug = await uniqueSlug(db, menuId, item.name);
@@ -813,6 +821,8 @@ export async function createMenuItem(
 // Update menu item
 export async function updateMenuItem(
   db: D1Database,
+  organizationId: string,
+  siteId: string,
   menuItemId: string,
   updates: UpdateMenuItemRequest,
   updatedBy: string,
@@ -820,8 +830,14 @@ export async function updateMenuItem(
   const now = new Date().toISOString();
 
   const existing = await db
-    .prepare(`SELECT menu_id, section FROM menu_items WHERE id = ? LIMIT 1`)
-    .bind(menuItemId)
+    .prepare(`
+      SELECT mi.menu_id, mi.section
+      FROM menu_items mi
+      JOIN menus m ON mi.menu_id = m.id
+      WHERE mi.id = ? AND m.organization_id = ? AND m.site_id = ?
+      LIMIT 1
+    `)
+    .bind(menuItemId, organizationId, siteId)
     .first<{ menu_id: string; section: string | null }>();
 
   if (!existing) {
