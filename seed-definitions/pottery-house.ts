@@ -1041,36 +1041,6 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
-  const locationRows = compiledPotteryHouseSeed.locations
-    .map((location) => `  (${[
-      sqlValue(location.id),
-      sqlValue(compiledPotteryHouseSeed.identity.organizationId),
-      sqlValue(compiledPotteryHouseSeed.identity.siteId),
-      sqlValue(location.slug),
-      sqlValue(location.title),
-      sqlValue(location.city),
-      sqlJson(location.address),
-      sqlValue(location.phone),
-      sqlValue(location.email),
-      sqlValue(location.mapsUrl),
-      sqlValue(location.latitude),
-      sqlValue(location.longitude),
-      sqlValue(location.description),
-      sqlValue(location.shortDescription),
-      sqlJson(location.openingHours),
-      sqlValue(location.rating),
-      sqlValue(location.reviewCount),
-      sqlValue(location.priceLevel),
-      sqlJson(location.categories),
-      sqlValue(location.instagramUrl),
-      sqlValue(location.facebookUrl),
-      sqlValue(location.isPrimary),
-      sqlValue(location.status),
-      sqlValue(location.heroImageAssetId ?? null),
-      sqlValue(location.heroVideoAssetId ?? null),
-    ].join(', ')})`)
-    .join(',\n')
-
   const locationRowsNoHero = compiledPotteryHouseSeed.locations
     .map((location) => `  (${[
       sqlValue(location.id),
