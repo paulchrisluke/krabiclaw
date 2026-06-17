@@ -937,10 +937,26 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     minimumRole: 'editor',
     confirmRequired: false,
     inputSchema: {
-      file_id: { type: 'string', description: 'Secondary fallback plain file_id for a user-uploaded image (e.g. file_abc123). Prefer the file argument so ChatGPT can rewrite the attachment into an authorized file reference.' },
-      file: chatgptFileInput,
-      category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
-      description: { type: 'string', description: 'Description of the photo (stored as alt text).' },
+      oneOf: [
+        {
+          type: 'object',
+          required: ['file'],
+          properties: {
+            file: chatgptFileInput,
+            category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
+            description: { type: 'string', description: 'Description of the photo (stored as alt text).' },
+          },
+        },
+        {
+          type: 'object',
+          required: ['file_id'],
+          properties: {
+            file_id: { type: 'string', description: 'Secondary fallback plain file_id for a user-uploaded image (e.g. file_abc123). Prefer the file argument so ChatGPT can rewrite the attachment into an authorized file reference.' },
+            category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
+            description: { type: 'string', description: 'Description of the photo (stored as alt text).' },
+          },
+        },
+      ],
     },
     required: [],
     fileParams: ['file'],

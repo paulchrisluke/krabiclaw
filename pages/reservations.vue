@@ -22,21 +22,21 @@
 
               <!-- Name + Email -->
               <div class="grid gap-5 sm:grid-cols-2">
-                <UFormField label="Name" name="name" required>
-                  <UInput v-model="reservationForm.name" size="lg" placeholder="Your name" />
+                <UFormField :label="resCopy.nameLabel" name="name" required>
+                  <UInput v-model="reservationForm.name" size="lg" :placeholder="resCopy.namePlaceholder" />
                 </UFormField>
-                <UFormField label="Email" name="email" required>
-                  <UInput v-model="reservationForm.email" size="lg" type="email" placeholder="you@example.com" />
+                <UFormField :label="resCopy.emailLabel" name="email" required>
+                  <UInput v-model="reservationForm.email" size="lg" type="email" :placeholder="resCopy.emailPlaceholder" />
                 </UFormField>
               </div>
 
               <!-- Phone -->
-              <UFormField label="Phone" name="phone" required>
-                <UInput v-model="reservationForm.phone" size="lg" type="tel" placeholder="+66 81 234 5678" class="w-full" />
+              <UFormField :label="resCopy.phoneLabel" name="phone" required>
+                <UInput v-model="reservationForm.phone" size="lg" type="tel" :placeholder="resCopy.phonePlaceholder" class="w-full" />
               </UFormField>
 
               <!-- Date — Calendar (client-only: skips SSR of the full date grid) -->
-              <UFormField label="Date" name="date" required>
+              <UFormField :label="resCopy.dateLabel" name="date" required>
                 <div class="space-y-3">
                   <ClientOnly>
                     <UCalendar
@@ -50,27 +50,27 @@
                   <p v-if="reservationForm.date" class="text-sm font-medium text-default">
                     Selected: <span class="text-primary">{{ readableDate }}</span>
                   </p>
-                  <p v-else class="text-xs text-muted">Pick a day above to continue.</p>
+                  <p v-else class="text-xs text-muted">{{ resCopy.pickDayLabel }}</p>
                 </div>
               </UFormField>
 
               <!-- Time + Guests -->
               <div class="grid gap-5 sm:grid-cols-2">
-                <UFormField label="Time" name="time" required>
+                <UFormField :label="resCopy.timeLabel" name="time" required>
                   <USelect
                     v-model="reservationForm.time"
                     size="lg"
                     :items="timeSelectOptions"
-                    placeholder="Select time"
+                    :placeholder="resCopy.selectTimeLabel"
                     class="w-full"
                   />
                 </UFormField>
-                <UFormField label="Guests" name="guests" required>
+                <UFormField :label="resCopy.guestsLabel" name="guests" required>
                   <USelect
                     v-model="reservationForm.guests"
                     size="lg"
                     :items="guestOptions"
-                    placeholder="Select guests"
+                    :placeholder="resCopy.selectGuestsLabel"
                     class="w-full"
                   />
                 </UFormField>
@@ -78,14 +78,14 @@
 
               <!-- Special requests -->
               <UFormField
-                label="Special requests"
+                label="resCopy.specialRequestsLabel"
                 name="requests"
                 :description="resCopy.bookingNotesPlaceholder"
               >
                 <UTextarea
                   v-model="reservationForm.requests"
                   size="lg"
-                  placeholder="Tell us anything that will help us prepare for your visit."
+                  :placeholder="resCopy.specialRequestsPlaceholder"
                   :rows="3"
                   class="w-full"
                 />
@@ -110,7 +110,7 @@
               </h2>
               <p class="mt-4 text-muted">
                 We've received your request for
-                <strong class="text-default">{{ lastSubmission?.guests }} {{ Number(lastSubmission?.guests) === 1 ? 'guest' : 'guests' }}</strong>
+                <strong class="text-default">{{ lastSubmission?.guests }} {{ Number(lastSubmission?.guests) === 1 ? resCopy.guestLabel : resCopy.guestsLabelPlural }}</strong>
                 on <strong class="text-default">{{ readableLastDate }}</strong>
                 at <strong class="text-default">{{ lastSubmission?.time }}</strong>.
               </p>
@@ -146,24 +146,24 @@
           <h2 class="mb-6 text-2xl font-bold text-default md:text-3xl">{{ resCopy.reservationFormTitle }} Details</h2>
 
           <UCard class="mb-6 rounded-2xl bg-muted">
-            <h3 class="mb-4 text-lg font-semibold text-default">Contact Information</h3>
+            <h3 class="mb-4 text-lg font-semibold text-default">{{ resCopy.contactInfoHeading }}</h3>
             <div class="space-y-2">
-              <p class="text-muted"><strong class="text-default">Phone:</strong> {{ contactPhone }}</p>
-              <p class="text-muted"><strong class="text-default">Email:</strong> {{ contactEmail }}</p>
+              <p class="text-muted"><strong class="text-default">{{ resCopy.phoneLabelShort }}:</strong> {{ contactPhone }}</p>
+              <p class="text-muted"><strong class="text-default">{{ resCopy.emailLabelShort }}:</strong> {{ contactEmail }}</p>
             </div>
           </UCard>
 
           <UCard class="mb-6 rounded-2xl bg-muted">
-            <h3 class="mb-4 text-lg font-semibold text-default">{{ resCopy.reservationFormTitle }} Policies</h3>
+            <h3 class="mb-4 text-lg font-semibold text-default">{{ resCopy.reservationPoliciesHeading }}</h3>
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div v-html="policiesBody" class="text-muted" />
           </UCard>
 
           <div class="space-y-4">
             <UButton v-if="contactPhone" :to="`tel:${contactPhone?.replace(/\s/g, '') ?? ''}`" color="primary" variant="outline" class="w-full">
-              Call {{ contactPhone }}
+              {{ resCopy.callButtonLabel }} {{ contactPhone }}
             </UButton>
-            <UButton to="/contact" color="primary" variant="outline" class="w-full">Contact Form</UButton>
+            <UButton to="/contact" color="primary" variant="outline" class="w-full">{{ resCopy.contactFormButtonLabel }}</UButton>
             <UButton :to="resCopy.reservationExploreRoute" color="primary" variant="outline" class="w-full">
               {{ resCopy.reservationExploreLabel }}
             </UButton>
@@ -184,8 +184,10 @@ definePageMeta({ layout: 'saya' })
 
 const { getField } = usePageContent('reservations')
 const { site, siteId } = useTenantSite()
-const resCopy = getVerticalCopy((site as ApiValue)?.vertical)
+const { locale } = useI18n()
+const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 useBootstrap()
+const { formatDate } = useLocaleDate()
 
 // ── Calendar ──────────────────────────────────────────────────────────────
 // selectedDate is untyped to bridge the two moduleResolution instances of
@@ -200,30 +202,26 @@ watch(selectedDate, (d: unknown) => {
 
 const readableDate = computed(() => {
   if (!selectedDate.value) return ''
-  return new Date(reservationForm.value.date + 'T12:00:00').toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-  })
+  return formatDate(`${reservationForm.value.date}T12:00:00`)
 })
 
 const readableLastDate = computed(() => {
   if (!lastSubmission.value?.date) return ''
-  return new Date(lastSubmission.value.date + 'T12:00:00').toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-  })
+  return formatDate(`${lastSubmission.value.date}T12:00:00`)
 })
 
 // ── Options ───────────────────────────────────────────────────────────────
 const timeSelectOptions = ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'].map(t => ({ label: t, value: t }))
-const guestOptions = [
-  { value: '1', label: '1 Guest' },
-  { value: '2', label: '2 Guests' },
-  { value: '3', label: '3 Guests' },
-  { value: '4', label: '4 Guests' },
-  { value: '5', label: '5 Guests' },
-  { value: '6', label: '6 Guests' },
-  { value: '7', label: '7 Guests' },
-  { value: '8+', label: '8+ Guests' },
-]
+const guestOptions = computed(() => [
+  { value: '1', label: resCopy.value.oneGuestLabel },
+  { value: '2', label: `2 ${resCopy.value.guestsLabelPlural}` },
+  { value: '3', label: `3 ${resCopy.value.guestsLabelPlural}` },
+  { value: '4', label: `4 ${resCopy.value.guestsLabelPlural}` },
+  { value: '5', label: `5 ${resCopy.value.guestsLabelPlural}` },
+  { value: '6', label: `6 ${resCopy.value.guestsLabelPlural}` },
+  { value: '7', label: `7 ${resCopy.value.guestsLabelPlural}` },
+  { value: '8+', label: `8+ ${resCopy.value.guestsLabelPlural}` },
+])
 
 // ── Policies ──────────────────────────────────────────────────────────────
 const policiesBody = ref('')
@@ -303,8 +301,8 @@ useBreadcrumbSchema([
 
 const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Restaurant')
 useSeoMeta({
-  title: computed(() => `${brandName.value} | ${resCopy.reserveCta}`),
-  description: computed(() => resCopy.seoReservationDescription(brandName.value)),
+  title: computed(() => `${brandName.value} | ${resCopy.value.reserveCta}`),
+  description: computed(() => resCopy.value.seoReservationDescription(brandName.value)),
   ogImage: sharedOgImage,
   ogUrl: currentPageUrl,
   ogType: 'website'

@@ -64,14 +64,19 @@ function App() {
   const homePage = pages.find(page => page.path === '/') ?? pages[0] ?? { label: 'Home', path: '/' }
 
   const handleOpen = () => {
-    const path = homePage.path.startsWith('/') ? homePage.path : `/${homePage.path}`
-    const dest = new URL(openUrl)
-    if (isLive) {
-      dest.pathname = path
-    } else if (path !== '/') {
-      dest.pathname = `${dest.pathname.replace(/\/$/, '')}${path}`
+    try {
+      const path = homePage.path.startsWith('/') ? homePage.path : `/${homePage.path}`
+      const dest = new URL(openUrl)
+      if (isLive) {
+        dest.pathname = path
+      } else if (path !== '/') {
+        dest.pathname = `${dest.pathname.replace(/\/$/, '')}${path}`
+      }
+      openExternal(dest.toString())
+    } catch (error) {
+      console.error('Failed to open URL:', error)
+      // Provide user feedback through notification or error dialog if available
     }
-    openExternal(dest.toString())
   }
 
   const handleWhatsNext = () => {

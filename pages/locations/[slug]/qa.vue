@@ -11,13 +11,13 @@
       <!-- Compact Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
         <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
-          ← Back to {{ location?.title }}
+          ← {{ t('saya.qa_page.back_to', { title: location?.title }) }}
         </NuxtLink>
         
         <div class="flex flex-col gap-2">
-          <h1 class="saya-display-md text-default"><em class="saya-italic">Frequently</em> asked</h1>
+          <h1 class="saya-display-md text-default">{{ t('saya.qa_page.title') }}</h1>
           <p class="text-sm text-muted">
-            Q&A · {{ location?.title }}
+            {{ t('saya.qa_page.subtitle', { location: location?.title }) }}
           </p>
         </div>
       </header>
@@ -28,8 +28,8 @@
     <section class="border-b border-default border-t bg-elevated">
       <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-10 sm:px-6 lg:px-8">
         <div>
-          <p class="saya-eyebrow mb-2 text-muted">Don't see your question?</p>
-          <div class="saya-display saya-italic text-3xl text-default">Ask us — it'll show up here.</div>
+          <p class="saya-eyebrow mb-2 text-muted">{{ t('saya.qa_page.dont_see') }}</p>
+          <div class="saya-display saya-italic text-3xl text-default">{{ t('saya.qa_page.ask_us') }}</div>
         </div>
         <!-- Free-tier: trigger upgrade modal; paid: link to GMB Q&A -->
         <button
@@ -38,7 +38,7 @@
           @click="openUpgrade('qa-writeback')"
         >
           <UIcon name="i-heroicons-lock-closed" class="size-3.5" />
-          Ask a question · Pro
+          {{ t('saya.qa_page.ask_question_pro') }}
         </button>
         <a
           v-else
@@ -47,7 +47,7 @@
           rel="noopener noreferrer"
           class="inline-flex items-center rounded-full bg-default px-7 py-3.5 text-xs font-medium uppercase tracking-widest text-inverted no-underline transition hover:opacity-80"
         >
-          Ask a question →
+          {{ t('saya.qa_page.ask_question') }}
         </a>
       </div>
     </section>
@@ -58,8 +58,8 @@
         <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
           <UIcon name="i-heroicons-question-mark-circle" class="size-7" />
         </div>
-        <h3 class="mt-6 saya-display saya-italic text-3xl text-default">No questions yet.</h3>
-        <p class="mt-2 max-w-sm text-sm text-muted">Be the first to ask — our team usually responds within a few hours.</p>
+        <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ t('saya.qa_page.no_questions_title') }}</h3>
+        <p class="mt-2 max-w-sm text-sm text-muted">{{ t('saya.qa_page.no_questions_desc') }}</p>
         <div class="mt-8">
           <UButton
             v-if="isFree"
@@ -95,14 +95,14 @@
             <div class="flex-1 min-w-0">
               <p class="text-base font-medium leading-snug text-default">{{ q.question }}</p>
               <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
-                <span>Asked by {{ q.question_author }}</span>
+                <span>{{ t('saya.qa_page.asked_by', { author: q.question_author }) }}</span>
                 <span>·</span>
-                <span>{{ formatDate(q.question_date) }}</span>
+                <span>{{ formatQaDate(q.question_date) }}</span>
                 <template v-if="q.upvote_count > 0">
                   <span>·</span>
                   <span class="inline-flex items-center gap-1">
                     <UIcon name="i-heroicons-hand-thumb-up" class="size-3" />
-                    {{ q.upvote_count }} found this helpful
+                    {{ q.upvote_count }} {{ t('saya.qa_page.helpful') }}
                   </span>
                 </template>
               </div>
@@ -122,11 +122,11 @@
               <p class="text-sm leading-relaxed text-default">{{ q.answer }}</p>
               <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
                 <UBadge v-if="q.is_owner_answer" color="neutral" size="xs" class="font-semibold">
-                  {{ siteName }} · Owner
+                  {{ siteName }} · {{ t('saya.qa_page.owner') }}
                 </UBadge>
                 <span v-else>{{ q.answer_author }}</span>
                 <span>·</span>
-                <span>{{ formatDate(q.answer_date) }}</span>
+                <span>{{ formatQaDate(q.answer_date) }}</span>
               </div>
             </div>
           </div>
@@ -134,7 +134,7 @@
           <!-- Awaiting answer -->
           <div v-else class="ml-13 mt-4 flex items-center gap-2 text-xs text-muted">
             <UIcon name="i-heroicons-clock" class="size-3.5 opacity-50" />
-            Awaiting answer from the team.
+            {{ t('saya.qa_page.awaiting_answer') }}
           </div>
         </article>
       </div>
@@ -144,6 +144,8 @@
 
 <script setup lang="ts">
 definePageMeta({ layout: 'saya' })
+
+const { t } = useI18n()
 
 const route = useRoute()
 const { siteId, site } = useTenantSite()
@@ -156,6 +158,7 @@ const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.title || 'KrabiClaw')
 
 const { location, qaList } = useBootstrap()
+const { formatDate } = useLocaleDate()
 
 const qa = qaList
 
@@ -166,9 +169,9 @@ const sorted = computed(() =>
   })
 )
 
-function formatDate(ts: string | null) {
+function formatQaDate(ts: string | null) {
   if (!ts) return ''
-  return new Date(ts).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  return formatDate(ts)
 }
 
 

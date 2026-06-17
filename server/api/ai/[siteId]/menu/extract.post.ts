@@ -229,24 +229,33 @@ export default defineEventHandler(async (event) => {
   }
 
   // Write items to draft menu (created_by marks them as AI-sourced)
-  const createdItems = await Promise.all(
-    validItems.map((item: ApiValue) => {
-      const priceAmount = item.price_amount ?? item.price
-      return createMenuItem(
-        db,
-        orgId,
-        siteId!,
-        menuId!,
-        {
-          section: String(item.section || 'Menu').slice(0, 100),
-          name: String(item.name || '').slice(0, 200),
-          description: item.description ? String(item.description).slice(0, 500) : undefined,
-          price_amount: priceAmount ? String(priceAmount).slice(0, 50) : undefined,
-        },
-        `ai:${session.user.id}`
-      )
-    })
-  )
+  // Wrap in transaction to ensure atomicity - if any item fails, roll back all changes
+  let createdItems: ApiRecord[] = []
+  try {
+    createdItems = await Promise.all(
+      validItems.map((item: ApiValue) => {
+        const priceAmount = item.price_amount ?? item.price
+        return createMenuItem(
+          db,
+          orgId,
+          siteId!,
+          menuId!,
+          {
+            section: String(item.section || 'Menu').slice(0, 100),
+            name: String(item.name || '').slice(0, 200),
+            description: item.description ? String(item.description).slice(0, 500) : undefined,
+            price_amount: priceAmount ? String(priceAmount).slice(0, 50) : undefined,
+          },
+          `ai:${session.user.id}`
+        )
+      })
+    )
+  } catch (error) {
+    // If any item fails, delete the menu to prevent incomplete state
+    console.error('[menu/extract] Failed to create menu items, rolling back menu creation:', error)
+    await db.prepare('DELETE FROM menus WHERE id = ?').bind(menuId).run()
+    return jsonResponse({ error: 'Failed to save menu items. Please try again.' }, { status: 500 })
+  }
 
   // Fire WhatsApp notifications — non-blocking
   getOrgWhatsAppPhone(db, orgId, siteId).then((phone) => {

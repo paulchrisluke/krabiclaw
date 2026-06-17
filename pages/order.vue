@@ -5,17 +5,17 @@
       <div v-if="!hasOrderLinks" class="flex min-h-96 flex-col items-center justify-center gap-6 px-4 py-24 text-center">
         <UIcon name="i-heroicons-shopping-bag" class="size-12 text-muted" />
         <div>
-          <h1 class="text-2xl font-bold text-default">Online ordering not available</h1>
-          <p class="mt-2 text-muted">We'd love to see you in person.</p>
+          <h1 class="text-2xl font-bold text-default">{{ orderCopy.onlineOrderingNotAvailable }}</h1>
+          <p class="mt-2 text-muted">{{ orderCopy.wedLoveToSeeYou }}</p>
         </div>
         <UButton :to="orderCopy.ctaRoute" size="lg" color="primary" class="rounded-full">{{ orderCopy.reserveCta }}</UButton>
       </div>
 
       <template v-else>
         <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
-          <p class="saya-kicker mb-6">Order</p>
+          <p class="saya-kicker mb-6">{{ orderCopy.orderKicker }}</p>
           <h1 class="saya-display-md text-default">
-            <em class="saya-italic">{{ getField('hero.title', 'Order online') }}</em>
+            <em class="saya-italic">{{ getField('hero.title', orderCopy.orderHeroTitle) }}</em>
           </h1>
           <p v-if="getField('hero.subtitle')" class="mt-5 max-w-xl text-sm leading-relaxed text-muted">{{ getField('hero.subtitle') }}</p>
         </header>
@@ -64,7 +64,7 @@
           </div>
 
           <p class="mt-16 text-sm text-muted">
-            Prefer to {{ orderCopy.reservationWord }}?
+            {{ orderCopy.preferReservation }} {{ orderCopy.reservationWord }}?
             <NuxtLink :to="orderCopy.ctaRoute" class="font-medium text-default underline-offset-4 hover:underline">{{ orderCopy.reserveCta }} →</NuxtLink>
           </p>
         </section>
@@ -77,15 +77,16 @@
 definePageMeta({ layout: false })
 
 const { isPlatform, site } = useTenantSite()
-const orderCopy = getVerticalCopy(site?.vertical)
+const { locale } = useI18n()
+const orderCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 const { getField, locations } = useBootstrap()
 
 const allLocations = computed(() => locations.value)
 
 const platformLinks = (loc) => [
-  { label: 'Grab', url: loc.grab_url },
-  { label: 'Uber Eats', url: loc.uber_eats_url },
-  { label: 'FoodPanda', url: loc.foodpanda_url },
+  { label: orderCopy.value.grabLabel, url: loc.grab_url },
+  { label: orderCopy.value.uberEatsLabel, url: loc.uber_eats_url },
+  { label: orderCopy.value.foodpandaLabel, url: loc.foodpanda_url },
 ].filter(l => l.url)
 
 const orderableLocations = computed(() =>
@@ -99,7 +100,7 @@ const requestURL = useRequestURL()
 
 useSeoMeta({
   title: computed(() => `Order Online | ${getField('restaurant.name', 'Our Restaurant')}`),
-  description: 'Order our food online for delivery.',
+  description: computed(() => orderCopy.value.seoReservationDescription(getField('restaurant.name', 'Our Restaurant'))),
   ogImage: sharedOgImage,
   ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
 })

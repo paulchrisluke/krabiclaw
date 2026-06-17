@@ -1,13 +1,13 @@
 <template>
   <div class="min-h-screen bg-default text-default">
     <header class="mx-auto max-w-7xl px-4 pt-16 pb-10 sm:px-6 lg:px-8 text-center">
-      <h1 class="saya-display-md text-default"><em class="saya-italic">Cancel reservation</em></h1>
+      <h1 class="saya-display-md text-default"><em class="saya-italic">{{ t('saya.reservation_cancel.title') }}</em></h1>
     </header>
 
     <div class="mx-auto max-w-xl px-4 pb-24 text-center">
       <template v-if="pending">
         <UIcon name="i-heroicons-arrow-path" class="mx-auto size-12 animate-spin text-muted" />
-        <p class="mt-4 text-muted">Checking reservation details...</p>
+        <p class="mt-4 text-muted">{{ t('saya.reservation_cancel.checking') }}</p>
       </template>
 
       <template v-else-if="reservation">
@@ -17,12 +17,12 @@
               <UIcon name="i-heroicons-calendar-days" class="size-10" />
             </div>
           </div>
-          <h2 class="saya-display saya-italic text-3xl">Cancel your visit?</h2>
+          <h2 class="saya-display saya-italic text-3xl">{{ t('saya.reservation_cancel.cancel_visit') }}</h2>
           <div class="mt-6 space-y-2 border-y border-default py-6 text-sm">
-            <p><strong>Reservation for:</strong> {{ reservation.name }}</p>
-            <p><strong>Date:</strong> {{ reservation.date }}</p>
-            <p><strong>Time:</strong> {{ reservation.time }}</p>
-            <p><strong>Guests:</strong> {{ reservation.guests }}</p>
+            <p><strong>{{ t('saya.reservation_cancel.reservation_for') }}</strong> {{ reservation.name }}</p>
+            <p><strong>{{ t('saya.reservation_cancel.date') }}</strong> {{ reservation.date }}</p>
+            <p><strong>{{ t('saya.reservation_cancel.time') }}</strong> {{ reservation.time }}</p>
+            <p><strong>{{ t('saya.reservation_cancel.guests') }}</strong> {{ reservation.guests }}</p>
           </div>
           <div class="mt-10 flex flex-col gap-3">
             <UButton
@@ -34,7 +34,7 @@
               :loading="loading"
               @click="handleCancel"
             >
-              Confirm Cancellation
+              {{ t('saya.reservation_cancel.confirm') }}
             </UButton>
             <UButton
               to="/"
@@ -43,7 +43,7 @@
               block
               class="rounded-full"
             >
-              Keep Reservation
+              {{ t('saya.reservation_cancel.keep') }}
             </UButton>
           </div>
         </div>
@@ -54,19 +54,19 @@
               <UIcon name="i-heroicons-check-circle" class="size-10" />
             </div>
           </div>
-          <h2 class="saya-display saya-italic text-3xl">Reservation Cancelled</h2>
-          <p class="mt-4 text-muted">Your reservation for {{ reservation.date }} has been cancelled. We hope to see you another time!</p>
+          <h2 class="saya-display saya-italic text-3xl">{{ t('saya.reservation_cancel.cancelled_title') }}</h2>
+          <p class="mt-4 text-muted">{{ t('saya.reservation_cancel.cancelled_desc', { date: reservation.date }) }}</p>
           <div class="mt-10">
-            <UButton to="/" color="primary" variant="soft" class="rounded-full">Back to Home</UButton>
+            <UButton to="/" color="primary" variant="soft" class="rounded-full">{{ t('saya.reservation_cancel.back_home') }}</UButton>
           </div>
         </div>
       </template>
 
       <div v-else class="rounded-3xl border border-default bg-muted/20 p-12">
         <UIcon name="i-heroicons-exclamation-triangle" class="mx-auto size-12 text-error" />
-        <h2 class="mt-6 text-xl font-bold">Invalid Link</h2>
-        <p class="mt-2 text-muted">We couldn't find a reservation matching this link. It may have already been cancelled or expired.</p>
-        <UButton to="/reservations" color="primary" variant="soft" class="mt-10 rounded-full">Make a New Reservation</UButton>
+        <h2 class="mt-6 text-xl font-bold">{{ t('saya.reservation_cancel.invalid_link') }}</h2>
+        <p class="mt-2 text-muted">{{ t('saya.reservation_cancel.invalid_link_desc') }}</p>
+        <UButton to="/reservations" color="primary" variant="soft" class="mt-10 rounded-full">{{ t('saya.reservation_cancel.make_new') }}</UButton>
       </div>
     </div>
   </div>
@@ -74,6 +74,8 @@
 
 <script setup lang="ts">
 definePageMeta({ layout: 'saya' })
+
+const { t } = useI18n()
 
 const route = useRoute()
 const { siteId } = useTenantSite()
@@ -106,10 +108,10 @@ async function handleCancel() {
       }
     })
     cancelled.value = true
-    toast.add({ title: 'Reservation cancelled', color: 'success' })
+    toast.add({ title: t('saya.reservation_cancel.toast_cancelled'), color: 'success' })
   } catch (err) {
     const message = (err as { data?: { error?: string } })?.data?.error
-    toast.add({ title: 'Error', description: message || 'Failed to cancel reservation', color: 'error' })
+    toast.add({ title: t('saya.reservation_cancel.toast_error'), description: message || t('saya.reservation_cancel.toast_cancel_failed'), color: 'error' })
   } finally {
     loading.value = false
   }

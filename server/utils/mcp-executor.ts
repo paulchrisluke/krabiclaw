@@ -3,6 +3,7 @@ import { createPreviewToken } from "~/server/utils/preview-token";
 import { getFreeSiteDomain } from "~/server/utils/tenant-hosts";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { hasEntitlement } from "~/server/utils/billing";
+import { hasCredits, chargeCredits } from "~/server/utils/ai-credits";
 import {
   requestImageUpload,
   buildImageUrl,
@@ -638,12 +639,37 @@ async function generatePickerImagesForTool(
   const target = context.target;
   const pickerBase = assignmentForGeneratedTarget(target, args, context.siteName);
   const prompt = buildGeneratedImagePrompt(context);
+
+  // Check credits before generating image
+  const creditOk = await hasCredits(site.db, site.organizationId)
+  if (!creditOk) {
+    throw createError({
+      statusCode: 402,
+      statusMessage: 'No AI credits remaining. Upgrade your plan or purchase more credits.',
+    })
+  }
+
   const generated = await generateImageViaGateway(site.env as Record<string, unknown>, prompt, {
     ...generationOptionsForTarget(target),
     n: 1,
     outputFormat: "jpeg",
     outputCompression: 88,
   });
+
+  // Charge credits after successful generation
+  try {
+    await chargeCredits(site.db, site.organizationId, {
+      siteId: site.siteId,
+      action: 'image_generation',
+      model: 'gpt-image-1',
+      inputTokens: 0,
+      outputTokens: 0,
+      cfGatewayLogId: generated.cfLogId || null,
+    })
+  } catch (err) {
+    console.error('Failed to charge credits for image generation:', err)
+  }
+
   const images = await Promise.all(
     generated.images.map((image) =>
       createGeneratedMediaAsset(site, image, prompt),
@@ -1803,7 +1829,7 @@ export async function executeMcpToolCall(
       const wantsInstagram = channels.includes("instagram");
 
       if (wantsFacebook || wantsInstagram) {
-        if (!hasEntitlement(site.env, site.db, site.organizationId, "managed_service")) {
+        if (!(await hasEntitlement(site.env, site.db, site.organizationId, "managed_service"))) {
           throw createError({
             statusCode: 403,
             statusMessage:
@@ -2009,7 +2035,13 @@ export async function executeMcpToolCall(
       });
       const baseUrl = resolveMcpBaseUrl(event);
       const activationSecret = typeof site.env.CRON_SECRET === 'string' ? site.env.CRON_SECRET : '';
-      const activationToken = activationSecret ? await createMediaActivationToken(activationSecret, assetId, site.siteId) : '';
+      if (!activationSecret) {
+        throw createError({
+          statusCode: 500,
+          statusMessage: 'Server configuration error: CRON_SECRET is not configured',
+        })
+      }
+      const activationToken = await createMediaActivationToken(activationSecret, assetId, site.siteId);
       const uploadPayload = {
         asset_id: assetId,
         upload_url: upload.uploadUrl,

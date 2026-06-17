@@ -11,13 +11,13 @@
       <!-- Compact Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
         <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
-          ← Back to {{ location?.title }}
+          ← {{ $t('saya.location.back_to', { title: location?.title }) }}
         </NuxtLink>
         
         <div class="flex flex-col gap-2">
           <h1 class="saya-display-md text-default">{{ location?.title }}</h1>
           <p class="text-sm text-muted">
-            Menu · Updated {{ menuUpdated }}
+            {{ $t('saya.menu_page.updated', { date: menuUpdated }) }}
           </p>
         </div>
       </header>
@@ -25,15 +25,15 @@
 
     <!-- Loading -->
     <div v-if="menuLoading" class="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6">
-      <p class="text-muted">Loading menu…</p>
+      <p class="text-muted">{{ $t('saya.menu_page.loading') }}</p>
     </div>
 
     <!-- Empty state -->
     <div v-else-if="!hasMenu" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
-      <div class="saya-display saya-italic text-3xl text-default mb-4">Menu coming soon.</div>
-      <p class="text-sm text-muted mb-6">Our menu for {{ location?.title }} is being prepared.</p>
+      <div class="saya-display saya-italic text-3xl text-default mb-4">{{ $t('saya.menu_page.coming_soon_title') }}</div>
+      <p class="text-sm text-muted mb-6">{{ $t('saya.menu_page.coming_soon_desc', { location: location?.title }) }}</p>
       <UButton v-if="hasExperiences" to="/experiences" color="primary" variant="solid" class="rounded-full">
-        View experiences
+        {{ $t('saya.menu_page.view_experiences') }}
       </UButton>
     </div>
 
@@ -107,7 +107,7 @@
                       variant="outline"
                       size="xs"
                       class="shrink-0 font-medium"
-                    >Unavailable</UBadge>
+                    >{{ $t('saya.menu_page.unavailable') }}</UBadge>
                     <UBadge
                       v-for="tag in getDietaryTags(item)"
                       :key="tag"
@@ -129,12 +129,12 @@
 
         <!-- Allergens footer -->
         <section class="border-t border-default pt-12">
-          <p class="saya-kicker mb-4">Allergens & diet</p>
+          <p class="saya-kicker mb-4">{{ $t('saya.menu_page.allergens_title') }}</p>
           <p class="text-sm leading-relaxed text-muted">
             <strong class="font-semibold text-default">V</strong> vegetarian ·
             <strong class="font-semibold text-default">VG</strong> vegan ·
             <strong class="font-semibold text-default">GF</strong> gluten-free.
-            Please tell your server about any allergies — we adjust most dishes.
+            {{ $t('saya.menu_page.allergens_desc') }}
           </p>
         </section>
       </div>
@@ -157,12 +157,13 @@ const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.title || 'KrabiClaw')
 
 const { location, menu: bootstrapMenu, menuItemsBySection, pending: menuLoading, config: bootstrapConfig, hasExperiences } = useBootstrap()
+const { formatDate } = useLocaleDate()
 const hasMenu = computed(() => ((bootstrapMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
 
 const menuUpdated = computed(() => {
   const d = bootstrapMenu.value?.updated_at
   if (!d) return 'recently'
-  return new Date(d).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  return formatDate(d)
 })
 
 function slugifyCategory(input: string): string {

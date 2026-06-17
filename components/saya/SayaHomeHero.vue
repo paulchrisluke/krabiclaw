@@ -82,7 +82,7 @@
           size="xl"
           class="rounded-full border-white/50 text-white hover:bg-white/10"
         >
-          View Menu
+          {{ $t('saya.hero.view_menu') }}
         </UButton>
       </div>
     </div>

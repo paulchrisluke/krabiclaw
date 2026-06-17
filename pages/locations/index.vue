@@ -3,7 +3,7 @@
 
     <!-- Page header -->
     <header class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-      <p class="saya-kicker mb-6">Find us</p>
+      <p class="saya-kicker mb-6">{{ locationsCopy.findUsKicker }}</p>
       <h1 class="saya-display-md text-default">
         {{ locationsCopy.locationGroupLine(locations.length) }}
       </h1>
@@ -63,7 +63,7 @@
             <!-- Open now meta -->
             <div class="saya-eyebrow mb-5 flex items-center gap-2 text-muted">
               <span class="size-1.5 rounded-full" :class="loc.open_now ? 'bg-green-400' : 'bg-zinc-300'" />
-              {{ loc.open_now ? 'Open now' : 'Closed' }}
+              {{ loc.open_now ? locationsCopy.openNowLabel : locationsCopy.closedLabel }}
               <template v-if="loc.hours_today">· {{ loc.hours_today }}</template>
             </div>
 
@@ -76,7 +76,7 @@
 
             <!-- CTA -->
             <div class="mt-6 border-t border-default pt-5">
-              <span class="saya-eyebrow text-muted">Visit this location →</span>
+              <span class="saya-eyebrow text-muted">{{ locationsCopy.visitLocationCta }}</span>
             </div>
           </div>
         </NuxtLink>
@@ -103,7 +103,7 @@
             variant="solid"
             class="rounded-full"
           >
-            Connect Google Business to sync locations
+            {{ locationsCopy.connectGoogleLocationsCta }}
           </UButton>
         </div>
       </div>
@@ -119,7 +119,8 @@ type AddressInput = string | { addressLines?: string[]; locality?: string; admin
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 const { isAuthenticated } = useAuth()
-const locationsCopy = getVerticalCopy(unref(site)?.vertical)
+const { locale } = useI18n()
+const locationsCopy = computed(() => getVerticalCopy(unref(site)?.vertical, locale.value))
 
 const { locations, pending } = useBootstrap()
 
@@ -129,10 +130,10 @@ function formatAddress(address: AddressInput) {
   return [address.addressLines?.[0], address.locality, address.administrativeArea, address.postalCode].filter(Boolean).join(', ')
 }
 
-const placeholders = [
-  { title: 'Main Dining Room', city: 'Krabi', address: 'Connect Google Business to sync your verified address.' },
-  { title: 'Second Location', city: 'Coming Soon', address: 'Additional locations appear here when added.' }
-]
+const placeholders = computed(() => [
+  { title: locationsCopy.value.mainDiningRoomLabel, city: 'Krabi', address: locationsCopy.value.connectGoogleAddressNote },
+  { title: locationsCopy.value.secondLocationLabel, city: 'Coming Soon', address: locationsCopy.value.additionalLocationsNote }
+])
 
 const siteName = computed(() => unref(site)?.title || 'KrabiClaw')
 

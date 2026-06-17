@@ -128,6 +128,10 @@ export default defineEventHandler(async (event) => {
         status: 'failed',
         error: 'Something went wrong.',
       }, session.user.id)
+      await push({
+        type: 'error',
+        message: 'Something went wrong while processing your request.'
+      })
       throw error
     }
   })

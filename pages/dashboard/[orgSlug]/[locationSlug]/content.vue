@@ -519,6 +519,15 @@ const iframeSrc = computed(() => {
   return url.toString()
 })
 
+const previewOrigin = computed(() => {
+  if (!iframeSrc.value) return '*'
+  try {
+    return new URL(iframeSrc.value).origin
+  } catch {
+    return '*'
+  }
+})
+
 const onPageChange = async (oldPageId?: string) => {
   const previousValues = { ...currentValues.value }
   activeField.value = null
@@ -655,7 +664,7 @@ const selectField = (key: string) => {
       type: 'admin:focus',
       field: key,
       group: group.id
-    }, '*')
+    }, previewOrigin.value)
   }
 }
 
@@ -667,7 +676,7 @@ const postPreviewUpdate = () => {
     page: selectedPageId.value,
     field: activeField.value,
     value: editingValue.value
-  }, '*')
+  }, previewOrigin.value)
 }
 
 watch(editingValue, () => {

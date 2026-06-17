@@ -297,7 +297,8 @@ definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
 const { siteId, site } = useTenantSite()
-const locationIndexCopy = getVerticalCopy((site as ApiValue)?.vertical)
+const { locale } = useI18n()
+const locationIndexCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
@@ -323,8 +324,8 @@ const hasMenu = computed(() => {
   return !!(m && m.items && m.items.length > 0)
 })
 
-const primaryCtaPath = computed(() => locationIndexCopy.ctaRoute)
-const primaryCtaLabel = computed(() => locationIndexCopy.reserveCta)
+const primaryCtaPath = computed(() => locationIndexCopy.value.ctaRoute)
+const primaryCtaLabel = computed(() => locationIndexCopy.value.reserveCta)
 
 const secondaryCtaPath = computed(() => {
   if (hasMenu.value) return `/locations/${slug.value}/menu`
