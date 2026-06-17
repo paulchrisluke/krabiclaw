@@ -35,7 +35,8 @@ export async function verifyMediaActivationToken(secret: string, assetId: string
   if (!Number.isFinite(expiresAt) || !signature) return false
   if (Date.now() > expiresAt) return false
 
-  const expected = await createMediaActivationToken(secret, assetId, siteId)
+  const expectedSignature = await signActivationPayload(secret, `${assetId}.${siteId}.${expiresAt}`)
+  const expected = `${expiresAt}.${expectedSignature}`
 
   const tokenBuf = textEncoder.encode(token)
   const expectedBuf = textEncoder.encode(expected)
