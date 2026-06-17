@@ -4,9 +4,17 @@ When an internal API returns errors, nulls, or malformed data, fix the API contr
 
 ---
 
-## Platform Strategy — ChatGPT MCP App Native
+## Platform Strategy — Dual Surface
 
-KrabiClaw is a **ChatGPT MCP app**. All content creation and editing flows through the MCP server (`server/api/mcp.post.ts`). The dashboard is limited to:
+KrabiClaw supports **both** the ChatGPT MCP app and the dashboard/ChowBot surfaces.
+Content creation and editing may flow through:
+
+- The MCP server (`server/api/mcp.post.ts`)
+- Dashboard CMS pages
+- ChowBot in the dashboard
+- ChowBot over WhatsApp where applicable
+
+The dashboard is still the home for:
 
 - Billing and plan management
 - Organization settings: domains, members, general
@@ -14,9 +22,9 @@ KrabiClaw is a **ChatGPT MCP app**. All content creation and editing flows throu
 - Work requests and support
 - Analytics overview
 
-**ChowBot is fully decommissioned.** Do not add back `chowbot-agent.ts`, `chowbot-conversations.ts`, `/api/ai/[siteId]/agent`, WhatsApp webhook, or any ChowBot composable/component.
+ChowBot and dashboard CMS are supported product surfaces. Keep MCP and ChowBot aligned on the same backend source of truth; do not fork business logic or create shadow data models.
 
-The only remaining ChowBot-adjacent file is `server/utils/chowbot-media.ts`, kept for the `import_menu_from_media` MCP tool. Rename it when refactoring.
+`server/utils/chowbot-media.ts` remains valid shared infrastructure for media-driven menu import. Rename it when refactoring if a better shared name becomes obvious.
 
 **Image generation** uses ChatGPT's native `image_generation` Responses API tool.
 
@@ -34,14 +42,7 @@ Canonical generated-image contracts:
 
 Do not pass raw local file paths like `/mnt/data/...` to MCP tools.
 
-**Dashboard CMS pages** are candidates for future removal once the MCP path is fully validated as the primary editing surface. Do not invest in new features for:
-
-- Content editor
-- Menus
-- Media
-- Posts
-- Photos
-- Pages
+Dashboard CMS pages remain supported. When changing editing behavior, prefer shared server/domain utilities so MCP, dashboard CMS, ChowBot, and WhatsApp all operate on the same canonical state.
 
 ---
 

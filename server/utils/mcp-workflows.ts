@@ -434,6 +434,22 @@ export async function reorderLocationQa(
     throw new Error("At least one Q&A update is required");
   }
 
+  const placeholders = updates.map(() => "?").join(", ");
+  const validationResult = await db
+    .prepare(
+      `SELECT COUNT(*) AS valid_count FROM location_qa
+       WHERE id IN (${placeholders}) AND location_id = ? AND site_id = ? AND organization_id = ?`,
+    )
+    .bind(...updates.map((u) => u.id), locationId, siteId, organizationId)
+    .first<{ valid_count: number }>();
+
+  const validCount = validationResult?.valid_count ?? 0;
+  if (validCount !== updates.length) {
+    throw new Error(
+      `Q&A reorder failed: ${updates.length - validCount} item(s) not found or do not belong to this location.`,
+    );
+  }
+
   const now = new Date().toISOString();
   let updated = 0;
 
@@ -806,6 +822,10 @@ export async function hydrateSeededLocationForOnboarding(
     updates,
     userId,
   );
+
+  if (result.status >= 400) {
+    return result;
+  }
 
   return {
     ...result.data,

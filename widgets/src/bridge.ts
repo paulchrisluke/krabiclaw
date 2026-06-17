@@ -245,7 +245,17 @@ export function callToolWithResult<T = unknown>(
   args: Record<string, unknown>,
 ): Promise<T> {
   if (window.openai?.callTool) {
-    return Promise.resolve(window.openai.callTool(name, args) as T);
+    return Promise.resolve(window.openai.callTool(name, args)).then((raw) => {
+      const result = raw as { isError?: boolean; structuredContent?: T; content?: Array<{ text?: string }> } | T
+      if (result && typeof result === 'object' && 'isError' in result && (result as { isError?: boolean }).isError) {
+        const errText = (result as { content?: Array<{ text?: string }> }).content?.[0]?.text || `${name} failed.`
+        throw new Error(errText)
+      }
+      if (result && typeof result === 'object' && 'structuredContent' in result) {
+        return (result as { structuredContent: T }).structuredContent
+      }
+      return raw as T
+    })
   }
 
   return new Promise<T>((resolve, reject) => {

@@ -1,7 +1,11 @@
-# MCP Coverage & Dashboard Decommission Plan
+# MCP Coverage & Dual-Surface Plan
 
-The goal: ChatGPT MCP app is the primary editing surface. Dashboard is limited to billing,
-settings, domains, members, and read-only inbox triage. No feature regressions.
+This document is now a historical MCP coverage audit, not a dashboard or ChowBot removal plan.
+
+Current product stance:
+- MCP, dashboard CMS, ChowBot, and WhatsApp are all supported surfaces.
+- Editing flows should share the same server-side source of truth.
+- MCP parity work remains valuable, but it is no longer a prerequisite for deleting dashboard or ChowBot surfaces.
 
 ---
 
@@ -56,12 +60,11 @@ intentional upload surface — not a temporary workaround.
 
 ---
 
-## Dashboard Pages — Decommission Status
+## Dashboard Pages — Coverage Status
 
-### Safe to remove now (MCP fully covers, no gap)
+### MCP-covered dashboard pages
 
-These pages have complete MCP tool coverage. Remove once we confirm ChatGPT handles
-each workflow end-to-end in staging.
+These pages have complete MCP tool coverage. They may remain in the dashboard even when MCP coverage exists.
 
 | Page | Route | MCP tools |
 |---|---|---|
@@ -74,11 +77,11 @@ each workflow end-to-end in staging.
 | Order (reorder) | `[locationSlug]/order.vue` | reorder_menu_items |
 | Translations | `[orgSlug]/translations.vue` | full translation job + review + publish flow |
 
-### Keep — by design or pending removal
+### Keep — supported dashboard scope
 
 | Page | Status |
 |---|---|
-| `settings/domains.vue` | MCP tools exist — can remove or replace with ChatGPT prompt |
+| `settings/domains.vue` | MCP tools exist and the dashboard page is also supported |
 | `settings/members.vue` | Intentionally kept in CMS (user decision) |
 | `settings/billing.vue` | Stripe billing is dashboard-only by design — no MCP |
 | `settings/general.vue` | Keep as settings fallback; MCP covers `update_site_settings` already |
@@ -96,7 +99,9 @@ each workflow end-to-end in staging.
 
 ---
 
-## Files Already Removed (ChowBot decommission — June 2026)
+## Previously Removed During The June 2026 Decommission Pass
+
+The files below were removed during the June 2026 decommission push and may be restored as part of the dual-surface product strategy.
 
 - `server/utils/chowbot-agent.ts`
 - `server/utils/chowbot-conversations.ts`

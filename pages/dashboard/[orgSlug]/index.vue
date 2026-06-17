@@ -105,6 +105,7 @@
                 </p>
               </div>
 
+              <p v-if="applyError" class="text-sm text-error">{{ applyError }}</p>
               <div class="flex items-center justify-between pt-1">
                 <UButton variant="ghost" size="sm" class="text-muted" @click="placePreview = null; mapsUrl = ''">
                   Not my business
@@ -445,6 +446,7 @@ const placePreview = ref<{
 } | null>(null)
 
 const applyLoading = ref(false)
+const applyError = ref<string | null>(null)
 const completeLoading = ref(false)
 const mcpCopied = ref(false)
 
@@ -523,6 +525,7 @@ function onPaste(e: ClipboardEvent) {
 async function applyPlace() {
   if (!placePreview.value) return
   applyLoading.value = true
+  applyError.value = null
   onboardStep.value = 1
   try {
     const res = await $fetch<{ success: boolean; orgSlug: string | null }>('/api/dashboard/onboarding/setup', {
@@ -535,11 +538,13 @@ async function applyPlace() {
       return
     }
     await dashboardState.refresh()
-  } catch {
-    // Non-fatal — still advance to preview
+    onboardStep.value = 2
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Setup failed. Please try again.'
+    applyError.value = msg
+    onboardStep.value = 0
   } finally {
     applyLoading.value = false
-    onboardStep.value = 2
   }
 }
 

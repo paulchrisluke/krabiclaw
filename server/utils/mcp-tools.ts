@@ -444,7 +444,6 @@ const READ_ONLY_TOOL_NAMES = [
   'show_welcome',
   'get_current_user',
   'show_vertical_picker',
-  'import_from_maps',
   'show_generated_images',
   'list_sites',
   'show_site_preview',
@@ -519,6 +518,7 @@ const BOUNDED_WRITE_TOOL_NAMES = [
 ] as const
 
 const OPEN_WORLD_WRITE_TOOL_NAMES = [
+  'import_from_maps',
   'update_site_settings',
   'create_location',
   'update_location',
