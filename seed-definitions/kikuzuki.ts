@@ -575,15 +575,44 @@ export function renderKikuzukiMediaBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
-  return `-- BEGIN GENERATED: kikuzuki_media
-INSERT OR REPLACE INTO media_assets
-  (id, organization_id, site_id, location_id,
-   kind, provider, source,
-   cloudflare_image_id, r2_key, public_url, thumbnail_url,
-   mime_type, file_name, alt_text, category, status)
-VALUES
-${mediaRows};
+  const locationRowsNoHero = compiledKikuzukiSeed.locations
+    .map((location) => `  (${[
+      sqlValue(location.id),
+      sqlValue(identity.organizationId),
+      sqlValue(identity.siteId),
+      sqlValue(location.slug),
+      sqlValue(location.title),
+      sqlValue(location.city),
+      sqlJson(location.address),
+      sqlValue(location.phone),
+      sqlValue(location.email),
+      sqlValue(location.mapsUrl),
+      sqlValue(location.latitude),
+      sqlValue(location.longitude),
+      sqlValue(location.description),
+      sqlValue(location.shortDescription),
+      sqlJson(location.openingHours),
+      sqlValue(location.rating),
+      sqlValue(location.reviewCount),
+      sqlValue(location.priceLevel),
+      sqlJson(location.categories),
+      sqlValue(location.instagramUrl),
+      sqlValue(location.facebookUrl),
+      sqlValue(location.isPrimary),
+      sqlValue(location.status),
+      'NULL',
+      'NULL',
+    ].join(', ')})`)
+    .join(',\n')
 
+  const heroUpdates = compiledKikuzukiSeed.locations
+    .filter((l) => l.heroImageAssetId || l.heroVideoAssetId)
+    .map((l) => `UPDATE business_locations SET hero_image_asset_id = ${sqlValue(l.heroImageAssetId ?? null)}, hero_video_asset_id = ${sqlValue(l.heroVideoAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
+    .join('\n')
+
+  return `-- BEGIN GENERATED: kikuzuki_media
+-- Insert locations first (without hero asset refs) to satisfy media_assets FK,
+-- then insert media_assets, then patch hero refs back onto locations.
 INSERT OR REPLACE INTO business_locations (
   id, organization_id, site_id, slug, title, city,
   address, phone, email, maps_url,
@@ -596,7 +625,17 @@ INSERT OR REPLACE INTO business_locations (
   is_primary, status,
   hero_image_asset_id, hero_video_asset_id
 ) VALUES
-${locationRows};
+${locationRowsNoHero};
+
+INSERT OR REPLACE INTO media_assets
+  (id, organization_id, site_id, location_id,
+   kind, provider, source,
+   cloudflare_image_id, r2_key, public_url, thumbnail_url,
+   mime_type, file_name, alt_text, category, status)
+VALUES
+${mediaRows};
+
+${heroUpdates}
 
 UPDATE sites SET logo_asset_id = ${sqlValue(compiledKikuzukiSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledKikuzukiSeed.site.primaryLocationId)} WHERE id = ${sqlValue(identity.siteId)};
 -- END GENERATED: kikuzuki_media`
