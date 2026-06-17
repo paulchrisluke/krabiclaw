@@ -76,6 +76,12 @@ DELETE FROM user WHERE id IN ('user-demo', 'user_demo', 'Nfqw39lwLZ1vejIfYJv24xv
 
 -- Guard against legacy demo scripts that may have claimed the demo domains.
 DELETE FROM site_domains WHERE domain IN ('demo.localhost', 'demo.krabiclaw.com');
+-- Explicit child-row cleanup before deleting MCP fixture orgs.
+-- D1 does not reliably cascade foreign key deletes when PRAGMA foreign_keys is
+-- set at the session level via wrangler d1 execute --file, so orphaned sites
+-- from a previous CI run would cause resolveCreationOrganization to create a
+-- brand-new org (with no entitlements) instead of reusing the fixture org.
+DELETE FROM sites WHERE organization_id IN ('org-mcp-free', 'org-mcp-growth', 'org-mcp-managed');
 DELETE FROM organization WHERE id IN ('org-mcp-free', 'org-mcp-growth', 'org-mcp-managed');
 DELETE FROM user WHERE id IN ('user-mcp-free', 'user-mcp-growth', 'user-mcp-managed');
 
