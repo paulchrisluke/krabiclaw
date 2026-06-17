@@ -241,7 +241,7 @@
             </UButton>
             <UButton
               v-if="!hasOrderLinks"
-              to="/menu"
+              :to="homeCopy.viewMenuRoute"
               color="neutral"
               variant="outline"
               size="xl"
@@ -430,7 +430,7 @@
                 <div class="p-5 pt-4">
                   <p class="saya-eyebrow mb-2 text-muted">{{ homeCopy.postsEyebrow }}</p>
                   <p class="text-sm leading-relaxed text-default line-clamp-3">{{ post.text }}</p>
-                  <p class="mt-3 saya-eyebrow text-muted opacity-60">Read more →</p>
+                  <p class="mt-3 saya-eyebrow text-muted opacity-60">{{ homeCopy.readMoreCta }}</p>
                 </div>
               </article>
 
@@ -551,7 +551,7 @@
             </NuxtLink>
           </template>
           <template v-else>
-            <h2 class="saya-display-md text-default">What our guests say.</h2>
+            <h2 class="saya-display-md text-default">{{ homeCopy.whatGuestsSayLabel }}</h2>
           </template>
         </div>
 

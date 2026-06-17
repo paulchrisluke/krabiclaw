@@ -84,7 +84,7 @@ The questions should adapt to vertical:
 The chat should also narrate work:
 
 - "I pulled your address, hours, and reviews."
-- "I drafted your homepage hero."
+- "I built your homepage hero."
 - "I found 12 usable photos."
 - "I think the headline can feel stronger. Want three options?"
 
@@ -142,12 +142,12 @@ Suggested opening structure:
 - short copy: `We’ll shape the homepage, photos, story, and visitor action together. You’ll preview everything before launch.`
 - CTA: `Start building`
 
-### Phase B. Import and first draft
+### Phase B. Import and first build
 
 If Google Maps or existing business data already exists:
 
 - import immediately
-- render a first draft before asking too many questions
+- render the first version before asking too many questions
 
 If not:
 
@@ -168,13 +168,13 @@ Chat actions here:
 - import reviews
 - choose photos
 - generate hero variants if needed
-- draft page content
+- write page content
 
 The preview should appear as soon as there is enough to show.
 
 ### Phase C. Guided polish
 
-Once a draft exists, the AI should move through high-value decisions in order.
+Once initial content exists, the AI should move through high-value decisions in order.
 
 Suggested sequence:
 

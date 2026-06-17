@@ -132,7 +132,6 @@ export default defineEventHandler(async (event) => {
         type: 'error',
         message: 'Something went wrong while processing your request.'
       })
-      throw error
     }
   })
 

@@ -78,7 +78,7 @@
 
               <!-- Special requests -->
               <UFormField
-                label="resCopy.specialRequestsLabel"
+                :label="resCopy.specialRequestsLabel"
                 name="requests"
                 :description="resCopy.bookingNotesPlaceholder"
               >
@@ -106,34 +106,36 @@
               </div>
 
               <h2 class="saya-display saya-italic text-4xl text-default">
-                Thank you, {{ lastSubmission?.name }}!
+                {{ resCopy.thankYouLabel(lastSubmission?.name ?? '') }}
               </h2>
               <p class="mt-4 text-muted">
-                We've received your request for
-                <strong class="text-default">{{ lastSubmission?.guests }} {{ Number(lastSubmission?.guests) === 1 ? resCopy.guestLabel : resCopy.guestsLabelPlural }}</strong>
-                on <strong class="text-default">{{ readableLastDate }}</strong>
-                at <strong class="text-default">{{ lastSubmission?.time }}</strong>.
+                {{ resCopy.confirmationMessage(
+                  lastSubmission?.guests ?? '',
+                  Number(lastSubmission?.guests) === 1 ? resCopy.guestLabel : resCopy.guestsLabelPlural,
+                  readableLastDate,
+                  lastSubmission?.time ?? ''
+                ) }}
               </p>
               <p class="mt-2 text-sm text-muted">
-                Our team will confirm your {{ resCopy.reservationWord }} shortly via email or phone.
+                {{ resCopy.confirmSoonLabel(resCopy.reservationWord) }}
               </p>
 
               <!-- Manage reservation -->
               <div v-if="cancelUrl" class="mt-10 rounded-2xl border border-default bg-default px-6 py-5">
-                <p class="saya-eyebrow mb-1 text-muted">Manage {{ resCopy.reservationWord }}</p>
-                <p class="text-sm text-muted">Changed your plans? Cancel anytime before your visit.</p>
+                <p class="saya-eyebrow mb-1 text-muted">{{ resCopy.manageLabel(resCopy.reservationWord) }}</p>
+                <p class="text-sm text-muted">{{ resCopy.cancelAnytimeLabel }}</p>
                 <UButton :to="cancelUrl" color="error" variant="ghost" size="sm" class="mt-4 rounded-full">
                   <UIcon name="i-heroicons-x-circle" class="mr-1.5 size-4" />
-                  Cancel {{ resCopy.reservationWord }}
+                  {{ resCopy.cancelLabel(resCopy.reservationWord) }}
                 </UButton>
               </div>
 
               <div class="mt-8 flex flex-col gap-3">
                 <UButton :to="`tel:${contactPhone?.replace(/\s/g, '') ?? ''}`" color="neutral" variant="soft" class="rounded-full">
-                  Call us: {{ contactPhone }}
+                  {{ resCopy.callUsLabel(contactPhone ?? '') }}
                 </UButton>
                 <UButton color="primary" variant="ghost" size="sm" @click="resetForm">
-                  Make another {{ resCopy.reservationWord }}
+                  {{ resCopy.makeAnotherLabel(resCopy.reservationWord) }}
                 </UButton>
               </div>
             </div>

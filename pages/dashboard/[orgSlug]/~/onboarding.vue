@@ -151,7 +151,6 @@
 </template>
 
 <script setup lang="ts">
-// -nocheck
 definePageMeta({ layout: 'editor', ssr: false })
 
 const route = useRoute()
@@ -265,7 +264,7 @@ const scoreHeadline = computed(() => {
   if (computedSiteStatus.value === 'live') return 'Live and looking sharp'
   if (readinessScore.value >= 90) return 'Ready to launch'
   if (readinessScore.value >= 50) return 'Coming together'
-  if (readinessScore.value > 0) return 'Early draft'
+  if (readinessScore.value > 0) return 'In progress'
   return 'Setup · not started'
 })
 

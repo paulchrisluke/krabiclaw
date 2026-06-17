@@ -134,7 +134,7 @@ function editableFieldKeys(page: string) {
   return Object.keys(contentRegistry[page]?.fields ?? {});
 }
 
-function normalizeDraftString(value: unknown, field: string) {
+function normalizeStringField(value: unknown, field: string) {
   if (typeof value !== "string") {
     throw new Error(`Field "${field}" must be a string.`);
   }
@@ -164,17 +164,17 @@ function normalizeContentChanges(
 
       if (heroTitle !== undefined)
         heroChange.hero_title =
-          normalizeDraftString(heroTitle, "hero.hero_title") || undefined;
+          normalizeStringField(heroTitle, "hero.hero_title") || undefined;
       if (heroSubtitle !== undefined)
         heroChange.hero_subtitle =
-          normalizeDraftString(heroSubtitle, "hero.hero_subtitle") || undefined;
+          normalizeStringField(heroSubtitle, "hero.hero_subtitle") || undefined;
       if (heroImageAssetId !== undefined)
         heroChange.hero_image_asset_id =
-          normalizeDraftString(heroImageAssetId, "hero.hero_image_asset_id") ||
+          normalizeStringField(heroImageAssetId, "hero.hero_image_asset_id") ||
           undefined;
       if (heroVideoAssetId !== undefined)
         heroChange.hero_video_asset_id =
-          normalizeDraftString(heroVideoAssetId, "hero.hero_video_asset_id") ||
+          normalizeStringField(heroVideoAssetId, "hero.hero_video_asset_id") ||
           undefined;
 
       if (
@@ -190,7 +190,7 @@ function normalizeContentChanges(
 
     const heroAlias = HERO_FIELD_ALIASES[rawField];
     if (heroAlias) {
-      const value = normalizeDraftString(rawValue, rawField);
+      const value = normalizeStringField(rawValue, rawField);
       hasHeroChange = true;
       if (heroAlias === "hero.title")
         heroChange.hero_title = value || undefined;
@@ -211,7 +211,7 @@ function normalizeContentChanges(
       );
     }
 
-    normalizedFields.set(rawField, normalizeDraftString(rawValue, rawField));
+    normalizedFields.set(rawField, normalizeStringField(rawValue, rawField));
   }
 
   return { normalizedFields, heroChange, hasHeroChange };

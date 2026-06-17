@@ -497,7 +497,7 @@ const dashboardState = useDashboardRestaurant()
 
 // ── Onboarding state ──────────────────────────────────────────────────────────
 
-const onboardStepLabels = ['Find your business', 'Your site is live', 'Notifications', 'Connect to ChatGPT', 'Manage with ChatGPT']
+const onboardStepLabels = ['Find your business', 'Building', 'Your site is live', 'Notifications', 'Manage with ChatGPT']
 const onboardStep = ref(0)
 
 const { user: authUser } = useAuth()
@@ -544,11 +544,13 @@ async function saveNotifications() {
           method: 'PATCH',
           body: { whatsapp_phone: phone },
         })
+        onboardStep.value = 4
       } catch {
         notifError.value = 'Could not save your number. You can update this in settings later.'
       } finally {
         notifSaving.value = false
       }
+      return
     }
   }
   onboardStep.value = 4

@@ -69,6 +69,7 @@
           v-if="iframeSrc"
           :href="iframeSrc"
           target="_blank"
+          rel="noopener noreferrer"
           icon="i-heroicons-arrow-top-right-on-square"
           color="neutral"
           variant="ghost"
@@ -85,14 +86,14 @@
       </div>
       <p class="text-[15px] font-semibold text-highlighted">Your site shows up here.</p>
       <p class="max-w-[30ch] text-[12.5px] leading-relaxed">
-        Tell me where to start and I'll draft a homepage you can watch build in real time.
+        Tell me where to start and I'll build your homepage live as we chat.
       </p>
     </div>
 
     <!-- Preview scroll area -->
     <div v-else class="min-h-0 flex-1 overflow-auto p-5">
       <!-- Browser chrome frame -->
-      <div class="overflow-hidden rounded-2xl border border-default bg-default shadow-lg">
+      <UCard :ui="{ root: 'overflow-hidden rounded-2xl shadow-lg', body: 'p-0 sm:p-0' }">
         <!-- Chrome bar -->
         <div class="flex items-center gap-2 border-b border-default bg-elevated px-3 py-2">
           <div class="flex gap-[5px]">
@@ -134,7 +135,7 @@
             </div>
           </Transition>
         </div>
-      </div>
+      </UCard>
     </div>
   </div>
 </template>

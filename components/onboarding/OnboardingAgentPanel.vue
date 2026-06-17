@@ -12,7 +12,7 @@
         v-if="isDragging"
         class="absolute inset-0 z-10 flex items-center justify-center"
       >
-        <UCard :ui="{ root: 'border-2 border-dashed border-primary mx-8', body: 'px-8 py-10 sm:px-8 sm:py-10' }">
+        <UCard class="mx-8 border-2 border-dashed border-primary" :ui="{ body: 'px-8 py-10 sm:px-8 sm:py-10' }">
           <div class="flex flex-col items-center gap-3 text-center">
             <UIcon name="i-heroicons-arrow-up-tray" class="size-10 text-primary" />
             <p class="font-medium text-highlighted">Drop menu image or PDF</p>
@@ -195,7 +195,7 @@
       ref="fileInputRef"
       type="file"
       class="hidden"
-      accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,.txt"
+      accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
       @change="handleFileInput"
     />
   </div>
@@ -248,7 +248,7 @@ const isSetup = computed(() => !props.siteId || props.setupMode)
 
 const welcomePoints: [string, string][] = [
   ['i-heroicons-globe-alt', 'Pulls your address, hours, photos & reviews from Google'],
-  ['i-heroicons-sparkles', 'Drafts a homepage, menu and story you can watch build'],
+  ['i-heroicons-sparkles', 'Builds your homepage, menu and story as you watch'],
   ['i-heroicons-rocket-launch', 'Launches free on a krabiclaw.com address when you are ready'],
 ]
 
@@ -289,6 +289,7 @@ const dragCounter = ref(0)
 const isDragging = computed(() => dragCounter.value > 0)
 const buyingCredits = ref<number | null>(null)
 const scrollRef = ref<HTMLElement | null>(null)
+const toast = useToast()
 
 watch([messages, isLoading], async () => {
   await nextTick()
@@ -336,8 +337,14 @@ const handleFileInput = (e: Event) => {
 
 const stageFile = (file: File) => {
   const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
-  if (!allowed.includes(file.type.toLowerCase())) return
-  if (file.size > 10 * 1024 * 1024) return
+  if (!allowed.includes(file.type.toLowerCase())) {
+    toast.add({ description: 'Unsupported file type. Use JPEG, PNG, WEBP, GIF, or PDF.', color: 'error' })
+    return
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    toast.add({ description: 'File exceeds the 10 MB size limit.', color: 'error' })
+    return
+  }
   pendingFile.value = file
 }
 
@@ -394,11 +401,7 @@ const toolLabel = (name: string): string => {
 }
 
 function renderMarkdown(text: string): string {
-  const html = marked.parse(text, {
-    breaks: true,
-    gfm: true,
-  })
-  if (import.meta.server) return html
+  const html = marked.parse(text, { breaks: true, gfm: true }) as string
   return DOMPurify.sanitize(html)
 }
 </script>

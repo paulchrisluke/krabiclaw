@@ -656,19 +656,15 @@ async function generatePickerImagesForTool(
     outputCompression: 88,
   });
 
-  // Charge credits after successful generation
-  try {
-    await chargeCredits(site.db, site.organizationId, {
-      siteId: site.siteId,
-      action: 'image_generation',
-      model: 'gpt-image-1',
-      inputTokens: 0,
-      outputTokens: 0,
-      cfGatewayLogId: generated.cfLogId || null,
-    })
-  } catch (err) {
-    console.error('Failed to charge credits for image generation:', err)
-  }
+  // Charge credits before delivering the result — failure is terminal to prevent unbilled usage
+  await chargeCredits(site.db, site.organizationId, {
+    siteId: site.siteId,
+    action: 'image_generation',
+    model: 'gpt-image-1',
+    inputTokens: 0,
+    outputTokens: 0,
+    cfGatewayLogId: generated.cfLogId || null,
+  })
 
   const images = await Promise.all(
     generated.images.map((image) =>

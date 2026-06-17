@@ -98,19 +98,6 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
     }
   }
 
-  const checkDraftStatus = async () => {
-    try {
-      // Get site context from tenant
-      const tenant = await useTenantSite()
-      if (!tenant.siteId) {
-        return // silently ignore - no site context
-      }
-
-    } catch {
-      // silently ignore — not critical
-    }
-  }
-
   return {
     editMode,
     hasChanges,
@@ -125,6 +112,5 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
     queueChange,
     saveContent,
     discardChanges,
-    checkDraftStatus
   }
 }

@@ -31,6 +31,7 @@ type VerticalCopy = {
   seoExperiencesDescription: (_name: string) => string
   orderNowCta: string
   viewMenuCta: string
+  viewMenuRoute: string
   findUsKicker: string
   visitLocationCta: string
   mainLocationLabel: string
@@ -95,6 +96,14 @@ type VerticalCopy = {
   callButtonLabel: string
   contactFormButtonLabel: string
   oneGuestLabel: string
+  thankYouLabel: (_name: string) => string
+  confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) => string
+  confirmSoonLabel: (_word: string) => string
+  manageLabel: (_word: string) => string
+  cancelAnytimeLabel: string
+  callUsLabel: (_phone: string) => string
+  makeAnotherLabel: (_word: string) => string
+  cancelLabel: (_word: string) => string
 }
 
 const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
@@ -134,6 +143,7 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
         `Explore classes, tasting nights, and bookable experiences at ${_name}.`,
       orderNowCta: "Order Now",
       viewMenuCta: "View Menu",
+      viewMenuRoute: "/menu",
       findUsKicker: "Find us",
       visitLocationCta: "Visit this location →",
       mainLocationLabel: "Main location",
@@ -198,6 +208,15 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       callButtonLabel: "Call",
       contactFormButtonLabel: "Contact Form",
       oneGuestLabel: "1 Guest",
+      thankYouLabel: (_name: string) => `Thank you, ${_name}!`,
+      confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
+        `We've received your request for ${_guests} ${_guestLabel} on ${_date} at ${_time}.`,
+      confirmSoonLabel: (_word: string) => `Our team will confirm your ${_word} shortly via email or phone.`,
+      manageLabel: (_word: string) => `Manage ${_word}`,
+      cancelAnytimeLabel: "Changed your plans? Cancel anytime before your visit.",
+      callUsLabel: (_phone: string) => `Call us: ${_phone}`,
+      makeAnotherLabel: (_word: string) => `Make another ${_word}`,
+      cancelLabel: (_word: string) => `Cancel ${_word}`,
     },
     experience: {
       poweredByTagline: "experience booking sites that run themselves",
@@ -234,6 +253,7 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
         `Browse classes and bookable experiences at ${_name}.`,
       orderNowCta: "Book Now",
       viewMenuCta: "View Experiences",
+      viewMenuRoute: "/experiences",
       findUsKicker: "Find us",
       visitLocationCta: "Visit this studio →",
       mainLocationLabel: "Main studio",
@@ -298,6 +318,15 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       callButtonLabel: "Call",
       contactFormButtonLabel: "Contact Form",
       oneGuestLabel: "1 Guest",
+      thankYouLabel: (_name: string) => `Thank you, ${_name}!`,
+      confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
+        `We've received your request for ${_guests} ${_guestLabel} on ${_date} at ${_time}.`,
+      confirmSoonLabel: (_word: string) => `Our team will confirm your ${_word} shortly via email or phone.`,
+      manageLabel: (_word: string) => `Manage ${_word}`,
+      cancelAnytimeLabel: "Changed your plans? Cancel anytime before your visit.",
+      callUsLabel: (_phone: string) => `Call us: ${_phone}`,
+      makeAnotherLabel: (_word: string) => `Make another ${_word}`,
+      cancelLabel: (_word: string) => `Cancel ${_word}`,
     },
   },
   th: {
@@ -336,6 +365,7 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
         `สำรวจคลาส ชิมอาหารค่ำ และประสบการณ์ที่จองได้ที่ ${_name}`,
       orderNowCta: "สั่งออนไลน์",
       viewMenuCta: "ดูเมนู",
+      viewMenuRoute: "/menu",
       findUsKicker: "หาเรา",
       visitLocationCta: "เยี่ยมชมสาขานี้ →",
       mainLocationLabel: "สาขาหลัก",
@@ -400,6 +430,15 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       callButtonLabel: "โทร",
       contactFormButtonLabel: "แบบฟอร์มติดต่อ",
       oneGuestLabel: "1 แขก",
+      thankYouLabel: (_name: string) => `ขอบคุณ ${_name}!`,
+      confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
+        `เราได้รับคำขอของคุณสำหรับ ${_guests} ${_guestLabel} วันที่ ${_date} เวลา ${_time}`,
+      confirmSoonLabel: (_word: string) => `ทีมของเราจะยืนยัน${_word}ของคุณเร็วๆ นี้ทางอีเมลหรือโทรศัพท์`,
+      manageLabel: (_word: string) => `จัดการ${_word}`,
+      cancelAnytimeLabel: "เปลี่ยนแผนแล้วหรือ? ยกเลิกได้ทุกเมื่อก่อนมาเยือน",
+      callUsLabel: (_phone: string) => `โทรหาเรา: ${_phone}`,
+      makeAnotherLabel: (_word: string) => `สร้าง${_word}ใหม่`,
+      cancelLabel: (_word: string) => `ยกเลิก${_word}`,
     },
     experience: {
       poweredByTagline: "เว็บไซต์จองประสบการณ์ที่ดูแลตัวเองได้",
@@ -436,6 +475,7 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
         `เลือกดูคลาสและประสบการณ์ที่จองได้ที่ ${_name}`,
       orderNowCta: "จองเลย",
       viewMenuCta: "ดูประสบการณ์",
+      viewMenuRoute: "/experiences",
       findUsKicker: "หาเรา",
       visitLocationCta: "เยี่ยมชมสตูดิโอนี้ →",
       mainLocationLabel: "สตูดิโอหลัก",
@@ -500,6 +540,15 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       callButtonLabel: "โทร",
       contactFormButtonLabel: "แบบฟอร์มติดต่อ",
       oneGuestLabel: "1 แขก",
+      thankYouLabel: (_name: string) => `ขอบคุณ ${_name}!`,
+      confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
+        `เราได้รับคำขอของคุณสำหรับ ${_guests} ${_guestLabel} วันที่ ${_date} เวลา ${_time}`,
+      confirmSoonLabel: (_word: string) => `ทีมของเราจะยืนยัน${_word}ของคุณเร็วๆ นี้ทางอีเมลหรือโทรศัพท์`,
+      manageLabel: (_word: string) => `จัดการ${_word}`,
+      cancelAnytimeLabel: "เปลี่ยนแผนแล้วหรือ? ยกเลิกได้ทุกเมื่อก่อนมาเยือน",
+      callUsLabel: (_phone: string) => `โทรหาเรา: ${_phone}`,
+      makeAnotherLabel: (_word: string) => `สร้าง${_word}ใหม่`,
+      cancelLabel: (_word: string) => `ยกเลิก${_word}`,
     },
   },
 }
@@ -507,7 +556,7 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
 export function getVerticalCopy(vertical: string | null | undefined, locale: string | null | undefined = "en") {
   const v = String(vertical ?? "restaurant")
   const l = String(locale ?? "en") as LocaleCode
-  const byLocale = registry[l] ?? registry.en
+  const byLocale = Object.prototype.hasOwnProperty.call(registry, l) ? registry[l]! : registry.en
   if (Object.prototype.hasOwnProperty.call(byLocale, v)) {
     return byLocale[v as SiteVertical]
   }

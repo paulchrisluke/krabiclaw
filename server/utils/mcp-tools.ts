@@ -383,11 +383,16 @@ function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'output
   required?: string[]
   outputSchema?: Record<string, unknown>
 }): McpToolDefinition {
+  const { oneOf, anyOf, allOf, ...propertyDefs } = definition.inputSchema ?? {}
   const properties = {
     ...siteIdSchema,
-    ...(definition.inputSchema ?? {}),
+    ...propertyDefs,
   }
   const required = ['site_id', ...(definition.required ?? [])]
+  const combinators: Record<string, unknown> = {}
+  if (oneOf !== undefined) combinators.oneOf = oneOf
+  if (anyOf !== undefined) combinators.anyOf = anyOf
+  if (allOf !== undefined) combinators.allOf = allOf
   return withToolAnnotations({
     name: definition.name,
     description: definition.description,
@@ -400,6 +405,7 @@ function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'output
       properties,
       required,
       additionalProperties: true,
+      ...combinators,
     },
     outputSchema: definition.outputSchema ?? { type: 'object' },
     widgetName: definition.widgetName,

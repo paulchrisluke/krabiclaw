@@ -34,10 +34,12 @@ const styles = `
   .actions { display: flex; gap: 8px; margin-top: 12px; }
   .btn { flex: 1; }
   .loading { text-align: center; padding: 40px 20px; color: var(--ui-text-muted); font-size: 14px; }
+  .open-error { font-size: 12px; color: var(--kc-error, #e53e3e); margin-top: 6px; text-align: center; }
 `
 
 function App() {
   const [content, setContent] = useState<SiteContent | null>(null)
+  const [openError, setOpenError] = useState<string | null>(null)
 
   useEffect(() => {
     onToolResult((result) => {
@@ -64,6 +66,7 @@ function App() {
   const homePage = pages.find(page => page.path === '/') ?? pages[0] ?? { label: 'Home', path: '/' }
 
   const handleOpen = () => {
+    setOpenError(null)
     try {
       const path = homePage.path.startsWith('/') ? homePage.path : `/${homePage.path}`
       const dest = new URL(openUrl)
@@ -75,7 +78,7 @@ function App() {
       openExternal(dest.toString())
     } catch (error) {
       console.error('Failed to open URL:', error)
-      // Provide user feedback through notification or error dialog if available
+      setOpenError('Could not open the site. Please try again.')
     }
   }
 
@@ -108,6 +111,7 @@ function App() {
         <button className="btn btn-primary" onClick={handleOpen}>{isLive ? '↗ Open site' : '↗ Open preview'}</button>
         <button className="btn btn-outline" onClick={handleWhatsNext}>What's next?</button>
       </div>
+      {openError && <div className="open-error">{openError}</div>}
     </div>
   )
 }

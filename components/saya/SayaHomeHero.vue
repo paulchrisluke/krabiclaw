@@ -63,7 +63,7 @@
         </NuxtLink>
       </div>
       <div v-else class="mt-12 flex flex-wrap gap-4">
-        <UButton v-if="hasOrderLinks" to="/order" color="neutral" variant="solid" size="xl" class="rounded-full bg-white! text-black! hover:bg-zinc-100!">Order Now</UButton>
+        <UButton v-if="hasOrderLinks" to="/order" color="neutral" variant="solid" size="xl" class="rounded-full bg-white! text-black! hover:bg-zinc-100!">{{ $t('saya.cta.order_now') }}</UButton>
         <UButton
           :to="ctaRoute"
           color="neutral"

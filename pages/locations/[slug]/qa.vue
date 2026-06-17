@@ -69,7 +69,7 @@
             class="rounded-full"
             @click="openUpgrade('qa-empty')"
           >
-            Ask a question
+            {{ t('saya.qa_page.ask_question_pro') }}
           </UButton>
           <a
             v-else
@@ -78,7 +78,7 @@
             rel="noopener noreferrer"
             class="inline-flex items-center rounded-full bg-primary px-6 py-2.5 text-xs font-semibold uppercase tracking-widest text-(--primary-foreground,#fff) shadow-sm transition hover:opacity-90"
           >
-            Ask a question →
+            {{ t('saya.qa_page.ask_question') }}
           </a>
         </div>
       </div>

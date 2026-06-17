@@ -222,10 +222,12 @@ export default defineEventHandler(async (event) => {
     if (!existing) menuId = null
   }
 
+  let menuCreatedInThisRequest = false
   if (!menuId) {
     const menuName = (formData.get('menuName') as string | null)?.trim() || 'Imported Menu'
     const newMenu = await createMenu(db, orgId, siteId, { name: menuName }, session.user.id)
     menuId = newMenu.id
+    menuCreatedInThisRequest = true
   }
 
   // Write items to draft menu (created_by marks them as AI-sourced)
@@ -251,9 +253,12 @@ export default defineEventHandler(async (event) => {
       })
     )
   } catch (error) {
-    // If any item fails, delete the menu to prevent incomplete state
-    console.error('[menu/extract] Failed to create menu items, rolling back menu creation:', error)
-    await db.prepare('DELETE FROM menus WHERE id = ?').bind(menuId).run()
+    // Roll back only items; only delete the menu if it was created in this request
+    console.error('[menu/extract] Failed to create menu items, rolling back:', error)
+    await db.prepare('DELETE FROM menu_items WHERE menu_id = ?').bind(menuId).run()
+    if (menuCreatedInThisRequest) {
+      await db.prepare('DELETE FROM menus WHERE id = ?').bind(menuId).run()
+    }
     return jsonResponse({ error: 'Failed to save menu items. Please try again.' }, { status: 500 })
   }
 

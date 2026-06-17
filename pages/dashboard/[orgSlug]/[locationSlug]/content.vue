@@ -774,6 +774,7 @@ const localHasChanges = ref(false)
 const saving = ref(false)
 const discardPending = ref(false)
 const contentLoading = ref(false)
+const loadVersion = ref(0)
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {
@@ -795,12 +796,13 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 const loadPageContent = async () => {
   if (requiresLocationSelection.value) return
-
+  const version = ++loadVersion.value
   contentLoading.value = true
   try {
     const res = await $fetch<{ content: ApiRecord[] }>(
       endpointWithContentScope(`/api/dashboard/editor/content/${selectedPageId.value}`)
     )
+    if (version !== loadVersion.value) return
     const map: Record<string, string> = {}
     for (const row of res.content || []) {
       if (row.field === 'hero') {
@@ -817,11 +819,12 @@ const loadPageContent = async () => {
     }
     currentValues.value = map
   } catch (error) {
+    if (version !== loadVersion.value) return
     console.error('Failed to load page content:', error)
     toast.add({ description: 'Failed to load content', color: 'error' })
     throw error
   } finally {
-    contentLoading.value = false
+    if (version === loadVersion.value) contentLoading.value = false
   }
 }
 
