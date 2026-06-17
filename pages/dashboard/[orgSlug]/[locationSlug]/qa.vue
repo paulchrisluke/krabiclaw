@@ -65,7 +65,7 @@
             </UFormField>
             <div class="flex gap-2">
               <UButton v-if="editingId" block color="neutral" variant="ghost" @click="resetForm">Cancel</UButton>
-              <UButton block :loading="saving" :disabled="!formLocationId || !form.question.trim()" @click="saveQa">
+              <UButton block :loading="saving" :disabled="!formLocationId || formLocationId === NO_LOCATION_SELECTED || !form.question.trim()" @click="saveQa">
                 {{ editingId ? 'Save changes' : 'Add question' }}
               </UButton>
             </div>
@@ -166,7 +166,7 @@ function startEdit(item: QaRow) {
 }
 
 async function saveQa() {
-  if (!formLocationId.value) return
+  if (!formLocationId.value || formLocationId.value === NO_LOCATION_SELECTED) return
   saving.value = true
   try {
     if (editingId.value) {

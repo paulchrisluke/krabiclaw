@@ -1,4 +1,5 @@
 import type { McpToolRole } from '~/server/utils/mcp-auth'
+import { EXPERIENCE_STATUSES } from '~/server/utils/experiences'
 
 export interface McpToolDefinition {
   name: string
@@ -6,6 +7,8 @@ export interface McpToolDefinition {
   domain: string
   minimumRole: McpToolRole
   confirmRequired: boolean
+  annotations: McpToolAnnotations
+  securitySchemes: McpToolSecurityScheme[]
   requiredEntitlement?: string
   inputSchema: Record<string, unknown>
   outputSchema: Record<string, unknown>
@@ -15,6 +18,22 @@ export interface McpToolDefinition {
   widgetInvoking?: string
   widgetInvoked?: string
 }
+
+export interface McpToolAnnotations {
+  readOnlyHint: boolean
+  openWorldHint?: boolean
+  destructiveHint?: boolean
+  idempotentHint?: boolean
+}
+
+export interface McpToolSecurityScheme {
+  type: 'oauth2'
+  scopes: string[]
+}
+
+export const MCP_TOOL_SECURITY_SCHEMES: McpToolSecurityScheme[] = [
+  { type: 'oauth2', scopes: ['tenant'] },
+]
 
 // --- reusable schema fragments ---
 
@@ -147,6 +166,11 @@ const fileReferenceObject = {
   required: ['download_url', 'file_id'],
 }
 
+const chatgptFileInput = {
+  ...fileReferenceObject,
+  description: 'Authorized file reference supplied by ChatGPT after rewriting the declared top-level file argument, including a temporary download_url and file_id.',
+}
+
 const experienceObject = {
   type: 'object',
   properties: {
@@ -158,13 +182,47 @@ const experienceObject = {
     price: { type: ['string', 'null'] },
     currency: { type: ['string', 'null'] },
     capacity: { type: ['number', 'null'] },
-    status: { type: 'string' },
+    status: { type: 'string', enum: [...EXPERIENCE_STATUSES] },
     location_id: { type: ['string', 'null'] },
-    hero_image_asset_id: { type: ['string', 'null'] },
+    image_asset_id: { type: ['string', 'null'] },
+    video_asset_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
 }
+
+const experienceStatusSchema = { type: 'string', enum: [...EXPERIENCE_STATUSES] }
+
+const experienceWriteSchema = {
+  title: { type: 'string' },
+  tagline: { type: ['string', 'null'] },
+  body: { type: ['string', 'null'] },
+  image_asset_id: { type: ['string', 'null'] },
+  video_asset_id: { type: ['string', 'null'] },
+  images: {
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        url: { type: 'string' },
+        kind: { type: 'string', enum: ['image', 'video'] },
+      },
+      required: ['url', 'kind'],
+    },
+  },
+  price: { type: ['string', 'null'] },
+  duration_minutes: { type: ['number', 'null'] },
+  max_capacity: { type: ['number', 'null'] },
+  time_slots: { type: ['array', 'null'], items: { type: 'string' } },
+  available_note: { type: ['string', 'null'] },
+  status: experienceStatusSchema,
+  sort_order: { type: 'number' },
+  featured: { type: 'boolean' },
+  featured_sort_order: { type: 'number' },
+  location_id: { type: ['string', 'null'] },
+  seo_title: { type: ['string', 'null'] },
+  seo_description: { type: ['string', 'null'] },
+} as const
 
 const bookingObject = {
   type: 'object',
@@ -293,7 +351,34 @@ const siteIdSchema = {
   site_id: { type: 'string', description: 'Site ID.' },
 }
 
-function siteTool(definition: Omit<McpToolDefinition, 'inputSchema' | 'outputSchema'> & {
+const generatedImagePickerOutputSchema = {
+  type: 'object',
+  properties: {
+    title: { type: 'string' },
+    subtitle: { type: ['string', 'null'] },
+    images: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          assetId: { type: 'string' },
+          publicUrl: { type: 'string' },
+        },
+        required: ['assetId', 'publicUrl'],
+      },
+    },
+    useLabel: { type: ['string', 'null'] },
+    regenerateLabel: { type: ['string', 'null'] },
+    assignTool: { type: ['string', 'null'] },
+    assignArgs: { type: ['object', 'null'] },
+    regenerateTool: { type: ['string', 'null'] },
+    regenerateArgs: { type: ['object', 'null'] },
+    successMessage: { type: ['string', 'null'] },
+  },
+  required: ['images'],
+} as const
+
+function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'outputSchema'> & {
   inputSchema?: Record<string, unknown>
   required?: string[]
   outputSchema?: Record<string, unknown>
@@ -303,7 +388,7 @@ function siteTool(definition: Omit<McpToolDefinition, 'inputSchema' | 'outputSch
     ...(definition.inputSchema ?? {}),
   }
   const required = ['site_id', ...(definition.required ?? [])]
-  return {
+  return withToolAnnotations({
     name: definition.name,
     description: definition.description,
     domain: definition.domain,
@@ -317,15 +402,218 @@ function siteTool(definition: Omit<McpToolDefinition, 'inputSchema' | 'outputSch
       additionalProperties: true,
     },
     outputSchema: definition.outputSchema ?? { type: 'object' },
+    widgetName: definition.widgetName,
+    widgetInvoking: definition.widgetInvoking,
+    widgetInvoked: definition.widgetInvoked,
+    fileParams: definition.fileParams,
+  })
+}
+
+function globalTool(definition: RawMcpToolDefinition | McpToolDefinition): McpToolDefinition {
+  if ('annotations' in definition && 'securitySchemes' in definition) {
+    // Validate that both fields exist AND are properly structured
+    const hasValidAnnotations = definition.annotations && typeof definition.annotations === 'object'
+    const hasValidSecuritySchemes = definition.securitySchemes && Array.isArray(definition.securitySchemes) && definition.securitySchemes.length > 0
+    if (hasValidAnnotations && hasValidSecuritySchemes) {
+      return definition
+    }
+  }
+
+  return withToolAnnotations(definition)
+}
+
+type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'securitySchemes'>
+
+const READ_ONLY_DEFAULT: McpToolAnnotations = Object.freeze({
+  readOnlyHint: true,
+  idempotentHint: true,
+})
+
+function boundedWriteAnnotations(): McpToolAnnotations {
+  return { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
+}
+
+function openWorldWriteAnnotations(): McpToolAnnotations {
+  return { readOnlyHint: false, openWorldHint: true, destructiveHint: false }
+}
+
+function boundedDestructiveAnnotations(): McpToolAnnotations {
+  return { readOnlyHint: false, openWorldHint: false, destructiveHint: true }
+}
+
+function openWorldDestructiveAnnotations(): McpToolAnnotations {
+  return { readOnlyHint: false, openWorldHint: true, destructiveHint: true }
+}
+
+const READ_ONLY_TOOL_NAMES = [
+  'show_welcome',
+  'get_current_user',
+  'show_vertical_picker',
+  'show_generated_images',
+  'list_sites',
+  'show_site_preview',
+  'get_site',
+  'get_site_settings',
+  'list_locations',
+  'get_location',
+  'list_menus',
+  'get_menu',
+  'list_posts',
+  'get_post',
+  'get_site_media_assets',
+  'get_facebook_connection',
+  'get_page_fields',
+  'list_location_qa',
+  'list_location_reviews',
+  'list_experiences',
+  'get_experience',
+  'list_experience_bookings',
+  'list_locales',
+  'get_translation_inventory',
+  'list_translation_jobs',
+  'get_translation_job',
+  'get_translation_review_items',
+  'get_contact_inquiries',
+  'get_reservation_inquiries',
+  'get_notification_settings',
+  'get_google_business_connection',
+  'get_google_business_auth_url',
+  'list_google_business_accounts',
+  'list_work_requests',
+  'get_site_domains',
+  'get_site_analytics',
+] as const
+
+const BOUNDED_WRITE_TOOL_NAMES = [
+  'save_generated_image',
+  'save_generated_image_file',
+  'generate_logo',
+  'generate_home_hero_image',
+  'generate_story_image',
+  'generate_location_hero_image',
+  'generate_post_image',
+  'generate_menu_item_image',
+  'generate_experience_image',
+  'upload_user_photo',
+  'request_photo_upload',
+  'set_logo',
+  'set_home_hero_image',
+  'set_home_hero_video',
+  'set_story_image',
+  'set_location_hero_image',
+  'set_location_hero_video',
+  'set_menu_item_image',
+  'set_post_image',
+  'set_experience_image',
+  'set_experience_video',
+  'create_site',
+  'create_post',
+  'update_post',
+  'request_media_upload',
+  'confirm_media_upload',
+  'update_media_asset',
+  'import_menu_from_media',
+  'update_experience_booking',
+  'upsert_locale',
+  'start_translation_job',
+  'run_translation_job_batch',
+  'save_translation_review_item',
+  'update_notification_settings',
+  'create_work_request',
+] as const
+
+const OPEN_WORLD_WRITE_TOOL_NAMES = [
+  'import_from_maps',
+  'update_site_settings',
+  'create_location',
+  'update_location',
+  'create_menu',
+  'update_menu',
+  'create_menu_item',
+  'update_menu_item',
+  'rename_menu_section',
+  'reorder_menu_items',
+  'publish_post',
+  'publish_to_facebook',
+  'sync_facebook_page',
+  'update_page_content',
+  'update_home_hero',
+  'create_location_qa',
+  'update_location_qa',
+  'reorder_location_qa',
+  'reply_to_review',
+  'create_experience',
+  'update_experience',
+  'publish_translations',
+  'sync_google_business_locations',
+  'create_domain',
+  'set_canonical_domain',
+  'sync_domain',
+] as const
+
+const BOUNDED_DESTRUCTIVE_TOOL_NAMES = [
+  'delete_media_asset',
+] as const
+
+const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
+  'delete_location',
+  'delete_menu',
+  'delete_menu_item',
+  'delete_menu_section',
+  'delete_post',
+  'delete_content_field',
+  'delete_location_qa',
+  'delete_experience',
+  'delete_locale',
+  'delete_domain',
+] as const
+
+function buildToolAnnotationsByName() {
+  const groups = [
+    { names: READ_ONLY_TOOL_NAMES, annotations: READ_ONLY_DEFAULT },
+    { names: BOUNDED_WRITE_TOOL_NAMES, annotations: boundedWriteAnnotations() },
+    { names: OPEN_WORLD_WRITE_TOOL_NAMES, annotations: openWorldWriteAnnotations() },
+    { names: BOUNDED_DESTRUCTIVE_TOOL_NAMES, annotations: boundedDestructiveAnnotations() },
+    { names: OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES, annotations: openWorldDestructiveAnnotations() },
+  ] as const
+
+  const map = new Map<string, McpToolAnnotations>()
+  for (const group of groups) {
+    for (const name of group.names) {
+      if (map.has(name)) {
+        throw new Error(`Duplicate MCP tool annotation classification for "${name}".`)
+      }
+      map.set(name, group.annotations)
+    }
+  }
+  return map
+}
+
+const TOOL_ANNOTATIONS_BY_NAME = buildToolAnnotationsByName()
+
+function withToolAnnotations(definition: RawMcpToolDefinition): McpToolDefinition {
+  const annotations = TOOL_ANNOTATIONS_BY_NAME.get(definition.name)
+  if (!annotations) {
+    throw new Error(`Missing MCP tool annotation classification for "${definition.name}".`)
+  }
+
+  if (annotations.readOnlyHint === false) {
+    if (typeof annotations.openWorldHint !== 'boolean' || typeof annotations.destructiveHint !== 'boolean') {
+      throw new Error(`Write tool "${definition.name}" must declare openWorldHint and destructiveHint.`)
+    }
+  } else if (definition.confirmRequired) {
+    throw new Error(`Read-only MCP tool "${definition.name}" cannot require confirmation.`)
+  }
+
+  return {
+    ...definition,
+    securitySchemes: MCP_TOOL_SECURITY_SCHEMES,
+    annotations,
   }
 }
 
-function globalTool(definition: McpToolDefinition): McpToolDefinition {
-  return definition
-}
-
 export const MCP_TOOLS: McpToolDefinition[] = [
-  globalTool({
+  globalTool(withToolAnnotations({
     name: 'show_welcome',
     description: 'Show the welcome screen. Lists existing sites, exposes the current authenticated account, and renders a site picker or a "Create your first site" CTA. Call this at the start of every conversation.',
     domain: 'onboarding',
@@ -347,8 +635,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     widgetName: 'welcome-list',
     widgetInvoking: 'Loading your sites…',
     widgetInvoked: 'Sites loaded',
-  }),
-  globalTool({
+  })),
+  globalTool(withToolAnnotations({
     name: 'get_current_user',
     description: 'Get the currently authenticated KrabiClaw account identity for debugging and workflow confirmation.',
     domain: 'account',
@@ -362,8 +650,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['user'],
     },
-  }),
-  globalTool({
+  })),
+  globalTool(withToolAnnotations({
     name: 'show_vertical_picker',
     description: 'Show a clickable business-type picker widget. The user taps one option and it is sent back to the model. Call this after the user clicks "Create a new site" but before asking for their Maps URL.',
     domain: 'onboarding',
@@ -378,8 +666,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     widgetName: 'vertical-picker',
     widgetInvoking: 'Loading business types…',
     widgetInvoked: 'Choose your business type',
-  }),
-  globalTool({
+  })),
+  globalTool(withToolAnnotations({
     name: 'import_from_maps',
     description: 'Import business details from a Google Maps URL or share link. Returns business info and photos. Call this when the user provides a Maps URL during site creation.',
     domain: 'onboarding',
@@ -455,10 +743,10 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     widgetName: 'photo-album',
     widgetInvoking: 'Importing from Google Maps…',
     widgetInvoked: 'Business imported',
-  }),
-  globalTool({
+  })),
+  globalTool(withToolAnnotations({
     name: 'show_generated_images',
-    description: 'Show a carousel of AI-generated hero images for the user to pick from. Call save_generated_image first to persist each image, then pass the resulting assetId and publicUrl here.',
+    description: 'Show a carousel of AI-generated images for the user to pick from. First persist each image with save_generated_image or save_generated_image_file, then pass the resulting assetId and publicUrl here. Include target metadata when the selected image should be applied directly.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -467,38 +755,141 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         images: {
           type: 'array',
-          description: 'Array of { assetId, publicUrl } returned by save_generated_image.',
+          description: 'Array of { assetId, publicUrl } returned by save_generated_image or save_generated_image_file.',
           items: { type: 'object', properties: { assetId: { type: 'string' }, publicUrl: { type: 'string' } } },
         },
+        target: {
+          type: 'string',
+          enum: ['logo', 'home_hero', 'story_image', 'location_hero', 'post_image', 'menu_item_image', 'experience_image'],
+          description: 'Optional target that the widget should update directly after the user selects an image.',
+        },
+        site_id: { type: 'string', description: 'Required with target. Site ID that owns the target content.' },
+        location_id: { type: 'string' },
+        post_id: { type: 'string' },
+        menu_item_id: { type: 'string' },
+        experience_id: { type: 'string' },
+        title: { type: 'string', description: 'Optional widget title override.' },
+        subtitle: { type: 'string', description: 'Optional widget subtitle override.' },
+        use_label: { type: 'string', description: 'Optional label for the primary button.' },
+        regenerate_label: { type: 'string', description: 'Optional label for the secondary button.' },
       },
       required: ['images'],
       additionalProperties: true,
     },
-    outputSchema: {
-      type: 'object',
-      description: 'Renders an image carousel widget. The user selects one image and the assetId is returned.',
-      properties: {
-        images: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              assetId: { type: 'string' },
-              publicUrl: { type: 'string' },
-            },
-            required: ['assetId', 'publicUrl'],
-          },
-        },
-      },
-      required: ['images'],
-    },
+    outputSchema: generatedImagePickerOutputSchema,
     widgetName: 'image-carousel',
     widgetInvoking: 'Loading generated images…',
+    widgetInvoked: 'Pick your image',
+  })),
+  siteTool({
+    name: 'generate_logo',
+    description: 'Generate several text-free logo concepts for the current site, save them to the media library, and open an approval widget. Use this when native image_generation is unavailable or when KrabiClaw should handle logo generation end-to-end.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating logo concepts…',
+    widgetInvoked: 'Pick your logo',
+  }),
+  siteTool({
+    name: 'generate_home_hero_image',
+    description: 'Generate several homepage hero image options for the current site, save them to the media library, and open an approval widget.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating hero images…',
     widgetInvoked: 'Pick your hero image',
   }),
   siteTool({
+    name: 'generate_story_image',
+    description: 'Generate several story/about image options for the current site, save them to the media library, and open an approval widget.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating story images…',
+    widgetInvoked: 'Pick your story image',
+  }),
+  siteTool({
+    name: 'generate_location_hero_image',
+    description: 'Generate several location hero image options for a specific business location, save them to the media library, and open an approval widget.',
+    domain: 'locations',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      location_id: { type: 'string', description: 'Target location ID.' },
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    required: ['location_id'],
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating location hero images…',
+    widgetInvoked: 'Pick your location hero image',
+  }),
+  siteTool({
+    name: 'generate_post_image',
+    description: 'Generate several image options for a post, save them to the media library, and open an approval widget.',
+    domain: 'posts',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      post_id: { type: 'string', description: 'Target post ID.' },
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    required: ['post_id'],
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating post images…',
+    widgetInvoked: 'Pick your post image',
+  }),
+  siteTool({
+    name: 'generate_menu_item_image',
+    description: 'Generate several image options for a menu item, save them to the media library, and open an approval widget.',
+    domain: 'menus',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      menu_item_id: { type: 'string', description: 'Target menu item ID.' },
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    required: ['menu_item_id'],
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating menu item images…',
+    widgetInvoked: 'Pick your menu image',
+  }),
+  siteTool({
+    name: 'generate_experience_image',
+    description: 'Generate several image options for an experience, save them to the media library, and open an approval widget.',
+    domain: 'experiences',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      experience_id: { type: 'string', description: 'Target experience ID.' },
+      prompt: { type: 'string', description: 'Optional creative brief or style direction from the user.' },
+    },
+    required: ['experience_id'],
+    outputSchema: generatedImagePickerOutputSchema,
+    widgetName: 'image-carousel',
+    widgetInvoking: 'Generating experience images…',
+    widgetInvoked: 'Pick your experience image',
+  }),
+  siteTool({
     name: 'save_generated_image',
-    description: 'Upload a ChatGPT natively-generated image to Cloudflare Images and persist a media_asset record. Accepts base64 from image_generation_call.result or a base64 data URL. Returns assetId and publicUrl to pass to show_generated_images.',
+    description: 'Upload a base64-encoded image to Cloudflare Images and persist a media_asset record. Use ONLY when you already have a raw base64 string (e.g. from an external API). For ChatGPT native image_generation output, use save_generated_image_file instead — passing image_generation_call.result base64 here will be blocked by safety checks.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -519,7 +910,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'save_generated_image_file',
-    description: 'Canonical attachment/file-based generated-image handoff. Use this when the runtime has a real attachment handle instead of base64 image_generation output.',
+    description: 'Primary path for saving a ChatGPT natively-generated image. After calling image_generation, pass the resulting image as attachment_id (a file reference). This avoids safety blocks that occur when raw base64 is passed to save_generated_image.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -539,7 +930,57 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       required: ['assetId', 'publicUrl'],
     },
   }),
-  globalTool({
+  siteTool({
+    name: 'upload_user_photo',
+    description: 'Primary path for a user-provided image attachment. First inspect the attached image visually and ask the user to confirm the target site, placement, and that this exact image should be used. Only after confirmation, call this tool with file set to the ChatGPT attachment path so the host can rewrite it into an authorized file reference. Use file_id only as a secondary fallback when a rewritten file argument is unavailable. Do NOT use save_generated_image_file for user uploads; that tool is only for ChatGPT native image_generation output.',
+    domain: 'onboarding',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      file_id: { type: 'string', description: 'Secondary fallback plain file_id for a user-uploaded image (e.g. file_abc123). Prefer the file argument so ChatGPT can rewrite the attachment into an authorized file reference.' },
+      file: chatgptFileInput,
+      category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
+      description: { type: 'string', description: 'Description of the photo (stored as alt text).' },
+    },
+    required: [],
+    fileParams: ['file'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        assetId: { type: 'string' },
+        publicUrl: { type: 'string' },
+        thumbnailUrl: { type: 'string' },
+      },
+      required: ['assetId', 'publicUrl'],
+    },
+  }),
+  globalTool(withToolAnnotations({
+    name: 'request_photo_upload',
+    description: 'Secondary fallback only. Open an in-chat file picker when the user has not already attached an image in ChatGPT and still wants to provide their own photo. Prefer the native attachment flow plus upload_user_photo for the default path.',
+    domain: 'media',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    widgetName: 'photo-upload',
+    widgetInvoking: 'Opening upload form…',
+    widgetInvoked: 'Upload your photo',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...siteIdSchema,
+        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
+      },
+      required: ['site_id'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['awaiting_user_upload'] },
+      },
+      required: ['status'],
+    },
+  })),
+  globalTool(withToolAnnotations({
     name: 'list_sites',
     description: 'List the caller\'s accessible sites and current authenticated account identity.',
     domain: 'sites',
@@ -560,8 +1001,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     widgetName: 'welcome-list',
     widgetInvoking: 'Loading your sites…',
     widgetInvoked: 'Sites loaded',
-  }),
-  globalTool({
+  })),
+  globalTool(withToolAnnotations({
     name: 'create_site',
     description: 'Create a new site in the caller\'s organization.',
     domain: 'sites',
@@ -589,10 +1030,10 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['id', 'siteId', 'subdomain'],
     },
-  }),
+  })),
   siteTool({
     name: 'show_site_preview',
-    description: 'Show a live iframe preview of the newly created site. Call after create_site + create_location succeed.',
+    description: 'Show a preview of the site. Call after create_site + create_location succeed. Works before the site is publicly launched.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -604,10 +1045,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           properties: {
             id: { type: 'string' },
             name: { type: 'string' },
-            subdomain: { type: 'string' },
+            subdomain: { type: ['string', 'null'] },
             publicUrl: { type: 'string' },
+            previewUrl: { type: 'string' },
           },
-          required: ['id', 'subdomain', 'publicUrl'],
+          required: ['id', 'publicUrl', 'previewUrl'],
         },
         pages: {
           type: 'array',
@@ -627,7 +1069,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     widgetName: 'site-preview',
     widgetInvoking: 'Building your site preview…',
-    widgetInvoked: 'Your site is live!',
+    widgetInvoked: 'Site preview ready',
   }),
   siteTool({
     name: 'get_site',
@@ -726,6 +1168,26 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
+    name: 'set_logo',
+    description: 'Assign a saved media asset as the site logo. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id.',
+    domain: 'sites',
+    minimumRole: 'admin',
+    confirmRequired: false,
+    inputSchema: {
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        updated: { type: 'boolean' },
+        logo_asset_id: { type: 'string' },
+      },
+      required: ['id', 'updated', 'logo_asset_id'],
+    },
+  }),
+  siteTool({
     name: 'list_locations',
     description: 'List site locations.',
     domain: 'locations',
@@ -772,12 +1234,46 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'update_location',
-    description: 'Update a location.',
+    description: 'Update a location\'s details or assign a hero image/video. To assign a hero image: call get_site_media_assets first to find the asset id, then pass it as hero_image_asset_id here. Only provided fields are changed — omitting hero_image_asset_id leaves the existing one intact.',
     domain: 'locations',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { location_id: { type: 'string' } },
+    inputSchema: {
+      location_id: { type: 'string' },
+      hero_image_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero image for this location.' },
+      hero_video_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero video for this location.' },
+    },
     required: ['location_id'],
+    outputSchema: {
+      ...locationMutationResultObject,
+    },
+  }),
+  siteTool({
+    name: 'set_location_hero_image',
+    description: 'Assign a saved media asset as a location hero image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target location_id.',
+    domain: 'locations',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      location_id: { type: 'string' },
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['location_id', 'asset_id'],
+    outputSchema: {
+      ...locationMutationResultObject,
+    },
+  }),
+  siteTool({
+    name: 'set_location_hero_video',
+    description: 'Assign a saved video asset as a location hero video. Upload the video via the dashboard media library first, then call get_site_media_assets to find its asset id.',
+    domain: 'locations',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      location_id: { type: 'string' },
+      asset_id: { type: 'string', description: 'Active video asset id from get_site_media_assets.' },
+    },
+    required: ['location_id', 'asset_id'],
     outputSchema: {
       ...locationMutationResultObject,
     },
@@ -928,6 +1424,23 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
+    name: 'set_menu_item_image',
+    description: 'Assign a saved media asset as a menu item image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target menu_item_id.',
+    domain: 'menus',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      menu_item_id: { type: 'string' },
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['menu_item_id', 'asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: { item: menuItemObject },
+      required: ['item'],
+    },
+  }),
+  siteTool({
     name: 'delete_menu_item',
     description: 'Delete a menu item.',
     domain: 'menus',
@@ -1043,12 +1556,33 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
+    name: 'set_post_image',
+    description: 'Assign a saved media asset as a post image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target post_id.',
+    domain: 'posts',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      post_id: { type: 'string' },
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['post_id', 'asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: { post: postObject },
+      required: ['post'],
+    },
+  }),
+  siteTool({
     name: 'publish_post',
-    description: 'Publish a post to one or more channels. channels defaults to ["site"]. Pass ["site","facebook"] or ["site","instagram"] or all three to simultaneously publish to social — requires a connected Facebook Page (get_facebook_connection). Instagram additionally requires the post to have an image.',
+    description: 'Publish a post to one or more channels. channels defaults to ["site"]. Pass ["site","facebook"] or ["site","instagram"] or all three to simultaneously publish to social — requires a connected Facebook Page (get_facebook_connection). Instagram additionally requires the post to have an image. targets is accepted as a deprecated alias for channels.',
     domain: 'posts',
     minimumRole: 'editor',
     confirmRequired: true,
-    inputSchema: { post_id: { type: 'string' }, channels: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram', 'gmb'] }, description: 'Channels to publish to. Defaults to ["site"].' } },
+    inputSchema: {
+      post_id: { type: 'string' },
+      channels: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram', 'gmb'] }, description: 'Channels to publish to. Defaults to ["site"].' },
+      targets: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram', 'gmb'] }, description: 'Deprecated alias for channels. Prefer channels.' },
+    },
     required: ['post_id'],
     outputSchema: {
       type: 'object',
@@ -1071,11 +1605,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_site_media_assets',
-    description: 'List media assets (images and videos) for a site. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}/media — orgSlug comes from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
+    description: 'List media assets (images and videos) for a site. Use this first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}/media — orgSlug comes from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { kind: { type: 'string' }, location_id: { type: 'string' } },
+    inputSchema: { kind: { type: 'string', description: 'Filter by asset type: "image" or "video".' }, location_id: { type: 'string' } },
     outputSchema: {
       type: 'object',
       properties: { assets: { type: 'array', items: mediaAssetObject } },
@@ -1246,8 +1780,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
-    name: 'get_page_content',
-    description: 'Get the canonical page content used by the public renderer for one page.',
+    name: 'get_page_fields',
+    description: 'Get editable field definitions and current values for a page. Call this before update_page_content to see which fields exist and what they are set to.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1260,10 +1794,28 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         siteId: { type: 'string' },
         locationId: { type: ['string', 'null'] },
         public_path: { type: 'string' },
-        content: { type: 'array', items: { type: 'object' } },
-        editableSchema: { type: 'object' },
+        fields: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              field: { type: 'string' },
+              value: { type: ['string', 'null'] },
+              render_status: { type: 'string', enum: ['rendered', 'orphan'] },
+              editable_keys: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+        schema: {
+          type: 'object',
+          properties: {
+            page: { type: 'string' },
+            fields: { type: 'array', items: { type: 'string' } },
+            structured: { type: 'array', items: { type: 'string' } },
+          },
+        },
       },
-      required: ['page', 'siteId', 'content'],
+      required: ['page', 'siteId', 'fields'],
     },
   }),
   siteTool({
@@ -1288,7 +1840,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'update_home_hero',
-    description: 'Update the canonical homepage hero record that the public renderer uses. This avoids orphan scalar fields and writes directly to live content.',
+    description: 'Update the homepage hero (title, subtitle, hero image, or hero video). To assign an existing media asset as the hero image: call get_site_media_assets first to get its id, then pass it as image_asset_id here. Only provided fields are changed — omitting image_asset_id leaves the existing hero image intact.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1299,6 +1851,71 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       video_asset_id: { type: 'string' },
       location_id: { type: 'string' },
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        page: { type: 'string' },
+        changes_count: { type: 'number' },
+        public_path: { type: 'string' },
+      },
+      required: ['success', 'page', 'changes_count'],
+    },
+  }),
+  siteTool({
+    name: 'set_home_hero_image',
+    description: 'Assign a saved media asset as the homepage hero image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id.',
+    domain: 'content',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+      location_id: { type: 'string', description: 'Optional location scope when the homepage content is location-specific.' },
+    },
+    required: ['asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        page: { type: 'string' },
+        changes_count: { type: 'number' },
+        public_path: { type: 'string' },
+      },
+      required: ['success', 'page', 'changes_count'],
+    },
+  }),
+  siteTool({
+    name: 'set_home_hero_video',
+    description: 'Assign a saved video asset as the homepage hero video. Upload the video via the dashboard media library first, then call get_site_media_assets to find its asset id.',
+    domain: 'content',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      asset_id: { type: 'string', description: 'Active video asset id from get_site_media_assets.' },
+      location_id: { type: 'string', description: 'Optional location scope when the homepage content is location-specific.' },
+    },
+    required: ['asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        page: { type: 'string' },
+        changes_count: { type: 'number' },
+        public_path: { type: 'string' },
+      },
+      required: ['success', 'page', 'changes_count'],
+    },
+  }),
+  siteTool({
+    name: 'set_story_image',
+    description: 'Assign a saved media asset as the About page story image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id.',
+    domain: 'content',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['asset_id'],
     outputSchema: {
       type: 'object',
       properties: {
@@ -1424,20 +2041,22 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'reply_to_review',
-    description: 'Add or update the owner reply for a review.',
+    description: 'Add, update, or clear the owner reply for a review. Pass reply: null to clear an existing reply.',
     domain: 'reviews',
-    minimumRole: 'editor',
+    minimumRole: 'owner',
     confirmRequired: false,
-    inputSchema: { review_id: { type: 'string' }, reply: { type: 'string' } },
+    inputSchema: { review_id: { type: 'string' }, reply: { type: ['string', 'null'] } },
     required: ['review_id', 'reply'],
     outputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'string' },
-        reply: { type: 'string' },
+        review_id: { type: 'string' },
+        reply: { type: ['string', 'null'] },
+        replied: { type: 'boolean' },
+        cleared: { type: 'boolean' },
         updated_at: { type: 'string' },
       },
-      required: ['id', 'reply'],
+      required: ['review_id', 'replied', 'cleared', 'updated_at'],
     },
   }),
   siteTool({
@@ -1469,11 +2088,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'create_experience',
-    description: 'Create an experience.',
+    description: `Create an experience. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}.`,
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { title: { type: 'string' } },
+    inputSchema: experienceWriteSchema,
     required: ['title'],
     outputSchema: {
       type: 'object',
@@ -1483,12 +2102,46 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'update_experience',
-    description: 'Update an experience.',
+    description: `Update an experience. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}.`,
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { experience_id: { type: 'string' } },
+    inputSchema: { experience_id: { type: 'string' }, ...experienceWriteSchema },
     required: ['experience_id'],
+    outputSchema: {
+      type: 'object',
+      properties: { experience: experienceObject },
+      required: ['experience'],
+    },
+  }),
+  siteTool({
+    name: 'set_experience_image',
+    description: 'Assign a saved media asset as an experience image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target experience_id.',
+    domain: 'experiences',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      experience_id: { type: 'string' },
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['experience_id', 'asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: { experience: experienceObject },
+      required: ['experience'],
+    },
+  }),
+  siteTool({
+    name: 'set_experience_video',
+    description: 'Assign a saved video asset as an experience video. Upload the video via the dashboard media library first, then call get_site_media_assets to find its asset id.',
+    domain: 'experiences',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      experience_id: { type: 'string' },
+      asset_id: { type: 'string', description: 'Active video asset id from get_site_media_assets.' },
+    },
+    required: ['experience_id', 'asset_id'],
     outputSchema: {
       type: 'object',
       properties: { experience: experienceObject },
@@ -1800,24 +2453,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
-    name: 'update_contact_submission',
-    description: 'Update contact submission triage status.',
-    domain: 'submissions',
-    minimumRole: 'editor',
-    confirmRequired: false,
-    inputSchema: { submission_id: { type: 'string' }, status: { type: 'string' } },
-    required: ['submission_id', 'status'],
-    outputSchema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        status: { type: 'string' },
-        updated_at: { type: 'string' },
-      },
-      required: ['id', 'status'],
-    },
-  }),
-  siteTool({
     name: 'get_reservation_inquiries',
     description: 'List reservation submissions.',
     domain: 'submissions',
@@ -1827,24 +2462,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       properties: { submissions: { type: 'array', items: reservationSubmissionObject } },
       required: ['submissions'],
-    },
-  }),
-  siteTool({
-    name: 'update_reservation_submission',
-    description: 'Update reservation submission triage status.',
-    domain: 'submissions',
-    minimumRole: 'editor',
-    confirmRequired: false,
-    inputSchema: { submission_id: { type: 'string' }, status: { type: 'string' } },
-    required: ['submission_id', 'status'],
-    outputSchema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        status: { type: 'string' },
-        updated_at: { type: 'string' },
-      },
-      required: ['id', 'status'],
     },
   }),
   siteTool({
@@ -2051,6 +2668,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     domain: 'settings',
     minimumRole: 'owner',
     confirmRequired: true,
+    requiredEntitlement: 'custom_domains',
     inputSchema: {
       domain: { type: 'string', description: 'Custom domain to add, e.g. "www.example.com" or "example.com".' },
       include_www: { type: 'boolean', description: 'If true (default), provision both www and the apex domain as a pair.' },
@@ -2182,6 +2800,15 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
 ].sort((a, b) => a.name.localeCompare(b.name))
+
+{
+  const toolNames = new Set(MCP_TOOLS.map((tool) => tool.name))
+  for (const name of TOOL_ANNOTATIONS_BY_NAME.keys()) {
+    if (!toolNames.has(name)) {
+      console.warn(`MCP tool annotation classification exists for unknown tool "${name}".`)
+    }
+  }
+}
 
 export function getMcpTool(name: string) {
   return MCP_TOOLS.find((tool) => tool.name === name) ?? null

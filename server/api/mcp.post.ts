@@ -1,19 +1,51 @@
-import { createError, getHeader, getRequestURL, setResponseHeader } from 'h3'
-import { asMcpError, mcpFailure, mcpProtocolError, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, readMcpRequest } from '~/server/utils/mcp-protocol'
-import { executeMcpToolCall } from '~/server/utils/mcp-executor'
-import { isMcpRenderResponse } from '~/server/utils/mcp-render'
-import { getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies } from '~/server/utils/mcp-auth'
-import { MCP_TOOLS } from '~/server/utils/mcp-tools'
+import { createError, getHeader, getRequestURL, setResponseHeader } from "h3";
+import {
+  asMcpError,
+  mcpFailure,
+  mcpProtocolError,
+  mcpSuccess,
+  MCP_ERROR,
+  MCP_PROTOCOL_VERSION,
+  readMcpRequest,
+} from "~/server/utils/mcp-protocol";
+import { executeMcpToolCall } from "~/server/utils/mcp-executor";
+import { isMcpRenderResponse } from "~/server/utils/mcp-render";
+import {
+  getActiveEntitlements,
+  getVisibleSiteContext,
+  requireMcpUser,
+  roleSatisfies,
+} from "~/server/utils/mcp-auth";
+import { MCP_TOOLS } from "~/server/utils/mcp-tools";
+import { cloudflareEnv } from "~/server/utils/api-response";
 
-const WIDGET_RESOURCE_MIME_TYPE = 'text/html;profile=mcp-app'
+const WIDGET_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 
 // Increment this whenever widgets are changed to bust ChatGPT's ui:// cache.
 // ChatGPT caches widget resources by URI, so the same ui://widget/foo.html
 // URI will continue to serve the old widget until the URI changes.
-const WIDGET_VERSION = 'v4'
+const WIDGET_VERSION = "v9";
+
+// Keep global widget rendering conservative, then selectively enable stable tools below.
+const WIDGETS_ENABLED = false;
+const ENABLED_WIDGET_TOOLS = new Set([
+  "show_welcome",
+  "request_photo_upload",
+  "show_generated_images",
+  "generate_logo",
+  "generate_home_hero_image",
+  "generate_story_image",
+  "generate_location_hero_image",
+  "generate_post_image",
+  "generate_menu_item_image",
+  "generate_experience_image",
+  "show_vertical_picker",
+  "import_from_maps",
+  "show_site_preview",
+]);
 
 function widgetResourceUri(name: string) {
-  return `ui://widget/${name}@${WIDGET_VERSION}.html`
+  return `ui://widget/${name}@${WIDGET_VERSION}.html`;
 }
 
 // Prefer BETTER_AUTH_URL from Cloudflare env — it is set correctly per environment
@@ -21,84 +53,181 @@ function widgetResourceUri(name: string) {
 // Falling back to the raw request URL origin can return a Workers internal hostname
 // on Cloudflare, which the ChatGPT sandbox then blocks in CSP.
 function resolveBaseUrl(event: Parameters<typeof getRequestURL>[0]): string {
-  const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
-  return (cfEnv?.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(/\/$/, '')
+  const cfEnv = cloudflareEnv(event);
+  return (cfEnv.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(
+    /\/$/,
+    "",
+  );
+}
+
+function oauthChallenge(baseUrl: string, error = "invalid_token", description = "Connect KrabiClaw to continue.") {
+  return `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource", error="${error}", error_description="${description}"`
+}
+
+function setMcpAuthChallenge(event: Parameters<typeof getRequestURL>[0], challenge: string) {
+  setResponseHeader(event, "WWW-Authenticate", challenge)
+}
+
+function mcpAuthRequiredResult(challenge: string) {
+  return {
+    isError: true,
+    content: [
+      {
+        type: "text",
+        text: "Authentication required: connect KrabiClaw to continue.",
+      },
+    ],
+    _meta: {
+      "mcp/www_authenticate": [challenge],
+    },
+  }
 }
 
 export default defineEventHandler(async (event) => {
-  let requestId: string | number | null | undefined
+  let requestId: string | number | null | undefined;
+  let requestMethod: string | undefined;
   try {
     // Return 401 with WWW-Authenticate before any protocol parsing so OAuth
     // clients (e.g. ChatGPT) can discover the authorization server on first touch.
     // Session-cookie requests (dashboard, E2E tests) have a Cookie header and skip this.
-    if (!getHeader(event, 'authorization')?.startsWith('Bearer ') && !getHeader(event, 'cookie')) {
-      const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
-      const baseUrl = (cfEnv?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
-      setResponseStatus(event, 401)
-      setResponseHeader(event, 'WWW-Authenticate',
-        `Bearer realm="${baseUrl}/api/mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`)
-      return mcpFailure(null, { code: MCP_ERROR.invalidRequest, message: 'Authentication required.' })
+    const cfEnv = cloudflareEnv(event);
+    const baseUrl = (
+      cfEnv.BETTER_AUTH_URL ?? "https://krabiclaw.com"
+    ).replace(/\/$/, "");
+    const authChallenge = oauthChallenge(baseUrl);
+    if (
+      !getHeader(event, "authorization")?.startsWith("Bearer ") &&
+      !getHeader(event, "cookie")
+    ) {
+      const body = await readBody(event);
+      // Lenient extraction only — full validation happens after auth succeeds.
+      // readMcpRequest would throw on discovery payloads missing version/method.
+      const rawBody = body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : null;
+      requestId = rawBody?.id as string | number | undefined;
+      requestMethod = rawBody?.method as string | undefined;
+      setResponseStatus(event, 401);
+      setMcpAuthChallenge(event, authChallenge);
+      if (requestMethod === "tools/call") {
+        return mcpSuccess(requestId ?? null, mcpAuthRequiredResult(authChallenge));
+      }
+      return mcpFailure(requestId ?? null, {
+        code: MCP_ERROR.invalidRequest,
+        message: "Authentication required.",
+      });
     }
 
-    const body = await readBody(event)
+    const body = await readBody(event);
 
     // ChatGPT occasionally sends an empty-body health probe — ignore silently.
-    if (!body || (typeof body === 'object' && Object.keys(body).length === 0)) {
-      setResponseStatus(event, 200)
-      return ''
+    if (!body || (typeof body === "object" && Object.keys(body).length === 0)) {
+      setResponseStatus(event, 200);
+      return "";
     }
 
-    const request = readMcpRequest(event, body)
-    requestId = request.id
+    const request = readMcpRequest(event, body);
+    requestId = request.id;
+    requestMethod = request.method;
 
     // MCP protocol handshake — required before any tools/list or tools/call
-    if (request.method === 'initialize') {
-      await requireMcpUser(event)
+    if (request.method === "initialize") {
+      await requireMcpUser(event);
       return mcpSuccess(request.id, {
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: {}, resources: {}, prompts: {} },
-        serverInfo: { name: 'krabiclaw-mcp', version: 'phase-5' },
+        serverInfo: { name: "krabiclaw-mcp", version: "phase-5" },
         instructions: `KrabiClaw — manage your restaurant or business website through this connection.
 
-Start every conversation by calling show_welcome to discover the user's sites and display the interactive site picker widget.
-- If they have 0 sites, start the Onboarding Flow: 
+## Image work — applies at any point in the conversation
+Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience cover, story image, or any content section):
+
+**AI-generated (user asks you to generate or create an image):**
+1. Call image_generation natively with model gpt-image-1 and a detailed prompt tailored to the business.
+2. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
+3. Call show_generated_images with the assetId and publicUrl returned by save_generated_image_file.
+4. After the user approves, assign with the appropriate tool: set_home_hero_image, set_logo, set_story_image, set_location_hero_image, set_post_image, or set_experience_image.
+5. If the user wants changes, call image_generation again with a revised prompt and repeat from step 2.
+
+This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
+
+**Guaranteed KrabiClaw fallback and end-to-end path:**
+- If native image_generation is unavailable, or if the user wants KrabiClaw to handle generation inside the app from start to finish, call the specific backend tool instead: generate_logo, generate_home_hero_image, generate_story_image, generate_location_hero_image, generate_post_image, generate_menu_item_image, or generate_experience_image.
+- Those tools generate several options on KrabiClaw's backend, save them into the site media library, and open a picker widget that can apply the selected image directly.
+
+**User-uploaded (user provides their own photo):**
+- Primary happy path:
+  1. When the user has already attached an image in ChatGPT, inspect it visually first. Do not upload or mutate anything yet.
+  2. If the intended use is obvious, describe it briefly and ask the user to confirm the target site, the target placement, and that the attached image should be used.
+  3. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
+  4. After confirmation, call upload_user_photo({ site_id, file: <attached local file argument>, category, description }).
+  5. The file argument is the primary contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not fabricate download URLs or wrap fake file objects.
+  6. After upload_user_photo returns assetId/publicUrl, call the appropriate assignment tool such as set_home_hero_image, set_logo, set_story_image, set_location_hero_image, set_post_image, or set_experience_image.
+  7. Reply with the exact site, placement, assetId, and publicUrl that were updated.
+- Secondary fallback only:
+  - If the user wants to provide an image but has not attached one in ChatGPT, call request_photo_upload({ site_id, category }) to open the in-chat file picker widget.
+  - Use file_id-only upload_user_photo calls only when the file argument rewrite path is unavailable.
+
+## Session start
+Start every conversation by calling show_welcome to discover the user's sites and present the available sites as a text list.
+- If they have 0 sites, start the Onboarding Flow:
   1. Ask for their Google Maps URL (or shortlink) to import their business details.
   2. Call import_from_maps.
-  3. After import, ask for Required missing context: "What should the main button say (e.g., Book Now)?" and ask if they want to upload a Hero Image or have AI generate one.
-     - If AI generate natively: generate the image using the image_generation tool, then call save_generated_image with site_id and image_data_base64 from image_generation_call.result, then call show_generated_images with the returned assetId and publicUrl.
-     - If the runtime provides a file/attachment handle instead of base64: call save_generated_image_file with site_id and attachment_id. Never pass raw local file paths to save_generated_image.
+  3. After import, ask for Required missing context: "What should the main button say (e.g., Book Now)?" and ask if they want to upload a Hero Image or have AI generate one. Follow the Image work rules above.
   4. Ask for Optional context: "What's the short story behind your business?" and "Do you have a logo to upload?" (let them skip these).
   5. DO NOT ask for menus, detailed services, or social links yet (defer until the site is live).
   6. Call create_site and create_location, then show_site_preview.
-- If they have exactly one site, use it automatically and confirm: "Working with [site name]."
-- If they have multiple sites, present them clearly and ask which to use.
+- If they have exactly one site, the widget confirms it automatically. Say "Working with [site name]." in your first reply before doing anything else.
+- If they have multiple sites, present them clearly and wait for the user to select one — do not assume or guess.
 
-All other tools require a site_id obtained from list_sites. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
+## Site confirmation policy — enforced before every mutation
 
-Common workflows: update menus and items, create and publish posts, triage contact and reservation submissions, update page content directly, upload media, translate content, reply to reviews, and manage experiences and bookings.`,
-      })
+Before calling any mutating tool, the active site must be confirmed for this conversation.
+
+A site is confirmed when:
+- 0 sites: onboarding completed and create_site succeeded
+- 1 site: you have said "Working with [site name]." in this conversation (the widget confirms automatically)
+- Multiple sites: the user explicitly chose one via the show_welcome widget
+
+Tool categories:
+- **Read-only** (list_*, get_*, show_*) — safe to call once show_welcome returns
+- **Preview/generate** (generate_*, show_generated_images) — require a confirmed site
+- **Mutating** (set_*, update_*, create_*, delete_*, publish_*) — require a confirmed site
+
+If the user asks you to mutate content before a site is confirmed, call show_welcome first, confirm the active site, then proceed.
+
+When calling show_generated_images after native image_generation, always include the active site name in the labels:
+- use_label: "Use as homepage hero for [site name]"  (or the appropriate placement)
+- subtitle: can reference the site name to make the target obvious
+After applying, always confirm: "[Placement] updated for [site name]." — never leave the target ambiguous.
+
+All other tools require a site_id obtained from list_sites or show_welcome. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
+
+Common workflows: update menus and items, create and publish posts, triage contact and reservation submissions, update page content directly, upload media, translate content, reply to reviews, manage experiences and bookings, and generate or replace images for any content section.`,
+      });
     }
 
     // Client acknowledgement after initialize — spec requires 202 with no body
-    if (request.method === 'notifications/initialized') {
-      setResponseStatus(event, 202)
-      return ''
+    if (request.method === "notifications/initialized") {
+      setResponseStatus(event, 202);
+      return "";
     }
 
     // Standard ping
-    if (request.method === 'ping') {
-      return mcpSuccess(request.id, {})
+    if (request.method === "ping") {
+      return mcpSuccess(request.id, {});
     }
 
     // Widget resources served as ui://widget/{name}.html with the MCP Apps UI MIME type.
     // ChatGPT fetches these when it sees openai/outputTemplate on a tool definition.
     const WIDGETS = [
-      { name: 'welcome-list',    title: 'Site Picker' },
-      { name: 'vertical-picker', title: 'Business Type Picker' },
-      { name: 'photo-album',     title: 'Business Photos' },
-      { name: 'image-carousel',  title: 'Image Carousel' },
-      { name: 'site-preview',    title: 'Site Preview' },
-    ] as const
+      { name: "welcome-list", title: "Site Picker" },
+      { name: "vertical-picker", title: "Business Type Picker" },
+      { name: "photo-album", title: "Business Photos" },
+      { name: "image-carousel", title: "Image Carousel" },
+      { name: "site-preview", title: "Site Preview" },
+      { name: "photo-upload", title: "Photo Upload" },
+    ] as const;
 
     function widgetHtml(name: string, baseUrl: string) {
       return `<!DOCTYPE html>
@@ -107,184 +236,293 @@ Common workflows: update menus and items, create and publish posts, triage conta
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>KrabiClaw</title>
+<script>window.__KC_WIDGET_VERSION__="${WIDGET_VERSION}";</script>
 <script type="module" crossorigin src="${baseUrl}/mcp-assets/${name}.js"></script>
 <link rel="modulepreload" crossorigin href="${baseUrl}/mcp-assets/jsx-runtime-chunk.js">
 </head>
 <body><div id="app"></div></body>
-</html>`
+</html>`;
     }
 
-    if (request.method === 'resources/list') {
-      await requireMcpUser(event)
+    if (request.method === "resources/list") {
+      await requireMcpUser(event);
       return mcpSuccess(request.id, {
-        resources: WIDGETS.map(w => ({
+        resources: WIDGETS.map((w) => ({
           uri: widgetResourceUri(w.name),
           name: w.title,
           description: `${w.title} widget`,
           mimeType: WIDGET_RESOURCE_MIME_TYPE,
         })),
-      })
+      });
     }
 
-    if (request.method === 'resources/templates/list') {
-      await requireMcpUser(event)
-      return mcpSuccess(request.id, { resourceTemplates: [] })
+    if (request.method === "resources/templates/list") {
+      await requireMcpUser(event);
+      return mcpSuccess(request.id, { resourceTemplates: [] });
     }
 
-    if (request.method === 'resources/read') {
-      await requireMcpUser(event)
-      const uri = typeof request.params?.uri === 'string' ? request.params.uri : ''
+    if (request.method === "resources/read") {
+      await requireMcpUser(event);
+      const uri =
+        typeof request.params?.uri === "string" ? request.params.uri : "";
       // Accept both versioned (name@vN.html) and plain (name.html) forms so that
       // older cached tool references from prior sessions can still resolve.
-      const match = uri.match(/^ui:\/\/widget\/([^@]+?)(?:@[^.]+)?(?:\.html)?$/)
+      const match = uri.match(
+        /^ui:\/\/widget\/([^@]+?)(?:@[^.]+)?(?:\.html)?$/,
+      );
       if (!match) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown resource: ${uri}`)
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          `Unknown resource: ${uri}`,
+        );
       }
-      const widgetName = match[1]!
-      if (!WIDGETS.some(w => w.name === widgetName)) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown widget: ${widgetName}`)
+      const widgetName = match[1]!;
+      if (!WIDGETS.some((w) => w.name === widgetName)) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          `Unknown widget: ${widgetName}`,
+        );
       }
-      const baseUrl = resolveBaseUrl(event)
+      const baseUrl = resolveBaseUrl(event);
       return mcpSuccess(request.id, {
-        contents: [{
-          uri: widgetResourceUri(widgetName),
-          mimeType: WIDGET_RESOURCE_MIME_TYPE,
-          text: widgetHtml(widgetName, baseUrl),
-          _meta: {
-            ui: {
-              prefersBorder: true,
-              domain: baseUrl,
-              csp: {
-                connectDomains: [baseUrl],
-                resourceDomains: [baseUrl],
+        contents: [
+          {
+            uri: widgetResourceUri(widgetName),
+            mimeType: WIDGET_RESOURCE_MIME_TYPE,
+            text: widgetHtml(widgetName, baseUrl),
+            _meta: {
+              ui: {
+                prefersBorder: true,
+                domain: baseUrl,
+                csp: {
+                  connectDomains: [baseUrl, "https://upload.imagedelivery.net", "https://imagedelivery.net"],
+                  resourceDomains: [baseUrl, "https://imagedelivery.net"],
+                  imageDomains: ["https://imagedelivery.net"],
+                },
+              },
+              "openai/widgetDescription": `${WIDGETS.find((w) => w.name === widgetName)?.title ?? "KrabiClaw"} widget`,
+              "openai/widgetPrefersBorder": true,
+              "openai/widgetDomain": baseUrl,
+              "openai/widgetCSP": {
+                connect_domains: [baseUrl, "https://upload.imagedelivery.net", "https://imagedelivery.net"],
+                resource_domains: [baseUrl, "https://imagedelivery.net"],
+                image_domains: ["https://imagedelivery.net"],
+                redirect_domains: [
+                  ...new Set([
+                    baseUrl,
+                    cloudflareEnv(event).NUXT_PUBLIC_PLATFORM_DOMAIN?.replace(/\/$/, "") ??
+                      "https://krabiclaw.com",
+                  ]),
+                ],
               },
             },
-            'openai/widgetDescription': `${WIDGETS.find(w => w.name === widgetName)?.title ?? 'KrabiClaw'} widget`,
-            'openai/widgetPrefersBorder': true,
-            'openai/widgetDomain': baseUrl,
-            'openai/widgetCSP': {
-              connect_domains: [baseUrl],
-              resource_domains: [baseUrl],
-              redirect_domains: [...new Set([baseUrl, (event.context.cloudflare?.env as { NUXT_PUBLIC_PLATFORM_DOMAIN?: string } | undefined)?.NUXT_PUBLIC_PLATFORM_DOMAIN?.replace(/\/$/, '') ?? 'https://krabiclaw.com'])],
-            },
           },
-        }],
-      })
+        ],
+      });
     }
 
-    if (request.method === 'prompts/list') {
-      await requireMcpUser(event)
-      return mcpSuccess(request.id, { prompts: [] })
+    if (request.method === "prompts/list") {
+      await requireMcpUser(event);
+      return mcpSuccess(request.id, { prompts: [] });
     }
 
-    if (request.method === 'server/discover') {
-      await requireMcpUser(event)
+    if (request.method === "server/discover") {
+      await requireMcpUser(event);
       return mcpSuccess(request.id, {
-        supportedVersions: ['2026-07-28', '2025-11-25', '2025-03-26', '2024-11-05'],
+        supportedVersions: [
+          "2026-07-28",
+          "2025-11-25",
+          "2025-03-26",
+          "2024-11-05",
+        ],
         capabilities: { tools: {} },
         serverInfo: {
-          name: 'krabiclaw-mcp',
-          version: 'phase-5',
+          name: "krabiclaw-mcp",
+          version: "phase-5",
         },
-        instructions: 'KrabiClaw MCP. Call show_welcome at the start of every conversation to display the site picker and discover the user\'s sites. Use the site_id from that interaction with all other tools.',
-      })
+        instructions:
+          "KrabiClaw MCP. Call show_welcome at the start of every conversation to display the site picker and discover the user's sites. Use the site_id from that interaction with all other tools.",
+      });
     }
 
-    if (request.method === 'tools/list') {
-      const user = await requireMcpUser(event)
-      const siteId = typeof request.params?.site_id === 'string' ? request.params.site_id : null
-      const siteCtx = siteId ? await getVisibleSiteContext(event, siteId) : null
+    if (request.method === "tools/list") {
+      const user = await requireMcpUser(event);
+      const siteId =
+        typeof request.params?.site_id === "string"
+          ? request.params.site_id
+          : null;
+      const siteCtx = siteId
+        ? await getVisibleSiteContext(event, siteId)
+        : null;
 
       const entitlementKeys = siteCtx
-        ? [...new Set(MCP_TOOLS.map(t => t.requiredEntitlement).filter(Boolean) as string[])]
-        : []
+        ? [
+            ...new Set(
+              MCP_TOOLS.map((t) => t.requiredEntitlement).filter(
+                Boolean,
+              ) as string[],
+            ),
+          ]
+        : [];
       const activeEntitlements = siteCtx
-        ? await getActiveEntitlements(user.db, siteCtx.organizationId, entitlementKeys)
-        : new Set<string>()
+        ? await getActiveEntitlements(
+            user.db,
+            siteCtx.organizationId,
+            entitlementKeys,
+          )
+        : new Set<string>();
 
-      const tools = MCP_TOOLS
-        .filter((tool) => {
-          // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
-          // the full capability set on first connection. Security is enforced at execution time.
-          if (!siteId || !siteCtx) return true
-          if (!roleSatisfies(siteCtx.role, tool.minimumRole)) return false
-          if (tool.requiredEntitlement && !activeEntitlements.has(tool.requiredEntitlement)) return false
-          return true
-        })
-        .map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-          outputSchema: tool.outputSchema,
-          annotations: {
-            domain: tool.domain,
-            minimumRole: tool.minimumRole,
-            confirmRequired: tool.confirmRequired,
-          },
-          ...(tool.widgetName ? {
-            _meta: {
-              ui: { resourceUri: widgetResourceUri(tool.widgetName) },
-              'openai/outputTemplate': widgetResourceUri(tool.widgetName),
-              'openai/widgetAccessible': true,
-              'openai/toolInvocation/invoking': tool.widgetInvoking ?? 'Loading…',
-              'openai/toolInvocation/invoked': tool.widgetInvoked ?? 'Done',
-              ...(tool.fileParams?.length ? { 'openai/fileParams': tool.fileParams } : {}),
-            },
-          } : tool.fileParams?.length ? {
-            _meta: {
-              'openai/fileParams': tool.fileParams,
-            },
-          } : {}),
-        }))
+      const tools = MCP_TOOLS.filter((tool) => {
+        // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
+        // the full capability set on first connection. Security is enforced at execution time.
+        if (!siteId || !siteCtx) return true;
+        if (!roleSatisfies(siteCtx.role, tool.minimumRole)) return false;
+        if (
+          tool.requiredEntitlement &&
+          !activeEntitlements.has(tool.requiredEntitlement)
+        )
+          return false;
+        return true;
+      }).map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        outputSchema: tool.outputSchema,
+        annotations: tool.annotations,
+        securitySchemes: tool.securitySchemes,
+        ...((WIDGETS_ENABLED || ENABLED_WIDGET_TOOLS.has(tool.name)) && tool.widgetName
+          ? {
+              _meta: {
+                securitySchemes: tool.securitySchemes,
+                "krabiclaw/toolInfo": {
+                  domain: tool.domain,
+                  minimumRole: tool.minimumRole,
+                  confirmRequired: tool.confirmRequired,
+                },
+                ui: { resourceUri: widgetResourceUri(tool.widgetName) },
+                "openai/outputTemplate": widgetResourceUri(tool.widgetName),
+                "openai/widgetAccessible": true,
+                "openai/toolInvocation/invoking":
+                  tool.widgetInvoking ?? "Loading…",
+                "openai/toolInvocation/invoked": tool.widgetInvoked ?? "Done",
+                ...(tool.fileParams?.length
+                  ? { "openai/fileParams": tool.fileParams }
+                  : {}),
+              },
+            }
+          : tool.fileParams?.length
+            ? {
+                _meta: {
+                  securitySchemes: tool.securitySchemes,
+                  "krabiclaw/toolInfo": {
+                    domain: tool.domain,
+                    minimumRole: tool.minimumRole,
+                    confirmRequired: tool.confirmRequired,
+                  },
+                  "openai/fileParams": tool.fileParams,
+                },
+              }
+            : {
+                _meta: {
+                  securitySchemes: tool.securitySchemes,
+                  "krabiclaw/toolInfo": {
+                    domain: tool.domain,
+                    minimumRole: tool.minimumRole,
+                    confirmRequired: tool.confirmRequired,
+                  },
+                },
+              }),
+      }));
 
-      return mcpSuccess(request.id, { tools })
+      return mcpSuccess(request.id, { tools });
     }
 
-    if (request.method === 'tools/call') {
-      const toolName = typeof request.params?.name === 'string' ? request.params.name : ''
-      const rawArgs = (request.params?.arguments && typeof request.params.arguments === 'object' && !Array.isArray(request.params.arguments))
-        ? request.params.arguments as Record<string, unknown>
-        : Object.fromEntries(Object.entries(request.params ?? {}).filter(([key]) => key !== 'name'))
+    if (request.method === "tools/call") {
+      const toolName =
+        typeof request.params?.name === "string" ? request.params.name : "";
+      const rawArgs =
+        request.params?.arguments &&
+        typeof request.params.arguments === "object" &&
+        !Array.isArray(request.params.arguments)
+          ? (request.params.arguments as Record<string, unknown>)
+          : Object.fromEntries(
+              Object.entries(request.params ?? {}).filter(
+                ([key]) => key !== "name",
+              ),
+            );
 
-      const result = await executeMcpToolCall(event, toolName, rawArgs)
-      if (isMcpRenderResponse(result)) {
-        const tool = MCP_TOOLS.find(t => t.name === toolName)
-        return mcpSuccess(request.id, {
-          isError: false,
-          structuredContent: result.structuredContent,
-          content: [{ type: 'text', text: JSON.stringify(result.structuredContent, null, 2) }],
-          _meta: {
-            'openai/toolInvocation/invoking': tool?.widgetInvoking ?? 'Loading…',
-            'openai/toolInvocation/invoked': tool?.widgetInvoked ?? 'Done',
-          },
-        })
-      }
+      const result = await executeMcpToolCall(event, toolName, rawArgs);
+      const isRender = isMcpRenderResponse(result);
+      const structuredContent = isRender ? result.structuredContent : result;
+      const modelText = isRender && result.fallbackText
+        ? result.fallbackText
+        : JSON.stringify(structuredContent, null, 2);
+      const tool =
+        (WIDGETS_ENABLED || ENABLED_WIDGET_TOOLS.has(toolName)) && isRender
+          ? MCP_TOOLS.find((t) => t.name === toolName)
+          : null;
       return mcpSuccess(request.id, {
         isError: false,
-        structuredContent: result,
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      })
+        structuredContent,
+        content: [
+          { type: "text", text: modelText },
+        ],
+        ...(tool
+          ? {
+              _meta: {
+                "openai/toolInvocation/invoking":
+                  tool.widgetInvoking ?? "Loading…",
+                "openai/toolInvocation/invoked": tool.widgetInvoked ?? "Done",
+                ...(isRender && result.privateMeta
+                  ? { "krabiclaw/widgetData": result.privateMeta }
+                  : {}),
+              },
+            }
+          : {}),
+      });
     }
 
-    throw createError({ statusCode: 404, statusMessage: `Unsupported MCP method: ${request.method}` })
+    throw createError({
+      statusCode: 404,
+      statusMessage: `Unsupported MCP method: ${request.method}`,
+    });
   } catch (error) {
-    const mcpError = asMcpError(error)
-    const errorStatus = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
-      ? Number((error as { statusCode: number }).statusCode)
-      : null
-    const status = errorStatus ?? (mcpError.code === MCP_ERROR.methodNotFound ? 404
-      : mcpError.code === MCP_ERROR.invalidRequest || mcpError.code === MCP_ERROR.invalidParams ? 400
-      : mcpError.code === MCP_ERROR.parse ? 400
-      : 500)
+    const mcpError = asMcpError(error);
+    const errorStatus =
+      typeof (error as { statusCode?: unknown })?.statusCode === "number"
+        ? Number((error as { statusCode: number }).statusCode)
+        : null;
+    const status =
+      errorStatus ??
+      (mcpError.code === MCP_ERROR.methodNotFound
+        ? 404
+        : mcpError.code === MCP_ERROR.invalidRequest ||
+            mcpError.code === MCP_ERROR.invalidParams
+          ? 400
+          : mcpError.code === MCP_ERROR.parse
+            ? 400
+            : 500);
     // Temporary: log all MCP errors so wrangler tail can capture them
-    console.error('[MCP]', status, mcpError.code, mcpError.message, 'method:', requestId)
-    setResponseStatus(event, status)
+    console.error(
+      "[MCP]",
+      status,
+      mcpError.code,
+      mcpError.message,
+      "method:",
+      requestId,
+    );
+    setResponseStatus(event, status);
     if (status === 401) {
-      const cfEnv = event.context.cloudflare?.env as { BETTER_AUTH_URL?: string } | undefined
-      const baseUrl = (cfEnv?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
-      setResponseHeader(event, 'WWW-Authenticate',
-        `Bearer realm="${baseUrl}/api/mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`)
+      const cfEnv = cloudflareEnv(event);
+      const baseUrl = (
+        cfEnv.BETTER_AUTH_URL ?? "https://krabiclaw.com"
+      ).replace(/\/$/, "");
+      const authChallenge = oauthChallenge(baseUrl);
+      setMcpAuthChallenge(event, authChallenge);
+      if (requestMethod === "tools/call") {
+        return mcpSuccess(requestId, mcpAuthRequiredResult(authChallenge));
+      }
     }
-    return mcpFailure(requestId, mcpError)
+    return mcpFailure(requestId, mcpError);
   }
-})
+});

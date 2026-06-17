@@ -247,6 +247,19 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
   ],
   siteContent: [
     {
+      id: 'sc-kiku-home-hero',
+      locationId: null,
+      page: 'home',
+      field: 'hero',
+      content: 'Robatayaki & sushi in Ao Nang, Krabi.',
+      heroTitle: 'A little piece of Japan in Krabi.',
+      heroSubtitle: 'Robatayaki, sushi, and warm hospitality in the heart of Ao Nang.',
+      heroImageAssetId: 'media-kiku-about',
+      heroVideoAssetId: 'media-kiku-hero-video',
+      type: 'text',
+      source: 'manual',
+    },
+    {
       id: 'sc-kiku-about-hero',
       locationId: null,
       page: 'about',
@@ -465,34 +478,6 @@ export function renderKikuzukiCoreSeedBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
-  const locationRows = compiledKikuzukiSeed.locations
-    .map((location) => `  (${[
-      sqlValue(location.id),
-      sqlValue(identity.organizationId),
-      sqlValue(identity.siteId),
-      sqlValue(location.slug),
-      sqlValue(location.title),
-      sqlValue(location.city),
-      sqlJson(location.address),
-      sqlValue(location.phone),
-      sqlValue(location.email),
-      sqlValue(location.mapsUrl),
-      sqlValue(location.latitude),
-      sqlValue(location.longitude),
-      sqlValue(location.description),
-      sqlValue(location.shortDescription),
-      sqlJson(location.openingHours),
-      sqlValue(location.rating),
-      sqlValue(location.reviewCount),
-      sqlValue(location.priceLevel),
-      sqlJson(location.categories),
-      sqlValue(location.instagramUrl),
-      sqlValue(location.facebookUrl),
-      sqlValue(location.isPrimary),
-      sqlValue(location.status),
-    ].join(', ')})`)
-    .join(',\n')
-
   return `-- BEGIN GENERATED: kikuzuki_core
 INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
@@ -533,21 +518,6 @@ ${siteLocaleRows};
 INSERT OR REPLACE INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status)
 VALUES
 ${siteDomainRows};
-
-INSERT OR REPLACE INTO business_locations (
-  id, organization_id, site_id, slug, title, city,
-  address, phone, email, maps_url,
-  latitude, longitude,
-  description, short_description,
-  opening_hours,
-  rating, review_count,
-  price_level, categories,
-  instagram_url, facebook_url,
-  is_primary, status
-) VALUES
-${locationRows};
-
-UPDATE sites SET primary_location_id = ${sqlValue(site.primaryLocationId)} WHERE id = ${sqlValue(identity.siteId)};
 -- END GENERATED: kikuzuki_core`
 }
 
@@ -575,17 +545,58 @@ export function renderKikuzukiMediaBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
+  const locationRowsNoHero = compiledKikuzukiSeed.locations
+    .map((location) => `  (${[
+      sqlValue(location.id),
+      sqlValue(identity.organizationId),
+      sqlValue(identity.siteId),
+      sqlValue(location.slug),
+      sqlValue(location.title),
+      sqlValue(location.city),
+      sqlJson(location.address),
+      sqlValue(location.phone),
+      sqlValue(location.email),
+      sqlValue(location.mapsUrl),
+      sqlValue(location.latitude),
+      sqlValue(location.longitude),
+      sqlValue(location.description),
+      sqlValue(location.shortDescription),
+      sqlJson(location.openingHours),
+      sqlValue(location.rating),
+      sqlValue(location.reviewCount),
+      sqlValue(location.priceLevel),
+      sqlJson(location.categories),
+      sqlValue(location.instagramUrl),
+      sqlValue(location.facebookUrl),
+      sqlValue(location.isPrimary),
+      sqlValue(location.status),
+      'NULL',
+      'NULL',
+    ].join(', ')})`)
+    .join(',\n')
+
   const heroUpdates = compiledKikuzukiSeed.locations
-    .filter((loc) => loc.heroImageAssetId || loc.heroVideoAssetId)
-    .map((loc) => {
-      const parts: string[] = []
-      if (loc.heroImageAssetId) parts.push(`hero_image_asset_id = ${sqlValue(loc.heroImageAssetId)}`)
-      if (loc.heroVideoAssetId) parts.push(`hero_video_asset_id = ${sqlValue(loc.heroVideoAssetId)}`)
-      return `UPDATE business_locations SET ${parts.join(', ')} WHERE id = ${sqlValue(loc.id)};`
-    })
+    .filter((l) => l.heroImageAssetId || l.heroVideoAssetId)
+    .map((l) => `UPDATE business_locations SET hero_image_asset_id = ${sqlValue(l.heroImageAssetId ?? null)}, hero_video_asset_id = ${sqlValue(l.heroVideoAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
     .join('\n')
 
   return `-- BEGIN GENERATED: kikuzuki_media
+-- Insert locations first (without hero asset refs) to satisfy media_assets FK,
+-- then insert media_assets, then patch hero refs back onto locations.
+INSERT OR REPLACE INTO business_locations (
+  id, organization_id, site_id, slug, title, city,
+  address, phone, email, maps_url,
+  latitude, longitude,
+  description, short_description,
+  opening_hours,
+  rating, review_count,
+  price_level, categories,
+  instagram_url, facebook_url,
+  is_primary, status,
+  hero_image_asset_id, hero_video_asset_id
+) VALUES
+${locationRowsNoHero};
+
 INSERT OR REPLACE INTO media_assets
   (id, organization_id, site_id, location_id,
    kind, provider, source,
@@ -594,8 +605,9 @@ INSERT OR REPLACE INTO media_assets
 VALUES
 ${mediaRows};
 
-UPDATE sites SET logo_asset_id = ${sqlValue(compiledKikuzukiSeed.site.logoAssetId ?? null)} WHERE id = ${sqlValue(identity.siteId)};
 ${heroUpdates}
+
+UPDATE sites SET logo_asset_id = ${sqlValue(compiledKikuzukiSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledKikuzukiSeed.site.primaryLocationId)} WHERE id = ${sqlValue(identity.siteId)};
 -- END GENERATED: kikuzuki_media`
 }
 
@@ -638,7 +650,7 @@ INSERT OR REPLACE INTO menus (id, organization_id, site_id, location_id, name, d
 VALUES
 ${menuRows};
 
-INSERT OR REPLACE INTO menu_items
+INSERT OR IGNORE INTO menu_items
   (id, menu_id, section, name, slug, description,
    price_amount, image_asset_id, available,
    allergens, dietary_notes, sort_order)
@@ -669,7 +681,7 @@ export function renderKikuzukiContentBlock(): string {
     .join(',\n')
 
   return `-- BEGIN GENERATED: kikuzuki_content
-INSERT OR REPLACE INTO site_content
+INSERT OR IGNORE INTO site_content
   (id, organization_id, site_id, location_id,
    page, field, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id,
    type, source)

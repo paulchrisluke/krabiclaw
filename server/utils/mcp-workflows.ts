@@ -1,44 +1,76 @@
-import { contentRegistry, getFieldDef } from '~/config/content-registry'
-import { hasEntitlement } from '~/server/utils/billing'
-import { getGoogleBusinessAccounts, getGoogleBusinessAuthUrl, getGoogleBusinessConnection, getGoogleBusinessLocations, syncGoogleLocations } from '~/server/utils/google-business'
-import { normalizePhone, getOrgWhatsAppPhone, setOrgWhatsAppPhone } from '~/server/utils/whatsapp'
-import { deleteSiteContentField, getPageContent, upsertSiteContent } from '~/server/utils/content-management'
-import type { SiteContent } from '~/server/utils/content-management'
-import type { CloudflareEnv } from '~/server/utils/auth'
-import { signOAuthState } from '~/server/utils/encryption'
-import { updateLocation } from '~/server/utils/location-management'
+import { contentRegistry, getFieldDef } from "~/config/content-registry";
+import { hasEntitlement } from "~/server/utils/billing";
+import {
+  getGoogleBusinessAccounts,
+  getGoogleBusinessAuthUrl,
+  getGoogleBusinessConnection,
+  getGoogleBusinessLocations,
+  syncGoogleLocations,
+} from "~/server/utils/google-business";
+import {
+  normalizePhone,
+  getOrgWhatsAppPhone,
+  setOrgWhatsAppPhone,
+} from "~/server/utils/whatsapp";
+import {
+  deleteSiteContentField,
+  getPageContent,
+  upsertSiteContent,
+} from "~/server/utils/content-management";
+import type { SiteContent } from "~/server/utils/content-management";
+import type { CloudflareEnv } from "~/server/utils/auth";
+import { signOAuthState } from "~/server/utils/encryption";
+import { updateLocation } from "~/server/utils/location-management";
 
-export async function listSitesForUser(db: D1Database, userId: string, isPlatformAdmin: boolean) {
+export async function listSitesForUser(
+  db: D1Database,
+  userId: string,
+  isPlatformAdmin: boolean,
+) {
   if (isPlatformAdmin) {
-    const rows = await db.prepare(`
+    const rows = await db
+      .prepare(
+        `
       SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
              s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
       FROM sites s
       ORDER BY s.created_at DESC
-    `).all()
-    return rows.results ?? []
+    `,
+      )
+      .all();
+    return rows.results ?? [];
   }
 
-  const orgRows = await db.prepare(`
+  const orgRows = await db
+    .prepare(
+      `
     SELECT o.id
     FROM organization o
     JOIN member m ON o.id = m.organizationId
     WHERE m.userId = ?
-  `).bind(userId).all<{ id: string }>()
+  `,
+    )
+    .bind(userId)
+    .all<{ id: string }>();
 
-  const orgIds = (orgRows.results ?? []).map((row) => row.id).filter(Boolean)
-  if (!orgIds.length) return []
+  const orgIds = (orgRows.results ?? []).map((row) => row.id).filter(Boolean);
+  if (!orgIds.length) return [];
 
-  const placeholders = orgIds.map(() => '?').join(', ')
-  const rows = await db.prepare(`
+  const placeholders = orgIds.map(() => "?").join(", ");
+  const rows = await db
+    .prepare(
+      `
     SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
            s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
     FROM sites s
     WHERE s.organization_id IN (${placeholders})
     ORDER BY s.created_at DESC
-  `).bind(...orgIds).all()
+  `,
+    )
+    .bind(...orgIds)
+    .all();
 
-  return rows.results ?? []
+  return rows.results ?? [];
 }
 
 export async function getSiteForMcp(
@@ -48,109 +80,141 @@ export async function getSiteForMcp(
   isPlatformAdmin = false,
 ) {
   const site = isPlatformAdmin
-    ? await db.prepare(`
+    ? await db
+        .prepare(
+          `
       SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
              s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
       FROM sites s
       WHERE s.id = ?
       LIMIT 1
-    `).bind(siteId).first()
-    : await db.prepare(`
+    `,
+        )
+        .bind(siteId)
+        .first()
+    : await db
+        .prepare(
+          `
       SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
              s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
       FROM sites s
       JOIN member m ON s.organization_id = m.organizationId
       WHERE s.id = ? AND m.userId = ?
       LIMIT 1
-    `).bind(siteId, userId).first()
+    `,
+        )
+        .bind(siteId, userId)
+        .first();
 
-  if (!site) throw new Error('Site not found or access denied')
-  return site
+  if (!site) throw new Error("Site not found or access denied");
+  return site;
 }
 
-const HERO_FIELD_ALIASES: Record<string, 'hero.title' | 'hero.subtitle' | 'hero.image' | 'hero.video'> = {
-  hero_heading: 'hero.title',
-  hero_title: 'hero.title',
-  'hero.title': 'hero.title',
-  hero_subheading: 'hero.subtitle',
-  hero_subtitle: 'hero.subtitle',
-  'hero.subtitle': 'hero.subtitle',
-  hero_image_asset_id: 'hero.image',
-  'hero.image': 'hero.image',
-  hero_video_asset_id: 'hero.video',
-  'hero.video': 'hero.video',
-}
+const HERO_FIELD_ALIASES: Record<
+  string,
+  "hero.title" | "hero.subtitle" | "hero.image" | "hero.video"
+> = {
+  hero_heading: "hero.title",
+  hero_title: "hero.title",
+  "hero.title": "hero.title",
+  hero_subheading: "hero.subtitle",
+  hero_subtitle: "hero.subtitle",
+  "hero.subtitle": "hero.subtitle",
+  hero_image_asset_id: "hero.image",
+  "hero.image": "hero.image",
+  hero_video_asset_id: "hero.video",
+  "hero.video": "hero.video",
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function editableFieldKeys(page: string) {
-  return Object.keys(contentRegistry[page]?.fields ?? {})
+  return Object.keys(contentRegistry[page]?.fields ?? {});
 }
 
 function normalizeDraftString(value: unknown, field: string) {
-  if (typeof value !== 'string') {
-    throw new Error(`Field "${field}" must be a string.`)
+  if (typeof value !== "string") {
+    throw new Error(`Field "${field}" must be a string.`);
   }
-  return value
+  return value;
 }
 
-function normalizeContentChanges(page: string, changes: Record<string, unknown>) {
-  const normalizedFields = new Map<string, string>()
-  const heroChange: Partial<SiteContent> = {}
-  let hasHeroChange = false
+function normalizeContentChanges(
+  page: string,
+  changes: Record<string, unknown>,
+) {
+  const normalizedFields = new Map<string, string>();
+  const heroChange: Partial<SiteContent> = {};
+  let hasHeroChange = false;
 
   for (const [rawField, rawValue] of Object.entries(changes)) {
-    if (rawField === 'hero') {
+    if (rawField === "hero") {
       if (!isRecord(rawValue)) {
-        throw new Error('Field "hero" must be an object with hero_title/hero_subtitle/media asset IDs.')
+        throw new Error(
+          'Field "hero" must be an object with hero_title/hero_subtitle/media asset IDs.',
+        );
       }
 
-      const heroTitle = rawValue.hero_title
-      const heroSubtitle = rawValue.hero_subtitle
-      const heroImageAssetId = rawValue.hero_image_asset_id
-      const heroVideoAssetId = rawValue.hero_video_asset_id
+      const heroTitle = rawValue.hero_title;
+      const heroSubtitle = rawValue.hero_subtitle;
+      const heroImageAssetId = rawValue.hero_image_asset_id;
+      const heroVideoAssetId = rawValue.hero_video_asset_id;
 
-      if (heroTitle !== undefined) heroChange.hero_title = normalizeDraftString(heroTitle, 'hero.hero_title') || undefined
-      if (heroSubtitle !== undefined) heroChange.hero_subtitle = normalizeDraftString(heroSubtitle, 'hero.hero_subtitle') || undefined
-      if (heroImageAssetId !== undefined) heroChange.hero_image_asset_id = normalizeDraftString(heroImageAssetId, 'hero.hero_image_asset_id') || undefined
-      if (heroVideoAssetId !== undefined) heroChange.hero_video_asset_id = normalizeDraftString(heroVideoAssetId, 'hero.hero_video_asset_id') || undefined
+      if (heroTitle !== undefined)
+        heroChange.hero_title =
+          normalizeDraftString(heroTitle, "hero.hero_title") || undefined;
+      if (heroSubtitle !== undefined)
+        heroChange.hero_subtitle =
+          normalizeDraftString(heroSubtitle, "hero.hero_subtitle") || undefined;
+      if (heroImageAssetId !== undefined)
+        heroChange.hero_image_asset_id =
+          normalizeDraftString(heroImageAssetId, "hero.hero_image_asset_id") ||
+          undefined;
+      if (heroVideoAssetId !== undefined)
+        heroChange.hero_video_asset_id =
+          normalizeDraftString(heroVideoAssetId, "hero.hero_video_asset_id") ||
+          undefined;
 
       if (
-        heroTitle !== undefined
-        || heroSubtitle !== undefined
-        || heroImageAssetId !== undefined
-        || heroVideoAssetId !== undefined
+        heroTitle !== undefined ||
+        heroSubtitle !== undefined ||
+        heroImageAssetId !== undefined ||
+        heroVideoAssetId !== undefined
       ) {
-        hasHeroChange = true
+        hasHeroChange = true;
       }
-      continue
+      continue;
     }
 
-    const heroAlias = HERO_FIELD_ALIASES[rawField]
+    const heroAlias = HERO_FIELD_ALIASES[rawField];
     if (heroAlias) {
-      const value = normalizeDraftString(rawValue, rawField)
-      hasHeroChange = true
-      if (heroAlias === 'hero.title') heroChange.hero_title = value || undefined
-      if (heroAlias === 'hero.subtitle') heroChange.hero_subtitle = value || undefined
-      if (heroAlias === 'hero.image') heroChange.hero_image_asset_id = value || undefined
-      if (heroAlias === 'hero.video') heroChange.hero_video_asset_id = value || undefined
-      continue
+      const value = normalizeDraftString(rawValue, rawField);
+      hasHeroChange = true;
+      if (heroAlias === "hero.title")
+        heroChange.hero_title = value || undefined;
+      if (heroAlias === "hero.subtitle")
+        heroChange.hero_subtitle = value || undefined;
+      if (heroAlias === "hero.image")
+        heroChange.hero_image_asset_id = value || undefined;
+      if (heroAlias === "hero.video")
+        heroChange.hero_video_asset_id = value || undefined;
+      continue;
     }
 
-    const fieldDef = getFieldDef(page, rawField)
+    const fieldDef = getFieldDef(page, rawField);
     if (!fieldDef) {
-      const supported = editableFieldKeys(page)
+      const supported = editableFieldKeys(page);
       throw new Error(
-        `Field "${rawField}" is not editable on page "${page}". Supported fields: ${supported.join(', ')}${supported.length ? ', ' : ''}hero.title, hero.subtitle, hero.image, hero.video.`,
-      )
+        `Field "${rawField}" is not editable on page "${page}". Supported fields: ${supported.join(", ")}${supported.length ? ", " : ""}hero.title, hero.subtitle, hero.image, hero.video.`,
+      );
     }
 
-    normalizedFields.set(rawField, normalizeDraftString(rawValue, rawField))
+    normalizedFields.set(rawField, normalizeDraftString(rawValue, rawField));
   }
 
-  return { normalizedFields, heroChange, hasHeroChange }
+  return { normalizedFields, heroChange, hasHeroChange };
 }
 
 export async function getLocationForMcp(
@@ -159,22 +223,27 @@ export async function getLocationForMcp(
   siteId: string,
   locationId: string,
 ) {
-  const row = await db.prepare(`
+  const row = await db
+    .prepare(
+      `
     SELECT bl.*, img.public_url AS hero_public_url, img.kind AS hero_kind
     FROM business_locations bl
     LEFT JOIN media_assets img ON bl.hero_image_asset_id = img.id AND img.status = 'active'
     WHERE bl.id = ? AND bl.organization_id = ? AND bl.site_id = ?
     LIMIT 1
-  `).bind(locationId, organizationId, siteId).first()
+  `,
+    )
+    .bind(locationId, organizationId, siteId)
+    .first();
 
-  if (!row) throw new Error('Location not found')
+  if (!row) throw new Error("Location not found");
   return {
     ...row,
     address: safeJson(row.address),
     opening_hours: safeJson(row.opening_hours),
     categories: safeJson(row.categories),
     is_primary: Boolean(row.is_primary),
-  }
+  };
 }
 
 export async function getNotificationsSettings(
@@ -184,7 +253,7 @@ export async function getNotificationsSettings(
 ) {
   return {
     whatsapp_phone: await getOrgWhatsAppPhone(db, organizationId, siteId),
-  }
+  };
 }
 
 export async function updateNotificationsSettings(
@@ -193,21 +262,26 @@ export async function updateNotificationsSettings(
   siteId: string,
   whatsappPhone: string,
 ) {
-  await setOrgWhatsAppPhone(db, organizationId, siteId, whatsappPhone.trim())
+  await setOrgWhatsAppPhone(db, organizationId, siteId, whatsappPhone.trim());
   return {
     whatsapp_phone: normalizePhone(whatsappPhone.trim()),
-  }
+  };
 }
 
 export async function listContactSubmissions(db: D1Database, siteId: string) {
-  const rows = await db.prepare(`
+  const rows = await db
+    .prepare(
+      `
     SELECT * FROM contact_submissions
     WHERE site_id = ?
     ORDER BY created_at DESC
     LIMIT 200
-  `).bind(siteId).all()
+  `,
+    )
+    .bind(siteId)
+    .all();
 
-  return rows.results ?? []
+  return rows.results ?? [];
 }
 
 export async function updateContactSubmissionStatus(
@@ -216,29 +290,46 @@ export async function updateContactSubmissionStatus(
   submissionId: string,
   status: string,
 ) {
-  if (!['new', 'read', 'replied'].includes(status)) {
-    throw new Error('Invalid contact submission status')
+  if (!["new", "read", "replied"].includes(status)) {
+    throw new Error("Invalid contact submission status");
   }
 
-  const result = await db.prepare(`
+  const result = await db
+    .prepare(
+      `
     UPDATE contact_submissions
     SET status = ?
     WHERE id = ? AND site_id = ?
-  `).bind(status, submissionId, siteId).run()
+  `,
+    )
+    .bind(status, submissionId, siteId)
+    .run();
 
-  if (!result.meta.changes) throw new Error('Submission not found')
-  return { updated: true, submission_id: submissionId, status }
+  if (!result.meta.changes) throw new Error("Submission not found");
+  return {
+    updated: true,
+    submission_id: submissionId,
+    status,
+  };
 }
 
-export async function listReservationSubmissions(db: D1Database, siteId: string) {
-  const rows = await db.prepare(`
+export async function listReservationSubmissions(
+  db: D1Database,
+  siteId: string,
+) {
+  const rows = await db
+    .prepare(
+      `
     SELECT * FROM reservation_submissions
     WHERE site_id = ?
     ORDER BY created_at DESC
     LIMIT 200
-  `).bind(siteId).all()
+  `,
+    )
+    .bind(siteId)
+    .all();
 
-  return rows.results ?? []
+  return rows.results ?? [];
 }
 
 export async function updateReservationSubmissionStatus(
@@ -247,18 +338,27 @@ export async function updateReservationSubmissionStatus(
   submissionId: string,
   status: string,
 ) {
-  if (!['new', 'confirmed', 'cancelled', 'completed'].includes(status)) {
-    throw new Error('Invalid reservation submission status')
+  if (!["new", "confirmed", "cancelled", "completed"].includes(status)) {
+    throw new Error("Invalid reservation submission status");
   }
 
-  const result = await db.prepare(`
+  const result = await db
+    .prepare(
+      `
     UPDATE reservation_submissions
     SET status = ?
     WHERE id = ? AND site_id = ?
-  `).bind(status, submissionId, siteId).run()
+  `,
+    )
+    .bind(status, submissionId, siteId)
+    .run();
 
-  if (!result.meta.changes) throw new Error('Reservation not found')
-  return { updated: true, submission_id: submissionId, status }
+  if (!result.meta.changes) throw new Error("Reservation not found");
+  return {
+    updated: true,
+    submission_id: submissionId,
+    status,
+  };
 }
 
 export async function updateLocationQa(
@@ -269,51 +369,58 @@ export async function updateLocationQa(
   qaId: string,
   updates: Record<string, unknown>,
 ) {
-  const sets: string[] = ['updated_at = ?']
-  const params: Array<string | number | null> = [new Date().toISOString()]
+  const sets: string[] = ["updated_at = ?"];
+  const params: Array<string | number | null> = [new Date().toISOString()];
 
   if (updates.question !== undefined) {
-    const value = String(updates.question ?? '').trim()
-    if (!value) throw new Error('Question is required')
-    sets.push('question = ?')
-    params.push(value.slice(0, 500))
+    const value = String(updates.question ?? "").trim();
+    if (!value) throw new Error("Question is required");
+    sets.push("question = ?");
+    params.push(value.slice(0, 500));
   }
   if (updates.answer !== undefined) {
-    sets.push('answer = ?')
-    params.push(stringOrNull(updates.answer, 2000))
+    sets.push("answer = ?");
+    params.push(stringOrNull(updates.answer, 2000));
   }
   if (updates.question_author !== undefined) {
-    sets.push('question_author = ?')
-    params.push(stringOrNull(updates.question_author, 120))
+    sets.push("question_author = ?");
+    params.push(stringOrNull(updates.question_author, 120));
   }
   if (updates.is_owner_answer !== undefined) {
-    sets.push('is_owner_answer = ?')
-    params.push(booleanInt(updates.is_owner_answer))
+    sets.push("is_owner_answer = ?");
+    params.push(booleanInt(updates.is_owner_answer));
   }
   if (updates.status !== undefined) {
-    const value = String(updates.status)
-    if (!['published', 'hidden'].includes(value)) throw new Error('Invalid Q&A status')
-    sets.push('status = ?')
-    params.push(value)
+    const value = String(updates.status);
+    if (!["published", "hidden"].includes(value))
+      throw new Error("Invalid Q&A status");
+    sets.push("status = ?");
+    params.push(value);
   }
   if (updates.sort_order !== undefined) {
-    const value = Number(updates.sort_order)
-    if (!Number.isInteger(value)) throw new Error('sort_order must be an integer')
-    sets.push('sort_order = ?')
-    params.push(value)
+    const value = Number(updates.sort_order);
+    if (!Number.isInteger(value))
+      throw new Error("sort_order must be an integer");
+    sets.push("sort_order = ?");
+    params.push(value);
   }
 
-  if (sets.length === 1) throw new Error('No update fields provided')
+  if (sets.length === 1) throw new Error("No update fields provided");
 
-  params.push(qaId, locationId, siteId, organizationId)
-  const result = await db.prepare(`
+  params.push(qaId, locationId, siteId, organizationId);
+  const result = await db
+    .prepare(
+      `
     UPDATE location_qa
-    SET ${sets.join(', ')}
+    SET ${sets.join(", ")}
     WHERE id = ? AND location_id = ? AND site_id = ? AND organization_id = ?
-  `).bind(...params).run()
+  `,
+    )
+    .bind(...params)
+    .run();
 
-  if (!result.meta.changes) throw new Error('Q&A not found')
-  return { updated: true, qa_id: qaId }
+  if (!result.meta.changes) throw new Error("Q&A not found");
+  return { updated: true, qa_id: qaId };
 }
 
 export async function reorderLocationQa(
@@ -323,66 +430,90 @@ export async function reorderLocationQa(
   locationId: string,
   updates: Array<{ id: string; sort_order: number }>,
 ) {
-  if (updates.length !== 2 || updates[0]?.id === updates[1]?.id) {
-    throw new Error('Two distinct Q&A reorder updates are required')
+  if (!updates.length) {
+    throw new Error("At least one Q&A update is required");
   }
 
-  const [first, second] = updates
-  const firstSortOrder = Number(first?.sort_order)
-  const secondSortOrder = Number(second?.sort_order)
-  if (!Number.isInteger(firstSortOrder) || !Number.isInteger(secondSortOrder)) {
-    throw new Error('Invalid sort_order for Q&A reorder')
+  const placeholders = updates.map(() => "?").join(", ");
+  const validationResult = await db
+    .prepare(
+      `SELECT COUNT(*) AS valid_count FROM location_qa
+       WHERE id IN (${placeholders}) AND location_id = ? AND site_id = ? AND organization_id = ?`,
+    )
+    .bind(...updates.map((u) => u.id), locationId, siteId, organizationId)
+    .first<{ valid_count: number }>();
+
+  const validCount = validationResult?.valid_count ?? 0;
+  if (validCount !== updates.length) {
+    throw new Error(
+      `Q&A reorder failed: ${updates.length - validCount} item(s) not found or do not belong to this location.`,
+    );
   }
 
-  const now = new Date().toISOString()
-  const result = await db.prepare(`
-    UPDATE location_qa
-    SET sort_order = CASE id
-        WHEN ? THEN ?
-        WHEN ? THEN ?
-        ELSE sort_order
-      END,
-      updated_at = ?
-    WHERE location_id = ?
-      AND site_id = ?
-      AND organization_id = ?
-      AND id IN (?, ?)
-  `).bind(
-    first!.id,
-    firstSortOrder,
-    second!.id,
-    secondSortOrder,
-    now,
-    locationId,
-    siteId,
-    organizationId,
-    first!.id,
-    second!.id,
-  ).run()
+  const now = new Date().toISOString();
+  let updated = 0;
 
-  if (Number(result.meta.changes ?? 0) !== 2) {
-    throw new Error('Q&A reorder targets not found')
+  for (const update of updates) {
+    const result = await db
+      .prepare(
+        `
+      UPDATE location_qa
+      SET sort_order = ?, updated_at = ?
+      WHERE id = ? AND location_id = ? AND site_id = ? AND organization_id = ?
+    `,
+      )
+      .bind(
+        update.sort_order,
+        now,
+        update.id,
+        locationId,
+        siteId,
+        organizationId,
+      )
+      .run();
+    updated += Number(result.meta.changes ?? 0);
   }
-  return { updated: true }
+
+  if (updated !== updates.length) {
+    throw new Error(
+      `Q&A reorder failed: expected ${updates.length} item(s) to update but only ${updated} matched. Some items may not exist or do not belong to this location.`,
+    );
+  }
+
+  return { updated };
 }
 
-export async function listLocationReviews(db: D1Database, siteId: string, locationId: string) {
-  const rows = await db.prepare(`
+export async function listLocationReviews(
+  db: D1Database,
+  siteId: string,
+  locationId: string,
+) {
+  const rows = await db
+    .prepare(
+      `
     SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply,
            owner_reply_at, photo_urls, source, status, created_at, updated_at
     FROM reviews
     WHERE site_id = ? AND location_id = ?
     ORDER BY created_at DESC
-  `).bind(siteId, locationId).all()
+  `,
+    )
+    .bind(siteId, locationId)
+    .all();
 
   return (rows.results ?? []).map((review) => ({
     ...review,
     photo_urls: safeJsonArray(review.photo_urls),
-  }))
+  }));
 }
 
-export async function listWorkRequestsForOrganization(db: D1Database, organizationId: string) {
-  const rows = await db.prepare(`
+export async function listWorkRequestsForOrganization(
+  db: D1Database,
+  organizationId: string,
+) {
+  const rows = await db
+    .prepare(
+      `
     SELECT id, type, title, description, status, priority, source, notes, created_at, updated_at, completed_at
     FROM work_requests
     WHERE organization_id = ?
@@ -391,9 +522,12 @@ export async function listWorkRequestsForOrganization(db: D1Database, organizati
       CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
       created_at DESC
     LIMIT 100
-  `).bind(organizationId).all()
+  `,
+    )
+    .bind(organizationId)
+    .all();
 
-  return rows.results ?? []
+  return rows.results ?? [];
 }
 
 function buildContentId(
@@ -403,7 +537,7 @@ function buildContentId(
   field: string,
   locationId?: string,
 ) {
-  return `content::${organizationId}::${siteId}::${locationId ?? 'site'}::${page}::${field}`
+  return `content::${organizationId}::${siteId}::${locationId ?? "site"}::${page}::${field}`;
 }
 
 async function resolvePublicPath(
@@ -412,29 +546,39 @@ async function resolvePublicPath(
   page: string,
   locationId?: string,
 ) {
-  if (page === 'location' && locationId) {
-    const location = await db.prepare(`
+  if (page === "location" && locationId) {
+    const location = await db
+      .prepare(
+        `
       SELECT slug
       FROM business_locations
       WHERE id = ? AND site_id = ?
       LIMIT 1
-    `).bind(locationId, siteId).first<{ slug: string }>()
+    `,
+      )
+      .bind(locationId, siteId)
+      .first<{ slug: string }>();
 
-    return location?.slug ? `/locations/${location.slug}` : '/locations'
+    return location?.slug ? `/locations/${location.slug}` : "/locations";
   }
 
-  if (page === 'menu' && locationId) {
-    const location = await db.prepare(`
+  if (page === "menu" && locationId) {
+    const location = await db
+      .prepare(
+        `
       SELECT slug
       FROM business_locations
       WHERE id = ? AND site_id = ?
       LIMIT 1
-    `).bind(locationId, siteId).first<{ slug: string }>()
+    `,
+      )
+      .bind(locationId, siteId)
+      .first<{ slug: string }>();
 
-    return location?.slug ? `/locations/${location.slug}/menu` : '/menu'
+    return location?.slug ? `/locations/${location.slug}/menu` : "/menu";
   }
 
-  return contentRegistry[page]?.path ?? '/'
+  return contentRegistry[page]?.path ?? "/";
 }
 
 export async function updatePageContent(
@@ -442,16 +586,17 @@ export async function updatePageContent(
   organizationId: string,
   siteId: string,
   input: {
-    page: string
-    changes: Record<string, unknown>
-    location_id?: string | null
+    page: string;
+    changes: Record<string, unknown>;
+    location_id?: string | null;
   },
 ) {
-  const locationId = input.location_id ?? undefined
-  const { normalizedFields, heroChange, hasHeroChange } = normalizeContentChanges(input.page, input.changes)
+  const locationId = input.location_id ?? undefined;
+  const { normalizedFields, heroChange, hasHeroChange } =
+    normalizeContentChanges(input.page, input.changes);
 
   for (const [field, value] of normalizedFields.entries()) {
-    const fieldDef = getFieldDef(input.page, field)
+    const fieldDef = getFieldDef(input.page, field);
     await upsertSiteContent(db, {
       id: buildContentId(organizationId, siteId, input.page, field, locationId),
       organization_id: organizationId,
@@ -460,30 +605,36 @@ export async function updatePageContent(
       page: input.page,
       field,
       value,
-      type: fieldDef?.type || 'text',
-      source: 'manual',
+      type: fieldDef?.type || "text",
+      source: "manual",
       content: value,
       hero_title: undefined,
       hero_subtitle: undefined,
       hero_image_asset_id: undefined,
       hero_video_asset_id: undefined,
-    })
+    });
   }
 
   if (hasHeroChange) {
     await upsertSiteContent(db, {
-      id: buildContentId(organizationId, siteId, input.page, 'hero', locationId),
+      id: buildContentId(
+        organizationId,
+        siteId,
+        input.page,
+        "hero",
+        locationId,
+      ),
       organization_id: organizationId,
       site_id: siteId,
       location_id: locationId,
       page: input.page,
-      field: 'hero',
-      type: 'text',
-      source: 'manual',
+      field: "hero",
+      type: "text",
+      source: "manual",
       content: undefined,
       updated_at: undefined as never,
       ...(heroChange as Partial<SiteContent>),
-    } as Omit<SiteContent, 'updated_at'>)
+    } as Omit<SiteContent, "updated_at">);
   }
 
   return {
@@ -492,7 +643,7 @@ export async function updatePageContent(
     location_id: locationId ?? null,
     changes_count: normalizedFields.size + (hasHeroChange ? 1 : 0),
     public_path: await resolvePublicPath(db, siteId, input.page, locationId),
-  }
+  };
 }
 
 export async function getEditorContent(
@@ -502,10 +653,18 @@ export async function getEditorContent(
   page: string,
   locationId?: string,
 ) {
-  const mergedContent = await getPageContent(db, organizationId, siteId, page, locationId)
+  const mergedContent = await getPageContent(
+    db,
+    organizationId,
+    siteId,
+    page,
+    locationId,
+  );
 
-  if (page === 'location' && locationId) {
-    const locHero = await db.prepare(`
+  if (page === "location" && locationId) {
+    const locHero = await db
+      .prepare(
+        `
       SELECT bl.hero_image_asset_id, bl.hero_video_asset_id,
              img.public_url AS hero_public_url, img.kind AS hero_kind,
              vid.public_url AS hero_video_public_url, vid.kind AS hero_video_kind
@@ -514,27 +673,32 @@ export async function getEditorContent(
       LEFT JOIN media_assets vid ON bl.hero_video_asset_id = vid.id AND vid.status = 'active'
       WHERE bl.id = ? AND bl.site_id = ?
       LIMIT 1
-    `).bind(locationId, siteId).first<{
-      hero_image_asset_id: string | null
-      hero_video_asset_id: string | null
-      hero_public_url: string | null
-      hero_kind: string | null
-      hero_video_public_url: string | null
-      hero_video_kind: string | null
-    }>()
+    `,
+      )
+      .bind(locationId, siteId)
+      .first<{
+        hero_image_asset_id: string | null;
+        hero_video_asset_id: string | null;
+        hero_public_url: string | null;
+        hero_kind: string | null;
+        hero_video_public_url: string | null;
+        hero_video_kind: string | null;
+      }>();
 
     if (locHero) {
-      const heroIdx = mergedContent.findIndex((content) => content.field === 'hero')
-      const existing = heroIdx !== -1 ? mergedContent[heroIdx]! : null
+      const heroIdx = mergedContent.findIndex(
+        (content) => content.field === "hero",
+      );
+      const existing = heroIdx !== -1 ? mergedContent[heroIdx]! : null;
       const overlaid = {
         id: existing?.id ?? `bl-hero-${locationId}`,
         organization_id: existing?.organization_id ?? organizationId,
         site_id: existing?.site_id ?? siteId,
         location_id: existing?.location_id ?? locationId,
         page: existing?.page ?? page,
-        field: 'hero',
-        type: existing?.type ?? 'text',
-        source: existing?.source ?? 'manual',
+        field: "hero",
+        type: existing?.type ?? "text",
+        source: existing?.source ?? "manual",
         content: existing?.content,
         value: existing?.value,
         hero_title: existing?.hero_title,
@@ -546,39 +710,40 @@ export async function getEditorContent(
         hero_video_public_url: locHero.hero_video_public_url ?? null,
         hero_video_kind: locHero.hero_video_kind ?? null,
         updated_at: existing?.updated_at ?? new Date().toISOString(),
-      }
-      if (heroIdx !== -1) mergedContent[heroIdx] = overlaid
-      else mergedContent.push(overlaid)
+      };
+      if (heroIdx !== -1) mergedContent[heroIdx] = overlaid;
+      else mergedContent.push(overlaid);
     }
   }
 
-  const editableKeys = editableFieldKeys(page)
+  const editableKeys = editableFieldKeys(page);
   const content = mergedContent.map((item) => {
-    const isStructuredHero = item.field === 'hero'
-    const isEditableField = isStructuredHero || Boolean(getFieldDef(page, item.field))
+    const isStructuredHero = item.field === "hero";
+    const isEditableField =
+      isStructuredHero || Boolean(getFieldDef(page, item.field));
     return {
       ...item,
-      render_status: isEditableField ? 'rendered' : 'orphan',
+      render_status: isEditableField ? "rendered" : "orphan",
       editable_keys: isStructuredHero
-        ? ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video']
+        ? ["hero.title", "hero.subtitle", "hero.image", "hero.video"]
         : getFieldDef(page, item.field)
           ? [item.field]
           : [],
-    }
-  })
+    };
+  });
 
   return {
-    content,
+    fields: content,
     siteId,
     locationId,
     page,
     public_path: await resolvePublicPath(db, siteId, page, locationId),
-    editableSchema: {
+    schema: {
       page,
       fields: editableKeys,
-      structured: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'],
+      structured: ["hero.title", "hero.subtitle", "hero.image", "hero.video"],
     },
-  }
+  };
 }
 
 export async function updateHomeHero(
@@ -586,34 +751,40 @@ export async function updateHomeHero(
   organizationId: string,
   siteId: string,
   input: {
-    title?: string | null
-    subtitle?: string | null
-    image_asset_id?: string | null
-    video_asset_id?: string | null
-    location_id?: string | null
+    title?: string | null;
+    subtitle?: string | null;
+    image_asset_id?: string | null;
+    video_asset_id?: string | null;
+    location_id?: string | null;
   },
 ) {
   const changes: Record<string, unknown> = {
     hero: {
-      ...(input.title !== undefined ? { hero_title: input.title ?? '' } : {}),
-      ...(input.subtitle !== undefined ? { hero_subtitle: input.subtitle ?? '' } : {}),
-      ...(input.image_asset_id !== undefined ? { hero_image_asset_id: input.image_asset_id ?? '' } : {}),
-      ...(input.video_asset_id !== undefined ? { hero_video_asset_id: input.video_asset_id ?? '' } : {}),
+      ...(input.title !== undefined ? { hero_title: input.title ?? "" } : {}),
+      ...(input.subtitle !== undefined
+        ? { hero_subtitle: input.subtitle ?? "" }
+        : {}),
+      ...(input.image_asset_id !== undefined
+        ? { hero_image_asset_id: input.image_asset_id ?? "" }
+        : {}),
+      ...(input.video_asset_id !== undefined
+        ? { hero_video_asset_id: input.video_asset_id ?? "" }
+        : {}),
     },
-  }
+  };
 
   const result = await updatePageContent(db, organizationId, siteId, {
-    page: 'home',
+    page: "home",
     changes,
     location_id: input.location_id,
-  })
+  });
 
   return {
     success: true,
-    page: 'home',
+    page: "home",
     changes_count: result.changes_count,
     public_path: result.public_path,
-  }
+  };
 }
 
 export async function hydrateSeededLocationForOnboarding(
@@ -623,19 +794,26 @@ export async function hydrateSeededLocationForOnboarding(
   userId: string,
   updates: Record<string, unknown>,
 ) {
-  const rows = await db.prepare(`
+  const rows = await db
+    .prepare(
+      `
     SELECT id, slug
     FROM business_locations
     WHERE organization_id = ? AND site_id = ? AND status = 'active'
     ORDER BY is_primary DESC, created_at ASC
-  `).bind(organizationId, siteId).all<{ id: string; slug: string }>()
+  `,
+    )
+    .bind(organizationId, siteId)
+    .all<{ id: string; slug: string }>();
 
-  const locations = rows.results ?? []
+  const locations = rows.results ?? [];
   if (locations.length !== 1) {
-    throw new Error('Location limit reached and no single seeded location was available to hydrate.')
+    throw new Error(
+      "Location limit reached and no single seeded location was available to hydrate.",
+    );
   }
 
-  const location = locations[0]!
+  const location = locations[0]!;
   const result = await updateLocation(
     db,
     organizationId,
@@ -643,13 +821,17 @@ export async function hydrateSeededLocationForOnboarding(
     location.id,
     updates,
     userId,
-  )
+  );
+
+  if (result.status >= 400) {
+    return result;
+  }
 
   return {
     ...result.data,
     hydrated_seed_location: true,
     previous_slug: location.slug,
-  }
+  };
 }
 
 export async function deleteContentField(
@@ -658,14 +840,21 @@ export async function deleteContentField(
   siteId: string,
   input: { page: string; field: string; location_id?: string | null },
 ) {
-  const locationId = input.location_id ?? undefined
-  await deleteSiteContentField(db, organizationId, siteId, input.page, input.field, locationId)
+  const locationId = input.location_id ?? undefined;
+  await deleteSiteContentField(
+    db,
+    organizationId,
+    siteId,
+    input.page,
+    input.field,
+    locationId,
+  );
   return {
     deleted: true,
     page: input.page,
     field: input.field,
     public_path: await resolvePublicPath(db, siteId, input.page, locationId),
-  }
+  };
 }
 
 export async function getGoogleBusinessLocationConnectionForMcp(
@@ -675,12 +864,22 @@ export async function getGoogleBusinessLocationConnectionForMcp(
   siteId: string,
   locationId: string,
 ) {
-  const entitled = await hasEntitlement(env, db, organizationId, 'google_business')
+  const entitled = await hasEntitlement(
+    env,
+    db,
+    organizationId,
+    "google_business",
+  );
   if (!entitled) {
-    throw new Error('Google Business integration requires a paid plan.')
+    throw new Error("Google Business integration requires a paid plan.");
   }
-  const connection = await getGoogleBusinessConnection(env, organizationId, siteId, locationId)
-  if (!connection) return null
+  const connection = await getGoogleBusinessConnection(
+    env,
+    organizationId,
+    siteId,
+    locationId,
+  );
+  if (!connection) return null;
   return {
     id: connection.id,
     provider_account_email: connection.provider_account_email,
@@ -688,7 +887,7 @@ export async function getGoogleBusinessLocationConnectionForMcp(
     expires_at: connection.expires_at,
     created_at: connection.created_at,
     updated_at: connection.updated_at,
-  }
+  };
 }
 
 export async function getGoogleBusinessLocationAuthUrlForMcp(
@@ -699,12 +898,18 @@ export async function getGoogleBusinessLocationAuthUrlForMcp(
   locationId: string,
   userId: string,
 ) {
-  const entitled = await hasEntitlement(env, db, organizationId, 'google_business')
+  const entitled = await hasEntitlement(
+    env,
+    db,
+    organizationId,
+    "google_business",
+  );
   if (!entitled) {
-    throw new Error('Google Business integration requires a paid plan.')
+    throw new Error("Google Business integration requires a paid plan.");
   }
-  const secret = env.CONNECTOR_TOKEN_ENCRYPTION_KEY
-  if (!secret) throw new Error('Server misconfiguration: encryption key not set')
+  const secret = env.CONNECTOR_TOKEN_ENCRYPTION_KEY;
+  if (!secret)
+    throw new Error("Server misconfiguration: encryption key not set");
 
   const state = await signOAuthState(secret, {
     siteId,
@@ -712,8 +917,8 @@ export async function getGoogleBusinessLocationAuthUrlForMcp(
     userId,
     locationId,
     timestamp: Date.now(),
-  })
-  return { auth_url: getGoogleBusinessAuthUrl(env, state) }
+  });
+  return { auth_url: getGoogleBusinessAuthUrl(env, state) };
 }
 
 export async function listGoogleBusinessAccountsForMcp(
@@ -722,18 +927,36 @@ export async function listGoogleBusinessAccountsForMcp(
   organizationId: string,
   siteId: string,
 ) {
-  const entitled = await hasEntitlement(env, db, organizationId, 'google_business')
+  const entitled = await hasEntitlement(
+    env,
+    db,
+    organizationId,
+    "google_business",
+  );
   if (!entitled) {
-    throw new Error('Google Business integration requires a paid plan.')
+    throw new Error("Google Business integration requires a paid plan.");
   }
-  const connection = await getGoogleBusinessConnection(env, organizationId, siteId)
-  if (!connection) throw new Error('Google Business not connected')
+  const connection = await getGoogleBusinessConnection(
+    env,
+    organizationId,
+    siteId,
+  );
+  if (!connection) throw new Error("Google Business not connected");
 
-  const accounts = await getGoogleBusinessAccounts(env, connection.encrypted_access_token)
-  const accountsWithLocations = await Promise.all(accounts.map(async (account) => ({
-    ...account,
-    locations: await getGoogleBusinessLocations(env, connection.encrypted_access_token, account.name),
-  })))
+  const accounts = await getGoogleBusinessAccounts(
+    env,
+    connection.encrypted_access_token,
+  );
+  const accountsWithLocations = await Promise.all(
+    accounts.map(async (account) => ({
+      ...account,
+      locations: await getGoogleBusinessLocations(
+        env,
+        connection.encrypted_access_token,
+        account.name,
+      ),
+    })),
+  );
 
   return {
     connection: {
@@ -743,7 +966,7 @@ export async function listGoogleBusinessAccountsForMcp(
       connected_at: connection.created_at,
     },
     accounts: accountsWithLocations,
-  }
+  };
 }
 
 export async function syncGoogleBusinessLocationsForMcp(
@@ -754,16 +977,31 @@ export async function syncGoogleBusinessLocationsForMcp(
   accountId: string,
   locationIds: string[],
 ) {
-  const entitled = await hasEntitlement(env, db, organizationId, 'google_business')
+  const entitled = await hasEntitlement(
+    env,
+    db,
+    organizationId,
+    "google_business",
+  );
   if (!entitled) {
-    throw new Error('Google Business integration requires a paid plan.')
+    throw new Error("Google Business integration requires a paid plan.");
   }
-  const connection = await getGoogleBusinessConnection(env, organizationId, siteId)
-  if (!connection) throw new Error('Google Business not connected')
+  const connection = await getGoogleBusinessConnection(
+    env,
+    organizationId,
+    siteId,
+  );
+  if (!connection) throw new Error("Google Business not connected");
 
-  const allLocations = await getGoogleBusinessLocations(env, connection.encrypted_access_token, accountId)
-  const selectedLocations = allLocations.filter((location) => locationIds.includes(location.name))
-  if (!selectedLocations.length) throw new Error('No valid locations found')
+  const allLocations = await getGoogleBusinessLocations(
+    env,
+    connection.encrypted_access_token,
+    accountId,
+  );
+  const selectedLocations = allLocations.filter((location) =>
+    locationIds.includes(location.name),
+  );
+  if (!selectedLocations.length) throw new Error("No valid locations found");
 
   const { reviewsUpserted } = await syncGoogleLocations(
     env,
@@ -771,36 +1009,36 @@ export async function syncGoogleBusinessLocationsForMcp(
     siteId,
     selectedLocations,
     connection.encrypted_access_token,
-  )
+  );
 
   return {
     success: true,
     synced_locations: selectedLocations.length,
     reviews_upserted: reviewsUpserted,
-  }
+  };
 }
 
 function safeJson(value: unknown) {
-  if (typeof value !== 'string' || !value.trim()) return null
+  if (typeof value !== "string" || !value.trim()) return null;
   try {
-    return JSON.parse(value)
+    return JSON.parse(value);
   } catch {
-    return null
+    return null;
   }
 }
 
 function safeJsonArray(value: unknown) {
-  const parsed = safeJson(value)
-  return Array.isArray(parsed) ? parsed : []
+  const parsed = safeJson(value);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 function stringOrNull(value: unknown, maxLength: number) {
-  const normalized = String(value ?? '').trim()
-  return normalized ? normalized.slice(0, maxLength) : null
+  const normalized = String(value ?? "").trim();
+  return normalized ? normalized.slice(0, maxLength) : null;
 }
 
 function booleanInt(value: unknown) {
-  if (value === true || value === 1 || value === '1') return 1
-  if (value === false || value === 0 || value === '0') return 0
-  throw new Error('Boolean value required')
+  if (value === true || value === 1 || value === "1") return 1;
+  if (value === false || value === 0 || value === "0") return 0;
+  throw new Error("Boolean value required");
 }

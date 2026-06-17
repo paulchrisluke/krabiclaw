@@ -136,7 +136,7 @@ test.describe('stateless MCP server', () => {
     expect(allToolNames).toEqual(expect.arrayContaining([
       'list_sites', 'create_site',
       'get_site', 'list_locations', 'list_menus', 'list_posts', 'get_site_media_assets',
-      'get_page_content', 'list_experiences', 'get_contact_inquiries',
+      'get_page_fields', 'list_experiences', 'get_contact_inquiries',
       'get_translation_inventory', 'list_work_requests', 'get_google_business_connection',
     ]))
     expect(allToolNames.length).toBeGreaterThan(50)
@@ -160,7 +160,8 @@ test.describe('stateless MCP server', () => {
     })
     expect(sitesList.status()).toBe(200)
     const sitesListBody = await sitesList.json()
-    expect(mcpData<{ sites: Array<{ id: string }> }>(sitesListBody).sites.some(site => site.id === siteId)).toBe(true)
+    const sitesListText = sitesListBody?.result?.content?.[0]?.text as string | undefined
+    expect(sitesListText).toContain('You have')
 
     const siteRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -201,12 +202,12 @@ test.describe('stateless MCP server', () => {
 
     const contentRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'get_page_content',
+      toolName: 'get_page_fields',
       args: { site_id: siteId, page: 'home' },
     })
     expect(contentRead.status()).toBe(200)
     const mergedBody = await contentRead.json()
-    const mergedHero = mcpData<{ content: Array<{ field: string; hero_title?: string }> }>(mergedBody).content.find(item => item.field === 'hero')
+    const mergedHero = mcpData<{ fields: Array<{ field: string; hero_title?: string }> }>(mergedBody).fields.find(item => item.field === 'hero')
     expect(mergedHero?.hero_title).toContain('MCP Hero')
 
     const settingsBefore = await mcpRequest(request, baseURL!, {
@@ -230,7 +231,7 @@ test.describe('stateless MCP server', () => {
         site_id: siteId,
         page: 'about',
         changes: {
-          'promo.note': `Delete me ${Date.now()}`,
+          'story.title': `Delete me ${Date.now()}`,
         },
       },
     })
@@ -239,7 +240,7 @@ test.describe('stateless MCP server', () => {
     const deleteField = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'delete_content_field',
-      args: { site_id: siteId, page: 'about', field: 'promo.note' },
+      args: { site_id: siteId, page: 'about', field: 'story.title' },
     })
     expect(deleteField.status()).toBe(200)
 
@@ -285,13 +286,6 @@ test.describe('stateless MCP server', () => {
     const contactSubmissionId = mcpData<{ submissions: Array<{ id: string }> }>(contactsBody).submissions[0]?.id
     expect(contactSubmissionId).toEqual(expect.any(String))
 
-    const updateContact = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'update_contact_submission',
-      args: { site_id: siteId, submission_id: contactSubmissionId, status: 'read' },
-    })
-    expect(updateContact.status()).toBe(200)
-
     const listReservations = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_reservation_inquiries',
@@ -302,12 +296,17 @@ test.describe('stateless MCP server', () => {
     const reservationSubmissionId = mcpData<{ submissions: Array<{ id: string }> }>(reservationsBody).submissions[0]?.id
     expect(reservationSubmissionId).toEqual(expect.any(String))
 
-    const updateReservation = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'update_reservation_submission',
-      args: { site_id: siteId, submission_id: reservationSubmissionId, status: 'confirmed' },
+    const tools = await mcpRequest(request, baseURL!, {
+      method: 'tools/list',
+      siteId,
     })
-    expect(updateReservation.status()).toBe(200)
+    expect(tools.status()).toBe(200)
+    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string }> } }
+    const toolNames = toolsBody.result.tools.map(tool => tool.name)
+    expect(toolNames).toContain('get_contact_inquiries')
+    expect(toolNames).toContain('get_reservation_inquiries')
+    expect(toolNames).not.toContain('update_contact_submission')
+    expect(toolNames).not.toContain('update_reservation_submission')
 
     const localeCode = `qaa-${Date.now().toString(36).slice(-6)}`
     const locale = await mcpRequest(request, baseURL!, {
@@ -745,6 +744,13 @@ test.describe('stateless MCP server', () => {
       args: { site_id: siteId, experience_id: experienceId, tagline: 'Updated through MCP', available_note: 'Call ahead to confirm.' },
     })
     expect(experienceUpdate.status()).toBe(200)
+
+    const invalidExperience = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'create_experience',
+      args: { site_id: siteId, title: 'Invalid MCP Experience', status: 'draft' },
+    })
+    expect(invalidExperience.status()).toBe(400)
 
     const experienceReadBody = await experienceRead.json()
     const experienceSlug = mcpData<{ experience: { slug: string } }>(experienceReadBody).experience.slug

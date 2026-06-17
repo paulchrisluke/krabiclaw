@@ -129,14 +129,25 @@ async function main() {
   const siteId = await getOrCreateSite(headers)
   if (!siteId) process.exit(1)
 
+  const location = await mcp(headers, 'create_location', {
+    site_id: siteId,
+    title: `MCP Ops Location ${Date.now()}`,
+  })
+  expectStatus('create_location succeeds', location)
+  const locationId = data(location.body)?.location?.id
+  expectValue('create_location returns location id', Boolean(locationId), location.body)
+
   const menu = await mcp(headers, 'create_menu', {
     site_id: siteId,
     name: `MCP Ops Menu ${Date.now()}`,
     description: 'Menu created by MCP ops checker',
+    location_id: locationId,
   })
   expectStatus('create_menu succeeds', menu)
-  const menuId = data(menu.body)?.menu?.id
+  const createdMenu = data(menu.body)?.menu
+  const menuId = createdMenu?.id
   expectValue('create_menu returns menu id', Boolean(menuId), menu.body)
+  expectValue('create_menu preserves location_id', createdMenu?.location_id === locationId, createdMenu)
 
   const menuItem = await mcp(headers, 'create_menu_item', {
     site_id: siteId,
@@ -166,6 +177,10 @@ async function main() {
   const readItems = data(menuRead.body)?.menu?.items ?? []
   expectValue('get_menu includes updated item', readItems.some(item => item.id === menuItemId && item.name === 'MCP Ops Green Curry'), readItems)
 
+  const menuDelete = await mcp(headers, 'delete_menu', { site_id: siteId, menu_id: menuId })
+  expectStatus('delete_menu succeeds', menuDelete)
+  expectValue('delete_menu returns deleted true', data(menuDelete.body)?.deleted === true, menuDelete.body)
+
   const post = await mcp(headers, 'create_post', {
     site_id: siteId,
     title: 'MCP Ops Post',
@@ -192,6 +207,13 @@ async function main() {
   expectStatus('publish_post succeeds', postPublish)
   expectValue('publish_post returns published post', Boolean(data(postPublish.body)?.post?.id), postPublish.body)
 
+  const socialOnlyPublish = await mcp(headers, 'publish_post', {
+    site_id: siteId,
+    post_id: postId,
+    channels: ['facebook'],
+  })
+  expectStatus('publish_post with disconnected facebook returns 409', socialOnlyPublish, 409)
+
   const posts = await mcp(headers, 'list_posts', { site_id: siteId })
   expectStatus('list_posts succeeds', posts)
   expectValue('list_posts includes published post', (data(posts.body)?.posts ?? []).some(post => post.id === postId), posts.body)
@@ -208,6 +230,13 @@ async function main() {
   expectStatus('create_experience succeeds', experience)
   const experienceId = data(experience.body)?.experience?.id
   expectValue('create_experience returns experience id', Boolean(experienceId), experience.body)
+
+  const invalidExperience = await mcp(headers, 'create_experience', {
+    site_id: siteId,
+    title: 'Invalid MCP Experience Status',
+    status: 'draft',
+  })
+  expectStatus('create_experience rejects invalid status', invalidExperience, 400)
 
   const experienceUpdate = await mcp(headers, 'update_experience', {
     site_id: siteId,

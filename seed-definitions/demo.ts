@@ -1295,37 +1295,9 @@ export function renderCompiledDemoCoreSeedBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
-  const locationRows = compiledDemoSeed.locations
-    .map((location) => `  (${[
-      sqlValue(location.id),
-      sqlValue(compiledDemoSeed.identity.organizationId),
-      sqlValue(compiledDemoSeed.identity.siteId),
-      sqlValue(location.slug),
-      sqlValue(location.title),
-      sqlValue(location.city),
-      sqlJson(location.address),
-      sqlValue(location.phone),
-      sqlValue(location.email),
-      sqlValue(location.mapsUrl),
-      sqlValue(location.latitude),
-      sqlValue(location.longitude),
-      sqlValue(location.description),
-      sqlValue(location.shortDescription),
-      sqlJson(location.openingHours),
-      sqlValue(location.rating),
-      sqlValue(location.reviewCount),
-      sqlValue(location.priceLevel),
-      sqlJson(location.categories),
-      sqlValue(location.instagramUrl),
-      sqlValue(location.facebookUrl),
-      sqlValue(location.isPrimary),
-      sqlValue(location.status),
-    ].join(', ')})`)
-    .join(',\n')
-
   return `-- BEGIN GENERATED: demo_core
 -- Canonical demo site core generated from the curated fixture contract.
-INSERT INTO sites (
+INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
   status, plan, onboarding_status, url_structure, primary_location_id,
@@ -1351,33 +1323,18 @@ INSERT INTO sites (
   ${sqlValue(compiledDemoSeed.site.mediaSource)}
 );
 
-INSERT INTO site_config (organization_id, site_id, key, value)
+INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
 VALUES
 ${siteConfigRows};
 
-INSERT INTO site_locales
+INSERT OR REPLACE INTO site_locales
   (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
 VALUES
 ${siteLocaleRows};
 
-INSERT INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status)
+INSERT OR REPLACE INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status)
 VALUES
 ${siteDomainRows};
-
-INSERT INTO business_locations (
-  id, organization_id, site_id, slug, title, city,
-  address, phone, email, maps_url,
-  latitude, longitude,
-  description, short_description,
-  opening_hours,
-  rating, review_count,
-  price_level, categories,
-  instagram_url, facebook_url,
-  is_primary, status
-) VALUES
-${locationRows};
-
-UPDATE sites SET primary_location_id = ${sqlValue(compiledDemoSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledDemoSeed.identity.siteId)};
 -- END GENERATED: demo_core`
 }
 
@@ -1403,19 +1360,60 @@ export function renderCompiledDemoMediaBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
+  const locationRowsNoHero = compiledDemoSeed.locations
+    .map((location) => `  (${[
+      sqlValue(location.id),
+      sqlValue(compiledDemoSeed.identity.organizationId),
+      sqlValue(compiledDemoSeed.identity.siteId),
+      sqlValue(location.slug),
+      sqlValue(location.title),
+      sqlValue(location.city),
+      sqlJson(location.address),
+      sqlValue(location.phone),
+      sqlValue(location.email),
+      sqlValue(location.mapsUrl),
+      sqlValue(location.latitude),
+      sqlValue(location.longitude),
+      sqlValue(location.description),
+      sqlValue(location.shortDescription),
+      sqlJson(location.openingHours),
+      sqlValue(location.rating),
+      sqlValue(location.reviewCount),
+      sqlValue(location.priceLevel),
+      sqlJson(location.categories),
+      sqlValue(location.instagramUrl),
+      sqlValue(location.facebookUrl),
+      sqlValue(location.isPrimary),
+      sqlValue(location.status),
+      'NULL',
+      'NULL',
+    ].join(', ')})`)
+    .join(',\n')
+
   const heroUpdates = compiledDemoSeed.locations
-    .filter((loc) => loc.heroImageAssetId || loc.heroVideoAssetId)
-    .map((loc) => {
-      const parts: string[] = []
-      if (loc.heroImageAssetId) parts.push(`hero_image_asset_id = ${sqlValue(loc.heroImageAssetId)}`)
-      if (loc.heroVideoAssetId) parts.push(`hero_video_asset_id = ${sqlValue(loc.heroVideoAssetId)}`)
-      return `UPDATE business_locations SET ${parts.join(', ')} WHERE id = ${sqlValue(loc.id)};`
-    })
+    .filter((l) => l.heroImageAssetId || l.heroVideoAssetId)
+    .map((l) => `UPDATE business_locations SET hero_image_asset_id = ${sqlValue(l.heroImageAssetId ?? null)}, hero_video_asset_id = ${sqlValue(l.heroVideoAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
     .join('\n')
 
   return `-- BEGIN GENERATED: demo_media
+-- Insert locations first (without hero asset refs) to satisfy media_assets FK,
+-- then insert media_assets, then patch hero refs back onto locations.
+INSERT OR REPLACE INTO business_locations (
+  id, organization_id, site_id, slug, title, city,
+  address, phone, email, maps_url,
+  latitude, longitude,
+  description, short_description,
+  opening_hours,
+  rating, review_count,
+  price_level, categories,
+  instagram_url, facebook_url,
+  is_primary, status,
+  hero_image_asset_id, hero_video_asset_id
+) VALUES
+${locationRowsNoHero};
+
 -- All media assets for the demo tenant.
-INSERT INTO media_assets
+INSERT OR REPLACE INTO media_assets
   (id, organization_id, site_id, location_id,
    kind, provider, source,
    cloudflare_image_id, r2_key, public_url, thumbnail_url,
@@ -1424,6 +1422,8 @@ VALUES
 ${mediaRows};
 
 ${heroUpdates}
+
+UPDATE sites SET primary_location_id = ${sqlValue(compiledDemoSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledDemoSeed.identity.siteId)};
 -- END GENERATED: demo_media`
 }
 
@@ -1447,7 +1447,7 @@ export function renderCompiledDemoReviewsBlock(): string {
 
   return `-- BEGIN GENERATED: demo_reviews
 -- Reviews for the demo tenant.
-INSERT INTO reviews
+INSERT OR IGNORE INTO reviews
   (id, organization_id, site_id, location_id,
    author_name, reviewer_photo_url, rating, content,
    owner_reply, owner_reply_at,
@@ -1491,11 +1491,11 @@ export function renderCompiledDemoMenuBlock(): string {
 
   return `-- BEGIN GENERATED: demo_menu
 -- Menus and menu items for the demo tenant.
-INSERT INTO menus (id, organization_id, site_id, location_id, name, description, section_order, status)
+INSERT OR REPLACE INTO menus (id, organization_id, site_id, location_id, name, description, section_order, status)
 VALUES
 ${menuRows};
 
-INSERT INTO menu_items
+INSERT OR IGNORE INTO menu_items
   (id, menu_id, section, name, slug, description, price_amount,
    image_asset_id, allergens, dietary_notes, available, sort_order)
 VALUES
@@ -1524,7 +1524,7 @@ export function renderCompiledDemoQaBlock(): string {
 
   return `-- BEGIN GENERATED: demo_qa
 -- Location Q&A for the demo tenant.
-INSERT INTO location_qa
+INSERT OR IGNORE INTO location_qa
   (id, organization_id, site_id, location_id,
    question, question_author, answer, answer_author,
    is_owner_answer, upvote_count, source, status, sort_order)
@@ -1564,14 +1564,14 @@ export function renderCompiledDemoPostsBlock(): string {
 
   return `-- BEGIN GENERATED: demo_posts
 -- Posts and channel jobs for the demo tenant.
-INSERT INTO posts
+INSERT OR IGNORE INTO posts
   (id, organization_id, site_id, location_id,
    post_type, title, body, image_asset_id,
    status, published_at, created_by)
 VALUES
 ${postRows};
 
-INSERT INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
+INSERT OR IGNORE INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
 VALUES
 ${channelJobRows};
 -- END GENERATED: demo_posts`
@@ -1605,7 +1605,7 @@ export function renderCompiledDemoExperienceSeedBlock(): string {
 
   return `-- BEGIN GENERATED: demo_experiences
 -- Hybrid restaurant + experiences showcase for the platform demo.
-INSERT INTO experiences
+INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id,
    title, slug, tagline, body,
    image_asset_id, price, duration_minutes, max_capacity,
@@ -1638,7 +1638,7 @@ export function renderCompiledDemoContentBlock(): string {
 
   return `-- BEGIN GENERATED: demo_content
 -- Site content for the demo tenant.
-INSERT INTO site_content
+INSERT OR IGNORE INTO site_content
   (id, organization_id, site_id, location_id,
    page, field, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id,
    type, source)
@@ -1725,22 +1725,22 @@ export function renderCompiledDemoTranslationsBlock(): string {
     .join(',\n')
 
   return `-- BEGIN GENERATED: demo_translations
-INSERT INTO site_content_translations
+INSERT OR IGNORE INTO site_content_translations
   (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, reviewed_at)
 VALUES
 ${siteContentTranslationRows};
 
-INSERT INTO business_location_translations
+INSERT OR IGNORE INTO business_location_translations
   (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, reviewed_at)
 VALUES
 ${businessLocationTranslationRows};
 
-INSERT INTO menu_translations
+INSERT OR IGNORE INTO menu_translations
   (id, organization_id, site_id, menu_id, locale, name, description, section_order, status, source_hash, translated_at, reviewed_at)
 VALUES
 ${menuTranslationRows};
 
-INSERT INTO menu_item_translations
+INSERT OR IGNORE INTO menu_item_translations
   (id, organization_id, site_id, menu_item_id, locale, section, name, description, allergens, dietary_notes, status, source_hash, translated_at, reviewed_at)
 VALUES
 ${menuItemTranslationRows};

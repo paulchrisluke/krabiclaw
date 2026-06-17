@@ -110,8 +110,8 @@ test.describe('dashboard functional smoke', () => {
 
     const contentRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/content/home`)
     expect(contentRes.status()).toBe(200)
-    const contentBody = await contentRes.json() as { content: Array<{ field: string; hero_title?: string }> }
-    const hero = contentBody.content.find((entry) => entry.field === 'hero')
+    const contentBody = await contentRes.json() as { fields: Array<{ field: string; hero_title?: string }> }
+    const hero = contentBody.fields.find((entry) => entry.field === 'hero')
     expect(hero?.hero_title).toBe(uniqueTitle)
   })
 

@@ -16,6 +16,7 @@ export default defineConfig({
         'photo-album': resolve(__dirname, 'widgets/photo-album.html'),
         'image-carousel': resolve(__dirname, 'widgets/image-carousel.html'),
         'site-preview': resolve(__dirname, 'widgets/site-preview.html'),
+        'photo-upload': resolve(__dirname, 'widgets/photo-upload.html'),
       },
       output: {
         entryFileNames: '[name].js',

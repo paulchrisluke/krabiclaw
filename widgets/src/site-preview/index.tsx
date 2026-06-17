@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import { useState, useEffect } from 'react'
 import { onToolResult, sendUiMessage, openExternal, injectStyles } from '../bridge'
+import { sharedStyles } from '../theme'
 
 interface Page {
   label: string
@@ -11,35 +12,28 @@ interface SiteContent {
   site: {
     id: string
     name: string
-    subdomain: string
+    subdomain?: string | null
     publicUrl: string
+    previewUrl: string
   }
   pages: Page[]
   ogImageUrl?: string | null
 }
 
-const PRIMARY = '#1F2547'
-
 const styles = `
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #111; }
-  .card { padding: 20px; }
   .header { margin-bottom: 10px; }
-  .title { font-size: 15px; font-weight: 700; color: #16a34a; display: flex; align-items: center; gap: 5px; }
-  .preview-link { width: 100%; aspect-ratio: 3 / 2; border-radius: 10px; border: 1px solid #e5e7eb; display: block; overflow: hidden; background: #f9fafb; cursor: pointer; }
-  .preview-link:focus-visible { outline: 2px solid ${PRIMARY}; outline-offset: 3px; }
+  .title { font-size: 15px; font-weight: 700; color: var(--kc-success); display: flex; align-items: center; gap: 5px; }
+  .preview-link { width: 100%; aspect-ratio: 3 / 2; border-radius: 10px; border: 1px solid var(--ui-border); display: block; overflow: hidden; background: var(--ui-bg-muted); cursor: pointer; }
+  .preview-link:focus-visible { outline: 2px solid var(--ui-text); outline-offset: 3px; }
   .preview-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.18s ease-out; }
   .preview-link:hover .preview-img { transform: scale(1.015); }
-  .link-card { width: 100%; height: 100%; background: #f9fafb; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
-  .link-card-name { font-size: 16px; font-weight: 700; color: #111; }
-  .link-card-url { font-size: 13px; color: #888; }
-  .site-url { font-size: 12px; color: #888; margin-top: 8px; text-align: center; }
+  .link-card { width: 100%; height: 100%; background: var(--ui-bg-muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .link-card-name { font-size: 16px; font-weight: 700; color: var(--ui-text); }
+  .link-card-url { font-size: 13px; color: var(--ui-text-muted); }
+  .site-url { font-size: 12px; color: var(--ui-text-muted); margin-top: 8px; text-align: center; }
   .actions { display: flex; gap: 8px; margin-top: 12px; }
-  .btn { flex: 1; padding: 11px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.15s; }
-  .btn:hover { opacity: 0.85; }
-  .btn-primary { background: ${PRIMARY}; color: #fff; }
-  .btn-outline { background: #fff; color: ${PRIMARY}; border: 1.5px solid ${PRIMARY}; }
-  .loading { text-align: center; padding: 40px 20px; color: #888; font-size: 14px; }
+  .btn { flex: 1; }
+  .loading { text-align: center; padding: 40px 20px; color: var(--ui-text-muted); font-size: 14px; }
 `
 
 function App() {
@@ -63,12 +57,21 @@ function App() {
   }
 
   const { site, pages, ogImageUrl } = content
+  const isLive = Boolean(site.subdomain)
+  // For launched sites use the public URL; for previews use the preview URL.
+  const openUrl = isLive ? site.publicUrl : site.previewUrl
+  const displayUrl = openUrl.replace(/^https?:\/\//, '').replace(/\?.*$/, '')
   const homePage = pages.find(page => page.path === '/') ?? pages[0] ?? { label: 'Home', path: '/' }
 
   const handleOpen = () => {
-    const base = site.publicUrl.replace(/\/$/, '')
     const path = homePage.path.startsWith('/') ? homePage.path : `/${homePage.path}`
-    openExternal(`${base}${path}`)
+    const dest = new URL(openUrl)
+    if (isLive) {
+      dest.pathname = path
+    } else if (path !== '/') {
+      dest.pathname = `${dest.pathname.replace(/\/$/, '')}${path}`
+    }
+    openExternal(dest.toString())
   }
 
   const handleWhatsNext = () => {
@@ -78,7 +81,7 @@ function App() {
   return (
     <div className="card">
       <div className="header">
-        <div className="title">✓ Your site is live!</div>
+        <div className="title">{isLive ? '✓ Your site is live!' : '✓ Site preview ready'}</div>
       </div>
       {ogImageUrl
         ? (
@@ -90,20 +93,20 @@ function App() {
           <button type="button" className="preview-link" onClick={handleOpen} aria-label={`Open ${site.name}`}>
             <span className="link-card">
               <span className="link-card-name">{site.name}</span>
-              <span className="link-card-url">{site.publicUrl.replace('https://', '')}</span>
+              <span className="link-card-url">{displayUrl}</span>
             </span>
           </button>
         )
       }
-      <div className="site-url">{site.publicUrl.replace('https://', '')}</div>
+      <div className="site-url">{displayUrl}</div>
       <div className="actions">
-        <button className="btn btn-primary" onClick={handleOpen}>↗ Open site</button>
+        <button className="btn btn-primary" onClick={handleOpen}>{isLive ? '↗ Open site' : '↗ Open preview'}</button>
         <button className="btn btn-outline" onClick={handleWhatsNext}>What's next?</button>
       </div>
     </div>
   )
 }
 
-injectStyles(styles)
+injectStyles(sharedStyles + styles)
 const root = document.getElementById('app')!
 createRoot(root).render(<App />)

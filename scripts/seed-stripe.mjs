@@ -159,16 +159,26 @@ async function createSubscriptionPlan({ name, description, planId, amountCents, 
 }
 
 // --- Create one-time prices ---
-async function createOneTimePrice({ productName, amountCents, priceKey }) {
+async function createOneTimePrice({ productName, amountCents, priceKey, description, features }) {
   console.log(`\nCreating one-time price: ${productName} ($${amountCents / 100})`)
+
+  const productData = {
+    name: productName,
+    metadata: { addon_type: priceKey },
+    ...(description ? { description } : {}),
+    ...(features?.length ? { marketing_features: features.map(f => ({ name: f })) } : {}),
+  }
 
   // Check if product already exists by metadata.addon_type
   const existingProducts = await stripe.products.list({ active: true, limit: 100 })
   const existingProduct = existingProducts.data.find(p => p.metadata?.addon_type === priceKey)
 
   if (existingProduct) {
-    console.log(`  Product already exists: ${existingProduct.id}`)
-    // Search for an existing price matching currency 'usd' and unit_amount === amountCents for that product
+    console.log(`  Product already exists: ${existingProduct.id} — updating description & features`)
+    await stripe.products.update(existingProduct.id, {
+      ...(description ? { description } : {}),
+      ...(features?.length ? { marketing_features: features.map(f => ({ name: f })) } : {}),
+    })
     const existingPrices = await stripe.prices.list({
       product: existingProduct.id,
       active: true,
@@ -190,10 +200,7 @@ async function createOneTimePrice({ productName, amountCents, priceKey }) {
     }
   }
 
-  const product = await stripe.products.create({
-    name: productName,
-    metadata: { addon_type: priceKey },
-  })
+  const product = await stripe.products.create(productData)
 
   const price = await stripe.prices.create({
     product: product.id,
@@ -215,26 +222,25 @@ async function main() {
   // Recurring plans
   await createSubscriptionPlan({
     name: 'Growth',
-    description: 'Your site, your domain — we handle updates so you can focus on your business.',
+    description: 'Your site, your domain — go live in minutes and edit everything through ChatGPT.',
     planId: 'growth',
     amountCents: 4900,
     highlighted: false,
     imagePath: '/Users/paulchrisluke/Downloads/growth.png',
     features: [
-      'AI-built site live in minutes',
+      'Restaurant or experience site live in minutes',
       'Your own domain (yourbusiness.com)',
-      'WhatsApp content & hours updates — we handle it',
-      'Auto-sync from Facebook, Google & Instagram',
-      'Bookings, experiences & ordering links',
-      'Booking notifications via WhatsApp or email',
-      '1 language translation by our team',
+      'Edit menus, content & photos through ChatGPT',
+      'Bookings, ticketed experiences & delivery links',
+      'WhatsApp booking & reservation notifications',
+      '1 language translation included',
       'Google Business profile basics',
     ],
   })
 
   await createSubscriptionPlan({
     name: 'Managed',
-    description: 'Send us a WhatsApp. We run your online presence — no dashboard login needed.',
+    description: 'Send us a WhatsApp. We run your online presence — no login needed.',
     planId: 'managed',
     amountCents: 14900,
     highlighted: true,
@@ -242,9 +248,9 @@ async function main() {
     imagePath: '/Users/paulchrisluke/Downloads/managed.png',
     features: [
       'Everything in Growth, plus:',
-      'We manage all content — no login needed',
+      'We manage all content via ChatGPT — no login needed',
       'Unlimited language translations',
-      'Auto-sync content from all your social channels',
+      'Auto-sync from Facebook & Instagram',
       'Full Google Business profile management',
       'Priority WhatsApp support from Paul & Julia',
     ],
@@ -252,7 +258,7 @@ async function main() {
 
   await createSubscriptionPlan({
     name: 'SEO Accelerator',
-    description: "Active SEO strategy from Julia — get found by tourists and recommended by AI.",
+    description: 'Active SEO & AEO strategy from Julia — get found by tourists and recommended by AI.',
     planId: 'seo_accelerator',
     amountCents: 34900,
     highlighted: false,
@@ -271,18 +277,39 @@ async function main() {
     productName: 'Additional Language Translation',
     amountCents: 4500,
     priceKey: 'translation',
+    description: 'Professional translation into Thai, Chinese, Russian, or any target language — reviewed and published to your live site.',
+    features: [
+      'Human-reviewed AI translation',
+      'Published to your live site',
+      'Thai, Chinese, Russian, Korean & more',
+      'Covers all pages: menus, content, Q&A',
+    ],
   })
 
   const { price: seasonalPrice } = await createOneTimePrice({
     productName: 'Seasonal Relaunch Package',
     amountCents: 9900,
     priceKey: 'seasonal',
+    description: 'Content refresh for a new season, promotion, or menu change — updated copy, photos, and Google Business sync.',
+    features: [
+      'Updated homepage and menu copy',
+      'Seasonal photo refresh',
+      'Google Business profile sync',
+      'New promotion or event feature',
+    ],
   })
 
   const { price: gbpPrice } = await createOneTimePrice({
     productName: 'Google Business Optimization',
     amountCents: 4900,
     priceKey: 'gbp_setup',
+    description: 'Full Google Business Profile setup and optimization — categories, photos, posts, Q&A, and service areas configured by our team.',
+    features: [
+      'Category and service area optimization',
+      'Photo upload and ordering',
+      'Q&A seeding for common guest questions',
+      'First Google post published',
+    ],
   })
 
   console.log('\n=== Add these to your .env ===')

@@ -171,7 +171,7 @@ export async function updatePost(
   await db.prepare(`UPDATE posts SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`)
     .bind(...params).run()
 
-  return await db.prepare('SELECT * FROM posts WHERE id = ? LIMIT 1').bind(postId).first()
+  return await db.prepare('SELECT * FROM posts WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1').bind(postId, organizationId, siteId).first()
 }
 
 export async function publishPost(
@@ -181,12 +181,18 @@ export async function publishPost(
   postId: string,
   channels: Array<'site' | 'gmb' | 'instagram' | 'facebook'>
 ): Promise<PostWithChannels | null> {
+  if (!channels.length) {
+    throw new Error('At least one publish channel is required')
+  }
+
   const now = new Date().toISOString()
 
-  await db.prepare(`
+  const updateResult = await db.prepare(`
     UPDATE posts SET status = 'published', published_at = ?, updated_at = ?
     WHERE id = ? AND organization_id = ? AND site_id = ?
   `).bind(now, now, postId, organizationId, siteId).run()
+
+  if ((updateResult.meta.changes ?? 0) === 0) return null
 
   // Create a channel job for each requested channel
   const jobs = channels.map(channel =>

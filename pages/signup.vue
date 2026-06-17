@@ -14,7 +14,7 @@
     <div class="flex items-center justify-center px-8 py-12">
       <div class="w-full max-w-105">
         <h1 class="text-[36px] font-extrabold tracking-tight text-default m-0 mb-2">Create your account</h1>
-        <p class="text-[15px] text-muted mb-7">Start building your restaurant website today.</p>
+        <p class="text-[15px] text-muted mb-7">Sign up, connect the KrabiClaw app in ChatGPT, and start editing through conversation.</p>
 
         <UAlert v-if="error" color="error" variant="soft" :description="error" class="mb-4" />
 

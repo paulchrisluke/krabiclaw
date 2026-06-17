@@ -60,6 +60,27 @@
             </NuxtLink>
           </template>
 
+          <template v-else-if="inConversationsWorkspace">
+            <div v-if="collapsed" class="flex items-center justify-center w-full">
+              <UButton
+                :to="orgBase ?? '/dashboard'"
+                icon="i-lucide-arrow-left"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                aria-label="Back to Restaurant"
+              />
+            </div>
+            <NuxtLink
+              v-else
+              :to="orgBase ?? '/dashboard'"
+              class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
+            >
+              <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
+              <span class="truncate">Back to Restaurant</span>
+            </NuxtLink>
+          </template>
+
           <UDropdownMenu
             v-else
             :items="organizationMenuItems"
@@ -80,7 +101,48 @@
         </template>
 
         <template #default="{ collapsed }">
+          <template v-if="inConversationsWorkspace">
+            <div class="flex flex-col gap-3 px-2">
+              <UTooltip :text="collapsed ? 'New conversation' : undefined">
+                <UButton
+                  icon="i-heroicons-plus"
+                  :label="collapsed ? undefined : 'New conversation'"
+                  color="primary"
+                  variant="soft"
+                  size="sm"
+                  :block="!collapsed"
+                  @click="newChowBotChat"
+                />
+              </UTooltip>
+
+              <ClientOnly>
+                <div v-if="!collapsed" class="space-y-1">
+                  <UButton
+                    v-for="conv in siteConversations"
+                    :key="conv.id"
+                    :label="conv.title"
+                    :icon="conv.active_channel === 'whatsapp' ? 'i-simple-icons-whatsapp' : 'i-lucide-message-square'"
+                    :color="conv.id === activeConversationId ? 'primary' : 'neutral'"
+                    :variant="conv.id === activeConversationId ? 'soft' : 'ghost'"
+                    size="sm"
+                    class="w-full justify-start"
+                    :ui="{ label: 'truncate text-left' }"
+                    @click="loadChowBotChat(conv)"
+                  />
+                  <p v-if="!siteConversations.length" class="px-1 py-2 text-xs text-muted">
+                    No conversations yet
+                  </p>
+                </div>
+                <template #fallback>
+                  <div v-if="!collapsed" class="space-y-1">
+                    <USkeleton v-for="i in 4" :key="i" class="h-8 rounded-lg" />
+                  </div>
+                </template>
+              </ClientOnly>
+            </div>
+          </template>
           <UNavigationMenu
+            v-else
             :collapsed="collapsed"
             :items="navigationItems"
             orientation="vertical"
@@ -272,6 +334,16 @@
 
             <template #right>
               <UColorModeButton variant="ghost" color="neutral" size="sm" />
+              <UTooltip v-if="!inAdminWorkspace && !inConversationsWorkspace && restaurant" text="ChowBot">
+                <UButton
+                  icon="i-lucide-bot"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Open ChowBot"
+                  @click="toggleChowbot"
+                />
+              </UTooltip>
             </template>
           </UDashboardNavbar>
         </template>
@@ -281,6 +353,7 @@
         </template>
       </UDashboardPanel>
 
+      <ChowBot v-if="!inConversationsWorkspace" />
     </UDashboardGroup>
     <BillingCreditPurchaseModal />
     <BillingServiceUpsellModal />
@@ -290,6 +363,9 @@
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
+import { useChowBot } from '~/composables/useChowBot'
+import type { ChowBotConv } from '~/composables/useChowBotHistory'
+import { useChowBotHistory } from '~/composables/useChowBotHistory'
 
 interface AuthOrganization {
   id: string
@@ -313,6 +389,8 @@ function getThemeIcon(pref: 'system' | 'light' | 'dark') {
   return 'i-lucide-moon'
 }
 
+const chowBot = useChowBot()
+const chowBotHistory = useChowBotHistory()
 const billingStatus = ref<{ billing: { plan: string } } | null>(null)
 const platformStatus = ref<'normal' | 'loading' | 'error'>('loading')
 const dashboardContextError = ref<unknown>(null)
@@ -335,6 +413,12 @@ const organization = dashboard.organization
 const restaurant = dashboard.restaurant
 const selectedLocation = dashboard.selectedLocation
 const locations = dashboard.locations
+const activeSiteId = dashboard.siteId
+
+const toggleChowbot = () => chowBot.toggle()
+const newChowBotChat = () => chowBot.startNewConversation()
+const loadChowBotChat = (conv: ChowBotConv) => chowBot.loadConversation(conv)
+
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
@@ -364,6 +448,13 @@ const inSettingsWorkspace = computed(() => {
   if (orgSettingsBase.value && route.path.startsWith(orgSettingsBase.value)) return true
   return /^\/dashboard\/[^/]+\/~\/settings/.test(route.path)
 })
+const inConversationsWorkspace = computed(() => {
+  if (!orgBase.value) return /^\/dashboard\/[^/]+\/conversations(?:\/|$)/.test(route.path)
+  return route.path === `${orgBase.value}/conversations` || route.path.startsWith(`${orgBase.value}/conversations/`)
+})
+const siteConversations = computed(() => activeSiteId.value ? chowBotHistory.forSite(activeSiteId.value) : [])
+const activeConversationId = computed(() => chowBot.conversationId.value)
+
 const organizationLabel = computed(() => organization.value?.name ?? 'Restaurant')
 const organizationAvatar = computed(() => ({
   src: organization.value?.logo ?? undefined,
@@ -405,6 +496,7 @@ const locationMenuItems = computed(() => [
 const mainNavigation = computed(() => [
   [
     { label: 'Restaurant', icon: 'i-lucide-layout-dashboard', to: orgBase.value ?? '/dashboard' },
+    { label: 'Conversations', icon: 'i-lucide-messages-square', to: orgBase.value ? `${orgBase.value}/conversations` : '/dashboard' },
   ],
   [
     { label: 'Translations', icon: 'i-lucide-languages', to: orgBase.value ? `${orgBase.value}/translations` : '/dashboard' },
@@ -483,6 +575,7 @@ const settingsNavigation = computed(() => {
 
 const navigationItems = computed(() => {
   if (inAdminWorkspace.value) return adminNavigation.value
+  if (inConversationsWorkspace.value) return []
   if (inSettingsWorkspace.value) return settingsNavigation.value
   if (inLocationWorkspace.value) return locationNavigation.value
   return mainNavigation.value
@@ -496,6 +589,7 @@ const navbarTitle = computed(() => {
   const labels: Record<string, string> = {
     account: 'Account',
     billing: 'Billing',
+    conversations: 'Conversations',
     content: 'Content',
     experiences: 'Experiences',
     help: 'Help',
@@ -525,6 +619,11 @@ async function switchOrganization(organizationId: string) {
   await dashboard.refresh()
   await navigateTo('/dashboard')
 }
+
+watch(activeSiteId, (siteId) => {
+  if (!import.meta.client || !siteId) return
+  chowBotHistory.load(siteId).catch(console.error)
+}, { immediate: true })
 
 // Load dashboard context during SSR so nav links render stable org-scoped routes.
 if (route.path.startsWith('/dashboard') && !dashboard.state.value) {

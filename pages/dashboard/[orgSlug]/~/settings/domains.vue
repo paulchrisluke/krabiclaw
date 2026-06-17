@@ -1,11 +1,10 @@
 <template>
   <UPage>
-    <UPageHeader
-      title="Domains"
-      description="Custom domain setup and DNS configuration for your site."
-    />
-
     <UPageBody>
+      <div class="mb-6 space-y-1">
+        <h1 class="text-2xl font-semibold text-highlighted">Domains</h1>
+        <p class="text-sm text-muted">Custom domain setup and DNS configuration for your site.</p>
+      </div>
       <div class="grid gap-4">
 
         <!-- Current domains -->

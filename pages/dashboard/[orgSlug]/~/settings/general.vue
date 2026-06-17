@@ -1,11 +1,10 @@
 <template>
   <UPage>
-    <UPageHeader
-      title="Settings"
-      description="Organization and account preferences for the dashboard."
-    />
-
     <UPageBody>
+      <div class="mb-6 space-y-1">
+        <h1 class="text-2xl font-semibold text-highlighted">Settings</h1>
+        <p class="text-sm text-muted">Organization and account preferences for the dashboard.</p>
+      </div>
       <div class="grid gap-4 lg:grid-cols-2">
         <UCard>
           <template #header>

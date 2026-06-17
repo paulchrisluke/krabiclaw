@@ -136,13 +136,9 @@ test.describe("mcp tools", () => {
         },
       },
     });
-    expect(toolRes.status()).toBe(200);
-    expect(await toolRes.json()).toEqual({
-      result: {
-        error:
-          "Failed to register subdomain with Cloudflare. The rename was not applied.",
-      },
-    });
+    expect(toolRes.status()).toBe(400);
+    const body = await toolRes.json();
+    expect(body.data?.error).toBe("Failed to register subdomain with Cloudflare. The rename was not applied.");
 
     const afterRes = await request.get(
       `${baseURL}/api/sites/${siteId}/settings`,
@@ -214,11 +210,11 @@ test.describe("mcp tools", () => {
     );
     expect(updateLocationRes.status()).toBe(200);
     const updateLocationBody = (await updateLocationRes.json()) as {
-      result: { id?: string; title?: string; status?: string; error?: string };
+      result: { location?: { id?: string; title?: string; status?: string }; error?: string };
     };
     expect(updateLocationBody.result.error).toBeUndefined();
-    expect(updateLocationBody.result.id).toBe(locationId);
-    expect(updateLocationBody.result.status).toBe("inactive");
+    expect(updateLocationBody.result.location?.id).toBe(locationId);
+    expect(updateLocationBody.result.location?.status).toBe("inactive");
 
     const addQaRes = await request.post(`${baseURL}/api/dev/mcp-tool`, {
       headers: devLoginHeaders(),

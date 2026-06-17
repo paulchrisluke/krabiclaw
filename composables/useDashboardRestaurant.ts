@@ -19,6 +19,8 @@ interface DashboardRestaurant {
   primary_location_id: string | null
   default_currency: string | null
   source_locale: string | null
+  heroImageUrl?: string | null
+  locationHeroImageUrl?: string | null
 }
 
 interface DashboardLocation {
