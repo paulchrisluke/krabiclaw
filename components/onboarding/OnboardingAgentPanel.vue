@@ -224,9 +224,14 @@ const props = defineProps<{
   setupMode?: boolean
 }>()
 
-const DOMPurify = import.meta.client
-  ? (await import('isomorphic-dompurify')).default
-  : { sanitize: (s: string) => s }
+let _dompurify: { sanitize: (s: string) => string } = { sanitize: (s: string) => s }
+onMounted(async () => {
+  if (import.meta.client) {
+    const { default: dp } = await import('isomorphic-dompurify')
+    _dompurify = dp
+  }
+})
+const DOMPurify = { sanitize: (s: string) => _dompurify.sanitize(s) }
 
 const { messages, isLoading, sendMessage, currentPageOverride } = useChowBot()
 const { balance, total, isLow: _isLow, isDepleted, fetch: fetchCredits } = useAiCredits(
