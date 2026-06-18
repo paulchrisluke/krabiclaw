@@ -604,7 +604,7 @@ export async function createMenu(
     .prepare(
       `
     INSERT INTO menus (id, organization_id, site_id, location_id, name, description, status, created_at, updated_at, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, 'published', ?, ?, ?)
   `,
     )
     .bind(
@@ -631,7 +631,7 @@ export async function createMenu(
     location_id: locationId,
     name: menu.name,
     description: menu.description || null,
-    status: "draft",
+    status: "published",
     created_at: now,
     updated_at: now,
     created_by: createdBy,

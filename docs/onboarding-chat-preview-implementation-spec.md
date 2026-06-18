@@ -228,7 +228,7 @@ We should stop treating onboarding as only a page route and treat it as a workfl
 Site-level onboarding stage values:
 
 - `setup`
-- `drafting`
+- `building`
 - `refining`
 - `review`
 - `launch_ready`
@@ -459,16 +459,16 @@ When the owner lands on onboarding:
 - if no site exists, bootstrap via existing setup flow
 - if a site exists but onboarding is incomplete, resume
 
-### Step 2. First draft
+### Step 2. First build
 
-The system should aim to produce a first visible site draft quickly.
+The system should aim to produce a first visible site quickly.
 
 That means:
 
 - ingest business data
 - hydrate location
 - select photos
-- draft hero and story
+- write hero and story
 - render preview fast
 
 ### Step 3. Guided refinement

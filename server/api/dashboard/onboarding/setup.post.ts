@@ -98,10 +98,10 @@ export default defineEventHandler(async (event) => {
   if (place.photos && place.photos.length > 0) {
     const [heroImage, locationHeroImage] = place.photos
     if (heroImage?.photoUri) {
-      await setConfig(db, organizationId, siteId, 'heroImageUrl', heroImage.photoUri)
+      await setConfig(db, organizationId, siteId, 'hero_image_url', heroImage.photoUri)
     }
     if (locationHeroImage?.photoUri) {
-      await setConfig(db, organizationId, siteId, 'locationHeroImageUrl', locationHeroImage.photoUri)
+      await setConfig(db, organizationId, siteId, 'location_hero_image_url', locationHeroImage.photoUri)
     }
   }
 

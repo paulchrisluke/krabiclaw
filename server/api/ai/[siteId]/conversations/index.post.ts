@@ -49,7 +49,7 @@ export default defineEventHandler(async (event) => {
       userId: session.user.id,
       title: body.title,
       activeChannel: 'dashboard',
-      selectedLocationId: typeof body.locationId === 'string' ? body.locationId : null,
+      selectedLocationId: (typeof body.locationId === 'string' && body.locationId) ? body.locationId : null,
     })
 
     return jsonResponse({ success: true, conversation }, { status: 201 })

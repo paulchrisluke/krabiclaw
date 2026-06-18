@@ -22,7 +22,7 @@
 
       <!-- Empty -->
       <div v-else-if="!experiences.length" class="py-24 text-center text-muted">
-        <p class="text-sm">No experiences available right now. Check back soon.</p>
+        <p class="text-sm">{{ expCopy.noExperiencesLabel }}</p>
       </div>
 
       <!-- Grid -->
@@ -48,7 +48,7 @@
               class="absolute inset-0 flex items-center justify-center bg-black/50"
             >
               <span class="rounded-full bg-white px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-default">
-                Sold Out
+                {{ expCopy.soldOutLabel }}
               </span>
             </div>
           </div>
@@ -70,12 +70,12 @@
               </span>
               <span v-if="exp.max_capacity" class="flex items-center gap-1">
                 <UIcon name="i-heroicons-user-group" class="size-3.5" />
-                {{ exp.max_capacity }} guests max
+                {{ exp.max_capacity }} {{ expCopy.guestsMaxLabel }}
               </span>
             </div>
 
             <div class="mt-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-              View experience
+              {{ expCopy.viewExperienceCta }}
               <UIcon name="i-heroicons-arrow-right" class="size-3.5 transition-transform group-hover:translate-x-1" />
             </div>
           </div>
@@ -90,7 +90,8 @@ import type { Experience } from '~/server/utils/experiences'
 
 const { isPlatform, site } = useTenantSite()
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
-const expCopy = getVerticalCopy((site as ApiValue)?.vertical)
+const { locale } = useI18n()
+const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
@@ -99,8 +100,8 @@ const { experiencesList, pending: bootstrapPending, getField } = useBootstrap()
 const pending = computed(() => !isPlatform && bootstrapPending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
 const heroKicker = computed(() => getField('hero.kicker', 'Experiences') || 'Experiences')
-const heroTitle = computed(() => getField('hero.title', expCopy.experiencesPageTitle) || expCopy.experiencesPageTitle)
-const heroSubtitle = computed(() => getField('hero.subtitle', expCopy.experiencesPageSubtitle) || expCopy.experiencesPageSubtitle)
+const heroTitle = computed(() => getField('hero.title', expCopy.value.experiencesPageTitle) || expCopy.value.experiencesPageTitle)
+const heroSubtitle = computed(() => getField('hero.subtitle', expCopy.value.experiencesPageSubtitle) || expCopy.value.experiencesPageSubtitle)
 const currentPageUrl = useSeoUrl('/experiences')
 const ogImage = useSharedOgImage(() => experiences.value[0]?.image_url)
 
@@ -118,7 +119,7 @@ useBreadcrumbSchema([
 
 useSeoMeta({
   title: computed(() => `Experiences | ${siteName.value}`),
-  description: computed(() => expCopy.seoExperiencesDescription(siteName.value)),
+  description: computed(() => expCopy.value.seoExperiencesDescription(siteName.value)),
   ogUrl: currentPageUrl,
   ogType: 'website',
   ogImage,

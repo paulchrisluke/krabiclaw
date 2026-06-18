@@ -1,6 +1,6 @@
 // POST /api/ai/[siteId]/posts/generate
 // Accepts a text prompt and optional base64 image.
-// Calls Claude via CF AI Gateway and returns a draft post (title + body).
+// Calls Claude via CF AI Gateway and returns generated post content (title + body).
 // Does NOT save — the client saves via POST /api/editor/sites/[siteId]/posts.
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
@@ -72,9 +72,17 @@ export default defineEventHandler(async (event) => {
 
   if (body.image_base64 && body.image_mime) {
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-    if (allowed.includes(body.image_mime)) {
-      userContent.push(imageBlock(body.image_base64, body.image_mime as ApiValue))
+    if (!allowed.includes(body.image_mime)) {
+      return jsonResponse({ error: `Unsupported image MIME type: ${body.image_mime}. Allowed types: ${allowed.join(', ')}` }, { status: 400 })
     }
+    const base64Length = body.image_base64.length
+    const maxBase64Size = 5 * 1024 * 1024 * 4 / 3 // 5MB decoded, accounting for base64 overhead
+    if (base64Length > maxBase64Size) {
+      return jsonResponse({ error: 'Image size exceeds 5MB limit. Please use a smaller image.' }, { status: 413 })
+    }
+    userContent.push(imageBlock(body.image_base64, body.image_mime as ApiValue))
+  } else if (body.image_base64 || body.image_mime) {
+    return jsonResponse({ error: 'Both image_base64 and image_mime must be provided together' }, { status: 400 })
   }
 
   userContent.push(textBlock(
@@ -110,16 +118,34 @@ export default defineEventHandler(async (event) => {
   }
 
   const rawText = aiResponse.content.find((b: ApiValue) => b.type === 'text')?.text ?? ''
+  // Extract JSON from fenced code blocks or find JSON object pattern
+  const jsonText = (() => {
+    const fenced = rawText.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (fenced) return (fenced[1] ?? '').trim()
+    const obj = rawText.match(/\{[\s\S]*\}/)
+    if (obj) return obj[0]
+    return rawText.trim()
+  })()
   let parsed: { title: string | null; body: string }
   try {
-    parsed = JSON.parse(rawText)
+    parsed = JSON.parse(jsonText)
   } catch {
     return jsonResponse({ error: 'AI returned unexpected format. Try rephrasing your prompt.' }, { status: 422 })
+  }
+  // Validate parsed structure
+  if (!parsed || typeof parsed !== 'object') {
+    return jsonResponse({ error: 'AI returned invalid format. Expected an object with title and body.' }, { status: 422 })
+  }
+  if (typeof parsed.body !== 'string') {
+    return jsonResponse({ error: 'AI returned invalid format. Body must be a string.' }, { status: 422 })
+  }
+  if (parsed.title !== null && parsed.title !== undefined && typeof parsed.title !== 'string') {
+    return jsonResponse({ error: 'AI returned invalid format. Title must be a string or null.' }, { status: 422 })
   }
 
   return jsonResponse({
     success: true,
-    draft: { title: parsed.title ?? null, body: parsed.body ?? '' },
+    generated: { title: parsed.title ?? null, body: parsed.body ?? '' },
     credits: { charged: creditsCharged, remaining: newBalance },
   })
 })

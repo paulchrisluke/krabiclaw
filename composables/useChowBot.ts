@@ -76,7 +76,7 @@ export const useChowBot = () => {
     const names = new Set(toolCalls.map(t => t.name))
 
     if (names.has('rename_site') || names.has('set_default_currency')) {
-      useState<number>('site:refresh').value++
+      useState<number>('site:refresh', () => 0).value++
     }
 
     if ([...names].some(n => MENU_TOOLS.has(n))) {

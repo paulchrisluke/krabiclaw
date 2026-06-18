@@ -6,9 +6,9 @@
 
       <!-- Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
-        <p class="saya-kicker mb-6">Our story</p>
+        <p class="saya-kicker mb-6">{{ copy.ourStoryKicker }}</p>
         <h1 class="saya-display-lg text-default">
-          <em class="saya-italic">{{ getField('hero.title', 'About us') }}</em>
+          <em class="saya-italic">{{ getField('hero.title', copy.aboutHeroTitle) }}</em>
         </h1>
         <p v-if="getField('hero.subtitle')" class="mt-6 max-w-2xl text-base leading-relaxed text-muted">
           {{ getField('hero.subtitle') }}
@@ -41,7 +41,7 @@
           <!-- Story text -->
           <div>
             <h2 class="saya-display-md text-default">
-              {{ getField('story.title', 'Our Story') }}
+              {{ getField('story.title', copy.ourStoryTitle) }}
             </h2>
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="prose prose-lg mt-8 max-w-none text-muted" v-html="storyBody" />
@@ -53,9 +53,9 @@
       <section v-if="getField('journey.title') || getField('journey.body')" class="bg-elevated">
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div class="max-w-3xl">
-            <p class="saya-kicker mb-6">The journey</p>
+            <p class="saya-kicker mb-6">{{ copy.ourJourneyKicker }}</p>
             <h2 class="saya-display-md text-default">
-              {{ getField('journey.title', 'Our Journey') }}
+              {{ getField('journey.title', copy.ourJourneyTitle) }}
             </h2>
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="prose prose-lg mt-8 max-w-none text-default" v-html="journeyBody" />
@@ -69,7 +69,7 @@
           {{ getField('cta.title', copy.ctaTitle) }}
         </h3>
         <div class="flex flex-wrap gap-3">
-          <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">Order Now</UButton>
+          <UButton v-if="hasOrderLinks" to="/order" color="primary" variant="solid" size="xl" class="rounded-full">{{ copy.orderNowCta }}</UButton>
           <UButton
             :to="copy.ctaRoute"
             color="primary"
@@ -191,7 +191,8 @@ const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).de
 const { isPlatform, site } = useTenantSite()
 const { getField, locations, contentBlocks } = useBootstrap()
 const { resolveComponent } = useDynamicComponent()
-const copy = getVerticalCopy(site?.vertical)
+const { locale } = useI18n()
+const copy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
 const storyBody = computed(() => DOMPurify.sanitize(getField('story.body', '') || ''))
 const journeyBody = computed(() => DOMPurify.sanitize(getField('journey.body', '') || ''))

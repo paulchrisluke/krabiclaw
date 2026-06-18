@@ -1,11 +1,11 @@
 // POST /api/ai/[siteId]/menu/extract
 // Accepts a photo (JPEG/PNG/WEBP) or PDF page image as multipart form data.
 // Passes it to Claude via Cloudflare AI Gateway, extracts menu items as structured JSON,
-// and saves them as a draft menu. The owner must publish from the dashboard.
+// and saves them to a published menu immediately.
 //
 // Multipart fields:
 //   file        — required, image file (JPEG/PNG/WEBP/GIF) or first page of a PDF rendered to image
-//   menuId      — optional, existing draft menu to append to; creates a new one if omitted
+//   menuId      — optional, existing menu to append to; creates a new one if omitted
 //   menuName    — optional, name for a newly created menu (default: "Imported Menu")
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
@@ -213,26 +213,31 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Resolve or create a draft menu
+  // Resolve or create a menu to append to
   let menuId = formData.get('menuId') as string | null
   if (menuId) {
     const existing = await db.prepare(
-      'SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? AND status = ? LIMIT 1'
-    ).bind(menuId, orgId, siteId, 'draft').first()
+      'SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1'
+    ).bind(menuId, orgId, siteId).first()
     if (!existing) menuId = null
   }
 
+  let menuCreatedInThisRequest = false
   if (!menuId) {
     const menuName = (formData.get('menuName') as string | null)?.trim() || 'Imported Menu'
     const newMenu = await createMenu(db, orgId, siteId, { name: menuName }, session.user.id)
     menuId = newMenu.id
+    menuCreatedInThisRequest = true
   }
 
-  // Write items to draft menu (created_by marks them as AI-sourced)
-  const createdItems = await Promise.all(
-    validItems.map((item: ApiValue) => {
+  // Write items to menu (created_by marks them as AI-sourced)
+  // Track created IDs so rollback only removes items added in this request
+  let createdItems: ApiRecord[] = []
+  const createdItemIds: string[] = []
+  try {
+    for (const item of validItems as ApiValue[]) {
       const priceAmount = item.price_amount ?? item.price
-      return createMenuItem(
+      const created = await createMenuItem(
         db,
         orgId,
         siteId!,
@@ -245,8 +250,29 @@ export default defineEventHandler(async (event) => {
         },
         `ai:${session.user.id}`
       )
-    })
-  )
+      createdItems.push(created)
+      createdItemIds.push(created.id)
+    }
+  } catch (error) {
+    // Roll back only the items created in this request, preserving pre-existing items
+    console.error('[menu/extract] Failed to create menu items, rolling back:', error)
+    if (createdItemIds.length > 0) {
+      const placeholders = createdItemIds.map(() => '?').join(', ')
+      try {
+        await db.prepare(`DELETE FROM menu_items WHERE id IN (${placeholders})`).bind(...createdItemIds).run()
+      } catch (rollbackErr) {
+        console.error('[menu/extract] Rollback of menu_items failed — orphaned rows may remain:', rollbackErr)
+      }
+    }
+    if (menuCreatedInThisRequest) {
+      try {
+        await db.prepare('DELETE FROM menus WHERE id = ?').bind(menuId).run()
+      } catch (rollbackErr) {
+        console.error('[menu/extract] Rollback of menus failed — orphaned row may remain:', rollbackErr)
+      }
+    }
+    return jsonResponse({ error: 'Failed to save menu items. Please try again.' }, { status: 500 })
+  }
 
   // Fire WhatsApp notifications — non-blocking
   getOrgWhatsAppPhone(db, orgId, siteId).then((phone) => {
@@ -258,7 +284,7 @@ export default defineEventHandler(async (event) => {
       toPhone: phone,
       template: 'ai_action_complete',
       vars: {
-        action_summary: `${createdItems.length} menu item${createdItems.length === 1 ? '' : 's'} extracted and saved as draft`,
+        action_summary: `${createdItems.length} menu item${createdItems.length === 1 ? '' : 's'} extracted and added to menu`,
         preview_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/${orgSlug}/menu`,
       },
     }).catch(console.error)

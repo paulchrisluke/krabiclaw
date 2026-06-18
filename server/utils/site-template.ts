@@ -207,6 +207,29 @@ export async function seedNewSite(
 
   const statements: D1PreparedStatement[] = [];
 
+  // Canonical language setup for new Saya sites.
+  statements.push(
+    db
+      .prepare(
+        `
+    INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
+    VALUES (?, ?, 'source_locale', 'en')
+  `,
+      )
+      .bind(organizationId, siteId),
+  );
+  statements.push(
+    db
+      .prepare(
+        `
+    INSERT OR REPLACE INTO site_locales
+      (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
+    VALUES (?, ?, ?, 'en', 'English', 1, 'published', 1)
+  `,
+      )
+      .bind(`locale::${organizationId}::${siteId}::en`, organizationId, siteId),
+  );
+
   // ── Location ──────────────────────────────────────────────────────────────
   statements.push(
     db

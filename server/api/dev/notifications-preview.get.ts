@@ -6,5 +6,5 @@ export default defineEventHandler(async () => {
     throw createError({ statusCode: 404, statusMessage: 'Not found' })
   }
 
-  return jsonResponse({ previews: getNotificationCopyPreviews() })
+  return jsonResponse({ previews: await getNotificationCopyPreviews() })
 })

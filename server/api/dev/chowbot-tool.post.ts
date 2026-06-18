@@ -41,7 +41,13 @@ export default defineEventHandler(async (event) => {
     siteId: body.siteId,
     userId: session.user.id,
     userRole: site.role,
-    agentMessages: (body.messages ?? []) as Array<{ role: 'user' | 'assistant'; content: string }>,
+    agentMessages: (body.messages ?? []).filter(
+      (m): m is { role: 'user' | 'assistant'; content: string } =>
+        typeof m === 'object' &&
+        m !== null &&
+        (m.role === 'user' || m.role === 'assistant') &&
+        typeof m.content === 'string'
+    ),
     locationId: body.locationId ?? null,
     channel: 'dashboard',
     forceSubdomainRegistrationFailure: body.forceSubdomainRegistrationFailure === true,

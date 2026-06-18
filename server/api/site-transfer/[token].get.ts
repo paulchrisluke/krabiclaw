@@ -13,7 +13,8 @@ export default defineEventHandler(async (event) => {
   const row = await db
     .prepare(
       `SELECT r.id, r.site_id, r.to_email, r.status, r.message,
-              r.invited_plan, r.invited_coupon, r.invited_domain, r.requires_payment,
+              r.invited_plan, r.invited_coupon, r.invited_interval, r.invited_domain,
+              r.requires_payment, r.custom_domains_removed_at,
               s.brand_name, s.slug, s.subdomain,
               u.name AS initiated_by_name, u.email AS initiated_by_email
        FROM site_transfer_requests r
@@ -30,8 +31,10 @@ export default defineEventHandler(async (event) => {
       message: string | null
       invited_plan: string | null
       invited_coupon: string | null
+      invited_interval: string | null
       invited_domain: string | null
       requires_payment: number
+      custom_domains_removed_at: string | null
       brand_name: string | null
       slug: string
       subdomain: string | null
@@ -46,6 +49,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const requiresPayment = row.requires_payment === 1 || Boolean(row.invited_plan)
+  const invitedInterval: 'month' | 'year' = row.invited_interval === 'year' ? 'year' : 'month'
 
   // Fetch plan price + coupon discount from Stripe (best-effort)
   interface PricingInfo {
@@ -54,7 +58,8 @@ export default defineEventHandler(async (event) => {
     coupon_duration: string | null
     coupon_duration_months: number | null
   }
-  let pricing: PricingInfo | null = null
+  let pricing_month: PricingInfo | null = null
+  let pricing_year: PricingInfo | null = null
 
   if (row.invited_plan && env.STRIPE_SECRET_KEY) {
     try {
@@ -63,26 +68,47 @@ export default defineEventHandler(async (event) => {
       const product = products.data.find((p) => p.metadata?.plan_id === row.invited_plan)
       if (product) {
         const prices = await stripe.prices.list({ active: true, product: product.id, type: 'recurring', limit: 100 })
-        const price = prices.data.find((p) => p.recurring?.interval === 'month')
-        if (price?.unit_amount) {
-          let discounted_cents: number | null = null
-          let coupon_duration: string | null = null
-          let coupon_duration_months: number | null = null
-          if (row.invited_coupon) {
-            try {
-              const coupon = await stripe.coupons.retrieve(row.invited_coupon)
-              coupon_duration = coupon.duration ?? null
-              coupon_duration_months = coupon.duration_in_months ?? null
-              if (coupon.percent_off) {
-                discounted_cents = Math.round(price.unit_amount * (1 - coupon.percent_off / 100))
-              } else if (coupon.amount_off) {
-                discounted_cents = Math.max(0, price.unit_amount - coupon.amount_off)
-              }
-            } catch {
-              // Coupon not found — show base price without discount
-            }
+
+        let coupon_duration: string | null = null
+        let coupon_duration_months: number | null = null
+        let coupon_percent_off: number | null = null
+        let coupon_amount_off: number | null = null
+        if (row.invited_coupon) {
+          try {
+            const coupon = await stripe.coupons.retrieve(row.invited_coupon)
+            coupon_duration = coupon.duration ?? null
+            coupon_duration_months = coupon.duration_in_months ?? null
+            coupon_percent_off = coupon.percent_off ?? null
+            coupon_amount_off = coupon.amount_off ?? null
+          } catch {
+            // Coupon not found — show base price without discount
           }
-          pricing = { base_cents: price.unit_amount, discounted_cents, coupon_duration, coupon_duration_months }
+        }
+
+        const applyDiscount = (amount: number): number | null => {
+          if (coupon_percent_off) return Math.round(amount * (1 - coupon_percent_off / 100))
+          if (coupon_amount_off) return Math.max(0, amount - coupon_amount_off)
+          return null
+        }
+
+        const monthPrice = prices.data.find((p) => p.recurring?.interval === 'month')
+        if (monthPrice?.unit_amount) {
+          pricing_month = {
+            base_cents: monthPrice.unit_amount,
+            discounted_cents: applyDiscount(monthPrice.unit_amount),
+            coupon_duration,
+            coupon_duration_months,
+          }
+        }
+
+        const yearPrice = prices.data.find((p) => p.recurring?.interval === 'year')
+        if (yearPrice?.unit_amount) {
+          pricing_year = {
+            base_cents: yearPrice.unit_amount,
+            discounted_cents: applyDiscount(yearPrice.unit_amount),
+            coupon_duration,
+            coupon_duration_months,
+          }
         }
       }
     } catch (e) {
@@ -98,8 +124,11 @@ export default defineEventHandler(async (event) => {
     message: row.message,
     invited_plan: row.invited_plan,
     invited_coupon: row.invited_coupon,
-    pricing,
+    invited_interval: invitedInterval,
+    pricing_month,
+    pricing_year,
     invited_domain: row.invited_domain,
+    domain_active: !row.custom_domains_removed_at,
     requires_payment: requiresPayment,
     never_expires: true,
     site_subdomain: row.subdomain,

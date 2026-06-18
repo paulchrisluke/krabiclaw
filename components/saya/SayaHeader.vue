@@ -152,7 +152,8 @@ interface I18nComposable {
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
 const { site } = useTenantSite()
-const verticalCopy = getVerticalCopy((site as { vertical?: string } | null)?.vertical)
+const { locale } = useI18n()
+const verticalCopy = computed(() => getVerticalCopy((site as { vertical?: string } | null)?.vertical, locale.value))
 const i18n = useI18n() as ApiValue as I18nComposable
 const { t } = i18n
 const mobileMenuOpen = ref(false)
@@ -197,12 +198,12 @@ const hasOrderLinks = computed(() =>
 
 const primaryCtaPath = computed(() => {
   if (hasOrderLinks.value) return '/order'
-  return verticalCopy.ctaRoute
+  return verticalCopy.value.ctaRoute
 })
 
 const primaryCtaLabel = computed(() => {
   if (hasOrderLinks.value) return t('saya.header.order_now')
-  return verticalCopy.reserveCta
+  return verticalCopy.value.reserveCta
 })
 
 const locationDropdownItems = computed(() => [

@@ -1,5 +1,7 @@
+import { useRender } from 'vue-email'
 import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
 import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import DomainUpdate from '~/server/emails/templates/DomainUpdate'
 
 interface DomainNotificationEnv {
   PLATFORM_OWNER_EMAILS?: string
@@ -39,15 +41,6 @@ function supportEmails(env: DomainNotificationEnv): string[] {
     .split(',')
     .map((email) => email.trim())
     .filter(Boolean)
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
 function safeDashboardUrl(raw: string): string {
@@ -106,10 +99,11 @@ async function sendEmail(
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
+  const dashboardUrl = safeDashboardUrl(opts.dashboardUrl)
+  const { html, text } = await useRender(DomainUpdate, { props: { title: opts.title, message: opts.message, domain: opts.domain, status: opts.status, dashboardUrl } })
+
   let response: Response
   try {
-    const dashboardUrl = safeDashboardUrl(opts.dashboardUrl)
-    const escapedDashboardUrl = escapeHtml(dashboardUrl)
     response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -121,12 +115,8 @@ async function sendEmail(
         from: 'KrabiClaw <hello@krabiclaw.com>',
         to: [opts.to],
         subject: opts.title,
-        html: `
-        <p>${escapeHtml(opts.message)}</p>
-        <p><strong>Domain:</strong> ${escapeHtml(opts.domain)}</p>
-        <p><strong>Status:</strong> ${escapeHtml(opts.status)}</p>
-        <p><a href="${escapedDashboardUrl}">Open domain settings</a></p>
-      `
+        html,
+        text,
       })
     })
   } catch (error) {

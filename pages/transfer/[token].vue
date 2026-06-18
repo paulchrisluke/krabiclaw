@@ -66,29 +66,53 @@
 
           <!-- Details -->
           <div class="mt-6 space-y-3">
-            <div v-if="transfer.invited_domain" class="flex items-start gap-3 text-sm">
+            <div v-if="transfer.invited_domain && transfer.domain_active" class="flex items-start gap-3 text-sm">
               <UIcon name="i-heroicons-globe-alt" class="size-4 text-muted mt-0.5 shrink-0" />
               <span class="text-muted">Ready to launch at <strong class="text-default">{{ transfer.invited_domain }}</strong> (hosting included).</span>
             </div>
 
             <!-- Pricing block -->
             <div v-if="matchedPlan" class="mt-8">
-              <BillingPlanCard :plan="matchedPlan" :annual="false">
+              <!-- Monthly / Annual toggle -->
+              <div v-if="transfer.pricing_year" class="flex items-center justify-center gap-1 mb-4 p-1 bg-muted/40 rounded-lg">
+                <button
+                  class="flex-1 py-1.5 px-3 rounded-md text-sm font-medium transition-all"
+                  :class="selectedInterval === 'month' ? 'bg-default shadow text-highlighted' : 'text-muted hover:text-default'"
+                  @click="selectedInterval = 'month'"
+                >Monthly</button>
+                <button
+                  class="flex-1 py-1.5 px-3 rounded-md text-sm font-medium transition-all"
+                  :class="selectedInterval === 'year' ? 'bg-default shadow text-highlighted' : 'text-muted hover:text-default'"
+                  @click="selectedInterval = 'year'"
+                >
+                  Annual
+                  <span class="ml-1 text-[10px] font-bold text-primary uppercase tracking-wide">Save 10%</span>
+                </button>
+              </div>
+
+              <BillingPlanCard :plan="matchedPlan" :annual="selectedInterval === 'year'">
                 <template #cta>
                   <!-- Custom discount callout if applicable -->
-                  <div v-if="transfer.pricing && transfer.pricing.discounted_cents !== null" class="mb-4 bg-primary/5 border border-primary/20 rounded-xl px-4 py-3 text-center">
+                  <div v-if="activePricing && activePricing.discounted_cents !== null" class="mb-4 bg-primary/5 border border-primary/20 rounded-xl px-4 py-3 text-center">
                     <div class="flex items-baseline justify-center gap-2">
-                      <span class="text-xl font-bold text-highlighted">${{ (transfer.pricing.discounted_cents / 100).toFixed(2) }}<span class="text-sm font-normal text-muted">/mo</span></span>
-                      <span class="text-xs text-muted line-through">${{ (transfer.pricing.base_cents / 100).toFixed(0) }}</span>
+                      <span class="text-xl font-bold text-highlighted">
+                        <template v-if="selectedInterval === 'year'">${{ (activePricing.discounted_cents / 100 / 12).toFixed(2) }}<span class="text-sm font-normal text-muted">/mo</span></template>
+                        <template v-else>${{ (activePricing.discounted_cents / 100).toFixed(2) }}<span class="text-sm font-normal text-muted">/mo</span></template>
+                      </span>
+                      <span class="text-xs text-muted line-through">
+                        <template v-if="selectedInterval === 'year'">${{ (activePricing.base_cents / 100 / 12).toFixed(0) }}</template>
+                        <template v-else>${{ (activePricing.base_cents / 100).toFixed(0) }}</template>
+                      </span>
                     </div>
+                    <p v-if="selectedInterval === 'year'" class="text-[11px] text-muted mt-0.5">billed ${{ (activePricing.discounted_cents / 100).toFixed(0) }}/year</p>
                     <p class="text-[11px] text-primary mt-1 font-semibold uppercase tracking-wide">
-                      <template v-if="transfer.pricing.coupon_duration === 'forever'">locked in forever</template>
-                      <template v-else-if="transfer.pricing.coupon_duration === 'repeating' && transfer.pricing.coupon_duration_months">for {{ transfer.pricing.coupon_duration_months }} months</template>
-                      <template v-else>first month</template>
+                      <template v-if="activePricing.coupon_duration === 'forever'">locked in forever</template>
+                      <template v-else-if="activePricing.coupon_duration === 'repeating' && activePricing.coupon_duration_months">for {{ activePricing.coupon_duration_months }} months</template>
+                      <template v-else>first {{ selectedInterval === 'year' ? 'year' : 'month' }}</template>
                     </p>
                   </div>
                   <p class="text-center text-xs text-muted mt-2">
-                    <template v-if="transfer.requires_payment && transfer.invited_domain">Payment is required before we transfer ownership and keep your custom domain live.</template>
+                    <template v-if="transfer.requires_payment && transfer.invited_domain && transfer.domain_active">Payment is required before we transfer ownership and keep your custom domain live.</template>
                     <template v-else-if="transfer.requires_payment">Payment is required before we transfer ownership.</template>
                     <template v-else>Claim the site now and set up billing later if you want to upgrade.</template>
                   </p>
@@ -224,8 +248,11 @@ interface TransferInfo {
   message: string | null
   invited_plan: string | null
   invited_coupon: string | null
-  pricing: PricingInfo | null
+  invited_interval: 'month' | 'year'
+  pricing_month: PricingInfo | null
+  pricing_year: PricingInfo | null
   invited_domain: string | null
+  domain_active: boolean
   requires_payment: boolean
   never_expires: boolean
   initiated_by_name: string
@@ -239,6 +266,12 @@ const accepting = ref(false)
 const acceptError = ref<string | null>(null)
 const accepted = ref(false)
 const redirectingToCheckout = ref(false)
+const selectedInterval = ref<'month' | 'year'>('month')
+
+const activePricing = computed(() => {
+  if (!transfer.value) return null
+  return selectedInterval.value === 'year' ? transfer.value.pricing_year : transfer.value.pricing_month
+})
 
 const emailMatches = computed(() => {
   if (!transfer.value || !user.value) return false
@@ -260,6 +293,7 @@ onMounted(async () => {
   try {
     const data = await $fetch<TransferInfo>(`/api/site-transfer/${token}`)
     transfer.value = data
+    selectedInterval.value = data.invited_interval ?? 'month'
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
     const errorMessage = err && typeof err === 'object' && 'message' in err ? (err as Record<string, string>).message : null
@@ -273,7 +307,10 @@ async function acceptTransfer() {
   accepting.value = true
   acceptError.value = null
   try {
-    const result = await $fetch<{ success: boolean; site_id: string; checkout_url?: string | null }>(`/api/site-transfer/${token}/accept`, { method: 'POST' })
+    const result = await $fetch<{ success: boolean; site_id: string; checkout_url?: string | null }>(`/api/site-transfer/${token}/accept`, {
+      method: 'POST',
+      body: { interval: selectedInterval.value },
+    })
     if (result.checkout_url) {
       redirectingToCheckout.value = true
       await navigateTo(result.checkout_url, { external: true })

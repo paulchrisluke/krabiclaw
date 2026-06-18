@@ -17,8 +17,8 @@ export interface SiteConfig {
   source_locale?: string
   google_analytics_measurement_id?: string
   google_site_verification?: string
-  heroImageUrl?: string
-  locationHeroImageUrl?: string
+  hero_image_url?: string
+  location_hero_image_url?: string
 }
 
 export const getConfig = async (

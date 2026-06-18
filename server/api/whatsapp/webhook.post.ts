@@ -363,7 +363,36 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const payload = await readBody(event).catch(() => ({})) as WhatsAppPayload
+  const rawBody = await readRawBody(event) ?? ''
+  const appSecret = typeof env.WHATSAPP_APP_SECRET === 'string' ? env.WHATSAPP_APP_SECRET : ''
+  if (appSecret) {
+    const signature = getHeader(event, 'x-hub-signature-256') ?? ''
+    const key = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(appSecret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify'],
+    )
+    const incomingHex = signature.startsWith('sha256=') ? signature.slice(7) : ''
+    const pairs = incomingHex.match(/.{2}/g)
+    const parsedPairs = pairs && pairs.length === 32 ? pairs.map((b) => parseInt(b, 16)) : null
+    const incomingBytes = parsedPairs && parsedPairs.every((n) => !Number.isNaN(n))
+      ? new Uint8Array(parsedPairs)
+      : new Uint8Array(0)
+    const isValid = incomingBytes.length === 32 && await crypto.subtle.verify(
+      { name: 'HMAC', hash: 'SHA-256' },
+      key,
+      incomingBytes,
+      new TextEncoder().encode(rawBody),
+    )
+    if (!isValid) {
+      return jsonResponse({ error: 'Invalid signature' }, { status: 403 })
+    }
+  }
+
+  let payload: WhatsAppPayload = {}
+  try { payload = rawBody ? JSON.parse(rawBody) : {} } catch { payload = {} }
   const messages = inboundMessages(payload)
 
   for (const message of messages) {
