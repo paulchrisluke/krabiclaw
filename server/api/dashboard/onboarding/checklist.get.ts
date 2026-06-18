@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const dashboard = await getDashboardContext(event, { requireRestaurant: true })
+  const dashboard = await getDashboardContext(event, { requireRestaurant: false })
   if (!dashboard?.restaurant) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const { restaurant, organization } = dashboard
