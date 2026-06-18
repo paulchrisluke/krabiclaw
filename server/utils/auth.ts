@@ -6,6 +6,7 @@ import { Kysely } from 'kysely'
 import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
 import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
+import { notifyAdminNewUserSignup } from '~/server/utils/admin-notifications'
 
 export interface CloudflareEnv {
   DB: D1Database
@@ -76,6 +77,13 @@ export function createAuth(env: CloudflareEnv) {
             console.error('Failed to create org/member on signup, batch rolled back for orgId:', orgId, batchErr)
             throw batchErr
           }
+          // Fire-and-forget — must not block or throw into the auth flow
+          notifyAdminNewUserSignup(env, {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            createdAt: now,
+          }).catch((err) => console.error('admin_signup_notify_failed', err))
           }
         }
       }

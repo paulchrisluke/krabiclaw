@@ -2466,7 +2466,7 @@ async function executeTool(
         hero_subtitle: undefined,
         hero_image_asset_id: undefined,
         hero_video_asset_id: undefined,
-        component: "SayaStory",
+        component: "SayaBrandStory",
       });
       return { updated: true, asset_id: assetId };
     }

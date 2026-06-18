@@ -5,6 +5,7 @@ import {
   rootDomainForPair,
 } from '~/server/utils/domains'
 import { notifySiteTransferReminder } from '~/server/utils/site-transfer-notifications'
+import { normalizeHost } from '~/server/utils/tenant-hosts'
 
 // Tables with (organization_id, site_id) that need re-parenting when a site transfers orgs.
 // Excludes billing/credits tables (organization_billing, organization_entitlements, ai_credits,
@@ -470,7 +471,7 @@ export async function processSiteTransferReminders(
       siteId: transfer.site_id,
       toEmail: transfer.to_email,
       siteName: transfer.site_name || transfer.site_id,
-      transferUrl: `https://${String(env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com')}/transfer/${transfer.token}`,
+      transferUrl: `https://${normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN) || 'krabiclaw.com'}/transfer/${transfer.token}`,
       invitedPlan: transfer.invited_plan,
       invitedDomain: transfer.invited_domain,
       daysPending,

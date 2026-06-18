@@ -118,7 +118,7 @@ export async function createPost(
 ): Promise<Post> {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  const status = data.status ?? 'published'
+  const status = data.status ?? (data.scheduled_for ? 'scheduled' : 'published')
   const publishedAt = status === 'published' ? now : null
 
   await db.prepare(`

@@ -31,10 +31,15 @@ export default defineEventHandler(async (event) => {
   const userEmail = session.user.email?.toLowerCase() ?? ''
   const isPlatAdmin = isPlatformOwner(session.user.email, env)
 
+  let acceptBody: { interval?: string } = {}
+  try {
+    acceptBody = (await readBody(event)) ?? {}
+  } catch { /* empty body is fine */ }
+
   const transfer = await db
     .prepare(
       `SELECT id, site_id, from_organization_id, to_email, status,
-              invited_plan, invited_coupon, requires_payment, stripe_checkout_session_id
+              invited_plan, invited_coupon, invited_interval, requires_payment, stripe_checkout_session_id
        FROM site_transfer_requests WHERE token = ? LIMIT 1`,
     )
     .bind(token)
@@ -46,6 +51,7 @@ export default defineEventHandler(async (event) => {
       status: string
       invited_plan: string | null
       invited_coupon: string | null
+      invited_interval: string | null
       requires_payment: number
       stripe_checkout_session_id: string | null
     }>()
@@ -99,7 +105,11 @@ export default defineEventHandler(async (event) => {
     }
 
     try {
-      const priceId = await getPriceIdForPlan(env, transfer.invited_plan, 'month')
+      const interval: 'month' | 'year' = acceptBody.interval === 'year' ? 'year'
+        : acceptBody.interval === 'month' ? 'month'
+        : transfer.invited_interval === 'year' ? 'year'
+        : 'month'
+      const priceId = await getPriceIdForPlan(env, transfer.invited_plan, interval)
       const stripe = getStripe(env)
 
       // Get or create Stripe customer for the new org

@@ -1,4 +1,6 @@
+import { useRender } from 'vue-email'
 import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import SiteTransferReminder from '~/server/emails/templates/SiteTransferReminder'
 
 interface SiteTransferNotificationEnv {
   PLATFORM_OWNER_EMAILS?: string
@@ -23,15 +25,6 @@ function supportEmails(env: SiteTransferNotificationEnv): string[] {
     .split(',')
     .map((email) => email.trim())
     .filter(Boolean)
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
 async function logEmailNotification(
@@ -191,29 +184,21 @@ export async function notifySiteTransferReminder(
     now,
   ).run()
 
-  const planLine = opts.invitedPlan ? `<p><strong>Recommended plan:</strong> ${escapeHtml(opts.invitedPlan)}</p>` : ''
-  const domainLine = opts.invitedDomain ? `<p><strong>Domain:</strong> ${escapeHtml(opts.invitedDomain)}</p>` : ''
-  const pausedLine = opts.customDomainsPaused
-    ? '<p><em>Custom domain status: Paused until checkout is complete.</em></p>'
-    : ''
-  const html = `
-    <p>${escapeHtml(body)}</p>
-    <p><strong>Site:</strong> ${escapeHtml(opts.siteName)}</p>
-    ${domainLine}
-    ${planLine}
-    ${pausedLine}
-    <p style="margin:24px 0"><a href="${escapeHtml(opts.transferUrl)}" style="background:#FB7461;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">View your website handoff</a></p>
-  `
-  const text = [
-    body,
-    '',
-    `Site: ${opts.siteName}`,
-    opts.invitedDomain ? `Domain: ${opts.invitedDomain}` : '',
-    opts.invitedPlan ? `Recommended plan: ${opts.invitedPlan}` : '',
-    opts.customDomainsPaused ? 'Custom domain status: Paused until checkout is complete.' : '',
-    '',
-    `View your website handoff: ${opts.transferUrl}`,
-  ].filter(Boolean).join('\n')
+  const planLabel: Record<string, string> = {
+    growth: 'Growth ($49/mo)',
+    managed: 'Managed ($149/mo)',
+    seo_accelerator: 'SEO Accelerator ($349/mo)',
+  }
+
+  const { html, text } = await useRender(SiteTransferReminder, {
+    props: {
+      siteName: opts.siteName,
+      transferUrl: opts.transferUrl,
+      domain: opts.invitedDomain ?? null,
+      planLabel: opts.invitedPlan ? (planLabel[opts.invitedPlan] ?? opts.invitedPlan) : null,
+      customDomainsPaused: opts.customDomainsPaused,
+    },
+  })
 
   await sendReminderEmail(env, db, {
     organizationId: opts.organizationId,
