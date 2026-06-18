@@ -204,7 +204,7 @@ async function handleCheckoutCompleted(
     const plan = session.metadata?.plan
     const transferId = session.metadata?.transfer_request_id
     if (!organizationId || !plan || !transferId) { console.error('Invalid site transfer metadata:', session.id); return }
-    const resolvedSiteId = siteId ?? (await db.prepare(`SELECT id FROM sites WHERE organization_id = ? LIMIT 1`).bind(organizationId).first<{ id: string }>())?.id
+    const resolvedSiteId = siteId ?? session.metadata?.transfer_site_id ?? (await db.prepare(`SELECT id FROM sites WHERE organization_id = ? LIMIT 1`).bind(organizationId).first<{ id: string }>())?.id
     if (!resolvedSiteId) { console.error('No site found for site_transfer checkout:', session.id); return }
     const customerId = session.customer as string
     const subscriptionId = checkoutSubscriptionId(session)

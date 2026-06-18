@@ -148,13 +148,13 @@ test("pottery house translations block includes Thai content and location transl
   assert.match(sql, /loc-pottery-beachfront/);
 });
 
-test("pottery house billing block includes ai credits and organization billing state", () => {
+test("pottery house billing block includes ai credits and site billing state", () => {
   const sql = renderCompiledPotteryHouseBillingBlock();
 
   assert.match(sql, /INSERT OR REPLACE INTO ai_credits/);
-  assert.match(sql, /INSERT OR REPLACE INTO organization_billing/);
-  assert.match(sql, /INSERT OR REPLACE INTO organization_entitlements/);
-  assert.match(sql, /billing-org-pottery-house/);
+  assert.match(sql, /INSERT OR REPLACE INTO site_billing/);
+  assert.match(sql, /INSERT OR REPLACE INTO site_entitlements/);
+  assert.match(sql, /sb-site-pottery-house/);
   assert.match(sql, /managed/);
   assert.match(sql, /managed_service/);
   assert.match(sql, /google_business/);

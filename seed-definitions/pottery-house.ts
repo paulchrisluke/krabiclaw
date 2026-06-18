@@ -1,6 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedSiteDefinition } from './contracts.ts'
-import { renderOrganizationBillingSql, renderOrganizationEntitlementsSql } from './billing-sql.ts'
+import { renderSiteBillingSql, renderSiteEntitlementsSql } from './billing-sql.ts'
 
 function escapeSql(value: string): string {
   return value.replace(/'/g, "''")
@@ -1346,8 +1346,8 @@ VALUES (${sqlValue(identity.organizationId)}, ${aiCredits.balance}, ${aiCredits.
   }
 
   if (organizationBilling) {
-    parts.push(renderOrganizationBillingSql(identity.organizationId, organizationBilling, sqlValue))
-    parts.push(renderOrganizationEntitlementsSql(identity.organizationId, organizationBilling.plan, sqlValue))
+    parts.push(renderSiteBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue))
+    parts.push(renderSiteEntitlementsSql(identity.siteId, identity.organizationId, organizationBilling.plan, sqlValue))
   }
 
   return `-- BEGIN GENERATED: pottery_billing

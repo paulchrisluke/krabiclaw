@@ -3,6 +3,7 @@
 // subdomain uniqueness, seeding, and Cloudflare subdomain registration.
 import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain } from '~/server/utils/domains'
+import { setSiteEntitlementsFromPlan } from '~/server/utils/billing'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
@@ -159,6 +160,14 @@ async function performSeeding(
     if (!resolvedSubdomain?.trim()) throw new Error(`Missing subdomain for site ${siteId}`)
 
     await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
+
+    const existingBilling = await db.prepare(`
+      SELECT sb.plan FROM site_billing sb
+      WHERE sb.organization_id = ? AND sb.status != 'canceled'
+      ORDER BY sb.updated_at DESC LIMIT 1
+    `).bind(organizationId).first<{ plan: string }>()
+    await setSiteEntitlementsFromPlan(db, siteId, organizationId, existingBilling?.plan ?? 'free')
+
     await db.prepare(`UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`)
       .bind(now, siteId).run()
 

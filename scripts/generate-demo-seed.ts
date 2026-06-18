@@ -16,7 +16,7 @@ import {
   renderCompiledDemoBillingBlock,
   renderDemoExperienceSeedBlock,
 } from '../seed-definitions/demo.ts'
-import { renderOrganizationBillingSql, renderOrganizationEntitlementsSql } from '../seed-definitions/billing-sql.ts'
+import { renderSiteBillingSql, renderSiteEntitlementsSql } from '../seed-definitions/billing-sql.ts'
 
 function escapeSql(value: string) {
   return value.replace(/'/g, "''")
@@ -30,6 +30,8 @@ function sqlValue(value: string | number | boolean | null) {
 }
 
 function renderMcpFixtureOrg(orgId: string, userId: string, name: string, slug: string, plan: 'free' | 'growth' | 'managed') {
+  const siteId = `site-${orgId.replace(/^org-/, '')}`
+  const status = plan === 'free' ? 'free' : 'active'
   return `INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
 VALUES (${sqlValue(userId)}, ${sqlValue(name)}, ${sqlValue(`${userId}@example.test`)}, 1, 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
@@ -39,8 +41,12 @@ VALUES (${sqlValue(orgId)}, ${sqlValue(name)}, ${sqlValue(slug)}, CURRENT_TIMEST
 INSERT INTO member (id, organizationId, userId, role, createdAt)
 VALUES (${sqlValue(`member-${orgId}`)}, ${sqlValue(orgId)}, ${sqlValue(userId)}, 'owner', CURRENT_TIMESTAMP);
 
-${renderOrganizationBillingSql(orgId, { status: plan === 'free' ? 'free' : 'active', plan }, sqlValue)}
-${renderOrganizationEntitlementsSql(orgId, plan, sqlValue)}`
+INSERT OR IGNORE INTO sites (id, organization_id, theme_id, slug, subdomain, brand_name, status, plan, onboarding_status, created_at, updated_at)
+VALUES (${sqlValue(siteId)}, ${sqlValue(orgId)}, 'saya-theme-v1', ${sqlValue(slug)}, ${sqlValue(slug)}, ${sqlValue(name)}, 'active', ${sqlValue(plan)}, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+${renderSiteBillingSql(siteId, orgId, { status, plan }, sqlValue)}
+
+${renderSiteEntitlementsSql(siteId, orgId, plan, sqlValue)}`
 }
 
 const isStdout = process.argv.includes('--stdout')
