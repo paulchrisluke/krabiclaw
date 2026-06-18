@@ -732,7 +732,10 @@ onMounted(async () => {
 
   try {
     await dashboardState.refresh()
-    if (showOnboarding.value) return
+    if (showOnboarding.value) {
+      await navigateTo(`/dashboard/${route.params.orgSlug}/~/onboarding`)
+      return
+    }
     await loadDashboardData()
   } finally {
     loading.value = false
