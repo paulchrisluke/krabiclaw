@@ -229,8 +229,9 @@ export async function getActiveEntitlements(db: D1Database, organizationId: stri
   if (!keys.length) return new Set()
   const placeholders = keys.map(() => '?').join(', ')
   const { results } = await db.prepare(`
-    SELECT key FROM organization_entitlements
-    WHERE organization_id = ? AND key IN (${placeholders}) AND value = 'true'
+    SELECT se.key FROM site_entitlements se
+    JOIN sites s ON s.id = se.site_id
+    WHERE s.organization_id = ? AND se.key IN (${placeholders}) AND se.value = 'true'
   `).bind(organizationId, ...keys).all<{ key: string }>()
   return new Set((results ?? []).map(r => r.key))
 }

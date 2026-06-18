@@ -164,11 +164,11 @@ export function validateCustomDomain(env: DomainEnv, domain: string): { valid: b
 
 export async function hasCustomDomainsEntitlement(db: D1Database, organizationId: string): Promise<boolean> {
   const entitlement = await db.prepare(`
-    SELECT value FROM organization_entitlements
-    WHERE organization_id = ? AND key = 'custom_domains'
+    SELECT se.value FROM site_entitlements se
+    JOIN sites s ON s.id = se.site_id
+    WHERE s.organization_id = ? AND se.key = 'custom_domains'
     LIMIT 1
   `).bind(organizationId).first()
-
   return String(entitlement?.value || '').toLowerCase() === 'true'
 }
 
@@ -696,15 +696,14 @@ export async function deleteOrganizationCustomDomains(
   organizationId: string
 ): Promise<void> {
   const domains = await db.prepare(`
-    SELECT id
-    FROM site_domains
+    SELECT id FROM site_domains
     WHERE organization_id = ? AND type = 'custom' AND status != 'deleted'
   `).bind(organizationId).all()
-
   for (const domain of domains.results || []) {
     await deleteCustomDomain(env, db, domain.id as string, 'system')
   }
 }
+
 
 export async function setCanonicalDomain(
   db: D1Database,

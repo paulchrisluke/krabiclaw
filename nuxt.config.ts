@@ -151,6 +151,10 @@ export default defineNuxtConfig({
       prefix: 'Billing',
       pathPrefix: false,
     },
+    {
+      path: '~/components/onboarding',
+      pathPrefix: false,
+    },
   ],
 
   // Global watcher exclusions

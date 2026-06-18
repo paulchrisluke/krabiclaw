@@ -156,7 +156,7 @@ export async function notifySiteTransferReminder(
   const title = opts.customDomainsPaused
     ? `Action needed: Finishing touches for ${opts.siteName}`
     : `Reminder: ${opts.siteName} is ready for you!`
-  const body = opts.customDomainsPaused
+  const _body = opts.customDomainsPaused
     ? `Your website is ready to go, but we just need to wrap up the payment setup to get your custom domain live and kicking.`
     : `Good news—your new website is ready and waiting for you to take the reins. Click below to review and claim it whenever you're ready.`
 

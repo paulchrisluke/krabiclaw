@@ -1,9 +1,9 @@
 // Onboarding site setup — web equivalent of the MCP create_site + create_location flow.
-// Uses the same underlying functions: runSiteCreation, updateLocation, getPlaceDetails.
+// Uses the same underlying functions: runSiteCreation, updateLocation, getPlaceDetailsByUrl.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { getPlaceDetails } from '~/server/utils/google-places'
+import { getPlaceDetailsByUrl, getPlaceDetails } from '~/server/utils/google-places'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
 import { updateLocation } from '~/server/utils/location-management'
 import { setConfig } from '~/server/utils/site-config'
@@ -25,16 +25,45 @@ export default defineEventHandler(async (event) => {
   const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
   if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 503 })
 
-  const body = await readBody(event) as { placeId?: unknown; vertical?: unknown }
+  const body = await readBody(event) as { mapsUrl?: unknown; placeId?: unknown; vertical?: unknown; previewOnly?: unknown }
+  const mapsUrl = typeof body?.mapsUrl === 'string' ? body.mapsUrl.trim() : ''
   const placeId = typeof body?.placeId === 'string' ? body.placeId.trim() : ''
-  if (!placeId) return jsonResponse({ error: 'placeId is required' }, { status: 400 })
+  if (!mapsUrl && !placeId) return jsonResponse({ error: 'mapsUrl or placeId is required' }, { status: 400 })
 
   const vertical = typeof body?.vertical === 'string' && VALID_VERTICALS.includes(body.vertical as never)
     ? (body.vertical as 'restaurant' | 'experience')
     : 'restaurant'
 
-  const place = await getPlaceDetails(apiKey, placeId).catch(() => null)
-  if (!place) return jsonResponse({ error: 'Could not fetch place details. Try again.' }, { status: 502 })
+  const previewOnly = body?.previewOnly === true
+
+  let place
+  try {
+    place = placeId
+      ? await getPlaceDetails(apiKey, placeId)
+      : await getPlaceDetailsByUrl(apiKey, mapsUrl)
+  } catch (err) {
+    return jsonResponse({
+      error: err instanceof Error ? err.message : 'Could not fetch place details. Try again.',
+    }, { status: err instanceof Error && err.message.includes('extract place ID') ? 422 : 502 })
+  }
+
+  if (previewOnly) {
+    return jsonResponse({
+      success: true,
+      preview: {
+        placeId: place.placeId,
+        name: place.name,
+        address: place.formattedAddress,
+        city: place.city,
+        phone: place.phone,
+        mapsUrl: place.mapsUrl,
+        rating: place.rating,
+        ratingCount: place.ratingCount,
+        openingHours: place.openingHours,
+        photos: place.photos,
+      },
+    })
+  }
 
   // Resolve or create the site — mirrors MCP create_site using runSiteCreation
   const dashboard = await getDashboardContext(event, { requireRestaurant: false })
@@ -44,31 +73,23 @@ export default defineEventHandler(async (event) => {
 
   if (!dashboard?.restaurant) {
     const baseSubdomain = slugify(place.name).slice(0, 40)
-    let result = await runSiteCreation(env as SiteEnv, db, session.user.id, {
+    const result = await runSiteCreation(env as SiteEnv, db, session.user.id, {
       name: place.name,
       subdomain: baseSubdomain,
       vertical,
     })
-    if (result.status === 409) {
-      // Subdomain taken — retry with random suffix
-      const fallback = `${slugify(place.name).slice(0, 32)}-${Math.random().toString(36).slice(2, 6)}`
-      result = await runSiteCreation(env as SiteEnv, db, session.user.id, {
-        name: place.name,
-        subdomain: fallback,
-        vertical,
-      })
-    }
     if (result.status !== 200) {
-      return jsonResponse({ error: 'Could not create site. Please try again.' }, { status: 500 })
+      if (result.status === 409) {
+        return jsonResponse({ error: 'A site with this name already exists. Please try a different business or contact support.' }, { status: 409 })
+      }
+      return jsonResponse({ error: (result.data.error as string) || 'Could not create site. Please try again.' }, { status: result.status || 500 })
     }
     siteId = result.data.siteId as string
     organizationId = result.data.organizationId as string
   } else {
-    siteId = dashboard.restaurant.id
-    organizationId = dashboard.restaurant.organization_id
+    return jsonResponse({ error: 'You already have a site. Onboarding is for new sites only.' }, { status: 400 })
   }
 
-  // Find the primary location — same approach as hydrateSeededLocationForOnboarding
   const locationRow = await db.prepare(`
     SELECT id FROM business_locations
     WHERE site_id = ? AND organization_id = ? AND status = 'active'
@@ -80,14 +101,13 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'No active location found for this site. Site creation may have failed.' }, { status: 500 })
   }
 
-  // Update with place data via the same updateLocation path the MCP uses
   await updateLocation(db, organizationId, siteId, locationRow.id, {
     title: place.name,
     slug: slugify(place.name),
     phone: place.phone ?? undefined,
     city: place.city ?? undefined,
     maps_url: place.mapsUrl ?? undefined,
-    google_place_id: placeId,
+    google_place_id: place.placeId,
     website_url: place.websiteUrl ?? undefined,
     opening_hours: place.openingHours ?? undefined,
     rating: place.rating ?? undefined,
@@ -105,7 +125,6 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Upsert reviews — INSERT OR IGNORE so MCP edits are never overwritten
   const now = new Date().toISOString()
   for (const review of place.reviews) {
     if (!review.reviewId || !review.rating) continue
@@ -131,7 +150,6 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Return org slug so the frontend can redirect if a new site was created
   const orgRow = await db.prepare(`SELECT slug FROM organization WHERE id = ? LIMIT 1`)
     .bind(organizationId).first<{ slug: string }>()
 

@@ -230,6 +230,7 @@ async function main() {
     features: [
       'Restaurant or experience site live in minutes',
       'Your own domain (yourbusiness.com)',
+      'Unlimited locations — one site covers all your branches',
       'Edit menus, content & photos through ChatGPT',
       'Bookings, ticketed experiences & delivery links',
       'WhatsApp booking & reservation notifications',
@@ -249,7 +250,7 @@ async function main() {
     features: [
       'Everything in Growth, plus:',
       'We manage all content via ChatGPT — no login needed',
-      'Unlimited language translations',
+      'Unlimited locations & unlimited language translations',
       'Auto-sync from Facebook & Instagram',
       'Full Google Business profile management',
       'Priority WhatsApp support from Paul & Julia',

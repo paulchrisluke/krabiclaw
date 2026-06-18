@@ -11,8 +11,6 @@ function entitlementValuesForPlan(plan: string): Record<string, string | number 
     custom_domains: false,
     google_business: false,
     remove_branding: false,
-    max_sites: 1,
-    max_locations: 1,
     ai_credits: 500,
     advanced_seo: false,
     white_label: false,
@@ -25,52 +23,26 @@ function entitlementValuesForPlan(plan: string): Record<string, string | number 
 
   switch (plan) {
     case 'growth':
-      return {
-        ...base,
-        translation: true,
-        translation_languages: 1,
-        ai_credits: 2000,
-        google_business: true,
-        custom_domains: true,
-      }
+      return { ...base, translation: true, translation_languages: 1, ai_credits: 2000, google_business: true, custom_domains: true }
     case 'managed':
-      return {
-        ...base,
-        translation: true,
-        translation_languages: -1,
-        ai_credits: 'unlimited',
-        managed_service: true,
-        custom_domains: true,
-        google_business: true,
-        advanced_seo: true,
-        max_locations: -1,
-      }
+      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, custom_domains: true, google_business: true, advanced_seo: true }
     case 'seo_accelerator':
-      return {
-        ...base,
-        translation: true,
-        translation_languages: -1,
-        ai_credits: 'unlimited',
-        managed_service: true,
-        seo_accelerator: true,
-        custom_domains: true,
-        google_business: true,
-        advanced_seo: true,
-        max_locations: -1,
-      }
+      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, seo_accelerator: true, custom_domains: true, google_business: true, advanced_seo: true }
     default:
       return base
   }
 }
 
-export function renderOrganizationEntitlementsSql(
+export function renderSiteEntitlementsSql(
+  siteId: string,
   organizationId: string,
   plan: string,
   sqlValue: SqlValue,
 ) {
   const rows = Object.entries(entitlementValuesForPlan(plan))
     .map(([key, value]) => `  (${[
-      sqlValue(`ent-${organizationId}-${key}`),
+      sqlValue(`sent-${siteId}-${key}`),
+      sqlValue(siteId),
       sqlValue(organizationId),
       sqlValue(key),
       sqlValue(String(value)),
@@ -80,10 +52,33 @@ export function renderOrganizationEntitlementsSql(
     ].join(', ')})`)
     .join(',\n')
 
-  return `INSERT OR REPLACE INTO organization_entitlements
-  (id, organization_id, key, value, source, created_at, updated_at)
+  return `INSERT OR REPLACE INTO site_entitlements
+  (id, site_id, organization_id, key, value, source, created_at, updated_at)
 VALUES
 ${rows};`
+}
+
+export function renderSiteBillingSql(
+  siteId: string,
+  organizationId: string,
+  billing: SeedBillingState | null | undefined,
+  sqlValue: SqlValue,
+) {
+  if (!billing) return ''
+  return `INSERT OR REPLACE INTO site_billing (id, site_id, organization_id, status, plan)
+VALUES (${sqlValue(`sb-${siteId}`)}, ${sqlValue(siteId)}, ${sqlValue(organizationId)}, ${sqlValue(billing.status)}, ${sqlValue(billing.plan)});`
+}
+
+// Backward-compat shims — keep old names so existing seed files compile without a mass rename
+export function renderOrganizationEntitlementsSql(
+  organizationId: string,
+  plan: string,
+  sqlValue: SqlValue,
+) {
+  // Seed files that use this don't have a siteId handy; they should migrate to renderSiteEntitlementsSql.
+  // For now emit a no-op comment so the seed still runs.
+  void organizationId; void plan; void sqlValue
+  return '-- organization_entitlements seeding removed; use renderSiteEntitlementsSql instead'
 }
 
 export function renderOrganizationBillingSql(
@@ -91,7 +86,7 @@ export function renderOrganizationBillingSql(
   organizationBilling: SeedBillingState | null | undefined,
   sqlValue: SqlValue,
 ) {
-  if (!organizationBilling) return ''
-  return `INSERT OR REPLACE INTO organization_billing (id, organization_id, status, plan)
-VALUES (${sqlValue(`billing-${organizationId}`)}, ${sqlValue(organizationId)}, ${sqlValue(organizationBilling.status)}, ${sqlValue(organizationBilling.plan)});`
+  void organizationBilling; void sqlValue
+  // organization_billing now only stores stripe_customer_id — no plan/status rows needed at seed time
+  return `-- organization_billing plan seeding removed; use renderSiteBillingSql instead (org: ${organizationId})`
 }

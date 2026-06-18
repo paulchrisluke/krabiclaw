@@ -153,7 +153,7 @@ async function saveLocation(location: LocationRow & { form: OrderForm }) {
   savingId.value = location.id
   try {
     await $fetch(`/api/dashboard/locations/${location.id}`, {
-      method: 'PATCH',
+      method: 'PATCH' as unknown as 'POST',
       body: {
         grab_url: normalizedUrl(location.form.grab_url),
         uber_eats_url: normalizedUrl(location.form.uber_eats_url),

@@ -16,12 +16,15 @@ export default defineEventHandler(async (event) => {
   if (!isPlatformOwner(session.user.email, env)) return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
 
   const billing = await db.prepare(`
-    SELECT b.stripe_customer_id, b.stripe_subscription_id, b.plan, b.status,
-           b.current_period_end, b.cancel_at_period_end,
+    SELECT ob.stripe_customer_id, sb.stripe_subscription_id, sb.plan, sb.status,
+           sb.current_period_end, sb.cancel_at_period_end,
            o.name AS org_name, o.slug AS org_slug
     FROM organization o
-    LEFT JOIN organization_billing b ON b.organization_id = o.id
+    LEFT JOIN organization_billing ob ON ob.organization_id = o.id
+    LEFT JOIN sites s ON s.organization_id = o.id
+    LEFT JOIN site_billing sb ON sb.site_id = s.id
     WHERE o.id = ?
+    ORDER BY s.created_at ASC
     LIMIT 1
   `).bind(orgId).first<{
     stripe_customer_id: string | null

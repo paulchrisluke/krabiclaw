@@ -1,9 +1,6 @@
-import {
-  getOrganizationEntitlements,
-  updateSubscriptionQuantity,
-} from "~/server/utils/billing";
+import { updateSubscriptionQuantity } from "~/server/utils/billing";
 
-type SetupEnv = Parameters<typeof getOrganizationEntitlements>[0];
+type SetupEnv = Record<string, string | undefined>;
 
 const MAX_SLUG_ATTEMPTS = 10;
 
@@ -268,25 +265,6 @@ export async function createLocation(
     return {
       status: 500,
       data: { error: "Unable to verify active locations." },
-    };
-  }
-
-  const entitlements = await getOrganizationEntitlements(
-    env,
-    db,
-    organizationId,
-  );
-  const maxLocations =
-    typeof entitlements.max_locations === "number"
-      ? entitlements.max_locations
-      : 1;
-  if (maxLocations > 0 && activeCount >= maxLocations) {
-    return {
-      status: 402,
-      data: {
-        error: "Location limit reached. Upgrade to a paid plan to add more locations.",
-        code: "LOCATION_LIMIT_REACHED",
-      },
     };
   }
 

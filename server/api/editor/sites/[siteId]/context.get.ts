@@ -97,10 +97,8 @@ export default defineEventHandler(async (event) => {
     }))
 
     const entitlementsResult = await db.prepare(`
-      SELECT key, value
-      FROM organization_entitlements
-      WHERE organization_id = ?
-    `).bind(site.organization_id).all()
+      SELECT key, value FROM site_entitlements WHERE site_id = ?
+    `).bind(siteId).all()
 
     const entitlementRows = (entitlementsResult.results || []) as unknown as EntitlementRow[]
     const entitlements = entitlementRows.reduce((acc: Record<string, string | boolean>, row) => {

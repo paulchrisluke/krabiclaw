@@ -62,14 +62,6 @@ export default defineEventHandler(async (event) => {
 
     const siteConfig = await getConfig(db, site.organization_id as string, site.id as string)
 
-    const maxLocationsRow = await db.prepare(`
-      SELECT value FROM organization_entitlements
-      WHERE organization_id = ? AND key = 'max_locations'
-      LIMIT 1
-    `).bind(site.organization_id).first<{ value: string }>()
-    const _parsed = parseInt(maxLocationsRow?.value ?? '', 10)
-    const max_locations = Number.isNaN(_parsed) ? 1 : _parsed
-
     const settings = {
       id: site.id,
       organization_id: site.organization_id,
@@ -98,7 +90,6 @@ export default defineEventHandler(async (event) => {
       google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '',
       google_site_verification: siteConfig.google_site_verification || '',
       url_structure: siteSettings.url_structure || 'location_subdirectories',
-      max_locations,
       last_published_at: site.last_published_at,
       created_at: site.created_at,
       updated_at: site.updated_at

@@ -301,6 +301,71 @@ export async function searchPlaces(
   return (data.places ?? []).map(normalizeSearchResult)
 }
 
+function extractPlaceIdFromUrl(url: string): string | null {
+  const match = url.match(/!1s(ChIJ[^!&%]+)/)
+  if (match?.[1]) {
+    try { return decodeURIComponent(match[1]) } catch { return match[1] }
+  }
+  return null
+}
+
+function extractNameAndCoordsFromUrl(url: string): { name: string | null; lat: number | null; lng: number | null } {
+  let name: string | null = null
+  let lat: number | null = null
+  let lng: number | null = null
+  const pathMatch = url.match(/\/maps\/place\/([^/@]+)/)
+  if (pathMatch?.[1]) {
+    try { name = decodeURIComponent(pathMatch[1].replace(/\+/g, ' ')) } catch { name = pathMatch[1] }
+  }
+  const coordMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
+  if (coordMatch?.[1] && coordMatch?.[2]) {
+    lat = parseFloat(coordMatch[1])
+    lng = parseFloat(coordMatch[2])
+  }
+  return { name, lat, lng }
+}
+
+async function resolveShortUrl(url: string): Promise<string> {
+  let parsed: URL
+  try { parsed = new URL(url) } catch { return url }
+  if (parsed.protocol !== 'https:') return url
+  if (!['maps.app.goo.gl', 'goo.gl'].includes(parsed.hostname)) return url
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 5000)
+  try {
+    const res = await fetch(parsed.toString(), { method: 'HEAD', redirect: 'follow', signal: controller.signal })
+    return res.url || url
+  } catch { return url } finally { clearTimeout(timeout) }
+}
+
+export async function getPlaceDetailsByUrl(
+  apiKey: string,
+  mapsUrl: string,
+  fetchPhotos = true,
+  photoLimit = 5,
+): Promise<PlaceDetails> {
+  const resolved = await resolveShortUrl(mapsUrl)
+  const placeId = extractPlaceIdFromUrl(resolved)
+  if (placeId) {
+    return getPlaceDetails(apiKey, placeId, fetchPhotos, photoLimit)
+  }
+
+  // URL uses hex-format or feature ID — extract name + coords and search instead
+  const { name, lat, lng } = extractNameAndCoordsFromUrl(resolved)
+  if (!name) {
+    throw new Error('Could not identify the business from this URL. Copy the full Google Maps link directly from your browser address bar.')
+  }
+  const locationBias = (lat !== null && lng !== null)
+    ? { latitude: lat, longitude: lng, radiusMeters: 2000 }
+    : undefined
+  const results = await searchPlaces(apiKey, name, locationBias)
+  const top = results[0]
+  if (!top?.placeId) {
+    throw new Error(`Could not find "${name}" on Google. Try pasting the link from a desktop browser, or use the Facebook or manual option.`)
+  }
+  return getPlaceDetails(apiKey, top.placeId, fetchPhotos, photoLimit)
+}
+
 export async function getPlaceDetails(
   apiKey: string,
   placeId: string,

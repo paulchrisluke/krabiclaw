@@ -6,12 +6,7 @@
 
       <!-- Brand mark -->
       <div class="flex items-center gap-2.5">
-        <div
-          class="flex size-[30px] select-none items-center justify-center rounded-lg bg-primary font-bold italic text-white"
-          style="font-family: 'Fredoka', sans-serif; font-size: 16px;"
-        >
-          K
-        </div>
+        <img src="/krabi-claw-logo.png" alt="KrabiClaw" class="h-7 w-auto" />
       </div>
 
       <div class="h-[22px] w-px bg-default-200 dark:bg-default-700" />
@@ -27,29 +22,28 @@
       <!-- ─── Readiness progress (centred) ──────────────────────────── -->
       <div class="flex flex-1 items-center justify-center">
         <div class="relative">
-          <button
+          <UButton
+            :color="progOpen ? 'neutral' : 'neutral'"
+            :variant="progOpen ? 'soft' : 'ghost'"
             :class="[
-              'inline-flex items-center gap-2.5 rounded-xl border px-3 py-1.5 text-highlighted transition-colors',
-              progOpen
-                ? 'border-default bg-elevated'
-                : 'border-default/60 bg-transparent hover:border-default hover:bg-elevated',
+              'inline-flex items-center gap-2.5 rounded-xl px-3 py-1.5 text-highlighted transition-colors',
+              progOpen ? 'bg-elevated border border-default' : 'border border-default/60 hover:border-default hover:bg-elevated',
             ]"
             @click="progOpen = !progOpen"
           >
             <!-- Score ring -->
             <OnboardingScoreRing :score="readinessScore" :size="32" />
-            <span class="flex flex-col text-left leading-tight">
+            <span class="text-left leading-tight">
               <b class="text-[12.5px] font-bold">{{ scoreHeadline }}</b>
-              <span class="text-[10.5px] text-muted">
-                {{ readinessDoneCount }} of {{ READINESS_CATEGORIES.length }} areas ready · score {{ Math.round(readinessScore) }}
-              </span>
             </span>
-            <UIcon
-              name="i-heroicons-chevron-down-20-solid"
-              class="size-3.5 text-dimmed transition-transform"
-              :class="{ 'rotate-180': progOpen }"
-            />
-          </button>
+            <template #trailing>
+              <UIcon
+                name="i-heroicons-chevron-down-20-solid"
+                class="size-3.5 text-dimmed transition-transform"
+                :class="{ 'rotate-180': progOpen }"
+              />
+            </template>
+          </UButton>
 
           <!-- Readiness dropdown -->
           <Transition
@@ -110,7 +104,6 @@
 
       <!-- Actions -->
       <div class="flex items-center gap-2">
-        <UColorModeButton variant="ghost" color="neutral" size="sm" />
         <UButton color="neutral" variant="ghost" size="sm" @click="handleSaveLater">Save for later</UButton>
         <UButton color="neutral" variant="outline" size="sm" @click="handleExit">Exit</UButton>
       </div>
@@ -120,11 +113,12 @@
     <div
       v-if="contextLoaded"
       class="grid min-h-0 flex-1 overflow-hidden"
-      style="grid-template-columns: minmax(24rem, 45%) 1fr"
+      style="grid-template-columns: minmax(24rem, 45%) 1fr; grid-template-rows: minmax(0, 1fr)"
     >
-      <OnboardingAgentPanel
+      <OnboardingWizard
         :site-id="siteId"
-        :setup-mode="!siteId"
+        :existing-org-slug="orgSlug"
+        @site-created="onSiteCreated"
       />
       <OnboardingPreviewPane
         :iframe-src="iframeSrc"
@@ -178,9 +172,9 @@ const READINESS_STATE_LABEL: Record<ReadinessState, string> = {
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
-const dashboard = useDashboardRestaurant()
 const siteData = ref<ApiRecord | null>(null)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
+const orgSlug = ref<string | null>(null)
 const previewToken = ref('')
 const contextLoaded = ref(false)
 const progOpen = ref(false)
@@ -196,15 +190,15 @@ const selectedPreviewPage = ref('home')
 const previewReloadToken = ref(0)
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
-// Use dashboard state as siteId source — same as useChowBot internally uses
-const siteId = computed<string | null>(() => dashboard.siteId.value)
+// Site ID comes from context loading, not dashboard composable (since org may not exist yet)
+const siteId = computed<string | null>(() => siteData.value?.id ?? null)
 
 const platformHostname = computed(() => {
   const domain = config.public.freeSiteDomain as string
   return domain.replace(/^https?:\/\//, '')
 })
 
-const siteName = computed(() => siteData.value?.brand_name || 'New Site')
+const siteName = computed(() => siteData.value?.brand_name || 'New Workspace')
 const siteDomain = computed(() =>
   siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : ''
 )
@@ -251,7 +245,7 @@ const computedSiteStatus = computed((): 'setup' | 'progress' | 'ready' | 'live' 
   return 'setup'
 })
 
-const readinessDoneCount = computed(() =>
+const _readinessDoneCount = computed(() =>
   READINESS_CATEGORIES.filter(c => readiness.value[c.key] === 'complete').length
 )
 
@@ -269,33 +263,50 @@ const scoreHeadline = computed(() => {
 })
 
 // ─── Load context ─────────────────────────────────────────────────────────────
+
+// Step 1 — fast org/site resolution (works even when site doesn't exist yet)
 const loadContext = async () => {
   try {
-    // Ensure dashboard restaurant context is loaded (same source as useChowBot)
-    if (!dashboard.state.value) await dashboard.refresh()
+    const response = await $fetch<{
+      success: boolean
+      organization?: { id: string; slug: string; name: string } | null
+      restaurant?: ApiRecord | null
+      locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
+    }>('/api/dashboard/context')
 
-    if (dashboard.siteId.value) {
-      // Load editor-specific context (preview token, locations)
-      const response = await $fetch<{ context: ApiValue }>(`/api/dashboard/editor/context`)
-      siteData.value = response.context.site
-      siteLocations.value = response.context.locations || []
-      previewToken.value = response.context.previewToken
-      // Default to primary location for location-scoped pages
+    if (response.organization) orgSlug.value = response.organization.slug ?? null
+    if (response.restaurant) {
+      siteData.value = response.restaurant
+      siteLocations.value = response.locations ?? []
       const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]
       if (primary) selectedLocationId.value = primary.id
+      // Step 2 — get preview token now that we have a site
+      await loadPreviewToken()
     }
   } catch {
-    // Site may not exist yet — that's fine, agent panel handles setup mode
+    // No org/site yet — expected for new users
   } finally {
     contextLoaded.value = true
   }
 }
 
+// Step 2 — editor context includes the signed preview token needed to render draft sites
+const loadPreviewToken = async () => {
+  try {
+    const res = await $fetch<{ context: { previewToken: string } }>('/api/dashboard/editor/context')
+    if (res.context?.previewToken) previewToken.value = res.context.previewToken
+  } catch {
+    // Non-fatal — preview still works if onboarding_status is 'active' (it will be after setup)
+  }
+}
+
 const loadReadiness = async () => {
+  if (!siteId.value) return
+
   try {
     const data = await $fetch<{
       items: { business_info: boolean; hero_image: boolean; menu_or_experiences: boolean; story: boolean; post: boolean }
-    }>(`/api/dashboard/onboarding/checklist`)
+    }>(`/api/dashboard/onboarding/checklist?siteId=${siteId.value}`)
 
     readiness.value = {
       details: data.items.business_info ? 'complete' : 'missing',
@@ -324,9 +335,12 @@ const onSelectLocation = (id: string) => {
   selectedLocationId.value = id
 }
 
-const handleExit = () => {
-  const orgSlug = route.params.orgSlug as string
-  router.push(`/dashboard/${orgSlug}`)
+const handleExit = async () => {
+  if (orgSlug.value) {
+    await router.push(`/dashboard/${orgSlug.value}`)
+  } else {
+    await router.push('/dashboard')
+  }
 }
 
 const handleSaveLater = () => {
@@ -334,19 +348,12 @@ const handleSaveLater = () => {
   handleExit()
 }
 
-// Reload preview when agent makes changes
-const { messages } = useChowBot()
-let lastMessageCount = 0
-watch(messages, (msgs) => {
-  if (msgs.length > lastMessageCount) {
-    const last = msgs[msgs.length - 1]
-    if (last?.role === 'assistant' && !last.streaming && last.toolCalls?.length) {
-      previewReloadToken.value = Date.now()
-      loadReadiness()
-    }
-  }
-  lastMessageCount = msgs.length
-})
+// Called by OnboardingWizard after the site is created — reload context + preview token, populate preview pane
+const onSiteCreated = async (_orgSlug: string | null) => {
+  await loadContext()        // sets siteData + calls loadPreviewToken()
+  await loadReadiness()
+  previewReloadToken.value = Date.now()
+}
 
 // ─── Toast from query params ──────────────────────────────────────────────────
 onMounted(async () => {

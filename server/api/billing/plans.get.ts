@@ -95,18 +95,6 @@ function parseOptionalInt(value?: string): number | undefined {
 
 function parseLimits(metadata: Record<string, string>): Partial<PlanLimits> {
   const result: Partial<PlanLimits> = {};
-  if ("max_locations" in metadata) {
-    result.locations =
-      metadata.max_locations === "unlimited"
-        ? "unlimited"
-        : parseOptionalInt(metadata.max_locations);
-  }
-  if ("max_sites" in metadata) {
-    result.sites =
-      metadata.max_sites === "unlimited"
-        ? "unlimited"
-        : parseOptionalInt(metadata.max_sites);
-  }
   if ("ai_credits" in metadata) {
     result.aiCredits =
       metadata.ai_credits === "unlimited" || metadata.ai_credits === "-1"
