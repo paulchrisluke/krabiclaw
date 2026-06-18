@@ -376,8 +376,9 @@ export default defineEventHandler(async (event) => {
     )
     const incomingHex = signature.startsWith('sha256=') ? signature.slice(7) : ''
     const pairs = incomingHex.match(/.{2}/g)
-    const incomingBytes = pairs && pairs.length === 32
-      ? new Uint8Array(pairs.map((b) => parseInt(b, 16)))
+    const parsedPairs = pairs && pairs.length === 32 ? pairs.map((b) => parseInt(b, 16)) : null
+    const incomingBytes = parsedPairs && parsedPairs.every((n) => !Number.isNaN(n))
+      ? new Uint8Array(parsedPairs)
       : new Uint8Array(0)
     const isValid = incomingBytes.length === 32 && await crypto.subtle.verify(
       { name: 'HMAC', hash: 'SHA-256' },

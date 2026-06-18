@@ -231,33 +231,45 @@ export default defineEventHandler(async (event) => {
   }
 
   // Write items to menu (created_by marks them as AI-sourced)
-  // Wrap in transaction to ensure atomicity - if any item fails, roll back all changes
+  // Track created IDs so rollback only removes items added in this request
   let createdItems: ApiRecord[] = []
+  const createdItemIds: string[] = []
   try {
-    createdItems = await Promise.all(
-      validItems.map((item: ApiValue) => {
-        const priceAmount = item.price_amount ?? item.price
-        return createMenuItem(
-          db,
-          orgId,
-          siteId!,
-          menuId!,
-          {
-            section: String(item.section || 'Menu').slice(0, 100),
-            name: String(item.name || '').slice(0, 200),
-            description: item.description ? String(item.description).slice(0, 500) : undefined,
-            price_amount: priceAmount ? String(priceAmount).slice(0, 50) : undefined,
-          },
-          `ai:${session.user.id}`
-        )
-      })
-    )
+    for (const item of validItems as ApiValue[]) {
+      const priceAmount = item.price_amount ?? item.price
+      const created = await createMenuItem(
+        db,
+        orgId,
+        siteId!,
+        menuId!,
+        {
+          section: String(item.section || 'Menu').slice(0, 100),
+          name: String(item.name || '').slice(0, 200),
+          description: item.description ? String(item.description).slice(0, 500) : undefined,
+          price_amount: priceAmount ? String(priceAmount).slice(0, 50) : undefined,
+        },
+        `ai:${session.user.id}`
+      )
+      createdItems.push(created)
+      createdItemIds.push(created.id)
+    }
   } catch (error) {
-    // Roll back only items; only delete the menu if it was created in this request
+    // Roll back only the items created in this request, preserving pre-existing items
     console.error('[menu/extract] Failed to create menu items, rolling back:', error)
-    await db.prepare('DELETE FROM menu_items WHERE menu_id = ?').bind(menuId).run()
+    if (createdItemIds.length > 0) {
+      const placeholders = createdItemIds.map(() => '?').join(', ')
+      try {
+        await db.prepare(`DELETE FROM menu_items WHERE id IN (${placeholders})`).bind(...createdItemIds).run()
+      } catch (rollbackErr) {
+        console.error('[menu/extract] Rollback of menu_items failed — orphaned rows may remain:', rollbackErr)
+      }
+    }
     if (menuCreatedInThisRequest) {
-      await db.prepare('DELETE FROM menus WHERE id = ?').bind(menuId).run()
+      try {
+        await db.prepare('DELETE FROM menus WHERE id = ?').bind(menuId).run()
+      } catch (rollbackErr) {
+        console.error('[menu/extract] Rollback of menus failed — orphaned row may remain:', rollbackErr)
+      }
     }
     return jsonResponse({ error: 'Failed to save menu items. Please try again.' }, { status: 500 })
   }

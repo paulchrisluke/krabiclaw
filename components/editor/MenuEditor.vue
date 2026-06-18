@@ -50,6 +50,18 @@
         <div class="flex items-center gap-2">
           <AiMenuImport :site-id="props.siteId" :menu-id="currentMenu?.id" @imported="handleAiImport" />
           <UButton
+            v-if="currentMenu?.status === 'draft'"
+            size="sm"
+            color="neutral"
+            variant="soft"
+            icon="i-heroicons-arrow-up-tray"
+            :loading="saving"
+            @click="handlePublish"
+          >
+            Publish
+          </UButton>
+          <UButton
+            v-else
             size="sm"
             color="neutral"
             variant="soft"
@@ -332,6 +344,17 @@ const {
   deleteMenuSection,
   updateMenu
 } = useMenuEditor(props.siteId, props.locationId)
+
+const handlePublish = async () => {
+  if (!currentMenu.value) return
+  try {
+    await updateMenu(currentMenu.value.id, { status: 'active' })
+    toast.addToast('Menu published', 'success')
+  } catch (err) {
+    console.error('handlePublish failed:', err)
+    toast.addToast('Failed to publish menu', 'error')
+  }
+}
 
 const handleUnpublish = async () => {
   if (!currentMenu.value) return
