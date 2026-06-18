@@ -284,6 +284,13 @@ Common workflows: update menus and items, create and publish posts, triage conta
         );
       }
       const baseUrl = resolveBaseUrl(event);
+      const r2MediaOrigin = (() => {
+        try {
+          const base = cfEnv.MEDIA_BASE_URL as string | undefined;
+          return base ? new URL(base).origin : null;
+        } catch { return null; }
+      })();
+      const extraDomains = r2MediaOrigin ? [r2MediaOrigin] : [];
       return mcpSuccess(request.id, {
         contents: [
           {
@@ -295,18 +302,18 @@ Common workflows: update menus and items, create and publish posts, triage conta
                 prefersBorder: true,
                 domain: baseUrl,
                 csp: {
-                  connectDomains: [baseUrl, "https://upload.imagedelivery.net", "https://imagedelivery.net"],
-                  resourceDomains: [baseUrl, "https://imagedelivery.net"],
-                  imageDomains: ["https://imagedelivery.net"],
+                  connectDomains: [...extraDomains, baseUrl, "https://upload.imagedelivery.net", "https://imagedelivery.net"],
+                  resourceDomains: [...extraDomains, baseUrl, "https://imagedelivery.net"],
+                  imageDomains: [...extraDomains, "https://imagedelivery.net"],
                 },
               },
               "openai/widgetDescription": `${WIDGETS.find((w) => w.name === widgetName)?.title ?? "KrabiClaw"} widget`,
               "openai/widgetPrefersBorder": true,
               "openai/widgetDomain": baseUrl,
               "openai/widgetCSP": {
-                connect_domains: [baseUrl, "https://upload.imagedelivery.net", "https://imagedelivery.net"],
-                resource_domains: [baseUrl, "https://imagedelivery.net"],
-                image_domains: ["https://imagedelivery.net"],
+                connect_domains: [...extraDomains, baseUrl, "https://upload.imagedelivery.net", "https://imagedelivery.net"],
+                resource_domains: [...extraDomains, baseUrl, "https://imagedelivery.net"],
+                image_domains: [...extraDomains, "https://imagedelivery.net"],
                 redirect_domains: [
                   ...new Set([
                     baseUrl,

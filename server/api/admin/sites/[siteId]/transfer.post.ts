@@ -9,6 +9,8 @@ import {
   buildTransferDomainSnapshot,
   serializeTransferDomainSnapshot,
 } from '~/server/utils/site-transfer'
+import { useRender } from 'vue-email'
+import SiteTransferInvite from '~/server/emails/templates/SiteTransferInvite'
 
 const ALLOWED_PLANS = ['growth', 'managed', 'seo_accelerator']
 const TOKEN_BYTES = 32
@@ -19,14 +21,6 @@ function generateToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -56,7 +50,7 @@ export default defineEventHandler(async (event) => {
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  let body: { email?: string; message?: string; plan?: string; coupon?: string; domain?: string }
+  let body: { email?: string; message?: string; plan?: string; coupon?: string; domain?: string; interval?: string }
   try {
     body = await readBody(event)
   } catch {
@@ -67,6 +61,7 @@ export default defineEventHandler(async (event) => {
   if (invitedPlan && !ALLOWED_PLANS.includes(invitedPlan)) {
     return jsonResponse({ error: `Invalid plan. Allowed: ${ALLOWED_PLANS.join(', ')}` }, { status: 400 })
   }
+  const invitedInterval: 'month' | 'year' = body.interval === 'year' ? 'year' : 'month'
   const invitedCoupon = body.coupon?.trim() || null
   const invitedDomain = body.domain?.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') || null
   const requiresPayment = Boolean(invitedPlan)
@@ -124,8 +119,8 @@ export default defineEventHandler(async (event) => {
   const insertStmt = db.prepare(
     `INSERT INTO site_transfer_requests
      (id, site_id, from_organization_id, to_email, token, status, initiated_by_user_id, message,
-      invited_plan, invited_coupon, invited_domain, requires_payment, created_at, custom_domains_snapshot)
-     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)`,
+      invited_plan, invited_coupon, invited_interval, invited_domain, requires_payment, created_at, custom_domains_snapshot)
+     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     id,
     siteId,
@@ -136,6 +131,7 @@ export default defineEventHandler(async (event) => {
     body.message?.trim() ?? null,
     invitedPlan,
     invitedCoupon,
+    invitedInterval,
     invitedDomain,
     requiresPayment ? 1 : 0,
     now.toISOString(),
@@ -168,68 +164,40 @@ export default defineEventHandler(async (event) => {
       seo_accelerator: 'SEO Accelerator ($349/mo)',
     }
     const discountNote = invitedCoupon ? ' — a discount has been applied automatically at checkout' : ''
-    const planLine = invitedPlan
-      ? `<p style="margin:8px 0 0"><strong>Recommended plan:</strong> ${planLabel[invitedPlan] ?? invitedPlan}${discountNote}</p>`
-      : ''
-    const personalNote = body.message?.trim()
-      ? `<p style="font-style:italic;color:#71717a;margin:16px 0">"${escapeHtml(body.message.trim())}"</p>`
-      : ''
+    const resolvedPlanLabel = invitedPlan ? `${planLabel[invitedPlan] ?? invitedPlan}${discountNote}` : null
 
-    const domainLine = invitedDomain
-      ? `<p style="margin:8px 0 0"><strong>Your domain:</strong> ${escapeHtml(invitedDomain)} — already set up, no extra hosting needed</p>`
-      : ''
-
-    const html = `
-      <p>Hi there,</p>
-      <p><strong>${escapeHtml(initiatorName)}</strong> has built your website and it's ready for you to claim.</p>
-      <div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px;margin:16px 0">
-        <p style="margin:0"><strong>Website:</strong> ${escapeHtml(siteName)}</p>
-        <p style="margin:8px 0 0"><strong>Live preview:</strong> <a href="https://${escapeHtml(invitedDomain ?? platformDomain)}" style="color:#8F1D21">View your live site</a></p>
-        ${domainLine}
-        ${planLine}
-      </div>
-      ${personalNote}
-      <p>Click the button below to sign in and take ownership of your site. You only pay once you've had a look around and you're happy.</p>
-      <p style="margin:24px 0">
-        <a href="${escapeHtml(transferUrl)}" style="background:#FB7461;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Claim your website</a>
-      </p>
-      <p style="font-size:12px;color:#71717a">This transfer link will stay active until you're ready to claim it. Didn't expect this email? No worries, you can safely ignore it.</p>
-    `
-
-    const textParts = [
-      'Hi there,',
-      '',
-      `${initiatorName} has built your website (${siteName}) and it's ready to claim.`,
-    ]
-    if (invitedDomain) textParts.push('', `Your domain: ${invitedDomain} — already set up, no extra hosting needed`)
-    if (personalNote) textParts.push('', `"${body.message!.trim()}"`)
-    if (invitedPlan) textParts.push('', `Recommended plan: ${planLabel[invitedPlan] ?? invitedPlan}${discountNote}`)
-    if (requiresPayment) {
-      textParts.push('', 'Checkout comes before ownership transfer on paid handoffs.')
-    }
-    textParts.push('', `Claim your website: ${transferUrl}`, '', `This transfer link will stay active until you're ready to claim it. Didn't expect this email? No worries, you can safely ignore it.`)
-
-    if (shouldSendRealEmail(env)) {
-      fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: 'KrabiClaw <hello@krabiclaw.com>',
-          to: [toEmail],
+    useRender(SiteTransferInvite, {
+      props: {
+        siteName,
+        initiatorName,
+        transferUrl,
+        domain: invitedDomain ?? null,
+        planLabel: resolvedPlanLabel,
+        personalMessage: body.message?.trim() || null,
+      },
+    }).then(({ html, text }) => {
+      if (shouldSendRealEmail(env)) {
+        fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: 'KrabiClaw <hello@krabiclaw.com>',
+            to: [toEmail],
+            subject: `${initiatorName} just built your new website! 🎉`,
+            html,
+            text,
+          }),
+        }).catch((err) => console.error('transfer_invite_email_failed', err))
+      } else {
+        console.info('email_delivery_log_only', {
+          recipient: hashEmail(toEmail),
+          siteId,
+          organizationId: site.organization_id,
+          template: 'site_transfer_invite',
           subject: `${initiatorName} just built your new website! 🎉`,
-          html,
-          text: textParts.join('\n'),
-        }),
-      }).catch((err) => console.error('transfer_invite_email_failed', err))
-    } else {
-      console.info('email_delivery_log_only', {
-        recipient: hashEmail(toEmail),
-        siteId,
-        organizationId: site.organization_id,
-        template: 'site_transfer_invite',
-        subject: `${initiatorName} just built your new website! 🎉`,
-      })
-    }
+        })
+      }
+    }).catch((err) => console.error('transfer_invite_email_render_failed', err))
   }
 
   return jsonResponse({
@@ -240,6 +208,7 @@ export default defineEventHandler(async (event) => {
     site_name: siteName,
     invited_plan: invitedPlan,
     invited_coupon: invitedCoupon,
+    invited_interval: invitedInterval,
     invited_domain: invitedDomain,
     requires_payment: requiresPayment,
   })

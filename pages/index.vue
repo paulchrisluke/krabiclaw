@@ -228,7 +228,7 @@
             </NuxtLink>
           </div>
           <div v-else class="mt-12 flex flex-wrap gap-4">
-            <UButton v-if="hasOrderLinks" to="/order" color="neutral" variant="solid" size="xl" class="rounded-full bg-white! text-black! hover:bg-zinc-100!">Order Now</UButton>
+            <UButton v-if="hasOrderLinks" to="/order" color="neutral" variant="solid" size="xl" class="rounded-full bg-white! text-black! hover:bg-zinc-100!">{{ homeCopy.orderNowCta }}</UButton>
             <UButton
               :to="homeCopy.ctaRoute"
               color="neutral"
@@ -241,13 +241,13 @@
             </UButton>
             <UButton
               v-if="!hasOrderLinks"
-              to="/menu"
+              :to="homeCopy.viewMenuRoute"
               color="neutral"
               variant="outline"
               size="xl"
               class="rounded-full border-white/50 text-white hover:bg-white/10"
             >
-              View Menu
+              {{ homeCopy.viewMenuCta }}
             </UButton>
           </div>
         </div>
@@ -309,7 +309,7 @@
       />
       <section v-else class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
         <div class="mb-16 max-w-2xl">
-          <p class="saya-kicker mb-6">Find us</p>
+          <p class="saya-kicker mb-6">{{ homeCopy.findUsKicker }}</p>
           <h2 class="saya-display-md text-default">
             {{ homeCopy.locationGroupLine(locations.length) }}
           </h2>
@@ -359,7 +359,7 @@
               </div>
               <div class="saya-display saya-italic text-4xl text-default leading-none">{{ loc.title }}</div>
               <div class="mt-6 border-t border-default pt-5">
-                <span class="saya-eyebrow text-muted">Visit this location →</span>
+                <span class="saya-eyebrow text-muted">{{ homeCopy.visitLocationCta }}</span>
               </div>
             </div>
           </NuxtLink>
@@ -377,16 +377,16 @@
             </div>
             <div class="p-8 pb-9">
               <div class="saya-display saya-italic text-4xl text-muted leading-none">
-                {{ i === 1 ? 'Main location' : 'Second location' }}
+                {{ i === 1 ? homeCopy.mainLocationLabel : homeCopy.secondLocationLabel }}
               </div>
               <p class="mt-4 text-sm text-muted">
-                {{ i === 1 ? 'Connect Google Business to sync your address, hours, photos and reviews.' : 'Add a second location once your first is connected.' }}
+                {{ i === 1 ? homeCopy.connectGoogleAddressNote : homeCopy.addSecondLocationNote }}
               </p>
             </div>
           </div>
           <div v-if="isAuthenticated" class="md:col-span-2 text-center pt-2">
             <UButton to="/dashboard" color="neutral" variant="outline" size="sm" class="rounded-full">
-              Connect Google Business →
+              {{ homeCopy.connectGoogleCta }}
             </UButton>
           </div>
         </div>
@@ -396,7 +396,7 @@
       <section v-if="recentPosts.length" class="bg-elevated">
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div class="mb-16 max-w-2xl">
-            <p class="saya-kicker mb-6">Lately</p>
+            <p class="saya-kicker mb-6">{{ homeCopy.latelyKicker }}</p>
             <h2 class="saya-display-md text-default">{{ homeCopy.highlightsSectionHeading }}</h2>
           </div>
           <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -430,7 +430,7 @@
                 <div class="p-5 pt-4">
                   <p class="saya-eyebrow mb-2 text-muted">{{ homeCopy.postsEyebrow }}</p>
                   <p class="text-sm leading-relaxed text-default line-clamp-3">{{ post.text }}</p>
-                  <p class="mt-3 saya-eyebrow text-muted opacity-60">Read more →</p>
+                  <p class="mt-3 saya-eyebrow text-muted opacity-60">{{ homeCopy.readMoreCta }}</p>
                 </div>
               </article>
 
@@ -482,7 +482,7 @@
           <template v-if="getField('story.headline') || hasGoogleBusiness">
             <div :class="getField('story.image') ? 'grid gap-16 lg:grid-cols-2 lg:items-center' : ''">
               <div>
-                <p class="saya-eyebrow mb-8 text-inverted/60">Our story</p>
+                <p class="saya-eyebrow mb-8 text-inverted/60">{{ homeCopy.ourStoryKicker }}</p>
                 <h2 class="saya-display-md text-inverted" :class="getField('story.image') ? '' : 'max-w-3xl'">
                   {{ getField('story.headline', businessTitle) }}
                 </h2>
@@ -493,7 +493,7 @@
                   to="/about"
                   class="mt-8 inline-block border-b border-inverted pb-1 text-xs uppercase tracking-widest text-inverted no-underline transition hover:opacity-60"
                 >
-                  Read more →
+                  {{ homeCopy.readMoreCta }}
                 </NuxtLink>
               </div>
               <div v-if="getField('story.image')" class="overflow-hidden">
@@ -509,17 +509,17 @@
 
           <!-- Empty state: owner hasn't added story yet -->
           <template v-else>
-            <p class="saya-eyebrow mb-8 text-inverted/60">Our story</p>
-            <h2 class="saya-display-md max-w-3xl text-inverted/30">Your brand story goes here.</h2>
+            <p class="saya-eyebrow mb-8 text-inverted/60">{{ homeCopy.ourStoryKicker }}</p>
+            <h2 class="saya-display-md max-w-3xl text-inverted/30">{{ homeCopy.brandStoryPlaceholder }}</h2>
             <p class="mt-6 max-w-lg text-sm leading-relaxed text-inverted/30">
-              Two or three sentences about your brand — what you do, how you do it, why it matters.
+              {{ homeCopy.brandStoryDescription }}
             </p>
             <NuxtLink
               v-if="isAuthenticated"
               to="/dashboard"
               class="mt-8 inline-flex items-center gap-2 rounded-full border border-inverted/20 px-5 py-2.5 text-xs uppercase tracking-widest text-inverted/60 no-underline transition hover:border-inverted/40 hover:text-inverted/80"
             >
-              Add your story in the dashboard →
+              {{ homeCopy.addStoryCta }}
             </NuxtLink>
           </template>
         </div>
@@ -531,27 +531,27 @@
         class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8"
       >
         <div class="mb-12 max-w-2xl">
-          <p class="saya-kicker mb-6">Reviews</p>
+          <p class="saya-kicker mb-6">{{ homeCopy.reviewsKicker }}</p>
           <template v-if="hasGoogleBusiness && googleReviewSummary && Number(googleReviewSummary.average) > 0">
             <h2 class="saya-display-md flex flex-wrap items-center gap-4 text-default">
               <UIcon name="i-heroicons-star-solid" class="size-8 text-primary" />
               {{ googleReviewSummary.average }}
               <span v-if="googleReviewSummary.count" class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
             </h2>
-            <p class="mt-6 text-sm text-muted">Guest reviews &amp; ratings.</p>
+            <p class="mt-6 text-sm text-muted">{{ homeCopy.guestReviewsLabel }}</p>
           </template>
           <template v-else-if="isAuthenticated">
-            <h2 class="saya-display-md text-default opacity-30">What your guests say.</h2>
-            <p class="mt-6 text-sm text-muted opacity-50">No reviews yet.</p>
+            <h2 class="saya-display-md text-default opacity-30">{{ homeCopy.whatGuestsSayLabel }}</h2>
+            <p class="mt-6 text-sm text-muted opacity-50">{{ homeCopy.noReviewsLabel }}</p>
             <NuxtLink
               to="/dashboard"
               class="mt-4 inline-block text-xs uppercase tracking-widest text-default opacity-50 no-underline underline-offset-4 hover:underline hover:opacity-80"
             >
-              Connect Google Business →
+              {{ homeCopy.connectGoogleReviewsCta }}
             </NuxtLink>
           </template>
           <template v-else>
-            <h2 class="saya-display-md text-default">What our guests say.</h2>
+            <h2 class="saya-display-md text-default">{{ homeCopy.whatGuestsSayLabel }}</h2>
           </template>
         </div>
 
@@ -566,7 +566,7 @@
             ]"
             @click="reviewFilter = 'all'"
           >
-            All locations
+            {{ homeCopy.allLocationsFilter }}
           </button>
           <NuxtLink
             v-for="loc in locations"
@@ -635,7 +635,8 @@ import { useDynamicComponent } from '~/composables/useDynamicComponent'
 definePageMeta({ layout: false })
 
 const { isPlatform, siteId, site } = useTenantSite()
-const homeCopy = getVerticalCopy(site?.vertical)
+const { locale } = useI18n()
+const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
 // Inline location grid — load videos via IntersectionObserver when cards scroll into view
 const locCardRefs = ref([])

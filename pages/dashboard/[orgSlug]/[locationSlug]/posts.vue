@@ -3,7 +3,7 @@
 
     <UPageBody>
       <div class="grid gap-6 lg:grid-cols-[1fr_400px]">
-        <!-- Left: AI compose + draft list -->
+        <!-- Left: AI compose + post list -->
         <div class="space-y-4">
           <!-- AI compose input -->
           <div class="overflow-hidden rounded-lg border border-default">
@@ -39,12 +39,12 @@
             </div>
           </div>
 
-          <!-- Draft / published list -->
+          <!-- Post list -->
           <div class="overflow-hidden rounded-lg border border-default">
             <div class="flex items-center justify-between gap-4 border-b border-default bg-elevated px-4 py-2.5">
               <div class="flex items-center gap-3">
                 <button
-                  v-for="tab in ['all','draft','published']"
+                  v-for="tab in ['all','published','archived']"
                   :key="tab"
                   class="text-xs font-semibold capitalize transition-colors"
                   :class="activeTab === tab ? 'text-highlighted' : 'text-muted hover:text-default'"
@@ -106,7 +106,7 @@
             v-model:image-kind="editForm.imageKind"
             v-model:selected-channels="selectedChannels"
             :eyebrow="composing ? 'New post' : 'Site post'"
-            :status-text="composing ? 'Draft' : String(selectedPost?.status ?? 'Draft')"
+            :status-text="String(selectedPost?.status ?? '')"
             :site-id="siteId"
             :channel-options="channelOptions"
             :show-image="true"
@@ -119,7 +119,7 @@
             body-placeholder="What's the post about?"
             :body-rows="6"
             :publish-label="selectedChannels.length > 1 ? `Publish to ${selectedChannels.length} channels` : 'Publish'"
-            @save="handleSaveDraft"
+            @save="handleSave"
             @publish="handlePublish"
             @delete="handleDelete"
             @close="closeEditor"
@@ -157,7 +157,7 @@ const loadPosts = async () => {
     const status = activeTab.value === 'all' ? undefined : activeTab.value
     const res = await $fetch<{ posts: ApiRecord[] }>(`/api/dashboard/editor/posts${status ? `?status=${status}` : ''}`)
     posts.value = res.posts ?? []
-  } catch { posts.value = [] } finally { loading.value = false }
+  } catch { toast.add({ description: 'Failed to load posts', color: 'error' }) } finally { loading.value = false }
 }
 
 async function loadSitePublicUrl() {
@@ -234,7 +234,7 @@ const selectPost = (post: ApiRecord) => {
 const saving = ref(false)
 const publishing = ref(false)
 
-const handleSaveDraft = async () => {
+const handleSave = async () => {
   if (!editForm.body.trim()) return
   saving.value = true
   try {
@@ -250,7 +250,7 @@ const handleSaveDraft = async () => {
       selectedPost.value = res.post
       composing.value = false
     }
-    toast.add({ description: 'Draft saved', color: 'success' })
+    toast.add({ description: 'Saved', color: 'success' })
     await loadPosts()
   } catch { toast.add({ description: 'Failed to save', color: 'error' }) }
   finally { saving.value = false }
@@ -262,7 +262,7 @@ const handlePublish = async () => {
   try {
     // Save any edits first
     let postId = selectedPost.value?.id
-    if (!postId || editForm.body !== selectedPost.value?.body || editForm.title !== (selectedPost.value?.title ?? '')) {
+    if (!postId || editForm.body !== selectedPost.value?.body || editForm.title !== (selectedPost.value?.title ?? '') || editForm.image_asset_id !== selectedPost.value?.image_asset_id) {
       const method = postId ? 'PATCH' : 'POST'
       const url = postId ? `/api/dashboard/editor/posts/${postId}` : `/api/dashboard/editor/posts`
       const res = await $fetch<ApiRecord>(url, { method, body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id } })
@@ -317,7 +317,14 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 const onAiImageSelect = (e: Event) => {
-  aiImageFile.value = (e.target as HTMLInputElement).files?.[0] ?? null
+  const file = (e.target as HTMLInputElement).files?.[0] ?? null
+  if (file && file.size > 5 * 1024 * 1024) {
+    toast.add({ description: 'Image must be under 5 MB', color: 'error' })
+    if (aiImageInput.value) aiImageInput.value.value = ''
+    aiImageFile.value = null
+    return
+  }
+  aiImageFile.value = file
 }
 
 const generatePost = async () => {
@@ -346,11 +353,11 @@ const generatePost = async () => {
 
     credits.value = res.credits?.remaining ?? null
     openCompose()
-    editForm.title = res.draft.title ?? ''
-    editForm.body = res.draft.body ?? ''
+    editForm.title = res.generated.title ?? ''
+    editForm.body = res.generated.body ?? ''
     aiPrompt.value = ''
     aiImageFile.value = null
-    toast.add({ description: 'Draft generated — review and publish when ready', color: 'success' })
+    toast.add({ description: 'Post generated — review before saving', color: 'success' })
   } catch (err) {
     toast.add({ description: getErrorMessage(err, 'Generation failed. Try again.'), color: 'error' })
   } finally { aiLoading.value = false }

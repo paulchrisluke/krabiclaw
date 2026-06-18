@@ -200,8 +200,8 @@ const props = withDefaults(defineProps<{
   bodyPlaceholder: 'Write the post...',
   bodyLabel: 'Body',
   bodyRows: 10,
-  saveLabel: 'Save draft',
-  publishLabel: 'Publish'
+  saveLabel: 'Save',
+  publishLabel: 'Publish to channels'
 })
 
 const emit = defineEmits<{

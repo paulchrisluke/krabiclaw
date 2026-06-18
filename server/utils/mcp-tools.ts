@@ -383,11 +383,16 @@ function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'output
   required?: string[]
   outputSchema?: Record<string, unknown>
 }): McpToolDefinition {
+  const { oneOf, anyOf, allOf, ...propertyDefs } = definition.inputSchema ?? {}
   const properties = {
     ...siteIdSchema,
-    ...(definition.inputSchema ?? {}),
+    ...propertyDefs,
   }
   const required = ['site_id', ...(definition.required ?? [])]
+  const combinators: Record<string, unknown> = {}
+  if (oneOf !== undefined) combinators.oneOf = oneOf
+  if (anyOf !== undefined) combinators.anyOf = anyOf
+  if (allOf !== undefined) combinators.allOf = allOf
   return withToolAnnotations({
     name: definition.name,
     description: definition.description,
@@ -400,6 +405,7 @@ function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'output
       properties,
       required,
       additionalProperties: true,
+      ...combinators,
     },
     outputSchema: definition.outputSchema ?? { type: 'object' },
     widgetName: definition.widgetName,
@@ -937,10 +943,26 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     minimumRole: 'editor',
     confirmRequired: false,
     inputSchema: {
-      file_id: { type: 'string', description: 'Secondary fallback plain file_id for a user-uploaded image (e.g. file_abc123). Prefer the file argument so ChatGPT can rewrite the attachment into an authorized file reference.' },
-      file: chatgptFileInput,
-      category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
-      description: { type: 'string', description: 'Description of the photo (stored as alt text).' },
+      oneOf: [
+        {
+          type: 'object',
+          required: ['file'],
+          properties: {
+            file: chatgptFileInput,
+            category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
+            description: { type: 'string', description: 'Description of the photo (stored as alt text).' },
+          },
+        },
+        {
+          type: 'object',
+          required: ['file_id'],
+          properties: {
+            file_id: { type: 'string', description: 'Secondary fallback plain file_id for a user-uploaded image (e.g. file_abc123). Prefer the file argument so ChatGPT can rewrite the attachment into an authorized file reference.' },
+            category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
+            description: { type: 'string', description: 'Description of the photo (stored as alt text).' },
+          },
+        },
+      ],
     },
     required: [],
     fileParams: ['file'],
@@ -1529,7 +1551,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'create_post',
-    description: 'Create a draft post.',
+    description: 'Create and publish a post.',
     domain: 'posts',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1707,7 +1729,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: {
       message: { type: 'string', description: 'Post text content.' },
       link: { type: 'string', description: 'Optional URL to attach to the post.' },
-      published: { type: 'boolean', description: 'Publish immediately (true, default) or save as draft (false).' },
+      published: { type: 'boolean', description: 'Publish immediately (true, default). Pass false to schedule for later.' },
     },
     required: ['message'],
     outputSchema: {
@@ -1756,7 +1778,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'import_menu_from_media',
-    description: 'Extract a draft menu from a menu photo or PDF.',
+    description: 'Extract and add menu items from a menu photo or PDF.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1767,7 +1789,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         menu: {
           type: 'object',
-          description: 'Created draft menu.',
+          description: 'Created menu.',
           properties: {
             id: { type: 'string' },
             name: { type: 'string' },

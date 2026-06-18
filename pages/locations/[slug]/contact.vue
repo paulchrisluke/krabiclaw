@@ -13,10 +13,10 @@
       <!-- Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-14 pb-10 sm:px-6 lg:px-8">
         <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
-          ← Back to {{ location.title }}
+          ← {{ t('saya.location.back_to', { title: location.title }) }}
         </NuxtLink>
         <h1 class="saya-display-md text-default mt-6">
-          <em class="saya-italic">Plan</em> a visit
+          <em class="saya-italic">{{ t('saya.location.plan_a_visit') }}</em>
         </h1>
         <p v-if="location.short_description" class="mt-4 text-sm text-muted">{{ location.short_description }}</p>
       </header>
@@ -26,10 +26,10 @@
 
         <!-- HOURS CARD -->
         <section class="border border-default bg-default p-9">
-          <p class="saya-eyebrow mb-4 text-muted">Hours</p>
+          <p class="saya-eyebrow mb-4 text-muted">{{ t('saya.location.hours') }}</p>
           <h2 class="saya-display saya-italic flex flex-wrap items-center gap-3 text-3xl text-default leading-none">
             <span :class="isOpenNow === true ? 'size-2.5 rounded-full bg-green-400' : 'size-2.5 rounded-full bg-zinc-400'" />
-            {{ isOpenNow === true ? 'Open now' : isOpenNow === false ? 'Closed' : 'Hours' }}
+            {{ isOpenNow === true ? t('saya.location.open_now') : isOpenNow === false ? t('saya.location.closed') : t('saya.location.hours') }}
             <span v-if="todayHours" class="text-base font-normal not-italic tracking-normal text-muted">· {{ todayHours }}</span>
           </h2>
 
@@ -43,14 +43,14 @@
                 <td class="border-b border-default py-3 text-sm" :class="day.today ? 'text-default' : 'text-muted'">
                   <span class="flex items-center gap-2">
                     {{ day.day }}
-                    <span v-if="day.today" class="rounded-full bg-inverted px-2 py-0.5 text-[9px] uppercase tracking-widest text-inverted">today</span>
+                    <span v-if="day.today" class="rounded-full bg-inverted px-2 py-0.5 text-[9px] uppercase tracking-widest text-inverted">{{ t('saya.location.today') }}</span>
                   </span>
                 </td>
                 <td class="border-b border-default py-3 text-right text-sm tabular-nums" :class="day.today ? 'text-default' : 'text-muted'">{{ day.hours }}</td>
               </tr>
               <tr v-if="!weekHours.length">
                 <td colspan="2" class="py-4 text-sm text-muted">
-                  Contact us for current hours.
+                  {{ t('saya.location.contact_us_for_hours') }}
                   <a v-if="location.phone" :href="`tel:${location.phone}`" class="ml-2 text-default underline-offset-2 hover:underline">{{ location.phone }}</a>
                 </td>
               </tr>
@@ -60,7 +60,7 @@
 
         <!-- ADDRESS + MAP CARD -->
         <section class="border border-default bg-default p-9">
-          <p class="saya-eyebrow mb-4 text-muted">Find us</p>
+          <p class="saya-eyebrow mb-4 text-muted">{{ t('saya.location.find_us') }}</p>
           <h2 class="saya-display saya-italic text-3xl text-default leading-none">{{ location.neighborhood || location.city || location.title }}</h2>
 
           <!-- Map embed (16/10) -->
@@ -68,7 +68,7 @@
             <iframe
               v-if="mapEmbedSrc"
               :src="mapEmbedSrc"
-              :title="location.title ? `Map for ${location.title}` : 'Location map'"
+              :title="location.title ? t('saya.location.map_for', { title: location.title }) : t('saya.location.location_map')"
               width="100%"
               height="100%"
               style="border:0;filter:grayscale(0.12)"
@@ -78,7 +78,7 @@
             />
             <div v-else class="flex h-full w-full flex-col items-center justify-center gap-3">
               <UIcon name="i-simple-icons-googlemaps" class="size-8 text-muted" />
-              <span class="text-sm text-muted">Map synced from Google Business</span>
+              <span class="text-sm text-muted">{{ t('saya.location.map_synced') }}</span>
             </div>
           </div>
 
@@ -95,7 +95,7 @@
               class="inline-flex items-center gap-2 rounded-full bg-inverted px-4 py-2 text-[11px] font-medium uppercase tracking-widest text-inverted no-underline transition hover:opacity-80"
             >
               <UIcon name="i-heroicons-map-pin" class="size-3.5" />
-              Get directions
+              {{ t('saya.location.get_directions') }}
             </a>
             <a
               v-if="location.maps_url"
@@ -104,18 +104,18 @@
               rel="noopener noreferrer"
               class="inline-flex items-center rounded-full border border-default px-4 py-2 text-[11px] font-medium uppercase tracking-widest text-default no-underline transition hover:bg-muted"
             >
-              Apple Maps
+              {{ t('saya.location.apple_maps') }}
             </a>
           </div>
 
           <!-- Phone + email -->
           <div v-if="location.phone || location.email" class="mt-7 grid grid-cols-2 gap-6 border-t border-default pt-7">
             <div v-if="location.phone">
-              <p class="saya-eyebrow mb-2 text-muted">Phone</p>
+              <p class="saya-eyebrow mb-2 text-muted">{{ t('saya.location.phone') }}</p>
               <a :href="`tel:${location.phone}`" class="border-b border-default pb-0.5 text-sm text-default no-underline hover:opacity-70">{{ location.phone }}</a>
             </div>
             <div v-if="location.email">
-              <p class="saya-eyebrow mb-2 text-muted">Email</p>
+              <p class="saya-eyebrow mb-2 text-muted">{{ t('saya.location.email') }}</p>
               <a :href="`mailto:${location.email}`" class="border-b border-default pb-0.5 text-sm text-default no-underline hover:opacity-70 break-all">{{ location.email }}</a>
             </div>
           </div>
@@ -126,17 +126,17 @@
       <section v-if="sanitizedParkingInfo || sanitizedExtraNotes" class="mt-16 bg-elevated">
         <div class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
           <div class="mb-12 max-w-2xl">
-            <p class="saya-kicker mb-6">Good to know</p>
-            <h2 class="saya-display-md text-default">Before you come.</h2>
+            <p class="saya-kicker mb-6">{{ t('saya.location.good_to_know') }}</p>
+            <h2 class="saya-display-md text-default">{{ t('saya.location.before_you_come') }}</h2>
           </div>
           <div class="grid gap-6 sm:grid-cols-2">
             <!-- eslint-disable vue/no-v-html -->
             <div v-if="sanitizedParkingInfo" class="border border-default bg-default p-8">
-              <p class="saya-eyebrow mb-4 text-muted">Parking</p>
+              <p class="saya-eyebrow mb-4 text-muted">{{ t('saya.location.parking') }}</p>
               <div class="prose prose-sm max-w-none text-default" v-html="sanitizedParkingInfo" />
             </div>
             <div v-if="sanitizedExtraNotes" class="border border-default bg-default p-8">
-              <p class="saya-eyebrow mb-4 text-muted">Additional Notes</p>
+              <p class="saya-eyebrow mb-4 text-muted">{{ t('saya.location.additional_notes') }}</p>
               <div class="prose prose-sm max-w-none text-default" v-html="sanitizedExtraNotes" />
             </div>
             <!-- eslint-enable vue/no-v-html -->
@@ -146,7 +146,7 @@
 
       <!-- CTA strip -->
       <section class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-24 sm:px-6 lg:px-8">
-        <h3 class="saya-display-md saya-italic text-default">See you soon.</h3>
+        <h3 class="saya-display-md saya-italic text-default">{{ t('saya.location.see_you_soon') }}</h3>
         <div class="flex flex-wrap gap-3">
           <UButton :to="locationCopy.ctaRoute" color="primary" variant="solid" size="xl" class="rounded-full">{{ locationCopy.reserveCta }}</UButton>
           <a
@@ -154,7 +154,7 @@
             :href="`tel:${location.phone}`"
             class="inline-flex items-center rounded-full border border-default px-6 py-2.5 text-xs font-medium uppercase tracking-widest text-default no-underline transition hover:bg-muted"
           >
-            Call us
+            {{ t('saya.location.call_us') }}
           </a>
         </div>
       </section>
@@ -162,8 +162,8 @@
 
     <div v-else class="mx-auto max-w-xl px-4 py-24 text-center">
       <UIcon name="i-heroicons-map-pin" class="mx-auto mb-4 size-12 text-muted" />
-      <h1 class="saya-display-sm text-default">Location Not Found</h1>
-      <UButton to="/locations" color="primary" variant="solid" class="mt-8 rounded-full">View all locations</UButton>
+      <h1 class="saya-display-sm text-default">{{ t('saya.location.not_found') }}</h1>
+      <UButton to="/locations" color="primary" variant="solid" class="mt-8 rounded-full">{{ t('saya.location.view_all_locations') }}</UButton>
     </div>
   </div>
 </template>
@@ -174,9 +174,12 @@ const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).de
 
 definePageMeta({ layout: 'saya' })
 
+const { t } = useI18n()
+
 const route = useRoute()
 const { siteId, site } = useTenantSite()
-const locationCopy = getVerticalCopy((site as ApiValue)?.vertical)
+const { locale } = useI18n()
+const locationCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))

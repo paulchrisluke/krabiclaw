@@ -18,11 +18,11 @@
       <!-- Compact Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
         <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
-          ← Back to {{ location?.title }}
+          ← {{ t('saya.reviews_page.back_to', { title: location?.title }) }}
         </NuxtLink>
         
         <div class="flex flex-col gap-2">
-          <h1 class="saya-display-md text-default">What guests are <em class="saya-italic">saying</em></h1>
+          <h1 class="saya-display-md text-default">{{ t('saya.reviews_page.title') }}</h1>
           <p class="text-sm text-muted">
             {{ location?.title }}
           </p>
@@ -45,8 +45,8 @@
                 :class="s <= Math.round(aggregate?.rating ?? 0) ? 'text-primary' : 'text-muted'"
               />
             </div>
-            <p class="mt-4 text-sm text-default">Based on {{ aggregate?.review_count?.toLocaleString() ?? 0 }} reviews</p>
-            <p class="mt-1 text-xs tracking-wide text-muted">Synced live from Google Business</p>
+            <p class="mt-4 text-sm text-default">{{ t('saya.reviews_page.based_on', { count: aggregate?.review_count?.toLocaleString() ?? 0 }) }}</p>
+            <p class="mt-1 text-xs tracking-wide text-muted">{{ t('saya.reviews_page.synced_live') }}</p>
           </div>
 
           <!-- Star distribution -->
@@ -75,7 +75,7 @@
         :tabs="filters"
       >
         <template #extra>
-          <span class="ml-auto text-[10px] tabular-nums text-muted/50">{{ filtered.length }} reviews</span>
+          <span class="ml-auto text-[10px] tabular-nums text-muted/50">{{ filtered.length }}</span>
         </template>
       </SayaFilterTabs>
 
@@ -86,19 +86,19 @@
           <div class="flex size-14 items-center justify-center rounded-full bg-elevated text-muted">
             <UIcon name="i-heroicons-star" class="size-7" />
           </div>
-          <div class="mt-6 saya-display saya-italic text-3xl text-default">No reviews yet.</div>
-          <p class="mt-2 max-w-sm text-sm text-muted">Be the first to share your experience with us on Google.</p>
+          <div class="mt-6 saya-display saya-italic text-3xl text-default">{{ t('saya.reviews_page.no_reviews_title') }}</div>
+          <p class="mt-2 max-w-sm text-sm text-muted">{{ t('saya.reviews_page.no_reviews_desc') }}</p>
         </div>
 
         <!-- Has reviews but active filter hides them -->
         <div v-else-if="filtered.length === 0" class="rounded-3xl border border-dashed border-default p-14 text-center">
-          <div class="saya-display saya-italic text-2xl text-default">No reviews match this filter.</div>
-          <p class="mt-2 text-sm text-muted">Switch filter, or read all reviews.</p>
+          <div class="saya-display saya-italic text-2xl text-default">{{ t('saya.reviews_page.no_match_title') }}</div>
+          <p class="mt-2 text-sm text-muted">{{ t('saya.reviews_page.no_match_desc') }}</p>
           <button
             class="mt-6 rounded-full border border-default px-5 py-2.5 text-sm transition hover:bg-muted"
             @click="activeFilter = 'recent'"
           >
-            Reset filter
+            {{ t('saya.reviews_page.reset_filter') }}
           </button>
         </div>
 
@@ -118,7 +118,7 @@
               <div class="flex-1 min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="font-medium text-default">{{ review.author_name }}</span>
-                  <UBadge v-if="review.source === 'gmb'" variant="outline" size="xs">via Google</UBadge>
+                  <UBadge v-if="review.source === 'gmb'" variant="outline" size="xs">{{ t('saya.reviews_page.via_google') }}</UBadge>
                 </div>
                 <div class="mt-1 flex items-center gap-2">
                   <div class="flex gap-0.5">
@@ -130,8 +130,8 @@
                       :class="s <= review.rating ? 'text-primary' : 'text-muted'"
                     />
                   </div>
-                  <span class="text-muted">·</span>
-                  <span class="text-xs text-muted">{{ formatDate(review.created_at) }}</span>
+                <span class="text-muted">·</span>
+                  <span class="text-xs text-muted">{{ formatReviewDate(review.created_at) }}</span>
                 </div>
               </div>
             </div>
@@ -165,7 +165,7 @@
             >
               <div class="mb-2 flex items-center gap-3">
                 <UBadge color="neutral" size="xs" class="font-semibold">{{ siteName }}</UBadge>
-                <span class="text-xs text-muted">Owner response · {{ formatDate(review.owner_reply_at) }}</span>
+                <span class="text-xs text-muted">{{ t('saya.reviews_page.owner_response') }} · {{ formatReviewDate(review.owner_reply_at) }}</span>
               </div>
               <p class="text-sm leading-relaxed text-default">{{ review.owner_reply }}</p>
             </div>
@@ -177,10 +177,10 @@
       <section class="bg-inverted text-inverted">
         <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-12 px-4 py-18 sm:px-6 lg:px-8">
           <div>
-            <p class="saya-eyebrow mb-4 text-white/60">Eaten with us recently?</p>
-            <h3 class="saya-display saya-italic text-5xl text-white leading-none">Leave a review on Google.</h3>
+            <p class="saya-eyebrow mb-4 text-white/60">{{ t('saya.reviews_page.eaten_recently') }}</p>
+            <h3 class="saya-display saya-italic text-5xl text-white leading-none">{{ t('saya.reviews_page.leave_review') }}</h3>
             <p class="mt-4 max-w-md text-sm leading-relaxed text-zinc-400">
-              It shows up here automatically within 24 hours. Honest words help us — and the next guest deciding where to eat.
+              {{ t('saya.reviews_page.leave_review_desc') }}
             </p>
           </div>
           <a
@@ -190,7 +190,7 @@
             rel="noopener noreferrer"
             class="inline-flex items-center rounded-full bg-white px-8 py-4 text-xs font-medium uppercase tracking-widest text-black no-underline transition hover:bg-zinc-100"
           >
-            Write a review →
+            {{ t('saya.reviews_page.write_review') }}
           </a>
         </div>
       </section>
@@ -201,6 +201,8 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'saya' })
 
+const { t } = useI18n()
+
 const route = useRoute()
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
@@ -209,15 +211,16 @@ const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.title || 'KrabiClaw')
 
 const { location, reviewsAggregate, reviewsList, pending } = useBootstrap()
+const { formatDate } = useLocaleDate()
 const aggregate = reviewsAggregate
 const reviews = reviewsList
 
-const filters = [
-  { key: 'recent', label: 'Most recent' },
-  { key: 'highest', label: 'Highest rated' },
-  { key: 'lowest', label: 'Lowest rated' },
-  { key: 'photos', label: 'With photos' }
-]
+const filters = computed(() => [
+  { key: 'recent', label: t('saya.reviews_page.most_recent') },
+  { key: 'highest', label: t('saya.reviews_page.highest_rated') },
+  { key: 'lowest', label: t('saya.reviews_page.lowest_rated') },
+  { key: 'photos', label: t('saya.reviews_page.with_photos') }
+])
 const activeFilter = ref('recent')
 
 const filtered = computed(() => {
@@ -253,9 +256,9 @@ function handleReviewImageError(reviewId: string | number, index: string | numbe
   failedPhotoIndices.value[`${String(reviewId)}-${String(index)}`] = true
 }
 
-function formatDate(ts: string | null) {
+function formatReviewDate(ts: string | null) {
   if (!ts) return ''
-  return new Date(ts).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  return formatDate(ts)
 }
 
 

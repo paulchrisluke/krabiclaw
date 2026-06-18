@@ -46,20 +46,17 @@
       <div class="flex items-center justify-between gap-4">
         <div class="flex items-center gap-2">
           <span class="text-sm font-medium text-highlighted">{{ currentMenu?.name }}</span>
-          <UBadge :color="currentMenu?.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs">
-            {{ currentMenu?.status }}
-          </UBadge>
         </div>
         <div class="flex items-center gap-2">
           <AiMenuImport :site-id="props.siteId" :menu-id="currentMenu?.id" @imported="handleAiImport" />
           <UButton
-            v-if="currentMenu?.status !== 'published'"
+            v-if="currentMenu?.status === 'draft'"
             size="sm"
-            color="primary"
-            variant="solid"
-            icon="i-heroicons-check-circle"
+            color="neutral"
+            variant="soft"
+            icon="i-heroicons-arrow-up-tray"
             :loading="saving"
-            @click="handleToggleStatus('published')"
+            @click="handlePublish"
           >
             Publish
           </UButton>
@@ -70,7 +67,7 @@
             variant="soft"
             icon="i-heroicons-archive-box"
             :loading="saving"
-            @click="handleToggleStatus('draft')"
+            @click="handleUnpublish"
           >
             Unpublish
           </UButton>
@@ -348,14 +345,25 @@ const {
   updateMenu
 } = useMenuEditor(props.siteId, props.locationId)
 
-const handleToggleStatus = async (status: 'published' | 'draft') => {
+const handlePublish = async () => {
   if (!currentMenu.value) return
   try {
-    await updateMenu(currentMenu.value.id, { status })
-    toast.addToast(status === 'published' ? 'Menu published' : 'Menu unpublished', 'success')
+    await updateMenu(currentMenu.value.id, { status: 'published' })
+    toast.addToast('Menu published', 'success')
   } catch (err) {
-    console.error('handleToggleStatus failed:', err)
-    toast.addToast(`Failed to ${status === 'published' ? 'publish' : 'unpublish'} menu`, 'error')
+    console.error('handlePublish failed:', err)
+    toast.addToast('Failed to publish menu', 'error')
+  }
+}
+
+const handleUnpublish = async () => {
+  if (!currentMenu.value) return
+  try {
+    await updateMenu(currentMenu.value.id, { status: 'draft' })
+    toast.addToast('Menu unpublished', 'success')
+  } catch (err) {
+    console.error('handleUnpublish failed:', err)
+    toast.addToast('Failed to unpublish menu', 'error')
   }
 }
 

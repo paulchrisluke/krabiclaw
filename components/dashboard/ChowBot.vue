@@ -584,7 +584,7 @@ const processFile = async (file: File, caption = '') => {
 
     const count = res.menuItems?.length ?? 0
     const msg = count > 0
-      ? `Extracted **${count} menu item${count === 1 ? '' : 's'}** saved as a draft.${res.warning ? `\n\n⚠️ ${res.warning}` : ''}\n\nGo to **Menu** in the sidebar to review and publish.`
+      ? `Extracted **${count} menu item${count === 1 ? '' : 's'}** and added to your menu.${res.warning ? `\n\n⚠️ ${res.warning}` : ''}`
       : `No items found in that file.${res.warning ? ` ${res.warning}` : ''} Try a higher-resolution photo.`
 
     messages.value = [...messages.value, { role: 'assistant', content: msg }]

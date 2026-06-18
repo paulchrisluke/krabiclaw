@@ -8,9 +8,9 @@
       <div>
         <!-- Page header -->
         <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
-          <p class="saya-kicker mb-6">Contact</p>
+          <p class="saya-kicker mb-6">{{ t('saya.contact_page.title') }}</p>
           <h1 class="saya-display-md text-default">
-            Get in <em class="saya-italic">touch</em>.
+            {{ t('saya.contact_page.headline') }}
           </h1>
           <p class="mt-5 max-w-xl text-sm leading-relaxed text-muted">
             {{ vertCopy.contactSubtitle }}
@@ -25,31 +25,31 @@
 
           <!-- MESSAGE FORM -->
           <section class="border border-default bg-default p-10 lg:p-11">
-            <p class="saya-eyebrow mb-4 text-muted">Send a message</p>
-            <h2 class="saya-display saya-italic text-3xl text-default">Anything not <em>location-specific</em>.</h2>
-            <p class="mt-4 text-sm leading-relaxed text-muted">For specific questions about hours, parking, or a reservation, the individual location pages will get you a faster answer.</p>
+            <p class="saya-eyebrow mb-4 text-muted">{{ t('saya.contact_page.send_message') }}</p>
+            <h2 class="saya-display saya-italic text-3xl text-default">{{ t('saya.contact_page.anything_not_location_specific') }}</h2>
+            <p class="mt-4 text-sm leading-relaxed text-muted">{{ t('saya.contact_page.specific_questions') }}</p>
 
             <!-- Success state -->
             <div v-if="tenantSubmitted" class="mt-10 py-4">
               <UIcon name="i-heroicons-check-circle" class="size-7 text-default" />
-              <div class="saya-display saya-italic mt-4 text-3xl text-default">Got it. Thank you.</div>
-              <p class="mt-3 text-sm leading-relaxed text-muted">We'll reply within a working day. For anything urgent, call the room directly.</p>
+              <div class="saya-display saya-italic mt-4 text-3xl text-default">{{ t('saya.contact_page.got_it') }}</div>
+              <p class="mt-3 text-sm leading-relaxed text-muted">{{ t('saya.contact_page.reply_within') }}</p>
               <button class="mt-6 text-xs uppercase tracking-widest text-default underline-offset-2 hover:underline" @click="tenantSubmitted = false; tenantForm = { name: '', email: '', subject: 'general', message: '' }">
-                Send another →
+                {{ t('saya.contact_page.send_another') }}
               </button>
             </div>
 
             <UForm v-else :state="tenantForm" :validate="validateTenantContact" class="mt-10 space-y-7" @submit="handleTenantContact">
               <div class="grid gap-6 sm:grid-cols-2">
-                <UFormField label="Your name" name="name" required>
+                <UFormField :label="t('saya.contact_page.your_name')" name="name" required>
                   <UInput v-model="tenantForm.name" size="lg" class="w-full" />
                 </UFormField>
-                <UFormField label="Email" name="email" required>
+                <UFormField :label="t('saya.contact_page.email')" name="email" required>
                   <UInput v-model="tenantForm.email" type="email" size="lg" class="w-full" />
                 </UFormField>
               </div>
 
-              <UFormField label="What's this about?" name="subject">
+              <UFormField :label="t('saya.contact_page.what_about')" name="subject">
                 <div class="mt-2 flex flex-wrap gap-2">
                   <button
                     v-for="opt in subjectOptions"
@@ -68,28 +68,28 @@
                 </div>
               </UFormField>
 
-              <UFormField label="Your message" name="message" required>
+              <UFormField :label="t('saya.contact_page.your_message')" name="message" required>
                 <UTextarea v-model="tenantForm.message" size="lg" :rows="6" class="w-full" />
               </UFormField>
 
               <UButton type="submit" color="primary" size="lg" class="rounded-full" :loading="tenantSubmitting">
-                Send message
+                {{ t('saya.contact_page.send_message') }}
               </UButton>
             </UForm>
           </section>
 
           <!-- DARK ASIDE: brand contact + social — hidden when no emails or socials configured -->
           <aside v-if="hasAnyBrandContact || activeSocials.length" class="bg-inverted p-10 text-inverted lg:p-11">
-            <p class="saya-eyebrow mb-4 text-inverted/60">Brand inquiries</p>
-            <h2 class="saya-display saya-italic text-3xl text-inverted">Or reach us direct.</h2>
+            <p class="saya-eyebrow mb-4 text-inverted/60">{{ t('saya.contact_page.brand_inquiries') }}</p>
+            <h2 class="saya-display saya-italic text-3xl text-inverted">{{ t('saya.contact_page.reach_us_direct') }}</h2>
 
             <dl v-if="hasAnyBrandContact" class="mt-8 space-y-0">
               <div v-if="siteConfig.press_email" class="flex justify-between gap-4 border-b border-inverted/10 py-4">
-                <dt class="saya-eyebrow text-inverted/60">Press</dt>
+                <dt class="saya-eyebrow text-inverted/60">{{ t('saya.contact_page.press') }}</dt>
                 <dd class="m-0 font-['Instrument_Serif',serif] italic"><a :href="`mailto:${siteConfig.press_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.press_email }}</a></dd>
               </div>
               <div v-if="siteConfig.partnerships_email" class="flex justify-between gap-4 border-b border-inverted/10 py-4">
-                <dt class="saya-eyebrow text-inverted/60">Partnerships</dt>
+                <dt class="saya-eyebrow text-inverted/60">{{ t('saya.contact_page.partnerships') }}</dt>
                 <dd class="m-0 font-['Instrument_Serif',serif] italic"><a :href="`mailto:${siteConfig.partnerships_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.partnerships_email }}</a></dd>
               </div>
               <div v-if="siteConfig.catering_email" class="flex justify-between gap-4 border-b border-inverted/10 py-4">
@@ -97,14 +97,14 @@
                 <dd class="m-0 font-['Instrument_Serif',serif] italic"><a :href="`mailto:${siteConfig.catering_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.catering_email }}</a></dd>
               </div>
               <div v-if="siteConfig.careers_email" class="flex justify-between gap-4 border-b border-inverted/10 py-4">
-                <dt class="saya-eyebrow text-inverted/60">Careers</dt>
+                <dt class="saya-eyebrow text-inverted/60">{{ t('saya.contact_page.careers') }}</dt>
                 <dd class="m-0 font-['Instrument_Serif',serif] italic"><a :href="`mailto:${siteConfig.careers_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.careers_email }}</a></dd>
               </div>
             </dl>
 
             <!-- Social -->
             <div v-if="activeSocials.length" class="mt-10">
-              <p class="saya-eyebrow mb-5 text-inverted/60">Follow along</p>
+              <p class="saya-eyebrow mb-5 text-inverted/60">{{ t('saya.contact_page.follow_along') }}</p>
               <div class="flex gap-3">
                 <a
                   v-for="social in activeSocials"
@@ -126,7 +126,7 @@
         <section class="mt-24 bg-elevated">
           <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
             <div class="mb-12 max-w-2xl">
-              <p class="saya-kicker mb-6">By location</p>
+              <p class="saya-kicker mb-6">{{ t('saya.contact_page.by_location') }}</p>
               <h2 class="saya-display-md text-default">
                 {{ vertCopy.contactLocationsByHeading }}
               </h2>
@@ -172,19 +172,19 @@
 
                   <div class="grid grid-cols-2 gap-5 border-t border-default pt-6 sm:grid-cols-4">
                     <div>
-                      <p class="saya-eyebrow mb-2 text-muted">Address</p>
+                      <p class="saya-eyebrow mb-2 text-muted">{{ t('saya.contact_page.address') }}</p>
                       <p class="text-sm leading-relaxed text-default">{{ formatLocAddress(loc) }}</p>
                     </div>
                     <div v-if="loc.phone">
-                      <p class="saya-eyebrow mb-2 text-muted">Phone</p>
+                      <p class="saya-eyebrow mb-2 text-muted">{{ t('saya.contact_page.phone') }}</p>
                       <a :href="`tel:${loc.phone}`" class="border-b border-default pb-px text-sm text-default no-underline hover:opacity-70">{{ loc.phone }}</a>
                     </div>
                     <div v-if="loc.email">
-                      <p class="saya-eyebrow mb-2 text-muted">Email</p>
+                      <p class="saya-eyebrow mb-2 text-muted">{{ t('saya.contact_page.email') }}</p>
                       <a :href="`mailto:${loc.email}`" class="border-b border-default pb-px text-sm text-default no-underline hover:opacity-70 break-all">{{ loc.email }}</a>
                     </div>
                     <div v-if="loc.hours_today">
-                      <p class="saya-eyebrow mb-2 text-muted">Today</p>
+                      <p class="saya-eyebrow mb-2 text-muted">{{ t('saya.contact_page.today') }}</p>
                       <p class="text-sm text-default">{{ loc.hours_today }}</p>
                     </div>
                   </div>
@@ -194,13 +194,13 @@
                       :to="`/locations/${loc.slug}/contact`"
                       class="inline-flex items-center rounded-full bg-inverted px-5 py-2.5 text-[11px] font-medium uppercase tracking-widest text-inverted no-underline transition hover:opacity-80"
                     >
-                      Plan a visit →
+                      {{ t('saya.contact_page.plan_visit') }}
                     </NuxtLink>
                     <NuxtLink
                       :to="`/locations/${loc.slug}`"
                       class="inline-flex items-center rounded-full border border-default px-5 py-2.5 text-[11px] font-medium uppercase tracking-widest text-default no-underline transition hover:bg-muted"
                     >
-                      Directions
+                      {{ t('saya.contact_page.directions') }}
                     </NuxtLink>
                     <NuxtLink
                       :to="vertCopy.ctaRoute"
@@ -221,14 +221,14 @@
     <!-- ── PLATFORM: KrabiClaw contact page ──────────────── -->
     <div v-else class="container mx-auto px-4 py-16">
       <div class="max-w-3xl mx-auto">
-        <h1 class="text-4xl font-bold text-default mb-6">Contact Us</h1>
+        <h1 class="text-4xl font-bold text-default mb-6">{{ t('saya.contact_page.contact_us') }}</h1>
         <p class="text-lg text-muted mb-12">Get in touch with the KrabiClaw team</p>
         <div class="grid md:grid-cols-2 gap-12 mb-12">
           <div>
-            <h2 class="text-2xl font-bold text-default mb-6">Get in Touch</h2>
+            <h2 class="text-2xl font-bold text-default mb-6">{{ t('saya.contact_page.contact_us') }}</h2>
             <div class="space-y-4">
               <div>
-                <h3 class="font-semibold text-default mb-1">Email</h3>
+                <h3 class="font-semibold text-default mb-1">{{ t('saya.contact_page.email') }}</h3>
                 <p class="text-muted">hello@krabiclaw.com</p>
               </div>
               <div>
@@ -242,7 +242,7 @@
             </div>
           </div>
           <div>
-            <h2 class="text-2xl font-bold text-default mb-6">Send a Message</h2>
+            <h2 class="text-2xl font-bold text-default mb-6">{{ t('saya.contact_page.send_message') }}</h2>
             <UCard>
               <UForm :state="platformForm" :validate="validatePlatformContact" class="space-y-4" @submit="handlePlatformContact">
                 <UFormField label="Name" name="name" required>
@@ -255,7 +255,7 @@
                   <UTextarea v-model="platformForm.message" size="lg" :rows="4" placeholder="How can we help?" />
                 </UFormField>
                 <UButton type="submit" color="primary" size="lg" block :loading="platformSubmitting" :disabled="platformSubmitted">
-                  {{ platformSubmitted ? 'Message sent!' : 'Send Message' }}
+                  {{ platformSubmitted ? t('saya.contact_page.message_sent') : t('saya.contact_page.send_message') }}
                 </UButton>
               </UForm>
             </UCard>
@@ -273,7 +273,9 @@ definePageMeta({ layout: false })
 import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
 const { isPlatform, siteId, site } = useTenantSite()
-const vertCopy = getVerticalCopy(site?.vertical)
+const { locale } = useI18n()
+const vertCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
+const { t } = useI18n()
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 const route = useRoute()
@@ -314,13 +316,13 @@ const hasAnyBrandContact = computed(() =>
 )
 
 // ── Tenant form ──────────────────────────────────────────
-const subjectOptions = [
-  { key: 'general', label: 'General' },
-  { key: 'press', label: 'Press' },
-  { key: 'partnerships', label: 'Partnerships' },
-  { key: 'catering', label: vertCopy.contactSubjectCatering },
-  { key: 'careers', label: 'Careers' }
-]
+const subjectOptions = computed(() => [
+  { key: 'general', label: t('saya.contact_page.general') },
+  { key: 'press', label: t('saya.contact_page.press') },
+  { key: 'partnerships', label: t('saya.contact_page.partnerships') },
+  { key: 'catering', label: vertCopy.value.contactSubjectCatering },
+  { key: 'careers', label: t('saya.contact_page.careers') }
+])
 
 const tenantForm = ref({ name: '', email: '', subject: 'general', message: '' })
 const tenantSubmitting = ref(false)
@@ -328,10 +330,10 @@ const tenantSubmitted = ref(false)
 
 const validateTenantContact = (state) => {
   const errors = []
-  if (!state.name) errors.push({ name: 'name', message: 'Please enter your name.' })
-  if (!state.email) errors.push({ name: 'email', message: 'Please enter your email.' })
-  else if (!emailPattern.test(state.email)) errors.push({ name: 'email', message: 'Please enter a valid email.' })
-  if (!state.message) errors.push({ name: 'message', message: 'Please enter a message.' })
+  if (!state.name) errors.push({ name: 'name', message: t('saya.contact_page.enter_name') })
+  if (!state.email) errors.push({ name: 'email', message: t('saya.contact_page.enter_email') })
+  else if (!emailPattern.test(state.email)) errors.push({ name: 'email', message: t('saya.contact_page.invalid_email') })
+  if (!state.message) errors.push({ name: 'message', message: t('saya.contact_page.enter_message') })
   return errors
 }
 
@@ -343,9 +345,9 @@ const handleTenantContact = async () => {
       body: tenantForm.value
     })
     tenantSubmitted.value = true
-    toast.add({ description: "Message sent! We'll be in touch soon.", color: 'success' })
+    toast.add({ description: t('saya.contact_page.message_sent'), color: 'success' })
   } catch {
-    toast.add({ description: 'Failed to send message. Please try again.', color: 'error' })
+    toast.add({ description: t('saya.contact_page.message_failed'), color: 'error' })
   } finally {
     tenantSubmitting.value = false
   }
@@ -358,10 +360,10 @@ const platformSubmitted = ref(false)
 
 const validatePlatformContact = (state) => {
   const errors = []
-  if (!state.name) errors.push({ name: 'name', message: 'Please enter your name.' })
-  if (!state.email) errors.push({ name: 'email', message: 'Please enter your email.' })
-  else if (!emailPattern.test(state.email)) errors.push({ name: 'email', message: 'Please enter a valid email.' })
-  if (!state.message) errors.push({ name: 'message', message: 'Please enter a message.' })
+  if (!state.name) errors.push({ name: 'name', message: t('saya.contact_page.enter_name') })
+  if (!state.email) errors.push({ name: 'email', message: t('saya.contact_page.enter_email') })
+  else if (!emailPattern.test(state.email)) errors.push({ name: 'email', message: t('saya.contact_page.invalid_email') })
+  if (!state.message) errors.push({ name: 'message', message: t('saya.contact_page.enter_message') })
   return errors
 }
 
@@ -371,10 +373,10 @@ const handlePlatformContact = async () => {
     await $fetch('/api/contact', { method: 'POST', body: platformForm.value })
     platformSubmitted.value = true
     platformForm.value = { name: '', email: '', message: '' }
-    toast.add({ description: "Message sent! We'll be in touch soon.", color: 'success' })
+    toast.add({ description: t('saya.contact_page.message_sent'), color: 'success' })
     setTimeout(() => { platformSubmitted.value = false }, 3000)
   } catch {
-    toast.add({ description: 'Failed to send message. Please try again.', color: 'error' })
+    toast.add({ description: t('saya.contact_page.message_failed'), color: 'error' })
   } finally {
     platformSubmitting.value = false
   }

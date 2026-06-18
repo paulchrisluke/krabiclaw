@@ -165,9 +165,9 @@
       <div v-else-if="step === 'done'" class="py-6 text-center">
         <UIcon name="i-heroicons-check-circle" class="mx-auto size-10 text-green-500" />
         <p class="mt-3 text-sm font-medium text-highlighted">
-          {{ savedCount }} item{{ savedCount === 1 ? '' : 's' }} saved as draft
+          {{ savedCount }} item{{ savedCount === 1 ? '' : 's' }} added to menu
         </p>
-        <p class="mt-1 text-xs text-muted">Review and publish from the menu editor when ready.</p>
+        <p class="mt-1 text-xs text-muted">Items are live on your menu immediately.</p>
       </div>
     </template>
 
@@ -194,9 +194,9 @@
           <UButton
             :loading="saving"
             :disabled="editedItems.length === 0"
-            @click="saveDraft"
+            @click="saveItems"
           >
-            Save {{ editedItems.length }} item{{ editedItems.length === 1 ? '' : 's' }} as draft
+            Add {{ editedItems.length }} item{{ editedItems.length === 1 ? '' : 's' }} to menu
           </UButton>
         </div>
       </div>
@@ -232,7 +232,8 @@ const selectedFile = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploadError = ref<string | null>(null)
 const extractWarning = ref<string | null>(null)
-const editedItems = ref<{ section: string; name: string; description: string; price_amount: string }[]>([])
+const editedItems = ref<{ id: string; section: string; name: string; description: string; price_amount: string }[]>([])
+const originalItemIds = ref<string[]>([])
 const expandedIdx = ref<number | null>(null)
 const saving = ref(false)
 const savedCount = ref(0)
@@ -263,6 +264,7 @@ function reset() {
   creditsCharged.value = null
   creditsRemaining.value = null
   resultMenuId.value = null
+  originalItemIds.value = []
 }
 
 function onDrop(e: DragEvent) {
@@ -315,11 +317,13 @@ async function runExtraction() {
     extractWarning.value = res.warning ?? null
 
     editedItems.value = (res.menuItems ?? []).map((item: ApiValue) => ({
+      id: item.id ?? '',
       section: item.section ?? '',
       name: item.name ?? '',
       description: item.description ?? '',
       price_amount: item.price_amount ?? '',
     }))
+    originalItemIds.value = editedItems.value.map(i => i.id)
 
     step.value = 'preview'
   } catch (err) {
@@ -330,14 +334,31 @@ async function runExtraction() {
   }
 }
 
-async function saveDraft() {
+async function saveItems() {
   if (!resultMenuId.value) return
   saving.value = true
   try {
+    const remainingIds = new Set(editedItems.value.map(i => i.id))
+    const deletedIds = originalItemIds.value.filter(id => !remainingIds.has(id))
+
+    await Promise.all(deletedIds.map(id =>
+      $fetch(`/api/dashboard/editor/menus/${resultMenuId.value}/items/${id}`, { method: 'DELETE' })
+    ))
+
+    await Promise.all(editedItems.value.map(item =>
+      $fetch(`/api/dashboard/editor/menus/${resultMenuId.value}/items/${item.id}`, {
+        method: 'PATCH',
+        body: { name: item.name, description: item.description, section: item.section, price_amount: item.price_amount },
+      })
+    ))
+
     savedCount.value = editedItems.value.length
     step.value = 'done'
     emit('imported', resultMenuId.value)
-    toast.addToast(`${savedCount.value} items saved as draft`, 'success')
+    toast.addToast(`${savedCount.value} item${savedCount.value === 1 ? '' : 's'} added to menu`, 'success')
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to save items. Please try again.'
+    toast.addToast(msg, 'error')
   } finally {
     saving.value = false
   }

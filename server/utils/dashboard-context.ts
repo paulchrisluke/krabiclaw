@@ -92,7 +92,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         SELECT key, value
         FROM site_config
         WHERE organization_id = ? AND site_id = ?
-          AND key IN ('heroImageUrl', 'locationHeroImageUrl')
+          AND key IN ('hero_image_url', 'location_hero_image_url')
       `).bind(organization.id, restaurant.id).all<{ key: string; value: string | null }>()
     : { results: [] as { key: string; value: string | null }[] }
 
@@ -106,8 +106,8 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     organization,
     restaurant: restaurant ? {
       ...restaurant,
-      heroImageUrl: configByKey.heroImageUrl ?? null,
-      locationHeroImageUrl: configByKey.locationHeroImageUrl ?? null,
+      heroImageUrl: configByKey.hero_image_url ?? null,
+      locationHeroImageUrl: configByKey.location_hero_image_url ?? null,
     } : null
   }
 }

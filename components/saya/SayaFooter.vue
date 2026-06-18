@@ -41,7 +41,7 @@
           role="status"
           aria-live="polite"
         >
-          We could not load locations right now. Please try again in a moment.
+          {{ t('saya.footer.locations_error') }}
         </div>
         <div
           v-else
@@ -59,7 +59,7 @@
               :to="`/locations/${loc.slug}`"
               class="mt-3 inline-block border-b border-inverted pb-0.5 text-xs uppercase tracking-widest text-inverted transition hover:opacity-70"
             >
-              Visit page →
+              {{ t('saya.footer.visit_page') }}
             </NuxtLink>
           </div>
         </div>
@@ -68,35 +68,35 @@
       <!-- Navigation links -->
       <div class="grid gap-8 border-b border-inverted/10 py-12 sm:grid-cols-3">
         <div>
-          <h4 class="saya-eyebrow mb-5 text-inverted/50">Experience</h4>
+          <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_experience') }}</h4>
           <ul class="space-y-3 text-sm">
-            <li v-if="hasMenu"><NuxtLink to="/menu" class="text-inverted/60 no-underline transition hover:text-inverted">Menu</NuxtLink></li>
-            <li v-if="hasExperiences"><NuxtLink to="/experiences" class="text-inverted/60 no-underline transition hover:text-inverted">Experiences</NuxtLink></li>
+            <li v-if="hasMenu"><NuxtLink to="/menu" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.menu') }}</NuxtLink></li>
+            <li v-if="hasExperiences"><NuxtLink to="/experiences" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.experiences') }}</NuxtLink></li>
             <li><NuxtLink to="/reservations" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
-            <li v-if="!hasExperiences"><NuxtLink to="/photos" class="text-inverted/60 no-underline transition hover:text-inverted">Gallery</NuxtLink></li>
-            <li><NuxtLink to="/about" class="text-inverted/60 no-underline transition hover:text-inverted">Our Story</NuxtLink></li>
+            <li v-if="!hasExperiences"><NuxtLink to="/photos" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
+            <li><NuxtLink to="/about" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.our_story') }}</NuxtLink></li>
           </ul>
         </div>
         <div>
-          <h4 class="saya-eyebrow mb-5 text-inverted/50">Discover</h4>
+          <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_discover') }}</h4>
           <ul class="space-y-3 text-sm">
-            <li><NuxtLink to="/reviews" class="text-inverted/60 no-underline transition hover:text-inverted">Reviews</NuxtLink></li>
-            <li><NuxtLink to="/posts" class="text-inverted/60 no-underline transition hover:text-inverted">Latest Updates</NuxtLink></li>
-            <li><NuxtLink to="/qa" class="text-inverted/60 no-underline transition hover:text-inverted">Q&amp;A</NuxtLink></li>
+            <li><NuxtLink to="/reviews" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.reviews') }}</NuxtLink></li>
+            <li><NuxtLink to="/posts" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.latest_updates') }}</NuxtLink></li>
+            <li><NuxtLink to="/qa" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.qa') }}</NuxtLink></li>
           </ul>
         </div>
         <div>
-          <h4 class="saya-eyebrow mb-5 text-inverted/50">Connect</h4>
+          <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_connect') }}</h4>
           <ul class="space-y-3 text-sm">
-            <li><NuxtLink to="/locations" class="text-inverted/60 no-underline transition hover:text-inverted">All Locations</NuxtLink></li>
-            <li><NuxtLink to="/contact" class="text-inverted/60 no-underline transition hover:text-inverted">Contact Us</NuxtLink></li>
+            <li><NuxtLink to="/locations" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.all_locations') }}</NuxtLink></li>
+            <li><NuxtLink to="/contact" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.contact_us') }}</NuxtLink></li>
           </ul>
         </div>
       </div>
 
       <!-- Delivery partners row — only rendered when at least one link is configured AND not an experiences site -->
       <div v-if="orderLinks.length && !hasExperiences" class="flex flex-wrap items-center gap-8 border-b border-inverted/10 py-10">
-        <span class="saya-eyebrow text-inverted/50">Order online</span>
+        <span class="saya-eyebrow text-inverted/50">{{ t('saya.footer.order_online') }}</span>
         <a
           v-for="link in orderLinks"
           :key="link.label"
@@ -120,8 +120,8 @@
             </UButton>
           </UDropdownMenu>
           <UColorModeButton variant="ghost" color="neutral" size="sm" />
-          <NuxtLink to="/privacy" class="transition hover:text-inverted/70">Privacy</NuxtLink>
-          <NuxtLink to="/terms" class="transition hover:text-inverted/70">Terms</NuxtLink>
+          <NuxtLink to="/privacy" class="transition hover:text-inverted/70">{{ t('legal.privacy') }}</NuxtLink>
+          <NuxtLink to="/terms" class="transition hover:text-inverted/70">{{ t('legal.terms') }}</NuxtLink>
           <a
             v-if="showBrandingCredit"
             href="https://krabiclaw.com"
@@ -129,7 +129,7 @@
             rel="noopener noreferrer"
             class="transition hover:text-inverted/70"
           >
-            Powered by krabiclaw.com, {{ copy.poweredByTagline }}
+            {{ t('saya.footer.powered_by') }}, {{ copy.poweredByTagline }}
           </a>
         </div>
       </div>
@@ -143,7 +143,8 @@ import { getTodayGoogleHours } from '~/utils/formatters'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
 const { isPlatform, site } = useTenantSite()
-const copy = computed(() => getVerticalCopy((site as { vertical?: string } | null)?.vertical))
+const { locale } = useI18n()
+const copy = computed(() => getVerticalCopy((site as { vertical?: string } | null)?.vertical, locale.value))
 
 // Shared bootstrap — same key as the page → zero extra SSR requests
 interface I18nComposable {
@@ -156,6 +157,7 @@ interface I18nComposable {
 const { locations: bootstrapLocations, locales: bootstrapLocales, error: bootstrapError, config: siteConfig, menu, hasExperiences } = useBootstrap()
 
 const i18n = useI18n() as ApiValue as I18nComposable
+const { t } = i18n
 const currentLocale = computed(() => i18n.locale.value)
 const getLocaleFlag = (code: string) =>
   ({ en: '🇺🇸', th: '🇹🇭', fr: '🇫🇷', ja: '🇯🇵', 'zh-CN': '🇨🇳', ko: '🇰🇷', es: '🇪🇸', de: '🇩🇪', it: '🇮🇹', ar: '🇸🇦' }[code] ?? '🌐')
