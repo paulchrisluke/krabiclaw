@@ -2351,7 +2351,7 @@ async function executeTool(
       const itemId = toSqlText(input.menu_item_id);
       const assetId = toSqlText(input.asset_id);
       if (!itemId || !assetId) return { error: "menu_item_id and asset_id required." };
-      const result = await updateMenuItem(db, orgId, siteId, itemId, { image_asset_id: assetId } as never, userId);
+      const result = await updateMenuItem(db, orgId, siteId, itemId, { image_asset_id: assetId }, userId);
       if (!result) return { error: "Failed to update menu item image." };
       return { updated: true, menu_item_id: itemId, asset_id: assetId };
     }
@@ -2371,7 +2371,7 @@ async function executeTool(
       const locationId = toSqlText(input.location_id);
       const assetId = toSqlText(input.asset_id);
       if (!locationId || !assetId) return { error: "location_id and asset_id required." };
-      const result = await updateLocation(db, orgId, siteId, locationId, { hero_image_asset_id: assetId } as never, userId);
+      const result = await updateLocation(db, orgId, siteId, locationId, { hero_image_asset_id: assetId }, userId);
       if (!result || result.status >= 400) return { error: "Failed to set location hero image." };
       return { updated: true, location_id: locationId, asset_id: assetId };
     }
@@ -2380,7 +2380,7 @@ async function executeTool(
       const locationId = toSqlText(input.location_id);
       const assetId = toSqlText(input.asset_id);
       if (!locationId || !assetId) return { error: "location_id and asset_id required." };
-      const result = await updateLocation(db, orgId, siteId, locationId, { hero_video_asset_id: assetId } as never, userId);
+      const result = await updateLocation(db, orgId, siteId, locationId, { hero_video_asset_id: assetId }, userId);
       if (!result || result.status >= 400) return { error: "Failed to set location hero video." };
       return { updated: true, location_id: locationId, asset_id: assetId };
     }
@@ -2681,7 +2681,7 @@ Guidelines:
 - Use publish_translations after the owner confirms drafted translations should go live; published languages become visible on the public site
 - Use get_page_fields, update_page_content, and delete_content_field for tenant page content such as home, about, contact, location notes, and reservations
 - Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, delete_location_qa, delete_content_field, delete_locale, start_translation_job, run_translation_job_batch, publish_translations — confirm first
-- Menus are DRAFT by default — publish_menu makes them live
+- Menus are live immediately when created — use publish_menu only to republish a menu that was set to unpublished
 - Keep responses short — this is a chat panel`;
 
   const MAX_MSG_CHARS = 20000;

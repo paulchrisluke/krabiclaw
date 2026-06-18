@@ -112,17 +112,20 @@ export async function createPost(
     cta_type?: string; cta_url?: string
     event_title?: string; event_start?: string; event_end?: string
     offer_coupon?: string; offer_terms?: string
+    status?: 'draft' | 'published'
   },
   createdBy: string
 ): Promise<Post> {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
+  const status = data.status ?? 'published'
+  const publishedAt = status === 'published' ? now : null
 
   await db.prepare(`
     INSERT INTO posts (id, organization_id, site_id, location_id, post_type, title, body, image_asset_id,
       cta_type, cta_url, event_title, event_start, event_end, offer_coupon, offer_terms,
-      status, scheduled_for, created_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)
+      status, scheduled_for, published_at, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id, organizationId, siteId,
     data.location_id ?? null, data.post_type ?? 'standard',
@@ -130,7 +133,7 @@ export async function createPost(
     data.cta_type ?? null, data.cta_url ?? null,
     data.event_title ?? null, data.event_start ?? null, data.event_end ?? null,
     data.offer_coupon ?? null, data.offer_terms ?? null,
-    data.scheduled_for ?? null, createdBy, now, now
+    status, data.scheduled_for ?? null, publishedAt, createdBy, now, now
   ).run()
 
   const createdPost = await db.prepare('SELECT * FROM posts WHERE id = ? LIMIT 1').bind(id).first() as Post | null

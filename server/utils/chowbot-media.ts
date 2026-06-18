@@ -200,7 +200,7 @@ export async function extractMenuFromMediaAsset(
       console.error('Failed to clean up partial menu import:', cleanupError)
     }
     const reason = error instanceof Error ? error.message : String(error)
-    throw new Error(`Menu import failed after creating ${createdItems.length} item${createdItems.length === 1 ? '' : 's'}; draft menu was removed. ${reason}`)
+    throw new Error(`Menu import failed after creating ${createdItems.length} item${createdItems.length === 1 ? '' : 's'}; menu was removed. ${reason}`)
   }
 
   return { menuId: menu.id, count: createdItems.length, warning: parsed.warning ?? null, creditsRemaining: charged.newBalance }

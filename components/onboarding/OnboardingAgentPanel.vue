@@ -364,7 +364,7 @@ const processFile = async (file: File, caption = '') => {
     messages.value = [...messages.value, {
       role: 'assistant',
       content: count > 0
-        ? `Extracted **${count} menu item${count === 1 ? '' : 's'}** saved as a draft. Go to **Menu** in the dashboard to review and publish.`
+        ? `Extracted **${count} menu item${count === 1 ? '' : 's'}** and added to your menu.`
         : 'No items found in that file. Try a higher-resolution photo.',
     }]
   } catch (err) {

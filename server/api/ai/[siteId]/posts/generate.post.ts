@@ -1,6 +1,6 @@
 // POST /api/ai/[siteId]/posts/generate
 // Accepts a text prompt and optional base64 image.
-// Calls Claude via CF AI Gateway and returns a draft post (title + body).
+// Calls Claude via CF AI Gateway and returns generated post content (title + body).
 // Does NOT save — the client saves via POST /api/editor/sites/[siteId]/posts.
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
@@ -145,7 +145,7 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({
     success: true,
-    draft: { title: parsed.title ?? null, body: parsed.body ?? '' },
+    generated: { title: parsed.title ?? null, body: parsed.body ?? '' },
     credits: { charged: creditsCharged, remaining: newBalance },
   })
 })

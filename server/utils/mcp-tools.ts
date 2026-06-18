@@ -1551,7 +1551,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'create_post',
-    description: 'Create a draft post.',
+    description: 'Create and publish a post.',
     domain: 'posts',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1729,7 +1729,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: {
       message: { type: 'string', description: 'Post text content.' },
       link: { type: 'string', description: 'Optional URL to attach to the post.' },
-      published: { type: 'boolean', description: 'Publish immediately (true, default) or save as draft (false).' },
+      published: { type: 'boolean', description: 'Publish immediately (true, default). Pass false to schedule for later.' },
     },
     required: ['message'],
     outputSchema: {
@@ -1778,7 +1778,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'import_menu_from_media',
-    description: 'Extract a draft menu from a menu photo or PDF.',
+    description: 'Extract and add menu items from a menu photo or PDF.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1789,7 +1789,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {
         menu: {
           type: 'object',
-          description: 'Created draft menu.',
+          description: 'Created menu.',
           properties: {
             id: { type: 'string' },
             name: { type: 'string' },

@@ -372,11 +372,20 @@ export default defineEventHandler(async (event) => {
       new TextEncoder().encode(appSecret),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
-      ['sign'],
+      ['verify'],
     )
-    const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody))
-    const expected = 'sha256=' + Array.from(new Uint8Array(mac)).map((b) => b.toString(16).padStart(2, '0')).join('')
-    if (signature !== expected) {
+    const incomingHex = signature.startsWith('sha256=') ? signature.slice(7) : ''
+    const pairs = incomingHex.match(/.{2}/g)
+    const incomingBytes = pairs && pairs.length === 32
+      ? new Uint8Array(pairs.map((b) => parseInt(b, 16)))
+      : new Uint8Array(0)
+    const isValid = incomingBytes.length === 32 && await crypto.subtle.verify(
+      { name: 'HMAC', hash: 'SHA-256' },
+      key,
+      incomingBytes,
+      new TextEncoder().encode(rawBody),
+    )
+    if (!isValid) {
       return jsonResponse({ error: 'Invalid signature' }, { status: 403 })
     }
   }

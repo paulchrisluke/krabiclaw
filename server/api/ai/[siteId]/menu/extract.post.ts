@@ -1,11 +1,11 @@
 // POST /api/ai/[siteId]/menu/extract
 // Accepts a photo (JPEG/PNG/WEBP) or PDF page image as multipart form data.
 // Passes it to Claude via Cloudflare AI Gateway, extracts menu items as structured JSON,
-// and saves them as a draft menu. The owner must publish from the dashboard.
+// and saves them to a published menu immediately.
 //
 // Multipart fields:
 //   file        — required, image file (JPEG/PNG/WEBP/GIF) or first page of a PDF rendered to image
-//   menuId      — optional, existing draft menu to append to; creates a new one if omitted
+//   menuId      — optional, existing menu to append to; creates a new one if omitted
 //   menuName    — optional, name for a newly created menu (default: "Imported Menu")
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
@@ -213,12 +213,12 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Resolve or create a draft menu
+  // Resolve or create a menu to append to
   let menuId = formData.get('menuId') as string | null
   if (menuId) {
     const existing = await db.prepare(
-      'SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? AND status = ? LIMIT 1'
-    ).bind(menuId, orgId, siteId, 'draft').first()
+      'SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1'
+    ).bind(menuId, orgId, siteId).first()
     if (!existing) menuId = null
   }
 
@@ -230,7 +230,7 @@ export default defineEventHandler(async (event) => {
     menuCreatedInThisRequest = true
   }
 
-  // Write items to draft menu (created_by marks them as AI-sourced)
+  // Write items to menu (created_by marks them as AI-sourced)
   // Wrap in transaction to ensure atomicity - if any item fails, roll back all changes
   let createdItems: ApiRecord[] = []
   try {
@@ -272,7 +272,7 @@ export default defineEventHandler(async (event) => {
       toPhone: phone,
       template: 'ai_action_complete',
       vars: {
-        action_summary: `${createdItems.length} menu item${createdItems.length === 1 ? '' : 's'} extracted and saved as draft`,
+        action_summary: `${createdItems.length} menu item${createdItems.length === 1 ? '' : 's'} extracted and added to menu`,
         preview_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/${orgSlug}/menu`,
       },
     }).catch(console.error)

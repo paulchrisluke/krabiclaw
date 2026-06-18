@@ -26,7 +26,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
   {
     name: "create_post",
     description:
-      "Create a new draft post. Saved as draft — NOT published until publish_post is called.",
+      "Create and publish a post immediately.",
     input_schema: {
       type: "object",
       properties: {
@@ -86,7 +86,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
   {
     name: "publish_post",
     description:
-      "Publish a draft post to the website. Only call after confirming content with the user.",
+      "Publish a post to external channels (Google Business, Facebook, Instagram). Only call after confirming with the user.",
     input_schema: {
       type: "object",
       properties: {
@@ -98,7 +98,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
   {
     name: "update_post",
     description:
-      "Update a draft or published post — title, body, image, location, type, CTA, or event/offer fields. Does not change publish status.",
+      "Update a post — title, body, image, location, type, CTA, or event/offer fields.",
     input_schema: {
       type: "object",
       properties: {
@@ -453,7 +453,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
   },
   {
     name: "publish_menu",
-    description: "Publish a draft menu so it appears on the live site.",
+    description: "Publish a menu so it appears on the live site.",
     input_schema: {
       type: "object",
       properties: { menu_id: { type: "string" } },
@@ -728,7 +728,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
     input_schema: {
       type: "object",
       properties: {
-        menu_name: { type: "string", description: "Optional draft menu name." },
+        menu_name: { type: "string", description: "Optional menu name." },
       },
     },
   },

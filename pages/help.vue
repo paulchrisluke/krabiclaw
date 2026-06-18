@@ -118,8 +118,8 @@ const sections = [
         a: 'Go to Dashboard → Locations → select your location → Hours. If you have connected Google Business, your hours sync automatically and can also be updated there.'
       },
       {
-        q: 'What is the draft/publish workflow?',
-        a: 'Page content updates save directly to the live site. Posts still use draft and publish states because they are separate publishing objects.'
+        q: 'How does publishing work?',
+        a: 'Everything saves and publishes immediately — page content, posts, and menus are all live as soon as you save. Use the Publish to channels button on a post to also push it to Google Business, Facebook, or Instagram.'
       }
     ]
   },

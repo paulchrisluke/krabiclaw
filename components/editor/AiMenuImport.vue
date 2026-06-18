@@ -165,9 +165,9 @@
       <div v-else-if="step === 'done'" class="py-6 text-center">
         <UIcon name="i-heroicons-check-circle" class="mx-auto size-10 text-green-500" />
         <p class="mt-3 text-sm font-medium text-highlighted">
-          {{ savedCount }} item{{ savedCount === 1 ? '' : 's' }} saved as draft
+          {{ savedCount }} item{{ savedCount === 1 ? '' : 's' }} added to menu
         </p>
-        <p class="mt-1 text-xs text-muted">Review and publish from the menu editor when ready.</p>
+        <p class="mt-1 text-xs text-muted">Items are live on your menu immediately.</p>
       </div>
     </template>
 
@@ -194,9 +194,9 @@
           <UButton
             :loading="saving"
             :disabled="editedItems.length === 0"
-            @click="saveDraft"
+            @click="saveItems"
           >
-            Save {{ editedItems.length }} item{{ editedItems.length === 1 ? '' : 's' }} as draft
+            Add {{ editedItems.length }} item{{ editedItems.length === 1 ? '' : 's' }} to menu
           </UButton>
         </div>
       </div>
@@ -330,14 +330,14 @@ async function runExtraction() {
   }
 }
 
-async function saveDraft() {
+async function saveItems() {
   if (!resultMenuId.value) return
   saving.value = true
   try {
     savedCount.value = editedItems.value.length
     step.value = 'done'
     emit('imported', resultMenuId.value)
-    toast.addToast(`${savedCount.value} items saved as draft`, 'success')
+    toast.addToast(`${savedCount.value} item${savedCount.value === 1 ? '' : 's'} added to menu`, 'success')
   } finally {
     saving.value = false
   }
