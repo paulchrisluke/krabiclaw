@@ -35,7 +35,7 @@ export default defineComponent({
               ? h(ESection, { style: 'padding:32px 40px 0' }, () => [
                   h(EButton, {
                     href: props.ctaUrl,
-                    style: 'background:#FB7461;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Arial,sans-serif;font-weight:600;font-size:15px;line-height:1;text-decoration:none;padding:14px 28px;border-radius:10px;display:inline-block',
+                    style: { background: '#FB7461', color: '#ffffff', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif", fontWeight: '600', fontSize: '15px', lineHeight: '1', textDecoration: 'none', padding: '14px 28px', borderRadius: '10px', display: 'inline-block' },
                   }, () => props.ctaText),
                 ])
               : null,

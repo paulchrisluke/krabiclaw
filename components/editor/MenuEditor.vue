@@ -348,7 +348,7 @@ const {
 const handlePublish = async () => {
   if (!currentMenu.value) return
   try {
-    await updateMenu(currentMenu.value.id, { status: 'active' })
+    await updateMenu(currentMenu.value.id, { status: 'published' })
     toast.addToast('Menu published', 'success')
   } catch (err) {
     console.error('handlePublish failed:', err)
