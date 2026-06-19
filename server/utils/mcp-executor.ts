@@ -1102,7 +1102,7 @@ export async function executeMcpToolCall(
         "Google Places API not configured.",
       );
 
-    const rawUrl = requiredString(rawArguments, "maps_url");
+    const rawUrl = requiredString(rawArguments, "url");
 
     let parsedUrl: URL;
     try {
@@ -1717,7 +1717,8 @@ export async function executeMcpToolCall(
     case "delete_menu_item": {
       const deleted = await deleteMenuItem(
         site.db,
-        requiredString(args, "menu_item_id"),
+        requiredString(args, "menu_id"),
+        requiredString(args, "item_id"),
         site.organizationId,
         site.siteId,
         site.userId,
@@ -1732,8 +1733,8 @@ export async function executeMcpToolCall(
         updated: await renameMenuSection(
           site.db,
           requiredString(args, "menu_id"),
-          requiredString(args, "old_name"),
-          requiredString(args, "new_name"),
+          requiredString(args, "old_section"),
+          requiredString(args, "new_section"),
           site.userId,
         ),
       };
@@ -1742,7 +1743,7 @@ export async function executeMcpToolCall(
         deleted: await deleteMenuSection(
           site.db,
           requiredString(args, "menu_id"),
-          requiredString(args, "section_name"),
+          requiredString(args, "section"),
         ),
       };
     case "reorder_menu_items":

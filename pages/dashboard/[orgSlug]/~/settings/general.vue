@@ -73,6 +73,13 @@
                 <p class="mt-1 text-sm text-muted">Restaurant-site publishing connection.</p>
               </div>
               <UBadge
+                v-if="!hasFacebookAccess"
+                label="Growth+"
+                color="warning"
+                variant="soft"
+              />
+              <UBadge
+                v-else
                 :label="facebookConnection?.connected ? 'Connected' : 'Not connected'"
                 :color="facebookConnection?.connected ? 'success' : 'neutral'"
                 variant="soft"
@@ -83,6 +90,23 @@
           <div v-if="loadingIntegrations" class="space-y-3">
             <USkeleton class="h-16 rounded-lg" />
             <USkeleton class="h-9 rounded-lg" />
+          </div>
+          <div v-else-if="!hasFacebookAccess" class="space-y-4">
+            <UAlert
+              color="warning"
+              variant="soft"
+              icon="i-heroicons-lock-closed"
+              title="Growth plan required"
+              description="Facebook and Instagram sync is available on the Growth plan and above. Upgrade to connect your Page and auto-sync posts to your site."
+            />
+            <UButton
+              color="primary"
+              variant="outline"
+              icon="i-heroicons-arrow-up-circle"
+              :to="`/dashboard/${route.params.orgSlug}/~/billing`"
+            >
+              Upgrade to Growth
+            </UButton>
           </div>
           <div v-else class="space-y-4">
             <UAlert
@@ -227,6 +251,10 @@ const { data: sessionData } = useAuth()
 const route = useRoute()
 const toast = useToast()
 const dashboard = useDashboardRestaurant()
+const hasFacebookAccess = computed(() => {
+  const plan = dashboard.restaurant.value?.plan
+  return plan === 'growth' || plan === 'managed' || plan === 'seo_accelerator'
+})
 const organizationsState = authClient.useListOrganizations()
 const organization = computed(() => unref(organizationsState)?.data?.[0] || null)
 const organizationRole = computed(() => {
@@ -297,9 +325,14 @@ async function loadSiteIntegrations() {
       return
     }
 
+    const plan = dashboard.restaurant.value.plan
+    const canUseFacebook = plan === 'growth' || plan === 'managed' || plan === 'seo_accelerator'
+
     const [notificationsRes, facebookRes] = await Promise.all([
       $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null } }>('/api/dashboard/editor/notifications'),
-      $fetch<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection')
+      canUseFacebook
+        ? $fetch<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection')
+        : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
     ])
     whatsappPhone.value = notificationsRes.notifications.whatsapp_phone
     whatsappForm.phone = notificationsRes.notifications.whatsapp_phone ?? ''

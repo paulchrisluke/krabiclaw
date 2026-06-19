@@ -74,9 +74,6 @@ export default defineNuxtConfig({
       },
       allowedHosts: ['.trycloudflare.com', 'local.krabiclaw.com']
     },
-    build: {
-      cache: true,
-    },
   },
 
   site: {

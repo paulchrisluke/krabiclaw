@@ -44,6 +44,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
   },
   siteConfig: [
     { key: 'source_locale', value: 'en' },
+    { key: 'whatsapp_phone', value: '+447464115465' },
   ],
   siteLocales: [
     {
@@ -128,6 +129,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       isPrimary: true,
       status: 'active',
       heroImageAssetId: 'media-ph-homepage-custom',
+      notificationPhone: '+66817794877',
     },
     {
       id: 'loc-pottery-beachfront',
@@ -169,6 +171,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       isPrimary: false,
       status: 'active',
       heroImageAssetId: 'media-ph-beach-hero',
+      notificationPhone: '+66858037108',
     },
   ],
   mediaAssets: [
@@ -1076,6 +1079,7 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
       sqlValue(location.status),
       'NULL',
       'NULL',
+      sqlValue(location.notificationPhone ?? null),
     ].join(', ')})`)
     .join(',\n')
 
@@ -1097,7 +1101,8 @@ INSERT OR REPLACE INTO business_locations (
   price_level, categories,
   instagram_url, facebook_url,
   is_primary, status,
-  hero_image_asset_id, hero_video_asset_id
+  hero_image_asset_id, hero_video_asset_id,
+  notification_phone
 ) VALUES
 ${locationRowsNoHero};
 

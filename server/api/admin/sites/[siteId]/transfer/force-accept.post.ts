@@ -55,13 +55,13 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Recipient already owns this site.' }, { status: 422 })
   }
 
-  // Guard check: if transfer requires payment, ensure active billing subscription exists
+  // Guard check: if transfer requires payment, ensure recipient has active billing subscription
   if (transfer.requires_payment === 1) {
     const billingCheck = await db.prepare(`
-      SELECT id FROM site_billing
-      WHERE site_id = ? AND organization_id = ? AND status = 'active'
+      SELECT id FROM organization_billing
+      WHERE organization_id = ? AND status = 'active'
       LIMIT 1
-    `).bind(transfer.site_id, recipient.org_id).first<{ id: string }>()
+    `).bind(recipient.org_id).first<{ id: string }>()
 
     if (!billingCheck) {
       return jsonResponse({

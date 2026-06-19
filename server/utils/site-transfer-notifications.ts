@@ -6,6 +6,7 @@ interface SiteTransferNotificationEnv {
   PLATFORM_OWNER_EMAILS?: string
   RESEND_API_KEY?: string
   EMAIL_DELIVERY_MODE?: string
+  NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
 interface ReminderInput {
@@ -190,6 +191,7 @@ export async function notifySiteTransferReminder(
     seo_accelerator: 'SEO Accelerator ($349/mo)',
   }
 
+  const platformDomain = (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
   const { html, text } = await useRender(SiteTransferReminder, {
     props: {
       siteName: opts.siteName,
@@ -197,6 +199,7 @@ export async function notifySiteTransferReminder(
       domain: opts.invitedDomain ?? null,
       planLabel: opts.invitedPlan ? (planLabel[opts.invitedPlan] ?? opts.invitedPlan) : null,
       customDomainsPaused: opts.customDomainsPaused,
+      platformDomain,
     },
   })
 

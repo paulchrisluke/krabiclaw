@@ -1,4 +1,5 @@
 import { processCashBillingReminders } from '~/server/utils/cash-billing-reminders'
+import type { ApiRecord } from '~/types/api-record'
 
 export default defineTask({
   meta: {

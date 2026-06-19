@@ -187,6 +187,7 @@ export async function processCashBillingReminders(
         localRate: row.local_rate,
         localCurrency: row.local_currency,
         periodEnd: periodEndFormatted,
+        platformDomain,
       },
     })
 
@@ -215,6 +216,7 @@ export async function processCashBillingReminders(
         localCurrency: row.local_currency,
         periodEnd: periodEndFormatted,
         daysUntilDue: days,
+        platformDomain,
       },
     })
 

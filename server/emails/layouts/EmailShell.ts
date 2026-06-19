@@ -8,9 +8,6 @@ const FG = '#1F2547' // navy
 const FG_MUTED = '#4A5380' // navy-500
 const FG_DIMMED = '#6B7198' // dimmed navy
 const BORDER = '#E6E1D9'
-const LOGO_URL = process.env.NUXT_PUBLIC_PLATFORM_DOMAIN
-  ? `https://${process.env.NUXT_PUBLIC_PLATFORM_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '')}/krabi-claw-logo.png`
-  : 'https://krabiclaw.com/krabi-claw-logo.png'
 
 export default defineComponent({
   props: {
@@ -20,9 +17,13 @@ export default defineComponent({
     ctaUrl: { type: String },
     ctaText: { type: String },
     footerNote: { type: String },
+    platformDomain: { type: String, default: 'krabiclaw.com' },
   },
   setup(props, { slots }) {
     const year = new Date().getFullYear()
+    const logoUrl = props.platformDomain
+      ? `https://${props.platformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}/krabi-claw-logo.png`
+      : 'https://krabiclaw.com/krabi-claw-logo.png'
     return () => h(EHtml, { lang: 'en', dir: 'ltr' }, () => [
       h(EHead),
       props.preheader ? h(EPreview, null, () => props.preheader) : null,
@@ -32,7 +33,7 @@ export default defineComponent({
         h(EContainer, { style: 'max-width:580px;margin:0 auto;padding:48px 16px 40px' }, () => [
           h(ESection, { style: 'text-align:center;padding-bottom:32px' }, () => [
             h(EImg, {
-              src: LOGO_URL,
+              src: logoUrl,
               alt: 'KrabiClaw',
               width: '140',
               height: 'auto',

@@ -219,7 +219,7 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
 
   switch (plan) {
     case 'growth':
-      return { ...base, translation: true, translation_languages: 1, ai_credits: 2000, google_business: true, custom_domains: true }
+      return { ...base, translation: true, translation_languages: 1, ai_credits: 2000, google_business: true, custom_domains: true, managed_service: true }
     case 'managed':
       return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, custom_domains: true, google_business: true, advanced_seo: true }
     case 'seo_accelerator':

@@ -53,6 +53,11 @@ export default defineEventHandler(async (event) => {
     params.push(body.foodpanda_url)
   }
 
+  if (body.notification_phone !== undefined) {
+    const phone = typeof body.notification_phone === 'string' ? body.notification_phone.trim() : null
+    updates.push('notification_phone = ?')
+    params.push(phone || null)
+  }
 
   if (updates.length === 0) {
     return jsonResponse({ error: 'No valid fields to update' }, { status: 400 })
