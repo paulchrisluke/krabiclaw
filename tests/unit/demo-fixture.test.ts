@@ -170,15 +170,15 @@ test("demo translations block includes Thai translations for content, locations,
   assert.match(sql, /ไฟฟืนและค่ำคืนในบรูคลิน/);
 });
 
-test("demo billing block includes ai credits and organization billing state", () => {
+test("demo billing block includes ai credits and site billing state", () => {
   const sql = renderCompiledDemoBillingBlock();
 
   assert.match(sql, /INSERT OR REPLACE INTO ai_credits/);
-  assert.match(sql, /INSERT OR REPLACE INTO organization_billing/);
-  assert.match(sql, /INSERT OR REPLACE INTO organization_entitlements/);
+  assert.match(sql, /INSERT OR REPLACE INTO site_billing/);
+  assert.match(sql, /INSERT OR REPLACE INTO site_entitlements/);
   assert.match(sql, /127/);
-  assert.match(sql, /billing-org-demo/);
-  assert.match(sql, /ent-org-demo-plan/);
+  assert.match(sql, /sb-site-demo/);
+  assert.match(sql, /sent-site-demo-plan/);
 });
 
 test("demo core seed block includes generated site, locale, domain, and location rows", () => {

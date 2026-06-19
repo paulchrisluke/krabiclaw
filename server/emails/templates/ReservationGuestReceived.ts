@@ -17,16 +17,18 @@ export default defineComponent({
     contactPhone: { type: String as PropType<string | null>, default: null },
     contactEmail: { type: String as PropType<string | null>, default: null },
     cancelUrl: { type: String as PropType<string | null>, default: null },
+    platformDomain: { type: String, required: true },
   },
   setup(props) {
     return () => h(EmailShell, {
       preheader: `Your reservation request was sent to ${props.siteName}`,
       title: 'Your reservation request was sent',
       siteName: props.siteName,
+      platformDomain: props.platformDomain,
     }, () => [
       h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `Hi ${props.guestName}, your reservation request has been sent to ${props.siteName}.`),
       h(ESection, { style: CARD }, () => [
-        h(EText, { style: ROW }, () => [h('strong', null, 'Restaurant: '), props.siteName]),
+        h(EText, { style: ROW }, () => [h('strong', null, 'Venue: '), props.siteName]),
         h(EText, { style: ROW_TOP }, () => [h('strong', null, 'Date: '), props.date]),
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Time: '), props.time]),
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Party size: '), props.guests]),

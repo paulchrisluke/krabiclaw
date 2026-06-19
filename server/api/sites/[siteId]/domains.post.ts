@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
   const actorType = siteResult.member_role
 
 
-  if (!(await hasCustomDomainsEntitlement(db, site.organization_id))) {
+  if (!(await hasCustomDomainsEntitlement(db, siteId))) {
     return jsonResponse({ error: 'Custom domains require a paid plan.' }, { status: 403 })
   }
 

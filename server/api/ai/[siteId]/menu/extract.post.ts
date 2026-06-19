@@ -232,7 +232,7 @@ export default defineEventHandler(async (event) => {
 
   // Write items to menu (created_by marks them as AI-sourced)
   // Track created IDs so rollback only removes items added in this request
-  let createdItems: ApiRecord[] = []
+  const createdItems: ApiRecord[] = []
   const createdItemIds: string[] = []
   try {
     for (const item of validItems as ApiValue[]) {

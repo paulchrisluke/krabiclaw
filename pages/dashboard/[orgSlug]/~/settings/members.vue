@@ -1,10 +1,5 @@
 <template>
   <UPage>
-    <UPageHeader
-      title="Members"
-      description="Manage who can access this restaurant workspace."
-    />
-
     <UPageBody>
       <div class="space-y-4">
         <UCard>
@@ -39,7 +34,19 @@
                   <p class="truncate text-sm text-muted">{{ member.email }}</p>
                 </div>
               </div>
-              <UBadge :label="member.role" color="neutral" variant="soft" class="capitalize" />
+              <div class="flex items-center gap-2">
+                <UBadge :label="member.role" color="neutral" variant="soft" class="capitalize" />
+                <UButton
+                  v-if="member.role !== 'owner'"
+                  icon="i-lucide-x"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  :loading="removingMemberId === member.id"
+                  :aria-label="`Remove ${member.name || member.email}`"
+                  @click="removeMember(member.id)"
+                />
+              </div>
             </div>
           </div>
 
@@ -49,6 +56,15 @@
             variant="soft"
             icon="i-lucide-users"
             description="No members found for this organization."
+          />
+
+          <UAlert
+            v-if="memberError"
+            class="mt-4"
+            color="error"
+            variant="soft"
+            icon="i-lucide-alert-circle"
+            :description="memberError"
           />
         </UCard>
 
@@ -79,7 +95,18 @@
                   Invited by {{ invitation.inviterName || 'team member' }} · Expires {{ formatDate(invitation.expiresAt) }}
                 </p>
               </div>
-              <UBadge :label="invitation.role || 'member'" color="neutral" variant="soft" class="capitalize" />
+              <div class="flex items-center gap-2">
+                <UBadge :label="invitation.role || 'member'" color="neutral" variant="soft" class="capitalize" />
+                <UButton
+                  icon="i-lucide-x"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  :loading="cancellingInviteId === invitation.id"
+                  :aria-label="`Cancel invitation for ${invitation.email}`"
+                  @click="cancelInvitation(invitation.id)"
+                />
+              </div>
             </div>
           </div>
 
@@ -91,12 +118,62 @@
             description="No pending invitations."
           />
         </UCard>
+
+        <UCard>
+          <template #header>
+            <h2 class="font-semibold text-highlighted">Invite a team member</h2>
+          </template>
+
+          <UForm :state="inviteForm" class="flex flex-col gap-4 sm:flex-row sm:items-end" @submit="sendInvite">
+            <UFormField label="Email address" class="flex-1">
+              <UInput
+                v-model="inviteForm.email"
+                type="email"
+                placeholder="teammate@example.com"
+                class="w-full"
+                required
+              />
+            </UFormField>
+            <UFormField label="Role" class="w-36">
+              <USelect
+                v-model="inviteForm.role"
+                :items="roleOptions"
+                class="w-full"
+              />
+            </UFormField>
+            <UButton
+              type="submit"
+              icon="i-lucide-send"
+              :loading="inviting"
+              label="Send invite"
+            />
+          </UForm>
+
+          <UAlert
+            v-if="inviteError"
+            class="mt-4"
+            color="error"
+            variant="soft"
+            icon="i-lucide-alert-circle"
+            :description="inviteError"
+          />
+          <UAlert
+            v-if="inviteSuccess"
+            class="mt-4"
+            color="success"
+            variant="soft"
+            icon="i-lucide-check-circle"
+            description="Invitation sent."
+          />
+        </UCard>
       </div>
     </UPageBody>
   </UPage>
 </template>
 
 <script setup lang="ts">
+import { authClient } from '~/lib/auth-client'
+
 definePageMeta({ layout: 'dashboard' })
 
 interface MemberRow {
@@ -119,7 +196,7 @@ interface InvitationRow {
   inviterName: string | null
 }
 
-const { data, pending } = await useFetch<{
+const { data, pending, refresh } = await useFetch<{
   members: MemberRow[]
   invitations: InvitationRow[]
 }>('/api/dashboard/members')
@@ -127,9 +204,98 @@ const { data, pending } = await useFetch<{
 const members = computed(() => data.value?.members ?? [])
 const invitations = computed(() => data.value?.invitations ?? [])
 
+const roleOptions = [
+  { label: 'Member', value: 'member' },
+  { label: 'Admin', value: 'admin' },
+]
+
+const inviteForm = reactive({ email: '', role: 'member' })
+const inviting = ref(false)
+const inviteError = ref<string | null>(null)
+const inviteSuccess = ref(false)
+const inviteSuccessTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
+
+const removingMemberId = ref<string | null>(null)
+const cancellingInviteId = ref<string | null>(null)
+const memberError = ref<string | null>(null)
+
+const { data: session } = await authClient.useSession(useFetch)
+const activeOrgId = computed(() => session.value?.session?.activeOrganizationId ?? null)
+
+async function sendInvite() {
+  if (!activeOrgId.value) return
+  inviting.value = true
+  inviteError.value = null
+  inviteSuccess.value = false
+
+  const { error } = await authClient.organization.inviteMember({
+    email: inviteForm.email,
+    role: inviteForm.role as 'member' | 'admin',
+    organizationId: activeOrgId.value,
+  })
+
+  inviting.value = false
+
+  if (error) {
+    inviteError.value = error.message ?? 'Failed to send invite.'
+    return
+  }
+
+  inviteForm.email = ''
+  inviteForm.role = 'member'
+  inviteSuccess.value = true
+  if (inviteSuccessTimeout.value !== null) {
+    clearTimeout(inviteSuccessTimeout.value)
+  }
+  inviteSuccessTimeout.value = setTimeout(() => { inviteSuccess.value = false }, 4000)
+  await refresh()
+}
+
+async function cancelInvitation(invitationId: string) {
+  cancellingInviteId.value = invitationId
+  memberError.value = null
+
+  const { error } = await authClient.organization.cancelInvitation({ invitationId })
+
+  cancellingInviteId.value = null
+
+  if (error) {
+    memberError.value = error.message ?? 'Failed to cancel invitation.'
+    return
+  }
+
+  await refresh()
+}
+
+async function removeMember(memberId: string) {
+  if (!activeOrgId.value) return
+  removingMemberId.value = memberId
+  memberError.value = null
+
+  const { error } = await authClient.organization.removeMember({
+    memberIdOrEmail: memberId,
+    organizationId: activeOrgId.value,
+  })
+
+  removingMemberId.value = null
+
+  if (error) {
+    memberError.value = error.message ?? 'Failed to remove member.'
+    return
+  }
+
+  await refresh()
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value))
 }
+
+onBeforeUnmount(() => {
+  if (inviteSuccessTimeout.value !== null) {
+    clearTimeout(inviteSuccessTimeout.value)
+  }
+})
 
 useSeoMeta({ title: 'Members | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

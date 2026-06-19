@@ -629,6 +629,21 @@
             </div>
           </div>
 
+          <!-- Mark month paid (active cash subs only) -->
+          <template v-if="billingStatus.status === 'active' && billingStatus.sites_billing?.[0]?.payment_method === 'cash'">
+            <div class="border-t border-default pt-4 space-y-3">
+              <p class="text-sm font-semibold text-highlighted">Mark month paid</p>
+              <p class="text-xs text-muted">
+                Collected cash in person? Finalize the outstanding Stripe invoice and advance the billing period.
+              </p>
+              <UAlert v-if="markPaidError" color="error" variant="soft" :description="markPaidError" />
+              <UAlert v-if="markPaidResult" color="success" variant="soft" :title="`Period advanced to ${markPaidResult.new_period_end ? new Date(markPaidResult.new_period_end).toLocaleDateString() : 'N/A'}`" description="Invoice marked paid. Next reminder will fire closer to the new due date." />
+              <UButton v-if="!markPaidResult" block color="success" :loading="markPaying" icon="i-lucide-check-circle" @click="markMonthPaid">
+                Mark this month paid
+              </UButton>
+            </div>
+          </template>
+
           <!-- Record cash payment (only if not already active) -->
           <template v-if="billingStatus.status !== 'active'">
             <div class="border-t border-default pt-4 space-y-3">
@@ -644,8 +659,13 @@
                   class="w-32"
                 />
               </div>
+              <div class="flex gap-2">
+                <UInput v-model.number="cashLocalRate" type="number" placeholder="Rate (e.g. 1500)" :min="0" size="sm" class="flex-1" />
+                <UInput v-model="cashLocalCurrency" placeholder="Currency (e.g. THB)" size="sm" class="w-28" />
+              </div>
+              <p class="text-xs text-muted">Local rate + currency power the billing reminder emails.</p>
               <UAlert v-if="cashError" color="error" variant="soft" :description="cashError" />
-              <UAlert v-if="cashResult" color="success" variant="soft" :title="`Payment recorded — ${cashResult.plan} ${cashResult.interval}ly`" :description="`฿${Math.round(cashResult.amount_paid / 100 * 32.85).toLocaleString()} collected. Entitlements are now active.`" />
+              <UAlert v-if="cashResult" color="success" variant="soft" :title="`Payment recorded — ${cashResult.plan} ${cashResult.interval}ly`" :description="`$${(cashResult.amount_paid / 100).toFixed(2)} collected. Entitlements are now active.`" />
               <UButton v-if="!cashResult" block color="primary" :loading="cashPaying" icon="i-lucide-banknote" @click="recordCashPayment">
                 Record cash payment
               </UButton>
@@ -897,6 +917,18 @@ interface BillingStatus {
   status: string | null
   current_period_end: string | null
   cancel_at_period_end: boolean
+  sites_billing: Array<{
+    site_id: string
+    brand_name: string | null
+    stripe_subscription_id: string | null
+    plan: string | null
+    status: string | null
+    current_period_end: string | null
+    cancel_at_period_end: boolean
+    payment_method: string
+    local_rate: number | null
+    local_currency: string | null
+  }>
   pending_transfer: {
     id: string
     site_id: string
@@ -919,9 +951,16 @@ const billingError = ref('')
 
 const cashPlan = ref('growth')
 const cashInterval = ref<'month' | 'year'>('year')
+const cashLocalRate = ref<number | null>(null)
+const cashLocalCurrency = ref('THB')
 const cashPaying = ref(false)
 const cashResult = ref<{ success: boolean; plan: string; interval: string; amount_paid: number } | null>(null)
 const cashError = ref('')
+
+const markPaying = ref(false)
+const markPaidResult = ref<{ success: boolean; new_period_end: string | null } | null>(null)
+const markPaidError = ref('')
+const selectedCashSiteId = ref<string | null>(null)
 
 const forceAccepting = ref(false)
 const forceAcceptResult = ref<{ success: boolean; to_email: string } | null>(null)
@@ -939,10 +978,14 @@ async function openBilling(client: Client) {
   billingError.value = ''
   cashResult.value = null
   cashError.value = ''
+  markPaidResult.value = null
+  markPaidError.value = ''
   forceAcceptResult.value = null
   forceAcceptError.value = ''
   cashPlan.value = client.plan !== 'free' ? client.plan : 'growth'
   cashInterval.value = 'year'
+  cashLocalRate.value = null
+  cashLocalCurrency.value = 'THB'
   billingOpen.value = true
   billingLoading.value = true
   try {
@@ -957,13 +1000,26 @@ async function openBilling(client: Client) {
 
 async function recordCashPayment() {
   if (!billingClient.value) return
+  if (cashLocalRate.value === null || cashLocalRate.value === undefined || cashLocalRate.value <= 0) {
+    cashError.value = 'Please enter a valid positive rate'
+    return
+  }
   cashPaying.value = true
   cashResult.value = null
   cashError.value = ''
   try {
     const res = await $fetch<{ success: boolean; plan: string; interval: string; amount_paid: number }>(
       `/api/admin/organizations/${billingClient.value.org_id}/billing/cash-payment`,
-      { method: 'POST', body: { plan: cashPlan.value, interval: cashInterval.value } },
+      {
+        method: 'POST',
+        body: {
+          plan: cashPlan.value,
+          interval: cashInterval.value,
+          siteId: billingClient.value?.site_id,
+          localRate: cashLocalRate.value ?? undefined,
+          localCurrency: cashLocalCurrency.value || undefined,
+        },
+      },
     )
     cashResult.value = res
     await loadClients()
@@ -974,6 +1030,32 @@ async function recordCashPayment() {
     cashError.value = data?.error ?? msg ?? 'Failed to record payment'
   } finally {
     cashPaying.value = false
+  }
+}
+
+async function markMonthPaid() {
+  const cashSites = billingStatus.value?.sites_billing?.filter(s => s.payment_method === 'cash') ?? []
+  const siteId = selectedCashSiteId.value || cashSites[0]?.site_id || billingClient.value?.site_id
+  if (!siteId) return
+  markPaying.value = true
+  markPaidResult.value = null
+  markPaidError.value = ''
+  try {
+    const res = await $fetch<{ success: boolean; new_period_end: string | null }>(
+      `/api/admin/sites/${siteId}/billing/mark-paid`,
+      { method: 'POST' },
+    )
+    markPaidResult.value = res
+    await loadClients()
+    if (billingClient.value) {
+      billingStatus.value = await $fetch<BillingStatus>(`/api/admin/organizations/${billingClient.value.org_id}/billing`)
+    }
+  } catch (err: unknown) {
+    const data = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
+    const msg = err instanceof Error ? err.message : null
+    markPaidError.value = data?.error ?? msg ?? 'Failed to mark payment'
+  } finally {
+    markPaying.value = false
   }
 }
 

@@ -8,6 +8,7 @@ export default defineComponent({
     email: { type: String, required: true },
     signedUpAt: { type: String, required: true },
     adminUrl: { type: String, required: true },
+    platformDomain: { type: String, required: true },
   },
   setup(props) {
     return () => h(EmailShell, {
@@ -15,6 +16,7 @@ export default defineComponent({
       title: 'New sign-up',
       ctaUrl: props.adminUrl,
       ctaText: 'View admin dashboard',
+      platformDomain: props.platformDomain,
     }, () => [
       h(EText, { style: 'margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6' }, () => 'A new user just created an account on KrabiClaw.'),
       h(ESection, { style: 'background:#f9fafb;border-radius:10px;padding:20px 24px' }, () => [

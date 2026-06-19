@@ -342,11 +342,11 @@ async function saveItems() {
     const deletedIds = originalItemIds.value.filter(id => !remainingIds.has(id))
 
     await Promise.all(deletedIds.map(id =>
-      $fetch(`/api/dashboard/editor/menus/${resultMenuId.value}/items/${id}`, { method: 'DELETE' })
+      $fetch(`/api/editor/sites/${props.siteId}/menus/${resultMenuId.value}/items/${id}`, { method: 'DELETE' })
     ))
 
     await Promise.all(editedItems.value.map(item =>
-      $fetch(`/api/dashboard/editor/menus/${resultMenuId.value}/items/${item.id}`, {
+      $fetch(`/api/editor/sites/${props.siteId}/menus/${resultMenuId.value}/items/${item.id}`, {
         method: 'PATCH',
         body: { name: item.name, description: item.description, section: item.section, price_amount: item.price_amount },
       })

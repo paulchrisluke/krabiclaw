@@ -520,11 +520,11 @@ const iframeSrc = computed(() => {
 })
 
 const previewOrigin = computed(() => {
-  if (!iframeSrc.value) return '*'
+  if (!iframeSrc.value) return null
   try {
     return new URL(iframeSrc.value).origin
   } catch {
-    return '*'
+    return null
   }
 })
 
@@ -659,7 +659,7 @@ const selectField = (key: string) => {
   
   // Find which group this field belongs to
   const group = currentPageGroups.value.find(g => g.fields.includes(key))
-  if (group && previewFrame.value?.contentWindow) {
+  if (group && previewFrame.value?.contentWindow && previewOrigin.value) {
     previewFrame.value.contentWindow.postMessage({
       type: 'admin:focus',
       field: key,
@@ -669,7 +669,7 @@ const selectField = (key: string) => {
 }
 
 const postPreviewUpdate = () => {
-  if (!activeField.value || !previewFrame.value?.contentWindow) return
+  if (!activeField.value || !previewFrame.value?.contentWindow || !previewOrigin.value) return
 
   previewFrame.value.contentWindow.postMessage({
     type: 'admin:content-update',
@@ -795,8 +795,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 const loadPageContent = async () => {
-  if (requiresLocationSelection.value) return
   const version = ++loadVersion.value
+  if (requiresLocationSelection.value) return
   contentLoading.value = true
   try {
     const res = await $fetch<{ content: ApiRecord[] }>(

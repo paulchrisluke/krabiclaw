@@ -14,13 +14,7 @@ export async function ensureSite(request: APIRequestContext, baseURL: string, si
     },
   })
   expect(createRes.status()).toBe(200)
-
-  const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
-  expect(contextRes.status()).toBe(200)
-  const context = await contextRes.json() as {
-    restaurant?: { id?: string | null }
-  }
-  const createdSiteId = context.restaurant?.id ?? null
-  expect(createdSiteId).toEqual(expect.any(String))
-  return createdSiteId
+  const body = await createRes.json() as { siteId?: string }
+  expect(body.siteId).toEqual(expect.any(String))
+  return body.siteId!
 }

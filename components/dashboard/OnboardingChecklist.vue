@@ -10,9 +10,7 @@
             Ask ChatGPT to complete these — your site gets better with each one.
           </p>
         </div>
-        <button class="text-muted hover:text-highlighted transition-colors shrink-0" aria-label="Dismiss" @click="dismiss">
-          <UIcon name="i-heroicons-x-mark" class="size-4" />
-        </button>
+        <UButton icon="i-heroicons-x-mark" color="neutral" variant="ghost" size="sm" square aria-label="Dismiss" @click="dismiss" />
       </div>
 
       <!-- Progress bar -->
@@ -46,13 +44,15 @@
               <code class="text-xs text-muted bg-elevated px-2 py-1 rounded-lg truncate max-w-[320px] block">
                 {{ item.prompt }}
               </code>
-              <button
-                class="shrink-0 text-muted hover:text-primary transition-colors"
+              <UButton
+                :icon="copied === item.key ? 'i-heroicons-check' : 'i-heroicons-clipboard'"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                square
                 :aria-label="`Copy prompt for ${item.label}`"
                 @click="copyPrompt(item.key, item.prompt)"
-              >
-                <UIcon :name="copied === item.key ? 'i-heroicons-check' : 'i-heroicons-clipboard'" class="size-3.5" />
-              </button>
+              />
             </div>
           </div>
         </li>
@@ -90,6 +90,7 @@ interface ChecklistResponse {
 
 const { data, refresh } = await useFetch<ChecklistResponse>('/api/dashboard/onboarding/checklist', {
   server: false,
+  lazy: true,
 })
 
 const DISMISS_KEY = computed(() => `kc_checklist_dismissed_${props.orgSlug}`)

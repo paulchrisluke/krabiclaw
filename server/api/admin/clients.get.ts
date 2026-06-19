@@ -46,25 +46,26 @@ export default defineEventHandler(async (event) => {
       o.id AS org_id,
       o.name AS org_name,
       o.slug AS org_slug,
-      COALESCE(ob.plan, 'free') AS plan,
+      COALESCE(sb.plan, 'free') AS plan,
       s.id AS site_id,
       s.brand_name,
       s.subdomain,
       s.custom_domain,
       s.source_locale,
-      ob.status AS subscription_status,
-      ob.current_period_end,
+      sb.status AS subscription_status,
+      sb.current_period_end,
       ob.stripe_customer_id,
-      ob.stripe_subscription_id,
+      sb.stripe_subscription_id,
       pt.to_email AS pending_transfer_email,
       o.createdAt AS created_at
     FROM organization o
     LEFT JOIN organization_billing ob ON ob.organization_id = o.id
     LEFT JOIN single_site s ON s.organization_id = o.id AND s.rn = 1
+    LEFT JOIN site_billing sb ON sb.site_id = s.id
     LEFT JOIN pending_transfer pt ON pt.from_organization_id = o.id AND pt.rn = 1
-    WHERE ob.plan IN ('growth', 'managed', 'seo_accelerator')
+    WHERE sb.plan IN ('growth', 'managed', 'seo_accelerator')
     ORDER BY
-      CASE ob.plan
+      CASE sb.plan
         WHEN 'seo_accelerator' THEN 0
         WHEN 'managed' THEN 1
         WHEN 'growth' THEN 2

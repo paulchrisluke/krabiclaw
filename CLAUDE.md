@@ -84,8 +84,11 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 ## Multi-Tenancy
 
-- Organizations map 1:1 with restaurant brands/workspaces using Better Auth’s `organization` plugin.
-- One site per org, enforced by the unique index on `sites(organization_id)`.
+- Organizations map to a team or agency using Better Auth’s `organization` plugin.
+- **One org can have multiple sites** — the unique-per-org constraint was removed in migration `0017`.
+- Each site has its own plan and Stripe subscription (`site_billing` table).
+- The Stripe *customer* stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
+- Multiple physical locations live under `business_locations`. Locations are **unlimited on all plans**.
 - Multiple physical locations live under `business_locations`, not separate orgs.
 - Dashboard route shape:
   - `/dashboard/{orgSlug}` — restaurant workspace
@@ -268,7 +271,8 @@ Flow:
 
 - Stripe is the source of truth for plan names, prices, and `marketing_features`.
 - `server/utils/billing.ts` → `getPlanEntitlements(plan)` defines what each plan unlocks in D1.
-- Entitlements are stored per-org in the `organization_entitlements` table and checked at API level.
+- Entitlements are stored **per-site** in the `site_entitlements` table (migration `0017` replaced `organization_entitlements`).
+- Billing is **per-site** via `site_billing`. Checkout must pass `site_id` in Stripe session metadata.
 - Key entitlement keys:
   - `custom_domains`
   - `google_business`
@@ -277,6 +281,7 @@ Flow:
   - `ai_credits`
   - `managed_service`
   - `seo_accelerator`
+- `max_locations` and `max_sites` entitlements no longer exist — locations are unlimited on all plans.
 
 - `managed_service = true` on Managed and SEO Accelerator.
 - `managed_service` gates Facebook sync auth/publish/sync endpoints.

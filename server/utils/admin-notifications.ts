@@ -33,7 +33,7 @@ export async function notifyAdminNewUserSignup(
   const platformDomain = (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
   const adminUrl = `https://${platformDomain}/admin`
 
-  const { html, text } = await useRender(AdminNewSignup, { props: { displayName, email: user.email, signedUpAt, adminUrl } })
+  const { html, text } = await useRender(AdminNewSignup, { props: { displayName, email: user.email, signedUpAt, adminUrl, platformDomain } })
 
   if (!shouldSendRealEmail(env)) {
     console.info('admin_notification_log_only', { event: 'new_user_signup', email: user.email })

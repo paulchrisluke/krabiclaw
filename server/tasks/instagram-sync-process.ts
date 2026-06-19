@@ -56,8 +56,8 @@ export default defineTask({
       SELECT fpc.id, fpc.organization_id, fpc.site_id,
              fpc.facebook_page_id, fpc.encrypted_user_token, fpc.encrypted_page_token
       FROM facebook_pages_connections fpc
-      INNER JOIN organization_entitlements oe
-        ON oe.organization_id = fpc.organization_id
+      INNER JOIN site_entitlements oe
+        ON oe.site_id = fpc.site_id
         AND oe.key = 'managed_service'
         AND oe.value = 'true'
       WHERE fpc.status = 'active'

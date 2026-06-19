@@ -114,6 +114,7 @@ export interface CuratedLocationDefinition {
   status: 'active' | 'inactive' | 'sync_error'
   heroImageAssetId?: string | null
   heroVideoAssetId?: string | null
+  notificationPhone?: string | null
 }
 
 export interface CuratedMediaAssetDefinition {

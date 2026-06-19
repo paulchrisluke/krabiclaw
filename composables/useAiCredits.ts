@@ -1,4 +1,16 @@
 export const useAiCredits = (siteId: Ref<string | null> | ComputedRef<string | null>) => {
+  // Skip on server to avoid hydration issues
+  if (import.meta.server) {
+    return {
+      balance: ref(null),
+      total: ref(null),
+      isLow: computed(() => false),
+      isDepleted: computed(() => false),
+      fetch: async () => {},
+      update: () => {},
+    }
+  }
+
   const balance = useState<number | null>('ai:credits:balance', () => null)
   const total = useState<number | null>('ai:credits:total', () => null)
 

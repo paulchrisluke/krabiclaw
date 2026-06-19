@@ -18,6 +18,11 @@ interface NotificationEnv {
   WHATSAPP_ACCESS_TOKEN?: string
   EMAIL_FROM?: string
   EMAIL_DELIVERY_MODE?: string
+  NUXT_PUBLIC_PLATFORM_DOMAIN?: string
+}
+
+function getPlatformDomain(env: NotificationEnv): string {
+  return (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
 
 interface SiteContext {
@@ -27,6 +32,7 @@ interface SiteContext {
 }
 
 interface ReservationNotificationInput extends SiteContext {
+  locationId?: string | null
   reservationId: string
   guestName: string
   email: string
@@ -41,6 +47,7 @@ interface ReservationNotificationInput extends SiteContext {
 }
 
 interface ContactNotificationInput extends SiteContext {
+  locationId?: string | null
   contactId: string
   guestName: string
   email: string
@@ -48,6 +55,7 @@ interface ContactNotificationInput extends SiteContext {
 }
 
 interface ExperienceBookingNotificationInput extends SiteContext {
+  locationId?: string | null
   bookingId: string
   guestName: string
   email: string
@@ -287,10 +295,18 @@ async function sendEmailNotification(
     .run()
 }
 
+async function getLocationNotificationPhone(db: D1Database, locationId: string): Promise<string | null> {
+  const row = await db.prepare(`
+    SELECT notification_phone FROM business_locations WHERE id = ? LIMIT 1
+  `).bind(locationId).first<{ notification_phone: string | null }>()
+  return row?.notification_phone ?? null
+}
+
 async function notifyOwner(
   env: NotificationEnv,
   db: D1Database,
   opts: SiteContext & {
+    locationId?: string | null
     template: string
     title: string
     payload: Record<string, string>
@@ -303,22 +319,29 @@ async function notifyOwner(
 ) {
   await insertDashboardNotification(db, opts)
 
-  const whatsappPhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
-  const channels = await getOwnerNotificationChannels(db, opts, Boolean(whatsappPhone))
+  const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
+  const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId) : null
+
+  // Collect unique phones — location manager + owner (site-level), deduped
+  const phones = [...new Set([locationPhone, sitePhone].filter(Boolean))] as string[]
+
+  const channels = await getOwnerNotificationChannels(db, opts, phones.length > 0)
 
   if (channels.includes('email')) {
     const ownerEmail = await getOwnerEmail(db, opts.organizationId)
     if (ownerEmail) await sendEmailNotification(env, db, { ...opts, to: ownerEmail })
   }
 
-  if (channels.includes('whatsapp') && whatsappPhone && opts.whatsapp) {
-    await sendWhatsAppNotification(env, db, {
-      organizationId: opts.organizationId,
-      siteId: opts.siteId,
-      toPhone: whatsappPhone,
-      template: opts.whatsapp.template,
-      vars: opts.whatsapp.vars
-    })
+  if (channels.includes('whatsapp') && opts.whatsapp && phones.length > 0) {
+    await Promise.allSettled(phones.map(toPhone =>
+      sendWhatsAppNotification(env, db, {
+        organizationId: opts.organizationId,
+        siteId: opts.siteId,
+        toPhone,
+        template: opts.whatsapp!.template,
+        vars: opts.whatsapp!.vars,
+      })
+    ))
   }
 }
 
@@ -330,6 +353,7 @@ export async function notifyReservationCreated(
   const restaurant = siteName(opts)
   const prettyDate = formatDateHuman(opts.date)
   const prettyTime = formatTimeHuman(opts.time)
+  const platformDomain = getPlatformDomain(env)
 
   const payload = {
     reservation_id: opts.reservationId,
@@ -343,8 +367,8 @@ export async function notifyReservationCreated(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ReservationOwnerNew, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone } }),
-    useRender(ReservationGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl } }),
+    useRender(ReservationOwnerNew, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, platformDomain } }),
+    useRender(ReservationGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl, platformDomain } }),
   ])
 
   const results = await Promise.allSettled([
@@ -389,6 +413,7 @@ export async function notifyReservationCancelled(
   const restaurant = siteName(opts)
   const prettyDate = formatDateHuman(opts.date)
   const prettyTime = formatTimeHuman(opts.time)
+  const platformDomain = getPlatformDomain(env)
   const ownerCancelTitle = confirmed
     ? `Reservation cancelled for ${opts.guestName}`
     : `Reservation request cancelled by ${opts.guestName}`
@@ -407,8 +432,8 @@ export async function notifyReservationCancelled(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ReservationOwnerCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, wasConfirmed: confirmed } }),
-    useRender(ReservationGuestCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, wasConfirmed: confirmed } }),
+    useRender(ReservationOwnerCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, wasConfirmed: confirmed, platformDomain } }),
+    useRender(ReservationGuestCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, wasConfirmed: confirmed, platformDomain } }),
   ])
 
   const results = await Promise.allSettled([
@@ -450,6 +475,7 @@ export async function notifyContactSubmitted(
   opts: ContactNotificationInput
 ) {
   const restaurant = siteName(opts)
+  const platformDomain = getPlatformDomain(env)
   const payload = {
     contact_id: opts.contactId,
     guest_name: opts.guestName,
@@ -459,8 +485,8 @@ export async function notifyContactSubmitted(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ContactOwnerNew, { props: { guestName: opts.guestName, email: opts.email, message: opts.message, siteName: restaurant } }),
-    useRender(ContactGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant } }),
+    useRender(ContactOwnerNew, { props: { guestName: opts.guestName, email: opts.email, message: opts.message, siteName: restaurant, platformDomain } }),
+    useRender(ContactGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, platformDomain } }),
   ])
 
   const results = await Promise.allSettled([
@@ -504,6 +530,7 @@ export async function notifyExperienceBookingCreated(
   const studio = siteName(opts, 'the business')
   const prettyDate = formatDateHuman(opts.bookingDate)
   const prettyTime = formatTimeHuman(opts.timeSlot)
+  const platformDomain = getPlatformDomain(env)
 
   const payload = {
     booking_id: opts.bookingId,
@@ -517,8 +544,8 @@ export async function notifyExperienceBookingCreated(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(BookingOwnerNew, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime } }),
-    useRender(BookingGuestReceived, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize } }),
+    useRender(BookingOwnerNew, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, platformDomain } }),
+    useRender(BookingGuestReceived, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, platformDomain } }),
   ])
 
   const results = await Promise.allSettled([
@@ -563,6 +590,7 @@ export async function notifyExperienceBookingCreated(
 export async function getNotificationCopyPreviews(): Promise<NotificationCopyPreview[]> {
   const restaurant = 'Ember & Slice'
   const studio = 'Pottery House Krabi'
+  const platformDomain = 'krabiclaw.com'
 
   const [
     ownerReservation,
@@ -574,14 +602,14 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
     ownerBooking,
     guestBooking,
   ] = await Promise.all([
-    useRender(ReservationOwnerNew, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567' } }),
-    useRender(ReservationGuestReceived, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', contactPhone: '+1 555 000 0000', contactEmail: 'hello@emberslice.example', cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1' } }),
-    useRender(ReservationGuestCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', wasConfirmed: false } }),
-    useRender(ReservationOwnerCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', wasConfirmed: false } }),
-    useRender(ContactOwnerNew, { props: { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant } }),
-    useRender(ContactGuestReceived, { props: { guestName: 'Jordan Lee', siteName: restaurant } }),
-    useRender(BookingOwnerNew, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM' } }),
-    useRender(BookingGuestReceived, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2 } }),
+    useRender(ReservationOwnerNew, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', platformDomain } }),
+    useRender(ReservationGuestReceived, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', contactPhone: '+1 555 000 0000', contactEmail: 'hello@emberslice.example', cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', platformDomain } }),
+    useRender(ReservationGuestCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', wasConfirmed: false, platformDomain } }),
+    useRender(ReservationOwnerCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Mon, Jul 14, 2026', time: '7:00 PM', guests: '2', wasConfirmed: false, platformDomain } }),
+    useRender(ContactOwnerNew, { props: { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain } }),
+    useRender(ContactGuestReceived, { props: { guestName: 'Jordan Lee', siteName: restaurant, platformDomain } }),
+    useRender(BookingOwnerNew, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', platformDomain } }),
+    useRender(BookingGuestReceived, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, platformDomain } }),
   ])
 
   return [

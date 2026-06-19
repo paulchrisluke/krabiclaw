@@ -230,11 +230,13 @@ async function main() {
     features: [
       'Restaurant or experience site live in minutes',
       'Your own domain (yourbusiness.com)',
+      'Unlimited locations — one site covers all your branches',
       'Edit menus, content & photos through ChatGPT',
       'Bookings, ticketed experiences & delivery links',
       'WhatsApp booking & reservation notifications',
+      'Auto-sync from Facebook & Instagram',
+      'Google Business profile sync',
       '1 language translation included',
-      'Google Business profile basics',
     ],
   })
 
@@ -248,10 +250,10 @@ async function main() {
     imagePath: '/Users/paulchrisluke/Downloads/managed.png',
     features: [
       'Everything in Growth, plus:',
-      'We manage all content via ChatGPT — no login needed',
+      'We manage your site for you — just WhatsApp us',
       'Unlimited language translations',
-      'Auto-sync from Facebook & Instagram',
       'Full Google Business profile management',
+      'Monthly content updates & photo refreshes',
       'Priority WhatsApp support from Paul & Julia',
     ],
   })

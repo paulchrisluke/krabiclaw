@@ -35,7 +35,8 @@ export default defineEventHandler(async (event) => {
 
   if (!transfer) return jsonResponse({ error: 'No pending transfer found for this site.' }, { status: 404 })
 
-  // Find the recipient's account — they must have signed up first
+  // Find the recipient's account — they must have signed up first and be an org owner
+  // Assumes recipients are single-org owners (acceptable for manual admin oversight)
   const recipient = await db.prepare(`
     SELECT u.id AS user_id, m.organizationId AS org_id
     FROM user u
@@ -52,6 +53,21 @@ export default defineEventHandler(async (event) => {
 
   if (recipient.org_id === transfer.from_organization_id) {
     return jsonResponse({ error: 'Recipient already owns this site.' }, { status: 422 })
+  }
+
+  // Guard check: if transfer requires payment, ensure recipient has active billing subscription
+  if (transfer.requires_payment === 1) {
+    const billingCheck = await db.prepare(`
+      SELECT id FROM organization_billing
+      WHERE organization_id = ? AND status = 'active'
+      LIMIT 1
+    `).bind(recipient.org_id).first<{ id: string }>()
+
+    if (!billingCheck) {
+      return jsonResponse({
+        error: 'This transfer requires payment. The recipient must have an active billing subscription before the transfer can proceed.',
+      }, { status: 402 })
+    }
   }
 
   await executeSiteTransfer(

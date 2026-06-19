@@ -61,8 +61,8 @@ export default defineTask({
     const { results } = await db.prepare(`
       SELECT bl.id, bl.organization_id, bl.site_id, bl.title, bl.google_place_id
       FROM business_locations bl
-      INNER JOIN organization_entitlements oe
-        ON oe.organization_id = bl.organization_id
+      INNER JOIN site_entitlements oe
+        ON oe.site_id = bl.site_id
         AND oe.key = 'google_business'
         AND oe.value = 'true'
       WHERE bl.google_place_id IS NOT NULL

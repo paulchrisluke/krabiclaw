@@ -40,6 +40,7 @@ interface DashboardContextResponse {
 }
 
 export function useDashboardRestaurant() {
+  // Only initialize state on client to avoid hydration mismatches
   const state = useState<DashboardContextResponse | null>('dashboard:restaurant-context', () => null)
   const pending = useState<boolean>('dashboard:restaurant-context:pending', () => false)
 

@@ -15,11 +15,13 @@ export default defineComponent({
     time: { type: String, required: true },
     guests: { type: String, required: true },
     phone: { type: String, required: true },
+    platformDomain: { type: String, required: true },
   },
   setup(props) {
     return () => h(EmailShell, {
       preheader: `New reservation request for ${props.siteName}`,
       title: `New reservation request from ${props.guestName}`,
+      platformDomain: props.platformDomain,
     }, () => [
       h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => 'New reservation request from your website.'),
       h(ESection, { style: CARD }, () => [
