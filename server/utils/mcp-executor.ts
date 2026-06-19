@@ -1742,7 +1742,7 @@ export async function executeMcpToolCall(
         deleted: await deleteMenuSection(
           site.db,
           requiredString(args, "menu_id"),
-          requiredString(args, "section"),
+          requiredString(args, "section_name"),
         ),
       };
     case "reorder_menu_items":
