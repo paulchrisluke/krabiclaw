@@ -230,6 +230,18 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
     `).bind(`${subdomain}.${platformDomain}`).first() as TenantSiteRow | null
 
     if (subdomainSite) return subdomainSite
+
+    // Fallback for sites that predate site_domains population — resolve by sites.subdomain directly.
+    // This keeps existing sites live until site_domains records are seeded.
+    return await db.prepare(`
+      SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
+             ? AS canonical_domain,
+             s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
+      FROM sites s
+      LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
+      WHERE s.subdomain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
+      LIMIT 1
+    `).bind(hostname, subdomain).first() as TenantSiteRow | null
   }
 
   return null
