@@ -72,7 +72,7 @@ test("pottery house core block includes site, locale, domain, and location rows 
 
   assert.match(sql, /INSERT OR REPLACE INTO sites/);
   assert.match(sql, /contact_phone/);
-  assert.match(sql, /\+66626505890/);
+  assert.match(sql, /\+66817794877/);
   assert.match(sql, /INSERT OR REPLACE INTO site_config/);
   assert.match(sql, /INSERT OR REPLACE INTO site_locales/);
   assert.match(sql, /INSERT OR REPLACE INTO site_domains/);
