@@ -14,7 +14,6 @@ export default defineNuxtConfig({
     'nuxt-schema-org',
     '@nuxtjs/i18n',
     '@nuxt/ui',
-    '@nuxt/eslint',
     '@nuxt/image',
     '@nuxt/fonts',
   ],
@@ -75,6 +74,9 @@ export default defineNuxtConfig({
       },
       allowedHosts: ['.trycloudflare.com', 'local.krabiclaw.com']
     },
+    build: {
+      cache: true,
+    },
   },
 
   site: {
@@ -91,14 +93,6 @@ export default defineNuxtConfig({
     locales: [
       { code: 'en',    name: 'English',    language: 'en-US', dir: 'ltr', file: 'en.json' },
       { code: 'th',    name: 'ไทย',        language: 'th-TH', dir: 'ltr', file: 'th.json' },
-      { code: 'fr',    name: 'Français',   language: 'fr-FR', dir: 'ltr', file: 'fr.json' },
-      { code: 'ja',    name: '日本語',      language: 'ja-JP', dir: 'ltr', file: 'ja.json' },
-      { code: 'zh-CN', name: '简体中文',    language: 'zh-CN', dir: 'ltr', file: 'zh-CN.json' },
-      { code: 'ko',    name: '한국어',      language: 'ko-KR', dir: 'ltr', file: 'ko.json' },
-      { code: 'es',    name: 'Español',    language: 'es-ES', dir: 'ltr', file: 'es.json' },
-      { code: 'de',    name: 'Deutsch',    language: 'de-DE', dir: 'ltr', file: 'de.json' },
-      { code: 'it',    name: 'Italiano',   language: 'it-IT', dir: 'ltr', file: 'it.json' },
-      { code: 'ar',    name: 'العربية',    language: 'ar-SA', dir: 'rtl', file: 'ar.json' },
     ],
     defaultLocale: 'en',
     strategy: 'no_prefix',

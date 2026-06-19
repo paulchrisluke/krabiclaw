@@ -660,7 +660,7 @@
                 />
               </div>
               <div class="flex gap-2">
-                <UInput v-model.number="cashLocalRate" type="number" placeholder="Rate (e.g. 1500)" size="sm" class="flex-1" />
+                <UInput v-model.number="cashLocalRate" type="number" placeholder="Rate (e.g. 1500)" :min="0" size="sm" class="flex-1" />
                 <UInput v-model="cashLocalCurrency" placeholder="Currency (e.g. THB)" size="sm" class="w-28" />
               </div>
               <p class="text-xs text-muted">Local rate + currency power the billing reminder emails.</p>
@@ -960,6 +960,7 @@ const cashError = ref('')
 const markPaying = ref(false)
 const markPaidResult = ref<{ success: boolean; new_period_end: string | null } | null>(null)
 const markPaidError = ref('')
+const selectedCashSiteId = ref<string | null>(null)
 
 const forceAccepting = ref(false)
 const forceAcceptResult = ref<{ success: boolean; to_email: string } | null>(null)
@@ -999,6 +1000,10 @@ async function openBilling(client: Client) {
 
 async function recordCashPayment() {
   if (!billingClient.value) return
+  if (cashLocalRate.value === null || cashLocalRate.value === undefined || cashLocalRate.value <= 0) {
+    cashError.value = 'Please enter a valid positive rate'
+    return
+  }
   cashPaying.value = true
   cashResult.value = null
   cashError.value = ''
@@ -1029,7 +1034,8 @@ async function recordCashPayment() {
 }
 
 async function markMonthPaid() {
-  const siteId = billingStatus.value?.sites_billing?.[0]?.site_id ?? billingClient.value?.site_id
+  const cashSites = billingStatus.value?.sites_billing?.filter(s => s.payment_method === 'cash') ?? []
+  const siteId = selectedCashSiteId.value || cashSites[0]?.site_id || billingClient.value?.site_id
   if (!siteId) return
   markPaying.value = true
   markPaidResult.value = null

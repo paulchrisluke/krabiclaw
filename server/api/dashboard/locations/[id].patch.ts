@@ -23,33 +23,36 @@ export default defineEventHandler(async (event) => {
   const organizationId = organization?.id as string
   const siteId = restaurant.id as string
 
-  // Verify the location belongs to this organization and site
-  const location = await db.prepare(`
-    SELECT id FROM business_locations
-    WHERE id = ? AND organization_id = ? AND site_id = ?
-    LIMIT 1
-  `).bind(locationId, organizationId, siteId).first<{ id: string }>()
-
-  if (!location) {
-    return jsonResponse({ error: 'Location not found or access denied' }, { status: 404 })
-  }
-
   const body = await readBody(event)
+  if (typeof body !== 'object' || body === null) {
+    return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
+  }
   const updates: string[] = []
   const params: (string | number | null)[] = []
 
+  const safeUrlPattern = /^https?:\/\//i
   if (body.grab_url !== undefined) {
+    if (!safeUrlPattern.test(body.grab_url)) {
+      return jsonResponse({ error: 'Invalid URL protocol' }, { status: 400 })
+    }
     updates.push('grab_url = ?')
     params.push(body.grab_url)
   }
   if (body.uber_eats_url !== undefined) {
+    if (!safeUrlPattern.test(body.uber_eats_url)) {
+      return jsonResponse({ error: 'Invalid URL protocol' }, { status: 400 })
+    }
     updates.push('uber_eats_url = ?')
     params.push(body.uber_eats_url)
   }
   if (body.foodpanda_url !== undefined) {
+    if (!safeUrlPattern.test(body.foodpanda_url)) {
+      return jsonResponse({ error: 'Invalid URL protocol' }, { status: 400 })
+    }
     updates.push('foodpanda_url = ?')
     params.push(body.foodpanda_url)
   }
+
 
   if (updates.length === 0) {
     return jsonResponse({ error: 'No valid fields to update' }, { status: 400 })
@@ -57,13 +60,17 @@ export default defineEventHandler(async (event) => {
 
   params.push(new Date().toISOString())
   updates.push('updated_at = ?')
-  params.push(locationId)
+  params.push(locationId, organizationId, siteId)
 
-  await db.prepare(`
+  const result = await db.prepare(`
     UPDATE business_locations
     SET ${updates.join(', ')}
-    WHERE id = ?
+    WHERE id = ? AND organization_id = ? AND site_id = ?
   `).bind(...params).run()
+
+  if (result.meta.changes === 0) {
+    return jsonResponse({ error: 'Location not found or access denied' }, { status: 404 })
+  }
 
   return jsonResponse({ success: true })
 })

@@ -163,16 +163,7 @@ test.describe("mcp tools", () => {
 
     await loginAs(request, baseURL!);
 
-    const contextRes = await request.get(`${baseURL}/api/dashboard/context`);
-    expect(contextRes.status()).toBe(200);
-    const context = (await contextRes.json()) as {
-      restaurant?: { id?: string | null };
-    };
-    const siteId = await ensureSite(
-      request,
-      baseURL!,
-      context.restaurant?.id ?? null,
-    );
+    const siteId = await ensureSite(request, baseURL!, null);
 
     const listLocationsRes = await request.post(
       `${baseURL}/api/dev/mcp-tool`,

@@ -36,6 +36,7 @@ export default defineEventHandler(async (event) => {
   if (!transfer) return jsonResponse({ error: 'No pending transfer found for this site.' }, { status: 404 })
 
   // Find the recipient's account — they must have signed up first and be an org owner
+  // Assumes recipients are single-org owners (acceptable for manual admin oversight)
   const recipient = await db.prepare(`
     SELECT u.id AS user_id, m.organizationId AS org_id
     FROM user u

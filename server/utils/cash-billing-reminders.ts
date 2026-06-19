@@ -55,7 +55,7 @@ async function sendEmail(
     template: string
     payload: Record<string, unknown>
   },
-) {
+): Promise<boolean> {
   const now = new Date().toISOString()
   const id = crypto.randomUUID()
 
@@ -75,7 +75,7 @@ async function sendEmail(
       subject: opts.subject,
       template: opts.template,
     })
-    return
+    return true
   }
 
   if (!env.RESEND_API_KEY) {
@@ -84,7 +84,7 @@ async function sendEmail(
       (id, organization_id, site_id, channel, template, recipient, title, payload, status, error, created_at)
       VALUES (?, ?, ?, 'email', ?, ?, ?, ?, 'failed', 'RESEND_API_KEY not configured', ?)
     `).bind(id, opts.organizationId, opts.siteId, opts.template, opts.recipient, opts.subject, JSON.stringify(opts.payload), now).run()
-    return
+    return false
   }
 
   await db.prepare(`
@@ -109,7 +109,7 @@ async function sendEmail(
       const error = await res.text().catch(() => 'Send failed')
       await db.prepare('UPDATE notifications SET status=\'failed\', error=?, sent_at=? WHERE id=?')
         .bind(error, new Date().toISOString(), id).run()
-      return
+      return false
     }
     const data = await res.json().catch(() => null) as { id?: string } | null
     await db.prepare('UPDATE notifications SET status=\'sent\', provider_message_id=?, sent_at=? WHERE id=?')
@@ -118,7 +118,9 @@ async function sendEmail(
     const message = err instanceof Error ? err.message : 'Send failed'
     await db.prepare('UPDATE notifications SET status=\'failed\', error=?, sent_at=? WHERE id=?')
       .bind(message, new Date().toISOString(), id).run()
+    return false
   }
+  return true
 }
 
 export async function processCashBillingReminders(
@@ -139,14 +141,12 @@ export async function processCashBillingReminders(
     FROM site_billing sb
     JOIN sites s ON s.id = sb.site_id
     LEFT JOIN (
-      SELECT DISTINCT m1.organizationId, u1.email
+      SELECT m1.organizationId, MIN(m1.userId) AS userId
       FROM member m1
-      JOIN user u1 ON u1.id = m1.userId
       WHERE m1.role = 'owner'
-      ORDER BY m1.userId
-      LIMIT 1
+      GROUP BY m1.organizationId
     ) owner ON owner.organizationId = sb.organization_id
-    LEFT JOIN user u ON u.email = owner.email
+    LEFT JOIN user u ON u.id = owner.userId
     WHERE sb.payment_method = 'cash'
       AND sb.status = 'active'
       AND sb.current_period_end IS NOT NULL
@@ -163,7 +163,10 @@ export async function processCashBillingReminders(
   for (const row of rows.results ?? []) {
     const siteName = row.brand_name ?? row.site_id
     const clientEmail = row.owner_email
-    if (!clientEmail) continue
+    if (!clientEmail) {
+      console.warn('cash_billing_reminder_missing_owner_email', { siteId: row.site_id, siteName })
+      continue
+    }
 
     const periodEndFormatted = formatDate(row.current_period_end)
     const days = daysUntil(row.current_period_end, now)
@@ -187,7 +190,7 @@ export async function processCashBillingReminders(
       },
     })
 
-    await sendEmail(env, db, {
+    const clientEmailSent = await sendEmail(env, db, {
       organizationId: row.organization_id,
       siteId: row.site_id,
       recipient: clientEmail,
@@ -197,6 +200,11 @@ export async function processCashBillingReminders(
       template: 'cash_billing_reminder_client',
       payload: { ...payload, audience: 'client' },
     })
+
+    if (!clientEmailSent) {
+      console.error('cash_billing_reminder_client_email_failed', { siteId: row.site_id, siteName, clientEmail })
+      continue
+    }
 
     const { html: adminHtml, text: adminText } = await useRender(CashBillingReminderAdmin, {
       props: {
