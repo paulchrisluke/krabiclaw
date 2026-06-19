@@ -60,8 +60,8 @@ export default defineEventHandler(async (event) => {
 
   // Preflight site eligibility check - ensure siteId exists and is associated with this organization
   const siteEligibility = await db.prepare(`
-    SELECT id FROM site_billing
-    WHERE site_id = ? AND organization_id = ?
+    SELECT id FROM sites
+    WHERE id = ? AND organization_id = ?
     LIMIT 1
   `).bind(siteId, orgId).first<{ id: string }>()
 

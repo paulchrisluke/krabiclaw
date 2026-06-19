@@ -60,7 +60,9 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: `Invoice in unexpected state after finalize: ${invoice.status}` }, { status: 500 })
   }
 
-  const paidInvoice = await stripe.invoices.pay(invoice.id, { paid_out_of_band: true })
+  const paidInvoice = await stripe.invoices.pay(invoice.id, { paid_out_of_band: true }, {
+    idempotencyKey: `mark-paid-invoice-${invoice.id}`,
+  })
 
   // Advance current_period_end by one interval based on the new invoice period
   const newPeriodEnd = paidInvoice.lines.data[0]?.period?.end

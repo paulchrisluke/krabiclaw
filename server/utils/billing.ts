@@ -9,7 +9,7 @@ interface SiteBillingRow {
   plan: string | null
   status: string | null
   current_period_end: string | null
-  cancel_at_period_end: boolean | null
+  cancel_at_period_end: number | null
 }
 
 interface OrgBillingRow {
@@ -88,7 +88,7 @@ export async function getSiteBillingStatus(
     stripeSubscriptionId: siteBilling?.stripe_subscription_id ?? undefined,
     subscriptionStatus: siteBilling?.status ?? undefined,
     currentPeriodEnd: siteBilling?.current_period_end ?? undefined,
-    cancelAtPeriodEnd: siteBilling?.cancel_at_period_end ?? undefined,
+    cancelAtPeriodEnd: siteBilling?.cancel_at_period_end ? Boolean(siteBilling.cancel_at_period_end) : undefined,
     autoTopupEnabled: Boolean(orgBilling?.auto_topup_enabled),
     autoTopupBundle: orgBilling?.auto_topup_bundle ?? 500,
     autoTopupThreshold: orgBilling?.auto_topup_threshold ?? 100,
@@ -102,7 +102,7 @@ export async function getOrganizationBillingStatus(
   db: D1Database,
   organizationId: string,
 ): Promise<SiteBillingStatus> {
-  const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? LIMIT 1`)
+  const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`)
     .bind(organizationId).first<{ id: string }>()
   if (site) return getSiteBillingStatus(env, db, site.id)
 
@@ -137,7 +137,7 @@ export async function getOrganizationEntitlements(
   organizationId: string,
 ): Promise<EntitlementsMap> {
   void env
-  const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? LIMIT 1`)
+  const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`)
     .bind(organizationId).first<{ id: string }>()
   if (site) return getSiteEntitlements(db, site.id)
   return getPlanEntitlements('free')
@@ -158,7 +158,7 @@ export async function hasEntitlement(
   key: string,
 ): Promise<boolean> {
   void env
-  const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? LIMIT 1`)
+  const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`)
     .bind(organizationId).first<{ id: string }>()
   if (!site) return false
   return hasSiteEntitlement(db, site.id, key)
@@ -193,7 +193,7 @@ export async function setOrganizationEntitlementsFromPlan(
   plan: string,
 ): Promise<void> {
   void env
-  const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? LIMIT 1`)
+  const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`)
     .bind(organizationId).first<{ id: string }>()
   if (!site) return
   await setSiteEntitlementsFromPlan(db, site.id, organizationId, plan)
@@ -288,7 +288,7 @@ function parseEntitlementRows(rows: EntitlementRow[]): EntitlementsMap {
   for (const row of rows) {
     const v = row.value.toLowerCase()
     if (v === 'true' || v === 'false') result[row.key] = v === 'true'
-    else if (/^\d+$/.test(v)) result[row.key] = parseInt(v, 10)
+    else if (/^-?\d+$/.test(v)) result[row.key] = parseInt(v, 10)
     else result[row.key] = row.value
   }
   return result

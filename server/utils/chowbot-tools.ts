@@ -205,16 +205,16 @@ export const CHOWBOT_TOOLS: AiTool[] = [
       type: "object",
       properties: {
         menu_id: { type: "string", description: "ID of the menu." },
-        old_name: {
+        old_section: {
           type: "string",
           description: "Current section/category title.",
         },
-        new_name: {
+        new_section: {
           type: "string",
           description: "New section/category title.",
         },
       },
-      required: ["menu_id", "old_name", "new_name"],
+      required: ["menu_id", "old_section", "new_section"],
     },
   },
   {
@@ -225,12 +225,12 @@ export const CHOWBOT_TOOLS: AiTool[] = [
       type: "object",
       properties: {
         menu_id: { type: "string", description: "ID of the menu." },
-        section_name: {
+        section: {
           type: "string",
           description: "Section/category title to delete.",
         },
       },
-      required: ["menu_id", "section_name"],
+      required: ["menu_id", "section"],
     },
   },
   {
@@ -445,9 +445,10 @@ export const CHOWBOT_TOOLS: AiTool[] = [
     input_schema: {
       type: "object",
       properties: {
-        menu_item_id: { type: "string", description: "ID of the menu item to delete." },
+        menu_id: { type: "string", description: "ID of the menu." },
+        item_id: { type: "string", description: "ID of the menu item to delete." },
       },
-      required: ["menu_item_id"],
+      required: ["menu_id", "item_id"],
     },
   },
   {
@@ -643,13 +644,13 @@ export const CHOWBOT_TOOLS: AiTool[] = [
     input_schema: {
       type: "object",
       properties: {
-        maps_url: {
+        url: {
           type: "string",
           description:
             "Google Maps URL or share link (e.g. https://maps.app.goo.gl/... or https://www.google.com/maps/place/...)",
         },
       },
-      required: ["maps_url"],
+      required: ["url"],
     },
   },
 

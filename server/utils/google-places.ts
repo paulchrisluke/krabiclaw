@@ -5,12 +5,15 @@ import type { D1Database } from '@cloudflare/workers-types'
 const PLACES_BASE = 'https://places.googleapis.com/v1/places'
 
 export class PlaceDetailsError extends Error {
+  public readonly statusCode: number
+
   constructor(
     message: string,
-    public readonly statusCode: number = 502
+    statusCode: number = 502
   ) {
     super(message)
     this.name = 'PlaceDetailsError'
+    this.statusCode = statusCode
   }
 }
 

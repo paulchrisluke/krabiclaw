@@ -56,7 +56,13 @@ SELECT
   custom_domain, custom_domain_status, primary_location_id, public_url,
   brand_name, brand_description, logo_url, logo_asset_id,
   contact_email, contact_phone,
-  source_locale, default_currency, status, plan, onboarding_status,
+  source_locale, default_currency, status,
+  CASE plan
+    WHEN 'pro' THEN 'growth'
+    WHEN 'enterprise' THEN 'managed'
+    ELSE plan
+  END AS plan,
+  onboarding_status,
   url_structure, vertical, content_source, media_source,
   settings, last_published_at, created_at, updated_at, updated_by
 FROM sites;

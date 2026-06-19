@@ -138,8 +138,15 @@ export async function processCashBillingReminders(
            sb.stripe_subscription_id
     FROM site_billing sb
     JOIN sites s ON s.id = sb.site_id
-    LEFT JOIN member m ON m.organizationId = sb.organization_id AND m.role = 'owner'
-    LEFT JOIN user u ON u.id = m.userId
+    LEFT JOIN (
+      SELECT DISTINCT m1.organizationId, u1.email
+      FROM member m1
+      JOIN user u1 ON u1.id = m1.userId
+      WHERE m1.role = 'owner'
+      ORDER BY m1.userId
+      LIMIT 1
+    ) owner ON owner.organizationId = sb.organization_id
+    LEFT JOIN user u ON u.email = owner.email
     WHERE sb.payment_method = 'cash'
       AND sb.status = 'active'
       AND sb.current_period_end IS NOT NULL

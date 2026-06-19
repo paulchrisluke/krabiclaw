@@ -286,7 +286,7 @@ async function saveReview() {
 
     if (editingReviewId.value) {
       await $fetch(`/api/dashboard/locations/${reviewForm.location_id}/reviews/${editingReviewId.value}`, {
-        method: 'PATCH' as unknown as 'POST',
+        method: 'PATCH',
         body
       })
       toast.add({ description: 'Review updated', color: 'success' })

@@ -208,10 +208,10 @@ export async function requireMcpSite(
 export async function getVisibleSiteContext(
   event: H3Event,
   siteId: string,
-): Promise<{ role: McpToolRole; organizationId: string } | null> {
+): Promise<{ role: McpToolRole; organizationId: string; siteId: string } | null> {
   try {
     const site = await requireMcpSite(event, siteId, 'editor')
-    return { role: site.role, organizationId: site.organizationId }
+    return { role: site.role, organizationId: site.organizationId, siteId }
   } catch (error) {
     const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
       ? Number((error as { statusCode: number }).statusCode)

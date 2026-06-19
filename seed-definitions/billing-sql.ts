@@ -75,10 +75,8 @@ export function renderOrganizationEntitlementsSql(
   plan: string,
   sqlValue: SqlValue,
 ) {
-  // Seed files that use this don't have a siteId handy; they should migrate to renderSiteEntitlementsSql.
-  // For now emit a no-op comment so the seed still runs.
   void organizationId; void plan; void sqlValue
-  return '-- organization_entitlements seeding removed; use renderSiteEntitlementsSql instead'
+  throw new Error('renderOrganizationEntitlementsSql is deprecated. Migrate to renderSiteEntitlementsSql(siteId, organizationId, plan, sqlValue)')
 }
 
 export function renderOrganizationBillingSql(
@@ -87,6 +85,5 @@ export function renderOrganizationBillingSql(
   sqlValue: SqlValue,
 ) {
   void organizationBilling; void sqlValue
-  // organization_billing now only stores stripe_customer_id — no plan/status rows needed at seed time
-  return `-- organization_billing plan seeding removed; use renderSiteBillingSql instead (org: ${organizationId})`
+  throw new Error('renderOrganizationBillingSql is deprecated. Migrate to renderSiteBillingSql(siteId, organizationId, billing, sqlValue)')
 }

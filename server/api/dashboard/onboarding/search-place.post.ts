@@ -11,7 +11,7 @@ function extractFacebookPageName(url: string): string | null {
     // Verify hostname is exactly 'facebook.com' or a proper subdomain (e.g., www.facebook.com)
     if (hostname !== 'facebook.com' && !hostname.endsWith('.facebook.com')) return null
     const parts = parsed.pathname.replace(/^\//, '').split('/').filter(Boolean)
-    if (!parts.length || parts[0] === 'pages') return null
+    if (!parts.length) return null
     // Known intermediate path segments that are not the target page slug
     const intermediateSegments = new Set(['posts', 'photos', 'videos', 'events', 'reviews', 'about'])
     // Extract the page slug, skipping intermediate segments
@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: `No results found for "${searchQuery}". Try a more specific name.` }, { status: 404 })
     }
 
-    const details = await getPlaceDetails(apiKey, top.placeId, { fetchPhotos: false })
+    const details = await getPlaceDetails(apiKey, top.placeId, false)
     return jsonResponse({
       success: true,
       preview: {

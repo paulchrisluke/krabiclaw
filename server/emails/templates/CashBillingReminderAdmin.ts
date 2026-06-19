@@ -15,7 +15,7 @@ export default defineComponent({
   setup(props) {
     return () => {
       const amount = `${props.localCurrency} ${props.localRate.toLocaleString()}`
-      const urgency = props.daysUntilDue <= 1 ? 'due today' : `due in ${props.daysUntilDue} day${props.daysUntilDue === 1 ? '' : 's'}`
+      const urgency = props.daysUntilDue <= 0 ? 'due today' : `due in ${props.daysUntilDue} day${props.daysUntilDue === 1 ? '' : 's'}`
       const preheader = `Collect ${amount} from ${props.clientEmail} — ${urgency}.`
 
       return h(EmailShell, {
