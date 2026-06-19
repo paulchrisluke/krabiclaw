@@ -237,7 +237,7 @@ const extraNotes = computed(() => getContentField('extra.notes', '') ?? '')
 const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value))
 const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
-const siteName = computed(() => (site as ApiValue)?.title || 'KrabiClaw')
+const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
 useSeoMeta({
   title: () => `Plan a visit · ${location.value?.title || slug.value}`,

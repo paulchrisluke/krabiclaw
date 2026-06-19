@@ -135,7 +135,7 @@ const placeholders = computed(() => [
   { title: locationsCopy.value.secondLocationLabel, city: 'Coming Soon', address: locationsCopy.value.additionalLocationsNote }
 ])
 
-const siteName = computed(() => unref(site)?.title || 'KrabiClaw')
+const siteName = computed(() => unref(site)?.brand_name || 'KrabiClaw')
 
 useSeoMeta({
   title: () => `Locations · ${siteName.value}`,

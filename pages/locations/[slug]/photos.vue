@@ -132,7 +132,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.title || 'KrabiClaw')
+const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
 const { location, photosList } = useBootstrap()
 

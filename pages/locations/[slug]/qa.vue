@@ -155,7 +155,7 @@ const isFree = computed(() => !plan.value || plan.value === 'free')
 const { open: openUpgrade } = useUpgradeModal()
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.title || 'KrabiClaw')
+const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
 const { location, qaList } = useBootstrap()
 const { formatDate } = useLocaleDate()
