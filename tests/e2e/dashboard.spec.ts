@@ -135,7 +135,7 @@ test.describe('dashboard functional smoke', () => {
       return
     }
 
-    expect(postRes.status()).toBe(200)
+    expect(postRes.status()).toBe(201)
     const body = await postRes.json()
     expect(body.success).toBe(true)
     expect(body.id).toEqual(expect.any(String))
