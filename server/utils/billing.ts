@@ -172,13 +172,17 @@ export async function setSiteEntitlementsFromPlan(
 ): Promise<void> {
   const now = new Date().toISOString()
   const entitlements = getPlanEntitlements(plan)
+  const statements: D1PreparedStatement[] = []
   for (const [key, value] of Object.entries(entitlements)) {
-    await db.prepare(`
-      INSERT OR REPLACE INTO site_entitlements
-        (id, site_id, organization_id, key, value, source, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'system', ?, ?)
-    `).bind(`sent-${siteId}-${key}`, siteId, organizationId, key, String(value), now, now).run()
+    statements.push(
+      db.prepare(`
+        INSERT OR REPLACE INTO site_entitlements
+          (id, site_id, organization_id, key, value, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'system', ?, ?)
+      `).bind(`sent-${siteId}-${key}`, siteId, organizationId, key, String(value), now, now)
+    )
   }
+  await db.batch(statements)
 }
 
 // Backward-compat shim

@@ -57,16 +57,16 @@ export default defineEventHandler(async (event) => {
   let place
   try {
     if (placeId) {
-      place = await getPlaceDetails(apiKey, placeId)
+      place = await getPlaceDetails(apiKey, placeId, { fetchPhotos: false })
     } else if (mapsUrl) {
-      place = await getPlaceDetailsByUrl(apiKey, mapsUrl)
+      place = await getPlaceDetailsByUrl(apiKey, mapsUrl, { fetchPhotos: false })
     } else {
       const results = await searchPlaces(apiKey, query)
       const top = results[0]
       if (!top?.placeId) {
         return jsonResponse({ error: `No results found for "${query}". Try a more specific name.` }, { status: 404 })
       }
-      place = await getPlaceDetails(apiKey, top.placeId)
+      place = await getPlaceDetails(apiKey, top.placeId, { fetchPhotos: false })
     }
   } catch (err) {
     return jsonResponse({

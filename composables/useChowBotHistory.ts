@@ -25,7 +25,7 @@ export const useChowBotHistory = () => {
     return {
       load: async () => {},
       forSite: () => [],
-      get: async () => ({ conversation: null as never, messages: [] }),
+      get: async () => { throw new Error('useChowBotHistory.get() should not be called on the server') },
       remove: async () => {},
     }
   }

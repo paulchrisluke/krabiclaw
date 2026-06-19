@@ -7,10 +7,17 @@ import { searchPlaces, getPlaceDetails } from '~/server/utils/google-places'
 function extractFacebookPageName(url: string): string | null {
   try {
     const parsed = new URL(url)
-    if (!parsed.hostname.includes('facebook.com')) return null
+    const hostname = parsed.hostname.toLowerCase()
+    // Verify hostname is exactly 'facebook.com' or a proper subdomain (e.g., www.facebook.com)
+    if (hostname !== 'facebook.com' && !hostname.endsWith('.facebook.com')) return null
     const parts = parsed.pathname.replace(/^\//, '').split('/').filter(Boolean)
     if (!parts.length || parts[0] === 'pages') return null
-    return decodeURIComponent(parts[parts.length === 1 ? 0 : 1]!).replace(/[-_.]/g, ' ').trim()
+    // Known intermediate path segments that are not the target page slug
+    const intermediateSegments = new Set(['posts', 'photos', 'videos', 'events', 'reviews', 'about'])
+    // Extract the page slug, skipping intermediate segments
+    const slugIndex = parts.findIndex(p => !intermediateSegments.has(p.toLowerCase()))
+    if (slugIndex === -1) return null
+    return decodeURIComponent(parts[slugIndex]!).replace(/[-_.]/g, ' ').trim()
   } catch {
     return null
   }
@@ -37,7 +44,7 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: `No results found for "${searchQuery}". Try a more specific name.` }, { status: 404 })
     }
 
-    const details = await getPlaceDetails(apiKey, top.placeId)
+    const details = await getPlaceDetails(apiKey, top.placeId, { fetchPhotos: false })
     return jsonResponse({
       success: true,
       preview: {

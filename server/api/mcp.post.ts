@@ -376,6 +376,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
             user.db,
             siteCtx.organizationId,
             entitlementKeys,
+            siteCtx.siteId,
           )
         : new Set<string>();
 

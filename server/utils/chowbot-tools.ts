@@ -205,16 +205,16 @@ export const CHOWBOT_TOOLS: AiTool[] = [
       type: "object",
       properties: {
         menu_id: { type: "string", description: "ID of the menu." },
-        old_section: {
+        old_name: {
           type: "string",
           description: "Current section/category title.",
         },
-        new_section: {
+        new_name: {
           type: "string",
           description: "New section/category title.",
         },
       },
-      required: ["menu_id", "old_section", "new_section"],
+      required: ["menu_id", "old_name", "new_name"],
     },
   },
   {
@@ -225,12 +225,12 @@ export const CHOWBOT_TOOLS: AiTool[] = [
       type: "object",
       properties: {
         menu_id: { type: "string", description: "ID of the menu." },
-        section: {
+        section_name: {
           type: "string",
           description: "Section/category title to delete.",
         },
       },
-      required: ["menu_id", "section"],
+      required: ["menu_id", "section_name"],
     },
   },
   {
@@ -445,10 +445,9 @@ export const CHOWBOT_TOOLS: AiTool[] = [
     input_schema: {
       type: "object",
       properties: {
-        menu_id: { type: "string", description: "Menu ID for verification." },
-        item_id: { type: "string", description: "ID of the item." },
+        menu_item_id: { type: "string", description: "ID of the menu item to delete." },
       },
-      required: ["menu_id", "item_id"],
+      required: ["menu_item_id"],
     },
   },
   {
@@ -644,13 +643,13 @@ export const CHOWBOT_TOOLS: AiTool[] = [
     input_schema: {
       type: "object",
       properties: {
-        url: {
+        maps_url: {
           type: "string",
           description:
             "Google Maps URL or share link (e.g. https://maps.app.goo.gl/... or https://www.google.com/maps/place/...)",
         },
       },
-      required: ["url"],
+      required: ["maps_url"],
     },
   },
 
@@ -1679,6 +1678,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
 ];
 
 export const CHOWBOT_CONFIRM_REQUIRED = new Set([
+  "create_post",
   "publish_post",
   "delete_post",
   "publish_menu",

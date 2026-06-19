@@ -47,7 +47,7 @@
             size="sm"
             color="primary"
             variant="soft"
-            to="/dashboard/new/workspace"
+            :to="`/dashboard/${route.params.orgSlug}/new`"
           />
         </div>
 
@@ -59,7 +59,7 @@
             size="sm"
             color="primary"
             class="mt-4"
-            to="/dashboard/new/workspace"
+            :to="`/dashboard/${route.params.orgSlug}/new`"
           />
         </div>
 

@@ -2900,7 +2900,7 @@ export async function executeMcpToolCall(
     case "create_domain": {
       const hasEntitlement = await hasCustomDomainsEntitlement(
         site.db,
-        site.organizationId,
+        site.siteId,
       );
       if (!hasEntitlement) {
         throw createError({

@@ -161,6 +161,9 @@ async function performSeeding(
 
     await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
 
+    // Inherit plan entitlements from the organization's most recent active subscription.
+    // This is intentional for multi-site onboarding: new sites under a paid org
+    // immediately receive the same entitlements without requiring separate subscriptions.
     const existingBilling = await db.prepare(`
       SELECT sb.plan FROM site_billing sb
       WHERE sb.organization_id = ? AND sb.status != 'canceled'

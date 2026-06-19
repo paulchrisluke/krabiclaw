@@ -3,7 +3,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformOwner } from '~/server/utils/platform-auth'
-import { getStripe, getPriceIdForPlan, setOrganizationEntitlementsFromPlan } from '~/server/utils/billing'
+import { getStripe, getPriceIdForPlan, setSiteEntitlementsFromPlan } from '~/server/utils/billing'
 
 const ALLOWED_PLANS = ['growth', 'managed', 'seo_accelerator']
 
@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
 
   if (!env.STRIPE_SECRET_KEY) return jsonResponse({ error: 'Stripe not configured' }, { status: 503 })
 
-  let body: { plan?: string; interval?: string }
+  let body: { plan?: string; interval?: string; siteId?: string }
   try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid body' }, { status: 400 }) }
 
   const plan = body.plan?.trim()
@@ -29,16 +29,19 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: `Invalid plan. Allowed: ${ALLOWED_PLANS.join(', ')}` }, { status: 400 })
   }
   const interval: 'month' | 'year' = body.interval === 'year' ? 'year' : 'month'
+  const siteId = body.siteId?.trim()
+  if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
 
   const org = await db.prepare(`
-    SELECT o.name, o.slug, u.email AS owner_email, b.stripe_customer_id, b.stripe_subscription_id, b.status
+    SELECT o.name, o.slug, u.email AS owner_email, ob.stripe_customer_id, sb.stripe_subscription_id, sb.status
     FROM organization o
     LEFT JOIN member m ON m.organizationId = o.id AND m.role = 'owner'
     LEFT JOIN user u ON u.id = m.userId
-    LEFT JOIN organization_billing b ON b.organization_id = o.id
+    LEFT JOIN organization_billing ob ON ob.organization_id = o.id
+    LEFT JOIN site_billing sb ON sb.site_id = ? AND sb.organization_id = o.id
     WHERE o.id = ?
     LIMIT 1
-  `).bind(orgId).first<{
+  `).bind(siteId, orgId).first<{
     name: string
     slug: string | null
     owner_email: string | null
@@ -81,6 +84,13 @@ export default defineEventHandler(async (event) => {
         stripe_customer_id = excluded.stripe_customer_id,
         updated_at = excluded.updated_at
     `).bind(`billing-${orgId}`, orgId, customerId, plan, new Date().toISOString()).run()
+    await db.prepare(`
+      INSERT INTO site_billing (id, site_id, organization_id, stripe_customer_id, plan, status, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'pending', ?)
+      ON CONFLICT(site_id) DO UPDATE SET
+        stripe_customer_id = excluded.stripe_customer_id,
+        updated_at = excluded.updated_at
+    `).bind(`billing-${siteId}`, siteId, orgId, customerId, plan, new Date().toISOString()).run()
   }
 
   // Create subscription (send_invoice so we can finalize + mark paid out-of-band)
@@ -90,7 +100,7 @@ export default defineEventHandler(async (event) => {
     items: [{ price: priceId }],
     collection_method: 'send_invoice',
     days_until_due: 0,
-    metadata: { organization_id: orgId, plan, source: 'admin_cash_payment' },
+    metadata: { organization_id: orgId, site_id: siteId, plan, source: 'admin_cash_payment' },
   })
 
   // Retrieve and finalize the invoice
@@ -119,11 +129,11 @@ export default defineEventHandler(async (event) => {
     : null
 
   await db.prepare(`
-    INSERT INTO organization_billing
-      (id, organization_id, stripe_customer_id, stripe_subscription_id, stripe_subscription_item_id,
+    INSERT INTO site_billing
+      (id, site_id, organization_id, stripe_customer_id, stripe_subscription_id, stripe_subscription_item_id,
        plan, status, current_period_end, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
-    ON CONFLICT(organization_id) DO UPDATE SET
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+    ON CONFLICT(site_id) DO UPDATE SET
       stripe_customer_id = excluded.stripe_customer_id,
       stripe_subscription_id = excluded.stripe_subscription_id,
       stripe_subscription_item_id = excluded.stripe_subscription_item_id,
@@ -132,11 +142,11 @@ export default defineEventHandler(async (event) => {
       current_period_end = excluded.current_period_end,
       updated_at = excluded.updated_at
   `).bind(
-    `billing-${orgId}`, orgId, customerId, subscription.id, subItemId,
+    `billing-${siteId}`, siteId, orgId, customerId, subscription.id, subItemId,
     plan, periodEnd, new Date().toISOString(),
   ).run()
 
-  await setOrganizationEntitlementsFromPlan(env, db, orgId, plan)
+  await setSiteEntitlementsFromPlan(db, siteId, orgId, plan)
 
   return jsonResponse({
     success: true,

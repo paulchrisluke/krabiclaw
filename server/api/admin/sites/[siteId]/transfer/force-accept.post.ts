@@ -17,6 +17,12 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   if (!isPlatformOwner(session.user.email, env)) return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
 
+  let body: { target_org_id?: string }
+  try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid body' }, { status: 400 }) }
+
+  const targetOrgId = body.target_org_id?.trim()
+  if (!targetOrgId) return jsonResponse({ error: 'target_org_id required' }, { status: 400 })
+
   // Find the pending transfer for this site
   const transfer = await db.prepare(`
     SELECT id, site_id, from_organization_id, to_email, status, requires_payment
@@ -35,14 +41,14 @@ export default defineEventHandler(async (event) => {
 
   if (!transfer) return jsonResponse({ error: 'No pending transfer found for this site.' }, { status: 404 })
 
-  // Find the recipient's account — they must have signed up first
+  // Find the recipient's account — they must have signed up first and be owner of target_org_id
   const recipient = await db.prepare(`
     SELECT u.id AS user_id, m.organizationId AS org_id
     FROM user u
-    JOIN member m ON m.userId = u.id AND m.role = 'owner'
+    JOIN member m ON m.userId = u.id AND m.role = 'owner' AND m.organizationId = ?
     WHERE lower(u.email) = ?
     LIMIT 1
-  `).bind(transfer.to_email.toLowerCase()).first<{ user_id: string; org_id: string }>()
+  `).bind(targetOrgId, transfer.to_email.toLowerCase()).first<{ user_id: string; org_id: string }>()
 
   if (!recipient) {
     return jsonResponse({

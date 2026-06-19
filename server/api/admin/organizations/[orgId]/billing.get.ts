@@ -15,29 +15,35 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   if (!isPlatformOwner(session.user.email, env)) return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
 
-  const billing = await db.prepare(`
-    SELECT ob.stripe_customer_id, sb.stripe_subscription_id, sb.plan, sb.status,
-           sb.current_period_end, sb.cancel_at_period_end,
-           o.name AS org_name, o.slug AS org_slug
-    FROM organization o
-    LEFT JOIN organization_billing ob ON ob.organization_id = o.id
-    LEFT JOIN sites s ON s.organization_id = o.id
+  const sitesBilling = await db.prepare(`
+    SELECT s.id AS site_id, s.brand_name, sb.stripe_subscription_id, sb.plan, sb.status,
+           sb.current_period_end, sb.cancel_at_period_end
+    FROM sites s
     LEFT JOIN site_billing sb ON sb.site_id = s.id
-    WHERE o.id = ?
-    ORDER BY s.created_at ASC
-    LIMIT 1
-  `).bind(orgId).first<{
-    stripe_customer_id: string | null
+    WHERE s.organization_id = ?
+  `).bind(orgId).all<{
+    site_id: string
+    brand_name: string | null
     stripe_subscription_id: string | null
     plan: string | null
     status: string | null
     current_period_end: string | null
     cancel_at_period_end: number | null
-    org_name: string
-    org_slug: string | null
   }>()
 
-  if (!billing) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+  const org = await db.prepare(`
+    SELECT o.name AS org_name, o.slug AS org_slug, ob.stripe_customer_id
+    FROM organization o
+    LEFT JOIN organization_billing ob ON ob.organization_id = o.id
+    WHERE o.id = ?
+    LIMIT 1
+  `).bind(orgId).first<{
+    org_name: string
+    org_slug: string | null
+    stripe_customer_id: string | null
+  }>()
+
+  if (!org) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
 
   // Pending transfer for any site owned by this org
   const transfer = await db.prepare(`
@@ -74,14 +80,18 @@ export default defineEventHandler(async (event) => {
   }
 
   return jsonResponse({
-    org_name: billing.org_name,
-    org_slug: billing.org_slug,
-    stripe_customer_id: billing.stripe_customer_id,
-    stripe_subscription_id: billing.stripe_subscription_id,
-    plan: billing.plan,
-    status: billing.status,
-    current_period_end: billing.current_period_end,
-    cancel_at_period_end: Boolean(billing.cancel_at_period_end),
+    org_name: org.org_name,
+    org_slug: org.org_slug,
+    stripe_customer_id: org.stripe_customer_id,
+    sites_billing: (sitesBilling.results ?? []).map(sb => ({
+      site_id: sb.site_id,
+      brand_name: sb.brand_name,
+      stripe_subscription_id: sb.stripe_subscription_id,
+      plan: sb.plan,
+      status: sb.status,
+      current_period_end: sb.current_period_end,
+      cancel_at_period_end: Boolean(sb.cancel_at_period_end),
+    })),
     pending_transfer: transfer
       ? {
           id: transfer.id,

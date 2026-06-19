@@ -8,7 +8,8 @@ import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
 
 function slugify(name: string) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site'
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return slug || `site-${crypto.randomUUID().slice(0, 8)}`
 }
 
 export default defineEventHandler(async (event) => {
@@ -49,5 +50,9 @@ export default defineEventHandler(async (event) => {
   const orgRow = await db.prepare(`SELECT slug FROM organization WHERE id = ? LIMIT 1`)
     .bind(organizationId).first<{ slug: string }>()
 
-  return jsonResponse({ success: true, orgSlug: orgRow?.slug ?? null })
+  if (!orgRow) {
+    return jsonResponse({ error: 'Organization not found after site creation. Data integrity issue.' }, { status: 500 })
+  }
+
+  return jsonResponse({ success: true, orgSlug: orgRow.slug })
 })

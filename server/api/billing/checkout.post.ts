@@ -52,7 +52,10 @@ export default defineEventHandler(async (event) => {
 
   // Resolve site — either passed explicitly or auto-detected from org
   let siteId = body.siteId
-  if (!siteId) {
+  if (siteId) {
+    const site = await db.prepare(`SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`).bind(siteId, orgId).first<{ id: string }>()
+    if (!site) return jsonResponse({ error: 'Site not found or does not belong to this organization' }, { status: 404 })
+  } else {
     const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? LIMIT 1`).bind(orgId).first<{ id: string }>()
     if (!site) return jsonResponse({ error: 'No site found for this organization' }, { status: 404 })
     siteId = site.id
@@ -116,6 +119,6 @@ export default defineEventHandler(async (event) => {
     const message = error instanceof Error ? error.message : String(error)
     console.error('Failed to create checkout session:', message)
     if (message.startsWith('Access denied')) return jsonResponse({ error: message }, { status: 403 })
-    return jsonResponse({ error: 'Failed to create checkout session', detail: message }, { status: 500 })
+    return jsonResponse({ error: 'Failed to create checkout session' }, { status: 500 })
   }
 })

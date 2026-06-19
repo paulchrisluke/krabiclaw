@@ -3,7 +3,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { getPlaceDetailsByUrl, getPlaceDetails } from '~/server/utils/google-places'
+import { getPlaceDetailsByUrl, getPlaceDetails, PlaceDetailsError } from '~/server/utils/google-places'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
 import { updateLocation } from '~/server/utils/location-management'
 import { setConfig } from '~/server/utils/site-config'
@@ -42,9 +42,10 @@ export default defineEventHandler(async (event) => {
       ? await getPlaceDetails(apiKey, placeId)
       : await getPlaceDetailsByUrl(apiKey, mapsUrl)
   } catch (err) {
+    const statusCode = err instanceof PlaceDetailsError ? err.statusCode : 502
     return jsonResponse({
       error: err instanceof Error ? err.message : 'Could not fetch place details. Try again.',
-    }, { status: err instanceof Error && err.message.includes('extract place ID') ? 422 : 502 })
+    }, { status: statusCode })
   }
 
   if (previewOnly) {
@@ -60,7 +61,7 @@ export default defineEventHandler(async (event) => {
         rating: place.rating,
         ratingCount: place.ratingCount,
         openingHours: place.openingHours,
-        photos: place.photos,
+        photos: place.photos.slice(0, 10),
       },
     })
   }

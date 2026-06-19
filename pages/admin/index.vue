@@ -645,7 +645,7 @@
                 />
               </div>
               <UAlert v-if="cashError" color="error" variant="soft" :description="cashError" />
-              <UAlert v-if="cashResult" color="success" variant="soft" :title="`Payment recorded — ${cashResult.plan} ${cashResult.interval}ly`" :description="`฿${Math.round(cashResult.amount_paid / 100 * 32.85).toLocaleString()} collected. Entitlements are now active.`" />
+              <UAlert v-if="cashResult" color="success" variant="soft" :title="`Payment recorded — ${cashResult.plan} ${cashResult.interval}ly`" :description="`$${(cashResult.amount_paid / 100).toFixed(2)} collected. Entitlements are now active.`" />
               <UButton v-if="!cashResult" block color="primary" :loading="cashPaying" icon="i-lucide-banknote" @click="recordCashPayment">
                 Record cash payment
               </UButton>

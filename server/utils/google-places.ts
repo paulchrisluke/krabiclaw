@@ -4,6 +4,16 @@ import type { D1Database } from '@cloudflare/workers-types'
 
 const PLACES_BASE = 'https://places.googleapis.com/v1/places'
 
+export class PlaceDetailsError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number = 502
+  ) {
+    super(message)
+    this.name = 'PlaceDetailsError'
+  }
+}
+
 // Field masks — controls billing tier. We fetch all useful fields in one call.
 // Basic: id, displayName, formattedAddress, location, googleMapsUri
 // Contact (+$0.003/1k): nationalPhoneNumber, internationalPhoneNumber, websiteUri
@@ -353,7 +363,7 @@ export async function getPlaceDetailsByUrl(
   // URL uses hex-format or feature ID — extract name + coords and search instead
   const { name, lat, lng } = extractNameAndCoordsFromUrl(resolved)
   if (!name) {
-    throw new Error('Could not identify the business from this URL. Copy the full Google Maps link directly from your browser address bar.')
+    throw new PlaceDetailsError('Could not identify the business from this URL. Copy the full Google Maps link directly from your browser address bar.', 422)
   }
   const locationBias = (lat !== null && lng !== null)
     ? { latitude: lat, longitude: lng, radiusMeters: 2000 }
@@ -361,7 +371,7 @@ export async function getPlaceDetailsByUrl(
   const results = await searchPlaces(apiKey, name, locationBias)
   const top = results[0]
   if (!top?.placeId) {
-    throw new Error(`Could not find "${name}" on Google. Try pasting the link from a desktop browser, or use the Facebook or manual option.`)
+    throw new PlaceDetailsError(`Could not find "${name}" on Google. Try pasting the link from a desktop browser, or use the Facebook or manual option.`, 422)
   }
   return getPlaceDetails(apiKey, top.placeId, fetchPhotos, photoLimit)
 }

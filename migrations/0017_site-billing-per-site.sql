@@ -46,11 +46,13 @@ CREATE TABLE IF NOT EXISTS site_entitlements (
 CREATE INDEX IF NOT EXISTS idx_site_entitlements_org ON site_entitlements(organization_id);
 
 -- Backfill site_billing from existing org billing rows
-INSERT OR IGNORE INTO site_billing (id, site_id, organization_id, plan, status, updated_at)
+INSERT OR IGNORE INTO site_billing (id, site_id, organization_id, stripe_subscription_id, stripe_subscription_item_id, plan, status, updated_at)
 SELECT
   'sb-' || s.id,
   s.id,
   s.organization_id,
+  COALESCE(ob.stripe_subscription_id, NULL),
+  COALESCE(ob.stripe_subscription_item_id, NULL),
   COALESCE(ob.plan, 'free'),
   COALESCE(ob.status, 'free'),
   strftime('%Y-%m-%dT%H:%M:%fZ', 'now')

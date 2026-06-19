@@ -241,7 +241,7 @@ async function handleSubscriptionUpdated(
 
   const { siteId, organizationId } = resolved
   const sub = subscription as Stripe.Subscription & SubscriptionTimingFields
-  const currentPeriodEnd = sub.billing_cycle_anchor ? new Date(sub.billing_cycle_anchor * 1000).toISOString() : new Date().toISOString()
+  const currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : new Date().toISOString()
 
   await db.prepare(`
     UPDATE site_billing SET stripe_subscription_id = ?, status = ?,

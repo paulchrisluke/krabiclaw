@@ -128,7 +128,7 @@ export default defineEventHandler(async (event) => {
     pricing_month,
     pricing_year,
     invited_domain: row.invited_domain,
-    domain_active: !row.custom_domains_removed_at,
+    domain_active: !!row.invited_domain && !row.custom_domains_removed_at,
     requires_payment: requiresPayment,
     never_expires: true,
     site_subdomain: row.subdomain,

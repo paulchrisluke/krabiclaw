@@ -1,6 +1,6 @@
 <template>
   <div
-    class="flex min-h-0 flex-col border-r border-default bg-default"
+    class="relative flex min-h-0 flex-col border-r border-default bg-default"
     @dragenter.prevent="dragCounter++"
     @dragover.prevent
     @dragleave="dragCounter = Math.max(0, dragCounter - 1)"
@@ -303,10 +303,12 @@ const preConfirmStep = ref<WizardStep>('awaiting_url')
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 let _dompurify: { sanitize: (_s: string) => string } = { sanitize: (_s: string) => _s }
+let _dompurifyLoaded = false
 onMounted(async () => {
   if (import.meta.client) {
     const { default: dp } = await import('isomorphic-dompurify')
     _dompurify = dp
+    _dompurifyLoaded = true
   }
   // If the user already has a site (returning to onboarding workspace), skip to imported state
   if (props.siteId && props.existingOrgSlug) {
@@ -323,6 +325,15 @@ onMounted(async () => {
 })
 
 function renderMarkdown(text: string): string {
+  if (!_dompurifyLoaded) {
+    // Return escaped text as a safe fallback until DOMPurify loads
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
   const html = marked.parse(text, { breaks: true, gfm: true }) as string
   return _dompurify.sanitize(html)
 }
@@ -498,11 +509,12 @@ async function runLookup(mapsUrl: string) {
   const tools = await showLookupTools('Looking up your Google Maps listing…')
 
   try {
+    const endpoint = props.setupEndpoint ?? '/api/dashboard/onboarding/setup'
     const res = await $fetch<{
       success: boolean
       preview?: { placeId: string; name: string; address: string; phone?: string | null; mapsUrl?: string | null }
       error?: string
-    }>('/api/dashboard/onboarding/setup', { method: 'POST', body: { mapsUrl, previewOnly: true } })
+    }>(endpoint, { method: 'POST', body: { mapsUrl, previewOnly: true } })
 
     if (!res.success || !res.preview) {
       throw new Error(res.error ?? 'Could not find your business. Please check the Google Maps URL and try again.')

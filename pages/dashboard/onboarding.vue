@@ -23,7 +23,7 @@
       <div class="flex flex-1 items-center justify-center">
         <div class="relative">
           <UButton
-            :color="progOpen ? 'neutral' : 'neutral'"
+            color="neutral"
             :variant="progOpen ? 'soft' : 'ghost'"
             :class="[
               'inline-flex items-center gap-2.5 rounded-xl px-3 py-1.5 text-highlighted transition-colors',
@@ -326,8 +326,10 @@ const onSelectPage = (page: string) => {
   selectedPreviewPage.value = page
   // When switching to location-scoped page, ensure a location is selected
   if (locationScopedPages.has(page) && !selectedLocationId.value && siteLocations.value.length > 0) {
-    const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]!
-    selectedLocationId.value = primary.id
+    const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]
+    if (primary) {
+      selectedLocationId.value = primary.id
+    }
   }
 }
 
@@ -343,9 +345,9 @@ const handleExit = async () => {
   }
 }
 
-const handleSaveLater = () => {
+const handleSaveLater = async () => {
   toast.add({ description: 'Progress saved. You can resume from here anytime.', color: 'success' })
-  handleExit()
+  await handleExit()
 }
 
 // Called by OnboardingWizard after the site is created — reload context + preview token, populate preview pane

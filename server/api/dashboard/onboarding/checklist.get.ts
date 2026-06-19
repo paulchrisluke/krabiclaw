@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
       LIMIT 1
     `).bind(querySiteId, session.user.id).first<{ id: string; brand_name: string | null }>()
 
-    if (!site) return jsonResponse(EMPTY_CHECKLIST)
+    if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     siteId = site.id
     brandName = site.brand_name
   } else {
@@ -110,7 +110,8 @@ export default defineEventHandler(async (event) => {
         post: (post?.c ?? 0) > 0,
       },
     })
-  } catch {
+  } catch (error) {
+    console.error('Checklist endpoint error:', error)
     return jsonResponse({ error: 'checklist_error' }, { status: 500 })
   }
 })

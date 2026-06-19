@@ -25,7 +25,6 @@ onMounted(async () => {
   } catch (error: unknown) {
     console.error('Failed to refresh dashboard:', error)
     dashboardError.value = error instanceof Error ? error.message : 'Failed to load dashboard.'
-    await navigateTo('/dashboard', { replace: true })
   }
 })
 </script>
