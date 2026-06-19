@@ -11,6 +11,10 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'whatsapp_phone is required' }, { status: 400 })
   }
 
+  if (body.channels !== undefined && !Array.isArray(body.channels)) {
+    return jsonResponse({ error: 'channels must be an array' }, { status: 400 })
+  }
+
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })

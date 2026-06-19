@@ -14,11 +14,13 @@ export default defineComponent({
     experienceTitle: { type: String, required: true },
     date: { type: String, required: true },
     time: { type: String, required: true },
+    platformDomain: { type: String, required: true },
   },
   setup(props) {
     return () => h(EmailShell, {
       preheader: `New experience booking for ${props.siteName}`,
       title: `New booking request from ${props.guestName}`,
+      platformDomain: props.platformDomain,
     }, () => [
       h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `New experience booking request from ${props.guestName}.`),
       h(ESection, { style: CARD }, () => [

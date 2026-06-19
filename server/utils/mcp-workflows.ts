@@ -256,7 +256,17 @@ export async function getNotificationsSettings(
     db.prepare(`SELECT value FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'owner_notification_channels' LIMIT 1`)
       .bind(organizationId, siteId).first<{ value: string }>(),
   ])
-  const channels: string[] = channelsRow?.value ? JSON.parse(channelsRow.value) : ['whatsapp']
+  let channels: string[] = ['whatsapp']
+  if (channelsRow?.value) {
+    try {
+      const parsed = JSON.parse(channelsRow.value)
+      if (Array.isArray(parsed)) {
+        channels = parsed.filter(c => c === 'whatsapp' || c === 'email')
+      }
+    } catch {
+      channels = ['whatsapp']
+    }
+  }
   return { whatsapp_phone: whatsappPhone, channels }
 }
 

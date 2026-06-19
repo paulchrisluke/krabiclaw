@@ -54,6 +54,9 @@ export default defineEventHandler(async (event) => {
   }
 
   if (body.notification_phone !== undefined) {
+    if (body.notification_phone !== null && typeof body.notification_phone !== 'string') {
+      return jsonResponse({ error: 'notification_phone must be a string or null' }, { status: 400 })
+    }
     const phone = typeof body.notification_phone === 'string' ? body.notification_phone.trim() : null
     updates.push('notification_phone = ?')
     params.push(phone || null)

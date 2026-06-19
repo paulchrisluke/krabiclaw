@@ -355,6 +355,7 @@ const facebookConnected = ref(false)
 
 const { data: session } = await authClient.useSession(useFetch)
 const activeOrgId = computed(() => session.value?.session?.activeOrganizationId ?? null)
+const toast = useToast()
 
 function pushMessage(msg: Omit<BotMessage, 'id'>) {
   messages.value.push({ id: String(++msgSeq), ...msg })
@@ -442,6 +443,7 @@ async function saveNotifications() {
     advance('team')
   } catch (e) {
     console.error('save_notifications_failed', e)
+    toast.add({ title: 'Failed to save notification settings', color: 'error' })
   } finally {
     savingNotifs.value = false
   }
@@ -451,15 +453,20 @@ async function sendInvite() {
   if (!activeOrgId.value || !inviteForm.email.trim()) return
   inviting.value = true
   inviteSuccess.value = false
-  const { error } = await authClient.organization.inviteMember({
-    email: inviteForm.email,
-    role: inviteForm.role as 'member' | 'admin',
-    organizationId: activeOrgId.value,
-  })
-  inviting.value = false
-  if (!error) {
-    inviteForm.email = ''
-    inviteSuccess.value = true
+  try {
+    const { error } = await authClient.organization.inviteMember({
+      email: inviteForm.email.trim(),
+      role: inviteForm.role as 'member' | 'admin',
+      organizationId: activeOrgId.value,
+    })
+    if (!error) {
+      inviteForm.email = ''
+      inviteSuccess.value = true
+    }
+  } catch (e) {
+    console.error('invite_member_failed', e)
+  } finally {
+    inviting.value = false
   }
 }
 
@@ -476,7 +483,9 @@ async function startFacebookConnect() {
     )
     if (!res.authUrl) throw new Error(res.error || 'No authorization URL returned')
     window.location.href = res.authUrl
-  } catch {
+  } catch (e) {
+    console.error('facebook_connect_failed', e)
+    toast.add({ title: 'Failed to connect Facebook', description: e instanceof Error ? e.message : 'Please try again', color: 'error' })
     connectingFacebook.value = false
   }
 }

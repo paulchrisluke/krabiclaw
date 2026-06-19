@@ -141,10 +141,14 @@ export async function processCashBillingReminders(
     FROM site_billing sb
     JOIN sites s ON s.id = sb.site_id
     LEFT JOIN (
-      SELECT m1.organizationId, MIN(m1.userId) AS userId
-      FROM member m1
-      WHERE m1.role = 'owner'
-      GROUP BY m1.organizationId
+      SELECT organizationId, userId
+      FROM (
+        SELECT m1.organizationId, m1.userId,
+               ROW_NUMBER() OVER (PARTITION BY m1.organizationId ORDER BY m1.createdAt ASC) as rn
+        FROM member m1
+        WHERE m1.role = 'owner'
+      )
+      WHERE rn = 1
     ) owner ON owner.organizationId = sb.organization_id
     LEFT JOIN user u ON u.id = owner.userId
     WHERE sb.payment_method = 'cash'

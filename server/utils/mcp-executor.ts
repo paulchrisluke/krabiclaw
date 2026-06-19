@@ -1717,8 +1717,7 @@ export async function executeMcpToolCall(
     case "delete_menu_item": {
       const deleted = await deleteMenuItem(
         site.db,
-        requiredString(args, "menu_id"),
-        requiredString(args, "item_id"),
+        requiredString(args, "menu_item_id"),
         site.organizationId,
         site.siteId,
         site.userId,
@@ -1733,8 +1732,8 @@ export async function executeMcpToolCall(
         updated: await renameMenuSection(
           site.db,
           requiredString(args, "menu_id"),
-          requiredString(args, "old_section"),
-          requiredString(args, "new_section"),
+          requiredString(args, "old_name"),
+          requiredString(args, "new_name"),
           site.userId,
         ),
       };

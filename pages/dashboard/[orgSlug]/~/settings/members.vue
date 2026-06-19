@@ -43,6 +43,7 @@
                   variant="ghost"
                   size="xs"
                   :loading="removingMemberId === member.id"
+                  :aria-label="`Remove ${member.name || member.email}`"
                   @click="removeMember(member.id)"
                 />
               </div>
@@ -102,6 +103,7 @@
                   variant="ghost"
                   size="xs"
                   :loading="cancellingInviteId === invitation.id"
+                  :aria-label="`Cancel invitation for ${invitation.email}`"
                   @click="cancelInvitation(invitation.id)"
                 />
               </div>
@@ -211,7 +213,7 @@ const inviteForm = reactive({ email: '', role: 'member' })
 const inviting = ref(false)
 const inviteError = ref<string | null>(null)
 const inviteSuccess = ref(false)
-const inviteSuccessTimeout = ref<number | null>(null)
+const inviteSuccessTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 
 const removingMemberId = ref<string | null>(null)
 const cancellingInviteId = ref<string | null>(null)
@@ -288,6 +290,12 @@ async function removeMember(memberId: string) {
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value))
 }
+
+onBeforeUnmount(() => {
+  if (inviteSuccessTimeout.value !== null) {
+    clearTimeout(inviteSuccessTimeout.value)
+  }
+})
 
 useSeoMeta({ title: 'Members | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

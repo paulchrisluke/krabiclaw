@@ -445,10 +445,9 @@ export const CHOWBOT_TOOLS: AiTool[] = [
     input_schema: {
       type: "object",
       properties: {
-        menu_id: { type: "string", description: "ID of the menu." },
-        item_id: { type: "string", description: "ID of the menu item to delete." },
+        menu_item_id: { type: "string", description: "ID of the menu item to delete." },
       },
-      required: ["menu_id", "item_id"],
+      required: ["menu_item_id"],
     },
   },
   {
