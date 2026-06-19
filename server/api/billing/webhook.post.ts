@@ -13,6 +13,7 @@ interface ExpandedCheckoutSubscription {
 interface SubscriptionTimingFields {
   billing_cycle_anchor?: number
   cancel_at_period_end?: boolean
+  current_period_end?: number
 }
 
 const textEncoder = new TextEncoder()
@@ -241,7 +242,9 @@ async function handleSubscriptionUpdated(
 
   const { siteId, organizationId } = resolved
   const sub = subscription as Stripe.Subscription & SubscriptionTimingFields
-  const currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : new Date().toISOString()
+  const currentPeriodEnd = sub.current_period_end
+    ? new Date(sub.current_period_end * 1000).toISOString()
+    : new Date().toISOString()
 
   await db.prepare(`
     UPDATE site_billing SET stripe_subscription_id = ?, status = ?,

@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
 
   if (!env.STRIPE_SECRET_KEY) return jsonResponse({ error: 'Stripe not configured' }, { status: 503 })
 
-  let body: { plan?: string; interval?: string; siteId?: string }
+  let body: { plan?: string; interval?: string; siteId?: string; localRate?: number; localCurrency?: string }
   try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid body' }, { status: 400 }) }
 
   const plan = body.plan?.trim()
@@ -31,6 +31,8 @@ export default defineEventHandler(async (event) => {
   const interval: 'month' | 'year' = body.interval === 'year' ? 'year' : 'month'
   const siteId = body.siteId?.trim()
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
+  const localRate = body.localRate ? Number(body.localRate) : null
+  const localCurrency = body.localCurrency?.trim() ?? null
 
   const org = await db.prepare(`
     SELECT o.name, o.slug, u.email AS owner_email, ob.stripe_customer_id, sb.stripe_subscription_id, sb.status
@@ -54,6 +56,17 @@ export default defineEventHandler(async (event) => {
 
   if (org.status === 'active' && org.stripe_subscription_id) {
     return jsonResponse({ error: 'This organization already has an active subscription.' }, { status: 409 })
+  }
+
+  // Preflight site eligibility check - ensure siteId exists and is associated with this organization
+  const siteEligibility = await db.prepare(`
+    SELECT id FROM site_billing
+    WHERE site_id = ? AND organization_id = ?
+    LIMIT 1
+  `).bind(siteId, orgId).first<{ id: string }>()
+
+  if (!siteEligibility) {
+    return jsonResponse({ error: 'Site not found or not eligible for this organization.' }, { status: 404 })
   }
 
   const stripe = getStripe(env)
@@ -88,19 +101,25 @@ export default defineEventHandler(async (event) => {
       INSERT INTO site_billing (id, site_id, organization_id, stripe_customer_id, plan, status, updated_at)
       VALUES (?, ?, ?, ?, ?, 'pending', ?)
       ON CONFLICT(site_id) DO UPDATE SET
+        organization_id = excluded.organization_id,
         stripe_customer_id = excluded.stripe_customer_id,
         updated_at = excluded.updated_at
     `).bind(`billing-${siteId}`, siteId, orgId, customerId, plan, new Date().toISOString()).run()
   }
 
-  // Create subscription (send_invoice so we can finalize + mark paid out-of-band)
+  // Create subscription (send_invoice + auto_advance=false so Stripe never auto-emails the client)
   const priceId = await getPriceIdForPlan(env, plan, interval)
   const subscription = await stripe.subscriptions.create({
     customer: customerId,
     items: [{ price: priceId }],
     collection_method: 'send_invoice',
     days_until_due: 0,
-    metadata: { organization_id: orgId, site_id: siteId, plan, source: 'admin_cash_payment' },
+    // Prevent Stripe from auto-finalizing renewal invoices — we handle reminders and mark paid manually
+    // @ts-expect-error auto_advance not yet in SDK types for subscription create
+    auto_advance: false,
+    metadata: { organization_id: orgId, site_id: siteId, plan, source: 'admin_cash_payment', payment_method: 'cash' },
+  }, {
+    idempotencyKey: `cash-payment-subscription-${orgId}-${siteId}-${plan}-${interval}`,
   })
 
   // Retrieve and finalize the invoice
@@ -120,19 +139,21 @@ export default defineEventHandler(async (event) => {
   }
 
   // Mark paid out-of-band (cash collected in person)
-  const paidInvoice = await stripe.invoices.pay(invoiceId, { paid_out_of_band: true })
+  const paidInvoice = await stripe.invoices.pay(invoiceId, { paid_out_of_band: true }, {
+    idempotencyKey: `cash-payment-invoice-${invoiceId}`,
+  })
 
   // Persist billing to D1 immediately — don't rely solely on the webhook
   const subItemId = subscription.items.data[0]?.id ?? null
-  const periodEnd = subscription.billing_cycle_anchor
-    ? new Date((subscription.billing_cycle_anchor as number) * 1000).toISOString()
+  const periodEnd = paidInvoice.lines.data[0]?.period?.end
+    ? new Date(paidInvoice.lines.data[0].period.end * 1000).toISOString()
     : null
 
   await db.prepare(`
     INSERT INTO site_billing
       (id, site_id, organization_id, stripe_customer_id, stripe_subscription_id, stripe_subscription_item_id,
-       plan, status, current_period_end, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+       plan, status, current_period_end, payment_method, local_rate, local_currency, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, 'cash', ?, ?, ?)
     ON CONFLICT(site_id) DO UPDATE SET
       stripe_customer_id = excluded.stripe_customer_id,
       stripe_subscription_id = excluded.stripe_subscription_id,
@@ -140,10 +161,13 @@ export default defineEventHandler(async (event) => {
       plan = excluded.plan,
       status = excluded.status,
       current_period_end = excluded.current_period_end,
+      payment_method = 'cash',
+      local_rate = excluded.local_rate,
+      local_currency = excluded.local_currency,
       updated_at = excluded.updated_at
   `).bind(
     `billing-${siteId}`, siteId, orgId, customerId, subscription.id, subItemId,
-    plan, periodEnd, new Date().toISOString(),
+    plan, periodEnd, localRate, localCurrency, new Date().toISOString(),
   ).run()
 
   await setSiteEntitlementsFromPlan(db, siteId, orgId, plan)
@@ -152,6 +176,9 @@ export default defineEventHandler(async (event) => {
     success: true,
     plan,
     interval,
+    payment_method: 'cash',
+    local_rate: localRate,
+    local_currency: localCurrency,
     stripe_customer_id: customerId,
     stripe_subscription_id: subscription.id,
     invoice_id: paidInvoice.id,

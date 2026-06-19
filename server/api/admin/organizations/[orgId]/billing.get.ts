@@ -17,7 +17,8 @@ export default defineEventHandler(async (event) => {
 
   const sitesBilling = await db.prepare(`
     SELECT s.id AS site_id, s.brand_name, sb.stripe_subscription_id, sb.plan, sb.status,
-           sb.current_period_end, sb.cancel_at_period_end
+           sb.current_period_end, sb.cancel_at_period_end,
+           sb.payment_method, sb.local_rate, sb.local_currency
     FROM sites s
     LEFT JOIN site_billing sb ON sb.site_id = s.id
     WHERE s.organization_id = ?
@@ -29,6 +30,9 @@ export default defineEventHandler(async (event) => {
     status: string | null
     current_period_end: string | null
     cancel_at_period_end: number | null
+    payment_method: string | null
+    local_rate: number | null
+    local_currency: string | null
   }>()
 
   const org = await db.prepare(`
@@ -79,10 +83,16 @@ export default defineEventHandler(async (event) => {
     recipientReady = Boolean(recipientUser)
   }
 
+  const firstSiteBilling = (sitesBilling.results ?? [])[0]
+
   return jsonResponse({
     org_name: org.org_name,
     org_slug: org.org_slug,
     stripe_customer_id: org.stripe_customer_id,
+    stripe_subscription_id: firstSiteBilling?.stripe_subscription_id ?? null,
+    plan: firstSiteBilling?.plan ?? null,
+    status: firstSiteBilling?.status ?? null,
+    current_period_end: firstSiteBilling?.current_period_end ?? null,
     sites_billing: (sitesBilling.results ?? []).map(sb => ({
       site_id: sb.site_id,
       brand_name: sb.brand_name,
@@ -91,6 +101,9 @@ export default defineEventHandler(async (event) => {
       status: sb.status,
       current_period_end: sb.current_period_end,
       cancel_at_period_end: Boolean(sb.cancel_at_period_end),
+      payment_method: sb.payment_method ?? 'stripe',
+      local_rate: sb.local_rate ?? null,
+      local_currency: sb.local_currency ?? null,
     })),
     pending_transfer: transfer
       ? {
