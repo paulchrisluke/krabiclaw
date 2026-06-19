@@ -20,6 +20,16 @@ interface StoredMessage {
 const conversationsState = () => useState<Record<string, ChowBotConv[]>>('chowbot:server-conversations', () => ({}))
 
 export const useChowBotHistory = () => {
+  // Skip on server to avoid hydration issues
+  if (import.meta.server) {
+    return {
+      load: async () => {},
+      forSite: () => [],
+      get: async () => { throw new Error('useChowBotHistory.get() should not be called on the server') },
+      remove: async () => {},
+    }
+  }
+
   const conversationsBySite = conversationsState()
 
   const load = async (siteId: string) => {

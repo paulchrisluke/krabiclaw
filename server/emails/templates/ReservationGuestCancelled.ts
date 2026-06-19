@@ -15,12 +15,13 @@ export default defineComponent({
     time: { type: String, required: true },
     guests: { type: String, required: true },
     wasConfirmed: { type: Boolean, required: true },
+    platformDomain: { type: String, required: true },
   },
   setup(props) {
     return () => {
       const title = props.wasConfirmed ? 'Your reservation was cancelled' : 'Your reservation request was cancelled'
       const intro = props.wasConfirmed ? 'Your reservation has been cancelled.' : 'Your reservation request has been cancelled.'
-      return h(EmailShell, { preheader: title, title, siteName: props.siteName }, () => [
+      return h(EmailShell, { preheader: title, title, siteName: props.siteName, platformDomain: props.platformDomain }, () => [
         h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `Hi ${props.guestName}, ${intro}`),
         h(ESection, { style: CARD }, () => [
           h(EText, { style: ROW }, () => [h('strong', null, 'Restaurant: '), props.siteName]),

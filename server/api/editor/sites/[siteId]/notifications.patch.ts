@@ -6,9 +6,13 @@ export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
-  const body = await readBody(event) as { whatsapp_phone?: string }
+  const body = await readBody(event) as { whatsapp_phone?: string; channels?: string[] }
   if (!body.whatsapp_phone?.trim()) {
     return jsonResponse({ error: 'whatsapp_phone is required' }, { status: 400 })
+  }
+
+  if (body.channels !== undefined && !Array.isArray(body.channels)) {
+    return jsonResponse({ error: 'channels must be an array' }, { status: 400 })
   }
 
   const env = cloudflareEnv(event)
@@ -28,6 +32,6 @@ export default defineEventHandler(async (event) => {
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const notifications = await updateNotificationsSettings(db, site.organization_id, siteId, body.whatsapp_phone.trim())
+  const notifications = await updateNotificationsSettings(db, site.organization_id, siteId, body.whatsapp_phone.trim(), body.channels)
   return jsonResponse({ success: true, notifications })
 })

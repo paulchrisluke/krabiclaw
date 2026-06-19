@@ -3,6 +3,7 @@
 // subdomain uniqueness, seeding, and Cloudflare subdomain registration.
 import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain } from '~/server/utils/domains'
+import { setSiteEntitlementsFromPlan } from '~/server/utils/billing'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
@@ -106,6 +107,13 @@ async function resolveCreationOrganization(
     return { organizationId: emptyOwnerOrg.organization_id }
   }
 
+  // Multi-site: if the user already owns an org with active sites, add the new site there.
+  // The unique-per-org constraint was removed in migration 0017.
+  const existingOwnerOrg = orgs.find(row => row.member_role === 'owner' && row.site_id && row.onboarding_status === 'active')
+  if (existingOwnerOrg) {
+    return { organizationId: existingOwnerOrg.organization_id }
+  }
+
   return await createOrganizationForSite(db, userId, name)
 }
 
@@ -159,6 +167,17 @@ async function performSeeding(
     if (!resolvedSubdomain?.trim()) throw new Error(`Missing subdomain for site ${siteId}`)
 
     await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
+
+    // Inherit plan entitlements from the organization's most recent active subscription.
+    // This is intentional for multi-site onboarding: new sites under a paid org
+    // immediately receive the same entitlements without requiring separate subscriptions.
+    const existingBilling = await db.prepare(`
+      SELECT sb.plan FROM site_billing sb
+      WHERE sb.organization_id = ? AND sb.status != 'canceled'
+      ORDER BY sb.updated_at DESC LIMIT 1
+    `).bind(organizationId).first<{ plan: string }>()
+    await setSiteEntitlementsFromPlan(db, siteId, organizationId, existingBilling?.plan ?? 'free')
+
     await db.prepare(`UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`)
       .bind(now, siteId).run()
 

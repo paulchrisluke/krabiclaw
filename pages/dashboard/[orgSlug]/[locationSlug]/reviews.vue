@@ -309,7 +309,7 @@ async function saveReview() {
 async function deleteReview(review: ReviewRow) {
   if (!confirm(`Delete review from ${review.author_name || 'Guest'}? This cannot be undone.`)) return
   try {
-    await $fetch(`/api/dashboard/locations/${review.location_id}/reviews/${review.id}`, { method: 'DELETE' })
+    await $fetch(`/api/dashboard/locations/${review.location_id}/reviews/${review.id}`, { method: 'DELETE' as unknown as 'POST' })
     reviews.value = reviews.value.filter(item => item.id !== review.id)
     toast.add({ description: 'Review deleted', color: 'neutral' })
   } catch (error) {

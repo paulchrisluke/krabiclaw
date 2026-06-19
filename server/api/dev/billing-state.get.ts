@@ -44,18 +44,22 @@ export default defineEventHandler(async (event) => {
   }
 
   const billing = await db.prepare(`
-    SELECT organization_id, stripe_customer_id, stripe_subscription_id, stripe_subscription_item_id,
-           status, plan, current_period_end, cancel_at_period_end, updated_at
-    FROM organization_billing
-    WHERE organization_id = ?
-    LIMIT 1
+    SELECT ob.organization_id, ob.stripe_customer_id,
+           sb.site_id, sb.stripe_subscription_id, sb.stripe_subscription_item_id,
+           sb.status, sb.plan, sb.current_period_end, sb.cancel_at_period_end, sb.updated_at
+    FROM organization_billing ob
+    LEFT JOIN sites s ON s.organization_id = ob.organization_id
+    LEFT JOIN site_billing sb ON sb.site_id = s.id
+    WHERE ob.organization_id = ?
+    ORDER BY s.created_at ASC LIMIT 1
   `).bind(organizationId).first()
 
   const entitlements = await db.prepare(`
-    SELECT key, value, source, created_at, updated_at
-    FROM organization_entitlements
-    WHERE organization_id = ?
-    ORDER BY key ASC
+    SELECT se.key, se.value, se.source, se.created_at, se.updated_at
+    FROM site_entitlements se
+    JOIN sites s ON s.id = se.site_id
+    WHERE s.organization_id = ?
+    ORDER BY se.key ASC
   `).bind(organizationId).all()
 
   let sql = `

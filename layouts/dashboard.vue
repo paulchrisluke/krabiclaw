@@ -148,9 +148,6 @@
             orientation="vertical"
           />
 
-          <ClientOnly>
-            <template #fallback />
-          </ClientOnly>
         </template>
 
         <template #footer="{ collapsed }">
@@ -471,9 +468,9 @@ const organizationMenuItems = computed(() => [
   })),
   [
     {
-      label: 'Create restaurant',
+      label: 'New business',
       icon: 'i-heroicons-plus',
-      to: orgBase.value ?? '/dashboard'
+      to: '/dashboard/onboarding'
     }
   ]
 ])

@@ -39,6 +39,8 @@ const SITE_SCOPED_TABLES = [
   'location_qa',
   'experiences',
   'experience_bookings',
+  'site_billing',
+  'site_entitlements',
 ] as const
 
 const DAY_MS = 24 * 60 * 60 * 1000

@@ -15,12 +15,14 @@ export default defineComponent({
     date: { type: String, required: true },
     time: { type: String, required: true },
     partySize: { type: Number, required: true },
+    platformDomain: { type: String, required: true },
   },
   setup(props) {
     return () => h(EmailShell, {
       preheader: 'We received your booking request',
       title: `Your booking request was sent — ${props.experienceTitle}`,
       siteName: props.siteName,
+      platformDomain: props.platformDomain,
     }, () => [
       h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `Thanks, ${props.guestName}. Your booking request has been sent to ${props.siteName}.`),
       h(ESection, { style: CARD }, () => [

@@ -445,10 +445,9 @@ export const CHOWBOT_TOOLS: AiTool[] = [
     input_schema: {
       type: "object",
       properties: {
-        menu_id: { type: "string", description: "Menu ID for verification." },
-        item_id: { type: "string", description: "ID of the item." },
+        menu_item_id: { type: "string", description: "ID of the menu item to delete." },
       },
-      required: ["menu_id", "item_id"],
+      required: ["menu_item_id"],
     },
   },
   {
@@ -1679,6 +1678,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
 ];
 
 export const CHOWBOT_CONFIRM_REQUIRED = new Set([
+  "create_post",
   "publish_post",
   "delete_post",
   "publish_menu",

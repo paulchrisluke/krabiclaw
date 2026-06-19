@@ -65,7 +65,7 @@ test.describe('site creation contracts', () => {
     expect(first.siteId).toEqual(expect.any(String))
     expect(second.siteId).toEqual(expect.any(String))
     expect(second.siteId).not.toBe(first.siteId)
-    expect(second.organizationId).not.toBe(first.organizationId)
+    expect(second.organizationId).toBe(first.organizationId)
     expect(second.subdomain).toBe(`multi-site-two-${suffix}`)
   })
 })

@@ -208,10 +208,10 @@ export async function requireMcpSite(
 export async function getVisibleSiteContext(
   event: H3Event,
   siteId: string,
-): Promise<{ role: McpToolRole; organizationId: string } | null> {
+): Promise<{ role: McpToolRole; organizationId: string; siteId: string } | null> {
   try {
     const site = await requireMcpSite(event, siteId, 'editor')
-    return { role: site.role, organizationId: site.organizationId }
+    return { role: site.role, organizationId: site.organizationId, siteId }
   } catch (error) {
     const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
       ? Number((error as { statusCode: number }).statusCode)
@@ -225,13 +225,16 @@ export async function getVisibleSiteContext(
   }
 }
 
-export async function getActiveEntitlements(db: D1Database, organizationId: string, keys: string[]): Promise<Set<string>> {
+export async function getActiveEntitlements(db: D1Database, organizationId: string, keys: string[], siteId?: string): Promise<Set<string>> {
   if (!keys.length) return new Set()
   const placeholders = keys.map(() => '?').join(', ')
+  const siteFilter = siteId ? 'AND se.site_id = ?' : ''
+  const bindings = siteId ? [organizationId, ...keys, siteId] : [organizationId, ...keys]
   const { results } = await db.prepare(`
-    SELECT key FROM organization_entitlements
-    WHERE organization_id = ? AND key IN (${placeholders}) AND value = 'true'
-  `).bind(organizationId, ...keys).all<{ key: string }>()
+    SELECT se.key FROM site_entitlements se
+    JOIN sites s ON s.id = se.site_id
+    WHERE s.organization_id = ? AND se.key IN (${placeholders}) AND se.value = 'true' ${siteFilter}
+  `).bind(...bindings).all<{ key: string }>()
   return new Set((results ?? []).map(r => r.key))
 }
 

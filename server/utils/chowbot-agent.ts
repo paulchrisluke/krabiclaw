@@ -2287,7 +2287,7 @@ async function executeTool(
 
       // Check org entitlement before insert
       if (!(await hasEntitlement(env as unknown as BillingEnv, db, orgId, "managed_service")))
-        return { error: "Work requests require a Growth plan or above." };
+        return { error: "Work requests require a Managed plan or above." };
 
       const result = await createWorkRequest(env, db, orgId, siteId, {
         type,

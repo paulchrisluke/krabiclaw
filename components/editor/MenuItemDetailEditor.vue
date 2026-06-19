@@ -235,7 +235,7 @@ const loadMenu = async () => {
 
   try {
     const response = await $fetch<{ success: boolean; menu: MenuWithItems }>(
-      `/api/dashboard/editor/menus/${props.menuId}`
+      `/api/editor/sites/${props.siteId}/menus/${props.menuId}`
     )
 
     if (!response.success) throw new Error('Failed to load menu')
@@ -291,13 +291,13 @@ const handleSave = async () => {
 
   try {
     if (props.itemId) {
-      await $fetch(`/api/dashboard/editor/menus/${props.menuId}/items/${props.itemId}`, {
+      await $fetch(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items/${props.itemId}`, {
         method: 'PATCH',
         body: payload.value
       })
       toast.addToast('Item saved', 'success')
     } else {
-      await $fetch(`/api/dashboard/editor/menus/${props.menuId}/items`, {
+      await $fetch(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items`, {
         method: 'POST',
         body: payload.value
       })
@@ -318,7 +318,7 @@ const handleDelete = async () => {
   error.value = null
 
   try {
-    await $fetch(`/api/dashboard/editor/menus/${props.menuId}/items/${props.itemId}`, {
+    await $fetch(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items/${props.itemId}`, {
       method: 'DELETE'
     })
     toast.addToast('Item deleted', 'success')

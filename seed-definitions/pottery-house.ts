@@ -1,6 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedSiteDefinition } from './contracts.ts'
-import { renderOrganizationBillingSql, renderOrganizationEntitlementsSql } from './billing-sql.ts'
+import { renderSiteBillingSql, renderSiteEntitlementsSql } from './billing-sql.ts'
 
 function escapeSql(value: string): string {
   return value.replace(/'/g, "''")
@@ -35,8 +35,8 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     onboardingStatus: 'active',
     urlStructure: 'location_subdirectories',
     primaryLocationId: 'loc-pottery-house',
-    contactEmail: 'thesdrew@gmail.com',
-    contactPhone: '+66626505890',
+    contactEmail: 'info@potteryhousekrabi.com',
+    contactPhone: '+66817794877',
     defaultCurrency: 'THB',
     vertical: 'experience',
     contentSource: 'google_maps',
@@ -44,6 +44,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
   },
   siteConfig: [
     { key: 'source_locale', value: 'en' },
+    { key: 'whatsapp_phone', value: '+447464115465' },
   ],
   siteLocales: [
     {
@@ -76,6 +77,14 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       id: 'domain-pottery-prod',
       domain: 'pottery-house.krabiclaw.com',
       type: 'subdomain',
+      role: 'secondary',
+      status: 'active',
+      dnsStatus: 'valid',
+    },
+    {
+      id: 'domain-pottery-custom',
+      domain: 'www.potteryhousekrabi.com',
+      type: 'custom',
       role: 'canonical',
       status: 'active',
       dnsStatus: 'valid',
@@ -94,8 +103,8 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
         postalCode: '81000',
         country: 'TH',
       },
-      phone: '+66626505890',
-      email: 'bamboo.chow@gmail.com',
+      phone: '+66817794877',
+      email: 'info@potteryhousekrabi.com',
       mapsUrl: 'https://maps.app.goo.gl/pottery-house-krabi',
       latitude: 8.0557285,
       longitude: 98.7504791,
@@ -120,6 +129,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       isPrimary: true,
       status: 'active',
       heroImageAssetId: 'media-ph-homepage-custom',
+      notificationPhone: '+66817794877',
     },
     {
       id: 'loc-pottery-beachfront',
@@ -133,8 +143,8 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
         postalCode: '81000',
         country: 'TH',
       },
-      phone: '+66626505890',
-      email: 'bamboo.chow@gmail.com',
+      phone: '+66858037108',
+      email: 'info@potteryhousekrabi.com',
       mapsUrl:
         'https://www.google.com/maps/place/Beachfront+Pottery+Krabi/@8.0556415,98.7476018,17z/data=!4m7!3m6!1s0x3051bf001b03f635:0xafb40b8ba3d4f053!8m2!3d8.057425!4d98.7486163!15sCgdwb3R0ZXJ5WgkiB3BvdHRlcnmSAQ9wb3R0ZXJ5X2NsYXNzZXOaAURDaTlEUVVsUlFVTnZaRU5vZEhsalJqbHZUMnQwZEdJeWNHaFRNRFI1VkZaV2ExWlZXakZWYkVJeFUxZHdURTVYWXhBQuABAPoBBAhYEDg!16s%2Fg%2F11yfvr97vw?entry=tts&g_ep=EgoyMDI2MDUyNS4wIPu8ASoASAFQAw%3D%3D&skid=1d6266f5-0075-4577-a084-27409b012140',
       latitude: 8.057425,
@@ -161,6 +171,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       isPrimary: false,
       status: 'active',
       heroImageAssetId: 'media-ph-beach-hero',
+      notificationPhone: '+66858037108',
     },
   ],
   mediaAssets: [
@@ -905,7 +916,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
   },
   organizationBilling: {
     status: 'active',
-    plan: 'managed',
+    plan: 'growth',
   },
   publicRoutes: [
     {
@@ -1068,6 +1079,7 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
       sqlValue(location.status),
       'NULL',
       'NULL',
+      sqlValue(location.notificationPhone ?? null),
     ].join(', ')})`)
     .join(',\n')
 
@@ -1089,7 +1101,8 @@ INSERT OR REPLACE INTO business_locations (
   price_level, categories,
   instagram_url, facebook_url,
   is_primary, status,
-  hero_image_asset_id, hero_video_asset_id
+  hero_image_asset_id, hero_video_asset_id,
+  notification_phone
 ) VALUES
 ${locationRowsNoHero};
 
@@ -1346,8 +1359,8 @@ VALUES (${sqlValue(identity.organizationId)}, ${aiCredits.balance}, ${aiCredits.
   }
 
   if (organizationBilling) {
-    parts.push(renderOrganizationBillingSql(identity.organizationId, organizationBilling, sqlValue))
-    parts.push(renderOrganizationEntitlementsSql(identity.organizationId, organizationBilling.plan, sqlValue))
+    parts.push(renderSiteBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue))
+    parts.push(renderSiteEntitlementsSql(identity.siteId, identity.organizationId, organizationBilling.plan, sqlValue))
   }
 
   return `-- BEGIN GENERATED: pottery_billing

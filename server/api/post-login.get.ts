@@ -32,7 +32,13 @@ export default defineEventHandler(async (event) => {
     `).bind(session.user.id).first<{ slug: string | null }>()
 
     const slug = row?.slug
-    return sendRedirect(event, slug ? `/dashboard/${slug}` : '/dashboard/account/settings')
+
+    // If no org, send to onboarding to create org + site
+    if (!slug) {
+      return sendRedirect(event, '/dashboard/onboarding')
+    }
+
+    return sendRedirect(event, `/dashboard/${slug}`)
   } catch (error) {
     console.error('Failed to resolve organization slug in post-login:', error)
     return sendRedirect(event, '/dashboard')

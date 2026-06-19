@@ -27,7 +27,11 @@ export const useChowBot = () => {
 
   const route = useRoute()
   const history = useChowBotHistory()
-  const { siteId, selectedLocation } = useDashboardRestaurant()
+
+  // Defer dashboard context access to avoid hydration issues
+  const dashboard = useDashboardRestaurant()
+  const siteId = computed(() => import.meta.server ? null : dashboard.siteId.value)
+  const selectedLocation = computed(() => import.meta.server ? null : dashboard.selectedLocation.value)
 
   const locationId = computed(() => {
     const param = route.query.locationId

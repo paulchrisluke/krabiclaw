@@ -1102,7 +1102,7 @@ export async function executeMcpToolCall(
         "Google Places API not configured.",
       );
 
-    const rawUrl = requiredString(rawArguments, "maps_url");
+    const rawUrl = requiredString(rawArguments, "url");
 
     let parsedUrl: URL;
     try {
@@ -2900,7 +2900,7 @@ export async function executeMcpToolCall(
     case "create_domain": {
       const hasEntitlement = await hasCustomDomainsEntitlement(
         site.db,
-        site.organizationId,
+        site.siteId,
       );
       if (!hasEntitlement) {
         throw createError({

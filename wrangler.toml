@@ -8,7 +8,7 @@ directory = ".output/public"
 
 [triggers]
 # Matches scheduledTasks in nuxt.config.ts
-crons = ["*/5 * * * *", "*/10 * * * *", "0 3 * * *", "0 4 * * *", "0 * * * *"]
+crons = ["*/5 * * * *", "*/10 * * * *", "0 1 * * *", "0 3 * * *", "0 4 * * *", "0 * * * *"]
 
 [[routes]]
 pattern = "*.krabiclaw.com/*"

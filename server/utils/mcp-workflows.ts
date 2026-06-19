@@ -251,9 +251,23 @@ export async function getNotificationsSettings(
   organizationId: string,
   siteId: string,
 ) {
-  return {
-    whatsapp_phone: await getOrgWhatsAppPhone(db, organizationId, siteId),
-  };
+  const [whatsappPhone, channelsRow] = await Promise.all([
+    getOrgWhatsAppPhone(db, organizationId, siteId),
+    db.prepare(`SELECT value FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'owner_notification_channels' LIMIT 1`)
+      .bind(organizationId, siteId).first<{ value: string }>(),
+  ])
+  let channels: string[] = ['whatsapp']
+  if (channelsRow?.value) {
+    try {
+      const parsed = JSON.parse(channelsRow.value)
+      if (Array.isArray(parsed)) {
+        channels = parsed.filter(c => c === 'whatsapp' || c === 'email')
+      }
+    } catch {
+      channels = ['whatsapp']
+    }
+  }
+  return { whatsapp_phone: whatsappPhone, channels }
 }
 
 export async function updateNotificationsSettings(
@@ -261,11 +275,21 @@ export async function updateNotificationsSettings(
   organizationId: string,
   siteId: string,
   whatsappPhone: string,
+  channels?: string[],
 ) {
-  await setOrgWhatsAppPhone(db, organizationId, siteId, whatsappPhone.trim());
-  return {
-    whatsapp_phone: normalizePhone(whatsappPhone.trim()),
-  };
+  const ops: Promise<unknown>[] = [
+    setOrgWhatsAppPhone(db, organizationId, siteId, whatsappPhone.trim()),
+  ]
+  if (channels) {
+    const validChannels = channels.filter(c => c === 'whatsapp' || c === 'email')
+    const value = JSON.stringify(validChannels.length ? validChannels : ['whatsapp'])
+    ops.push(
+      db.prepare(`INSERT INTO site_config (organization_id, site_id, key, value) VALUES (?, ?, 'owner_notification_channels', ?) ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value`)
+        .bind(organizationId, siteId, value).run()
+    )
+  }
+  await Promise.all(ops)
+  return { whatsapp_phone: normalizePhone(whatsappPhone.trim()), channels: channels ?? ['whatsapp'] }
 }
 
 export async function listContactSubmissions(db: D1Database, siteId: string) {
