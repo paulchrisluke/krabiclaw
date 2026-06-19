@@ -125,6 +125,7 @@ export function compileCuratedSiteFixture(
       body: experience.body,
       imageAssetId: experience.imageAssetId,
       price: experience.price,
+      priceAmount: experience.priceAmount,
       durationMinutes: experience.durationMinutes,
       maxCapacity: experience.maxCapacity,
       timeSlots: [...experience.timeSlots],

@@ -80,11 +80,11 @@ const linkTarget = computed(() => hasMenu.value ? '/menu' : '/experiences')
 const sectionKicker = computed(() => hasMenu.value ? 'The menu' : 'Experiences')
 const sectionHeading = computed(() => {
   const siteRecord = site as Record<string, unknown>
-  const siteTitle = typeof siteRecord?.title === 'string' ? siteRecord.title : null
+  const brandName = typeof siteRecord?.brand_name === 'string' ? siteRecord.brand_name : null
   if (hasMenu.value) {
-    return `What we're cooking at ${siteTitle || 'our kitchen'}.`
+    return `What we're cooking at ${brandName || 'our kitchen'}.`
   }
-  return `What we're offering at ${siteTitle || 'our studio'}.`
+  return `What we're offering at ${brandName || 'our studio'}.`
 })
 
 const clientReady = ref(false)

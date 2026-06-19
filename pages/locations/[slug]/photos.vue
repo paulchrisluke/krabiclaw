@@ -64,7 +64,7 @@
     </section>
 
     <!-- Lightbox -->
-    <UModal v-model:open="lightboxOpen" fullscreen :ui="{ content: 'bg-black/92 flex items-center justify-center' }">
+    <UModal v-model:open="lightboxOpen" fullscreen :portal="false" :ui="{ content: 'bg-black/92 flex items-center justify-center' }">
       <template #content>
         <div class="relative flex h-full w-full items-center justify-center p-16">
           <!-- Close -->

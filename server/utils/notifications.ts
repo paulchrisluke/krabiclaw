@@ -64,6 +64,8 @@ interface ExperienceBookingNotificationInput extends SiteContext {
   bookingDate: string
   timeSlot: string
   partySize: number
+  contactPhone?: string | null
+  contactEmail?: string | null
 }
 
 interface EmailTemplate {
@@ -545,7 +547,7 @@ export async function notifyExperienceBookingCreated(
 
   const [ownerEmail, guestEmail] = await Promise.all([
     useRender(BookingOwnerNew, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, platformDomain } }),
-    useRender(BookingGuestReceived, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, platformDomain } }),
+    useRender(BookingGuestReceived, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, platformDomain } }),
   ])
 
   const results = await Promise.allSettled([
@@ -609,7 +611,7 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
     useRender(ContactOwnerNew, { props: { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain } }),
     useRender(ContactGuestReceived, { props: { guestName: 'Jordan Lee', siteName: restaurant, platformDomain } }),
     useRender(BookingOwnerNew, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', platformDomain } }),
-    useRender(BookingGuestReceived, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, platformDomain } }),
+    useRender(BookingGuestReceived, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', platformDomain } }),
   ])
 
   return [

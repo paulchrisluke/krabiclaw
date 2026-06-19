@@ -103,9 +103,11 @@ export default defineEventHandler(async (event) => {
     db
       .prepare(
         `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name,
-                s.brand_description, COALESCE(ma.public_url, s.logo_url) AS logo_url
+                s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
+                ma_og.public_url AS og_image_url
            FROM sites s
-           LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
+           LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
+           LEFT JOIN media_assets ma_og ON s.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
           WHERE s.id = ? AND s.status = 'active'${isPreviewAuthorized ? "" : " AND s.onboarding_status = 'active'"}
           LIMIT 1`,
       )
@@ -119,6 +121,7 @@ export default defineEventHandler(async (event) => {
         brand_name: string | null;
         brand_description: string | null;
         logo_url: string | null;
+        og_image_url: string | null;
       }>(),
     locationSlug
       ? db
@@ -382,6 +385,7 @@ export default defineEventHandler(async (event) => {
       title: loc.title,
       address: parseJson(loc.address as string | null),
       phone: loc.phone,
+      email: (loc.email as string | null) ?? null,
       website_url: loc.website_url,
       maps_url: loc.maps_url,
       map_embed_url: calculateMapEmbedUrl({
@@ -421,6 +425,7 @@ export default defineEventHandler(async (event) => {
   if (site.brand_name) config.brand_name = site.brand_name;
   if (site.brand_description) config.brand_description = site.brand_description;
   if (site.logo_url) config.logo_url = site.logo_url;
+  if (site.og_image_url) config.og_image_url = site.og_image_url;
 
   const primary =
     (locRows.results ?? []).find((l) => l.is_primary) ??

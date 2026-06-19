@@ -1,4 +1,4 @@
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, type PropType } from 'vue'
 import { ESection, EText } from 'vue-email'
 import EmailShell from '../layouts/EmailShell'
 
@@ -15,6 +15,8 @@ export default defineComponent({
     date: { type: String, required: true },
     time: { type: String, required: true },
     partySize: { type: Number, required: true },
+    contactPhone: { type: String as PropType<string | null>, default: null },
+    contactEmail: { type: String as PropType<string | null>, default: null },
     platformDomain: { type: String, required: true },
   },
   setup(props) {
@@ -31,7 +33,14 @@ export default defineComponent({
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Time: '), props.time]),
         h(EText, { style: ROW_TIGHT }, () => [h('strong', null, 'Party size: '), String(props.partySize)]),
       ]),
-      h(EText, { style: 'margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6' }, () => `${props.siteName} will contact you to confirm availability.`),
+      props.contactPhone || props.contactEmail
+        ? h(EText, { style: 'margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6' }, () => [
+            h('strong', null, `Questions? Contact ${props.siteName}: `),
+            props.contactPhone ?? '',
+            props.contactPhone && props.contactEmail ? ' · ' : '',
+            props.contactEmail ?? '',
+          ])
+        : h(EText, { style: 'margin:0 0 20px;font-size:15px;color:#52525b;line-height:1.6' }, () => `${props.siteName} will contact you to confirm availability.`),
       h(EText, { style: 'margin:0;font-size:13px;color:#71717a;line-height:1.6' }, () => `The team at ${props.siteName}`),
     ])
   },

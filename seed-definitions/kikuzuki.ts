@@ -483,7 +483,8 @@ INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
   status, plan, onboarding_status, url_structure, primary_location_id,
-  contact_email, contact_phone, default_currency, vertical, content_source, media_source
+  contact_email, contact_phone, default_currency, vertical, content_source, media_source,
+  logo_asset_id, og_image_asset_id
 ) VALUES (
   ${sqlValue(identity.siteId)},
   ${sqlValue(identity.organizationId)},
@@ -503,7 +504,9 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(site.defaultCurrency)},
   ${sqlValue(site.vertical)},
   ${sqlValue(site.contentSource)},
-  ${sqlValue(site.mediaSource)}
+  ${sqlValue(site.mediaSource)},
+  'media-kiku-logo',
+  'media-kiku-about'
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
@@ -688,6 +691,49 @@ INSERT OR IGNORE INTO site_content
 VALUES
 ${contentRows};
 -- END GENERATED: kikuzuki_content`
+}
+
+export function renderKikuzukiExperienceBlock(): string {
+  const { identity } = compiledKikuzukiSeed
+  if (compiledKikuzukiSeed.experiences.length === 0) return '-- No experiences defined for Kikuzuki'
+
+  const experienceRows = compiledKikuzukiSeed.experiences
+    .map((experience) => `  (${[
+      sqlValue(experience.id),
+      sqlValue(identity.organizationId),
+      sqlValue(identity.siteId),
+      sqlValue(experience.locationId),
+      sqlValue(experience.title),
+      sqlValue(experience.slug),
+      sqlValue(experience.tagline),
+      sqlValue(experience.body),
+      sqlValue(experience.imageAssetId),
+      sqlValue(experience.price),
+      sqlValue(experience.priceAmount),
+      sqlValue(experience.durationMinutes),
+      sqlValue(experience.maxCapacity),
+      sqlJson(experience.timeSlots.length > 0 ? experience.timeSlots : null),
+      sqlValue(experience.availableNote),
+      sqlValue(experience.status),
+      sqlValue(experience.sortOrder),
+      sqlValue(experience.featured),
+      sqlValue(experience.featuredSortOrder),
+      sqlValue(experience.seoTitle),
+      sqlValue(experience.seoDescription),
+    ].join(', ')})`)
+    .join(',\n')
+
+  return `-- BEGIN GENERATED: kikuzuki_experiences
+INSERT OR REPLACE INTO experiences
+  (id, organization_id, site_id, location_id,
+   title, slug, tagline, body,
+   image_asset_id, price, price_amount, duration_minutes, max_capacity,
+   time_slots, available_note,
+   status, sort_order, featured, featured_sort_order,
+   seo_title, seo_description)
+VALUES
+${experienceRows};
+-- END GENERATED: kikuzuki_experiences`
 }
 
 export function renderKikuzukiBillingBlock(): string {

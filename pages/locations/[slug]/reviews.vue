@@ -172,28 +172,6 @@
           </article>
         </div>
       </section>
-
-      <!-- Write review CTA -->
-      <section class="bg-inverted text-inverted">
-        <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-12 px-4 py-18 sm:px-6 lg:px-8">
-          <div>
-            <p class="saya-eyebrow mb-4 text-white/60">{{ t('saya.reviews_page.eaten_recently') }}</p>
-            <h3 class="saya-display saya-italic text-5xl text-white leading-none">{{ t('saya.reviews_page.leave_review') }}</h3>
-            <p class="mt-4 max-w-md text-sm leading-relaxed text-zinc-400">
-              {{ t('saya.reviews_page.leave_review_desc') }}
-            </p>
-          </div>
-          <a
-            v-if="location?.gmb_review_url"
-            :href="location.gmb_review_url"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center rounded-full bg-white px-8 py-4 text-xs font-medium uppercase tracking-widest text-black no-underline transition hover:bg-zinc-100"
-          >
-            {{ t('saya.reviews_page.write_review') }}
-          </a>
-        </div>
-      </section>
     </template>
   </div>
 </template>

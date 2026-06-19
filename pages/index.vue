@@ -255,48 +255,13 @@
 
       <!-- ── Featured content (dishes / experiences) ─────────── -->
       <LazySayaFeaturedContent
-        v-if="contentBlocks.find(b => b.component === 'SayaFeaturedContent')"
+        v-if="featuredContent.length"
         :data="{
           items: featuredContent,
           hasMenu: hasMenu,
           vertical: site?.vertical
         }"
       />
-      <section v-else-if="featuredContent.length" class="mx-auto max-w-7xl px-4 pt-16 pb-8 sm:px-6 lg:px-8">
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <NuxtLink
-            v-for="(item, i) in featuredContent"
-            :key="i"
-            :to="item.href"
-            class="group block overflow-hidden bg-elevated no-underline text-default transition hover:opacity-90"
-          >
-            <div class="aspect-square overflow-hidden bg-muted">
-              <video
-                v-if="item.imageKind === 'video' && item.image"
-                :src="item.image"
-                autoplay
-                muted
-                loop
-                playsinline
-                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              />
-              <img
-                v-else-if="item.image"
-                :src="item.image"
-                :alt="item.alt"
-                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              >
-              <div v-else class="flex h-full w-full items-center justify-center">
-                <UIcon name="i-heroicons-sparkles" class="size-8 text-muted" />
-              </div>
-            </div>
-            <div class="p-3 pt-2">
-              <p class="saya-display saya-italic text-base text-default leading-snug line-clamp-2">{{ item.name }}</p>
-              <p v-if="item.price" class="mt-0.5 text-xs tabular-nums text-muted">{{ item.price }}</p>
-            </div>
-          </NuxtLink>
-        </div>
-      </section>
 
       <!-- ── Locations grid ─────────────────────────────────── -->
       <LazySayaLocationsGrid
@@ -404,6 +369,7 @@
               v-for="post in recentPosts"
               :key="post.id"
               fullscreen
+              :portal="false"
             >
               <!-- Trigger tile -->
               <article

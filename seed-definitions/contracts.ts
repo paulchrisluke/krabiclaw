@@ -156,6 +156,7 @@ export interface CuratedExperienceDefinition {
   body: string
   imageAssetId: string
   price: string
+  priceAmount: number | null
   durationMinutes: number | null
   maxCapacity: number | null
   timeSlots: string[]
@@ -347,6 +348,7 @@ export interface CompiledSeedExperience {
   body: string
   imageAssetId: string
   price: string
+  priceAmount: number | null
   durationMinutes: number | null
   maxCapacity: number | null
   timeSlots: string[]

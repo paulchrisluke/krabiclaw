@@ -509,6 +509,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
         'Our signature wheel throwing class is perfect for beginners and returning students alike. You will learn to centre clay, open and pull a cylinder, and shape your piece with guidance from our instructors every step of the way.\n\nAll clay, tools, and firing are included. Your finished pieces are bisque-fired and glaze-fired in our kiln and ready to collect approximately 2–3 weeks after your class.\n\nWhat to expect:\n- 1 hour 30 minutes of hands-on wheel time\n- All materials included (clay, tools, apron)\n- Bisque firing and glaze firing included\n- Studio glazes available to choose from\n- Pieces ready to collect in 2–3 weeks (or shipped home)',
       imageAssetId: 'media-ph-wheel',
       price: '฿1,200',
+      priceAmount: 1200,
       durationMinutes: 90,
       maxCapacity: 8,
       timeSlots: ['10:00', '12:00', '14:00', '16:00'],
@@ -531,6 +532,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
         'Cocktails & Clay is our Friday night social — a relaxed and fun way to try pottery with friends while enjoying a drink or two.\n\nYou get a full wheel throwing session with instructor support, and we take care of the good vibes. Bisque and glaze firing are included, so your creation gets the full kiln treatment just like in any daytime class.\n\nPerfect for couples, groups, date nights, and solo travellers looking for a fun evening out in Krabi.\n\nWhat is included:\n- 3 hours of wheel time and handbuilding\n- Drinks available at the studio\n- All clay, aprons, and tools provided\n- Bisque firing and glaze firing included\n- Pieces ready in 2–3 weeks',
       imageAssetId: 'media-ph-cocktails',
       price: '฿1,500',
+      priceAmount: 1500,
       durationMinutes: 180,
       maxCapacity: 12,
       timeSlots: ['19:00'],
@@ -553,6 +555,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
         'Our beachfront pottery popup at Sea View, Klong Muang is one of a kind. We set up the wheels right by the Gulf of Thailand so you can shape clay while watching long-tail boats drift past.\n\nSeats are extremely limited at this location. Each session is an intimate, unhurried experience guided by our instructor.\n\nAll materials and firing included — your piece travels back to the studio kiln and is ready to collect or ship within 2–3 weeks.\n\nGood for:\n- Hotel guests staying in Klong Muang or Tubkaek\n- Couples looking for a unique Krabi experience\n- Anyone who wants to make something by the sea',
       imageAssetId: 'media-ph-beachfront',
       price: '฿1,800',
+      priceAmount: 1800,
       durationMinutes: 120,
       maxCapacity: 4,
       timeSlots: ['09:00', '15:00'],
@@ -575,6 +578,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
         'For people staying in Krabi for a month or more, Pottery House can become more than a class. It can become your creative base — a place to practise, meet people, return to unfinished pieces, and feel part of the studio community.\n\nMembership is designed for long-stay visitors, remote workers, expats, and returning guests who want access to the studio beyond a single tourist class.\n\nWhat membership includes:\n- Studio access during agreed member hours\n- Space for handbuilding, practice, and quiet studio time\n- Access to shared tools, work tables, and clay support from the team\n- Storage for works-in-progress while pieces dry and move through firing\n- Clay included (reasonable monthly allowance)\n- Bisque and glaze firing included\n- Studio glazes available (member palette)\n- A chance to meet other makers and feel part of the Pottery House rhythm\n\nAsk us about current member hours, firing schedule, and monthly pricing.',
       imageAssetId: 'media-ph-membership',
       price: 'Ask us',
+      priceAmount: null,
       durationMinutes: null,
       maxCapacity: null,
       timeSlots: [],
@@ -992,7 +996,8 @@ INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
   status, plan, onboarding_status, url_structure, primary_location_id,
-  contact_email, contact_phone, default_currency, vertical, content_source, media_source
+  contact_email, contact_phone, default_currency, vertical, content_source, media_source,
+  logo_asset_id, og_image_asset_id
 ) VALUES (
   ${sqlValue(identity.siteId)},
   ${sqlValue(identity.organizationId)},
@@ -1012,7 +1017,9 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(site.defaultCurrency)},
   ${sqlValue(site.vertical)},
   ${sqlValue(site.contentSource)},
-  ${sqlValue(site.mediaSource)}
+  ${sqlValue(site.mediaSource)},
+  'media-ph-logo',
+  'media-ph-homepage-custom'
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
@@ -1134,6 +1141,7 @@ export function renderCompiledPotteryHouseExperiencesBlock(): string {
       sqlValue(experience.body),
       sqlValue(experience.imageAssetId),
       sqlValue(experience.price),
+      sqlValue(experience.priceAmount),
       sqlValue(experience.durationMinutes),
       sqlValue(experience.maxCapacity),
       sqlJson(experience.timeSlots.length > 0 ? experience.timeSlots : null),
@@ -1152,7 +1160,7 @@ export function renderCompiledPotteryHouseExperiencesBlock(): string {
 INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id,
    title, slug, tagline, body,
-   image_asset_id, price, duration_minutes, max_capacity,
+   image_asset_id, price, price_amount, duration_minutes, max_capacity,
    time_slots, available_note,
    status, sort_order, featured, featured_sort_order,
    seo_title, seo_description)

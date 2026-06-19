@@ -561,9 +561,13 @@ export const CHOWBOT_TOOLS: AiTool[] = [
           description:
             'Short neighbourhood tag shown on location hero and cards, e.g. "Beachside · 2 min from Centre Point".',
         },
-        phone: { type: "string" },
+        phone: { type: "string", description: "Public phone number shown to guests on the website and in confirmation emails." },
         address: { type: "string" },
-        email: { type: "string" },
+        email: { type: "string", description: "Public email shown to guests on the website and in confirmation emails." },
+        notification_phone: {
+          type: "string",
+          description: "Internal WhatsApp number for booking/reservation alerts to this location's manager. Not shown to guests. Falls back to the site-level whatsapp_phone if not set. International format: +66812345678",
+        },
         website_url: { type: "string" },
         maps_url: { type: "string" },
         google_place_id: { type: "string" },
@@ -1153,9 +1157,13 @@ export const CHOWBOT_TOOLS: AiTool[] = [
           description:
             "Rich HTML body — full description, what's included, atmosphere, etc.",
         },
+        price_amount: {
+          type: ["number", "null"],
+          description: "Numeric price amount, e.g. 1500. Uses site default currency. Preferred over price string. Pass null to clear.",
+        },
         price: {
-          type: "string",
-          description: 'Price string, e.g. "THB 1,500 / person".',
+          type: ["string", "null"],
+          description: 'Display override for non-numeric prices, e.g. "Ask us". Leave null when price_amount is set. Pass null to clear.',
         },
         featured: {
           type: "boolean",
@@ -1230,7 +1238,8 @@ export const CHOWBOT_TOOLS: AiTool[] = [
           description:
             "Sort order for featured experiences (lower numbers appear first).",
         },
-        price: { type: "string" },
+        price_amount: { type: ["number", "null"], description: "Numeric price amount. Preferred over price string. Pass null to clear." },
+        price: { type: ["string", "null"], description: 'Display override for non-numeric prices, e.g. "Ask us". Pass null to clear.' },
         duration_minutes: { type: "number" },
         max_capacity: { type: "number" },
         time_slots: { type: "array", items: { type: "string" } },

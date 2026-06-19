@@ -97,7 +97,7 @@
     </div>
 
     <!-- Full-screen modal for post details -->
-    <UModal v-model:open="modalOpen" fullscreen>
+    <UModal v-model:open="modalOpen" fullscreen :portal="false">
       <template #body v-if="selectedPost">
         <div class="flex h-full flex-col">
           <div v-if="selectedPost.media?.[0]" class="flex-1 overflow-hidden bg-muted">

@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse, cleanString } from '~/server/utils/api-response'
 import { getExperienceBySlug, createExperienceBooking } from '~/server/utils/experiences'
 import { notifyExperienceBookingCreated } from '~/server/utils/notifications'
+import { resolveLocationContact } from '~/server/utils/contact-resolution'
 
 const IP_HOURLY_LIMIT = 5
 const EMAIL_DAILY_LIMIT = 3
@@ -121,10 +122,12 @@ export default defineEventHandler(async (event) => {
   })
 
   try {
+    const { contactPhone, contactEmail } = await resolveLocationContact(db, siteId, experience.location_id)
     await notifyExperienceBookingCreated(env, db, {
       organizationId: site.organization_id,
       siteId,
       siteName: site.brand_name,
+      locationId: experience.location_id,
       bookingId: booking.id,
       guestName,
       email: guestEmail,
@@ -133,6 +136,8 @@ export default defineEventHandler(async (event) => {
       bookingDate,
       timeSlot,
       partySize,
+      contactPhone,
+      contactEmail,
     })
   } catch (error) {
     console.error('experience_booking_notification_failed', {

@@ -1510,6 +1510,23 @@ export async function executeMcpToolCall(
       assertDomainSuccess(result);
       return result.data;
     }
+    case "set_default_currency": {
+      const { isCurrencyCode } = await import("~/shared/currencies");
+      const currency = String(args.currency ?? "").toUpperCase().trim();
+      if (!isCurrencyCode(currency)) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, `Unsupported currency: ${currency}`);
+      }
+      const result = await updateSiteSettingsFields(
+        site.db,
+        site.env,
+        site.siteId,
+        site.organizationId,
+        { default_currency: currency },
+        site.userId,
+      );
+      assertDomainSuccess(result);
+      return { default_currency: currency, updated: true };
+    }
     case "set_logo": {
       const assetId = requiredString(args, "asset_id");
       await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
@@ -2445,25 +2462,45 @@ export async function executeMcpToolCall(
           requiredString(args, "experience_id"),
         ),
       };
-    case "create_experience":
+    case "create_experience": {
+      const ceArgs = args as Record<string, unknown>;
+      const priceAmountRaw = ceArgs.price_amount;
+      if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
+      }
       return {
         experience: await createExperience(
           site.db,
           site.organizationId,
           site.siteId,
-          args as never,
+          {
+            ...(ceArgs as never),
+            price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null,
+          },
           site.userId,
         ),
       };
-    case "update_experience":
+    }
+    case "update_experience": {
+      const ueArgs = omit(args, ["experience_id"]) as Record<string, unknown>;
+      const priceAmountRaw = ueArgs.price_amount;
+      if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
+      }
       return {
         experience: await updateExperience(
           site.db,
           site.siteId,
           requiredString(args, "experience_id"),
-          omit(args, ["experience_id"]) as never,
+          {
+            ...(ueArgs as never),
+            ...(priceAmountRaw !== undefined
+              ? { price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null }
+              : {}),
+          },
         ),
       };
+    }
     case "set_experience_image": {
       const assetId = requiredString(args, "asset_id");
       await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");

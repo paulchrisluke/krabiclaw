@@ -173,6 +173,44 @@
           </div>
         </UCard>
 
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h2 class="font-semibold text-highlighted">Default Currency</h2>
+                <p class="mt-1 text-sm text-muted">Used for menu prices and experience pricing across all surfaces.</p>
+              </div>
+              <UBadge
+                :label="currencyForm.currency || 'THB'"
+                color="neutral"
+                variant="soft"
+              />
+            </div>
+          </template>
+
+          <div v-if="loadingCurrency" class="space-y-3">
+            <USkeleton class="h-9 rounded-lg" />
+          </div>
+          <div v-else class="space-y-4">
+            <UFormField label="Currency" help="Changing this affects how prices are displayed site-wide.">
+              <USelect
+                v-model="currencyForm.currency"
+                :items="CURRENCY_OPTIONS"
+                value-attribute="value"
+                label-attribute="label"
+                class="w-full"
+              />
+            </UFormField>
+            <UButton
+              icon="i-heroicons-check"
+              :loading="savingCurrency"
+              @click="saveCurrency"
+            >
+              Save currency
+            </UButton>
+          </div>
+        </UCard>
+
         <!-- Danger Zone -->
         <UCard class="lg:col-span-2 border border-red-200 dark:border-red-900">
           <template #header>
@@ -244,6 +282,7 @@
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
+import { CURRENCY_OPTIONS } from '~/shared/currencies'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -264,6 +303,10 @@ const organizationRole = computed(() => {
   }
   return 'Member'
 })
+
+const loadingCurrency = ref(true)
+const savingCurrency = ref(false)
+const currencyForm = reactive({ currency: 'THB' })
 
 const deleteModalOpen = ref(false)
 const deleteConfirmText = ref('')
@@ -312,6 +355,33 @@ function resetDeleteModal() {
   deleteConfirmText.value = ''
   deleteError.value = ''
   deleting.value = false
+}
+
+async function loadCurrency() {
+  loadingCurrency.value = true
+  try {
+    const res = await $fetch<{ success: boolean; settings: { default_currency?: string } }>('/api/dashboard/settings')
+    currencyForm.currency = res.settings?.default_currency || 'THB'
+  } catch {
+    currencyForm.currency = 'THB'
+  } finally {
+    loadingCurrency.value = false
+  }
+}
+
+async function saveCurrency() {
+  savingCurrency.value = true
+  try {
+    await $fetch('/api/dashboard/settings', {
+      method: 'PATCH',
+      body: { default_currency: currencyForm.currency },
+    })
+    toast.add({ description: 'Currency saved', color: 'success' })
+  } catch (err) {
+    toast.add({ description: getErrorMessage(err, 'Failed to save currency'), color: 'error' })
+  } finally {
+    savingCurrency.value = false
+  }
 }
 
 async function loadSiteIntegrations() {
@@ -431,6 +501,7 @@ async function confirmDeleteAccount() {
 }
 
 onMounted(() => {
+  loadCurrency()
   loadSiteIntegrations()
   const fbStatus = typeof route.query.fb === 'string' ? route.query.fb : null
   if (fbStatus === 'connected') {

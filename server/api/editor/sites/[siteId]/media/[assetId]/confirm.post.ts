@@ -46,5 +46,14 @@ export default defineEventHandler(async (event) => {
   const activated = await activateMediaAsset(db, assetId, siteId, { public_url: publicUrl, thumbnail_url: thumbnailUrl })
   if (!activated) return jsonResponse({ error: 'Asset already confirmed' }, { status: 409 })
 
+  const siteRecord = await db.prepare(
+    `SELECT logo_asset_id, og_image_asset_id FROM sites WHERE id = ? LIMIT 1`
+  ).bind(siteId).first<{ logo_asset_id: string | null; og_image_asset_id: string | null }>()
+
+  if (siteRecord && asset.category === 'logo' && !siteRecord.logo_asset_id) {
+    await db.prepare(`UPDATE sites SET logo_asset_id = ?, updated_at = ? WHERE id = ?`)
+      .bind(assetId, new Date().toISOString(), siteId).run()
+  }
+
   return jsonResponse({ id: assetId, publicUrl, thumbnailUrl, status: 'active' })
 })

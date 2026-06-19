@@ -2,7 +2,34 @@
 
 ## What It Is
 
-**Shopify for restaurants** — multi-tenant SaaS where restaurant owners get a subdomain site and build their web presence with a visual editor. SSR-rendered, SEO-optimised restaurant websites. AI (ChowBot) manages content via natural language from the dashboard.
+**Website builder for restaurants and hospitality businesses** — multi-tenant SaaS where owners get a subdomain site and build their web presence through conversation with ChatGPT (via MCP) or the dashboard CMS. SSR-rendered, SEO-optimised sites. The ChatGPT plugin is the primary creation surface.
+
+---
+
+## Primary Surface: ChatGPT MCP Plugin
+
+KrabiClaw ships as a ChatGPT plugin backed by a full MCP server at `/api/mcp.post.ts`.
+
+- OAuth2 authorization at `/api/auth/oauth2/` — ChatGPT handles auth before any tool call
+- 90+ MCP tools covering: site setup, locations, menus, experiences, posts, media, translation, Google Business, Facebook, analytics, work requests
+- Widget system (HTML responses rendered inline in ChatGPT) for rich interactions: `show_welcome`, `import_from_maps`, `show_site_preview`, `show_vertical_picker`, `request_photo_upload`, image generation previews
+- Image generation via ChatGPT's native `image_generation` Responses API tool (`gpt-image-1` / `gpt-image-2`) — not DALL-E
+- Plugin landing page at `/plugin`
+
+The dashboard is still the home for billing, org settings, inbox triage, analytics, and the managed service work queue. MCP and dashboard operate on the same D1 backend with no forked business logic.
+
+---
+
+## Verticals
+
+KrabiClaw supports multiple business verticals. The `show_vertical_picker` MCP tool lets ChatGPT present the selection interactively during onboarding.
+
+| Vertical | Description |
+|----------|-------------|
+| `restaurant` | Food & beverage — menus, reviews, hours, reservations |
+| `experience` | Activity-based businesses — experiences, bookings, classes |
+
+Experiences have their own data model: `experiences` table, `experience_bookings`, experience-specific MCP tools (`list_experiences`, `create_experience`, `list_experience_bookings`, etc.) and Saya theme routes at `/experiences/[slug]`.
 
 ---
 
@@ -10,31 +37,36 @@
 
 Pricing managed entirely in Stripe — never duplicated in code. All pricing UI reads from `GET /api/billing/plans`.
 
-| Tier | Key Features |
-|------|-------------|
-| Free | Subdomain, Saya theme, manual editor, starter AI credits, 1 location |
-| Pro | Custom domain + SSL, Google Places sync, more AI credits/mo, unlimited locations |
-| Enterprise | Everything Pro + higher AI credits, white-label, API access, priority support |
-| Credit top-ups | 3 one-time bundles (500 / 2,500 / 5,000) — never expire |
+| Tier | Price | Key Features |
+|------|-------|-------------|
+| Free (Starter) | $0 | Subdomain, Saya theme, manual editor, basic AI credits, 1 locale |
+| Growth | $49/mo | Custom domain + SSL, Google Business sync, 2,000 AI credits/mo, translation (1 language) |
+| Managed | $149/mo | Everything in Growth + unlimited translation languages, unlimited AI credits, managed service, advanced SEO |
+| SEO Accelerator | $349/mo | Everything in Managed + SEO accelerator entitlement |
 
-**Upgrade modal** triggers on: connecting Google Business, adding location 2+, custom domain setup, removing KrabiClaw branding.
+Locations are unlimited on all plans. Credit top-ups are available as one-time purchases.
+
+**Upgrade modal** triggers on: connecting Google Business, custom domain setup, translation, removing KrabiClaw branding.
 
 ---
 
 ## Current Clients
 
-- **Kikuzuki** — Japanese restaurant brand, 2 locations (Ao Nang + Krabi Town)
+| Client | Vertical | Locations |
+|--------|----------|-----------|
+| **Kikuzuki** | Restaurant | 2 locations — Ao Nang + Krabi Town |
+| **Pottery House Krabi** | Experience | 2 locations — main + beachfront |
 
 ---
 
 ## Theme: Saya
 
-Default theme for all tenants. SSR-rendered, SEO-first, editorial typography. Location-centric — all content hangs off `/locations/[slug]/`.
+Default theme for all tenants. SSR-rendered, SEO-first, editorial typography. Location-centric with vertical-aware routing.
 
 ### URL Structure
 
 ```
-/                              → Home: hero + location entry points + brand feed
+/                              → Home: hero + location/experience entry points + brand feed
 /locations                     → All locations grid
 /locations/[slug]              → Location home: hours, address, map, menu preview
 /locations/[slug]/menu         → Full menu
@@ -42,6 +74,8 @@ Default theme for all tenants. SSR-rendered, SEO-first, editorial typography. Lo
 /locations/[slug]/photos       → Photo gallery by category
 /locations/[slug]/qa           → Q&A: owner-answered pairs
 /locations/[slug]/contact      → Map embed, hours, address, directions CTA
+/experiences                   → All experiences grid
+/experiences/[slug]            → Experience detail: description, pricing, bookings CTA
 /about                         → Brand story
 /contact                       → Brand contact form
 /reservations                  → Reservation form
@@ -51,7 +85,7 @@ Default theme for all tenants. SSR-rendered, SEO-first, editorial typography. Lo
 
 ### Nav
 
-Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locations dropdown is built at runtime from `business_locations` table.
+Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locations dropdown built at runtime from `business_locations`.
 
 ---
 
@@ -67,28 +101,38 @@ Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locat
 | Facebook / Instagram Graph API | ✅ OAuth + Pages sync + publish built |
 | Google Places API sync | ✅ Live — hours, address, rating, reviews (up to 5) |
 | Google Business Profile API | ⏳ API approval pending — RPM quota locked at 0 |
-| Google Places API | ✅ Live — location autocomplete |
+| Google Places API | ✅ Live — location autocomplete + `import_from_maps` MCP tool |
 | Cloudflare Stream | ✅ Built — video upload/playback |
+| ChatGPT MCP Plugin | ✅ Live — primary creation surface |
+| ChatGPT image generation | ✅ Live — `gpt-image-1`/`gpt-image-2` via Responses API |
 
 ---
 
 ## Architecture
 
-- All AI calls route through Cloudflare AI Gateway — never call model APIs directly
+- All backend-originated AI calls route through Cloudflare AI Gateway — never call model APIs directly from server code (exception: ChatGPT native `image_generation` is initiated by the OpenAI runtime, not by KrabiClaw server code, and bypasses the gateway by design)
+- MCP server is the canonical creation surface; dashboard CMS and ChowBot are secondary
 - Posts are the content primitive — channels are adapters on top of `post_channel_jobs`
-- All location data is CRUD-available in D1 regardless of GMB connection — GMB sync is additive, not required
+- All location data is CRUD-available in D1 regardless of GMB connection — GMB sync is additive
 - Notification delivery is channel-agnostic — `notifications.channel` column means email/push can be added with no schema change
 - WhatsApp and Instagram both go through the same Facebook app — single OAuth covers both
 - ChowBot is the owner of AI conversations; dashboard and WhatsApp are interfaces over the same D1-backed backend
 - Credit system enforced at the `/api/ai/*` route layer — 402 on exhaustion
+- Image generation: ChatGPT generates natively → `save_generated_image_file` persists via Cloudflare Images → `show_generated_images` renders the widget. Never pass raw base64 to MCP tools.
 
 ---
 
 ## Dashboard Model
 
 - **Organization** is the restaurant brand workspace and billing/team boundary.
-- Each organization owns exactly **one restaurant site** in `sites`.
+- **One org can have multiple sites** (multi-site constraint removed in migration `0017`).
+- Each site has its own plan and Stripe subscription (`site_billing`). The Stripe *customer* stays at org level (`organization_billing.stripe_customer_id`).
 - **Locations** are the persistent dashboard working context, selected from the header on every dashboard page.
-- Public tenant routes remain location-centric under `/locations/[slug]`.
-- Dashboard routes follow the Vercel-style workspace shape: `/dashboard/{orgSlug}` for the restaurant workspace, `/dashboard/{orgSlug}/{locationSlug}` for the selected location workspace, `/dashboard/{orgSlug}/~/settings/billing` for org billing, and `/dashboard/account/settings` for personal account settings. Dashboard UI should not expose site IDs.
+- Public tenant routes remain location/experience-centric under `/locations/[slug]` and `/experiences/[slug]`.
+- Dashboard routes follow the Vercel-style workspace shape:
+  - `/dashboard/{orgSlug}` — restaurant workspace
+  - `/dashboard/{orgSlug}/{locationSlug}` — location workspace
+  - `/dashboard/{orgSlug}/~/settings/billing` — org billing
+  - `/dashboard/account/settings` — personal account settings
 - App-facing dashboard APIs use `/api/dashboard/*`; server code resolves the canonical restaurant site from the active Better Auth organization.
+- Dashboard is home for: billing, org settings, inbox triage (contact, reservations, reviews), managed service work queue, analytics.

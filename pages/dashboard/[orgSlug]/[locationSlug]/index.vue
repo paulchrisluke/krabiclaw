@@ -209,6 +209,21 @@
 
             <section class="grid gap-6 p-6 md:grid-cols-[1fr_2fr]">
               <div>
+                <h3 class="font-semibold text-highlighted">Notifications</h3>
+                <p class="mt-1 text-sm text-muted">Internal alert routing for this location. Not shown to guests.</p>
+              </div>
+              <div class="space-y-5">
+                <UFormField
+                  label="Notification Phone (WhatsApp)"
+                  help="WhatsApp number for booking and reservation alerts at this location. Falls back to the site-level WhatsApp number if blank. International format: +66812345678"
+                >
+                  <UInput v-model="detailsForm.notification_phone" type="tel" placeholder="+66..." />
+                </UFormField>
+              </div>
+            </section>
+
+            <section class="grid gap-6 p-6 md:grid-cols-[1fr_2fr]">
+              <div>
                 <h3 class="font-semibold text-highlighted">Discovery</h3>
                 <p class="mt-1 text-sm text-muted">Location-specific mapping and place metadata.</p>
               </div>
@@ -390,6 +405,7 @@ interface BusinessLocation {
   last_synced_at: string | null
   hero_image_asset_id?: string | null
   hero_video_asset_id?: string | null
+  notification_phone?: string | null
 }
 
 interface ManualReview {
@@ -496,7 +512,8 @@ const detailsForm = reactive({
   short_description: '',
   description: '',
   is_primary: false,
-  status: 'active'
+  status: 'active',
+  notification_phone: '',
 })
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
@@ -552,6 +569,7 @@ function fillDetailsForm(loc: BusinessLocation) {
   openingHours.value = parseOpeningHours(loc.opening_hours?.weekdayDescriptions)
   detailsForm.is_primary = loc.is_primary
   detailsForm.status = loc.status
+  detailsForm.notification_phone = loc.notification_phone ?? ''
 }
 
 const twelveHourToTwentyFourHour = (value: string): string | null => {
@@ -692,7 +710,8 @@ async function saveLocationDetails() {
         description: detailsForm.description || null,
         opening_hours: { weekdayDescriptions: buildWeekdayDescriptions(openingHours.value) },
         is_primary: detailsForm.is_primary,
-        status: detailsForm.status
+        status: detailsForm.status,
+        notification_phone: detailsForm.notification_phone || null,
       }
     })
     if (!response.success) throw new Error('Failed to save location')

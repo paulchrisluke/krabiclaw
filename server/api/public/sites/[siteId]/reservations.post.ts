@@ -1,6 +1,7 @@
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyReservationCreated } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
+import { resolveLocationContact } from '~/server/utils/contact-resolution'
 
 const hashIp = async (ip: string) => {
   if (!ip) return null
@@ -25,13 +26,14 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const name     = cleanString(body.name, 100)
-  const email    = cleanString(body.email, 200)
-  const phone    = cleanString(body.phone, 30)
-  const date     = cleanString(body.date, 10)
-  const time     = cleanString(body.time, 5)
-  const guests   = cleanString(body.guests, 3)
-  const requests = cleanString(body.requests, 1000)
+  const name       = cleanString(body.name, 100)
+  const email      = cleanString(body.email, 200)
+  const phone      = cleanString(body.phone, 30)
+  const date       = cleanString(body.date, 10)
+  const time       = cleanString(body.time, 5)
+  const guests     = cleanString(body.guests, 3)
+  const requests   = cleanString(body.requests, 1000)
+  const locationId = cleanString(body.location_id, 36) ?? null
 
   if (!name) return jsonResponse({ error: 'Please enter your name.' }, { status: 400 })
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -57,9 +59,9 @@ export default defineEventHandler(async (event) => {
   await db.prepare(`
     INSERT INTO reservation_submissions (
       id, organization_id, site_id, name, email, phone, date, time, guests, requests, ip_hash,
-      cancellation_token_hash, cancellation_token_expires_at
+      cancellation_token_hash, cancellation_token_expires_at, location_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id,
     site.organization_id,
@@ -73,26 +75,23 @@ export default defineEventHandler(async (event) => {
     requests || null,
     ipHash,
     cancellationTokenHash,
-    cancellation.expiresAt
+    cancellation.expiresAt,
+    locationId,
   ).run()
 
   // Build absolute cancel URL for the confirmation email
   const siteBaseUrl = site.public_url?.replace(/\/$/, '') || (site.subdomain ? `https://${site.subdomain}.krabiclaw.com` : null)
   const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/reservations/cancel?id=${id}#${cancellation.token}` : null
 
-  // Fetch contact info from published site content (best-effort — non-fatal if missing)
-  const contactRows = await db.prepare(`
-    SELECT field, content FROM site_content
-    WHERE site_id = ? AND field IN ('contact.phone', 'contact.email') AND location_id IS NULL
-    LIMIT 2
-  `).bind(siteId).all<{ field: string; content: string | null }>()
-  const contactMap = Object.fromEntries((contactRows.results ?? []).map(r => [r.field, r.content]))
+  // Resolve contact info — location-specific when available, site-level fallback
+  const { contactPhone, contactEmail } = await resolveLocationContact(db, siteId, locationId)
 
   try {
     await notifyReservationCreated(env, db, {
       organizationId: site.organization_id,
       siteId,
       siteName: site.brand_name,
+      locationId,
       reservationId: id,
       guestName: name,
       email,
@@ -101,8 +100,8 @@ export default defineEventHandler(async (event) => {
       time,
       guests,
       cancelUrl,
-      contactPhone: contactMap['contact.phone'] ?? null,
-      contactEmail: contactMap['contact.email'] ?? null,
+      contactPhone,
+      contactEmail,
     })
   } catch (error) {
     console.error('reservation_notification_failed', {

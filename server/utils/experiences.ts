@@ -13,6 +13,7 @@ export interface Experience {
   video_url: string | null
   images: Array<{ url: string; kind: 'image' | 'video' }>
   price: string | null
+  price_amount: number | null
   duration_minutes: number | null
   max_capacity: number | null
   time_slots: string[] | null
@@ -45,6 +46,7 @@ interface ExperienceRow {
   video_url: string | null
   images: string | null
   price: string | null
+  price_amount: number | null
   duration_minutes: number | null
   max_capacity: number | null
   time_slots: string | null
@@ -87,7 +89,7 @@ const SELECT = `
   SELECT e.id, e.organization_id, e.site_id, e.location_id,
          e.title, e.slug, e.tagline, e.body, e.image_asset_id,
          e.video_asset_id, e.images,
-         e.price, e.duration_minutes, e.max_capacity, e.time_slots,
+         e.price, e.price_amount, e.duration_minutes, e.max_capacity, e.time_slots,
          e.available_note, e.status, e.sort_order,
          e.featured, e.featured_sort_order,
          e.seo_title, e.seo_description, e.created_at, e.updated_at,
@@ -171,6 +173,7 @@ export interface CreateExperienceInput {
   video_asset_id?: string | null
   images?: Array<{ url: string; kind: 'image' | 'video' }>
   price?: string | null
+  price_amount?: number | null
   duration_minutes?: number | null
   max_capacity?: number | null
   time_slots?: string[] | null
@@ -194,6 +197,13 @@ function assertExperienceStatus(value: unknown, fieldName: string): ExperienceSt
   return value as ExperienceStatus
 }
 
+function assertFiniteNonNegative(value: number | null | undefined, field: string): void {
+  if (value == null) return
+  if (!Number.isFinite(value) || value < 0) {
+    throw createError({ statusCode: 400, statusMessage: `${field} must be a finite non-negative number` })
+  }
+}
+
 export async function createExperience(
   db: D1Database,
   organizationId: string,
@@ -201,6 +211,8 @@ export async function createExperience(
   input: CreateExperienceInput,
   userId: string,
 ): Promise<Experience> {
+  assertFiniteNonNegative(input.price_amount, 'price_amount')
+  assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
   const id = crypto.randomUUID()
   const slug = await uniqueSlug(db, siteId, slugify(input.title))
   const now = new Date().toISOString()
@@ -212,10 +224,10 @@ export async function createExperience(
     .prepare(
       `INSERT INTO experiences
        (id, organization_id, site_id, location_id, title, slug, tagline, body,
-        image_asset_id, video_asset_id, images, price, duration_minutes, max_capacity, time_slots,
+        image_asset_id, video_asset_id, images, price, price_amount, duration_minutes, max_capacity, time_slots,
         available_note, status, sort_order, featured, featured_sort_order,
         seo_title, seo_description, created_at, updated_at, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
     .bind(
       id, organizationId, siteId,
@@ -228,6 +240,7 @@ export async function createExperience(
       input.video_asset_id ?? null,
       imagesJson,
       input.price ?? null,
+      input.price_amount ?? null,
       input.duration_minutes ?? null,
       input.max_capacity ?? null,
       slotsJson,
@@ -261,6 +274,8 @@ export async function updateExperience(
   id: string,
   input: UpdateExperienceInput,
 ): Promise<Experience | null> {
+  assertFiniteNonNegative(input.price_amount, 'price_amount')
+  assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
   const sets: string[] = []
   const params: (string | number | null)[] = []
 
@@ -283,6 +298,7 @@ export async function updateExperience(
     params.push(input.images?.length ? JSON.stringify(input.images) : null)
   }
   if (input.price !== undefined) { sets.push('price = ?'); params.push(input.price ?? null) }
+  if (input.price_amount !== undefined) { sets.push('price_amount = ?'); params.push(input.price_amount ?? null) }
   if (input.duration_minutes !== undefined) { sets.push('duration_minutes = ?'); params.push(input.duration_minutes ?? null) }
   if (input.max_capacity !== undefined) { sets.push('max_capacity = ?'); params.push(input.max_capacity ?? null) }
   if (input.time_slots !== undefined) {

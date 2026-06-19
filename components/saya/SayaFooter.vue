@@ -110,18 +110,25 @@
       </div>
 
       <!-- Legal bar -->
-      <div class="flex flex-wrap items-center justify-between gap-4 pt-6 text-xs text-inverted/40">
+      <div class="flex flex-wrap items-center justify-between gap-4 pt-6 text-xs text-inverted/70">
         <div>© {{ year }} {{ restaurantName }}</div>
         <div class="flex items-center gap-6">
           <UDropdownMenu :items="languageItems" :ui="{ content: 'saya-theme' }">
-            <UButton variant="ghost" color="neutral" size="sm">
+            <button type="button" class="flex items-center gap-1.5 text-xs text-inverted/70 transition hover:text-inverted">
               <span>{{ getCurrentLocaleFlag() }}</span>
               <span class="hidden sm:inline">{{ currentLocale }}</span>
-            </UButton>
+            </button>
           </UDropdownMenu>
-          <UColorModeButton variant="ghost" color="neutral" size="sm" />
-          <NuxtLink to="/privacy" class="transition hover:text-inverted/70">{{ t('legal.privacy') }}</NuxtLink>
-          <NuxtLink to="/terms" class="transition hover:text-inverted/70">{{ t('legal.terms') }}</NuxtLink>
+          <button
+            type="button"
+            class="flex items-center justify-center text-inverted/70 transition hover:text-inverted"
+            :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+            @click="toggleColorMode"
+          >
+            <UIcon :name="isDark ? 'i-heroicons-sun' : 'i-heroicons-moon'" class="size-4" />
+          </button>
+          <NuxtLink to="/privacy" class="transition hover:text-inverted">{{ t('legal.privacy') }}</NuxtLink>
+          <NuxtLink to="/terms" class="transition hover:text-inverted">{{ t('legal.terms') }}</NuxtLink>
           <a
             v-if="showBrandingCredit"
             href="https://krabiclaw.com"
@@ -143,6 +150,11 @@ import { getTodayGoogleHours } from '~/utils/formatters'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
 const { isPlatform, site } = useTenantSite()
+const colorMode = useColorMode()
+const isDark = computed(() => colorMode.value === 'dark')
+function toggleColorMode() {
+  colorMode.preference = isDark.value ? 'light' : 'dark'
+}
 const { locale } = useI18n()
 const copy = computed(() => getVerticalCopy((site as { vertical?: string } | null)?.vertical, locale.value))
 
@@ -239,6 +251,7 @@ interface PublicLocation {
   } | string | null
   city?: string | null
   phone?: string | null
+  email?: string | null
   googleBusinessHours?: ApiValue
   is_primary?: boolean
   grab_url?: string | null

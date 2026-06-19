@@ -1192,6 +1192,7 @@ async function executeTool(
           neighborhood: toSqlText(input.neighborhood) ?? undefined,
           phone: toSqlText(input.phone) ?? undefined,
           email: toSqlText(input.email) ?? undefined,
+          notification_phone: toSqlText(input.notification_phone) ?? undefined,
           description: toSqlText(input.description) ?? undefined,
           short_description: toSqlText(input.short_description) ?? undefined,
           price_level: toSqlText(input.price_level) ?? undefined,
@@ -2103,6 +2104,7 @@ async function executeTool(
           tagline: toSqlText(input.tagline) ?? null,
           body: toSqlText(input.body) ?? null,
           price: toSqlText(input.price) ?? null,
+          price_amount: typeof input.price_amount === "number" ? input.price_amount : null,
           duration_minutes:
             typeof input.duration_minutes === "number"
               ? Math.round(input.duration_minutes)
@@ -2156,6 +2158,12 @@ async function executeTool(
         updates.body = toSqlText(input.body) ?? null;
       if (input.price !== undefined)
         updates.price = toSqlText(input.price) ?? null;
+      if (input.price_amount !== undefined) {
+        if (input.price_amount !== null && typeof input.price_amount !== "number") {
+          return { error: "price_amount must be a number or null" };
+        }
+        updates.price_amount = typeof input.price_amount === "number" ? input.price_amount : null;
+      }
       if (input.duration_minutes !== undefined)
         updates.duration_minutes =
           typeof input.duration_minutes === "number"
@@ -2536,8 +2544,8 @@ async function executeTool(
     case "get_translation_review_items": {
       const locale = toSqlText(input.locale);
       if (!locale) return { error: "locale is required." };
-      const scope = toSqlText(input.scope) as "site" | "content" | "menus" | "locations" | "posts" | undefined ?? undefined;
-      const status = toSqlText(input.status) as "missing" | "draft" | "published" | "stale" | "all" | undefined ?? undefined;
+      const scope = (toSqlText(input.scope) ?? undefined) as "site" | "content" | "menus" | "locations" | "posts" | undefined;
+      const status = (toSqlText(input.status) ?? undefined) as "missing" | "draft" | "published" | "stale" | "all" | undefined;
       const result = await listTranslationReviewItems(db, orgId, siteId, { targetLocale: locale, scope, status });
       return result;
     }
@@ -2671,6 +2679,7 @@ Guidelines:
 - For menu category changes like renaming Appetizers to Starters or Drinks to Beverages, use rename_menu_section
 - For deleting one dish use delete_menu_item; for deleting a whole category and all dishes inside it use delete_menu_section
 - Store menu prices as price_amount only. Use the site default currency for display unless the user asks to change the currency, then call set_default_currency.
+- Store experience prices as price_amount (numeric). Use price (string) only for non-numeric display like "Ask us". If a user sets an experience price, always set price_amount; never store it only as a price string.
 - Use add_menu_items_batch only when the user is clearly adding brand-new items that are not already on the menu
 - Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
 - When creating menus, omit location_id — the server links it to the current location automatically

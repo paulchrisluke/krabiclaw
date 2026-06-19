@@ -577,6 +577,7 @@ export const demoFixture: CuratedSiteDefinition = {
         'Our flagship pizza making class brings guests right up to the bench and oven. You will learn how we stretch our dough, build a balanced pie, and work with high-heat live fire without feeling rushed.\n\nEach booking includes dough, toppings, one personal pizza, and a glass of house wine or sparkling lemonade. Great for couples, visitors, and anyone who wants a hands-on dinner plan in Brooklyn.',
       imageAssetId: 'media-demo-exp-class',
       price: '$95 per guest',
+      priceAmount: 95,
       durationMinutes: 120,
       maxCapacity: 10,
       timeSlots: ['14:00', '18:00'],
@@ -599,6 +600,7 @@ export const demoFixture: CuratedSiteDefinition = {
         'This evening is part tasting, part dinner party. We pair a rotating lineup of natural wines with off-menu pies, seasonal antipasti, and a little background on why each pairing works.\n\nBest for date nights, visiting friends, and anyone who wants the room at its loudest and warmest. Seats are shared at the table, and the menu changes with the week.',
       imageAssetId: 'media-demo-exp-wine',
       price: '$78 per guest',
+      priceAmount: 78,
       durationMinutes: 150,
       maxCapacity: 16,
       timeSlots: ['19:30'],
@@ -621,6 +623,7 @@ export const demoFixture: CuratedSiteDefinition = {
         'Family Pizza Night is our easiest way to turn a Sunday dinner into something a little more memorable. Kids shape mini pies, grown-ups share large-format pizzas and salads, and the kitchen keeps the pacing relaxed.\n\nIdeal for families, birthday dinners, and mixed-age groups who want an experience that feels special without feeling formal.',
       imageAssetId: 'media-demo-exp-family',
       price: '$140 per table',
+      priceAmount: 140,
       durationMinutes: 105,
       maxCapacity: 6,
       timeSlots: ['17:00', '18:30'],
@@ -1301,7 +1304,8 @@ INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
   status, plan, onboarding_status, url_structure, primary_location_id,
-  contact_email, default_currency, vertical, content_source, media_source
+  contact_email, default_currency, vertical, content_source, media_source,
+  og_image_asset_id
 ) VALUES (
   ${sqlValue(compiledDemoSeed.identity.siteId)},
   ${sqlValue(compiledDemoSeed.identity.organizationId)},
@@ -1320,7 +1324,8 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(compiledDemoSeed.site.defaultCurrency)},
   ${sqlValue(compiledDemoSeed.site.vertical)},
   ${sqlValue(compiledDemoSeed.site.contentSource)},
-  ${sqlValue(compiledDemoSeed.site.mediaSource)}
+  ${sqlValue(compiledDemoSeed.site.mediaSource)},
+  'media-demo-hero'
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
@@ -1590,6 +1595,7 @@ export function renderCompiledDemoExperienceSeedBlock(): string {
       sqlValue(experience.body),
       sqlValue(experience.imageAssetId),
       sqlValue(experience.price),
+      sqlValue(experience.priceAmount),
       sqlValue(experience.durationMinutes),
       sqlValue(experience.maxCapacity),
       sqlJson(experience.timeSlots),
@@ -1608,7 +1614,7 @@ export function renderCompiledDemoExperienceSeedBlock(): string {
 INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id,
    title, slug, tagline, body,
-   image_asset_id, price, duration_minutes, max_capacity,
+   image_asset_id, price, price_amount, duration_minutes, max_capacity,
    time_slots, available_note,
    status, sort_order, featured, featured_sort_order,
    seo_title, seo_description)

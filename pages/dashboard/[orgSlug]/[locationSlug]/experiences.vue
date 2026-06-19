@@ -98,8 +98,11 @@
             </div>
           </UFormField>
           <div class="grid gap-5 sm:grid-cols-2">
-            <UFormField label="Price" help="Display string, e.g. ฿ 1,500 per person.">
-              <UInput v-model="form.price" placeholder="฿ 1,500" class="w-full" />
+            <UFormField label="Price amount" :help="`Numeric amount in ${defaultCurrency}. Leave empty for free or contact-only pricing.`">
+              <UInput v-model="form.price_amount" type="number" min="0" step="any" :placeholder="`e.g. 1500`" class="w-full" />
+            </UFormField>
+            <UFormField label="Price display override" help='Optional. Overrides the displayed price text, e.g. "Ask us" or "Free".'>
+              <UInput v-model="form.price" placeholder="Ask us" class="w-full" />
             </UFormField>
             <UFormField label="Duration (minutes)">
               <UInput v-model="form.duration_minutes" type="number" min="0" class="w-full" />
@@ -166,6 +169,7 @@ const toast = useToast()
 const siteId = await useDashboardSiteId()
 
 const sitePublicUrl = ref<string | null>(null)
+const defaultCurrency = ref('THB')
 const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const _headerLinks = computed(() => buildHeaderLinks())
 
@@ -187,8 +191,9 @@ async function loadExperiences() {
 
 async function loadSitePublicUrl() {
   try {
-    const response = await $fetch<{ success: boolean; settings: { public_url?: string | null } }>(`/api/dashboard/settings`)
+    const response = await $fetch<{ success: boolean; settings: { public_url?: string | null; default_currency?: string } }>(`/api/dashboard/settings`)
     sitePublicUrl.value = response.settings?.public_url || null
+    defaultCurrency.value = response.settings?.default_currency || 'THB'
   } catch {
     sitePublicUrl.value = null
   }
@@ -212,6 +217,7 @@ const emptyForm = () => ({
   video_url: null as string | null,
   images: [] as Array<{ asset_id: string | null; url: string | null; kind: 'image' | 'video' }>,
   price: '',
+  price_amount: '',
   duration_minutes: '',
   max_capacity: '',
   available_note: '',
@@ -265,6 +271,7 @@ function openEdit(exp: ApiRecord) {
     video_url: exp.video_url ?? null,
     images: Array.isArray(exp.images) ? [...exp.images] : [],
     price: exp.price ?? '',
+    price_amount: exp.price_amount != null ? String(exp.price_amount) : '',
     duration_minutes: exp.duration_minutes != null ? String(exp.duration_minutes) : '',
     max_capacity: exp.max_capacity != null ? String(exp.max_capacity) : '',
     available_note: exp.available_note ?? '',
@@ -291,6 +298,7 @@ async function save() {
     }
     const payload = {
       ...form,
+      price_amount: parseNumber(form.price_amount),
       duration_minutes: parseNumber(form.duration_minutes),
       max_capacity: parseNumber(form.max_capacity),
       featured_sort_order: parseNumber(form.featured_sort_order),

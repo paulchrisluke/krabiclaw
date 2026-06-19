@@ -1,5 +1,6 @@
 import type { McpToolRole } from '~/server/utils/mcp-auth'
 import { EXPERIENCE_STATUSES } from '~/server/utils/experiences'
+import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 
 export interface McpToolDefinition {
   name: string
@@ -59,6 +60,7 @@ const locationObject = {
     is_primary: { type: 'number' },
     hero_image_asset_id: { type: ['string', 'null'] },
     hero_video_asset_id: { type: ['string', 'null'] },
+    notification_phone: { type: ['string', 'null'], description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Falls back to the site-level whatsapp_phone if null.' },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
@@ -180,6 +182,7 @@ const experienceObject = {
     short_description: { type: ['string', 'null'] },
     duration_minutes: { type: ['number', 'null'] },
     price: { type: ['string', 'null'] },
+    price_amount: { type: ['number', 'null'] },
     currency: { type: ['string', 'null'] },
     capacity: { type: ['number', 'null'] },
     status: { type: 'string', enum: [...EXPERIENCE_STATUSES] },
@@ -211,6 +214,7 @@ const experienceWriteSchema = {
     },
   },
   price: { type: ['string', 'null'] },
+  price_amount: { type: ['number', 'null'] },
   duration_minutes: { type: ['number', 'null'] },
   max_capacity: { type: ['number', 'null'] },
   time_slots: { type: ['array', 'null'], items: { type: 'string' } },
@@ -526,6 +530,7 @@ const BOUNDED_WRITE_TOOL_NAMES = [
   'save_translation_review_item',
   'update_notification_settings',
   'create_work_request',
+  'set_default_currency',
 ] as const
 
 const OPEN_WORLD_WRITE_TOOL_NAMES = [
@@ -1166,7 +1171,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       logo_url: { type: 'string' },
       logo_asset_id: { type: 'string' },
       contact_email: { type: 'string' },
-      default_currency: { type: 'string' },
+      default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
       brand_color: { type: 'string' },
       social_facebook: { type: 'string' },
       social_instagram: { type: 'string' },
@@ -1187,6 +1192,25 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         updated: { type: 'boolean' },
       },
       required: ['id'],
+    },
+  }),
+  siteTool({
+    name: 'set_default_currency',
+    description: 'Set the default currency for this site. Affects how prices are displayed on menus and experiences.',
+    domain: 'sites',
+    minimumRole: 'admin',
+    confirmRequired: false,
+    inputSchema: {
+      currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES], description: 'ISO 4217 currency code.' },
+    },
+    required: ['currency'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        default_currency: { type: 'string' },
+        updated: { type: 'boolean' },
+      },
+      required: ['default_currency', 'updated'],
     },
   }),
   siteTool({
@@ -1262,6 +1286,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     confirmRequired: false,
     inputSchema: {
       location_id: { type: 'string' },
+      phone: { type: 'string', description: 'Public phone number shown to guests on the website and in booking/reservation confirmation emails.' },
+      email: { type: 'string', description: 'Public email shown to guests on the website and in booking/reservation confirmation emails.' },
+      notification_phone: { type: 'string', description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Falls back to the site-level whatsapp_phone if null. International format: +66812345678' },
       hero_image_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero image for this location.' },
       hero_video_asset_id: { type: 'string', description: 'Asset ID from get_site_media_assets. Assigns the hero video for this location.' },
     },
@@ -1651,8 +1678,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         asset_id: { type: 'string', description: 'Pass to confirm_media_upload after the browser finishes uploading.' },
         upload_url: { type: 'string', description: 'Cloudflare direct-upload URL — POST the image file here from the browser.' },
         image_id: { type: 'string', description: 'Cloudflare Images ID.' },
+        site_id: { type: 'string' },
+        activate_url: { type: 'string', description: 'URL to POST after upload to activate the asset.' },
+        activation_token: { type: 'string', description: 'Bearer token required when calling activate_url.' },
       },
-      required: ['asset_id', 'upload_url', 'image_id'],
+      required: ['asset_id', 'upload_url', 'image_id', 'site_id', 'activate_url', 'activation_token'],
     },
   }),
   siteTool({
