@@ -191,6 +191,7 @@
                   <McpEditCard
                     :guide-to="chatgptGuidePath"
                     guide-label="ChatGPT setup guide"
+                    :starter-prompt="chatgptStarterPrompt"
                     :dashboard-to="workspaceEntryPath"
                     dashboard-label="Open the dashboard"
                   />
@@ -382,8 +383,10 @@ const detailsCardDescription = computed(() => detailsSource.value === 'manual'
 const detailsRequireBasics = computed(() => detailsSource.value === 'manual')
 
 const scrollRef = ref<HTMLElement | null>(null)
+const importedSiteId = ref<string | null>(props.siteId ?? null)
 const importedOrgSlug = ref<string | null>(null)
 const importedLocationSlug = ref<string | null>(null)
+const checklistStarterPrompt = ref<string | null>(null)
 const preConfirmStep = ref<WizardStep>('awaiting_url')
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -442,6 +445,92 @@ const chatgptGuidePath = computed(() => {
   const slug = importedOrgSlug.value ?? props.existingOrgSlug ?? null
   return slug ? `/dashboard/${slug}/~/settings/chatgpt` : '/plugin'
 })
+
+const chatgptStarterPrompt = computed(() => {
+  if (props.isAddingLocation) {
+    return 'Help me finish this new location. Ask me for location-specific hours, photos, FAQs, and what makes this branch different.'
+  }
+
+  if (checklistStarterPrompt.value) {
+    return checklistStarterPrompt.value
+  }
+
+  if (selectedVertical.value === 'experience') {
+    return 'Help me finish my experience site. First ask me for my hero headline, brand story, and signature experiences.'
+  }
+
+  return 'Help me finish my restaurant site. First ask me for my hero headline, brand story, and top menu sections.'
+})
+
+interface ChecklistResponse {
+  success: boolean
+  vertical: string
+  brandName: string | null
+  city: string | null
+  items: {
+    business_info: boolean
+    hero_image: boolean
+    menu_or_experiences: boolean
+    story: boolean
+    post: boolean
+  }
+}
+
+function buildChecklistStarterPrompt(checklist: ChecklistResponse): string {
+  const name = checklist.brandName ?? 'my business'
+  const city = checklist.city ? ` in ${checklist.city}` : ''
+  const isExperience = checklist.vertical === 'experience'
+
+  const items = [
+    {
+      label: 'Business info imported from Google Maps',
+      prompt: `Show me a summary of my site for ${name}`,
+      complete: checklist.items.business_info,
+    },
+    {
+      label: 'Hero image added',
+      prompt: `Generate a hero image for ${name}'s homepage`,
+      complete: checklist.items.hero_image,
+    },
+    {
+      label: isExperience ? 'Experiences listed' : 'Menu added',
+      prompt: isExperience
+        ? `Add our signature experience to ${name} — include a description, duration, price per person, and max capacity`
+        : `Build a menu for ${name}. Ask me about our sections and dishes.`,
+      complete: checklist.items.menu_or_experiences,
+    },
+    {
+      label: 'About section written',
+      prompt: `Write an About section for ${name}${city}. Ask me a few questions first.`,
+      complete: checklist.items.story,
+    },
+    {
+      label: 'First post published',
+      prompt: `Write a launch post announcing ${name}'s new website is live`,
+      complete: checklist.items.post,
+    },
+  ]
+
+  const firstMissing = items.find(item => !item.complete)
+  if (!firstMissing) {
+    return isExperience
+      ? `Help me review ${name}'s experience site and suggest the next highest-impact improvement. Ask me one question at a time.`
+      : `Help me review ${name}'s restaurant site and suggest the next highest-impact improvement. Ask me one question at a time.`
+  }
+
+  return `Help me finish ${name}'s ${isExperience ? 'experience' : 'restaurant'} site. Start with "${firstMissing.label}" first. Ask me one question at a time and then help me complete this: ${firstMissing.prompt}`
+}
+
+async function refreshChecklistStarterPrompt(siteId: string | null) {
+  if (!siteId || props.isAddingLocation) return
+  try {
+    const checklist = await $fetch<ChecklistResponse>(`/api/dashboard/onboarding/checklist?siteId=${encodeURIComponent(siteId)}`)
+    checklistStarterPrompt.value = buildChecklistStarterPrompt(checklist)
+  } catch (error) {
+    console.error('onboarding_checklist_prompt_failed', error)
+    checklistStarterPrompt.value = null
+  }
+}
 
 function pushUser(text: string) {
   messages.value.push({ id: crypto.randomUUID(), from: 'user', text })
@@ -512,14 +601,14 @@ async function advance(target: WizardStep) {
 
   if (target === 'details') {
     await pushBot(detailsCardDescription.value, {
-      detailsCard: {
-        title: detailsCardTitle.value,
-        description: detailsCardDescription.value,
-        actionLabel: detailsActionLabel.value,
-        requireLocationBasics: detailsRequireBasics.value,
-        showPrimaryToggle: props.isAddingLocation,
-      },
-    })
+        detailsCard: {
+          title: detailsCardTitle.value,
+          description: detailsCardDescription.value,
+          actionLabel: detailsActionLabel.value,
+          requireLocationBasics: detailsRequireBasics.value,
+          showPrimaryToggle: !!props.isAddingLocation,
+        },
+      })
   }
 }
 
@@ -724,6 +813,7 @@ async function submitDetails() {
 
     const res = await $fetch<{
       success: boolean
+      siteId?: string | null
       orgSlug?: string | null
       locationSlug?: string | null
       error?: string
@@ -734,7 +824,9 @@ async function submitDetails() {
     }
 
     tools[0]!.done = true
+    importedSiteId.value = res.siteId ?? props.siteId ?? null
     importedOrgSlug.value = res.orgSlug ?? null
+    await refreshChecklistStarterPrompt(importedSiteId.value)
     await finishCreation(res.orgSlug, res.locationSlug)
   } catch (err) {
     importError.value = err instanceof Error ? err.message : 'Something went wrong. Please try again.'

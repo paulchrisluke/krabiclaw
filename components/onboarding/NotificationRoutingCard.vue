@@ -84,7 +84,7 @@ type NotificationForm = {
 
 const form = defineModel<NotificationForm>('form', { required: true })
 
-const props = defineProps<{
+defineProps<{
   title: string
   description: string
   actionLabel: string

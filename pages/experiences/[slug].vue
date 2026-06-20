@@ -326,7 +326,7 @@
 
                   <!-- Time slots -->
                   <UFormField v-if="hasAnySlots" label="Choose a time slot" required>
-                    <div v-if="availabilityLoading" class="flex flex-wrap gap-2">
+                    <div v-if="!availabilityInitialized || availabilityLoading" class="flex flex-wrap gap-2">
                       <USkeleton class="h-10 w-20 rounded-lg" />
                       <USkeleton class="h-10 w-20 rounded-lg" />
                     </div>
@@ -504,7 +504,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 // ── Booking form ──────────────────────────────────────────────────────────────
 
-const clockNow = ref(Date.now())
+const clockNow = useState<number>(`experience-clock:${slug}`, () => Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
 
 function formatDateInTimeZone(date: Date, timeZone: string): string {
@@ -523,10 +523,24 @@ function formatDateInTimeZone(date: Date, timeZone: string): string {
   return `${year}-${month}-${day}`
 }
 
+interface SlotAvailabilityItem {
+  time_slot: string
+  capacity: number | null
+  booked: number
+  remaining: number | null
+  is_closed: boolean
+  is_full: boolean
+}
+
+const hasAnySlots = computed(() => Boolean(experience.value?.recurring_slots || experience.value?.time_slots?.length))
+const availabilityInitialized = ref(false)
+const slotAvailability = ref<SlotAvailabilityItem[]>([])
+const availabilityTimezone = ref<string | null>(null)
+const availabilityLoading = ref(false)
+
 const bookingTimezone = computed(() =>
   availabilityTimezone.value ||
   siteConfig.value?.default_timezone ||
-  Intl.DateTimeFormat().resolvedOptions().timeZone ||
   'UTC',
 )
 
@@ -546,7 +560,7 @@ const form = reactive({
   guest_email: '',
   guest_phone: '',
   party_size: '1',
-  booking_date: '',
+  booking_date: minDate.value,
   time_slot: '',
   notes: '',
 })
@@ -573,20 +587,6 @@ onUnmounted(() => {
   }
 })
 
-interface SlotAvailabilityItem {
-  time_slot: string
-  capacity: number | null
-  booked: number
-  remaining: number | null
-  is_closed: boolean
-  is_full: boolean
-}
-
-const hasAnySlots = computed(() => Boolean(experience.value?.recurring_slots || experience.value?.time_slots?.length))
-const slotAvailability = ref<SlotAvailabilityItem[]>([])
-const availabilityTimezone = ref<string | null>(null)
-const availabilityLoading = ref(false)
-
 function slotCanAccommodateParty(slot: SlotAvailabilityItem): boolean {
   return !(slot.remaining !== null && slot.remaining < Number(form.party_size))
 }
@@ -598,6 +598,7 @@ function slotCanBeSelected(slot: SlotAvailabilityItem): boolean {
 async function loadSlotAvailability() {
   if (!siteId || !experience.value || !form.booking_date || !hasAnySlots.value) {
     slotAvailability.value = []
+    availabilityInitialized.value = true
     return
   }
   availabilityLoading.value = true
@@ -617,6 +618,7 @@ async function loadSlotAvailability() {
     slotAvailability.value = []
   } finally {
     availabilityLoading.value = false
+    availabilityInitialized.value = true
   }
 }
 

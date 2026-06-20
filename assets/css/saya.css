@@ -14,6 +14,7 @@
      bg-primary / text-primary / ring-primary utilities and all Nuxt UI
      components using color="primary" resolve to the tenant brand color. */
   --color-primary:      var(--saya-primary);
+
   /* WCAG foreground: calculated dynamically based on brand color contrast */
   --primary-foreground: var(--brand-color-foreground, #fff);
   --saya-bg:            #FFFFFF;

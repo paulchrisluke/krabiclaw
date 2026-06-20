@@ -17,7 +17,7 @@
     </header>
 
     <div
-      v-if="contextLoaded"
+      v-if="contextLoaded && !contextError"
       class="grid min-h-0 flex-1 overflow-hidden"
       style="grid-template-columns: minmax(24rem, 45%) 1fr; grid-template-rows: minmax(0, 1fr)"
     >
@@ -40,6 +40,25 @@
         @select-page="onSelectPage"
         @select-location="onSelectLocation"
       />
+    </div>
+
+    <div v-else-if="contextError" class="flex min-h-0 flex-1 items-center justify-center px-5">
+      <UCard class="w-full max-w-md">
+        <div class="space-y-3">
+          <UAlert
+            color="error"
+            variant="soft"
+            icon="i-heroicons-exclamation-triangle"
+            title="Workspace load failed"
+            :description="contextError"
+          />
+          <div class="flex justify-end">
+            <UButton color="neutral" variant="soft" size="sm" @click="loadContext">
+              Try again
+            </UButton>
+          </div>
+        </div>
+      </UCard>
     </div>
 
     <div v-else class="flex min-h-0 flex-1 items-center justify-center">
@@ -66,6 +85,7 @@ const orgSlug = route.params.orgSlug as string
 const siteData = ref<ApiRecord | null>(null)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
 const contextLoaded = ref(false)
+const contextError = ref<string | null>(null)
 const selectedLocationId = ref<string | null>(null)
 const selectedPreviewPage = ref('home')
 const previewReloadToken = ref(0)
@@ -117,6 +137,7 @@ const computedSiteStatus = computed((): 'setup' | 'progress' | 'ready' | 'live' 
 )
 
 const loadContext = async () => {
+  contextError.value = null
   try {
     const response = await $fetch<{
       success: boolean
@@ -127,10 +148,13 @@ const loadContext = async () => {
     if (response.restaurant) {
       siteData.value = response.restaurant
       siteLocations.value = response.locations ?? []
+    } else {
+      contextError.value = 'Workspace data could not be loaded.'
     }
   } catch (error) {
     // This page requires an existing site, so a failed context load is unexpected here
     console.error('Failed to load dashboard context:', error)
+    contextError.value = 'Failed to load workspace. Please try again.'
     toast.add({ description: 'Failed to load workspace. Please try again.', color: 'error' })
   } finally {
     contextLoaded.value = true

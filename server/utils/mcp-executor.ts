@@ -110,7 +110,11 @@ import { getMcpTool } from "~/server/utils/mcp-tools";
 import { requireMcpSite, requireMcpUser } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
 import { renderWidget } from "~/server/utils/mcp-render";
-import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
+import {
+  getPlaceDetails,
+  PlaceDetailsError,
+  searchPlaces,
+} from "~/server/utils/google-places";
 import { generateImageViaGateway } from "~/server/utils/ai-gateway";
 import type { SiteVertical } from "~/utils/vertical-copy";
 import {
@@ -1242,7 +1246,17 @@ export async function executeMcpToolCall(
         lat != null && lng != null
           ? { latitude: lat, longitude: lng }
           : undefined;
-      const results = await searchPlaces(apiKey, nameHint, locationBias);
+      let results;
+      try {
+        results = await searchPlaces(apiKey, nameHint, locationBias);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Google Places search failed.";
+        throw createError({
+          statusCode: 502,
+          statusMessage: message,
+        });
+      }
       const candidate = results[0];
       if (!candidate?.placeId) {
         throw mcpProtocolError(
@@ -1280,7 +1294,19 @@ export async function executeMcpToolCall(
         MCP_ERROR.invalidParams,
         "Could not resolve a place ID from that URL.",
       );
-    const details = await getPlaceDetails(apiKey, placeId, true);
+    let details;
+    try {
+      details = await getPlaceDetails(apiKey, placeId, true);
+    } catch (error) {
+      const message =
+        error instanceof PlaceDetailsError || error instanceof Error
+          ? error.message
+          : "Google Places detail lookup failed.";
+      throw createError({
+        statusCode: 502,
+        statusMessage: message,
+      });
+    }
 
     // Upload Google Photos to Cloudflare Images for stable preview URLs.
     // We don't have an org/site yet, so we do NOT persist media_asset rows here.
@@ -1759,28 +1785,36 @@ export async function executeMcpToolCall(
     case "delete_menu":
       await deleteMenu(site.db, site.organizationId, site.siteId, requiredString(args, "menu_id"));
       return { deleted: true };
-    case "create_menu_item":
+    case "create_menu_item": {
+      const createMenuItemArgs = normalizeMenuItemArgs(args, {
+        requireSection: true,
+      });
       return {
         item: await createMenuItem(
           site.db,
           site.organizationId,
           site.siteId,
-          requiredString(args, "menu_id"),
-          omit(args, ["menu_id"]) as never,
+          requiredString(createMenuItemArgs, "menu_id"),
+          omit(createMenuItemArgs, ["menu_id", "price"]) as never,
           site.userId,
         ),
       };
-    case "update_menu_item":
+    }
+    case "update_menu_item": {
+      const updateMenuItemArgs = normalizeMenuItemArgs(args, {
+        requireSection: false,
+      });
       return {
         item: await updateMenuItem(
           site.db,
           site.organizationId,
           site.siteId,
-          requiredString(args, "menu_item_id"),
-          omit(args, ["menu_item_id"]) as never,
+          requiredString(updateMenuItemArgs, "menu_item_id"),
+          omit(updateMenuItemArgs, ["menu_item_id", "price"]) as never,
           site.userId,
         ),
       };
+    }
     case "set_menu_item_image": {
       const assetId = requiredString(args, "asset_id");
       await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
@@ -2386,10 +2420,16 @@ export async function executeMcpToolCall(
       try {
         const assetId = requiredString(args, "asset_id");
         await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-        return await updateHomeHero(site.db, site.organizationId, site.siteId, {
+        const update = await updateHomeHero(site.db, site.organizationId, site.siteId, {
           image_asset_id: assetId,
           location_id: optionalString(args, "location_id"),
         });
+        const asset = await getMediaAsset(site.db, assetId, site.siteId);
+        return {
+          ...update,
+          asset_id: assetId,
+          public_url: asset?.public_url ?? null,
+        };
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
@@ -2538,7 +2578,10 @@ export async function executeMcpToolCall(
         locationId = (siteRow.primary_location_id as string | null) ?? null;
       }
       if (!locationId) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "location_id is required");
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "location_id is required because this site does not have a primary location yet. Call list_locations or create_location first, then retry create_experience with that location_id.",
+        );
       }
       return {
         experience: await createExperience(
@@ -2955,9 +2998,13 @@ export async function executeMcpToolCall(
       });
 
       return {
+        uploaded: true,
+        assigned: false,
         assetId,
         publicUrl: uploaded.publicUrl,
         thumbnailUrl: uploaded.thumbnailUrl,
+        nextStep:
+          "Upload complete. This image is in the media library but not assigned yet. Call a placement tool like set_home_hero_image or set_logo next.",
       };
     }
     case "save_generated_image_file": {
@@ -3368,6 +3415,34 @@ function omit(source: Record<string, unknown>, keys: string[]) {
   return Object.fromEntries(
     Object.entries(source).filter(([key]) => !keys.includes(key)),
   );
+}
+
+function normalizeMenuItemArgs(
+  args: Record<string, unknown>,
+  { requireSection }: { requireSection: boolean },
+) {
+  const normalized = { ...args };
+
+  if (
+    normalized.price_amount === undefined &&
+    normalized.price !== undefined &&
+    normalized.price !== null &&
+    normalized.price !== ""
+  ) {
+    normalized.price_amount = normalized.price;
+  }
+
+  if (requireSection) {
+    normalized.section = requiredString(normalized, "section");
+  } else if (
+    normalized.section !== undefined &&
+    normalized.section !== null &&
+    typeof normalized.section !== "string"
+  ) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, "Invalid section");
+  }
+
+  return normalized;
 }
 
 function getDateString(date: Date): string {

@@ -224,6 +224,16 @@ test.describe('stateless MCP server', () => {
     })
     expect(settingsUpdate.status()).toBe(200)
 
+    const brandColorUpdate = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'set_brand_color',
+      args: { site_id: siteId, color: '#0F4C5C' },
+    })
+    expect(brandColorUpdate.status()).toBe(200)
+    const brandColorBody = await brandColorUpdate.json()
+    expect(mcpData<{ brand_color: string; updated: boolean }>(brandColorBody).brand_color).toBe('#0F4C5C')
+    expect(mcpData<{ brand_color: string; updated: boolean }>(brandColorBody).updated).toBe(true)
+
     const deleteFieldSeed = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'update_page_content',

@@ -36,7 +36,7 @@
             placeholder="Monday: 9:00 AM - 6:00 PM&#10;Tuesday: 9:00 AM - 6:00 PM"
           />
         </UFormField>
-        <UFormField label="Notification phone">
+        <UFormField label="Manager alert number">
           <UInput v-model="form.notificationPhone" type="tel" placeholder="+66..." />
         </UFormField>
         <UFormField label="Timezone">

@@ -57,14 +57,16 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Organization not found after site creation. Data integrity issue.' }, { status: 500 })
   }
 
-  if (siteId) {
-    const locationRow = await db.prepare(`
-      SELECT id FROM business_locations
+  const locationRow = siteId
+    ? await db.prepare(`
+      SELECT id, slug FROM business_locations
       WHERE site_id = ? AND organization_id = ? AND status = 'active'
       ORDER BY is_primary DESC, created_at ASC
       LIMIT 1
-    `).bind(siteId, organizationId).first<{ id: string }>()
+    `).bind(siteId, organizationId).first<{ id: string; slug: string | null }>()
+    : null
 
+  if (siteId) {
     if (locationRow?.id) {
       await updateLocation(db, organizationId, siteId, locationRow.id, {
         title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name,
@@ -81,14 +83,5 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const locationRow = siteId
-    ? await db.prepare(`
-      SELECT slug FROM business_locations
-      WHERE site_id = ? AND organization_id = ? AND status = 'active'
-      ORDER BY is_primary DESC, created_at ASC
-      LIMIT 1
-    `).bind(siteId, organizationId).first<{ slug: string }>()
-    : null
-
-  return jsonResponse({ success: true, orgSlug: orgRow.slug, locationSlug: locationRow?.slug ?? null })
+  return jsonResponse({ success: true, orgSlug: orgRow.slug, siteId, locationSlug: locationRow?.slug ?? null })
 })

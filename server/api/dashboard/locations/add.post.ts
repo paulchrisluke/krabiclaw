@@ -219,6 +219,7 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({
     success: true,
+    siteId,
     locationSlug: slug,
     orgSlug: orgRow.slug,
   })

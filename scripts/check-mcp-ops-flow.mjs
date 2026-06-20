@@ -162,6 +162,17 @@ async function main() {
   expectValue('create_menu_item returns item id', Boolean(menuItemId), menuItem.body)
   expectValue('created menu item keeps price amount', moneyEquals(menuItemData?.price_amount, 12.5), menuItemData)
 
+  const aliasedMenuItem = await mcp(headers, 'create_menu_item', {
+    site_id: siteId,
+    menu_id: menuId,
+    section: 'Mains',
+    name: 'MCP Alias Curry',
+    price: '14.25',
+  })
+  expectStatus('create_menu_item with legacy price alias succeeds', aliasedMenuItem)
+  const aliasedMenuItemData = data(aliasedMenuItem.body)?.item
+  expectValue('legacy price alias is normalized to price_amount', moneyEquals(aliasedMenuItemData?.price_amount, 14.25), aliasedMenuItemData)
+
   const itemUpdate = await mcp(headers, 'update_menu_item', {
     site_id: siteId,
     menu_item_id: menuItemId,

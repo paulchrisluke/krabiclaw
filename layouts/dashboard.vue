@@ -582,7 +582,11 @@ const navigationItems = computed(() => {
 const navbarTitle = computed(() => {
   if (inAdminWorkspace.value) return 'Platform Admin'
   const parts = route.path.split('/').filter(Boolean)
-  const segment = inLocationWorkspace.value ? parts.at(3) : parts.at(2)
+  const segment = parts.at(2) === '~'
+    ? parts.at(4)
+    : inLocationWorkspace.value
+      ? parts.at(3)
+      : parts.at(2)
   if (!segment) return 'Overview'
   const labels: Record<string, string> = {
     account: 'Account',

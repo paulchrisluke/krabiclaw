@@ -1141,7 +1141,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
   {
     name: "create_experience",
     description:
-      "Create a new bookable dining experience for this site. Every experience must belong to exactly one location — if the site has more than one location, call list_locations first and ask the user which one if it isn't obvious.",
+      "Create a new bookable dining experience for this site. Every experience belongs to a location. If location_id is omitted, use the site primary location when available; if the site has multiple locations and it is not obvious, call list_locations first and ask.",
     input_schema: {
       type: "object",
       properties: {
@@ -1221,7 +1221,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
         },
         location_id: {
           type: "string",
-          description: "ID from list_locations. Required — every experience belongs to exactly one location.",
+          description: "Optional ID from list_locations. If omitted, the site primary location is used when available.",
         },
         status: {
           type: "string",
@@ -1234,7 +1234,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
           description: "SEO meta description (150–160 chars).",
         },
       },
-      required: ["title", "location_id"],
+      required: ["title"],
     },
   },
   {

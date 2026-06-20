@@ -177,6 +177,7 @@
                   <McpEditCard
                     :guide-to="`/dashboard/${orgSlug}/~/settings/chatgpt`"
                     guide-label="ChatGPT setup guide"
+                    :starter-prompt="transferStarterPrompt"
                     :dashboard-to="`/dashboard/${orgSlug}`"
                     dashboard-label="Open the dashboard"
                   />
@@ -228,6 +229,10 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{ done: [] }>()
 const siteVertical = computed(() => props.vertical === 'experience' ? 'experience' : 'restaurant')
+const transferStarterPrompt = computed(() => props.vertical === 'experience'
+  ? 'Audit this imported site and help me improve it. Start with hero copy, brand story, missing photos, and any weak experience pages.'
+  : 'Audit this imported site and help me improve it. Start with hero copy, brand story, missing photos, and any weak menu pages.'
+)
 
 type WizardStep = 'welcome' | 'preview' | 'notifications' | 'team' | 'social' | 'domain' | 'done'
 
@@ -301,7 +306,7 @@ function advance(target: WizardStep) {
 
   if (target === 'notifications') {
     pushMessage({
-      text: `First, let's confirm the routing. Your owner number gets every booking and message, and each location can have its own notification number for the person managing it.`,
+      text: `First, let's confirm where alerts should go so bookings and messages land with the right person at each location.`,
       notifCard: true,
     })
   }

@@ -13,6 +13,24 @@
     </template>
 
     <div class="space-y-4 px-4 pb-4">
+      <div v-if="starterPrompt" class="space-y-2">
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-[11px] font-bold uppercase tracking-wide text-dimmed">Start with this prompt</p>
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            :icon="copiedStarter ? 'i-heroicons-check' : 'i-heroicons-clipboard'"
+            @click="copyStarterPrompt"
+          >
+            {{ copiedStarter ? 'Copied' : 'Copy prompt' }}
+          </UButton>
+        </div>
+        <div class="rounded-xl border border-default bg-default px-3 py-3 text-[12px] leading-relaxed text-highlighted">
+          {{ starterPrompt }}
+        </div>
+      </div>
+
       <div class="rounded-xl border border-default bg-default px-3 py-3">
         <p class="text-[11px] font-bold uppercase tracking-wide text-dimmed">How it works</p>
         <div class="mt-2 space-y-2">
@@ -78,6 +96,7 @@ const props = withDefaults(defineProps<{
   dashboardLabel?: string
   guideTo?: string | null
   guideLabel?: string
+  starterPrompt?: string | null
   examples?: string[]
 }>(), {
   title: 'Edit with ChatGPT',
@@ -86,6 +105,7 @@ const props = withDefaults(defineProps<{
   dashboardLabel: 'Open the dashboard',
   guideTo: null,
   guideLabel: 'Setup guide',
+  starterPrompt: null,
   examples: () => [
     'Update the beachfront pottery price to ฿2,000.',
     'Add a new FAQ for this location about parking.',
@@ -100,4 +120,19 @@ const steps = computed(() => [
 ])
 
 const examples = computed(() => props.examples)
+const starterPrompt = computed(() => props.starterPrompt)
+const copiedStarter = ref(false)
+
+async function copyStarterPrompt() {
+  if (!starterPrompt.value) return
+  try {
+    await navigator.clipboard.writeText(starterPrompt.value)
+    copiedStarter.value = true
+    setTimeout(() => {
+      copiedStarter.value = false
+    }, 2000)
+  } catch (error) {
+    console.error('copy_starter_prompt_failed', error)
+  }
+}
 </script>

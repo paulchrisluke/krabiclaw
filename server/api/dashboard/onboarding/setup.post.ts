@@ -100,11 +100,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const locationRow = await db.prepare(`
-    SELECT id FROM business_locations
+    SELECT id, slug FROM business_locations
     WHERE site_id = ? AND organization_id = ? AND status = 'active'
     ORDER BY is_primary DESC, created_at ASC
     LIMIT 1
-  `).bind(siteId, organizationId).first<{ id: string }>()
+  `).bind(siteId, organizationId).first<{ id: string; slug: string | null }>()
 
   if (!locationRow?.id) {
     return jsonResponse({ error: 'No active location found for this site. Site creation may have failed.' }, { status: 500 })
@@ -180,5 +180,11 @@ export default defineEventHandler(async (event) => {
   const orgRow = await db.prepare(`SELECT slug FROM organization WHERE id = ? LIMIT 1`)
     .bind(organizationId).first<{ slug: string }>()
 
-  return jsonResponse({ success: true, placeName: place.name, orgSlug: orgRow?.slug ?? null })
+  return jsonResponse({
+    success: true,
+    placeName: place.name,
+    orgSlug: orgRow?.slug ?? null,
+    siteId,
+    locationSlug: locationRow.slug ?? null,
+  })
 })
