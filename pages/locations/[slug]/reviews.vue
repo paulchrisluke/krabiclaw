@@ -241,7 +241,7 @@ function formatReviewDate(ts: string | null) {
 
 
 const seoTitle = () => `Reviews · ${location.value?.title || slug.value}`
-const seoDescription = () => `Guest reviews for ${location.value?.title} at ${siteName.value}.`
+const seoDescription = () => `Guest reviews for ${location.value?.title || slug.value} at ${siteName.value}.`
 
 useSeoMeta({
   title: seoTitle,

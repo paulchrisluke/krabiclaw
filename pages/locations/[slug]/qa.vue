@@ -155,7 +155,7 @@ const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
 const seoTitle = () => `Q&A · ${location.value?.title || slug.value}`
-const seoDescription = () => `Questions and answers for ${location.value?.title} at ${siteName.value}.`
+const seoDescription = () => `Questions and answers for ${location.value?.title || slug.value} at ${siteName.value}.`
 
 useSeoMeta({
   title: seoTitle,

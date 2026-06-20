@@ -192,7 +192,7 @@ function toAbsoluteUrl(value?: string | null): string | null {
 }
 
 const seoTitle = () => `Photos · ${location.value?.title || slug.value}`
-const seoDescription = () => `${photos.value.length} photos from ${location.value?.title} at ${siteName.value}.`
+const seoDescription = () => `${photos.value.length} photos from ${location.value?.title || slug.value} at ${siteName.value}.`
 
 useSeoMeta({
   title: seoTitle,

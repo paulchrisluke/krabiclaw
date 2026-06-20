@@ -20,13 +20,15 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  // Resolve organization_id from site
+  // Resolve organization_id from site and verify user permissions
   const site = await db.prepare(
-    `SELECT organization_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`
-  ).bind(siteId).first<{ organization_id: string }>()
+    `SELECT s.organization_id FROM sites s
+     JOIN member m ON m.organizationId = s.organization_id
+     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') AND s.status = 'active' LIMIT 1`
+  ).bind(siteId, session.user.id).first<{ organization_id: string }>()
 
   if (!site) {
-    return jsonResponse({ error: 'Site not found' }, { status: 404 })
+    return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
   }
 
   const organizationId = site.organization_id
@@ -34,7 +36,14 @@ export default defineEventHandler(async (event) => {
   // Process brand_color if provided - resolve natural language to hex
   let brandColor: string | undefined
   if (body.brand_color && typeof body.brand_color === 'string') {
-    brandColor = resolveColor(body.brand_color)
+    try {
+      brandColor = resolveColor(body.brand_color)
+      if (!brandColor) {
+        return jsonResponse({ error: 'Invalid color value' }, { status: 400 })
+      }
+    } catch {
+      return jsonResponse({ error: 'Invalid color value' }, { status: 400 })
+    }
   }
 
   // Update each provided config key
@@ -80,6 +89,6 @@ export default defineEventHandler(async (event) => {
   return jsonResponse({
     success: true,
     updated: true,
-    brand_color: brandColor || body.brand_color
+    brand_color: brandColor
   })
 })

@@ -262,12 +262,14 @@ function expandSlotGeneratorArgs(args: Record<string, unknown>): Record<string, 
       throw mcpProtocolError(MCP_ERROR.invalidParams, "slot_weekday must be a weekday name.");
     }
     const existingRecurring = (rest.recurring_slots as Record<string, string[]> | null | undefined) ?? {};
+    const { time_slots, ...restWithoutTimeSlots } = rest;
     return {
-      ...rest,
+      ...restWithoutTimeSlots,
       recurring_slots: { ...existingRecurring, [slot_weekday as WeekdayName]: generated },
     };
   }
-  return { ...rest, time_slots: generated };
+  const { recurring_slots, ...restWithoutRecurringSlots } = rest;
+  return { ...restWithoutRecurringSlots, time_slots: generated };
 }
 
 function resolveMcpBaseUrl(event: H3Event): string {
@@ -2621,7 +2623,14 @@ export async function executeMcpToolCall(
       if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "Date must be YYYY-MM-DD format");
       }
+      const parsedDate = new Date(`${startDate}T00:00:00Z`);
+      if (isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== startDate) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "Invalid calendar date");
+      }
       const daysRaw = (args as Record<string, unknown>).days;
+      if (daysRaw !== undefined && typeof daysRaw === "number" && !Number.isInteger(daysRaw)) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "days must be an integer");
+      }
       const days = Math.min(Math.max(typeof daysRaw === "number" ? daysRaw : 1, 1), 31);
       const cursor = new Date(`${startDate}T00:00:00Z`);
       const dates: Array<{ date: string; slots: Awaited<ReturnType<typeof getSlotAvailability>> }> = [];

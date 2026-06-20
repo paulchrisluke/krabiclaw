@@ -314,9 +314,9 @@ export async function createLocation(
             id, organization_id, site_id, title, slug, city, neighborhood, phone, email, website_url, maps_url,
             google_place_id, description, short_description, address, opening_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-            hero_image_asset_id, hero_video_asset_id, is_primary, status, created_at, updated_at
+            hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, is_primary, status, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
         `,
           )
           .bind(
@@ -347,6 +347,8 @@ export async function createLocation(
             normalizeOrderingUrl(input.foodpanda_url, "foodpanda_url"),
             input.hero_image_asset_id ?? null,
             input.hero_video_asset_id ?? null,
+            input.notification_phone ?? null,
+            input.timezone ?? null,
             isPrimary ? 1 : 0,
             now,
             now,

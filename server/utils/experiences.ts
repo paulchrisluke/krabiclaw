@@ -582,6 +582,30 @@ function assertDateStr(value: string, field: string): void {
   if (!DATE_PATTERN.test(value)) {
     throw createError({ statusCode: 400, statusMessage: `${field} must be in "YYYY-MM-DD" format` })
   }
+  // Parse and validate the actual date values
+  const parts = value.split('-')
+  const yearStr = parts[0]!
+  const monthStr = parts[1]!
+  const dayStr = parts[2]!
+  const year = parseInt(yearStr, 10)
+  const month = parseInt(monthStr, 10)
+  const day = parseInt(dayStr, 10)
+
+  if (month < 1 || month > 12) {
+    throw createError({ statusCode: 400, statusMessage: `${field} has invalid month: must be between 1 and 12` })
+  }
+
+  // Check if the day is valid for the given month and year
+  const daysInMonth = new Date(year, month, 0).getDate()
+  if (day < 1 || day > daysInMonth) {
+    throw createError({ statusCode: 400, statusMessage: `${field} has invalid day: must be between 1 and ${daysInMonth} for the given month and year` })
+  }
+
+  // Verify the date is actually valid by constructing it and checking if components match
+  const date = new Date(year, month - 1, day)
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    throw createError({ statusCode: 400, statusMessage: `${field} is not a valid date` })
+  }
 }
 
 export async function listSlotOverrides(
@@ -633,6 +657,15 @@ export async function upsertSlotOverride(
   }
   assertFiniteNonNegative(input.capacity_override, 'capacity_override')
 
+  // Verify that the experience belongs to the provided site
+  const experience = await db
+    .prepare(`SELECT id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1`)
+    .bind(experienceId, siteId)
+    .first<{ id: string }>()
+  if (!experience) {
+    throw createError({ statusCode: 404, statusMessage: 'Experience not found or does not belong to this site' })
+  }
+
   const now = new Date().toISOString()
   const existing = await db
     .prepare(`SELECT id FROM experience_slot_overrides WHERE experience_id = ? AND override_date = ? AND time_slot = ? LIMIT 1`)
@@ -664,9 +697,10 @@ export async function upsertSlotOverride(
     .prepare(
       `SELECT id, experience_id, organization_id, site_id, override_date, time_slot,
               status, capacity_override, note, created_at, updated_at
-       FROM experience_slot_overrides WHERE id = ?`,
+       FROM experience_slot_overrides
+       WHERE experience_id = ? AND override_date = ? AND time_slot = ?`,
     )
-    .bind(id)
+    .bind(experienceId, input.override_date, input.time_slot)
     .first<SlotOverride>()
   if (!row) throw new Error('Failed to read back slot override after upsert.')
   return row
@@ -705,10 +739,10 @@ export async function getSlotAvailability(
     .prepare(
       `SELECT time_slot, SUM(party_size) AS booked
        FROM experience_bookings
-       WHERE experience_id = ? AND booking_date = ? AND status IN ('pending', 'confirmed')
+       WHERE site_id = ? AND experience_id = ? AND booking_date = ? AND status IN ('pending', 'confirmed')
        GROUP BY time_slot`,
     )
-    .bind(experience.id, dateStr)
+    .bind(siteId, experience.id, dateStr)
     .all<{ time_slot: string; booked: number }>()
   const bookedMap = Object.fromEntries((bookingRows ?? []).map((r) => [r.time_slot, r.booked]))
 
@@ -716,9 +750,9 @@ export async function getSlotAvailability(
     .prepare(
       `SELECT time_slot, status, capacity_override
        FROM experience_slot_overrides
-       WHERE experience_id = ? AND override_date = ?`,
+       WHERE site_id = ? AND experience_id = ? AND override_date = ?`,
     )
-    .bind(experience.id, dateStr)
+    .bind(siteId, experience.id, dateStr)
     .all<{ time_slot: string; status: 'closed' | 'open'; capacity_override: number | null }>()
   const overrideMap = Object.fromEntries((overrideRows ?? []).map((r) => [r.time_slot, r]))
 

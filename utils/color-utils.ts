@@ -7,14 +7,19 @@
  * Parse hex color to RGB values
  */
 export function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!result || !result[1] || !result[2] || !result[3]) return null
+  const result = /^#?([a-f\d]{3}|[a-f\d]{6})$/i.exec(hex)
+  if (!result || !result[1]) return null
 
-  return {
-    r: parseInt(result[1], 16),
-    g: parseInt(result[2], 16),
-    b: parseInt(result[3], 16)
+  let hexValue = result[1]
+  if (hexValue.length === 3) {
+    hexValue = hexValue.split('').map(c => c + c).join('')
   }
+
+  const r = parseInt(hexValue.slice(0, 2), 16)
+  const g = parseInt(hexValue.slice(2, 4), 16)
+  const b = parseInt(hexValue.slice(4, 6), 16)
+
+  return { r, g, b }
 }
 
 /**
@@ -237,9 +242,9 @@ export function interpretColorDescription(description: string): string {
     }
   }
   
-  // Check for partial matches
+  // Check for partial matches with minimum length requirement
   for (const [key, value] of Object.entries(COLOR_MAPPINGS)) {
-    if (lowerDesc.includes(key) || key.includes(lowerDesc)) {
+    if ((lowerDesc.includes(key) && key.length >= 3) || (key.includes(lowerDesc) && lowerDesc.length >= 3)) {
       return value
     }
   }

@@ -15,14 +15,21 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'end parameter is required and cannot be empty' }, { status: 400 })
   }
 
-  // Validate start and end are valid dates
-  const startDate = new Date(start)
-  const endDate = new Date(end)
-  if (Number.isNaN(startDate.getTime())) {
-    return jsonResponse({ error: 'start parameter must be a valid date format' }, { status: 400 })
+  // Validate start and end are time-of-day strings in HH:MM format
+  const timeFormat = /^\d{2}:\d{2}$/
+  if (!timeFormat.test(start)) {
+    return jsonResponse({ error: 'start parameter must be in HH:MM format' }, { status: 400 })
   }
-  if (Number.isNaN(endDate.getTime())) {
-    return jsonResponse({ error: 'end parameter must be a valid date format' }, { status: 400 })
+  if (!timeFormat.test(end)) {
+    return jsonResponse({ error: 'end parameter must be in HH:MM format' }, { status: 400 })
+  }
+  const [startHours, startMinutes] = start.split(':').map(Number)
+  const [endHours, endMinutes] = end.split(':').map(Number)
+  if (startHours! < 0 || startHours! > 23 || startMinutes! < 0 || startMinutes! > 59) {
+    return jsonResponse({ error: 'start parameter must be a valid time (hours 0-23, minutes 0-59)' }, { status: 400 })
+  }
+  if (endHours! < 0 || endHours! > 23 || endMinutes! < 0 || endMinutes! > 59) {
+    return jsonResponse({ error: 'end parameter must be a valid time (hours 0-23, minutes 0-59)' }, { status: 400 })
   }
 
   // Validate interval is a finite positive number

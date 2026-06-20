@@ -568,6 +568,7 @@ const savingOverride = ref<string | null>(null)
 function openAvailability(exp: ApiRecord) {
   availabilityExp.value = exp
   availabilityDate.value = new Date().toISOString().slice(0, 10)
+  Object.keys(slotCapacityOverrides).forEach(key => delete slotCapacityOverrides[key])
   availabilityOpen.value = true
   loadAvailability()
 }
@@ -588,6 +589,7 @@ async function loadAvailability() {
     availabilityTimezone.value = avail.timezone
     availabilitySlots.value = avail.dates[0]?.slots ?? []
     existingOverrides.value = overrides.overrides ?? []
+    Object.keys(slotCapacityOverrides).forEach(key => delete slotCapacityOverrides[key])
   } catch {
     toast.add({ description: 'Failed to load availability.', color: 'error' })
   } finally {

@@ -225,7 +225,7 @@ function getDietaryTags(item: ApiValue): string[] {
 
 
 const seoTitle = () => `Menu · ${location.value?.title || slug.value}`
-const seoDescription = () => `Full menu for ${location.value?.title} at ${siteName.value}.`
+const seoDescription = () => `Full menu for ${location.value?.title || slug.value} at ${siteName.value}.`
 
 useSeoMeta({
   title: seoTitle,

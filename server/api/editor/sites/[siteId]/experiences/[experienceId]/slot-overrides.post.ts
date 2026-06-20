@@ -34,13 +34,18 @@ export default defineEventHandler(async (event) => {
   const timeSlot = String(body.time_slot ?? '')
   const status = String(body.status ?? '')
 
+  // Validate YYYY-MM-DD format
+  if (overrideDate && !/^\d{4}-\d{2}-\d{2}$/.test(overrideDate)) {
+    return jsonResponse({ error: 'override_date must be in YYYY-MM-DD format' }, { status: 400 })
+  }
+
   if (status !== 'closed' && status !== 'open') {
     return jsonResponse({ error: 'status must be "closed" or "open"' }, { status: 400 })
   }
 
   const capacityOverride = body.capacity_override == null || body.capacity_override === '' ? null : Number(body.capacity_override)
-  if (capacityOverride !== null && !Number.isFinite(capacityOverride)) {
-    return jsonResponse({ error: 'capacity_override must be a valid number' }, { status: 400 })
+  if (capacityOverride !== null && (!Number.isFinite(capacityOverride) || capacityOverride < 0)) {
+    return jsonResponse({ error: 'capacity_override must be a non-negative number' }, { status: 400 })
   }
 
   const effectiveSlots = resolveEffectiveTimeSlots(experience, overrideDate)

@@ -240,7 +240,7 @@ const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
 const seoTitle = () => `Plan a visit · ${location.value?.title || slug.value}`
-const seoDescription = () => `Hours, address and directions for ${location.value?.title}.`
+const seoDescription = () => `Hours, address and directions for ${location.value?.title || slug.value}.`
 
 useSeoMeta({
   title: seoTitle,

@@ -73,7 +73,11 @@ export default defineEventHandler(async (event) => {
     const orgRow = await db.prepare('SELECT slug FROM organization WHERE id = ? LIMIT 1')
       .bind(organizationId).first<{ slug: string }>()
 
-    return jsonResponse({ success: true, locationSlug: slug, orgSlug: orgRow?.slug ?? null })
+    if (!orgRow) {
+      return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+    }
+
+    return jsonResponse({ success: true, locationSlug: slug, orgSlug: orgRow.slug })
   }
 
   const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
@@ -171,9 +175,13 @@ export default defineEventHandler(async (event) => {
   const orgRow = await db.prepare('SELECT slug FROM organization WHERE id = ? LIMIT 1')
     .bind(organizationId).first<{ slug: string }>()
 
+  if (!orgRow) {
+    return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+  }
+
   return jsonResponse({
     success: true,
     locationSlug: slug,
-    orgSlug: orgRow?.slug ?? null,
+    orgSlug: orgRow.slug,
   })
 })
