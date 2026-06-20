@@ -41,18 +41,43 @@ export default defineEventHandler(async (event) => {
   const siteId = site.id as string
   const organizationId = organization?.id as string
 
-  const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
-  if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 503 })
-
-  const body = await readBody(event) as { mapsUrl?: unknown; placeId?: unknown; query?: unknown; previewOnly?: unknown }
+  const body = await readBody(event) as { mapsUrl?: unknown; placeId?: unknown; query?: unknown; previewOnly?: unknown; name?: unknown }
   const mapsUrl = typeof body?.mapsUrl === 'string' ? body.mapsUrl.trim() : ''
   const placeId = typeof body?.placeId === 'string' ? body.placeId.trim() : ''
   const query = typeof body?.query === 'string' ? body.query.trim() : ''
+  const name = typeof body?.name === 'string' ? body.name.trim() : ''
   const previewOnly = body?.previewOnly === true
 
-  if (!mapsUrl && !placeId && !query) {
-    return jsonResponse({ error: 'mapsUrl, placeId, or query is required' }, { status: 400 })
+  if (!mapsUrl && !placeId && !query && !name) {
+    return jsonResponse({ error: 'mapsUrl, placeId, query, or name is required' }, { status: 400 })
   }
+
+  // Manual path: business name only, no Google Places lookup required.
+  if (name && !mapsUrl && !placeId && !query) {
+    const baseSlug = slugify(name).slice(0, 50)
+    const slug = await uniqueLocationSlug(db, siteId, baseSlug)
+
+    const result = await createLocation(
+      env as SetupEnv,
+      db,
+      organizationId,
+      siteId,
+      { title: name, slug, is_primary: false },
+      session.user.id,
+    )
+
+    if (result.status !== 200 && result.status !== 201) {
+      return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
+    }
+
+    const orgRow = await db.prepare('SELECT slug FROM organization WHERE id = ? LIMIT 1')
+      .bind(organizationId).first<{ slug: string }>()
+
+    return jsonResponse({ success: true, locationSlug: slug, orgSlug: orgRow?.slug ?? null })
+  }
+
+  const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
+  if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 503 })
 
   let place
   try {

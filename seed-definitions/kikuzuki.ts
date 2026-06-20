@@ -505,8 +505,8 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(site.vertical)},
   ${sqlValue(site.contentSource)},
   ${sqlValue(site.mediaSource)},
-  'media-kiku-logo',
-  'media-kiku-about'
+  NULL,
+  NULL
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
@@ -612,7 +612,7 @@ ${mediaRows};
 
 ${heroUpdates}
 
-UPDATE sites SET logo_asset_id = ${sqlValue(compiledKikuzukiSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledKikuzukiSeed.site.primaryLocationId)} WHERE id = ${sqlValue(identity.siteId)};
+UPDATE sites SET logo_asset_id = ${sqlValue(compiledKikuzukiSeed.site.logoAssetId ?? null)}, og_image_asset_id = 'media-kiku-about', primary_location_id = ${sqlValue(compiledKikuzukiSeed.site.primaryLocationId)} WHERE id = ${sqlValue(identity.siteId)};
 -- END GENERATED: kikuzuki_media`
 }
 

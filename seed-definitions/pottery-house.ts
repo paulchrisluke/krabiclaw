@@ -1018,8 +1018,8 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(site.vertical)},
   ${sqlValue(site.contentSource)},
   ${sqlValue(site.mediaSource)},
-  'media-ph-logo',
-  'media-ph-homepage-custom'
+  NULL,
+  NULL
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
@@ -1126,7 +1126,7 @@ ${mediaRows};
 
 ${heroUpdates}
 
-UPDATE sites SET logo_asset_id = ${sqlValue(compiledPotteryHouseSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledPotteryHouseSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledPotteryHouseSeed.identity.siteId)};
+UPDATE sites SET logo_asset_id = ${sqlValue(compiledPotteryHouseSeed.site.logoAssetId ?? null)}, og_image_asset_id = 'media-ph-homepage-custom', primary_location_id = ${sqlValue(compiledPotteryHouseSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledPotteryHouseSeed.identity.siteId)};
 -- END GENERATED: pottery_media`
 }
 

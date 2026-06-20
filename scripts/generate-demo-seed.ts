@@ -79,42 +79,12 @@ INSERT OR IGNORE INTO themes (id, name, slug, version, description, status)
 VALUES ('saya-theme-v1', 'Saya', 'saya', '1.0.0', 'Restaurant website theme', 'active');
 
 -- Cleanly replace the protected demo tenant and MCP fixture orgs.
--- D1 does not reliably cascade foreign key deletes when PRAGMA foreign_keys is
--- set at the session level via wrangler d1 execute --file, so we must explicitly
--- delete all child rows in reverse dependency order before deleting parent rows.
-
--- Delete child rows in dependency order (deepest first)
-DELETE FROM translation_job_items WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM translation_jobs WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM post_channel_jobs WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM post_translations WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM menu_item_translations WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM menu_translations WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM business_location_translations WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM site_content_translations WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM site_content WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM site_locales WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM menu_items WHERE menu_id IN (SELECT id FROM menus WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient'));
-DELETE FROM menus WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM reviews WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM posts WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM experience_slot_overrides WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM experiences WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM reservation_submissions WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM media_assets WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM business_locations WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM site_domain_events WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM domain_reconciliation_jobs WHERE domain_id IN (SELECT id FROM site_domains WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient'));
-DELETE FROM site_domains WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM sites WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM organization_entitlements WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM organization_billing WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM google_business_events WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM google_business_connections WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM facebook_pages_connections WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM dashboard_preferences WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM member WHERE organizationId IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM invitation WHERE organizationId IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
+-- Every org-scoped table declares ON DELETE CASCADE back to organization(id),
+-- and D1 honors that cascade within a single wrangler d1 execute --file run
+-- (verified: deleting organization cascades through sites -> experiences ->
+-- experience_bookings without a constraint error). So deleting the org row
+-- is sufficient; there is no need to hand-maintain a child-table delete list
+-- that has to be kept in sync with every new table added to the schema.
 DELETE FROM organization WHERE id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
 
 -- Delete users (after member rows are deleted)

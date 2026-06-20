@@ -1326,7 +1326,7 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(compiledDemoSeed.site.vertical)},
   ${sqlValue(compiledDemoSeed.site.contentSource)},
   ${sqlValue(compiledDemoSeed.site.mediaSource)},
-  'media-demo-hero'
+  NULL
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
@@ -1431,7 +1431,7 @@ ${mediaRows};
 
 ${heroUpdates}
 
-UPDATE sites SET primary_location_id = ${sqlValue(compiledDemoSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledDemoSeed.identity.siteId)};
+UPDATE sites SET og_image_asset_id = 'media-demo-hero', primary_location_id = ${sqlValue(compiledDemoSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledDemoSeed.identity.siteId)};
 -- END GENERATED: demo_media`
 }
 

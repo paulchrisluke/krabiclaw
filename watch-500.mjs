@@ -12,7 +12,7 @@ page.on('response', async (res) => {
   const status = res.status();
   if (status >= 400) {
     let body = '';
-    try { body = (await res.text()).slice(0, 2000); } catch {}
+    try { body = (await res.text()).slice(0, 2000); } catch { /* response body unavailable */ }
     console.log(`\n=== ${new Date().toISOString()} ${status} ${res.url()} ===`);
     console.log(body);
   }

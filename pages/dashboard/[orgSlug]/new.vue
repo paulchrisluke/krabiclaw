@@ -22,6 +22,7 @@
           :site-id="null"
           :existing-org-slug="orgSlug"
           setup-endpoint="/api/dashboard/locations/add"
+          setup-manual-endpoint="/api/dashboard/locations/add"
           skip-vertical
           @site-created="onLocationCreated"
         />
