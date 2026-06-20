@@ -194,7 +194,7 @@ const { formatDate } = useLocaleDate()
 // Sites with experiences book per-experience on /experiences/[slug]; this generic
 // table-reservation form doesn't apply and is no longer linked from nav.
 if (hasExperiences.value) {
-  await navigateTo('/experiences', { replace: true, redirectCode: 301 })
+  await navigateTo('/experiences', { replace: true, redirectCode: 302 })
 }
 
 // ── Calendar ──────────────────────────────────────────────────────────────

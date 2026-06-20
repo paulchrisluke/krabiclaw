@@ -35,6 +35,9 @@ export default defineEventHandler(async (event) => {
 
   const dates: Array<{ date: string; slots: Awaited<ReturnType<typeof getSlotAvailability>> }> = []
   const cursor = new Date(`${date}T00:00:00Z`)
+  if (isNaN(cursor.getTime())) {
+    return jsonResponse({ error: 'Invalid calendar date' }, { status: 400 })
+  }
   for (let i = 0; i < days; i++) {
     const dateStr = cursor.toISOString().slice(0, 10)
     const slots = await getSlotAvailability(db, siteId, experience, dateStr)

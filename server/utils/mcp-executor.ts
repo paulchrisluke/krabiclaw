@@ -262,13 +262,15 @@ function expandSlotGeneratorArgs(args: Record<string, unknown>): Record<string, 
       throw mcpProtocolError(MCP_ERROR.invalidParams, "slot_weekday must be a weekday name.");
     }
     const existingRecurring = (rest.recurring_slots as Record<string, string[]> | null | undefined) ?? {};
-    const { time_slots, ...restWithoutTimeSlots } = rest;
+    const { time_slots: omittedTimeSlots, ...restWithoutTimeSlots } = rest;
+    void omittedTimeSlots;
     return {
       ...restWithoutTimeSlots,
       recurring_slots: { ...existingRecurring, [slot_weekday as WeekdayName]: generated },
     };
   }
-  const { recurring_slots, ...restWithoutRecurringSlots } = rest;
+  const { recurring_slots: omittedRecurringSlots, ...restWithoutRecurringSlots } = rest;
+  void omittedRecurringSlots;
   return { ...restWithoutRecurringSlots, time_slots: generated };
 }
 
@@ -1589,6 +1591,9 @@ export async function executeMcpToolCall(
       const { resolveColor } = await import("~/utils/color-utils");
       const colorInput = requiredString(args, "color");
       const resolvedColor = resolveColor(colorInput);
+      if (!resolvedColor) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, `Unsupported color: ${colorInput}`);
+      }
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,

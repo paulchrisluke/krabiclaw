@@ -3,26 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { updateLocation } from '~/server/utils/location-management'
-
-function parseLocationPayload<T>(value: T) {
-  const location = value as Record<string, unknown>
-  const parseJson = (field: string) => {
-    const raw = location[field]
-    if (typeof raw !== 'string' || !raw) return raw ?? null
-    try {
-      return JSON.parse(raw)
-    } catch {
-      return null
-    }
-  }
-
-  return {
-    ...location,
-    address: parseJson('address'),
-    opening_hours: parseJson('opening_hours'),
-    is_primary: Boolean(location.is_primary),
-  }
-}
+import { parseLocationPayload } from './location-helpers'
 
 export default defineEventHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
@@ -64,7 +45,13 @@ export default defineEventHandler(async (event) => {
     {
       title: typeof body.title === 'string' ? body.title : undefined,
       slug: typeof body.slug === 'string' ? body.slug : undefined,
-      address: body.address === undefined ? undefined : body.address ? JSON.stringify(body.address) : null,
+      address: body.address === undefined
+        ? undefined
+        : body.address === null
+          ? null
+          : typeof body.address === 'string'
+            ? body.address
+            : JSON.stringify(body.address),
       city: typeof body.city === 'string' ? body.city : body.city === null ? null : undefined,
       neighborhood: typeof body.neighborhood === 'string' ? body.neighborhood : body.neighborhood === null ? null : undefined,
       phone: typeof body.phone === 'string' ? body.phone : body.phone === null ? null : undefined,
@@ -73,7 +60,13 @@ export default defineEventHandler(async (event) => {
       hero_video_asset_id: typeof body.hero_video_asset_id === 'string' ? body.hero_video_asset_id : body.hero_video_asset_id === null ? null : undefined,
       website_url: typeof body.website_url === 'string' ? body.website_url : body.website_url === null ? null : undefined,
       maps_url: typeof body.maps_url === 'string' ? body.maps_url : body.maps_url === null ? null : undefined,
-      opening_hours: body.opening_hours === undefined ? undefined : body.opening_hours ? JSON.stringify(body.opening_hours) : null,
+      opening_hours: body.opening_hours === undefined
+        ? undefined
+        : body.opening_hours === null
+          ? null
+          : typeof body.opening_hours === 'string'
+            ? body.opening_hours
+            : JSON.stringify(body.opening_hours),
       description: typeof body.description === 'string' ? body.description : body.description === null ? null : undefined,
       short_description: typeof body.short_description === 'string' ? body.short_description : body.short_description === null ? null : undefined,
       price_level: typeof body.price_level === 'string' ? body.price_level : body.price_level === null ? null : undefined,

@@ -36,7 +36,9 @@ export default defineEventHandler(async (event) => {
   const title = String(body.title ?? '').trim()
   if (!title) return jsonResponse({ error: 'title is required' }, { status: 400 })
 
-  const locationId = body.location_id ? String(body.location_id) : site.primary_location_id
+  const locationId = ('location_id' in body && body.location_id !== undefined && body.location_id !== null)
+    ? String(body.location_id)
+    : site.primary_location_id
   if (!locationId) {
     return jsonResponse({ error: 'location_id is required' }, { status: 400 })
   }

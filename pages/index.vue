@@ -402,7 +402,10 @@
 
               <!-- Modal: full post -->
               <template #body>
-                <div class="relative h-full w-full">
+                <UCard
+                  class="relative h-full w-full overflow-hidden border-0 bg-transparent shadow-none"
+                  :ui="{ body: 'p-0 sm:p-0' }"
+                >
                   <!-- Media - full bleed -->
                   <div v-if="post.image" class="h-full w-full">
                     <video
@@ -423,11 +426,14 @@
                   </div>
 
                   <!-- Content overlay at bottom -->
-                  <div class="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 pt-32">
+                  <UCard
+                    class="absolute bottom-0 left-0 right-0 z-20 border-0 bg-linear-to-t from-black/90 via-black/60 to-transparent shadow-none"
+                    :ui="{ body: 'p-6 pt-32 sm:p-6 sm:pt-32' }"
+                  >
                     <p class="saya-eyebrow mb-3 text-white/60 text-[10px] font-bold uppercase tracking-widest">{{ homeCopy.postsEyebrow }}</p>
-                    <p class="text-white/90 text-sm leading-relaxed whitespace-pre-line line-clamp-8">{{ post.text }}</p>
-                  </div>
-                </div>
+                    <p class="text-white/90 text-sm leading-relaxed whitespace-pre-line">{{ post.text }}</p>
+                  </UCard>
+                </UCard>
               </template>
             </UModal>
           </div>

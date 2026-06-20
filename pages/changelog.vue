@@ -23,7 +23,7 @@
               <a :href="commit.url" target="_blank" rel="noopener" class="hover:underline">{{ commit.description }}</a>
             </h3>
             <p class="text-sm text-muted">
-              {{ commit.author }} ·
+              {{ commit.author }}<span v-if="commit.mergedAt"> ·</span>
               <NuxtTime v-if="commit.mergedAt" :datetime="commit.mergedAt" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
               <span v-if="commit.scope" class="ml-2 text-muted">({{ commit.scope }})</span>
             </p>
@@ -31,7 +31,7 @@
         </div>
 
         <div class="text-center text-sm text-muted">
-          Last updated:
+          <span v-if="changelog.lastUpdated">Last updated:</span>
           <NuxtTime v-if="changelog.lastUpdated" :datetime="changelog.lastUpdated" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
         </div>
       </div>

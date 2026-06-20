@@ -226,7 +226,7 @@ const COLOR_MAPPINGS: Record<string, string> = {
  * Interpret natural language color description and return hex code
  * Supports compound descriptions like "warm terracotta", "deep ocean blue"
  */
-export function interpretColorDescription(description: string): string {
+export function interpretColorDescription(description: string): string | null {
   const lowerDesc = description.toLowerCase().trim()
   
   // Check for exact matches first
@@ -249,14 +249,14 @@ export function interpretColorDescription(description: string): string {
     }
   }
   
-  // Default to a neutral color if no match
-  return '#8F1D21'
+  // No mapping found - signal invalid input to caller
+  return null
 }
 
 /**
  * Smart color resolver - accepts hex codes or natural language
  */
-export function resolveColor(input: string): string {
+export function resolveColor(input: string): string | null {
   // If it's already a valid hex code, return it
   if (isValidHex(input)) {
     return normalizeHex(input)

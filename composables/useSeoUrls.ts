@@ -1,5 +1,4 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
-import { useBootstrap } from './useBootstrap'
 
 export const SHARED_OG_IMAGE_PATH = '/og-image.png'
 

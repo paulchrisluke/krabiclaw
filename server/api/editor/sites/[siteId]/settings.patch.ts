@@ -37,10 +37,11 @@ export default defineEventHandler(async (event) => {
   let brandColor: string | undefined
   if (body.brand_color && typeof body.brand_color === 'string') {
     try {
-      brandColor = resolveColor(body.brand_color)
-      if (!brandColor) {
+      const resolvedBrandColor = resolveColor(body.brand_color)
+      if (resolvedBrandColor === null || resolvedBrandColor === undefined) {
         return jsonResponse({ error: 'Invalid color value' }, { status: 400 })
       }
+      brandColor = resolvedBrandColor
     } catch {
       return jsonResponse({ error: 'Invalid color value' }, { status: 400 })
     }
@@ -78,7 +79,7 @@ export default defineEventHandler(async (event) => {
     if (value !== undefined && value !== null && typeof value === 'string') {
       // Use resolved brand_color, otherwise use original value
       const finalValue = key === 'brand_color' ? brandColor : value
-      if (finalValue) {
+      if (finalValue !== null && finalValue !== undefined) {
         updates.push(setConfig(db, organizationId, siteId, key, finalValue))
       }
     }

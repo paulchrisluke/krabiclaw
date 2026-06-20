@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-const BASE = 'https://krabiclaw.com';
+const BASE = process.env.MONITOR_BASE_URL || 'http://localhost:3000';
 const DURATION_MS = 5 * 60 * 1000;
 const start = Date.now();
 
@@ -21,7 +21,10 @@ page.on('console', (msg) => {
   if (msg.type() === 'error') console.log(`[console.error] ${msg.text()}`);
 });
 
-const paths = ['/', '/login', '/dashboard', '/pricing', '/dashboard/kikuzuki'];
+const paths = (process.env.MONITOR_PATHS || '/,/login,/dashboard,/pricing,/dashboard/kikuzuki')
+  .split(',')
+  .map((path) => path.trim())
+  .filter(Boolean);
 
 let i = 0;
 while (Date.now() - start < DURATION_MS) {

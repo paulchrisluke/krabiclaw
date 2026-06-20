@@ -85,7 +85,10 @@ export default defineEventHandler(async (event) => {
   }
   if (!timeSlot) return jsonResponse({ error: 'A time slot is required' }, { status: 400 })
   const effectiveSlots = resolveEffectiveTimeSlots(experience, bookingDate)
-  if (effectiveSlots.length && !effectiveSlots.includes(timeSlot)) {
+  if (effectiveSlots.length === 0) {
+    return jsonResponse({ error: 'No available time slots for this date' }, { status: 400 })
+  }
+  if (!effectiveSlots.includes(timeSlot)) {
     return jsonResponse({ error: 'Invalid time slot' }, { status: 400 })
   }
   if (experience.max_capacity && partySize > experience.max_capacity) {

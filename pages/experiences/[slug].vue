@@ -342,11 +342,11 @@
                           'rounded-lg border px-4 py-2 text-sm font-medium transition-colors',
                           form.time_slot === slot.time_slot
                             ? 'border-primary bg-primary text-white'
-                            : slot.is_closed || slot.is_full
+                            : slot.is_closed || slot.is_full || (slot.remaining !== null && slot.remaining < Number(form.party_size))
                               ? 'border-default bg-muted text-dimmed cursor-not-allowed opacity-60'
                               : 'border-default bg-default text-default hover:border-primary hover:text-primary'
                         ]"
-                        :disabled="submitting || slot.is_closed || slot.is_full"
+                        :disabled="submitting || slot.is_closed || slot.is_full || (slot.remaining !== null && slot.remaining < Number(form.party_size))"
                         @click="form.time_slot = slot.time_slot"
                       >
                         {{ slot.time_slot }}
@@ -504,7 +504,37 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 // ── Booking form ──────────────────────────────────────────────────────────────
 
-const minDate = computed(() => new Date().toISOString().split('T')[0])
+const clockNow = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+function formatDateInTimeZone(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+
+  if (!year || !month || !day) return date.toISOString().slice(0, 10)
+  return `${year}-${month}-${day}`
+}
+
+const bookingTimezone = computed(() =>
+  availabilityTimezone.value ||
+  siteConfig.value?.default_timezone ||
+  Intl.DateTimeFormat().resolvedOptions().timeZone ||
+  'UTC',
+)
+
+const minDate = computed(() => {
+  // Keep a reactive dependency so this recomputes while the page stays open.
+  const now = new Date(clockNow.value)
+  return formatDateInTimeZone(now, bookingTimezone.value)
+})
 
 const maxCap = computed(() => experience.value?.max_capacity ?? 20)
 const partySizeOptions = computed(() =>
@@ -523,13 +553,23 @@ const form = reactive({
 
 // Sync booking_date with minDate to prevent stale dates across midnight
 watch(minDate, (newDate) => {
-  if (!form.booking_date && newDate) {
+  if (!form.booking_date || form.booking_date < newDate) {
     form.booking_date = newDate
   }
 })
 onMounted(() => {
+  clockTimer = setInterval(() => {
+    clockNow.value = Date.now()
+  }, 30_000)
+
   if (!form.booking_date && minDate.value) {
     form.booking_date = minDate.value
+  }
+})
+onUnmounted(() => {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
   }
 })
 
@@ -547,6 +587,14 @@ const slotAvailability = ref<SlotAvailabilityItem[]>([])
 const availabilityTimezone = ref<string | null>(null)
 const availabilityLoading = ref(false)
 
+function slotCanAccommodateParty(slot: SlotAvailabilityItem): boolean {
+  return !(slot.remaining !== null && slot.remaining < Number(form.party_size))
+}
+
+function slotCanBeSelected(slot: SlotAvailabilityItem): boolean {
+  return !slot.is_closed && !slot.is_full && slotCanAccommodateParty(slot)
+}
+
 async function loadSlotAvailability() {
   if (!siteId || !experience.value || !form.booking_date || !hasAnySlots.value) {
     slotAvailability.value = []
@@ -560,9 +608,9 @@ async function loadSlotAvailability() {
     )
     availabilityTimezone.value = res.timezone
     slotAvailability.value = res.dates[0]?.slots ?? []
-    const currentValid = slotAvailability.value.find((s) => s.time_slot === form.time_slot && !s.is_closed && !s.is_full)
+    const currentValid = slotAvailability.value.find((s) => s.time_slot === form.time_slot && slotCanBeSelected(s))
     if (!currentValid) {
-      const firstAvailable = slotAvailability.value.find((s) => !s.is_closed && !s.is_full)
+      const firstAvailable = slotAvailability.value.find((s) => slotCanBeSelected(s))
       form.time_slot = firstAvailable?.time_slot ?? ''
     }
   } catch {
@@ -590,6 +638,15 @@ const canSubmit = computed(() =>
 
 async function submitBooking() {
   if (!canSubmit.value || !siteId) return
+
+  if (hasAnySlots.value) {
+    const selectedSlot = slotAvailability.value.find((slot) => slot.time_slot === form.time_slot)
+    if (!selectedSlot || !slotCanBeSelected(selectedSlot)) {
+      bookingError.value = 'Selected time slot is no longer available for this party size. Please choose another slot.'
+      return
+    }
+  }
+
   submitting.value = true
   bookingError.value = null
   try {

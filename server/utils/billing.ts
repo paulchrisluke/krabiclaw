@@ -188,7 +188,7 @@ export async function setSiteEntitlementsFromPlan(
   // refresh, or those call sites keep showing whatever plan existed at
   // site-creation time.
   statements.push(
-    db.prepare(`UPDATE sites SET plan = ?, updated_at = ? WHERE id = ?`).bind(plan, now, siteId)
+    db.prepare(`UPDATE sites SET plan = ?, updated_at = ? WHERE id = ? AND organization_id = ?`).bind(plan, now, siteId, organizationId)
   )
   await db.batch(statements)
 }

@@ -2192,7 +2192,7 @@ async function executeTool(
     }
 
     case "update_experience": {
-      const { updateExperience } = await import("~/server/utils/experiences");
+      const { updateExperience, getExperienceById } = await import("~/server/utils/experiences");
       const id = toSqlText(input.experience_id);
       if (!id) return { error: "experience_id is required" };
       const updates: Record<string, ApiValue> = {};
@@ -2240,14 +2240,36 @@ async function executeTool(
         const { generateSlots } = await import("~/server/utils/experiences");
         const generatedSlots = generateSlots(slotStart, slotEnd, slotIntervalMinutes);
         if (slotWeekday) {
-          // Assign to recurring_slots for the specific weekday
-          const currentRecurring = updates.recurring_slots || (input.recurring_slots && typeof input.recurring_slots === 'object' ? input.recurring_slots : {});
-          updates.recurring_slots = { ...currentRecurring, [slotWeekday]: generatedSlots };
+          // Assign to recurring_slots for the specific weekday while preserving
+          // recurring slots for other weekdays.
+          const existingExperience = await getExperienceById(db, siteId, id);
+          const existingRecurring = existingExperience?.recurring_slots && typeof existingExperience.recurring_slots === 'object'
+            ? existingExperience.recurring_slots as Record<string, unknown>
+            : {};
+          const incomingRecurring = updates.recurring_slots && typeof updates.recurring_slots === 'object'
+            ? updates.recurring_slots as Record<string, unknown>
+            : (input.recurring_slots && typeof input.recurring_slots === 'object'
+                ? input.recurring_slots as Record<string, unknown>
+                : {});
+          updates.recurring_slots = {
+            ...existingRecurring,
+            ...incomingRecurring,
+            [slotWeekday]: generatedSlots,
+          };
         } else {
-          // Assign to flat time_slots
+          // Assign to flat time_slots and clear recurring slots so the new
+          // flat schedule is the source of truth.
           updates.time_slots = generatedSlots;
+          updates.recurring_slots = null;
         }
       }
+
+      // If flat time_slots are explicitly set without a weekday update, clear
+      // recurring slots to avoid schedule conflicts.
+      if (!slotWeekday && updates.time_slots !== undefined && input.recurring_slots === undefined) {
+        updates.recurring_slots = null;
+      }
+
       if (input.available_note !== undefined)
         updates.available_note = toSqlText(input.available_note) ?? null;
       if (input.image_asset_id !== undefined)
@@ -2338,12 +2360,27 @@ async function executeTool(
       const { getExperienceById, getSlotAvailability } = await import("~/server/utils/experiences");
       const experienceId = toSqlText(input.experience_id);
       const date = toSqlText(input.date);
+      const requestedDays = Number(input.days);
+      const days = Number.isFinite(requestedDays)
+        ? Math.max(1, Math.min(Math.floor(requestedDays), 14))
+        : 1;
       if (!experienceId || !date)
         return { error: "experience_id and date are required" };
       const experience = await getExperienceById(db, siteId, experienceId);
       if (!experience) return { error: "Experience not found" };
-      const availability = await getSlotAvailability(db, siteId, experience, date);
-      return { availability };
+
+      const dates: Array<{ date: string; slots: Awaited<ReturnType<typeof getSlotAvailability>> }> = [];
+      const cursor = new Date(`${date}T00:00:00Z`);
+      if (isNaN(cursor.getTime())) {
+        return { error: "Invalid calendar date" };
+      }
+      for (let i = 0; i < days; i++) {
+        const dateStr = cursor.toISOString().slice(0, 10);
+        const slots = await getSlotAvailability(db, siteId, experience, dateStr);
+        dates.push({ date: dateStr, slots });
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+      return { dates };
     }
 
     case "set_experience_slot_override": {

@@ -158,7 +158,8 @@ test.describe('onboarding wizard UI', () => {
     const created = await create.json() as { id: string; token: string }
 
     await page.request.get(devLoginUrl(baseURL!, RECIPIENT_USER_ID), { headers: devLoginHeaders(), maxRedirects: 0 })
-    await page.request.post(`${baseURL}/api/site-transfer/${created.token}/accept`)
+    const acceptRes = await page.request.post(`${baseURL}/api/site-transfer/${created.token}/accept`)
+    expect(acceptRes.ok()).toBeTruthy()
 
     const payload = JSON.stringify({
       id: `evt_transfer_ui_${Date.now()}`,

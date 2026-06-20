@@ -9,12 +9,13 @@
   background-color: var(--saya-bg);
 
   --saya-primary:       var(--brand-color, #8F1D21);
+
   /* Mirror saya-primary into Tailwind's --color-primary so that
      bg-primary / text-primary / ring-primary utilities and all Nuxt UI
      components using color="primary" resolve to the tenant brand color. */
   --color-primary:      var(--saya-primary);
   /* WCAG foreground: calculated dynamically based on brand color contrast */
-  --primary-foreground: var(--brand-color-foreground, #ffffff);
+  --primary-foreground: var(--brand-color-foreground, #fff);
   --saya-bg:            #FFFFFF;
   --saya-bg-alt:        #FAFAFA;
   --saya-bg-inverted:   #09090B;
@@ -48,6 +49,7 @@
 
   --saya-primary:       var(--brand-color-dark, var(--brand-color, #D16063));
   --color-primary:      var(--saya-primary);
+
   /* WCAG foreground: calculated dynamically based on brand color contrast */
   --primary-foreground: var(--brand-color-foreground-dark, var(--brand-color-foreground, #18060a));
   --saya-bg:            #09090B;
