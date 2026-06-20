@@ -29,6 +29,7 @@
           <button
             v-for="ch in channelOptions"
             :key="ch.value"
+            type="button"
             :class="[
               'rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors',
               form.channels.includes(ch.value)

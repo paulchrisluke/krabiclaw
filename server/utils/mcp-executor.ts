@@ -3061,7 +3061,6 @@ function normalizeMenuItemArgs(
     normalized.section = requiredString(normalized, "section");
   } else if (
     normalized.section !== undefined &&
-    normalized.section !== null &&
     typeof normalized.section !== "string"
   ) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, "Invalid section");

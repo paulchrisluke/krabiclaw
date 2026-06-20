@@ -210,7 +210,7 @@ async function handleCheckoutCompleted(
     const customerId = session.customer as string
     const subscriptionId = checkoutSubscriptionId(session)
     const expanded = expandedSub(session)
-    // Reparent the site to the recipient org first — applySiteSubscription's
+    // Reparent the site to the recipient org first — setSiteEntitlementsFromPlan's
     // `UPDATE sites SET plan ... WHERE organization_id = ?` only matches once
     // the site actually belongs to that org, otherwise it silently no-ops and
     // sites.plan (read by the transfer onboarding wizard) never updates.

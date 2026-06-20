@@ -1,7 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<Response> => {
   const rawPath = getRouterParam(event, 'path')
   const path = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath || '')
   const { restaurant } = await getDashboardContext(event, { requireRestaurant: false })
@@ -21,14 +21,21 @@ export default defineEventHandler(async (event) => {
     target = `/api/sites/${restaurant.id}/${path}`
   }
 
-  const url = new URL(target, getRequestURL(event).origin)
-  for (const [key, value] of Object.entries(getQuery(event))) {
-    if (Array.isArray(value)) {
-      for (const item of value) url.searchParams.append(key, String(item))
-    } else if (value !== undefined) {
-      url.searchParams.set(key, String(value))
-    }
-  }
+  const method = event.method
+  const body = method !== 'GET' && method !== 'HEAD' ? await readRawBody(event) : undefined
 
-  return proxyRequest(event, url.toString())
+  try {
+    const data: unknown = await $fetch<unknown>(target, {
+      method,
+      query: getQuery(event),
+      headers: getProxyRequestHeaders(event),
+      body
+    })
+    return jsonResponse(data as ApiValue)
+  } catch (error) {
+    const fetchError = error as { data?: unknown; status?: number; statusCode?: number }
+    return jsonResponse(fetchError.data ?? { error: 'Request failed' }, {
+      status: fetchError.status ?? fetchError.statusCode ?? 500
+    })
+  }
 })

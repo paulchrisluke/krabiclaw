@@ -24,20 +24,18 @@
     <div v-else>
 
       <!-- ── Mobile sticky bottom CTA ───────────────────────── -->
-      <Teleport to="body">
-        <div
-          v-if="experience.status !== 'sold_out' && !bookingSuccess"
-          class="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 backdrop-blur-sm px-5 py-4 shadow-lg"
-        >
-          <div class="min-w-0">
-            <p v-if="experience.price" class="font-semibold text-default leading-tight">{{ experience.price }}</p>
-            <p class="text-xs text-muted">per person</p>
-          </div>
-          <UButton color="primary" size="lg" class="rounded-full shrink-0" @click="scrollToBooking">
-            Reserve Now
-          </UButton>
+      <div
+        v-if="experience.status !== 'sold_out' && !bookingSuccess"
+        class="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 backdrop-blur-sm px-5 py-4 shadow-lg"
+      >
+        <div class="min-w-0">
+          <p v-if="experience.price" class="font-semibold text-default leading-tight">{{ experience.price }}</p>
+          <p class="text-xs text-muted">per person</p>
         </div>
-      </Teleport>
+        <UButton color="primary" size="lg" class="rounded-full shrink-0" @click="scrollToBooking">
+          Reserve Now
+        </UButton>
+      </div>
 
       <!-- ── Main layout ────────────────────────────────────── -->
       <section class="mx-auto max-w-7xl px-4 pt-10 pb-28 lg:pb-10 sm:px-6 lg:px-8">

@@ -886,14 +886,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     outputSchema: {
       type: 'object',
       properties: {
-        uploaded: { type: 'boolean' },
-        assigned: { type: 'boolean' },
         assetId: { type: 'string' },
         publicUrl: { type: 'string' },
         thumbnailUrl: { type: 'string' },
         nextStep: { type: 'string' },
       },
-      required: ['uploaded', 'assigned', 'assetId', 'publicUrl'],
+      required: ['assetId', 'publicUrl'],
     },
   }),
   globalTool(withToolAnnotations({
@@ -1598,7 +1596,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       body: { type: 'string' },
       title: { type: 'string' },
       post_type: { type: 'string', enum: ['standard', 'offer', 'event', 'update'], description: 'Determines how the post is presented. "offer" = promotion, "event" = scheduled happening.' },
-      location_id: { type: 'string', description: 'Restrict this post to a specific location. Pass null to clear it.' },
+      location_id: { type: ['string', 'null'], description: 'Restrict this post to a specific location. Pass null to clear it.' },
       cta_type: { type: 'string', description: 'Call-to-action type shown with the post, e.g. "book", "order", "learn_more".' },
       cta_url: { type: 'string', description: 'URL the call-to-action button links to.' },
       event_title: { type: 'string', description: 'Event name. Use with post_type "event".' },

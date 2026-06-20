@@ -2241,9 +2241,7 @@ async function executeTool(
           ? input.time_slots.map(String)
           : null;
       if (input.recurring_slots !== undefined)
-        updates.recurring_slots = input.recurring_slots && typeof input.recurring_slots === 'object'
-          ? input.recurring_slots
-          : null;
+        updates.recurring_slots = asValidRecurringSlots(input.recurring_slots);
 
       // Handle convenience slot generation parameters
       const slotStart = typeof input.slot_start === 'string' ? input.slot_start : null;
