@@ -110,8 +110,8 @@ DELETE FROM google_business_events WHERE organization_id IN ('org-demo', 'org_de
 DELETE FROM google_business_connections WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
 DELETE FROM facebook_pages_connections WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
 DELETE FROM dashboard_preferences WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM member WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
-DELETE FROM invitation WHERE organization_id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
+DELETE FROM member WHERE organizationId IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
+DELETE FROM invitation WHERE organizationId IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
 DELETE FROM organization WHERE id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
 
 -- Delete users (after member rows are deleted)
