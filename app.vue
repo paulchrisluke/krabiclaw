@@ -38,12 +38,16 @@ if (import.meta.client) {
   watchEffect(() => {
     const brandColor = config.value.brand_color
     if (!brandColor) return
-    const themeColors = calculateThemeColors(brandColor)
-    const root = document.documentElement
-    root.style.setProperty('--brand-color', themeColors.brandColor)
-    root.style.setProperty('--brand-color-foreground', themeColors.brandColorForeground)
-    root.style.setProperty('--brand-color-dark', themeColors.brandColorDark)
-    root.style.setProperty('--brand-color-foreground-dark', themeColors.brandColorForegroundDark)
+    try {
+      const themeColors = calculateThemeColors(brandColor)
+      const root = document.documentElement
+      root.style.setProperty('--brand-color', themeColors.brandColor)
+      root.style.setProperty('--brand-color-foreground', themeColors.brandColorForeground)
+      root.style.setProperty('--brand-color-dark', themeColors.brandColorDark)
+      root.style.setProperty('--brand-color-foreground-dark', themeColors.brandColorForegroundDark)
+    } catch (error) {
+      console.error('Failed to apply brand color theme:', error)
+    }
   })
 }
 </script>

@@ -59,6 +59,7 @@ definePageMeta({ layout: 'editor', ssr: false })
 const route = useRoute()
 const router = useRouter()
 const config = useRuntimeConfig()
+const toast = useToast()
 
 const orgSlug = route.params.orgSlug as string
 
@@ -127,8 +128,10 @@ const loadContext = async () => {
       siteData.value = response.restaurant
       siteLocations.value = response.locations ?? []
     }
-  } catch {
-    // No site yet — shouldn't normally happen on this page since it requires an existing site
+  } catch (error) {
+    // This page requires an existing site, so a failed context load is unexpected here
+    console.error('Failed to load dashboard context:', error)
+    toast.add({ description: 'Failed to load workspace. Please try again.', color: 'error' })
   } finally {
     contextLoaded.value = true
   }

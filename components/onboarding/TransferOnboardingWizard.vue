@@ -91,102 +91,32 @@
                 </div>
 
                 <!-- Notification form card -->
-                <div v-if="msg.notifCard" class="rounded-xl border border-default bg-elevated px-4 py-4 space-y-4">
-                  <div>
-                    <p class="text-[11px] font-bold uppercase tracking-wide text-dimmed mb-2">Your number (gets all notifications)</p>
-                    <UInput
-                      v-model="notifForm.ownerPhone"
-                      type="tel"
-                      placeholder="+447464115465"
-                      size="sm"
-                    />
-                  </div>
-                  <div>
-                    <p class="text-[11px] font-bold uppercase tracking-wide text-dimmed mb-2">Channel</p>
-                    <div class="flex gap-2">
-                      <button
-                        v-for="ch in CHANNEL_OPTIONS"
-                        :key="ch.value"
-                        :class="[
-                          'rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors',
-                          notifForm.channels.includes(ch.value)
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-default bg-default text-muted hover:border-default/80',
-                        ]"
-                        @click="toggleChannel(ch.value)"
-                      >{{ ch.label }}</button>
-                    </div>
-                  </div>
-                  <div v-if="locations.length">
-                    <p class="text-[11px] font-bold uppercase tracking-wide text-dimmed mb-2">Location notification numbers</p>
-                    <div class="space-y-2">
-                      <div v-for="loc in notifForm.locations" :key="loc.id" class="flex items-center gap-2">
-                        <span class="w-32 shrink-0 truncate text-[12px] text-muted">{{ loc.title }}</span>
-                        <UInput
-                          v-model="loc.notificationPhone"
-                          type="tel"
-                          :placeholder="loc.title"
-                          size="sm"
-                          class="flex-1"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <UButton
-                    size="sm"
-                    color="primary"
-                    :loading="savingNotifs"
-                    @click="saveNotifications"
-                  >
-                    Save notification settings
-                  </UButton>
-                </div>
+                <NotificationRoutingCard
+                  v-if="msg.notifCard"
+                  v-model:form="notifForm"
+                  title="Notification routing"
+                  description="Your owner number gets every booking and message, and each location can have its own notification number for the person managing it."
+                  action-label="Save notification settings"
+                  :loading="savingNotifs"
+                  :disabled="savingNotifs"
+                  @submit="saveNotifications"
+                />
 
                 <!-- Team invite card -->
-                <div v-if="msg.teamCard" class="rounded-xl border border-default bg-elevated px-4 py-4 space-y-3">
-                  <UForm :state="inviteForm" class="flex flex-col gap-2" @submit.prevent="sendInvite">
-                    <div class="flex gap-2">
-                      <UInput
-                        v-model="inviteForm.email"
-                        type="email"
-                        placeholder="teammate@example.com"
-                        size="sm"
-                        class="flex-1"
-                      />
-                      <USelect
-                        v-model="inviteForm.role"
-                        :items="ROLE_OPTIONS"
-                        size="sm"
-                        class="w-28"
-                      />
-                    </div>
-                    <div class="flex gap-2">
-                      <UButton type="submit" size="sm" color="primary" :loading="inviting" icon="i-heroicons-paper-airplane">
-                        Send invite
-                      </UButton>
-                      <UButton size="sm" color="neutral" variant="ghost" @click="skipTeam">
-                        Skip for now
-                      </UButton>
-                    </div>
-                  </UForm>
-                  <UAlert
-                    v-if="inviteSuccess"
-                    color="success"
-                    variant="soft"
-                    icon="i-heroicons-check-circle"
-                    description="Invite sent. Add another or continue."
-                    :ui="{ root: 'py-2' }"
-                  />
-                  <UButton
-                    v-if="inviteSuccess"
-                    size="sm"
-                    color="neutral"
-                    variant="outline"
-                    @click="advance(showSocialStep ? 'social' : showDomainStep ? 'domain' : 'done')"
-                  >
-                    Continue
-                  </UButton>
-                </div>
+                <TeamInviteCard
+                  v-if="msg.teamCard"
+                  v-model:form="inviteForm"
+                  title="Team access"
+                  description="Invite anyone who helps manage the site. You can add more people later from Settings → Members."
+                  action-label="Send invite"
+                  skip-label="Skip for now"
+                  continue-label="Continue"
+                  :loading="inviting"
+                  :invite-success="inviteSuccess"
+                  @submit="sendInvite"
+                  @skip="skipTeam"
+                  @continue="advance(showSocialStep ? 'social' : showDomainStep ? 'domain' : 'done')"
+                />
 
                 <!-- Social card -->
                 <div v-if="msg.socialCard" class="rounded-xl border border-default bg-elevated px-4 py-3 space-y-3">
@@ -239,20 +169,17 @@
 
                 <!-- Done card -->
                 <div v-if="msg.doneCard" class="space-y-3">
-                  <div class="rounded-xl border border-default bg-elevated px-4 py-3 space-y-1">
-                    <div class="flex items-center gap-2 mb-1">
-                      <UIcon name="i-simple-icons-openai" class="size-4 text-highlighted shrink-0" />
-                      <span class="text-[13px] font-semibold text-highlighted">Edit with ChatGPT</span>
-                    </div>
-                    <p class="text-[12px] text-muted leading-relaxed">Open ChatGPT, connect the KrabiClaw tool, and type what you want to change. Example: <em>"Update the beachfront pottery price to ฿2,000"</em> or <em>"Add a new FAQ to the Krabi location."</em></p>
-                  </div>
-                  <div class="rounded-xl border border-default bg-elevated px-4 py-3 space-y-1">
-                    <div class="flex items-center gap-2 mb-1">
-                      <UIcon name="i-heroicons-squares-2x2" class="size-4 text-highlighted shrink-0" />
-                      <span class="text-[13px] font-semibold text-highlighted">Edit in the dashboard</span>
-                    </div>
-                    <p class="text-[12px] text-muted leading-relaxed">Use the location tabs (posts, photos, menu, reviews) and Settings for team members, billing, and domain management.</p>
-                  </div>
+                  <PolishSuggestionsCard
+                    :vertical="siteVertical"
+                    :primary-to="`/dashboard/${orgSlug}`"
+                    primary-label="Open the dashboard"
+                  />
+                  <McpEditCard
+                    :guide-to="`/dashboard/${orgSlug}/~/settings/chatgpt`"
+                    guide-label="ChatGPT setup guide"
+                    :dashboard-to="`/dashboard/${orgSlug}`"
+                    dashboard-label="Open the dashboard"
+                  />
                   <UButton color="primary" icon="i-heroicons-arrow-right" @click="finish">
                     Go to my dashboard
                   </UButton>
@@ -295,10 +222,12 @@ interface Props {
   locations: Location[]
   plan: string
   ownerPhone: string | null
+  vertical?: 'restaurant' | 'experience' | null
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{ done: [] }>()
+const siteVertical = computed(() => props.vertical === 'experience' ? 'experience' : 'restaurant')
 
 type WizardStep = 'welcome' | 'preview' | 'notifications' | 'team' | 'social' | 'domain' | 'done'
 
@@ -316,19 +245,9 @@ interface BotMessage {
 
 const WELCOME_POINTS: [string, string][] = [
   ['i-heroicons-check-circle', 'Your site is live and indexed'],
-  ['i-heroicons-bell', 'Booking and contact notifications ready'],
+  ['i-heroicons-bell', 'Confirm where operational alerts should go'],
   ['i-heroicons-users', 'Invite your team to manage locations'],
   ['i-heroicons-chat-bubble-left-right', 'Edit anything from ChatGPT'],
-]
-
-const CHANNEL_OPTIONS = [
-  { label: 'WhatsApp', value: 'whatsapp' },
-  { label: 'Email', value: 'email' },
-]
-
-const ROLE_OPTIONS = [
-  { label: 'Member', value: 'member' },
-  { label: 'Admin', value: 'admin' },
 ]
 
 const scrollRef = ref<HTMLElement | null>(null)
@@ -364,15 +283,6 @@ function pushMessage(msg: Omit<BotMessage, 'id'>) {
   })
 }
 
-function toggleChannel(value: string) {
-  const idx = notifForm.channels.indexOf(value)
-  if (idx === -1) {
-    notifForm.channels.push(value)
-  } else if (notifForm.channels.length > 1) {
-    notifForm.channels.splice(idx, 1)
-  }
-}
-
 function advance(target: WizardStep) {
   step.value = target
 
@@ -391,7 +301,7 @@ function advance(target: WizardStep) {
 
   if (target === 'notifications') {
     pushMessage({
-      text: `Now let's set up where you get notified. Your owner number gets every booking and message. Each location can also have its own notification number for the person managing it.`,
+      text: `First, let's confirm the routing. Your owner number gets every booking and message, and each location can have its own notification number for the person managing it.`,
       notifCard: true,
     })
   }

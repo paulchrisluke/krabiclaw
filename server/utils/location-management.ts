@@ -136,6 +136,7 @@ function serializeOpeningHours(value: unknown) {
     // same { weekdayDescriptions } shape consumers (dashboard hours editor, public
     // site hours rendering) expect regardless of input source.
     if (Array.isArray(value)) {
+      if (!value.every((item) => typeof item === "string")) return null;
       return value.length ? JSON.stringify({ weekdayDescriptions: value }) : null;
     }
     if (!isPlainObject(value)) return null;

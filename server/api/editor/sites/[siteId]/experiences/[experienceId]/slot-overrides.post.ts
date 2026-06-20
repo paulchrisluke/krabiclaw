@@ -39,6 +39,13 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'override_date must be in YYYY-MM-DD format' }, { status: 400 })
   }
 
+  if (overrideDate) {
+    const parsedDate = new Date(`${overrideDate}T00:00:00.000Z`)
+    if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== overrideDate) {
+      return jsonResponse({ error: 'override_date is not a valid calendar date' }, { status: 400 })
+    }
+  }
+
   if (status !== 'closed' && status !== 'open') {
     return jsonResponse({ error: 'status must be "closed" or "open"' }, { status: 400 })
   }

@@ -14,6 +14,7 @@ export interface DashboardRestaurantRow {
   id: string
   organization_id: string
   brand_name: string | null
+  vertical: 'restaurant' | 'experience' | null
   subdomain: string | null
   custom_domain: string | null
   public_url: string | null
@@ -75,7 +76,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   }
 
   const restaurant = await db.prepare(`
-    SELECT id, organization_id, brand_name, subdomain, custom_domain, public_url,
+    SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
            status, onboarding_status, plan, primary_location_id, default_currency, source_locale
     FROM sites
     WHERE organization_id = ?

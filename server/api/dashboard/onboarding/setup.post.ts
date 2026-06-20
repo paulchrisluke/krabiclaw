@@ -25,10 +25,17 @@ export default defineEventHandler(async (event) => {
   const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
   if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 503 })
 
-  const body = await readBody(event) as { mapsUrl?: unknown; placeId?: unknown; vertical?: unknown; previewOnly?: unknown }
+  const body = await readBody(event) as {
+    mapsUrl?: unknown
+    placeId?: unknown
+    vertical?: unknown
+    previewOnly?: unknown
+    details?: Record<string, unknown> | null
+  }
   const mapsUrl = typeof body?.mapsUrl === 'string' ? body.mapsUrl.trim() : ''
   const placeId = typeof body?.placeId === 'string' ? body.placeId.trim() : ''
   if (!mapsUrl && !placeId) return jsonResponse({ error: 'mapsUrl or placeId is required' }, { status: 400 })
+  const details = body.details && typeof body.details === 'object' ? body.details : null
 
   const vertical = typeof body?.vertical === 'string' && VALID_VERTICALS.includes(body.vertical as never)
     ? (body.vertical as 'restaurant' | 'experience')
@@ -58,6 +65,7 @@ export default defineEventHandler(async (event) => {
         city: place.city,
         phone: place.phone,
         mapsUrl: place.mapsUrl,
+        websiteUrl: place.websiteUrl,
         rating: place.rating,
         ratingCount: place.ratingCount,
         openingHours: place.openingHours,
@@ -103,16 +111,34 @@ export default defineEventHandler(async (event) => {
   }
 
   await updateLocation(db, organizationId, siteId, locationRow.id, {
-    title: place.name,
+    title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : place.name,
     slug: slugify(place.name),
-    phone: place.phone ?? undefined,
-    city: place.city ?? undefined,
+    phone: typeof details?.phone === 'string' && details.phone.trim()
+      ? details.phone.trim()
+      : place.phone ?? undefined,
+    city: typeof details?.city === 'string' && details.city.trim()
+      ? details.city.trim()
+      : place.city ?? undefined,
     maps_url: place.mapsUrl ?? undefined,
     google_place_id: place.placeId,
-    website_url: place.websiteUrl ?? undefined,
-    opening_hours: place.openingHours ?? undefined,
+    website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim()
+      ? details.websiteUrl.trim()
+      : place.websiteUrl ?? undefined,
+    address: typeof details?.address === 'string' && details.address.trim()
+      ? details.address.trim()
+      : undefined,
+    opening_hours: typeof details?.openingHours === 'string' && details.openingHours.trim()
+      ? details.openingHours.trim()
+      : place.openingHours ?? undefined,
     rating: place.rating ?? undefined,
     review_count: place.ratingCount ?? undefined,
+    notification_phone: typeof details?.notificationPhone === 'string' && details.notificationPhone.trim()
+      ? details.notificationPhone.trim()
+      : undefined,
+    timezone: typeof details?.timezone === 'string' && details.timezone.trim()
+      ? details.timezone.trim()
+      : undefined,
+    is_primary: typeof details?.isPrimary === 'boolean' ? details.isPrimary : undefined,
     status: 'active',
   }, session.user.id)
 
