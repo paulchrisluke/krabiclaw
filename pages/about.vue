@@ -215,6 +215,7 @@ const siteUrl = config.public.siteUrl
 const route = useRoute()
 const requestURL = useRequestURL()
 const sharedOgImage = useSharedOgImage()
+const tenantOgImage = useTenantOgImage()
 
 if (isPlatform) {
   useOrganizationSchema()
@@ -228,13 +229,23 @@ useSeoMeta(isPlatform
   ? {
       title: 'About | KrabiClaw',
       description: 'KrabiClaw is a premium, AI-powered website builder designed for independent businesses globally.',
+      ogTitle: 'About | KrabiClaw',
+      ogDescription: 'KrabiClaw is a premium, AI-powered website builder designed for independent businesses globally.',
+      ogSiteName: 'KrabiClaw',
+      twitterTitle: 'About | KrabiClaw',
+      twitterDescription: 'KrabiClaw is a premium, AI-powered website builder designed for independent businesses globally.',
       ogImage: sharedOgImage,
       ogUrl: `${siteUrl}/about`
     }
   : {
       title: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
       description: computed(() => getField('seo.description', 'Learn about our business and our story.')),
-      ogImage: sharedOgImage,
+      ogTitle: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
+      ogDescription: computed(() => getField('seo.description', 'Learn about our business and our story.')),
+      ogSiteName: computed(() => site?.brand_name || 'KrabiClaw'),
+      twitterTitle: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
+      twitterDescription: computed(() => getField('seo.description', 'Learn about our business and our story.')),
+      ogImage: tenantOgImage,
       ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
     }
 )

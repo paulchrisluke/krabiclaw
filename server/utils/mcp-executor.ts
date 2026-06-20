@@ -48,11 +48,18 @@ import {
 import {
   createExperience,
   deleteExperience,
+  generateSlots,
   getExperienceById,
+  getSlotAvailability,
   listExperienceBookings,
   listExperiences,
+  listSlotOverrides,
   updateBookingStatus,
   updateExperience,
+  upsertSlotOverride,
+  type CreateExperienceInput,
+  type UpdateExperienceInput,
+  type WeekdayName,
 } from "~/server/utils/experiences";
 import {
   buildTranslationInventory,
@@ -230,6 +237,37 @@ async function requireActiveImageAsset(
     );
   }
   return asset;
+}
+
+/**
+ * Expands the slot_start/slot_end/slot_interval_minutes/slot_weekday convenience args
+ * (used by create_experience/update_experience) into a concrete time_slots array or a
+ * recurring_slots[weekday] entry, then strips the convenience keys before they reach
+ * createExperience/updateExperience.
+ */
+function expandSlotGeneratorArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const { slot_start, slot_end, slot_interval_minutes, slot_weekday, ...rest } = args;
+  if (slot_start === undefined && slot_end === undefined && slot_interval_minutes === undefined) {
+    return rest;
+  }
+  if (typeof slot_start !== "string" || typeof slot_end !== "string" || typeof slot_interval_minutes !== "number") {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      "slot_start, slot_end, and slot_interval_minutes must all be provided together.",
+    );
+  }
+  const generated = generateSlots(slot_start, slot_end, slot_interval_minutes);
+  if (slot_weekday !== undefined) {
+    if (typeof slot_weekday !== "string") {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, "slot_weekday must be a weekday name.");
+    }
+    const existingRecurring = (rest.recurring_slots as Record<string, string[]> | null | undefined) ?? {};
+    return {
+      ...rest,
+      recurring_slots: { ...existingRecurring, [slot_weekday as WeekdayName]: generated },
+    };
+  }
+  return { ...rest, time_slots: generated };
 }
 
 function resolveMcpBaseUrl(event: H3Event): string {
@@ -1545,6 +1583,25 @@ export async function executeMcpToolCall(
         logo_asset_id: assetId,
       };
     }
+    case "set_brand_color": {
+      const { resolveColor } = await import("~/utils/color-utils");
+      const colorInput = requiredString(args, "color");
+      const resolvedColor = resolveColor(colorInput);
+      const result = await updateSiteSettingsFields(
+        site.db,
+        site.env,
+        site.siteId,
+        site.organizationId,
+        { brand_color: resolvedColor },
+        site.userId,
+      );
+      assertDomainSuccess(result);
+      return {
+        brand_color: resolvedColor,
+        updated: true,
+        description: `Set brand color to ${resolvedColor} from "${colorInput}"`,
+      };
+    }
     case "list_locations": {
       const rows = await site.db
         .prepare(
@@ -2463,7 +2520,7 @@ export async function executeMcpToolCall(
         ),
       };
     case "create_experience": {
-      const ceArgs = args as Record<string, unknown>;
+      const ceArgs = expandSlotGeneratorArgs(args as Record<string, unknown>);
       const priceAmountRaw = ceArgs.price_amount;
       if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
@@ -2474,7 +2531,7 @@ export async function executeMcpToolCall(
           site.organizationId,
           site.siteId,
           {
-            ...(ceArgs as never),
+            ...(ceArgs as unknown as CreateExperienceInput),
             price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null,
           },
           site.userId,
@@ -2482,7 +2539,7 @@ export async function executeMcpToolCall(
       };
     }
     case "update_experience": {
-      const ueArgs = omit(args, ["experience_id"]) as Record<string, unknown>;
+      const ueArgs = expandSlotGeneratorArgs(omit(args, ["experience_id"]) as Record<string, unknown>);
       const priceAmountRaw = ueArgs.price_amount;
       if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
@@ -2493,7 +2550,7 @@ export async function executeMcpToolCall(
           site.siteId,
           requiredString(args, "experience_id"),
           {
-            ...(ueArgs as never),
+            ...(ueArgs as unknown as UpdateExperienceInput),
             ...(priceAmountRaw !== undefined
               ? { price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null }
               : {}),
@@ -2552,6 +2609,55 @@ export async function executeMcpToolCall(
             | "pending"
             | "confirmed"
             | "cancelled",
+        ),
+      };
+    case "get_experience_availability": {
+      const experienceId = requiredString(args, "experience_id");
+      const experience = await getExperienceById(site.db, site.siteId, experienceId);
+      if (!experience) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "Experience not found.");
+      }
+      const startDate = requiredString(args, "date");
+      const daysRaw = (args as Record<string, unknown>).days;
+      const days = Math.min(Math.max(typeof daysRaw === "number" ? daysRaw : 1, 1), 31);
+      const cursor = new Date(`${startDate}T00:00:00Z`);
+      const dates: Array<{ date: string; slots: Awaited<ReturnType<typeof getSlotAvailability>> }> = [];
+      for (let i = 0; i < days; i++) {
+        const dateStr = cursor.toISOString().slice(0, 10);
+        dates.push({ date: dateStr, slots: await getSlotAvailability(site.db, site.siteId, experience, dateStr) });
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+      return { dates };
+    }
+    case "set_experience_slot_override":
+      return {
+        override: await upsertSlotOverride(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          requiredString(args, "experience_id"),
+          {
+            override_date: requiredString(args, "date"),
+            time_slot: requiredString(args, "time_slot"),
+            status: requiredString(args, "status") as "closed" | "open",
+            capacity_override: typeof (args as Record<string, unknown>).capacity_override === "number"
+              ? ((args as Record<string, unknown>).capacity_override as number)
+              : null,
+            note: optionalString(args, "note") ?? null,
+          },
+          site.userId,
+        ),
+      };
+    case "list_experience_slot_overrides":
+      return {
+        overrides: await listSlotOverrides(
+          site.db,
+          site.siteId,
+          requiredString(args, "experience_id"),
+          {
+            fromDate: optionalString(args, "from") ?? undefined,
+            toDate: optionalString(args, "to") ?? undefined,
+          },
         ),
       };
     case "list_locales":

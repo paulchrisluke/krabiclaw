@@ -48,6 +48,11 @@ export default defineEventHandler(async (event) => {
   if ('duration_minutes' in body) updates.duration_minutes = optionalInteger(body.duration_minutes)
   if ('max_capacity' in body) updates.max_capacity = optionalInteger(body.max_capacity)
   if ('time_slots' in body) updates.time_slots = Array.isArray(body.time_slots) ? body.time_slots.map(String) : null
+  if ('recurring_slots' in body) {
+    updates.recurring_slots = body.recurring_slots && typeof body.recurring_slots === 'object' && !Array.isArray(body.recurring_slots)
+      ? (body.recurring_slots as Record<string, string[]>)
+      : null
+  }
   if ('available_note' in body) updates.available_note = body.available_note ? String(body.available_note).trim() : null
   if ('status' in body && ['active', 'inactive', 'sold_out'].includes(String(body.status))) updates.status = String(body.status)
   if ('sort_order' in body) {
@@ -64,7 +69,15 @@ export default defineEventHandler(async (event) => {
     if (featuredSortOrder === null) return jsonResponse({ error: 'featured_sort_order must be an integer' }, { status: 400 })
     updates.featured_sort_order = featuredSortOrder
   }
-  if ('location_id' in body) updates.location_id = body.location_id ? String(body.location_id) : null
+  if ('location_id' in body) {
+    if (!body.location_id) return jsonResponse({ error: 'location_id cannot be cleared' }, { status: 400 })
+    const location = await db
+      .prepare(`SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`)
+      .bind(String(body.location_id), siteId)
+      .first<{ id: string }>()
+    if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
+    updates.location_id = String(body.location_id)
+  }
   if ('seo_title' in body) updates.seo_title = body.seo_title ? String(body.seo_title).trim() : null
   if ('seo_description' in body) updates.seo_description = body.seo_description ? String(body.seo_description).trim() : null
 

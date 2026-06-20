@@ -21,12 +21,12 @@ export default defineEventHandler(async (event) => {
 
   const site = await db
     .prepare(
-      `SELECT s.id, s.organization_id FROM sites s
+      `SELECT s.id, s.organization_id, s.primary_location_id FROM sites s
        JOIN member m ON m.organizationId = s.organization_id
        WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') LIMIT 1`,
     )
     .bind(siteId, session.user.id)
-    .first<{ id: string; organization_id: string }>()
+    .first<{ id: string; organization_id: string; primary_location_id: string | null }>()
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
@@ -35,6 +35,16 @@ export default defineEventHandler(async (event) => {
 
   const title = String(body.title ?? '').trim()
   if (!title) return jsonResponse({ error: 'title is required' }, { status: 400 })
+
+  const locationId = body.location_id ? String(body.location_id) : site.primary_location_id
+  if (!locationId) {
+    return jsonResponse({ error: 'location_id is required' }, { status: 400 })
+  }
+  const location = await db
+    .prepare(`SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`)
+    .bind(locationId, siteId)
+    .first<{ id: string }>()
+  if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
 
   // Validate featured and featured_sort_order when explicitly provided
   if ('featured' in body && typeof body.featured !== 'boolean') {
@@ -54,12 +64,15 @@ export default defineEventHandler(async (event) => {
     duration_minutes: optionalInteger(body.duration_minutes),
     max_capacity: optionalInteger(body.max_capacity),
     time_slots: Array.isArray(body.time_slots) ? body.time_slots.map(String) : null,
+    recurring_slots: body.recurring_slots && typeof body.recurring_slots === 'object' && !Array.isArray(body.recurring_slots)
+      ? (body.recurring_slots as Record<string, string[]>)
+      : null,
     available_note: body.available_note ? String(body.available_note).trim() : null,
     status: (['active', 'inactive', 'sold_out'].includes(String(body.status)) ? String(body.status) : 'active') as 'active' | 'inactive' | 'sold_out',
     sort_order: optionalInteger(body.sort_order) ?? 0,
     featured: typeof body.featured === 'boolean' ? body.featured : false,
     featured_sort_order: optionalInteger(body.featured_sort_order) ?? 0,
-    location_id: body.location_id ? String(body.location_id) : null,
+    location_id: locationId,
     seo_title: body.seo_title ? String(body.seo_title).trim() : null,
     seo_description: body.seo_description ? String(body.seo_description).trim() : null,
   }, session.user.id)

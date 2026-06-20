@@ -52,22 +52,27 @@
 <script setup>
 definePageMeta({ layout: false })
 
-const { siteId } = useTenantSite()
+const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const { locations } = useBootstrap()
 const pending = ref(false)
+const restaurantName = computed(() => site?.brand_name || 'Our Restaurant')
 
 if (locations.value.length === 1) {
   await navigateTo(`/locations/${locations.value[0].slug}/photos`, { replace: true, redirectCode: 301 })
 }
 
-const sharedOgImage = useSharedOgImage()
 const currentPageUrl = useSeoUrl('/photos')
 useSeoMeta({
-  title: 'Photos',
-  description: 'Photo gallery from our restaurant.',
-  ogImage: sharedOgImage,
+  title: computed(() => `Photos | ${restaurantName.value}`),
+  description: computed(() => `Photo gallery from ${restaurantName.value}.`),
+  ogTitle: computed(() => `Photos | ${restaurantName.value}`),
+  ogDescription: computed(() => `Photo gallery from ${restaurantName.value}.`),
+  ogSiteName: computed(() => restaurantName.value),
+  twitterTitle: computed(() => `Photos | ${restaurantName.value}`),
+  twitterDescription: computed(() => `Photo gallery from ${restaurantName.value}.`),
+  ogImage: useTenantOgImage(),
   ogUrl: currentPageUrl
 })
 </script>

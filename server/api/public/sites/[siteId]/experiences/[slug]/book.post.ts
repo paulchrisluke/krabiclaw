@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse, cleanString } from '~/server/utils/api-response'
-import { getExperienceBySlug, createExperienceBooking } from '~/server/utils/experiences'
+import { getExperienceBySlug, createExperienceBooking, resolveEffectiveTimeSlots, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
+import { isDateBeforeTimezoneToday } from '~/server/utils/site-config'
 import { notifyExperienceBookingCreated } from '~/server/utils/notifications'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 
@@ -78,15 +79,27 @@ export default defineEventHandler(async (event) => {
   if (!bookingDate || !/^\d{4}-\d{2}-\d{2}$/.test(bookingDate)) {
     return jsonResponse({ error: 'A valid date (YYYY-MM-DD) is required' }, { status: 400 })
   }
-  if (new Date(bookingDate) < new Date(new Date().toISOString().split('T')[0]!)) {
+  const experienceTimezone = await resolveExperienceTimezone(db, site.organization_id, siteId, experience)
+  if (isDateBeforeTimezoneToday(bookingDate, experienceTimezone)) {
     return jsonResponse({ error: 'Booking date must be today or in the future' }, { status: 400 })
   }
   if (!timeSlot) return jsonResponse({ error: 'A time slot is required' }, { status: 400 })
-  if (experience.time_slots?.length && !experience.time_slots.includes(timeSlot)) {
+  const effectiveSlots = resolveEffectiveTimeSlots(experience, bookingDate)
+  if (effectiveSlots.length && !effectiveSlots.includes(timeSlot)) {
     return jsonResponse({ error: 'Invalid time slot' }, { status: 400 })
   }
   if (experience.max_capacity && partySize > experience.max_capacity) {
     return jsonResponse({ error: `Maximum party size for this experience is ${experience.max_capacity}` }, { status: 400 })
+  }
+  if (effectiveSlots.length) {
+    const availability = await getSlotAvailability(db, siteId, experience, bookingDate)
+    const slotAvailability = availability.find((s) => s.time_slot === timeSlot)
+    if (slotAvailability?.is_closed) {
+      return jsonResponse({ error: 'This time slot is closed for booking.' }, { status: 409 })
+    }
+    if (slotAvailability && slotAvailability.remaining !== null && partySize > slotAvailability.remaining) {
+      return jsonResponse({ error: `Only ${Math.max(slotAvailability.remaining, 0)} spot(s) left for this time slot.` }, { status: 409 })
+    }
   }
 
   // Rate limiting (skipped in dev so E2E tests can run repeatedly without hitting limits)

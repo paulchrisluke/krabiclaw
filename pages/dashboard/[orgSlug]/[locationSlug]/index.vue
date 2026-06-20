@@ -219,6 +219,17 @@
                 >
                   <UInput v-model="detailsForm.notification_phone" type="tel" placeholder="+66..." />
                 </UFormField>
+                <UFormField
+                  label="Timezone"
+                  help="Used to interpret experience booking time slots at this location, e.g. Asia/Bangkok. Falls back to the site default if blank."
+                >
+                  <USelectMenu
+                    v-model="detailsForm.timezone"
+                    :items="timezoneOptions"
+                    searchable
+                    placeholder="Select timezone"
+                  />
+                </UFormField>
               </div>
             </section>
 
@@ -406,6 +417,7 @@ interface BusinessLocation {
   hero_image_asset_id?: string | null
   hero_video_asset_id?: string | null
   notification_phone?: string | null
+  timezone?: string | null
 }
 
 interface ManualReview {
@@ -514,7 +526,10 @@ const detailsForm = reactive({
   is_primary: false,
   status: 'active',
   notification_phone: '',
+  timezone: '',
 })
+
+const timezoneOptions = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
 
@@ -570,6 +585,7 @@ function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.is_primary = loc.is_primary
   detailsForm.status = loc.status
   detailsForm.notification_phone = loc.notification_phone ?? ''
+  detailsForm.timezone = loc.timezone ?? ''
 }
 
 const twelveHourToTwentyFourHour = (value: string): string | null => {
@@ -712,6 +728,7 @@ async function saveLocationDetails() {
         is_primary: detailsForm.is_primary,
         status: detailsForm.status,
         notification_phone: detailsForm.notification_phone || null,
+        timezone: detailsForm.timezone || null,
       }
     })
     if (!response.success) throw new Error('Failed to save location')

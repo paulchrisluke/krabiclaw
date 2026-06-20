@@ -30,6 +30,7 @@
           </UDropdownMenu>
 
           <NuxtLink
+            v-if="!hasExperiences"
             to="/reservations"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
@@ -107,6 +108,7 @@
             {{ $t('saya.header.order_now') }}
           </NuxtLink>
           <NuxtLink
+            v-if="!hasExperiences"
             to="/reservations"
             class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
@@ -177,7 +179,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', syncHeaderHeight)
 })
 
-const restaurantName = computed(() => (site as Site | null)?.brand_name || 'Saya')
+const restaurantName = computed(() => (site as Site | null)?.brand_name || 'KrabiClaw')
 const logoUrl = computed(() => (site as Site | null)?.logo_url || null)
 
 useUpgradeModal()

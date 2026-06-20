@@ -39,6 +39,7 @@
               </div>
             </div>
             <div class="flex shrink-0 items-center gap-2">
+              <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-calendar-days" aria-label="Manage availability" @click="openAvailability(exp)" />
               <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-pencil-square" aria-label="Edit experience" @click="openEdit(exp)" />
               <UButton size="sm" color="neutral" variant="ghost" icon="i-heroicons-trash" aria-label="Delete experience" @click="confirmDelete(exp)" />
             </div>
@@ -53,6 +54,9 @@
         <div class="space-y-5 p-6">
           <UFormField label="Title" required>
             <UInput v-model="form.title" placeholder="e.g. Chef's Table Omakase" class="w-full" />
+          </UFormField>
+          <UFormField label="Location" required help="Every experience belongs to exactly one location.">
+            <USelect v-model="form.location_id" :items="locationItems" value-key="id" label-key="label" class="w-full" />
           </UFormField>
           <UFormField label="Tagline" help="One-line hook shown on the listing card.">
             <UInput v-model="form.tagline" placeholder="e.g. Eight courses, one table, full attention." class="w-full" />
@@ -124,8 +128,56 @@
               <UInput v-model="form.featured_sort_order" type="number" min="0" class="w-full" />
             </UFormField>
           </div>
-          <UFormField label="Time slots" help="Comma-separated times, e.g. 18:00, 20:30">
-            <UInput v-model="timeSlotsInput" placeholder="18:00, 20:30" class="w-full" />
+          <UFormField label="Time slots">
+            <UTabs v-model="slotsMode" :items="[{ label: 'Same times every day', value: 'flat' }, { label: 'Different times per day', value: 'recurring' }]" class="mb-3" />
+
+            <div v-if="slotsMode === 'flat'" class="space-y-3">
+              <UCard :ui="{ body: 'p-3 sm:p-3' }">
+                <div class="grid grid-cols-3 gap-2 items-end">
+                  <UFormField label="Start" size="xs">
+                    <UInput v-model="generator.start" type="time" class="w-full" />
+                  </UFormField>
+                  <UFormField label="End" size="xs">
+                    <UInput v-model="generator.end" type="time" class="w-full" />
+                  </UFormField>
+                  <UFormField label="Every" size="xs">
+                    <USelect v-model="generator.interval" :items="intervalOptions" class="w-full" />
+                  </UFormField>
+                </div>
+                <UButton size="xs" class="mt-2" color="neutral" variant="soft" :loading="generating" @click="runGenerator('flat')">
+                  Generate slots
+                </UButton>
+              </UCard>
+              <UInput v-model="timeSlotsInput" placeholder="18:00, 20:30" class="w-full" />
+              <p class="text-xs text-muted">Comma-separated times, applied every day.</p>
+            </div>
+
+            <div v-else class="space-y-3">
+              <UCard :ui="{ body: 'p-3 sm:p-3' }">
+                <div class="grid grid-cols-3 gap-2 items-end">
+                  <UFormField label="Start" size="xs">
+                    <UInput v-model="generator.start" type="time" class="w-full" />
+                  </UFormField>
+                  <UFormField label="End" size="xs">
+                    <UInput v-model="generator.end" type="time" class="w-full" />
+                  </UFormField>
+                  <UFormField label="Every" size="xs">
+                    <USelect v-model="generator.interval" :items="intervalOptions" class="w-full" />
+                  </UFormField>
+                </div>
+                <p class="mt-2 text-xs text-muted">Set times above, then use the bolt icon on a day to apply.</p>
+              </UCard>
+              <div class="flex flex-wrap gap-2">
+                <UButton size="xs" color="neutral" variant="soft" @click="copyRecurring('all')">Copy first day to all</UButton>
+                <UButton size="xs" color="neutral" variant="soft" @click="copyRecurring('weekdays')">Copy to Mon–Fri</UButton>
+                <UButton size="xs" color="neutral" variant="soft" @click="copyRecurring('weekend')">Copy to Fri–Sat</UButton>
+              </div>
+              <div v-for="day in weekdayNames" :key="day" class="grid grid-cols-[5.5rem_1fr_auto] items-center gap-2">
+                <span class="text-sm font-medium text-highlighted">{{ day }}</span>
+                <UInput v-model="recurringInputs[day]" placeholder="18:00, 20:30" class="w-full" />
+                <UButton size="xs" color="neutral" variant="ghost" icon="i-heroicons-bolt" :loading="generating" :aria-label="`Generate for ${day}`" @click="runGenerator('recurring', day)" />
+              </div>
+            </div>
           </UFormField>
           <UFormField label="Availability note" help="Short note shown when near capacity, e.g. 'Last 2 spots'.">
             <UInput v-model="form.available_note" class="w-full" />
@@ -154,18 +206,83 @@
         </div>
       </template>
     </UModal>
+
+    <!-- Manage availability -->
+    <UModal v-model:open="availabilityOpen" :title="`Manage availability — ${availabilityExp?.title ?? ''}`" :ui="{ content: 'max-w-2xl' }">
+      <template #body>
+        <div class="space-y-4 px-6 py-4">
+          <p v-if="availabilityTimezone" class="text-xs text-muted">Times shown in {{ availabilityTimezone }}.</p>
+          <UFormField label="Date">
+            <UInput v-model="availabilityDate" type="date" class="w-full max-w-xs" @change="loadAvailability" />
+          </UFormField>
+
+          <div v-if="availabilityLoading" class="space-y-2">
+            <USkeleton class="h-10 w-full rounded-lg" />
+            <USkeleton class="h-10 w-full rounded-lg" />
+          </div>
+          <p v-else-if="availabilitySlots.length === 0" class="text-sm text-muted">No effective time slots on this date.</p>
+          <div v-else class="space-y-2">
+            <div v-for="slot in availabilitySlots" :key="slot.time_slot" class="flex items-center gap-3 rounded-lg border border-default p-3">
+              <span class="w-16 shrink-0 font-medium text-highlighted">{{ slot.time_slot }}</span>
+              <span class="text-xs text-muted">
+                {{ slot.booked }} booked<span v-if="slot.capacity != null"> / {{ slot.capacity }}</span>
+              </span>
+              <UBadge v-if="slot.is_closed" color="error" variant="soft" size="xs">Closed</UBadge>
+              <UBadge v-else-if="slot.is_full" color="warning" variant="soft" size="xs">Full</UBadge>
+              <UInput
+                v-model="slotCapacityOverrides[slot.time_slot]"
+                type="number"
+                min="0"
+                placeholder="Capacity override"
+                class="ml-auto w-36"
+              />
+              <UButton
+                size="xs"
+                :color="slot.is_closed ? 'success' : 'error'"
+                variant="soft"
+                :loading="savingOverride === slot.time_slot"
+                @click="toggleSlotOverride(slot)"
+              >
+                {{ slot.is_closed ? 'Reopen' : 'Close' }}
+              </UButton>
+            </div>
+          </div>
+
+          <div v-if="existingOverrides.length" class="pt-2">
+            <p class="text-xs font-medium text-muted mb-2">Upcoming overrides</p>
+            <div class="space-y-1">
+              <div v-for="ov in existingOverrides" :key="ov.id" class="flex items-center gap-3 rounded-lg border border-default px-3 py-2 text-sm">
+                <span class="text-muted">{{ ov.override_date }}</span>
+                <span class="font-medium text-highlighted">{{ ov.time_slot }}</span>
+                <UBadge :color="ov.status === 'closed' ? 'error' : 'success'" variant="soft" size="xs">{{ ov.status }}</UBadge>
+                <span v-if="ov.capacity_override != null" class="text-xs text-muted">cap {{ ov.capacity_override }}</span>
+                <UButton size="xs" color="neutral" variant="ghost" icon="i-heroicons-trash" class="ml-auto" aria-label="Delete override" @click="deleteOverride(ov)" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-3 px-6 py-4">
+          <UButton color="neutral" variant="ghost" @click="availabilityOpen = false">Close</UButton>
+        </div>
+      </template>
+    </UModal>
   </UPage>
 </template>
 
 <script setup lang="ts">
 // -nocheck
-import type { Experience } from '~/server/utils/experiences'
+import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/server/utils/experiences'
+
+const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const satisfies WeekdayName[]
 
 definePageMeta({ layout: 'dashboard' })
 
 type ApiRecord = Experience
 
 const toast = useToast()
+const route = useRoute()
 const siteId = await useDashboardSiteId()
 
 const sitePublicUrl = ref<string | null>(null)
@@ -173,9 +290,25 @@ const defaultCurrency = ref('THB')
 const { buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
 const _headerLinks = computed(() => buildHeaderLinks())
 
+interface LocationRow {
+  id: string
+  slug: string
+  title: string
+  is_primary: boolean
+}
+
 // ── List ──────────────────────────────────────────────────
 const loading = ref(true)
 const experiences = ref<ApiRecord[]>([])
+const locations = ref<LocationRow[]>([])
+const locationItems = computed(() => locations.value.map(location => ({ id: location.id, label: location.title })))
+const defaultLocationId = computed(() => {
+  const slug = String(route.params.locationSlug ?? '')
+  return locations.value.find(l => l.slug === slug)?.id
+    ?? locations.value.find(l => l.is_primary)?.id
+    ?? locations.value[0]?.id
+    ?? ''
+})
 
 async function loadExperiences() {
   loading.value = true
@@ -189,6 +322,15 @@ async function loadExperiences() {
   }
 }
 
+async function loadLocations() {
+  try {
+    const res = await $fetch<{ locations: LocationRow[] }>(`/api/dashboard/locations`)
+    locations.value = res.locations ?? []
+  } catch {
+    locations.value = []
+  }
+}
+
 async function loadSitePublicUrl() {
   try {
     const response = await $fetch<{ success: boolean; settings: { public_url?: string | null; default_currency?: string } }>(`/api/dashboard/settings`)
@@ -199,16 +341,60 @@ async function loadSitePublicUrl() {
   }
 }
 
-await Promise.all([loadExperiences(), loadSitePublicUrl()])
+await Promise.all([loadExperiences(), loadLocations(), loadSitePublicUrl()])
 
 // ── Form ──────────────────────────────────────────────────
 const sliderOpen = ref(false)
 const editing = ref<ApiRecord | null>(null)
 const saving = ref(false)
 const timeSlotsInput = ref('')
+const slotsMode = ref<'flat' | 'recurring'>('flat')
+const recurringInputs = reactive<Record<WeekdayName, string>>({
+  Monday: '', Tuesday: '', Wednesday: '', Thursday: '', Friday: '', Saturday: '', Sunday: '',
+})
+const generator = reactive({ start: '17:00', end: '21:00', interval: 30 })
+const intervalOptions = [
+  { label: '15 min', value: 15 },
+  { label: '30 min', value: 30 },
+  { label: '45 min', value: 45 },
+  { label: '60 min', value: 60 },
+]
+const generating = ref(false)
+
+async function runGenerator(target: 'flat' | 'recurring', day?: WeekdayName) {
+  generating.value = true
+  try {
+    const res = await $fetch<{ slots: string[] }>(`/api/dashboard/editor/experiences/generate-slots`, {
+      query: { start: generator.start, end: generator.end, interval_minutes: generator.interval },
+    })
+    if (target === 'flat') {
+      timeSlotsInput.value = res.slots.join(', ')
+    } else if (day) {
+      recurringInputs[day] = res.slots.join(', ')
+    }
+  } catch {
+    toast.add({ description: 'Could not generate slots — check start/end/interval.', color: 'error' })
+  } finally {
+    generating.value = false
+  }
+}
+
+function copyRecurring(mode: 'all' | 'weekdays' | 'weekend') {
+  if (mode === 'all') {
+    const first = recurringInputs[weekdayNames[0]]
+    for (const day of weekdayNames) recurringInputs[day] = first
+  } else if (mode === 'weekdays') {
+    const monday = recurringInputs.Monday
+    for (const day of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as WeekdayName[]) recurringInputs[day] = monday
+  } else {
+    const friday = recurringInputs.Friday
+    for (const day of ['Friday', 'Saturday'] as WeekdayName[]) recurringInputs[day] = friday
+  }
+}
 
 const emptyForm = () => ({
   title: '',
+  location_id: '',
   tagline: '',
   body: '',
   image_asset_id: null as string | null,
@@ -231,7 +417,10 @@ const form = reactive(emptyForm())
 function openCreate() {
   editing.value = null
   Object.assign(form, emptyForm())
+  form.location_id = defaultLocationId.value
   timeSlotsInput.value = ''
+  slotsMode.value = 'flat'
+  for (const day of weekdayNames) recurringInputs[day] = ''
   sliderOpen.value = true
 }
 
@@ -263,6 +452,7 @@ function openEdit(exp: ApiRecord) {
   editing.value = exp
   Object.assign(form, {
     title: exp.title ?? '',
+    location_id: exp.location_id ?? defaultLocationId.value,
     tagline: exp.tagline ?? '',
     body: exp.body ?? '',
     image_asset_id: exp.image_asset_id ?? null,
@@ -280,12 +470,18 @@ function openEdit(exp: ApiRecord) {
     featured_sort_order: exp.featured_sort_order != null ? String(exp.featured_sort_order) : '0',
   })
   timeSlotsInput.value = Array.isArray(exp.time_slots) ? exp.time_slots.join(', ') : (exp.time_slots ?? '')
+  for (const day of weekdayNames) recurringInputs[day] = exp.recurring_slots?.[day]?.join(', ') ?? ''
+  slotsMode.value = exp.recurring_slots ? 'recurring' : 'flat'
   sliderOpen.value = true
 }
 
 async function save() {
   if (!form.title.trim()) {
     toast.add({ description: 'Title is required.', color: 'error' })
+    return
+  }
+  if (!form.location_id) {
+    toast.add({ description: 'Location is required.', color: 'error' })
     return
   }
   saving.value = true
@@ -302,8 +498,15 @@ async function save() {
       duration_minutes: parseNumber(form.duration_minutes),
       max_capacity: parseNumber(form.max_capacity),
       featured_sort_order: parseNumber(form.featured_sort_order),
-      time_slots: timeSlotsInput.value
+      time_slots: slotsMode.value === 'flat' && timeSlotsInput.value
         ? timeSlotsInput.value.split(',').map(s => s.trim()).filter(Boolean)
+        : null,
+      recurring_slots: slotsMode.value === 'recurring'
+        ? Object.fromEntries(
+            weekdayNames
+              .map((day) => [day, recurringInputs[day].split(',').map(s => s.trim()).filter(Boolean)])
+              .filter(([, slots]) => (slots as string[]).length > 0),
+          )
         : null,
       images: form.images.filter(img => img.url).map(img => ({
         url: img.url,
@@ -348,6 +551,79 @@ async function doDelete() {
     toast.add({ description: 'Failed to delete experience.', color: 'error' })
   } finally {
     deleting.value = false
+  }
+}
+
+// ── Manage availability ──────────────────────────────────────
+const availabilityOpen = ref(false)
+const availabilityExp = ref<ApiRecord | null>(null)
+const availabilityDate = ref(new Date().toISOString().slice(0, 10))
+const availabilityLoading = ref(false)
+const availabilitySlots = ref<SlotAvailability[]>([])
+const availabilityTimezone = ref<string | null>(null)
+const existingOverrides = ref<SlotOverride[]>([])
+const slotCapacityOverrides = reactive<Record<string, string>>({})
+const savingOverride = ref<string | null>(null)
+
+function openAvailability(exp: ApiRecord) {
+  availabilityExp.value = exp
+  availabilityDate.value = new Date().toISOString().slice(0, 10)
+  availabilityOpen.value = true
+  loadAvailability()
+}
+
+async function loadAvailability() {
+  if (!availabilityExp.value) return
+  availabilityLoading.value = true
+  try {
+    const [avail, overrides] = await Promise.all([
+      $fetch<{ timezone: string; dates: Array<{ date: string; slots: SlotAvailability[] }> }>(
+        `/api/dashboard/editor/experiences/${availabilityExp.value.id}/availability`,
+        { query: { date: availabilityDate.value } },
+      ),
+      $fetch<{ overrides: SlotOverride[] }>(
+        `/api/dashboard/editor/experiences/${availabilityExp.value.id}/slot-overrides`,
+      ),
+    ])
+    availabilityTimezone.value = avail.timezone
+    availabilitySlots.value = avail.dates[0]?.slots ?? []
+    existingOverrides.value = overrides.overrides ?? []
+  } catch {
+    toast.add({ description: 'Failed to load availability.', color: 'error' })
+  } finally {
+    availabilityLoading.value = false
+  }
+}
+
+async function toggleSlotOverride(slot: SlotAvailability) {
+  if (!availabilityExp.value) return
+  savingOverride.value = slot.time_slot
+  try {
+    const capacityInput = slotCapacityOverrides[slot.time_slot]
+    await $fetch(`/api/dashboard/editor/experiences/${availabilityExp.value.id}/slot-overrides`, {
+      method: 'POST',
+      body: {
+        override_date: availabilityDate.value,
+        time_slot: slot.time_slot,
+        status: slot.is_closed ? 'open' : 'closed',
+        capacity_override: capacityInput ? Number(capacityInput) : null,
+      },
+    })
+    await loadAvailability()
+  } catch {
+    toast.add({ description: 'Failed to update slot availability.', color: 'error' })
+  } finally {
+    savingOverride.value = null
+  }
+}
+
+async function deleteOverride(override: SlotOverride) {
+  if (!availabilityExp.value) return
+  try {
+    await $fetch(`/api/dashboard/editor/experiences/${availabilityExp.value.id}/slot-overrides/${override.id}`, { method: 'DELETE' })
+    await loadAvailability()
+  } catch {
+    toast.add({ description: 'Failed to delete override.', color: 'error' })
   }
 }
 </script>

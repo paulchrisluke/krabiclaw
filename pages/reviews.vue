@@ -62,12 +62,16 @@ function loadMore() { visibleCount.value += PAGE_SIZE }
 
 const restaurantName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Restaurant')
 
-const sharedOgImage = useSharedOgImage()
 const currentPageUrl = useSeoUrl('/reviews')
 useSeoMeta({
   title: computed(() => `Reviews | ${restaurantName.value}`),
   description: computed(() => `Guest reviews for ${restaurantName.value}.`),
-  ogImage: sharedOgImage,
+  ogTitle: computed(() => `Reviews | ${restaurantName.value}`),
+  ogDescription: computed(() => `Guest reviews for ${restaurantName.value}.`),
+  ogSiteName: computed(() => restaurantName.value),
+  twitterTitle: computed(() => `Reviews | ${restaurantName.value}`),
+  twitterDescription: computed(() => `Guest reviews for ${restaurantName.value}.`),
+  ogImage: useTenantOgImage(),
   ogUrl: currentPageUrl
 })
 

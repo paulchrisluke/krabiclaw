@@ -1,5 +1,5 @@
 <template>
-  <section v-if="items.length" class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+  <AppSection v-if="items.length" :bg="bg" :padding="padding">
     <div class="mb-12 flex flex-wrap items-end justify-between gap-4">
       <div class="max-w-2xl">
         <p class="saya-kicker mb-6">{{ sectionKicker }}</p>
@@ -48,10 +48,12 @@
         </div>
       </NuxtLink>
     </div>
-  </section>
+  </AppSection>
 </template>
 
 <script setup lang="ts">
+import AppSection from '~/components/ui/AppSection.vue'
+
 interface Props {
   data?: {
     items?: Array<{
@@ -65,10 +67,14 @@ interface Props {
     hasMenu?: boolean
     vertical?: string
   }
+  bg?: string
+  padding?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  data: () => ({})
+  data: () => ({ items: [], hasMenu: false, vertical: undefined }),
+  bg: 'default',
+  padding: 'lg'
 })
 
 const { site } = useTenantSite()

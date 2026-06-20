@@ -31,7 +31,7 @@
     />
 
       <!-- Gallery -->
-      <section class="mx-auto max-w-7xl px-4 py-12 pb-24 sm:px-6 lg:px-8">
+      <section class="mx-auto max-w-7xl px-4 pt-12 pb-24 sm:px-6 lg:px-8">
         <!-- Empty -->
         <div v-if="sorted.length === 0" class="py-24 text-center">
         <div class="saya-display saya-italic text-3xl text-default">No photos yet.</div>
@@ -191,9 +191,17 @@ function toAbsoluteUrl(value?: string | null): string | null {
   }
 }
 
+const seoTitle = () => `Photos · ${location.value?.title || slug.value}`
+const seoDescription = () => `${photos.value.length} photos from ${location.value?.title} at ${siteName.value}.`
+
 useSeoMeta({
-  title: () => `Photos · ${location.value?.title || slug.value}`,
-  description: () => `${photos.value.length} photos from ${location.value?.title} at ${siteName.value}.`,
+  title: seoTitle,
+  description: seoDescription,
+  ogTitle: seoTitle,
+  ogDescription: seoDescription,
+  ogSiteName: () => siteName.value,
+  twitterTitle: seoTitle,
+  twitterDescription: seoDescription,
   ogImage,
   ogUrl: currentPageUrl
 })

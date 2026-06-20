@@ -120,6 +120,11 @@ useBreadcrumbSchema([
 useSeoMeta({
   title: computed(() => `Experiences | ${siteName.value}`),
   description: computed(() => expCopy.value.seoExperiencesDescription(siteName.value)),
+  ogTitle: computed(() => `Experiences | ${siteName.value}`),
+  ogDescription: computed(() => expCopy.value.seoExperiencesDescription(siteName.value)),
+  ogSiteName: computed(() => siteName.value),
+  twitterTitle: computed(() => `Experiences | ${siteName.value}`),
+  twitterDescription: computed(() => expCopy.value.seoExperiencesDescription(siteName.value)),
   ogUrl: currentPageUrl,
   ogType: 'website',
   ogImage,

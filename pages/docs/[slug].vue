@@ -21,7 +21,9 @@
           <span v-if="doc.difficulty_level" class="px-3 py-1 rounded-full text-sm font-medium bg-(--kc-navy) text-white">
             {{ doc.difficulty_level }}
           </span>
-          <span class="text-dimmed text-sm">{{ formatDate(doc.updated_at) }}</span>
+          <span v-if="doc.updated_at" class="text-dimmed text-sm">
+            <NuxtTime :datetime="doc.updated_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+          </span>
         </div>
 
         <h1 class="text-4xl font-bold text-default mb-6">{{ doc.title }}</h1>
@@ -62,12 +64,6 @@ const renderedBody = computed(() => {
   const html = marked.parse(doc.value.body)
   return DOMPurify.sanitize(html)
 })
-
-function formatDate(iso) {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-}
 
 useSeoMeta({
   title: computed(() => `${doc.value?.title || 'Documentation'} | KrabiClaw Docs`),

@@ -8,13 +8,13 @@
   color-scheme: light;
   background-color: var(--saya-bg);
 
-  --saya-primary:       #8F1D21;
+  --saya-primary:       var(--brand-color, #8F1D21);
   /* Mirror saya-primary into Tailwind's --color-primary so that
      bg-primary / text-primary / ring-primary utilities and all Nuxt UI
      components using color="primary" resolve to the tenant brand color. */
   --color-primary:      var(--saya-primary);
-  /* WCAG foreground: #8F1D21 has 8.75:1 contrast with white — white text is safe */
-  --primary-foreground: #ffffff;
+  /* WCAG foreground: calculated dynamically based on brand color contrast */
+  --primary-foreground: var(--brand-color-foreground, #ffffff);
   --saya-bg:            #FFFFFF;
   --saya-bg-alt:        #FAFAFA;
   --saya-bg-inverted:   #09090B;
@@ -46,11 +46,10 @@
 .dark .saya-theme {
   color-scheme: dark;
 
-  --saya-primary:       #D16063;
+  --saya-primary:       var(--brand-color-dark, var(--brand-color, #D16063));
   --color-primary:      var(--saya-primary);
-  /* WCAG foreground: #D16063 has only ~3.7:1 contrast with white (fails AA).
-     Use near-black text instead — 11:1 contrast against #D16063. */
-  --primary-foreground: #18060a;
+  /* WCAG foreground: calculated dynamically based on brand color contrast */
+  --primary-foreground: var(--brand-color-foreground-dark, var(--brand-color-foreground, #18060a));
   --saya-bg:            #09090B;
   --saya-bg-alt:        #121216;
   --saya-bg-inverted:   #FAFAFA;

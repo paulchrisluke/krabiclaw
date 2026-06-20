@@ -223,7 +223,7 @@ const experienceWriteSchema = {
   sort_order: { type: 'number' },
   featured: { type: 'boolean' },
   featured_sort_order: { type: 'number' },
-  location_id: { type: ['string', 'null'] },
+  location_id: { type: 'string' },
   seo_title: { type: ['string', 'null'] },
   seo_description: { type: ['string', 'null'] },
 } as const
@@ -507,6 +507,7 @@ const BOUNDED_WRITE_TOOL_NAMES = [
   'upload_user_photo',
   'request_photo_upload',
   'set_logo',
+  'set_brand_color',
   'set_home_hero_image',
   'set_home_hero_video',
   'set_story_image',
@@ -1161,7 +1162,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'update_site_settings',
-    description: 'Update editable site settings.',
+    description: 'Update editable site settings including brand color theme. The brand_color controls the primary accent color across the entire Saya template (buttons, links, highlights). Use hex format (e.g., #8F1D21 for red, #1E40AF for blue, #78350F for earthy brown). For natural language color requests like "earthy for a clay pot studio" or "warm terracotta", interpret the mood and convert to an appropriate hex color.',
     domain: 'sites',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -1172,7 +1173,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       logo_asset_id: { type: 'string' },
       contact_email: { type: 'string' },
       default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
-      brand_color: { type: 'string' },
+      brand_color: { type: 'string', description: 'Primary brand color in hex format (e.g., #8F1D21). Controls accent colors across the Saya template. For natural language requests like "earthy", "warm terracotta", "ocean blue", interpret the mood and convert to an appropriate hex code.' },
       social_facebook: { type: 'string' },
       social_instagram: { type: 'string' },
       social_tiktok: { type: 'string' },
@@ -1211,6 +1212,26 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         updated: { type: 'boolean' },
       },
       required: ['default_currency', 'updated'],
+    },
+  }),
+  siteTool({
+    name: 'set_brand_color',
+    description: 'Set the brand color theme for the site. Accepts natural language color descriptions like "earthy", "warm terracotta", "ocean blue", "sage green", or hex codes like #8F1D21. The brand color controls the primary accent color across the entire Saya template (buttons, links, highlights). Automatically calculates appropriate dark mode variants and ensures WCAG contrast compliance for text.',
+    domain: 'sites',
+    minimumRole: 'admin',
+    confirmRequired: false,
+    inputSchema: {
+      color: { type: 'string', description: 'Color description in natural language (e.g., "earthy", "warm terracotta", "ocean blue") or hex format (e.g., #8F1D21).' },
+    },
+    required: ['color'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        brand_color: { type: 'string', description: 'The resolved hex color code that was set.' },
+        updated: { type: 'boolean' },
+        description: { type: 'string', description: 'Human-readable description of what color was set.' },
+      },
+      required: ['brand_color', 'updated', 'description'],
     },
   }),
   siteTool({
@@ -2140,12 +2161,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'create_experience',
-    description: `Create an experience. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}.`,
+    description: `Create an experience. status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Every experience must be tied to a location.`,
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,
     inputSchema: experienceWriteSchema,
-    required: ['title'],
+    required: ['title', 'location_id'],
     outputSchema: {
       type: 'object',
       properties: { experience: experienceObject },

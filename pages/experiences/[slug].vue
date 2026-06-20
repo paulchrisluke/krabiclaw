@@ -27,7 +27,7 @@
       <Teleport to="body">
         <div
           v-if="experience.status !== 'sold_out' && !bookingSuccess"
-          class="lg:hidden fixed bottom-0 inset-x-0 z-40 flex items-center justify-between gap-4 border-t border-default bg-default/95 backdrop-blur-sm px-5 py-4 shadow-lg"
+          class="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 backdrop-blur-sm px-5 py-4 shadow-lg"
         >
           <div class="min-w-0">
             <p v-if="experience.price" class="font-semibold text-default leading-tight">{{ experience.price }}</p>
@@ -117,19 +117,22 @@
             </div>
 
             <!-- Lightbox -->
-            <UModal v-model:open="lightboxOpen" fullscreen :portal="false" :ui="{ content: 'bg-black/92 flex items-center justify-center' }">
+            <UModal v-model:open="lightboxOpen" fullscreen :portal="false" :ui="{ content: 'bg-black flex items-center justify-center' }">
               <template #content>
-                <div class="relative flex h-full w-full items-center justify-center p-16">
+                <div class="relative h-full w-full">
+                  <!-- Close button -->
                   <button
-                    class="absolute right-6 top-6 flex size-11 items-center justify-center rounded-full bg-white/12 text-white transition hover:bg-white/25"
+                    class="absolute right-4 top-4 z-20 flex size-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white transition hover:bg-black/60"
                     aria-label="Close"
                     @click="lightboxOpen = false"
                   >
                     <UIcon name="i-heroicons-x-mark" class="size-5" />
                   </button>
+
+                  <!-- Navigation buttons -->
                   <button
                     v-if="lightboxIdx > 0"
-                    class="absolute left-6 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/12 text-white transition hover:bg-white/25"
+                    class="absolute left-4 top-1/2 z-20 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white transition hover:bg-black/60"
                     aria-label="Previous"
                     @click="lightboxIdx--"
                   >
@@ -137,21 +140,31 @@
                   </button>
                   <button
                     v-if="lightboxIdx < imageItems.length - 1"
-                    class="absolute right-6 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/12 text-white transition hover:bg-white/25"
+                    class="absolute right-4 top-1/2 z-20 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white transition hover:bg-black/60"
                     aria-label="Next"
                     @click="lightboxIdx++"
                   >
                     <UIcon name="i-heroicons-chevron-right" class="size-5" />
                   </button>
+
+                  <!-- Image - full bleed -->
                   <img
                     v-if="imageItems[lightboxIdx]"
-                    :src="imageItems[lightboxIdx].url"
+                    :src="imageItems[lightboxIdx]?.url"
                     :alt="experience.title"
-                    class="max-h-[85vh] max-w-[90vw] object-contain"
+                    class="h-full w-full object-cover"
                     @click.stop
                   >
-                  <div v-if="imageItems.length > 1" class="absolute left-6 top-6 tabular-nums text-sm text-white/70">
+
+                  <!-- Counter -->
+                  <div v-if="imageItems.length > 1" class="absolute left-4 top-4 z-20 rounded-full bg-black/40 backdrop-blur-md px-3 py-1 text-xs font-medium text-white">
                     {{ lightboxIdx + 1 }} / {{ imageItems.length }}
+                  </div>
+
+                  <!-- Title overlay at bottom -->
+                  <div class="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-6 pt-20">
+                    <p class="text-lg font-semibold text-white">{{ experience.title }}</p>
+                    <p v-if="experience.tagline" class="mt-1 text-sm text-white/80">{{ experience.tagline }}</p>
                   </div>
                 </div>
               </template>
@@ -301,30 +314,6 @@
                 </div>
 
                 <form v-else class="space-y-4" @submit.prevent="submitBooking">
-                  <!-- Time slots -->
-                  <UFormField v-if="experience.time_slots?.length" label="Choose a time slot" required>
-                    <div class="flex flex-wrap gap-2">
-                      <button
-                        v-for="slot in experience.time_slots"
-                        :key="slot"
-                        type="button"
-                        :class="[
-                          'rounded-lg border px-4 py-2 text-sm font-medium transition-colors',
-                          form.time_slot === slot
-                            ? 'border-primary bg-primary text-white'
-                            : 'border-default bg-default text-default hover:border-primary hover:text-primary'
-                        ]"
-                        :disabled="submitting"
-                        @click="form.time_slot = slot"
-                      >
-                        {{ slot }}
-                      </button>
-                    </div>
-                  </UFormField>
-                  <UFormField v-else label="Preferred Time" required>
-                    <UInput v-model="form.time_slot" placeholder="e.g. 10:00" size="md" :disabled="submitting" />
-                  </UFormField>
-
                   <!-- Date + party size row -->
                   <div class="grid grid-cols-2 gap-3">
                     <UFormField label="Date" required>
@@ -334,6 +323,43 @@
                       <USelect v-model="form.party_size" :items="partySizeOptions" size="md" :disabled="submitting" />
                     </UFormField>
                   </div>
+
+                  <!-- Time slots -->
+                  <UFormField v-if="hasAnySlots" label="Choose a time slot" required>
+                    <div v-if="availabilityLoading" class="flex flex-wrap gap-2">
+                      <USkeleton class="h-10 w-20 rounded-lg" />
+                      <USkeleton class="h-10 w-20 rounded-lg" />
+                    </div>
+                    <p v-else-if="slotAvailability.length === 0" class="text-sm text-muted">
+                      No availability on this day — try another date.
+                    </p>
+                    <div v-else class="flex flex-wrap gap-2">
+                      <button
+                        v-for="slot in slotAvailability"
+                        :key="slot.time_slot"
+                        type="button"
+                        :class="[
+                          'rounded-lg border px-4 py-2 text-sm font-medium transition-colors',
+                          form.time_slot === slot.time_slot
+                            ? 'border-primary bg-primary text-white'
+                            : slot.is_closed || slot.is_full
+                              ? 'border-default bg-muted text-dimmed cursor-not-allowed opacity-60'
+                              : 'border-default bg-default text-default hover:border-primary hover:text-primary'
+                        ]"
+                        :disabled="submitting || slot.is_closed || slot.is_full"
+                        @click="form.time_slot = slot.time_slot"
+                      >
+                        {{ slot.time_slot }}
+                        <span v-if="!slot.is_closed && slot.remaining !== null && slot.remaining <= 3 && slot.remaining > 0" class="ml-1 text-xs opacity-80">
+                          ({{ slot.remaining }} left)
+                        </span>
+                      </button>
+                    </div>
+                    <p v-if="availabilityTimezone" class="mt-2 text-xs text-muted">Times shown in {{ availabilityTimezone }}.</p>
+                  </UFormField>
+                  <UFormField v-else label="Preferred Time" required>
+                    <UInput v-model="form.time_slot" placeholder="e.g. 10:00" size="md" :disabled="submitting" />
+                  </UFormField>
 
                   <!-- Name + email -->
                   <UFormField label="Your Name" required>
@@ -490,22 +516,53 @@ const form = reactive({
   guest_email: '',
   guest_phone: '',
   party_size: '1',
-  booking_date: '',
+  booking_date: minDate.value,
   time_slot: '',
   notes: '',
 })
 
-watch(experience, (newExp) => {
-  if (newExp?.time_slots?.length && !form.time_slot) {
-    form.time_slot = newExp.time_slots[0] || ''
-  }
-})
+interface SlotAvailabilityItem {
+  time_slot: string
+  capacity: number | null
+  booked: number
+  remaining: number | null
+  is_closed: boolean
+  is_full: boolean
+}
 
-onMounted(() => {
-  if (experience.value?.time_slots?.length && !form.time_slot) {
-    form.time_slot = experience.value.time_slots[0] || ''
+const hasAnySlots = computed(() => Boolean(experience.value?.recurring_slots || experience.value?.time_slots?.length))
+const slotAvailability = ref<SlotAvailabilityItem[]>([])
+const availabilityTimezone = ref<string | null>(null)
+const availabilityLoading = ref(false)
+
+async function loadSlotAvailability() {
+  if (!siteId || !experience.value || !form.booking_date || !hasAnySlots.value) {
+    slotAvailability.value = []
+    return
   }
-})
+  availabilityLoading.value = true
+  try {
+    const res = await $fetch<{ timezone: string; dates: Array<{ date: string; slots: SlotAvailabilityItem[] }> }>(
+      `/api/public/sites/${siteId}/experiences/${slug}/availability`,
+      { query: { date: form.booking_date } },
+    )
+    availabilityTimezone.value = res.timezone
+    slotAvailability.value = res.dates[0]?.slots ?? []
+    const currentValid = slotAvailability.value.find((s) => s.time_slot === form.time_slot && !s.is_closed && !s.is_full)
+    if (!currentValid) {
+      const firstAvailable = slotAvailability.value.find((s) => !s.is_closed && !s.is_full)
+      form.time_slot = firstAvailable?.time_slot ?? ''
+    }
+  } catch {
+    slotAvailability.value = []
+  } finally {
+    availabilityLoading.value = false
+  }
+}
+
+watch(() => form.booking_date, loadSlotAvailability)
+watch(experience, () => loadSlotAvailability())
+onMounted(loadSlotAvailability)
 
 const submitting = ref(false)
 const bookingSuccess = ref(false)
@@ -556,9 +613,19 @@ useBreadcrumbSchema([
   { name: experience.value?.title ?? slug, url: `${siteUrl}/experiences/${slug}` },
 ])
 
+const seoTitle = computed(() => experience.value?.seo_title ?? (experience.value ? `${experience.value.title} | Experiences` : 'Experience'))
+const seoDescription = computed(() =>
+  truncateForSeo(experience.value?.seo_description ?? experience.value?.tagline ?? `Book the ${experience.value?.title} experience.`, 160)
+)
+
 useSeoMeta({
-  title: computed(() => experience.value?.seo_title ?? (experience.value ? `${experience.value.title} | Experiences` : 'Experience')),
-  description: computed(() => experience.value?.seo_description ?? experience.value?.tagline ?? `Book the ${experience.value?.title} experience.`),
+  title: seoTitle,
+  description: seoDescription,
+  ogTitle: seoTitle,
+  ogDescription: seoDescription,
+  ogSiteName: () => siteName.value,
+  twitterTitle: seoTitle,
+  twitterDescription: seoDescription,
   ogUrl: currentPageUrl,
   ogType: 'website',
   ogImage,

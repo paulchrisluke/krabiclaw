@@ -31,17 +31,7 @@
           <p class="saya-eyebrow mb-2 text-muted">{{ t('saya.qa_page.dont_see') }}</p>
           <div class="saya-display saya-italic text-3xl text-default">{{ t('saya.qa_page.ask_us') }}</div>
         </div>
-        <!-- Free-tier: trigger upgrade modal; paid: link to GMB Q&A -->
-        <button
-          v-if="isFree"
-          class="inline-flex items-center gap-2 rounded-full border border-default bg-default px-7 py-3.5 text-xs font-medium uppercase tracking-widest text-default transition hover:opacity-70"
-          @click="openUpgrade('qa-writeback')"
-        >
-          <UIcon name="i-heroicons-lock-closed" class="size-3.5" />
-          {{ t('saya.qa_page.ask_question_pro') }}
-        </button>
         <a
-          v-else
           :href="location?.gmb_qa_url || '#'"
           target="_blank"
           rel="noopener noreferrer"
@@ -61,18 +51,7 @@
         <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ t('saya.qa_page.no_questions_title') }}</h3>
         <p class="mt-2 max-w-sm text-sm text-muted">{{ t('saya.qa_page.no_questions_desc') }}</p>
         <div class="mt-8">
-          <UButton
-            v-if="isFree"
-            color="primary"
-            variant="soft"
-            size="sm"
-            class="rounded-full"
-            @click="openUpgrade('qa-empty')"
-          >
-            {{ t('saya.qa_page.ask_question_pro') }}
-          </UButton>
           <a
-            v-else
             :href="location?.gmb_qa_url || '#'"
             target="_blank"
             rel="noopener noreferrer"
@@ -150,9 +129,6 @@ const { t } = useI18n()
 const route = useRoute()
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
-const plan = computed(() => (site as ApiValue)?.plan)
-const isFree = computed(() => !plan.value || plan.value === 'free')
-const { open: openUpgrade } = useUpgradeModal()
 
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
@@ -178,9 +154,17 @@ function formatQaDate(ts: string | null) {
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
+const seoTitle = () => `Q&A · ${location.value?.title || slug.value}`
+const seoDescription = () => `Questions and answers for ${location.value?.title} at ${siteName.value}.`
+
 useSeoMeta({
-  title: () => `Questions and answers for ${location.value?.title} at ${siteName.value}.`,
-  description: () => `Questions and answers for ${location.value?.title} at ${siteName.value}.`,
+  title: seoTitle,
+  description: seoDescription,
+  ogTitle: seoTitle,
+  ogDescription: seoDescription,
+  ogSiteName: () => siteName.value,
+  twitterTitle: seoTitle,
+  twitterDescription: seoDescription,
   ogImage: useSharedOgImage(),
   ogUrl: useSeoUrl(() => `/locations/${slug.value}/qa`)
 })

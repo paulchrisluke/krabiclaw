@@ -56,12 +56,16 @@ const hasMore = computed(() => visibleCount.value < googlePosts.value.length)
 const remaining = computed(() => googlePosts.value.length - visibleCount.value)
 function loadMore() { visibleCount.value += PAGE_SIZE }
 
-const sharedOgImage = useSharedOgImage()
 const currentPageUrl = useSeoUrl('/posts')
 useSeoMeta({
   title: computed(() => `Updates | ${restaurantName.value}`),
   description: computed(() => `Latest news and updates from ${restaurantName.value}.`),
-  ogImage: sharedOgImage,
+  ogTitle: computed(() => `Updates | ${restaurantName.value}`),
+  ogDescription: computed(() => `Latest news and updates from ${restaurantName.value}.`),
+  ogSiteName: computed(() => restaurantName.value),
+  twitterTitle: computed(() => `Updates | ${restaurantName.value}`),
+  twitterDescription: computed(() => `Latest news and updates from ${restaurantName.value}.`),
+  ogImage: useTenantOgImage(),
   ogUrl: currentPageUrl
 })
 </script>

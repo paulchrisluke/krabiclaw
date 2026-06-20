@@ -475,9 +475,17 @@ const siteUrl = config.public.siteUrl
 const currentPageUrl = useSeoUrl(() => `/locations/${slug.value}`)
 const ogImage = useSharedOgImage(() => heroMedia.value.thumb)
 
+const seoTitle = () => location.value ? `${location.value.title} | Locations` : 'Location'
+const seoDescription = () => location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : ''
+
 useSeoMeta({
-  title: () => location.value ? `${location.value.title} | Locations` : 'Location',
-  description: () => location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : '',
+  title: seoTitle,
+  description: seoDescription,
+  ogTitle: seoTitle,
+  ogDescription: seoDescription,
+  ogSiteName: () => siteName.value,
+  twitterTitle: seoTitle,
+  twitterDescription: seoDescription,
   ogImage,
   ogUrl: currentPageUrl
 })

@@ -402,8 +402,9 @@
 
               <!-- Modal: full post -->
               <template #body>
-                <div class="flex h-full flex-col">
-                  <div v-if="post.image" class="flex-1 overflow-hidden bg-muted">
+                <div class="relative h-full w-full">
+                  <!-- Media - full bleed -->
+                  <div v-if="post.image" class="h-full w-full">
                     <video
                       v-if="post.imageKind === 'video'"
                       :src="post.image"
@@ -411,18 +412,20 @@
                       muted
                       loop
                       playsinline
-                      class="h-full w-full object-contain"
+                      class="h-full w-full object-cover"
                     />
                     <img
                       v-else
                       :src="post.image"
                       :alt="post.alt"
-                      class="h-full w-full object-contain"
+                      class="h-full w-full object-cover"
                     >
                   </div>
-                  <div class="p-6 sm:p-8">
-                    <p class="saya-eyebrow mb-4 text-muted">{{ homeCopy.postsEyebrow }}</p>
-                    <p class="text-base leading-relaxed text-default whitespace-pre-line">{{ post.text }}</p>
+
+                  <!-- Content overlay at bottom -->
+                  <div class="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 pt-32">
+                    <p class="saya-eyebrow mb-3 text-white/60 text-[10px] font-bold uppercase tracking-widest">{{ homeCopy.postsEyebrow }}</p>
+                    <p class="text-white/90 text-sm leading-relaxed whitespace-pre-line line-clamp-8">{{ post.text }}</p>
                   </div>
                 </div>
               </template>
@@ -725,11 +728,17 @@ const sharedOgImage = useSharedOgImage()
 if (isPlatform) {
   useOrganizationSchema()
   
+  const platformDescription = 'Sign up, add the KrabiClaw app in ChatGPT, and manage your restaurant website through conversation. Menus, content, photos — no CMS required.'
+  const platformOgDescription = 'Beautiful restaurant websites edited through ChatGPT. Google Business sync, bookings, and real-time analytics included.'
+
   useSeoMeta({
     title: 'KrabiClaw | Restaurant Websites Managed Through ChatGPT',
-    description: 'Sign up, add the KrabiClaw app in ChatGPT, and manage your restaurant website through conversation. Menus, content, photos — no CMS required.',
+    description: truncateForSeo(platformDescription, 160),
     ogTitle: 'KrabiClaw | Restaurant Websites Managed Through ChatGPT',
-    ogDescription: 'Beautiful restaurant websites edited through ChatGPT. Google Business sync, bookings, and real-time analytics included.',
+    ogDescription: truncateForSeo(platformOgDescription, 160),
+    ogSiteName: 'KrabiClaw',
+    twitterTitle: 'KrabiClaw | Restaurant Websites Managed Through ChatGPT',
+    twitterDescription: truncateForSeo(platformOgDescription, 160),
     ogImage: sharedOgImage,
     ogUrl: currentPageUrl,
     ogType: 'website'
@@ -747,9 +756,18 @@ if (!isPlatform && siteId) {
     return `${primary} | ${secondary}`
   })
 
+  const seoDescription = computed(() =>
+    truncateForSeo(businessSubtitle.value || 'Professional business website with photos, updates and reviews.', 160)
+  )
+
   useSeoMeta({
     title: seoTitle,
-    description: computed(() => businessSubtitle.value || 'Professional business website with photos, updates and reviews.'),
+    description: seoDescription,
+    ogTitle: seoTitle,
+    ogDescription: seoDescription,
+    ogSiteName: computed(() => site?.brand_name || restaurantName.value),
+    twitterTitle: seoTitle,
+    twitterDescription: seoDescription,
     ogImage: useSharedOgImage(() => hero.value.image),
     ogUrl: currentPageUrl,
     ogType: 'website'

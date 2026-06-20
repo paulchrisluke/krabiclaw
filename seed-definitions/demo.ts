@@ -42,6 +42,7 @@ export const demoFixture: CuratedSiteDefinition = {
   },
   siteConfig: [
     { key: 'source_locale', value: 'en' },
+    { key: 'brand_color', value: '#1E40AF' }, // Test blue color to verify configurability
   ],
   siteLocales: [
     {
@@ -1392,6 +1393,7 @@ export function renderCompiledDemoMediaBlock(): string {
       sqlValue(location.status),
       'NULL',
       'NULL',
+      sqlValue('Asia/Bangkok'),
     ].join(', ')})`)
     .join(',\n')
 
@@ -1413,7 +1415,8 @@ INSERT OR REPLACE INTO business_locations (
   price_level, categories,
   instagram_url, facebook_url,
   is_primary, status,
-  hero_image_asset_id, hero_video_asset_id
+  hero_image_asset_id, hero_video_asset_id,
+  timezone
 ) VALUES
 ${locationRowsNoHero};
 
@@ -1599,6 +1602,7 @@ export function renderCompiledDemoExperienceSeedBlock(): string {
       sqlValue(experience.durationMinutes),
       sqlValue(experience.maxCapacity),
       sqlJson(experience.timeSlots),
+      'NULL',
       sqlValue(experience.availableNote),
       sqlValue(experience.status),
       sqlValue(experience.sortOrder),
@@ -1615,7 +1619,7 @@ INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id,
    title, slug, tagline, body,
    image_asset_id, price, price_amount, duration_minutes, max_capacity,
-   time_slots, available_note,
+   time_slots, recurring_slots, available_note,
    status, sort_order, featured, featured_sort_order,
    seo_title, seo_description)
 VALUES

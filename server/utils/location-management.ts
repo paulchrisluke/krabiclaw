@@ -30,6 +30,7 @@ export interface CreateLocationInput {
   hero_image_asset_id?: string | null;
   hero_video_asset_id?: string | null;
   notification_phone?: string | null;
+  timezone?: string | null;
   is_primary?: boolean;
 }
 
@@ -66,6 +67,7 @@ export interface LocationRecord {
   uber_eats_url?: string | null;
   foodpanda_url?: string | null;
   notification_phone?: string | null;
+  timezone?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -181,7 +183,7 @@ async function loadLocation(
            rating, review_count, description, short_description, status, is_primary,
            address, opening_hours, hero_image_asset_id, hero_video_asset_id, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-           notification_phone, created_at, updated_at
+           notification_phone, timezone, created_at, updated_at
     FROM business_locations
     WHERE id = ? AND organization_id = ? AND site_id = ?
     LIMIT 1
@@ -222,6 +224,16 @@ export async function createLocation(
         error:
           "review_count must be a whole number greater than or equal to 0.",
       },
+    };
+  }
+  if (
+    input.timezone !== undefined &&
+    input.timezone !== null &&
+    !Intl.supportedValuesOf("timeZone").includes(input.timezone)
+  ) {
+    return {
+      status: 400,
+      data: { error: "timezone must be a valid IANA time zone identifier." },
     };
   }
 
@@ -423,6 +435,16 @@ export async function updateLocation(
       },
     };
   }
+  if (
+    input.timezone !== undefined &&
+    input.timezone !== null &&
+    !Intl.supportedValuesOf("timeZone").includes(input.timezone)
+  ) {
+    return {
+      status: 400,
+      data: { error: "timezone must be a valid IANA time zone identifier." },
+    };
+  }
 
   try {
     await validateMediaAsset(
@@ -485,6 +507,7 @@ export async function updateLocation(
     "hero_image_asset_id",
     "hero_video_asset_id",
     "notification_phone",
+    "timezone",
     "status",
   ] as const;
 

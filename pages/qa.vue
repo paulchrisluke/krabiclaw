@@ -19,12 +19,16 @@ const { googleBusiness } = useBootstrap()
 const googleQA = computed(() => googleBusiness.value?.qa || [])
 const restaurantName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Restaurant')
 
-const sharedOgImage = useSharedOgImage()
 const currentPageUrl = useSeoUrl('/qa')
 useSeoMeta({
   title: computed(() => `Q&A | ${restaurantName.value}`),
   description: computed(() => `Frequently asked questions about ${restaurantName.value}.`),
-  ogImage: sharedOgImage,
+  ogTitle: computed(() => `Q&A | ${restaurantName.value}`),
+  ogDescription: computed(() => `Frequently asked questions about ${restaurantName.value}.`),
+  ogSiteName: computed(() => restaurantName.value),
+  twitterTitle: computed(() => `Q&A | ${restaurantName.value}`),
+  twitterDescription: computed(() => `Frequently asked questions about ${restaurantName.value}.`),
+  ogImage: useTenantOgImage(),
   ogUrl: currentPageUrl
 })
 </script>

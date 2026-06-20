@@ -30,7 +30,7 @@
     </div>
 
     <!-- Content -->
-    <div class="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center justify-center px-4 py-12 text-center">
+    <AppSection bg="black" padding="lg" class="relative z-10 flex flex-col items-center justify-center text-center">
       <div v-if="establishmentYear" class="inline-flex items-center gap-2 mb-6">
         <span class="w-8 h-px bg-inverted-muted opacity-30" />
         <span class="text-[10px] font-bold uppercase tracking-[0.3em] text-inverted opacity-60 italic">
@@ -62,11 +62,12 @@
       <div v-if="$slots.cta" class="mt-8">
         <slot name="cta" />
       </div>
-    </div>
+    </AppSection>
   </div>
 </template>
 
 <script setup>
+import AppSection from '~/components/ui/AppSection.vue'
 import EditableField from '~/components/ui/EditableField.vue'
 
 const props = defineProps({

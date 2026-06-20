@@ -2086,6 +2086,11 @@ async function executeTool(
       const { createExperience } = await import("~/server/utils/experiences");
       const title = toSqlText(input.title);
       if (!title) return { error: "title is required" };
+      const locationId = toSqlText(input.location_id)
+        ?? (await db.prepare(`SELECT primary_location_id FROM sites WHERE id = ?`).bind(siteId).first<{ primary_location_id: string | null }>())?.primary_location_id
+        ?? (await db.prepare(`SELECT id FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`).bind(siteId).first<{ id: string }>())?.id
+        ?? null;
+      if (!locationId) return { error: "location_id is required" };
       const slots = Array.isArray(input.time_slots)
         ? input.time_slots.map(String)
         : null;
@@ -2118,7 +2123,7 @@ async function executeTool(
           image_asset_id: toSqlText(input.image_asset_id) ?? null,
           video_asset_id: toSqlText(input.video_asset_id) ?? null,
           images,
-          location_id: toSqlText(input.location_id) ?? null,
+          location_id: locationId,
           status: (["active", "inactive", "sold_out"].includes(
             String(input.status ?? ""),
           )
