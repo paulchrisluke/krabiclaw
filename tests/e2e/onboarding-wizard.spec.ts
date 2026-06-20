@@ -16,7 +16,15 @@ async function loginFreshUser(page: Page, baseURL: string, userId: string) {
 // `skipVertical` must match the wizard's own skip-vertical prop at the call
 // site (true on the add-location flow) — the vertical step never renders
 // there, so waiting on it would hang.
-async function completeManualWizard(page: Page, businessName: string, { skipVertical = false } = {}) {
+// `awaitNavigation` must be true on the add-location flow (pages/dashboard/[orgSlug]/new.vue):
+// its `onLocationCreated` handler calls router.push the instant `site-created`
+// fires, racing ahead of (and usually winning against) the wizard's own
+// "Done" message — so waiting for that text there is flaky by design.
+async function completeManualWizard(
+  page: Page,
+  businessName: string,
+  { skipVertical = false, awaitNavigation = false } = {},
+) {
   await page.getByRole('button', { name: 'Start building' }).click()
   if (!skipVertical) {
     await page.getByRole('button', { name: /Restaurant, café or bar/ }).click()
@@ -25,7 +33,11 @@ async function completeManualWizard(page: Page, businessName: string, { skipVert
   const input = page.getByPlaceholder('Your business name…')
   await input.fill(businessName)
   await input.press('Enter')
-  await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 15_000 })
+  if (awaitNavigation) {
+    await expect(page).not.toHaveURL(/\/new$/, { timeout: 15_000 })
+  } else {
+    await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 15_000 })
+  }
 }
 
 test.describe('onboarding wizard UI', () => {
@@ -42,10 +54,11 @@ test.describe('onboarding wizard UI', () => {
 
     // Regression coverage: manual location entry used to call the new-site
     // onboarding endpoint, which rejects any user who already has a site.
-    await completeManualWizard(page, `Onboard Test Cafe Second Location ${suffix}`, { skipVertical: true })
-
-    await page.getByRole('button', { name: 'Open my dashboard' }).click()
-    await expect(page).toHaveURL(/\/dashboard\/[^/]+$/)
+    await completeManualWizard(page, `Onboard Test Cafe Second Location ${suffix}`, {
+      skipVertical: true,
+      awaitNavigation: true,
+    })
+    await expect(page).toHaveURL(/\/dashboard\/[^/]+\/[^/]+$/)
 
     const orgSlug = new URL(page.url()).pathname.split('/')[2]
     const locationsRes = await page.request.get(`${baseURL}/api/dashboard/locations`)
