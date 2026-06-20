@@ -32,13 +32,6 @@ const ENABLED_WIDGET_TOOLS = new Set([
   "show_welcome",
   "request_photo_upload",
   "show_generated_images",
-  "generate_logo",
-  "generate_home_hero_image",
-  "generate_story_image",
-  "generate_location_hero_image",
-  "generate_post_image",
-  "generate_menu_item_image",
-  "generate_experience_image",
   "show_vertical_picker",
   "import_from_maps",
   "show_site_preview",
@@ -150,10 +143,6 @@ Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience 
 5. If the user wants changes, call image_generation again with a revised prompt and repeat from step 2.
 
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
-
-**Guaranteed KrabiClaw fallback and end-to-end path:**
-- If native image_generation is unavailable, or if the user wants KrabiClaw to handle generation inside the app from start to finish, call the specific backend tool instead: generate_logo, generate_home_hero_image, generate_story_image, generate_location_hero_image, generate_post_image, generate_menu_item_image, or generate_experience_image.
-- Those tools generate several options on KrabiClaw's backend, save them into the site media library, and open a picker widget that can apply the selected image directly.
 
 **User-uploaded (user provides their own photo):**
 - Primary happy path:

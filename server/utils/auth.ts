@@ -102,9 +102,15 @@ export function createAuth(env: CloudflareEnv) {
       oauthProvider({
         loginPage: '/oauth/login',
         consentPage: '/oauth/consent',
+        // Account selection is driven entirely by an explicit prompt=select_account
+        // from the client (handled upstream in the provider before this hook runs).
+        // shouldRedirect must stay false here — returning true unconditionally
+        // re-forces select_account on every authorize call, including the one
+        // fired by "Continue as X" on /oauth/login itself, producing an infinite
+        // login <-> authorize redirect loop.
         selectAccount: {
           page: '/oauth/login',
-          shouldRedirect: async () => true,
+          shouldRedirect: async () => false,
         },
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,

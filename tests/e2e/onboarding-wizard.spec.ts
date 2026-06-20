@@ -43,6 +43,9 @@ async function completeManualWizard(
 
 test.describe('onboarding wizard UI', () => {
   test('a new user can build a site manually and add a second location manually', async ({ page, baseURL }) => {
+    // Two full manual wizard completions (site + second location) routinely
+    // exceed the default 30s test timeout against a remote preview deploy.
+    test.setTimeout(90_000)
     const suffix = Date.now()
     const userId = `e2e-onboard-${suffix}`
     await loginFreshUser(page, baseURL!, userId)
