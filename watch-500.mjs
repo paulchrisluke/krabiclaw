@@ -21,10 +21,12 @@ page.on('console', (msg) => {
   if (msg.type() === 'error') console.log(`[console.error] ${msg.text()}`);
 });
 
-const paths = (process.env.MONITOR_PATHS || '/,/login,/dashboard,/pricing,/dashboard/kikuzuki')
+const DEFAULT_PATHS = ['/', '/login', '/dashboard', '/pricing', '/dashboard/kikuzuki'];
+const paths = (process.env.MONITOR_PATHS || '')
   .split(',')
   .map((path) => path.trim())
   .filter(Boolean);
+if (paths.length === 0) paths.push(...DEFAULT_PATHS);
 
 let i = 0;
 while (Date.now() - start < DURATION_MS) {

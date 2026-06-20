@@ -62,6 +62,8 @@ import { createWorkRequest } from "~/server/utils/work-request-management";
 import {
   getExperienceById,
   updateExperience,
+  WEEKDAY_NAMES,
+  type RecurringSlots,
 } from "~/server/utils/experiences";
 import { updateMediaAssetMetadata } from "~/server/utils/media-asset-manager";
 import {
@@ -222,6 +224,20 @@ function getToolBoolean(
 ): boolean | undefined {
   const value = record[key];
   return typeof value === "boolean" ? value : undefined;
+}
+
+const TIME_SLOT_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function asValidRecurringSlots(value: unknown): RecurringSlots | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (!WEEKDAY_NAMES.includes(key as (typeof WEEKDAY_NAMES)[number])) return null;
+    const slots = record[key];
+    if (!Array.isArray(slots)) return null;
+    if (!slots.every((s) => typeof s === "string" && TIME_SLOT_PATTERN.test(s))) return null;
+  }
+  return record as RecurringSlots;
 }
 
 function isSiteContentPage(page: string): page is keyof typeof contentRegistry {
@@ -2101,7 +2117,10 @@ async function executeTool(
           .first();
         if (!location) return { error: "Location not found or access denied" };
       } else {
-        locationId = ctx.locationId
+        const verifiedCtxLocationId = ctx.locationId
+          ? (await db.prepare(`SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`).bind(ctx.locationId, orgId, siteId).first<{ id: string }>())?.id
+          : null;
+        locationId = verifiedCtxLocationId
           ?? (await db.prepare(`SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ?`).bind(siteId, orgId).first<{ primary_location_id: string | null }>())?.primary_location_id
           ?? (await db.prepare(`SELECT id FROM business_locations WHERE site_id = ? AND organization_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`).bind(siteId, orgId).first<{ id: string }>())?.id
           ?? null;
@@ -2110,9 +2129,7 @@ async function executeTool(
       let slots = Array.isArray(input.time_slots)
         ? input.time_slots.map(String)
         : null;
-      let recurringSlots = input.recurring_slots && typeof input.recurring_slots === 'object'
-        ? input.recurring_slots as Record<string, string[]>
-        : null;
+      let recurringSlots = asValidRecurringSlots(input.recurring_slots);
       const slotStart = typeof input.slot_start === 'string' ? input.slot_start : null;
       const slotEnd = typeof input.slot_end === 'string' ? input.slot_end : null;
       const slotIntervalMinutes = typeof input.slot_interval_minutes === 'number' ? input.slot_interval_minutes : null;
@@ -2127,7 +2144,7 @@ async function executeTool(
         if (slotWeekday) {
           // Assign to recurring_slots for the specific weekday
           recurringSlots = recurringSlots || {};
-          recurringSlots[slotWeekday] = generatedSlots;
+          recurringSlots[slotWeekday as keyof RecurringSlots] = generatedSlots;
         } else {
           // Assign to flat time_slots
           slots = generatedSlots;

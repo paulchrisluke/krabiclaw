@@ -154,7 +154,7 @@ function formatQaDate(ts: string | null) {
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
-const seoTitle = () => `Q&A · ${location.value?.title || slug.value}`
+const seoTitle = () => `Questions and answers · ${location.value?.title || slug.value}`
 const seoDescription = () => `Questions and answers for ${location.value?.title || slug.value} at ${siteName.value}.`
 
 useSeoMeta({

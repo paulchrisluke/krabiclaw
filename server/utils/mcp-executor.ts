@@ -2532,6 +2532,14 @@ export async function executeMcpToolCall(
       if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
       }
+      let locationId = ceArgs.location_id ? String(ceArgs.location_id) : null;
+      if (!locationId) {
+        const siteRow = (await loadSiteSettings(site.db, site.organizationId, site.siteId)) as Record<string, unknown>;
+        locationId = (siteRow.primary_location_id as string | null) ?? null;
+      }
+      if (!locationId) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "location_id is required");
+      }
       return {
         experience: await createExperience(
           site.db,
@@ -2539,6 +2547,7 @@ export async function executeMcpToolCall(
           site.siteId,
           {
             ...(ceArgs as unknown as CreateExperienceInput),
+            location_id: locationId,
             price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null,
           },
           site.userId,
