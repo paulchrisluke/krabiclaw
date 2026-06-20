@@ -64,6 +64,16 @@ export default defineEventHandler(async (event) => {
           INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
           VALUES (?, ?, ?, 1, 'user', ?, ?)
         `).bind(userId, userId, email, now, now).run()
+        // Mirrors the databaseHooks.user.create.after hook in auth.ts — real
+        // signups always get an owner organization, but this raw insert
+        // bypasses Better Auth (and its hooks) entirely.
+        const orgId = `org-${userId}`
+        await db.batch([
+          db.prepare('INSERT OR IGNORE INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)')
+            .bind(orgId, userId, orgId, now),
+          db.prepare('INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, ?, ?)')
+            .bind(`member-${orgId}`, orgId, userId, 'owner', now),
+        ])
         user = { id: userId, email, role: 'user' }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
