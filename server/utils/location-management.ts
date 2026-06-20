@@ -132,7 +132,13 @@ function serializeAddress(value: unknown) {
 function serializeOpeningHours(value: unknown) {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") {
-    if (!isPlainObject(value) && !Array.isArray(value)) return null;
+    // Google Places returns a bare weekdayDescriptions string[] — normalize to the
+    // same { weekdayDescriptions } shape consumers (dashboard hours editor, public
+    // site hours rendering) expect regardless of input source.
+    if (Array.isArray(value)) {
+      return value.length ? JSON.stringify({ weekdayDescriptions: value }) : null;
+    }
+    if (!isPlainObject(value)) return null;
     return JSON.stringify(value);
   }
   const weekdayDescriptions = value
@@ -316,7 +322,7 @@ export async function createLocation(
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
             hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, is_primary, status, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
         `,
           )
           .bind(

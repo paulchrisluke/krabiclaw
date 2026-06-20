@@ -41,13 +41,15 @@
           <UIcon name="i-heroicons-sparkles" class="size-8" />
         </div>
         <div>
-          <p class="mb-1 text-[11px] font-bold uppercase tracking-[0.28em] text-primary">Let's build your site</p>
+          <p class="mb-1 text-[11px] font-bold uppercase tracking-[0.28em] text-primary">{{ props.isAddingLocation ? "Let's add a location" : "Let's build your site" }}</p>
           <h1 class="text-3xl font-extrabold leading-tight tracking-tight text-highlighted">
-            Tell me about your business. I'll do the typing.
+            {{ props.isAddingLocation ? "Tell me about this location. I'll do the typing." : "Tell me about your business. I'll do the typing." }}
           </h1>
         </div>
         <p class="text-[14.5px] leading-relaxed text-muted">
-          Answer a few questions and a real, SEO-ready site builds itself on the right — you decide what to keep.
+          {{ props.isAddingLocation
+            ? "Answer a few questions and this location is added to your site — you decide what to keep."
+            : "Answer a few questions and a real, SEO-ready site builds itself on the right — you decide what to keep." }}
         </p>
         <div class="flex flex-col gap-2.5">
           <div
@@ -258,6 +260,7 @@ const props = defineProps<{
   setupEndpoint?: string
   setupManualEndpoint?: string
   skipVertical?: boolean
+  isAddingLocation?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -267,11 +270,17 @@ const emit = defineEmits<{
 const router = useRouter()
 const toast = useToast()
 
-const WELCOME_POINTS: [string, string][] = [
-  ['i-heroicons-globe-alt', 'Pulls your address, hours, photos & reviews from Google'],
-  ['i-heroicons-sparkles', 'Builds your homepage and story as you watch'],
-  ['i-heroicons-rocket-launch', 'Launches free on a krabiclaw.com address when you are ready'],
-]
+const WELCOME_POINTS: [string, string][] = props.isAddingLocation
+  ? [
+      ['i-heroicons-globe-alt', 'Pulls the address, hours, photos & reviews from Google'],
+      ['i-heroicons-sparkles', 'Adds the location to your existing site as you watch'],
+      ['i-heroicons-map-pin', 'Goes live on your site as soon as you save it'],
+    ]
+  : [
+      ['i-heroicons-globe-alt', 'Pulls your address, hours, photos & reviews from Google'],
+      ['i-heroicons-sparkles', 'Builds your homepage and story as you watch'],
+      ['i-heroicons-rocket-launch', 'Launches free on a krabiclaw.com address when you are ready'],
+    ]
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
