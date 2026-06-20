@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event) as UpdateSiteSettingsRequest
   const forceSubdomainRegistrationFailure = getHeader(event, 'x-e2e-force-subdomain-failure') === 'true'
 
-  if (Object.keys(body).length === 0) {
+  if (typeof body !== 'object' || body === null || Object.keys(body).length === 0) {
     return jsonResponse(
       { error: 'No update fields provided' },
       { status: 400 },

@@ -136,10 +136,19 @@ function serializeOpeningHours(value: unknown) {
     // same { weekdayDescriptions } shape consumers (dashboard hours editor, public
     // site hours rendering) expect regardless of input source.
     if (Array.isArray(value)) {
-      if (!value.every((item) => typeof item === "string")) return null;
+      if (!value.every((item) => typeof item === "string")) {
+        throw new Error(
+          "opening_hours array must contain only strings (one per line, e.g. \"Monday: 9:00 AM – 5:00 PM\"). " +
+            "To pass structured hours, use { weekdayDescriptions: string[] } instead.",
+        );
+      }
       return value.length ? JSON.stringify({ weekdayDescriptions: value }) : null;
     }
-    if (!isPlainObject(value)) return null;
+    if (!isPlainObject(value)) {
+      throw new Error(
+        "opening_hours must be a string, a string[], or an object like { weekdayDescriptions: string[] }.",
+      );
+    }
     return JSON.stringify(value);
   }
   const weekdayDescriptions = value
@@ -532,8 +541,18 @@ export async function updateLocation(
     params.push(serializeAddress(input.address));
   }
   if (input.opening_hours !== undefined) {
-    sets.push("opening_hours = ?");
-    params.push(serializeOpeningHours(input.opening_hours));
+    try {
+      sets.push("opening_hours = ?");
+      params.push(serializeOpeningHours(input.opening_hours));
+    } catch (error) {
+      return {
+        status: 400,
+        data: {
+          error:
+            error instanceof Error ? error.message : "Invalid opening_hours.",
+        },
+      };
+    }
   }
   if (input.rating !== undefined) {
     sets.push("rating = ?");

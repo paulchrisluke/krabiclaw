@@ -18,5 +18,5 @@ export default defineEventHandler(async (event) => {
     phone: string | null; email: string | null; notification_phone: string | null
   }>()
 
-  return jsonResponse({ locations: rows.results ?? [] })
+  return jsonResponse({ success: true, locations: rows.results ?? [] })
 })

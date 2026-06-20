@@ -38,6 +38,11 @@ export const MCP_TOOL_SECURITY_SCHEMES: McpToolSecurityScheme[] = [
 
 // --- reusable schema fragments ---
 
+const openingHoursInputSchema = {
+  type: ['string', 'object', 'null'],
+  description: 'Opening hours for this location. Accepted shapes: (1) an object { weekdayDescriptions: string[] } with one entry per day, e.g. { weekdayDescriptions: ["Monday: 9:00 AM – 5:00 PM", "Tuesday: 9:00 AM – 5:00 PM", ...] } — this is also the shape returned by get_location; (2) a plain string with one day per line, e.g. "Monday: 9:00 AM – 5:00 PM\\nTuesday: 9:00 AM – 5:00 PM". A bare array of per-day structured objects (e.g. { openDay, openTime, closeTime }) is NOT supported — convert to weekdayDescriptions strings first. Pass null to clear.',
+}
+
 const locationObject = {
   type: 'object',
   properties: {
@@ -1204,6 +1209,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       grab_url: { type: 'string', description: 'Grab delivery/booking URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
       uber_eats_url: { type: 'string', description: 'Uber Eats URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
       foodpanda_url: { type: 'string', description: 'Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
+      opening_hours: openingHoursInputSchema,
     },
     required: ['title'],
     outputSchema: {
@@ -1234,6 +1240,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       grab_url: { type: 'string', description: 'Grab delivery/booking URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
       uber_eats_url: { type: 'string', description: 'Uber Eats URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
       foodpanda_url: { type: 'string', description: 'Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.' },
+      opening_hours: openingHoursInputSchema,
     },
     required: ['location_id'],
     outputSchema: {
