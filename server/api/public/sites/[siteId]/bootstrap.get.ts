@@ -318,11 +318,11 @@ export default defineEventHandler(async (event) => {
       includeMenu
         ? getActiveMenu(db, orgId, siteId, locationId, locale)
         : Promise.resolve(null),
-      (page === "experiences" && !experienceSlug) ||
-      page === "home" ||
-      page === "location"
+      (page === "experiences" && !experienceSlug) || page === "home"
         ? listExperiences(db, siteId, { activeOnly: true })
-        : Promise.resolve([]),
+        : page === "location"
+          ? listExperiences(db, siteId, { activeOnly: true, locationId: locationId ?? undefined })
+          : Promise.resolve([]),
       page === "experiences" && experienceSlug
         ? getExperienceBySlug(db, siteId, experienceSlug)
         : Promise.resolve(null),

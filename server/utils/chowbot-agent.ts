@@ -62,6 +62,8 @@ import { createWorkRequest } from "~/server/utils/work-request-management";
 import {
   getExperienceById,
   updateExperience,
+  WEEKDAY_NAMES,
+  type RecurringSlots,
 } from "~/server/utils/experiences";
 import { updateMediaAssetMetadata } from "~/server/utils/media-asset-manager";
 import {
@@ -222,6 +224,20 @@ function getToolBoolean(
 ): boolean | undefined {
   const value = record[key];
   return typeof value === "boolean" ? value : undefined;
+}
+
+const TIME_SLOT_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function asValidRecurringSlots(value: unknown): RecurringSlots | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (!WEEKDAY_NAMES.includes(key as (typeof WEEKDAY_NAMES)[number])) return null;
+    const slots = record[key];
+    if (!Array.isArray(slots)) return null;
+    if (!slots.every((s) => typeof s === "string" && TIME_SLOT_PATTERN.test(s))) return null;
+  }
+  return record as RecurringSlots;
 }
 
 function isSiteContentPage(page: string): page is keyof typeof contentRegistry {
@@ -2086,9 +2102,54 @@ async function executeTool(
       const { createExperience } = await import("~/server/utils/experiences");
       const title = toSqlText(input.title);
       if (!title) return { error: "title is required" };
-      const slots = Array.isArray(input.time_slots)
+      const explicitLocationId = toSqlText(input.location_id);
+      let locationId = explicitLocationId;
+      if (explicitLocationId) {
+        const location = await db
+          .prepare(
+            `
+            SELECT 1 FROM business_locations
+            WHERE id = ? AND organization_id = ? AND site_id = ?
+            LIMIT 1
+          `,
+          )
+          .bind(explicitLocationId, orgId, siteId)
+          .first();
+        if (!location) return { error: "Location not found or access denied" };
+      } else {
+        const verifiedCtxLocationId = ctx.locationId
+          ? (await db.prepare(`SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`).bind(ctx.locationId, orgId, siteId).first<{ id: string }>())?.id
+          : null;
+        locationId = verifiedCtxLocationId
+          ?? (await db.prepare(`SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ?`).bind(siteId, orgId).first<{ primary_location_id: string | null }>())?.primary_location_id
+          ?? (await db.prepare(`SELECT id FROM business_locations WHERE site_id = ? AND organization_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`).bind(siteId, orgId).first<{ id: string }>())?.id
+          ?? null;
+      }
+      if (!locationId) return { error: "location_id is required" };
+      let slots = Array.isArray(input.time_slots)
         ? input.time_slots.map(String)
         : null;
+      let recurringSlots = asValidRecurringSlots(input.recurring_slots);
+      const slotStart = typeof input.slot_start === 'string' ? input.slot_start : null;
+      const slotEnd = typeof input.slot_end === 'string' ? input.slot_end : null;
+      const slotIntervalMinutes = typeof input.slot_interval_minutes === 'number' ? input.slot_interval_minutes : null;
+      const slotWeekday = typeof input.slot_weekday === 'string' && ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].includes(input.slot_weekday)
+        ? input.slot_weekday
+        : null;
+
+      // Auto-generate slots from convenience parameters if provided
+      if (slotStart && slotEnd && slotIntervalMinutes) {
+        const { generateSlots } = await import("~/server/utils/experiences");
+        const generatedSlots = generateSlots(slotStart, slotEnd, slotIntervalMinutes);
+        if (slotWeekday) {
+          // Assign to recurring_slots for the specific weekday
+          recurringSlots = recurringSlots || {};
+          recurringSlots[slotWeekday as keyof RecurringSlots] = generatedSlots;
+        } else {
+          // Assign to flat time_slots
+          slots = generatedSlots;
+        }
+      }
       const images = Array.isArray(input.images)
         ? input.images.map((img: { url?: ApiValue; kind?: ApiValue }) => ({
             url: toSqlText(img.url) ?? "",
@@ -2114,11 +2175,12 @@ async function executeTool(
               ? Math.round(input.max_capacity)
               : null,
           time_slots: slots,
+          recurring_slots: recurringSlots,
           available_note: toSqlText(input.available_note) ?? null,
           image_asset_id: toSqlText(input.image_asset_id) ?? null,
           video_asset_id: toSqlText(input.video_asset_id) ?? null,
           images,
-          location_id: toSqlText(input.location_id) ?? null,
+          location_id: locationId,
           status: (["active", "inactive", "sold_out"].includes(
             String(input.status ?? ""),
           )
@@ -2147,7 +2209,7 @@ async function executeTool(
     }
 
     case "update_experience": {
-      const { updateExperience } = await import("~/server/utils/experiences");
+      const { updateExperience, getExperienceById } = await import("~/server/utils/experiences");
       const id = toSqlText(input.experience_id);
       if (!id) return { error: "experience_id is required" };
       const updates: Record<string, ApiValue> = {};
@@ -2178,6 +2240,51 @@ async function executeTool(
         updates.time_slots = Array.isArray(input.time_slots)
           ? input.time_slots.map(String)
           : null;
+      if (input.recurring_slots !== undefined)
+        updates.recurring_slots = asValidRecurringSlots(input.recurring_slots);
+
+      // Handle convenience slot generation parameters
+      const slotStart = typeof input.slot_start === 'string' ? input.slot_start : null;
+      const slotEnd = typeof input.slot_end === 'string' ? input.slot_end : null;
+      const slotIntervalMinutes = typeof input.slot_interval_minutes === 'number' ? input.slot_interval_minutes : null;
+      const slotWeekday = typeof input.slot_weekday === 'string' && ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].includes(input.slot_weekday)
+        ? input.slot_weekday
+        : null;
+
+      if (slotStart && slotEnd && slotIntervalMinutes) {
+        const { generateSlots } = await import("~/server/utils/experiences");
+        const generatedSlots = generateSlots(slotStart, slotEnd, slotIntervalMinutes);
+        if (slotWeekday) {
+          // Assign to recurring_slots for the specific weekday while preserving
+          // recurring slots for other weekdays.
+          const existingExperience = await getExperienceById(db, siteId, id);
+          const existingRecurring = existingExperience?.recurring_slots && typeof existingExperience.recurring_slots === 'object'
+            ? existingExperience.recurring_slots as Record<string, unknown>
+            : {};
+          const incomingRecurring = updates.recurring_slots && typeof updates.recurring_slots === 'object'
+            ? updates.recurring_slots as Record<string, unknown>
+            : (input.recurring_slots && typeof input.recurring_slots === 'object'
+                ? input.recurring_slots as Record<string, unknown>
+                : {});
+          updates.recurring_slots = {
+            ...existingRecurring,
+            ...incomingRecurring,
+            [slotWeekday]: generatedSlots,
+          };
+        } else {
+          // Assign to flat time_slots and clear recurring slots so the new
+          // flat schedule is the source of truth.
+          updates.time_slots = generatedSlots;
+          updates.recurring_slots = null;
+        }
+      }
+
+      // If flat time_slots are explicitly set without a weekday update, clear
+      // recurring slots to avoid schedule conflicts.
+      if (!slotWeekday && updates.time_slots !== undefined && input.recurring_slots === undefined) {
+        updates.recurring_slots = null;
+      }
+
       if (input.available_note !== undefined)
         updates.available_note = toSqlText(input.available_note) ?? null;
       if (input.image_asset_id !== undefined)
@@ -2262,6 +2369,68 @@ async function executeTool(
       );
       if (!ok) return { error: "Booking not found" };
       return { updated: true };
+    }
+
+    case "get_experience_availability": {
+      const { getExperienceById, getSlotAvailability } = await import("~/server/utils/experiences");
+      const experienceId = toSqlText(input.experience_id);
+      const date = toSqlText(input.date);
+      const requestedDays = Number(input.days);
+      const days = Number.isFinite(requestedDays)
+        ? Math.max(1, Math.min(Math.floor(requestedDays), 14))
+        : 1;
+      if (!experienceId || !date)
+        return { error: "experience_id and date are required" };
+      const experience = await getExperienceById(db, siteId, experienceId);
+      if (!experience) return { error: "Experience not found" };
+
+      const dates: Array<{ date: string; slots: Awaited<ReturnType<typeof getSlotAvailability>> }> = [];
+      const cursor = new Date(`${date}T00:00:00Z`);
+      if (isNaN(cursor.getTime())) {
+        return { error: "Invalid calendar date" };
+      }
+      for (let i = 0; i < days; i++) {
+        const dateStr = cursor.toISOString().slice(0, 10);
+        const slots = await getSlotAvailability(db, siteId, experience, dateStr);
+        dates.push({ date: dateStr, slots });
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+      return { dates };
+    }
+
+    case "set_experience_slot_override": {
+      const { upsertSlotOverride } = await import("~/server/utils/experiences");
+      const experienceId = toSqlText(input.experience_id);
+      const date = toSqlText(input.date);
+      const timeSlot = toSqlText(input.time_slot);
+      const status = toSqlText(input.status);
+      if (!experienceId || !date || !timeSlot || !status)
+        return { error: "experience_id, date, time_slot, and status are required" };
+      if (!["closed", "open"].includes(status))
+        return { error: "status must be closed or open" };
+      const capacityOverride = input.capacity_override !== undefined && input.capacity_override !== null
+        ? Number(input.capacity_override)
+        : undefined;
+      const note = toSqlText(input.note) ?? undefined;
+      const result = await upsertSlotOverride(db, orgId, siteId, experienceId, {
+        override_date: date,
+        time_slot: timeSlot,
+        status: status as "closed" | "open",
+        capacity_override: capacityOverride,
+        note: note,
+      }, userId);
+      return { success: true, override: result };
+    }
+
+    case "list_experience_slot_overrides": {
+      const { listSlotOverrides } = await import("~/server/utils/experiences");
+      const experienceId = toSqlText(input.experience_id);
+      if (!experienceId)
+        return { error: "experience_id is required" };
+      const from = toSqlText(input.from) ?? undefined;
+      const to = toSqlText(input.to) ?? undefined;
+      const overrides = await listSlotOverrides(db, siteId, experienceId, { fromDate: from, toDate: to });
+      return { overrides };
     }
 
     case "create_work_request": {

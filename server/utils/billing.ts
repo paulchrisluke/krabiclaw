@@ -182,6 +182,14 @@ export async function setSiteEntitlementsFromPlan(
       `).bind(`sent-${siteId}-${key}`, siteId, organizationId, key, String(value), now, now)
     )
   }
+  // sites.plan is a denormalized cache read directly by mcp-workflows, the
+  // transfer onboarding wizard, and Google Business sync gating — it must
+  // stay in sync with the site_billing.plan that triggered this entitlement
+  // refresh, or those call sites keep showing whatever plan existed at
+  // site-creation time.
+  statements.push(
+    db.prepare(`UPDATE sites SET plan = ?, updated_at = ? WHERE id = ? AND organization_id = ?`).bind(plan, now, siteId, organizationId)
+  )
   await db.batch(statements)
 }
 

@@ -27,6 +27,24 @@
         </div>
       </div>
 
+      <div class="space-y-2">
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-xs font-semibold uppercase tracking-wider text-dimmed">Start here</p>
+          <UButton
+            :icon="copiedStarter ? 'i-heroicons-check' : 'i-heroicons-clipboard'"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="copyStarterPrompt"
+          >
+            {{ copiedStarter ? 'Copied' : 'Copy prompt' }}
+          </UButton>
+        </div>
+        <div class="rounded-xl border border-default bg-elevated px-3 py-3 text-sm leading-relaxed text-highlighted">
+          {{ starterPrompt }}
+        </div>
+      </div>
+
       <!-- Items -->
       <ul class="space-y-2.5">
         <li v-for="item in items" :key="item.key" class="flex items-start gap-3">
@@ -62,6 +80,9 @@
         <UButton as="a" href="https://chatgpt.com" target="_blank" rel="noopener" size="sm">
           Open ChatGPT
           <UIcon name="i-heroicons-arrow-top-right-on-square" class="size-3.5" />
+        </UButton>
+        <UButton :to="`/dashboard/${props.orgSlug}/~/settings/chatgpt`" variant="outline" color="neutral" size="sm">
+          ChatGPT setup guide
         </UButton>
         <UButton variant="ghost" color="neutral" size="sm" @click="dismiss">
           Dismiss
@@ -107,6 +128,7 @@ function dismiss() {
 }
 
 const copied = ref<string | null>(null)
+const copiedStarter = ref(false)
 async function copyPrompt(key: string, prompt: string) {
   try {
     await navigator.clipboard.writeText(prompt)
@@ -114,6 +136,16 @@ async function copyPrompt(key: string, prompt: string) {
     setTimeout(() => { copied.value = null }, 2000)
   } catch (err) {
     console.error('Failed to copy text: ', err)
+  }
+}
+
+async function copyStarterPrompt() {
+  try {
+    await navigator.clipboard.writeText(starterPrompt.value)
+    copiedStarter.value = true
+    setTimeout(() => { copiedStarter.value = false }, 2000)
+  } catch (err) {
+    console.error('Failed to copy starter prompt: ', err)
   }
 }
 
@@ -157,6 +189,22 @@ const items = computed(() => {
       complete: completed?.post ?? false,
     },
   ]
+})
+
+const firstIncompleteItem = computed(() => items.value.find(item => !item.complete) ?? null)
+
+const starterPrompt = computed(() => {
+  const name = data.value?.brandName ?? 'my business'
+  const isExperience = data.value?.vertical === 'experience'
+  const firstMissing = firstIncompleteItem.value
+
+  if (!firstMissing) {
+    return isExperience
+      ? `Help me review ${name}'s experience site and suggest the next highest-impact improvement. Ask me one question at a time.`
+      : `Help me review ${name}'s restaurant site and suggest the next highest-impact improvement. Ask me one question at a time.`
+  }
+
+  return `Help me finish ${name}'s ${isExperience ? 'experience' : 'restaurant'} site. Start with "${firstMissing.label}" first. Ask me one question at a time and then help me complete this: ${firstMissing.prompt}`
 })
 
 const completedCount = computed(() => items.value.filter(i => i.complete).length)

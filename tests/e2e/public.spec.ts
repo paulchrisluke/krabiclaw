@@ -18,7 +18,8 @@ const tenantRoutes = [
   { path: '/about', title: /About|Story|Ember/, text: 'Ember' },
   { path: '/posts', title: /Updates|Posts|Ember/, text: 'Ember' },
   ...demoFixture.publicRoutes,
-  { path: '/reservations', title: /Reserve a [Tt]able/, text: 'Make a Reservation' },
+  // Demo site has experiences, so /reservations redirects to /experiences (per-experience booking replaces the generic table-reservation form)
+  { path: '/reservations', title: /Experiences/, text: 'Experiences' },
   { path: '/contact', title: /Contact/, text: 'Send a message' }
 ]
 

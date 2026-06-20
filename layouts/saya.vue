@@ -36,14 +36,13 @@ const googleAnalyticsId = computed(() => config.value?.google_analytics_measurem
 const googleSiteVerification = computed(() => config.value?.google_site_verification || null)
 
 const ogTitle = computed(() => config.value?.brand_name || null)
-const ogDescription = computed(() => config.value?.brand_description || null)
+const ogDescription = computed(() => truncateForSeo(config.value?.brand_description, 160) || null)
 const ogImage = computed(() =>
   config.value?.og_image_url ||
   locations.value[0]?.hero_image_public_url ||
   config.value?.logo_url ||
   null
 )
-const faviconUrl = computed(() => config.value?.logo_url || null)
 
 function isValidGoogleAnalyticsId(id) {
   if (!id || typeof id !== 'string') return false
@@ -62,10 +61,16 @@ useHead(() => {
 
   meta.push({ property: 'og:type', content: 'website' })
   meta.push({ name: 'twitter:card', content: 'summary_large_image' })
-  if (ogTitle.value) meta.push({ property: 'og:title', content: ogTitle.value })
-  if (ogDescription.value) meta.push({ property: 'og:description', content: ogDescription.value })
+  if (ogTitle.value) {
+    meta.push({ property: 'og:title', content: ogTitle.value })
+    meta.push({ name: 'twitter:title', content: ogTitle.value })
+    meta.push({ property: 'og:site_name', content: ogTitle.value })
+  }
+  if (ogDescription.value) {
+    meta.push({ property: 'og:description', content: ogDescription.value })
+    meta.push({ name: 'twitter:description', content: ogDescription.value })
+  }
   if (ogImage.value) meta.push({ property: 'og:image', content: ogImage.value })
-  if (faviconUrl.value) link.push({ rel: 'icon', href: faviconUrl.value })
 
   if (googleSiteVerification.value) {
     meta.push({

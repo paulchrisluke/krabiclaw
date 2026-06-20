@@ -559,6 +559,7 @@ const orgSettingsNavigation = computed(() => {
   if (!org) return [[]]
   return [[
     { label: 'General', icon: 'i-lucide-sliders', to: `${org}/general` },
+    { label: 'ChatGPT', icon: 'i-lucide-bot', to: `${org}/chatgpt` },
     { label: 'Domains', icon: 'i-lucide-globe', to: `${org}/domains` },
     { label: 'Billing', icon: 'i-lucide-credit-card', to: `${org}/billing` },
     { label: 'Members', icon: 'i-lucide-users', to: `${org}/members` },
@@ -581,11 +582,16 @@ const navigationItems = computed(() => {
 const navbarTitle = computed(() => {
   if (inAdminWorkspace.value) return 'Platform Admin'
   const parts = route.path.split('/').filter(Boolean)
-  const segment = inLocationWorkspace.value ? parts.at(3) : parts.at(2)
+  const segment = parts.at(2) === '~'
+    ? parts.at(4)
+    : inLocationWorkspace.value
+      ? parts.at(3)
+      : parts.at(2)
   if (!segment) return 'Overview'
   const labels: Record<string, string> = {
     account: 'Account',
     billing: 'Billing',
+    chatgpt: 'ChatGPT',
     conversations: 'Conversations',
     content: 'Content',
     experiences: 'Experiences',

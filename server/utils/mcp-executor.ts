@@ -3,7 +3,6 @@ import { createPreviewToken } from "~/server/utils/preview-token";
 import { getFreeSiteDomain } from "~/server/utils/tenant-hosts";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { hasEntitlement } from "~/server/utils/billing";
-import { hasCredits, chargeCredits } from "~/server/utils/ai-credits";
 import {
   requestImageUpload,
   buildImageUrl,
@@ -48,11 +47,18 @@ import {
 import {
   createExperience,
   deleteExperience,
+  generateSlots,
   getExperienceById,
+  getSlotAvailability,
   listExperienceBookings,
   listExperiences,
+  listSlotOverrides,
   updateBookingStatus,
   updateExperience,
+  upsertSlotOverride,
+  type CreateExperienceInput,
+  type UpdateExperienceInput,
+  type WeekdayName,
 } from "~/server/utils/experiences";
 import {
   buildTranslationInventory,
@@ -103,8 +109,11 @@ import { getMcpTool } from "~/server/utils/mcp-tools";
 import { requireMcpSite, requireMcpUser } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
 import { renderWidget } from "~/server/utils/mcp-render";
-import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
-import { generateImageViaGateway } from "~/server/utils/ai-gateway";
+import {
+  getPlaceDetails,
+  PlaceDetailsError,
+  searchPlaces,
+} from "~/server/utils/google-places";
 import type { SiteVertical } from "~/utils/vertical-copy";
 import {
   deleteContentField,
@@ -232,6 +241,41 @@ async function requireActiveImageAsset(
   return asset;
 }
 
+/**
+ * Expands the slot_start/slot_end/slot_interval_minutes/slot_weekday convenience args
+ * (used by create_experience/update_experience) into a concrete time_slots array or a
+ * recurring_slots[weekday] entry, then strips the convenience keys before they reach
+ * createExperience/updateExperience.
+ */
+function expandSlotGeneratorArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const { slot_start, slot_end, slot_interval_minutes, slot_weekday, ...rest } = args;
+  if (slot_start === undefined && slot_end === undefined && slot_interval_minutes === undefined) {
+    return rest;
+  }
+  if (typeof slot_start !== "string" || typeof slot_end !== "string" || typeof slot_interval_minutes !== "number") {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      "slot_start, slot_end, and slot_interval_minutes must all be provided together.",
+    );
+  }
+  const generated = generateSlots(slot_start, slot_end, slot_interval_minutes);
+  if (slot_weekday !== undefined) {
+    if (typeof slot_weekday !== "string") {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, "slot_weekday must be a weekday name.");
+    }
+    const existingRecurring = (rest.recurring_slots as Record<string, string[]> | null | undefined) ?? {};
+    const { time_slots: omittedTimeSlots, ...restWithoutTimeSlots } = rest;
+    void omittedTimeSlots;
+    return {
+      ...restWithoutTimeSlots,
+      recurring_slots: { ...existingRecurring, [slot_weekday as WeekdayName]: generated },
+    };
+  }
+  const { recurring_slots: omittedRecurringSlots, ...restWithoutRecurringSlots } = rest;
+  void omittedRecurringSlots;
+  return { ...restWithoutRecurringSlots, time_slots: generated };
+}
+
 function resolveMcpBaseUrl(event: H3Event): string {
   const env = cloudflareEnv(event);
   return (env.BETTER_AUTH_URL ?? getRequestURL(event).origin).replace(
@@ -259,53 +303,6 @@ interface GeneratedImagePickerConfig {
   regenerateTool: string | null;
   regenerateArgs: Record<string, unknown> | null;
   successMessage: string | null;
-}
-
-interface GeneratedImageContext {
-  siteName: string;
-  target: GeneratedImageTarget;
-  prompt: string | null;
-  locationTitle?: string | null;
-  locationCity?: string | null;
-  locationDescription?: string | null;
-  menuItemName?: string | null;
-  menuItemDescription?: string | null;
-  menuName?: string | null;
-  postTitle?: string | null;
-  postBody?: string | null;
-  experienceTitle?: string | null;
-  experienceTagline?: string | null;
-  experienceBody?: string | null;
-}
-
-function cleanPromptSnippet(value: string | null | undefined, max = 220) {
-  if (!value) return null;
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (!normalized) return null;
-  return normalized.length > max
-    ? `${normalized.slice(0, max - 1).trimEnd()}…`
-    : normalized;
-}
-
-function generatedImageTargetFromToolName(toolName: string): GeneratedImageTarget | null {
-  switch (toolName) {
-    case "generate_logo":
-      return "logo";
-    case "generate_home_hero_image":
-      return "home_hero";
-    case "generate_story_image":
-      return "story_image";
-    case "generate_location_hero_image":
-      return "location_hero";
-    case "generate_post_image":
-      return "post_image";
-    case "generate_menu_item_image":
-      return "menu_item_image";
-    case "generate_experience_image":
-      return "experience_image";
-    default:
-      return null;
-  }
 }
 
 function assignmentForGeneratedTarget(
@@ -395,320 +392,6 @@ function assignmentForGeneratedTarget(
       };
     }
   }
-}
-
-function generationOptionsForTarget(target: GeneratedImageTarget) {
-  switch (target) {
-    case "logo":
-    case "menu_item_image":
-      return { size: "1024x1024", quality: "medium" as const };
-    default:
-      return { size: "1536x1024", quality: "medium" as const };
-  }
-}
-
-function buildGeneratedImagePrompt(context: GeneratedImageContext) {
-  const details: string[] = [];
-  const brief = cleanPromptSnippet(context.prompt);
-  const locationTitle = cleanPromptSnippet(context.locationTitle);
-  const locationCity = cleanPromptSnippet(context.locationCity);
-  const locationDescription = cleanPromptSnippet(context.locationDescription);
-  const menuItemName = cleanPromptSnippet(context.menuItemName);
-  const menuItemDescription = cleanPromptSnippet(context.menuItemDescription);
-  const menuName = cleanPromptSnippet(context.menuName);
-  const postTitle = cleanPromptSnippet(context.postTitle);
-  const postBody = cleanPromptSnippet(context.postBody);
-  const experienceTitle = cleanPromptSnippet(context.experienceTitle);
-  const experienceTagline = cleanPromptSnippet(context.experienceTagline);
-  const experienceBody = cleanPromptSnippet(context.experienceBody);
-
-  switch (context.target) {
-    case "logo":
-      details.push(
-        `Create a premium, text-free logo mark for ${context.siteName}.`,
-        "Symbol only. No words, no letters, no monograms, no typography, no mockup presentation.",
-        "It should feel distinctive, memorable, and usable as a restaurant or hospitality brand mark."
-      );
-      break;
-    case "home_hero":
-      details.push(
-        `Create a homepage hero image for ${context.siteName}.`,
-        "The result should feel authentic, premium, and specific to the business.",
-        "Leave calm negative space for a website headline overlay. No text or UI elements in the image."
-      );
-      break;
-    case "story_image":
-      details.push(
-        `Create an editorial storytelling image for ${context.siteName}.`,
-        "The image should communicate atmosphere, craft, and a sense of backstory.",
-        "No text or graphic overlays."
-      );
-      break;
-    case "location_hero":
-      details.push(
-        `Create a location hero image for ${context.siteName}${locationTitle ? ` at ${locationTitle}` : ""}${locationCity ? ` in ${locationCity}` : ""}.`,
-        "Make it feel like a premium real-world brand image rather than a stock photo.",
-        "Leave subtle negative space for website copy."
-      );
-      break;
-    case "post_image":
-      details.push(
-        `Create a social-ready promotional image for ${context.siteName}.`,
-        "The image should feel polished and campaign-worthy, but contain no text.",
-      );
-      if (postTitle) details.push(`Post title/theme: ${postTitle}.`);
-      if (postBody) details.push(`Post message: ${postBody}.`);
-      break;
-    case "menu_item_image":
-      details.push(
-        `Create an appetizing menu item image for ${context.siteName}.`,
-        "This should look like professional food photography, natural and premium, not synthetic clipart.",
-        "No text, menus, pricing, labels, hands holding signs, or graphic frames."
-      );
-      if (menuItemName) details.push(`Dish: ${menuItemName}.`);
-      if (menuItemDescription) details.push(`Description: ${menuItemDescription}.`);
-      if (menuName) details.push(`Menu context: ${menuName}.`);
-      break;
-    case "experience_image":
-      details.push(
-        `Create a compelling experience cover image for ${context.siteName}.`,
-        "Show the activity in a way that feels aspirational, authentic, and bookable.",
-        "No text or poster layout."
-      );
-      if (experienceTitle) details.push(`Experience: ${experienceTitle}.`);
-      if (experienceTagline) details.push(`Tagline: ${experienceTagline}.`);
-      if (experienceBody) details.push(`Details: ${experienceBody}.`);
-      break;
-  }
-
-  if (locationDescription && context.target === "location_hero") {
-    details.push(`Location details: ${locationDescription}.`);
-  }
-  if (brief) {
-    details.push(`Creative direction from the user: ${brief}.`);
-  }
-
-  details.push(
-    "Use realistic lighting and strong composition.",
-    "Avoid collage layouts, split screens, screenshots, watermarks, and visible written language."
-  );
-  return details.join(" ");
-}
-
-async function createGeneratedMediaAsset(
-  site: Awaited<ReturnType<typeof requireMcpSite>>,
-  image: { imageBuffer: ArrayBuffer; contentType: string; filename: string },
-  altText: string,
-) {
-  const uploaded = await uploadImageBuffer(
-    site.env as Parameters<typeof uploadImageBuffer>[0],
-    image.imageBuffer,
-    image.filename,
-    image.contentType,
-  );
-
-  const assetId = crypto.randomUUID();
-  await createMediaAsset(site.db, {
-    id: assetId,
-    organization_id: site.organizationId,
-    site_id: site.siteId,
-    kind: "image",
-    provider: "cloudflare_images",
-    source: "generated",
-    cloudflare_image_id: uploaded.imageId,
-    public_url: uploaded.publicUrl,
-    thumbnail_url: uploaded.thumbnailUrl,
-    alt_text: altText,
-    mime_type: image.contentType,
-    file_name: image.filename,
-    status: "active",
-    created_by_user_id: site.userId,
-  });
-
-  return {
-    assetId,
-    publicUrl: uploaded.publicUrl,
-    thumbnailUrl: uploaded.thumbnailUrl,
-  };
-}
-
-async function buildGeneratedImageContext(
-  site: Awaited<ReturnType<typeof requireMcpSite>>,
-  toolName: string,
-  args: Record<string, unknown>,
-): Promise<GeneratedImageContext> {
-  const siteRow = await getSiteForMcp(
-    site.db,
-    site.siteId,
-    site.userId,
-    site.isPlatformAdmin,
-  ) as Record<string, unknown>;
-  const siteName =
-    (typeof siteRow.brand_name === "string" && siteRow.brand_name.trim())
-      ? siteRow.brand_name.trim()
-      : site.siteId;
-  const target = generatedImageTargetFromToolName(toolName);
-  if (!target) {
-    throw new Error(`Unsupported generated image tool: ${toolName}`);
-  }
-
-  const context: GeneratedImageContext = {
-    siteName,
-    target,
-    prompt: optionalString(args, "prompt"),
-  };
-
-  if (target === "location_hero") {
-    const location = await getLocationForMcp(
-      site.db,
-      site.organizationId,
-      site.siteId,
-      requiredString(args, "location_id"),
-    ) as Record<string, unknown>;
-    context.locationTitle = typeof location.title === "string" ? location.title : null;
-    context.locationCity = typeof location.city === "string" ? location.city : null;
-    context.locationDescription = typeof location.description === "string" ? location.description : null;
-  }
-
-  if (target === "menu_item_image") {
-    const row = await site.db.prepare(`
-      SELECT mi.name, mi.description, m.name AS menu_name
-      FROM menu_items mi
-      JOIN menus m ON m.id = mi.menu_id
-      WHERE mi.id = ? AND m.site_id = ? AND m.organization_id = ?
-      LIMIT 1
-    `).bind(
-      requiredString(args, "menu_item_id"),
-      site.siteId,
-      site.organizationId,
-    ).first<{ name: string; description: string | null; menu_name: string | null }>();
-    if (!row) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: "Menu item not found",
-      });
-    }
-    context.menuItemName = row.name;
-    context.menuItemDescription = row.description;
-    context.menuName = row.menu_name;
-  }
-
-  if (target === "post_image") {
-    const post = await getPost(
-      site.db,
-      site.organizationId,
-      site.siteId,
-      requiredString(args, "post_id"),
-    );
-    if (!post) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: "Post not found",
-      });
-    }
-    context.postTitle = post.title;
-    context.postBody = post.body;
-  }
-
-  if (target === "experience_image") {
-    const experience = await getExperienceById(
-      site.db,
-      site.siteId,
-      requiredString(args, "experience_id"),
-    );
-    if (!experience) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: "Experience not found",
-      });
-    }
-    context.experienceTitle = experience.title;
-    context.experienceTagline = experience.tagline;
-    context.experienceBody = experience.body;
-  }
-
-  return context;
-}
-
-async function generatePickerImagesForTool(
-  site: Awaited<ReturnType<typeof requireMcpSite>>,
-  toolName: string,
-  args: Record<string, unknown>,
-) {
-  const context = await buildGeneratedImageContext(site, toolName, args);
-  const target = context.target;
-  const pickerBase = assignmentForGeneratedTarget(target, args, context.siteName);
-  const prompt = buildGeneratedImagePrompt(context);
-
-  // Check credits before generating image
-  const creditOk = await hasCredits(site.db, site.organizationId)
-  if (!creditOk) {
-    throw createError({
-      statusCode: 402,
-      statusMessage: 'No AI credits remaining. Upgrade your plan or purchase more credits.',
-    })
-  }
-
-  const generated = await generateImageViaGateway(site.env as Record<string, unknown>, prompt, {
-    ...generationOptionsForTarget(target),
-    n: 1,
-    outputFormat: "jpeg",
-    outputCompression: 88,
-  });
-
-  // Charge credits before delivering the result — failure is terminal to prevent unbilled usage
-  await chargeCredits(site.db, site.organizationId, {
-    siteId: site.siteId,
-    action: 'image_generation',
-    model: 'gpt-image-1',
-    inputTokens: 0,
-    outputTokens: 0,
-    cfGatewayLogId: generated.cfLogId || null,
-  })
-
-  const images = await Promise.all(
-    generated.images.map((image) =>
-      createGeneratedMediaAsset(site, image, prompt),
-    ),
-  );
-
-  const picker: GeneratedImagePickerConfig = {
-    title: pickerBase.title,
-    subtitle: pickerBase.subtitle,
-    useLabel: pickerBase.useLabel,
-    regenerateLabel: "Try again",
-    assignTool: pickerBase.assignTool,
-    assignArgs: pickerBase.assignArgs,
-    regenerateTool: toolName,
-    regenerateArgs: args,
-    successMessage: pickerBase.successMessage,
-  };
-
-  const isDebug = args.debug === true;
-  return renderWidget(
-    "image-carousel",
-    {
-      title: picker.title,
-      subtitle: picker.subtitle,
-      images: images.map((image) => ({
-        assetId: image.assetId,
-        publicUrl: image.publicUrl,
-      })),
-      useLabel: picker.useLabel,
-      regenerateLabel: picker.regenerateLabel,
-      assignTool: picker.assignTool,
-      assignArgs: picker.assignArgs,
-      regenerateTool: picker.regenerateTool,
-      regenerateArgs: picker.regenerateArgs,
-      successMessage: picker.successMessage,
-      ...(isDebug ? {
-        debug: true,
-        debugLabel: `${toolName} debug`,
-        debugExpectedImageDomain: "https://imagedelivery.net",
-      } : {}),
-    },
-    `${images.length} AI-generated image option${images.length !== 1 ? "s" : ""} ready to review.`,
-  );
 }
 
 function pickerConfigFromShowGeneratedImages(
@@ -1200,7 +883,17 @@ export async function executeMcpToolCall(
         lat != null && lng != null
           ? { latitude: lat, longitude: lng }
           : undefined;
-      const results = await searchPlaces(apiKey, nameHint, locationBias);
+      let results;
+      try {
+        results = await searchPlaces(apiKey, nameHint, locationBias);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Google Places search failed.";
+        throw createError({
+          statusCode: 502,
+          statusMessage: message,
+        });
+      }
       const candidate = results[0];
       if (!candidate?.placeId) {
         throw mcpProtocolError(
@@ -1238,7 +931,19 @@ export async function executeMcpToolCall(
         MCP_ERROR.invalidParams,
         "Could not resolve a place ID from that URL.",
       );
-    const details = await getPlaceDetails(apiKey, placeId, true);
+    let details;
+    try {
+      details = await getPlaceDetails(apiKey, placeId, true);
+    } catch (error) {
+      const message =
+        error instanceof PlaceDetailsError || error instanceof Error
+          ? error.message
+          : "Google Places detail lookup failed.";
+      throw createError({
+        statusCode: 502,
+        statusMessage: message,
+      });
+    }
 
     // Upload Google Photos to Cloudflare Images for stable preview URLs.
     // We don't have an org/site yet, so we do NOT persist media_asset rows here.
@@ -1398,18 +1103,6 @@ export async function executeMcpToolCall(
   }
 
   switch (toolName) {
-    case "generate_logo":
-    case "generate_home_hero_image":
-    case "generate_story_image":
-    case "generate_location_hero_image":
-    case "generate_post_image":
-    case "generate_menu_item_image":
-    case "generate_experience_image": {
-      if (!hasCloudflareImagesConfig(site.env)) {
-        throw new Error("Cloudflare Images not configured");
-      }
-      return generatePickerImagesForTool(site, toolName, { ...args, site_id: site.siteId });
-    }
     case "show_site_preview": {
       const siteRow = await getSiteForMcp(
         site.db,
@@ -1543,6 +1236,28 @@ export async function executeMcpToolCall(
         id: site.siteId,
         updated: true,
         logo_asset_id: assetId,
+      };
+    }
+    case "set_brand_color": {
+      const { resolveColor } = await import("~/utils/color-utils");
+      const colorInput = requiredString(args, "color");
+      const resolvedColor = resolveColor(colorInput);
+      if (!resolvedColor) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, `Unsupported color: ${colorInput}`);
+      }
+      const result = await updateSiteSettingsFields(
+        site.db,
+        site.env,
+        site.siteId,
+        site.organizationId,
+        { brand_color: resolvedColor },
+        site.userId,
+      );
+      assertDomainSuccess(result);
+      return {
+        brand_color: resolvedColor,
+        updated: true,
+        description: `Set brand color to ${resolvedColor} from "${colorInput}"`,
       };
     }
     case "list_locations": {
@@ -1695,28 +1410,36 @@ export async function executeMcpToolCall(
     case "delete_menu":
       await deleteMenu(site.db, site.organizationId, site.siteId, requiredString(args, "menu_id"));
       return { deleted: true };
-    case "create_menu_item":
+    case "create_menu_item": {
+      const createMenuItemArgs = normalizeMenuItemArgs(args, {
+        requireSection: true,
+      });
       return {
         item: await createMenuItem(
           site.db,
           site.organizationId,
           site.siteId,
-          requiredString(args, "menu_id"),
-          omit(args, ["menu_id"]) as never,
+          requiredString(createMenuItemArgs, "menu_id"),
+          omit(createMenuItemArgs, ["menu_id", "price"]) as never,
           site.userId,
         ),
       };
-    case "update_menu_item":
+    }
+    case "update_menu_item": {
+      const updateMenuItemArgs = normalizeMenuItemArgs(args, {
+        requireSection: false,
+      });
       return {
         item: await updateMenuItem(
           site.db,
           site.organizationId,
           site.siteId,
-          requiredString(args, "menu_item_id"),
-          omit(args, ["menu_item_id"]) as never,
+          requiredString(updateMenuItemArgs, "menu_item_id"),
+          omit(updateMenuItemArgs, ["menu_item_id", "price"]) as never,
           site.userId,
         ),
       };
+    }
     case "set_menu_item_image": {
       const assetId = requiredString(args, "asset_id");
       await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
@@ -2322,10 +2045,16 @@ export async function executeMcpToolCall(
       try {
         const assetId = requiredString(args, "asset_id");
         await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-        return await updateHomeHero(site.db, site.organizationId, site.siteId, {
+        const update = await updateHomeHero(site.db, site.organizationId, site.siteId, {
           image_asset_id: assetId,
           location_id: optionalString(args, "location_id"),
         });
+        const asset = await getMediaAsset(site.db, assetId, site.siteId);
+        return {
+          ...update,
+          asset_id: assetId,
+          public_url: asset?.public_url ?? null,
+        };
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
@@ -2463,10 +2192,21 @@ export async function executeMcpToolCall(
         ),
       };
     case "create_experience": {
-      const ceArgs = args as Record<string, unknown>;
+      const ceArgs = expandSlotGeneratorArgs(args as Record<string, unknown>);
       const priceAmountRaw = ceArgs.price_amount;
       if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
+      }
+      let locationId = ceArgs.location_id ? String(ceArgs.location_id) : null;
+      if (!locationId) {
+        const siteRow = (await loadSiteSettings(site.db, site.organizationId, site.siteId)) as Record<string, unknown>;
+        locationId = (siteRow.primary_location_id as string | null) ?? null;
+      }
+      if (!locationId) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "location_id is required because this site does not have a primary location yet. Call list_locations or create_location first, then retry create_experience with that location_id.",
+        );
       }
       return {
         experience: await createExperience(
@@ -2474,7 +2214,8 @@ export async function executeMcpToolCall(
           site.organizationId,
           site.siteId,
           {
-            ...(ceArgs as never),
+            ...(ceArgs as unknown as CreateExperienceInput),
+            location_id: locationId,
             price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null,
           },
           site.userId,
@@ -2482,7 +2223,7 @@ export async function executeMcpToolCall(
       };
     }
     case "update_experience": {
-      const ueArgs = omit(args, ["experience_id"]) as Record<string, unknown>;
+      const ueArgs = expandSlotGeneratorArgs(omit(args, ["experience_id"]) as Record<string, unknown>);
       const priceAmountRaw = ueArgs.price_amount;
       if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
@@ -2493,7 +2234,7 @@ export async function executeMcpToolCall(
           site.siteId,
           requiredString(args, "experience_id"),
           {
-            ...(ueArgs as never),
+            ...(ueArgs as unknown as UpdateExperienceInput),
             ...(priceAmountRaw !== undefined
               ? { price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null }
               : {}),
@@ -2552,6 +2293,65 @@ export async function executeMcpToolCall(
             | "pending"
             | "confirmed"
             | "cancelled",
+        ),
+      };
+    case "get_experience_availability": {
+      const experienceId = requiredString(args, "experience_id");
+      const experience = await getExperienceById(site.db, site.siteId, experienceId);
+      if (!experience) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "Experience not found.");
+      }
+      const startDate = requiredString(args, "date");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "Date must be YYYY-MM-DD format");
+      }
+      const parsedDate = new Date(`${startDate}T00:00:00Z`);
+      if (isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== startDate) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "Invalid calendar date");
+      }
+      const daysRaw = (args as Record<string, unknown>).days;
+      if (daysRaw !== undefined && typeof daysRaw === "number" && !Number.isInteger(daysRaw)) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "days must be an integer");
+      }
+      const days = Math.min(Math.max(typeof daysRaw === "number" ? daysRaw : 1, 1), 31);
+      const cursor = new Date(`${startDate}T00:00:00Z`);
+      const dates: Array<{ date: string; slots: Awaited<ReturnType<typeof getSlotAvailability>> }> = [];
+      for (let i = 0; i < days; i++) {
+        const dateStr = cursor.toISOString().slice(0, 10);
+        dates.push({ date: dateStr, slots: await getSlotAvailability(site.db, site.siteId, experience, dateStr) });
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+      return { dates };
+    }
+    case "set_experience_slot_override":
+      return {
+        override: await upsertSlotOverride(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          requiredString(args, "experience_id"),
+          {
+            override_date: requiredString(args, "date"),
+            time_slot: requiredString(args, "time_slot"),
+            status: requiredString(args, "status") as "closed" | "open",
+            capacity_override: typeof (args as Record<string, unknown>).capacity_override === "number"
+              ? ((args as Record<string, unknown>).capacity_override as number)
+              : null,
+            note: optionalString(args, "note") ?? null,
+          },
+          site.userId,
+        ),
+      };
+    case "list_experience_slot_overrides":
+      return {
+        overrides: await listSlotOverrides(
+          site.db,
+          site.siteId,
+          requiredString(args, "experience_id"),
+          {
+            fromDate: optionalString(args, "from") ?? undefined,
+            toDate: optionalString(args, "to") ?? undefined,
+          },
         ),
       };
     case "list_locales":
@@ -2823,9 +2623,13 @@ export async function executeMcpToolCall(
       });
 
       return {
+        uploaded: true,
+        assigned: false,
         assetId,
         publicUrl: uploaded.publicUrl,
         thumbnailUrl: uploaded.thumbnailUrl,
+        nextStep:
+          "Upload complete. This image is in the media library but not assigned yet. Call a placement tool like set_home_hero_image or set_logo next.",
       };
     }
     case "save_generated_image_file": {
@@ -3236,6 +3040,33 @@ function omit(source: Record<string, unknown>, keys: string[]) {
   return Object.fromEntries(
     Object.entries(source).filter(([key]) => !keys.includes(key)),
   );
+}
+
+function normalizeMenuItemArgs(
+  args: Record<string, unknown>,
+  { requireSection }: { requireSection: boolean },
+) {
+  const normalized = { ...args };
+
+  if (
+    normalized.price_amount === undefined &&
+    normalized.price !== undefined &&
+    normalized.price !== null &&
+    normalized.price !== ""
+  ) {
+    normalized.price_amount = normalized.price;
+  }
+
+  if (requireSection) {
+    normalized.section = requiredString(normalized, "section");
+  } else if (
+    normalized.section !== undefined &&
+    typeof normalized.section !== "string"
+  ) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, "Invalid section");
+  }
+
+  return normalized;
 }
 
 function getDateString(date: Date): string {

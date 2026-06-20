@@ -240,9 +240,17 @@ function formatReviewDate(ts: string | null) {
 }
 
 
+const seoTitle = () => `Reviews · ${location.value?.title || slug.value}`
+const seoDescription = () => `Guest reviews for ${location.value?.title || slug.value} at ${siteName.value}.`
+
 useSeoMeta({
-  title: () => `Reviews · ${location.value?.title || slug.value}`,
-  description: () => `Guest reviews for ${location.value?.title} at ${siteName.value}.`,
+  title: seoTitle,
+  description: seoDescription,
+  ogTitle: seoTitle,
+  ogDescription: seoDescription,
+  ogSiteName: () => siteName.value,
+  twitterTitle: seoTitle,
+  twitterDescription: seoDescription,
   ogImage: useSharedOgImage(),
   ogUrl: useSeoUrl(() => `/locations/${slug.value}/reviews`)
 })

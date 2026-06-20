@@ -19,6 +19,7 @@ export interface SiteConfig {
   google_site_verification?: string
   hero_image_url?: string
   location_hero_image_url?: string
+  default_timezone?: string
 }
 
 export const getConfig = async (
@@ -31,6 +32,43 @@ export const getConfig = async (
      WHERE organization_id = ? AND site_id = ?`
   ).bind(organizationId, siteId).all<{ key: string; value: string }>()
   return Object.fromEntries((results ?? []).map(r => [r.key, r.value]))
+}
+
+/**
+ * Resolves the IANA timezone that a location-scoped date/time (reservation, booking, etc.)
+ * should be interpreted in: the location's own timezone, else the site's default_timezone, else UTC.
+ */
+export const resolveLocationTimezone = async (
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  locationId: string | null,
+): Promise<string> => {
+  if (locationId) {
+    const loc = await db
+      .prepare(`SELECT timezone FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`)
+      .bind(locationId, siteId)
+      .first<{ timezone: string | null }>()
+    if (loc?.timezone) return loc.timezone
+  }
+  const config = await getConfig(db, organizationId, siteId)
+  return config.default_timezone || 'UTC'
+}
+
+/**
+ * Returns true if `dateStr` (YYYY-MM-DD) is strictly before "today" as observed in `timezone`.
+ * Workers always run on a UTC clock, so "today" must be computed in the venue's zone rather
+ * than compared against `new Date()` directly — otherwise bookings/reservations near midnight
+ * are wrongly accepted/rejected for venues whose local day hasn't rolled over yet (or already has).
+ */
+export const isDateBeforeTimezoneToday = (dateStr: string, timezone: string): boolean => {
+  const todayInZone = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+  return dateStr < todayInZone
 }
 
 export const setConfig = async (

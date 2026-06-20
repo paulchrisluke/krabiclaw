@@ -140,7 +140,12 @@ const siteName = computed(() => unref(site)?.brand_name || 'KrabiClaw')
 useSeoMeta({
   title: () => `Locations · ${siteName.value}`,
   description: 'Find all our restaurant locations.',
-  ogImage: useSharedOgImage(),
+  ogTitle: () => `Locations · ${siteName.value}`,
+  ogDescription: 'Find all our restaurant locations.',
+  ogSiteName: () => siteName.value,
+  twitterTitle: () => `Locations · ${siteName.value}`,
+  twitterDescription: 'Find all our restaurant locations.',
+  ogImage: useTenantOgImage(),
   ogUrl: useSeoUrl('/locations')
 })
 </script>

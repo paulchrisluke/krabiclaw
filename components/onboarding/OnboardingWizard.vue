@@ -41,13 +41,15 @@
           <UIcon name="i-heroicons-sparkles" class="size-8" />
         </div>
         <div>
-          <p class="mb-1 text-[11px] font-bold uppercase tracking-[0.28em] text-primary">Let's build your site</p>
+          <p class="mb-1 text-[11px] font-bold uppercase tracking-[0.28em] text-primary">{{ props.isAddingLocation ? "Let's add a location" : "Let's build your site" }}</p>
           <h1 class="text-3xl font-extrabold leading-tight tracking-tight text-highlighted">
-            Tell me about your business. I'll do the typing.
+            {{ props.isAddingLocation ? "Tell me about this location. I'll do the typing." : "Tell me about your business. I'll do the typing." }}
           </h1>
         </div>
         <p class="text-[14.5px] leading-relaxed text-muted">
-          Answer a few questions and a real, SEO-ready site builds itself on the right — you decide what to keep.
+          {{ props.isAddingLocation
+            ? "Answer a few questions and this location is added to your site — you decide what to keep."
+            : "Answer a few questions and a real, SEO-ready site builds itself on the right — you decide what to keep." }}
         </p>
         <div class="flex flex-col gap-2.5">
           <div
@@ -145,6 +147,22 @@
                     </a>
                   </div>
                 </div>
+                <div
+                  v-if="msg.detailsCard"
+                  class="mt-2"
+                >
+                  <IntakeDetailsCard
+                    v-model:form="detailsForm"
+                    :title="msg.detailsCard.title"
+                    :description="msg.detailsCard.description"
+                    :action-label="msg.detailsCard.actionLabel"
+                    :require-location-basics="msg.detailsCard.requireLocationBasics"
+                    :show-primary-toggle="msg.detailsCard.showPrimaryToggle"
+                    :loading="importing"
+                    :disabled="importing"
+                    @submit="submitDetails"
+                  />
+                </div>
                 <!-- Handoff card -->
                 <div
                   v-if="msg.handoff"
@@ -159,6 +177,24 @@
                       Chat with ChowBot in your dashboard, use the structured editor for precise control, or pick it back up in ChatGPT — same site, same words.
                     </p>
                   </div>
+                </div>
+                <div v-if="msg.polishCard" class="mt-2">
+                  <PolishSuggestionsCard
+                    :vertical="selectedVertical"
+                    :primary-to="workspaceEntryPath"
+                    primary-label="Open the dashboard"
+                    :secondary-to="brandWorkspacePath"
+                    secondary-label="Open brand pages"
+                  />
+                </div>
+                <div v-if="msg.mcpCard" class="mt-2">
+                  <McpEditCard
+                    :guide-to="chatgptGuidePath"
+                    guide-label="ChatGPT setup guide"
+                    :starter-prompt="chatgptStarterPrompt"
+                    :dashboard-to="workspaceEntryPath"
+                    dashboard-label="Open the dashboard"
+                  />
                 </div>
               </div>
             </template>
@@ -237,7 +273,16 @@ interface WizardMessage {
   text?: string
   tools?: { label: string; done: boolean }[]
   handoff?: boolean
+  polishCard?: boolean
+  mcpCard?: boolean
   placePreview?: { name: string; address: string; phone?: string | null; mapsUrl?: string | null }
+  detailsCard?: {
+    title: string
+    description: string
+    actionLabel: string
+    requireLocationBasics: boolean
+    showPrimaryToggle: boolean
+  }
 }
 
 interface QuickReply {
@@ -249,8 +294,9 @@ interface QuickReply {
   action?: string
 }
 
-type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_search' | 'awaiting_manual_name' | 'confirm' | 'importing' | 'imported'
+type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_search' | 'awaiting_manual_name' | 'confirm' | 'details' | 'importing' | 'imported'
 type Vertical = 'restaurant' | 'experience'
+type DetailsSource = 'imported' | 'manual'
 
 const props = defineProps<{
   siteId: string | null
@@ -258,6 +304,7 @@ const props = defineProps<{
   setupEndpoint?: string
   setupManualEndpoint?: string
   skipVertical?: boolean
+  isAddingLocation?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -267,11 +314,17 @@ const emit = defineEmits<{
 const router = useRouter()
 const toast = useToast()
 
-const WELCOME_POINTS: [string, string][] = [
-  ['i-heroicons-globe-alt', 'Pulls your address, hours, photos & reviews from Google'],
-  ['i-heroicons-sparkles', 'Builds your homepage and story as you watch'],
-  ['i-heroicons-rocket-launch', 'Launches free on a krabiclaw.com address when you are ready'],
-]
+const WELCOME_POINTS: [string, string][] = props.isAddingLocation
+  ? [
+      ['i-heroicons-globe-alt', 'Pulls the address, hours, photos & reviews from Google'],
+      ['i-heroicons-sparkles', 'Adds the location to your existing site as you watch'],
+      ['i-heroicons-map-pin', 'Goes live on your site as soon as you save it'],
+    ]
+  : [
+      ['i-heroicons-globe-alt', 'Pulls your address, hours, photos & reviews from Google'],
+      ['i-heroicons-sparkles', 'Builds your homepage and story as you watch'],
+      ['i-heroicons-rocket-launch', 'Launches free on a krabiclaw.com address when you are ready'],
+    ]
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -282,9 +335,31 @@ const replies = ref<QuickReply[]>([])
 const awaitingInput = ref(false)
 const textInput = ref('')
 const importError = ref<string | null>(null)
+const importing = ref(false)
 const pendingMapsUrl = ref('')
-const pendingPreview = ref<{ placeId: string; name: string; address: string; phone?: string | null; mapsUrl?: string | null } | null>(null)
+const pendingPreview = ref<{
+  placeId: string
+  name: string
+  address: string
+  city?: string | null
+  phone?: string | null
+  mapsUrl?: string | null
+  websiteUrl?: string | null
+  openingHours?: string[] | null
+} | null>(null)
+const detailsSource = ref<DetailsSource>('imported')
 const selectedVertical = ref<Vertical>('restaurant')
+const detailsForm = reactive({
+  name: '',
+  city: '',
+  address: '',
+  phone: '',
+  websiteUrl: '',
+  openingHours: '',
+  notificationPhone: '',
+  timezone: '',
+  isPrimary: true,
+})
 
 // Drag support
 const dragCounter = ref(0)
@@ -295,9 +370,23 @@ const inputPlaceholder = computed(() => {
   if (step.value === 'awaiting_manual_name') return 'Your business name…'
   return 'Paste your Google Maps link…'
 })
+const detailsActionLabel = computed(() => props.isAddingLocation ? 'Add location' : 'Create site')
+const detailsCardTitle = computed(() => props.isAddingLocation ? 'Location details' : 'Business details')
+const detailsCardDescription = computed(() => detailsSource.value === 'manual'
+  ? (props.isAddingLocation
+    ? 'I still need the branch basics before I can add it to your site.'
+    : 'I still need the basics before I can create this site.')
+  : (props.isAddingLocation
+    ? 'I pulled the location data from Google. Fix anything that looks off, then add it.'
+    : 'I pulled the business data from Google. Fix anything that looks off, then create it.')
+)
+const detailsRequireBasics = computed(() => detailsSource.value === 'manual')
 
 const scrollRef = ref<HTMLElement | null>(null)
+const importedSiteId = ref<string | null>(props.siteId ?? null)
 const importedOrgSlug = ref<string | null>(null)
+const importedLocationSlug = ref<string | null>(null)
+const checklistStarterPrompt = ref<string | null>(null)
 const preConfirmStep = ref<WizardStep>('awaiting_url')
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -340,11 +429,121 @@ function renderMarkdown(text: string): string {
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
+const workspaceEntryPath = computed(() => {
+  const slug = importedOrgSlug.value ?? props.existingOrgSlug ?? null
+  return slug ? `/dashboard/${slug}` : null
+})
+
+const brandWorkspacePath = computed(() => {
+  const slug = importedOrgSlug.value ?? props.existingOrgSlug ?? null
+  const locationSlug = importedLocationSlug.value
+  if (!slug || !locationSlug) return workspaceEntryPath.value
+  return `/dashboard/${slug}/${locationSlug}/pages`
+})
+
+const chatgptGuidePath = computed(() => {
+  const slug = importedOrgSlug.value ?? props.existingOrgSlug ?? null
+  return slug ? `/dashboard/${slug}/~/settings/chatgpt` : '/plugin'
+})
+
+const chatgptStarterPrompt = computed(() => {
+  if (props.isAddingLocation) {
+    return 'Help me finish this new location. Ask me for location-specific hours, photos, FAQs, and what makes this branch different.'
+  }
+
+  if (checklistStarterPrompt.value) {
+    return checklistStarterPrompt.value
+  }
+
+  if (selectedVertical.value === 'experience') {
+    return 'Help me finish my experience site. First ask me for my hero headline, brand story, and signature experiences.'
+  }
+
+  return 'Help me finish my restaurant site. First ask me for my hero headline, brand story, and top menu sections.'
+})
+
+interface ChecklistResponse {
+  success: boolean
+  vertical: string
+  brandName: string | null
+  city: string | null
+  items: {
+    business_info: boolean
+    hero_image: boolean
+    menu_or_experiences: boolean
+    story: boolean
+    post: boolean
+  }
+}
+
+function buildChecklistStarterPrompt(checklist: ChecklistResponse): string {
+  const name = checklist.brandName ?? 'my business'
+  const city = checklist.city ? ` in ${checklist.city}` : ''
+  const isExperience = checklist.vertical === 'experience'
+
+  const items = [
+    {
+      label: 'Business info imported from Google Maps',
+      prompt: `Show me a summary of my site for ${name}`,
+      complete: checklist.items.business_info,
+    },
+    {
+      label: 'Hero image added',
+      prompt: `Generate a hero image for ${name}'s homepage`,
+      complete: checklist.items.hero_image,
+    },
+    {
+      label: isExperience ? 'Experiences listed' : 'Menu added',
+      prompt: isExperience
+        ? `Add our signature experience to ${name} — include a description, duration, price per person, and max capacity`
+        : `Build a menu for ${name}. Ask me about our sections and dishes.`,
+      complete: checklist.items.menu_or_experiences,
+    },
+    {
+      label: 'About section written',
+      prompt: `Write an About section for ${name}${city}. Ask me a few questions first.`,
+      complete: checklist.items.story,
+    },
+    {
+      label: 'First post published',
+      prompt: `Write a launch post announcing ${name}'s new website is live`,
+      complete: checklist.items.post,
+    },
+  ]
+
+  const firstMissing = items.find(item => !item.complete)
+  if (!firstMissing) {
+    return isExperience
+      ? `Help me review ${name}'s experience site and suggest the next highest-impact improvement. Ask me one question at a time.`
+      : `Help me review ${name}'s restaurant site and suggest the next highest-impact improvement. Ask me one question at a time.`
+  }
+
+  return `Help me finish ${name}'s ${isExperience ? 'experience' : 'restaurant'} site. Start with "${firstMissing.label}" first. Ask me one question at a time and then help me complete this: ${firstMissing.prompt}`
+}
+
+async function refreshChecklistStarterPrompt(siteId: string | null) {
+  if (!siteId || props.isAddingLocation) return
+  try {
+    const checklist = await $fetch<ChecklistResponse>(`/api/dashboard/onboarding/checklist?siteId=${encodeURIComponent(siteId)}`)
+    checklistStarterPrompt.value = buildChecklistStarterPrompt(checklist)
+  } catch (error) {
+    console.error('onboarding_checklist_prompt_failed', error)
+    checklistStarterPrompt.value = null
+  }
+}
+
 function pushUser(text: string) {
   messages.value.push({ id: crypto.randomUUID(), from: 'user', text })
 }
 
-async function pushBot(text: string, extra?: { tools?: { label: string; done: boolean }[]; handoff?: boolean; placePreview?: WizardMessage['placePreview'] }) {
+async function pushBot(text: string, extra?: {
+  tools?: { label: string; done: boolean }[]
+  handoff?: boolean
+  polishCard?: boolean
+  mcpCard?: boolean
+  placePreview?: WizardMessage['placePreview']
+  detailsCard?: WizardMessage['detailsCard']
+}) {
   typing.value = true
   await sleep(560)
   typing.value = false
@@ -399,6 +598,18 @@ async function advance(target: WizardStep) {
     await pushBot("What's the name of your business?")
     awaitingInput.value = true
   }
+
+  if (target === 'details') {
+    await pushBot(detailsCardDescription.value, {
+        detailsCard: {
+          title: detailsCardTitle.value,
+          description: detailsCardDescription.value,
+          actionLabel: detailsActionLabel.value,
+          requireLocationBasics: detailsRequireBasics.value,
+          showPrimaryToggle: !!props.isAddingLocation,
+        },
+      })
+  }
 }
 
 async function handleReply(reply: QuickReply) {
@@ -436,7 +647,11 @@ async function handleReply(reply: QuickReply) {
 
   if (reply.action === 'confirm_yes') {
     pushUser("Yes, that's my place")
-    if (pendingPreview.value) await runSetup(pendingPreview.value.placeId)
+    if (pendingPreview.value) {
+      detailsSource.value = 'imported'
+      seedDetailsFromPreview(pendingPreview.value)
+      await advance('details')
+    }
     return
   }
 
@@ -476,7 +691,9 @@ async function handleTextSubmit() {
   } else if (step.value === 'awaiting_search') {
     await runSearch(input)
   } else if (step.value === 'awaiting_manual_name') {
-    await runManualSetup(input)
+    detailsSource.value = 'manual'
+    seedDetailsFromManual(input)
+    await advance('details')
   }
 }
 
@@ -504,6 +721,7 @@ function showConfirm(preview: NonNullable<typeof pendingPreview.value>, returnSt
 
 async function runLookup(mapsUrl: string) {
   step.value = 'importing'
+  importing.value = true
   pendingMapsUrl.value = mapsUrl
   importError.value = null
   const tools = await showLookupTools('Looking up your Google Maps listing…')
@@ -512,7 +730,7 @@ async function runLookup(mapsUrl: string) {
     const endpoint = props.setupEndpoint ?? '/api/dashboard/onboarding/setup'
     const res = await $fetch<{
       success: boolean
-      preview?: { placeId: string; name: string; address: string; phone?: string | null; mapsUrl?: string | null }
+      preview?: { placeId: string; name: string; address: string; city?: string | null; phone?: string | null; mapsUrl?: string | null; websiteUrl?: string | null; openingHours?: string[] | null }
       error?: string
     }>(endpoint, { method: 'POST', body: { mapsUrl, previewOnly: true } })
 
@@ -527,18 +745,21 @@ async function runLookup(mapsUrl: string) {
     importError.value = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
     step.value = 'awaiting_url'
     awaitingInput.value = true
+  } finally {
+    importing.value = false
   }
 }
 
 async function runSearch(query: string) {
   step.value = 'importing'
+  importing.value = true
   importError.value = null
   const tools = await showLookupTools('Searching Google for your business…')
 
   try {
     const res = await $fetch<{
       success: boolean
-      preview?: { placeId: string; name: string; address: string; phone?: string | null; mapsUrl?: string | null }
+      preview?: { placeId: string; name: string; address: string; city?: string | null; phone?: string | null; mapsUrl?: string | null; websiteUrl?: string | null; openingHours?: string[] | null }
       error?: string
     }>('/api/dashboard/onboarding/search-place', { method: 'POST', body: { query } })
 
@@ -553,74 +774,116 @@ async function runSearch(query: string) {
     importError.value = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
     step.value = 'awaiting_search'
     awaitingInput.value = true
+  } finally {
+    importing.value = false
   }
 }
 
-async function runSetup(placeId: string) {
+async function submitDetails() {
+  const basicRequired = detailsRequireBasics.value
+  const requiredFields = basicRequired
+    ? [detailsForm.name, detailsForm.city, detailsForm.address, detailsForm.phone, detailsForm.openingHours]
+    : [detailsForm.name]
+  if (!requiredFields.every(value => value.trim().length > 0)) {
+    importError.value = 'Please fill in the required fields before continuing.'
+    return
+  }
+
   step.value = 'importing'
+  importing.value = true
   importError.value = null
-  const tools = await showLookupTools('Creating your workspace…')
+  const tools = await showLookupTools(props.isAddingLocation ? 'Adding your location…' : 'Creating your workspace…')
 
   try {
-    const endpoint = props.setupEndpoint ?? '/api/dashboard/onboarding/setup'
+    const endpoint = pendingPreview.value
+      ? (props.setupEndpoint ?? '/api/dashboard/onboarding/setup')
+      : (props.setupManualEndpoint ?? '/api/dashboard/onboarding/setup-manual')
+
+    const body = pendingPreview.value
+      ? {
+          placeId: pendingPreview.value.placeId,
+          vertical: selectedVertical.value,
+          details: serializeDetails(),
+        }
+      : {
+          name: detailsForm.name.trim(),
+          vertical: selectedVertical.value,
+          details: serializeDetails(),
+        }
+
     const res = await $fetch<{
       success: boolean
-      placeName?: string
+      siteId?: string | null
       orgSlug?: string | null
       locationSlug?: string | null
       error?: string
-    }>(endpoint, { method: 'POST', body: { placeId, vertical: selectedVertical.value } })
+    }>(endpoint, { method: 'POST', body })
 
     if (!res.success) {
       throw new Error(res.error ?? 'Failed to create your workspace. Please try again.')
     }
 
     tools[0]!.done = true
+    importedSiteId.value = res.siteId ?? props.siteId ?? null
     importedOrgSlug.value = res.orgSlug ?? null
+    await refreshChecklistStarterPrompt(importedSiteId.value)
     await finishCreation(res.orgSlug, res.locationSlug)
   } catch (err) {
     importError.value = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
-    step.value = preConfirmStep.value
-    awaitingInput.value = true
+    step.value = 'details'
+  } finally {
+    importing.value = false
   }
 }
 
-async function runManualSetup(name: string) {
-  step.value = 'importing'
-  importError.value = null
-  const tools = await showLookupTools('Creating your workspace…')
-
-  try {
-    const endpoint = props.setupManualEndpoint ?? '/api/dashboard/onboarding/setup-manual'
-    const res = await $fetch<{
-      success: boolean
-      orgSlug?: string | null
-      error?: string
-    }>(endpoint, { method: 'POST', body: { name, vertical: selectedVertical.value } })
-
-    if (!res.success) {
-      throw new Error(res.error ?? 'Failed to create your workspace. Please try again.')
-    }
-
-    tools[0]!.done = true
-    importedOrgSlug.value = res.orgSlug ?? null
-    await finishCreation(res.orgSlug, (res as { locationSlug?: string | null }).locationSlug)
-  } catch (err) {
-    importError.value = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
-    step.value = 'awaiting_manual_name'
-    awaitingInput.value = true
+function serializeDetails() {
+  return {
+    name: detailsForm.name.trim(),
+    city: detailsForm.city.trim() || null,
+    address: detailsForm.address.trim() || null,
+    phone: detailsForm.phone.trim() || null,
+    websiteUrl: detailsForm.websiteUrl.trim() || null,
+    openingHours: detailsForm.openingHours.trim() || null,
+    notificationPhone: detailsForm.notificationPhone.trim() || null,
+    timezone: detailsForm.timezone.trim() || null,
+    isPrimary: props.isAddingLocation ? detailsForm.isPrimary : true,
   }
+}
+
+function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value>) {
+  detailsForm.name = preview.name ?? ''
+  detailsForm.city = preview.city ?? ''
+  detailsForm.address = preview.address ?? ''
+  detailsForm.phone = preview.phone ?? ''
+  detailsForm.websiteUrl = preview.websiteUrl ?? ''
+  detailsForm.openingHours = Array.isArray(preview.openingHours) ? preview.openingHours.join('\n') : ''
+  detailsForm.notificationPhone = ''
+  detailsForm.timezone = ''
+  detailsForm.isPrimary = !props.isAddingLocation
+}
+
+function seedDetailsFromManual(name: string) {
+  detailsForm.name = name
+  detailsForm.city = ''
+  detailsForm.address = ''
+  detailsForm.phone = ''
+  detailsForm.websiteUrl = ''
+  detailsForm.openingHours = ''
+  detailsForm.notificationPhone = ''
+  detailsForm.timezone = ''
+  detailsForm.isPrimary = !props.isAddingLocation
 }
 
 async function finishCreation(orgSlug: string | null | undefined, locationSlug?: string | null) {
   emit('site-created', orgSlug ?? null, locationSlug ?? null)
+  importedLocationSlug.value = locationSlug ?? null
   await sleep(300)
   const domain = orgSlug ? `**${orgSlug}.krabiclaw.com**` : 'your new workspace'
   const offerLabel = selectedVertical.value === 'experience' ? 'experiences' : 'menu'
   await pushBot(`Done. Your workspace is live at ${domain}.`)
   await pushBot(
     `Head to your dashboard to keep building — add your ${offerLabel}, hero image and story — or connect ChatGPT to manage it from there.`,
-    { handoff: true },
+    { handoff: true, polishCard: true, mcpCard: true },
   )
   step.value = 'imported'
   replies.value = [

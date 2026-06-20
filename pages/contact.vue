@@ -283,6 +283,7 @@ const requestURL = useRequestURL()
 const toast = useToast()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const sharedOgImage = useSharedOgImage()
+const tenantOgImage = useTenantOgImage()
 
 const businessName = computed(() => site?.brand_name || 'Our Business')
 
@@ -395,13 +396,23 @@ useSeoMeta(isPlatform
   ? {
       title: 'Contact | KrabiClaw',
       description: 'Contact the KrabiClaw team for support, questions, or partnership inquiries.',
+      ogTitle: 'Contact | KrabiClaw',
+      ogDescription: 'Contact the KrabiClaw team for support, questions, or partnership inquiries.',
+      ogSiteName: 'KrabiClaw',
+      twitterTitle: 'Contact | KrabiClaw',
+      twitterDescription: 'Contact the KrabiClaw team for support, questions, or partnership inquiries.',
       ogImage: sharedOgImage,
       ogUrl: `${siteUrl}/contact`
     }
   : {
       title: computed(() => `Contact | ${businessName.value}`),
       description: 'Get in touch with our business.',
-      ogImage: sharedOgImage,
+      ogTitle: computed(() => `Contact | ${businessName.value}`),
+      ogDescription: 'Get in touch with our business.',
+      ogSiteName: computed(() => businessName.value),
+      twitterTitle: computed(() => `Contact | ${businessName.value}`),
+      twitterDescription: 'Get in touch with our business.',
+      ogImage: tenantOgImage,
       ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
     }
 )

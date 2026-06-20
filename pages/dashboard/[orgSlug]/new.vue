@@ -16,15 +16,55 @@
       </UButton>
     </header>
 
-    <div class="flex min-h-0 flex-1 overflow-hidden">
-      <div class="w-full max-w-2xl">
-        <OnboardingWizard
-          :site-id="null"
-          :existing-org-slug="orgSlug"
-          setup-endpoint="/api/dashboard/locations/add"
-          skip-vertical
-          @site-created="onLocationCreated"
-        />
+    <div
+      v-if="contextLoaded && !contextError"
+      class="grid min-h-0 flex-1 overflow-hidden"
+      style="grid-template-columns: minmax(24rem, 45%) 1fr; grid-template-rows: minmax(0, 1fr)"
+    >
+      <OnboardingWizard
+        :site-id="null"
+        :existing-org-slug="orgSlug"
+        setup-endpoint="/api/dashboard/locations/add"
+        setup-manual-endpoint="/api/dashboard/locations/add"
+        skip-vertical
+        is-adding-location
+        @site-created="onLocationCreated"
+      />
+      <OnboardingPreviewPane
+        :iframe-src="iframeSrc"
+        :site-locations="siteLocations"
+        :selected-location-id="selectedLocationId"
+        :selected-page="selectedPreviewPage"
+        :site-status="computedSiteStatus"
+        :site-domain="siteDomain"
+        @select-page="onSelectPage"
+        @select-location="onSelectLocation"
+      />
+    </div>
+
+    <div v-else-if="contextError" class="flex min-h-0 flex-1 items-center justify-center px-5">
+      <UCard class="w-full max-w-md">
+        <div class="space-y-3">
+          <UAlert
+            color="error"
+            variant="soft"
+            icon="i-heroicons-exclamation-triangle"
+            title="Workspace load failed"
+            :description="contextError"
+          />
+          <div class="flex justify-end">
+            <UButton color="neutral" variant="soft" size="sm" @click="loadContext">
+              Try again
+            </UButton>
+          </div>
+        </div>
+      </UCard>
+    </div>
+
+    <div v-else class="flex min-h-0 flex-1 items-center justify-center">
+      <div class="flex items-center gap-3 text-muted">
+        <UIcon name="i-heroicons-arrow-path" class="size-5 animate-spin" />
+        <span class="text-sm">Loading workspace…</span>
       </div>
     </div>
 
@@ -37,14 +77,112 @@ definePageMeta({ layout: 'editor', ssr: false })
 
 const route = useRoute()
 const router = useRouter()
+const config = useRuntimeConfig()
+const toast = useToast()
 
 const orgSlug = route.params.orgSlug as string
 
-const onLocationCreated = async (_orgSlug: string | null, locationSlug: string | null | undefined) => {
-  if (locationSlug) {
-    await router.push(`/dashboard/${orgSlug}/${locationSlug}`)
-  } else {
-    await router.push(`/dashboard/${orgSlug}`)
+const siteData = ref<ApiRecord | null>(null)
+const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
+const contextLoaded = ref(false)
+const contextError = ref<string | null>(null)
+const selectedLocationId = ref<string | null>(null)
+const selectedPreviewPage = ref('home')
+const previewReloadToken = ref(0)
+
+const platformHostname = computed(() => {
+  const domain = config.public.freeSiteDomain as string
+  return domain.replace(/^https?:\/\//, '')
+})
+
+const siteDomain = computed(() =>
+  siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : ''
+)
+
+const sitePreviewBaseUrl = computed(() => {
+  if (!siteData.value?.id) return ''
+  const platformBase = ((config.public.platformDomain || config.public.freeSiteDomain) as string).replace(/\/$/, '')
+  return `${platformBase}/preview/site/${siteData.value.id}`
+})
+
+const selectedLocation = computed(() =>
+  siteLocations.value.find(l => l.id === selectedLocationId.value) ?? null
+)
+
+const locationScopedPages = new Set(['location', 'menu'])
+const currentPageIsLocationScoped = computed(() => locationScopedPages.has(selectedPreviewPage.value))
+
+const previewPagePath = computed(() => {
+  if (!selectedLocation.value) return selectedPreviewPage.value === 'home' ? '/' : `/${selectedPreviewPage.value}`
+  if (selectedPreviewPage.value === 'location') return `/locations/${selectedLocation.value.slug}`
+  if (selectedPreviewPage.value === 'menu') return `/locations/${selectedLocation.value.slug}/menu`
+  return selectedPreviewPage.value === 'home' ? '/' : `/${selectedPreviewPage.value}`
+})
+
+const iframeSrc = computed(() => {
+  if (!sitePreviewBaseUrl.value) return ''
+  if (currentPageIsLocationScoped.value && !selectedLocation.value) return ''
+  const subPath = previewPagePath.value === '/' ? '' : previewPagePath.value
+  const url = new URL(sitePreviewBaseUrl.value + subPath)
+  url.searchParams.set('preview', 'true')
+  if (currentPageIsLocationScoped.value && selectedLocation.value) {
+    url.searchParams.set('location', selectedLocation.value.slug)
+  }
+  if (previewReloadToken.value) url.searchParams.set('t', String(previewReloadToken.value))
+  return url.toString()
+})
+
+const computedSiteStatus = computed((): 'setup' | 'progress' | 'ready' | 'live' =>
+  siteData.value?.status === 'active' ? 'live' : 'setup'
+)
+
+const loadContext = async () => {
+  contextError.value = null
+  try {
+    const response = await $fetch<{
+      success: boolean
+      restaurant?: ApiRecord | null
+      locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
+    }>('/api/dashboard/context')
+
+    if (response.restaurant) {
+      siteData.value = response.restaurant
+      siteLocations.value = response.locations ?? []
+    } else {
+      contextError.value = 'Workspace data could not be loaded.'
+    }
+  } catch (error) {
+    // This page requires an existing site, so a failed context load is unexpected here
+    console.error('Failed to load dashboard context:', error)
+    contextError.value = 'Failed to load workspace. Please try again.'
+    toast.add({ description: 'Failed to load workspace. Please try again.', color: 'error' })
+  } finally {
+    contextLoaded.value = true
   }
 }
+
+const onSelectPage = (page: string) => {
+  selectedPreviewPage.value = page
+  if (locationScopedPages.has(page) && !selectedLocationId.value && siteLocations.value.length > 0) {
+    const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]
+    if (primary) selectedLocationId.value = primary.id
+  }
+}
+
+const onSelectLocation = (id: string) => {
+  selectedLocationId.value = id
+}
+
+// Called by OnboardingWizard after the location is created — reload locations and preview the new one
+const onLocationCreated = async (_orgSlug: string | null, locationSlug: string | null | undefined) => {
+  await loadContext()
+  previewReloadToken.value = Date.now()
+
+  const created = locationSlug ? siteLocations.value.find(l => l.slug === locationSlug) : null
+  if (created) selectedLocationId.value = created.id
+}
+
+onMounted(async () => {
+  await loadContext()
+})
 </script>

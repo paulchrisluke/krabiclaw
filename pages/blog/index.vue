@@ -46,7 +46,9 @@
                 <div class="flex items-center gap-4 mb-4">
                   <span class="bg-inverted text-inverted px-3 py-1 rounded-full text-sm font-medium">Featured</span>
                   <span v-if="posts[0].category" class="px-3 py-1 rounded-full text-sm font-medium" :class="categoryClass(posts[0].category)">{{ posts[0].category }}</span>
-                  <span class="text-dimmed text-sm">{{ formatDate(posts[0].published_at) }}</span>
+                  <span v-if="posts[0].published_at" class="text-dimmed text-sm">
+                    <NuxtTime :datetime="posts[0].published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+                  </span>
                 </div>
                 <h2 class="text-3xl font-bold text-default mb-4">{{ posts[0].title }}</h2>
                 <p v-if="posts[0].excerpt" class="text-muted mb-6 text-lg">{{ posts[0].excerpt }}</p>
@@ -90,7 +92,9 @@
                   <div class="p-6">
                     <div class="flex items-center gap-3 mb-3">
                       <span v-if="post.category" class="px-2 py-1 rounded text-xs font-medium" :class="categoryClass(post.category)">{{ post.category }}</span>
-                      <span class="text-dimmed text-sm">{{ formatDate(post.published_at) }}</span>
+                      <span v-if="post.published_at" class="text-dimmed text-sm">
+                        <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+                      </span>
                     </div>
                     <h3 class="text-xl font-bold text-default mb-3">{{ post.title }}</h3>
                     <p v-if="post.excerpt" class="text-muted mb-4">{{ post.excerpt }}</p>
@@ -187,10 +191,6 @@ function categoryClass(cat: string) {
   return CATEGORY_CLASSES[cat] ?? 'bg-stone-100 text-stone-800'
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-}
-
 function readTime(post: ApiValue) {
   const words = (post.body ?? post.excerpt ?? '').split(/\s+/).length
   return Math.max(1, Math.ceil(words / 200))
@@ -225,6 +225,7 @@ useBreadcrumbSchema([
 useSeoMeta({
   title: 'Blog | KrabiClaw',
   description: 'Marketing tips, industry insights, and strategies to help your business succeed online.',
+  ogSiteName: 'KrabiClaw',
   ogImage: useSharedOgImage(),
   ogUrl: `${siteUrl}/blog`,
   ogType: 'website'

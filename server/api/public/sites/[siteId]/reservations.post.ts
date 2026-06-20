@@ -2,6 +2,7 @@ import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-res
 import { notifyReservationCreated } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
+import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/utils/site-config'
 
 const hashIp = async (ip: string) => {
   if (!ip) return null
@@ -33,13 +34,13 @@ export default defineEventHandler(async (event) => {
   const time       = cleanString(body.time, 5)
   const guests     = cleanString(body.guests, 3)
   const requests   = cleanString(body.requests, 1000)
-  const locationId = cleanString(body.location_id, 36) ?? null
+  const locationId: string | null = cleanString(body.location_id, 36) || null
 
   if (!name) return jsonResponse({ error: 'Please enter your name.' }, { status: 400 })
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return jsonResponse({ error: 'Please enter a valid email address.' }, { status: 400 })
   if (!phone) return jsonResponse({ error: 'Please enter your phone number.' }, { status: 400 })
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date < new Date().toISOString().slice(0, 10))
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
   if (!VALID_TIMES.includes(time))
     return jsonResponse({ error: 'Please choose a valid time.' }, { status: 400 })
@@ -47,9 +48,28 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
   const site = await db.prepare(
-    'SELECT id, organization_id, brand_name, public_url, subdomain FROM sites WHERE id = ? AND status = ? LIMIT 1'
-  ).bind(siteId, 'active').first<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null; subdomain?: string | null }>()
+    'SELECT id, organization_id, brand_name, public_url, subdomain, primary_location_id FROM sites WHERE id = ? AND status = ? LIMIT 1'
+  ).bind(siteId, 'active').first<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null; subdomain?: string | null; primary_location_id: string | null }>()
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
+
+  let resolvedLocationId = locationId
+  if (resolvedLocationId) {
+    const location = await db
+      .prepare('SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1')
+      .bind(resolvedLocationId, siteId)
+      .first<{ id: string }>()
+    if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
+  } else {
+    resolvedLocationId = site.primary_location_id
+      ?? (await db.prepare('SELECT id FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1')
+        .bind(siteId).first<{ id: string }>())?.id
+      ?? null
+  }
+  if (!resolvedLocationId) return jsonResponse({ error: 'This site has no location to reserve at.' }, { status: 400 })
+
+  const reservationTimezone = await resolveLocationTimezone(db, site.organization_id, siteId, resolvedLocationId)
+  if (isDateBeforeTimezoneToday(date, reservationTimezone))
+    return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
 
   const id = crypto.randomUUID()
   const ipHash = await hashIp(getHeader(event, 'CF-Connecting-IP') ?? getHeader(event, 'x-forwarded-for') ?? '')
@@ -76,7 +96,7 @@ export default defineEventHandler(async (event) => {
     ipHash,
     cancellationTokenHash,
     cancellation.expiresAt,
-    locationId,
+    resolvedLocationId,
   ).run()
 
   // Build absolute cancel URL for the confirmation email
@@ -84,14 +104,14 @@ export default defineEventHandler(async (event) => {
   const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/reservations/cancel?id=${id}#${cancellation.token}` : null
 
   // Resolve contact info — location-specific when available, site-level fallback
-  const { contactPhone, contactEmail } = await resolveLocationContact(db, siteId, locationId)
+  const { contactPhone, contactEmail } = await resolveLocationContact(db, siteId, resolvedLocationId)
 
   try {
     await notifyReservationCreated(env, db, {
       organizationId: site.organization_id,
       siteId,
       siteName: site.brand_name,
-      locationId,
+      locationId: resolvedLocationId,
       reservationId: id,
       guestName: name,
       email,

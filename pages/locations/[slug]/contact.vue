@@ -239,9 +239,17 @@ const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
+const seoTitle = () => `Plan a visit · ${location.value?.title || slug.value}`
+const seoDescription = () => `Hours, address and directions for ${location.value?.title || slug.value}.`
+
 useSeoMeta({
-  title: () => `Plan a visit · ${location.value?.title || slug.value}`,
-  description: () => `Hours, address and directions for ${location.value?.title}.`,
+  title: seoTitle,
+  description: seoDescription,
+  ogTitle: seoTitle,
+  ogDescription: seoDescription,
+  ogSiteName: () => siteName.value,
+  twitterTitle: seoTitle,
+  twitterDescription: seoDescription,
   ogImage: useSharedOgImage(),
   ogUrl: useSeoUrl(() => `/locations/${slug.value}/contact`)
 })

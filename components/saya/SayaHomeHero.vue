@@ -40,7 +40,7 @@
     <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
 
     <!-- Content -->
-    <div class="relative z-10 mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">
+    <AppSection bg="black" padding="none" class="relative z-10 py-36">
       <p v-if="hero.eyebrow || businessCity" class="saya-eyebrow mb-8 text-white/70">
         {{ hero.eyebrow || businessCity }}
       </p>
@@ -85,11 +85,13 @@
           {{ $t('saya.hero.view_menu') }}
         </UButton>
       </div>
-    </div>
+    </AppSection>
   </section>
 </template>
 
 <script setup lang="ts">
+import AppSection from '~/components/ui/AppSection.vue'
+
 interface HeroData {
   title?: string
   subtitle?: string

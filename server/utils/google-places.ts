@@ -342,7 +342,7 @@ async function resolveShortUrl(url: string): Promise<string> {
   let parsed: URL
   try { parsed = new URL(url) } catch { return url }
   if (parsed.protocol !== 'https:') return url
-  if (!['maps.app.goo.gl', 'goo.gl'].includes(parsed.hostname)) return url
+  if (!['maps.app.goo.gl', 'goo.gl', 'share.google'].includes(parsed.hostname)) return url
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 5000)
   try {

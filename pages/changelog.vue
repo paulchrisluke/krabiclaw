@@ -23,14 +23,16 @@
               <a :href="commit.url" target="_blank" rel="noopener" class="hover:underline">{{ commit.description }}</a>
             </h3>
             <p class="text-sm text-muted">
-              {{ commit.author }} · {{ formatDate(commit.mergedAt) }}
+              {{ commit.author }}<span v-if="commit.mergedAt"> ·</span>
+              <NuxtTime v-if="commit.mergedAt" :datetime="commit.mergedAt" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
               <span v-if="commit.scope" class="ml-2 text-muted">({{ commit.scope }})</span>
             </p>
           </div>
         </div>
 
         <div class="text-center text-sm text-muted">
-          Last updated: {{ formatDate(changelog.lastUpdated) }}
+          <span v-if="changelog.lastUpdated">Last updated:</span>
+          <NuxtTime v-if="changelog.lastUpdated" :datetime="changelog.lastUpdated" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
         </div>
       </div>
     </div>
@@ -62,16 +64,6 @@ onMounted(async () => {
   }
 })
 
-function formatDate(dateString) {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  if (isNaN(date.getTime())) return ''
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
-}
 
 function getBadgeClass(type) {
   const classes = {

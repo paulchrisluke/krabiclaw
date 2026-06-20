@@ -32,7 +32,9 @@
           <span v-if="post.category" class="px-3 py-1 rounded-full text-sm font-medium" :class="categoryClass(post.category)">
             {{ post.category }}
           </span>
-          <span class="text-dimmed text-sm">{{ formatDate(post.published_at) }}</span>
+          <span v-if="post.published_at" class="text-dimmed text-sm">
+            <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+          </span>
           <span class="text-dimmed text-sm">·</span>
           <span class="text-dimmed text-sm">{{ readTime }} min read</span>
         </div>
@@ -61,8 +63,12 @@
           <div>
             <p class="font-semibold text-default">{{ post.author_name || 'KrabiClaw' }}</p>
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-dimmed">
-              <span>Published {{ formatDate(post.published_at) }}</span>
-              <span v-if="wasUpdated">· Updated {{ formatDate(post.updated_at) }}</span>
+              <span v-if="post.published_at">
+                Published <NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+              </span>
+              <span v-if="wasUpdated && post.updated_at">
+                · Updated <NuxtTime :datetime="post.updated_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+              </span>
             </div>
           </div>
         </div>
@@ -213,21 +219,23 @@ function categoryClass(cat: string) {
   return CATEGORY_CLASSES[cat] ?? 'bg-stone-100 text-stone-800'
 }
 
-function formatDate(iso: string) {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-}
-
 const postMedia = computed(() => resolveMedia({
   public_url: post.value?.public_url,
   kind: post.value?.kind
 }))
 const ogImage = useSharedOgImage(() => postMedia.value.thumb)
 
+const seoTitle = computed(() => post.value ? `${post.value.title} | KrabiClaw Blog` : 'Blog | KrabiClaw')
+const seoDescription = computed(() => truncateForSeo(post.value?.excerpt ?? 'Business tips and insights from KrabiClaw.', 160))
+
 useSeoMeta({
-  title: computed(() => post.value ? `${post.value.title} | KrabiClaw Blog` : 'Blog | KrabiClaw'),
-  description: computed(() => post.value?.excerpt ?? 'Business tips and insights from KrabiClaw.'),
+  title: seoTitle,
+  description: seoDescription,
+  ogTitle: seoTitle,
+  ogDescription: seoDescription,
+  ogSiteName: 'KrabiClaw',
+  twitterTitle: seoTitle,
+  twitterDescription: seoDescription,
   ogUrl: computed(() => `${siteUrl}/blog/${route.params.slug}`),
   ogType: 'article',
   ogImage

@@ -3,13 +3,12 @@ import { devLoginHeaders, devLoginUrl } from './test-env'
 
 test.describe('site creation contracts', () => {
   test('legacy dashboard creation proxy requires an explicit vertical', async ({ request, baseURL }) => {
-    const ownerLogin = await request.get(devLoginUrl(baseURL!), {
+    const suffix = Date.now()
+    const ownerLogin = await request.get(devLoginUrl(baseURL!, `e2e-site-creation-vertical-${suffix}`), {
       headers: devLoginHeaders(),
       maxRedirects: 0,
     })
     expect(ownerLogin.status()).toBe(302)
-
-    const suffix = Date.now()
     const missingVerticalRes = await request.post(`${baseURL}/api/dashboard/restaurant`, {
       data: {
         restaurantName: `Missing Vertical ${suffix}`,
@@ -35,13 +34,12 @@ test.describe('site creation contracts', () => {
   })
 
   test('an authenticated user can create multiple site workspaces', async ({ request, baseURL }) => {
-    const ownerLogin = await request.get(devLoginUrl(baseURL!), {
+    const suffix = Date.now()
+    const ownerLogin = await request.get(devLoginUrl(baseURL!, `e2e-site-creation-multi-${suffix}`), {
       headers: devLoginHeaders(),
       maxRedirects: 0,
     })
     expect(ownerLogin.status()).toBe(302)
-
-    const suffix = Date.now()
     const firstRes = await request.post(`${baseURL}/api/sites`, {
       data: {
         name: `Multi Site One ${suffix}`,

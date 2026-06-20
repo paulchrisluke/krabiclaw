@@ -280,9 +280,10 @@
 </template>
 
 <script setup lang="ts">
+import type { CurrencyCode } from '~/shared/currencies'
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
-import { CURRENCY_OPTIONS } from '~/shared/currencies'
+import { CURRENCY_OPTIONS, DEFAULT_CURRENCY, isCurrencyCode } from '~/shared/currencies'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -306,7 +307,7 @@ const organizationRole = computed(() => {
 
 const loadingCurrency = ref(true)
 const savingCurrency = ref(false)
-const currencyForm = reactive({ currency: 'THB' })
+const currencyForm = reactive({ currency: DEFAULT_CURRENCY as CurrencyCode })
 
 const deleteModalOpen = ref(false)
 const deleteConfirmText = ref('')
@@ -361,9 +362,10 @@ async function loadCurrency() {
   loadingCurrency.value = true
   try {
     const res = await $fetch<{ success: boolean; settings: { default_currency?: string } }>('/api/dashboard/settings')
-    currencyForm.currency = res.settings?.default_currency || 'THB'
+    const fetched = res.settings?.default_currency
+    currencyForm.currency = isCurrencyCode(fetched) ? fetched : DEFAULT_CURRENCY
   } catch {
-    currencyForm.currency = 'THB'
+    currencyForm.currency = DEFAULT_CURRENCY
   } finally {
     loadingCurrency.value = false
   }

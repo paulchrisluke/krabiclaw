@@ -32,6 +32,7 @@
         :locations="locations"
         :plan="plan"
         :owner-phone="ownerPhone"
+        :vertical="siteVertical"
         @done="finish"
       />
       <OnboardingPreviewPane
@@ -77,6 +78,7 @@ interface LocationRow {
 const loaded = ref(false)
 const siteId = ref('')
 const siteName = ref('Your Site')
+const siteVertical = ref<'restaurant' | 'experience'>('restaurant')
 const subdomain = ref('')
 const plan = ref('free')
 const ownerPhone = ref<string | null>(null)
@@ -126,12 +128,13 @@ onMounted(async () => {
     const ctx = await $fetch<{
       success: boolean
       organization?: { id: string; slug: string } | null
-      restaurant?: { id: string; brand_name: string; subdomain: string; plan: string } | null
+      restaurant?: { id: string; brand_name: string; vertical?: 'restaurant' | 'experience' | null; subdomain: string; plan: string } | null
     }>('/api/dashboard/context')
 
     if (ctx.restaurant) {
       siteId.value = ctx.restaurant.id
       siteName.value = ctx.restaurant.brand_name ?? 'Your Site'
+      siteVertical.value = ctx.restaurant.vertical === 'experience' ? 'experience' : 'restaurant'
       subdomain.value = ctx.restaurant.subdomain ?? ''
       plan.value = ctx.restaurant.plan ?? 'free'
     }

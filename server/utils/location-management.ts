@@ -30,6 +30,7 @@ export interface CreateLocationInput {
   hero_image_asset_id?: string | null;
   hero_video_asset_id?: string | null;
   notification_phone?: string | null;
+  timezone?: string | null;
   is_primary?: boolean;
 }
 
@@ -66,6 +67,7 @@ export interface LocationRecord {
   uber_eats_url?: string | null;
   foodpanda_url?: string | null;
   notification_phone?: string | null;
+  timezone?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -130,7 +132,23 @@ function serializeAddress(value: unknown) {
 function serializeOpeningHours(value: unknown) {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") {
-    if (!isPlainObject(value) && !Array.isArray(value)) return null;
+    // Google Places returns a bare weekdayDescriptions string[] — normalize to the
+    // same { weekdayDescriptions } shape consumers (dashboard hours editor, public
+    // site hours rendering) expect regardless of input source.
+    if (Array.isArray(value)) {
+      if (!value.every((item) => typeof item === "string")) {
+        throw new Error(
+          "opening_hours array must contain only strings (one per line, e.g. \"Monday: 9:00 AM – 5:00 PM\"). " +
+            "To pass structured hours, use { weekdayDescriptions: string[] } instead.",
+        );
+      }
+      return value.length ? JSON.stringify({ weekdayDescriptions: value }) : null;
+    }
+    if (!isPlainObject(value)) {
+      throw new Error(
+        "opening_hours must be a string, a string[], or an object like { weekdayDescriptions: string[] }.",
+      );
+    }
     return JSON.stringify(value);
   }
   const weekdayDescriptions = value
@@ -181,7 +199,7 @@ async function loadLocation(
            rating, review_count, description, short_description, status, is_primary,
            address, opening_hours, hero_image_asset_id, hero_video_asset_id, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-           notification_phone, created_at, updated_at
+           notification_phone, timezone, created_at, updated_at
     FROM business_locations
     WHERE id = ? AND organization_id = ? AND site_id = ?
     LIMIT 1
@@ -222,6 +240,16 @@ export async function createLocation(
         error:
           "review_count must be a whole number greater than or equal to 0.",
       },
+    };
+  }
+  if (
+    input.timezone !== undefined &&
+    input.timezone !== null &&
+    !Intl.supportedValuesOf("timeZone").includes(input.timezone)
+  ) {
+    return {
+      status: 400,
+      data: { error: "timezone must be a valid IANA time zone identifier." },
     };
   }
 
@@ -302,9 +330,9 @@ export async function createLocation(
             id, organization_id, site_id, title, slug, city, neighborhood, phone, email, website_url, maps_url,
             google_place_id, description, short_description, address, opening_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-            hero_image_asset_id, hero_video_asset_id, is_primary, status, created_at, updated_at
+            hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, is_primary, status, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
         `,
           )
           .bind(
@@ -335,6 +363,8 @@ export async function createLocation(
             normalizeOrderingUrl(input.foodpanda_url, "foodpanda_url"),
             input.hero_image_asset_id ?? null,
             input.hero_video_asset_id ?? null,
+            input.notification_phone ?? null,
+            input.timezone ?? null,
             isPrimary ? 1 : 0,
             now,
             now,
@@ -423,6 +453,16 @@ export async function updateLocation(
       },
     };
   }
+  if (
+    input.timezone !== undefined &&
+    input.timezone !== null &&
+    !Intl.supportedValuesOf("timeZone").includes(input.timezone)
+  ) {
+    return {
+      status: 400,
+      data: { error: "timezone must be a valid IANA time zone identifier." },
+    };
+  }
 
   try {
     await validateMediaAsset(
@@ -485,6 +525,7 @@ export async function updateLocation(
     "hero_image_asset_id",
     "hero_video_asset_id",
     "notification_phone",
+    "timezone",
     "status",
   ] as const;
 
@@ -500,8 +541,18 @@ export async function updateLocation(
     params.push(serializeAddress(input.address));
   }
   if (input.opening_hours !== undefined) {
-    sets.push("opening_hours = ?");
-    params.push(serializeOpeningHours(input.opening_hours));
+    try {
+      sets.push("opening_hours = ?");
+      params.push(serializeOpeningHours(input.opening_hours));
+    } catch (error) {
+      return {
+        status: 400,
+        data: {
+          error:
+            error instanceof Error ? error.message : "Invalid opening_hours.",
+        },
+      };
+    }
   }
   if (input.rating !== undefined) {
     sets.push("rating = ?");

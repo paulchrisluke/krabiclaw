@@ -54,8 +54,10 @@ export default defineEventHandler(async (event) => {
         city: details.city,
         phone: details.phone,
         mapsUrl: details.mapsUrl,
+        websiteUrl: details.websiteUrl,
         rating: details.rating,
         ratingCount: details.ratingCount,
+        openingHours: details.openingHours,
       },
     })
   } catch (err) {

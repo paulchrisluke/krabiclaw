@@ -1,5 +1,5 @@
 <template>
-  <section class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+  <AppSection padding="xl">
     <div class="mb-16 max-w-2xl">
       <p class="saya-kicker mb-6">Find us</p>
       <h2 class="saya-display-md text-default">
@@ -71,10 +71,12 @@
         </UButton>
       </div>
     </div>
-  </section>
+  </AppSection>
 </template>
 
 <script setup lang="ts">
+import AppSection from '~/components/ui/AppSection.vue'
+
 interface Props {
   data?: {
     locations?: Array<{

@@ -1018,8 +1018,8 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(site.vertical)},
   ${sqlValue(site.contentSource)},
   ${sqlValue(site.mediaSource)},
-  'media-ph-logo',
-  'media-ph-homepage-custom'
+  NULL,
+  NULL
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
@@ -1087,6 +1087,7 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
       'NULL',
       'NULL',
       sqlValue(location.notificationPhone ?? null),
+      sqlValue('Asia/Bangkok'),
     ].join(', ')})`)
     .join(',\n')
 
@@ -1109,7 +1110,8 @@ INSERT OR REPLACE INTO business_locations (
   instagram_url, facebook_url,
   is_primary, status,
   hero_image_asset_id, hero_video_asset_id,
-  notification_phone
+  notification_phone,
+  timezone
 ) VALUES
 ${locationRowsNoHero};
 
@@ -1124,7 +1126,7 @@ ${mediaRows};
 
 ${heroUpdates}
 
-UPDATE sites SET logo_asset_id = ${sqlValue(compiledPotteryHouseSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledPotteryHouseSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledPotteryHouseSeed.identity.siteId)};
+UPDATE sites SET logo_asset_id = ${sqlValue(compiledPotteryHouseSeed.site.logoAssetId ?? null)}, og_image_asset_id = 'media-ph-homepage-custom', primary_location_id = ${sqlValue(compiledPotteryHouseSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledPotteryHouseSeed.identity.siteId)};
 -- END GENERATED: pottery_media`
 }
 
@@ -1145,6 +1147,7 @@ export function renderCompiledPotteryHouseExperiencesBlock(): string {
       sqlValue(experience.durationMinutes),
       sqlValue(experience.maxCapacity),
       sqlJson(experience.timeSlots.length > 0 ? experience.timeSlots : null),
+      'NULL',
       sqlValue(experience.availableNote),
       sqlValue(experience.status),
       sqlValue(experience.sortOrder),
@@ -1161,7 +1164,7 @@ INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id,
    title, slug, tagline, body,
    image_asset_id, price, price_amount, duration_minutes, max_capacity,
-   time_slots, available_note,
+   time_slots, recurring_slots, available_note,
    status, sort_order, featured, featured_sort_order,
    seo_title, seo_description)
 VALUES

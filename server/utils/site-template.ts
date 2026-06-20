@@ -247,6 +247,21 @@ export async function seedNewSite(
       .bind(locationId, organizationId, siteId, name),
   );
 
+  // createLocation() in location-management.ts normally syncs this when a
+  // location becomes primary — this raw seed insert bypasses that helper, so
+  // it must be kept in sync here or sites.primary_location_id stays NULL.
+  statements.push(
+    db
+      .prepare(
+        `
+    UPDATE sites
+    SET primary_location_id = ?
+    WHERE id = ? AND organization_id = ? AND primary_location_id IS NULL
+  `,
+      )
+      .bind(locationId, siteId, organizationId),
+  );
+
   // ── Hero image ────────────────────────────────────────────────────────────
   statements.push(
     db

@@ -41,18 +41,66 @@ export default defineEventHandler(async (event) => {
   const siteId = site.id as string
   const organizationId = organization?.id as string
 
-  const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
-  if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 503 })
-
-  const body = await readBody(event) as { mapsUrl?: unknown; placeId?: unknown; query?: unknown; previewOnly?: unknown }
+  const body = await readBody(event) as {
+    mapsUrl?: unknown
+    placeId?: unknown
+    query?: unknown
+    previewOnly?: unknown
+    name?: unknown
+    details?: Record<string, unknown> | null
+  }
   const mapsUrl = typeof body?.mapsUrl === 'string' ? body.mapsUrl.trim() : ''
   const placeId = typeof body?.placeId === 'string' ? body.placeId.trim() : ''
   const query = typeof body?.query === 'string' ? body.query.trim() : ''
+  const name = typeof body?.name === 'string' ? body.name.trim() : ''
   const previewOnly = body?.previewOnly === true
+  const details = body.details && typeof body.details === 'object' ? body.details : null
 
-  if (!mapsUrl && !placeId && !query) {
-    return jsonResponse({ error: 'mapsUrl, placeId, or query is required' }, { status: 400 })
+  if (!mapsUrl && !placeId && !query && !name) {
+    return jsonResponse({ error: 'mapsUrl, placeId, query, or name is required' }, { status: 400 })
   }
+
+  // Manual path: business name only, no Google Places lookup required.
+  if (name && !mapsUrl && !placeId && !query) {
+    const baseSlug = slugify(name).slice(0, 50)
+    const slug = await uniqueLocationSlug(db, siteId, baseSlug)
+
+    const result = await createLocation(
+      env as SetupEnv,
+      db,
+      organizationId,
+      siteId,
+      {
+        title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name,
+        slug,
+        city: typeof details?.city === 'string' && details.city.trim() ? details.city.trim() : null,
+        address: typeof details?.address === 'string' && details.address.trim() ? details.address.trim() : null,
+        phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : null,
+        website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : null,
+        opening_hours: typeof details?.openingHours === 'string' && details.openingHours.trim() ? details.openingHours.trim() : null,
+        notification_phone: typeof details?.notificationPhone === 'string' && details.notificationPhone.trim() ? details.notificationPhone.trim() : null,
+        timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null,
+        is_primary: typeof details?.isPrimary === 'boolean' ? details.isPrimary : false,
+      },
+      session.user.id,
+    )
+
+    if (result.status !== 200 && result.status !== 201) {
+      return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
+    }
+
+    const orgRow = await db.prepare('SELECT slug FROM organization WHERE id = ? LIMIT 1')
+      .bind(organizationId).first<{ slug: string }>()
+
+    if (!orgRow) {
+      return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+    }
+
+    return jsonResponse({ success: true, locationSlug: slug, orgSlug: orgRow.slug })
+  }
+
+  const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
+  if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 503 })
 
   let place
   try {
@@ -84,8 +132,10 @@ export default defineEventHandler(async (event) => {
         city: place.city,
         phone: place.phone,
         mapsUrl: place.mapsUrl,
+        websiteUrl: place.websiteUrl,
         rating: place.rating,
         ratingCount: place.ratingCount,
+        openingHours: place.openingHours,
       },
     })
   }
@@ -99,17 +149,34 @@ export default defineEventHandler(async (event) => {
     organizationId,
     siteId,
     {
-      title: place.name,
+      title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : place.name,
       slug,
-      phone: place.phone ?? null,
-      city: place.city ?? null,
+      phone: typeof details?.phone === 'string' && details.phone.trim()
+        ? details.phone.trim()
+        : place.phone ?? null,
+      city: typeof details?.city === 'string' && details.city.trim()
+        ? details.city.trim()
+        : place.city ?? null,
       maps_url: place.mapsUrl ?? null,
       google_place_id: place.placeId,
-      website_url: place.websiteUrl ?? null,
-      opening_hours: place.openingHours ?? null,
+      website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim()
+        ? details.websiteUrl.trim()
+        : place.websiteUrl ?? null,
+      address: typeof details?.address === 'string' && details.address.trim()
+        ? details.address.trim()
+        : null,
+      opening_hours: typeof details?.openingHours === 'string' && details.openingHours.trim()
+        ? details.openingHours.trim()
+        : place.openingHours ?? null,
       rating: place.rating ?? null,
       review_count: place.ratingCount ?? null,
-      is_primary: false,
+      notification_phone: typeof details?.notificationPhone === 'string' && details.notificationPhone.trim()
+        ? details.notificationPhone.trim()
+        : null,
+      timezone: typeof details?.timezone === 'string' && details.timezone.trim()
+        ? details.timezone.trim()
+        : null,
+      is_primary: typeof details?.isPrimary === 'boolean' ? details.isPrimary : false,
     },
     session.user.id,
   )
@@ -146,9 +213,14 @@ export default defineEventHandler(async (event) => {
   const orgRow = await db.prepare('SELECT slug FROM organization WHERE id = ? LIMIT 1')
     .bind(organizationId).first<{ slug: string }>()
 
+  if (!orgRow) {
+    return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+  }
+
   return jsonResponse({
     success: true,
+    siteId,
     locationSlug: slug,
-    orgSlug: orgRow?.slug ?? null,
+    orgSlug: orgRow.slug,
   })
 })

@@ -210,8 +210,12 @@ async function handleCheckoutCompleted(
     const customerId = session.customer as string
     const subscriptionId = checkoutSubscriptionId(session)
     const expanded = expandedSub(session)
-    await applySiteSubscription(env, db, resolvedSiteId, organizationId, customerId, subscriptionId, expanded?.items?.data?.[0]?.id ?? null, plan, expanded?.billing_cycle_anchor ? new Date(expanded.billing_cycle_anchor * 1000).toISOString() : null)
+    // Reparent the site to the recipient org first — setSiteEntitlementsFromPlan's
+    // `UPDATE sites SET plan ... WHERE organization_id = ?` only matches once
+    // the site actually belongs to that org, otherwise it silently no-ops and
+    // sites.plan (read by the transfer onboarding wizard) never updates.
     await completePaidSiteTransfer(env, db, transferId)
+    await applySiteSubscription(env, db, resolvedSiteId, organizationId, customerId, subscriptionId, expanded?.items?.data?.[0]?.id ?? null, plan, expanded?.billing_cycle_anchor ? new Date(expanded.billing_cycle_anchor * 1000).toISOString() : null)
     return
   }
 

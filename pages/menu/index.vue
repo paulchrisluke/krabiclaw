@@ -212,7 +212,12 @@ const formatMenuPrice = (amount: unknown, emptyLabel = 'TBD') =>
 useSeoMeta({
   title: () => `Menu · ${restaurantName.value}`,
   description: () => `Full menu at ${restaurantName.value}.`,
-  ogImage: useSharedOgImage(),
+  ogTitle: () => `Menu · ${restaurantName.value}`,
+  ogDescription: () => `Full menu at ${restaurantName.value}.`,
+  ogSiteName: () => restaurantName.value,
+  twitterTitle: () => `Menu · ${restaurantName.value}`,
+  twitterDescription: () => `Full menu at ${restaurantName.value}.`,
+  ogImage: useTenantOgImage(),
   ogUrl: useSeoUrl('/menu')
 })
 </script>

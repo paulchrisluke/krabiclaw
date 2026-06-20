@@ -43,7 +43,7 @@
           <h2 class="text-sm font-semibold text-highlighted">Locations</h2>
           <UButton
             icon="i-lucide-plus"
-            label="New workspace"
+            label="Add location"
             size="sm"
             color="primary"
             variant="soft"
@@ -148,7 +148,14 @@ const { data, pending } = await useAsyncData(
   async () => {
     await dashboardState.refresh()
     return $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[] }>('/api/dashboard/home')
-  }
+  },
+  // Reuse the SSR payload on first hydration (avoids a redundant duplicate fetch
+  // on initial load), but force a fresh fetch on every subsequent client-side
+  // navigation back to this page — otherwise this overview keeps showing
+  // "No locations yet" after a location was added elsewhere in the same SPA
+  // session (e.g. via the add-location wizard), since the key doesn't change
+  // between visits and Nuxt would otherwise reuse the stale cached result.
+  { getCachedData: (key, nuxtApp) => nuxtApp.isHydrating ? nuxtApp.payload.data[key] : undefined }
 )
 
 const locations = computed(() => data.value?.locations ?? [])

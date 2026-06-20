@@ -188,8 +188,14 @@ const { getField } = usePageContent('reservations')
 const { site, siteId } = useTenantSite()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-useBootstrap()
+const { hasExperiences } = useBootstrap()
 const { formatDate } = useLocaleDate()
+
+// Sites with experiences book per-experience on /experiences/[slug]; this generic
+// table-reservation form doesn't apply and is no longer linked from nav.
+if (hasExperiences.value) {
+  await navigateTo('/experiences', { replace: true, redirectCode: 302 })
+}
 
 // ── Calendar ──────────────────────────────────────────────────────────────
 // selectedDate is untyped to bridge the two moduleResolution instances of
@@ -292,7 +298,6 @@ const cancelUrl = computed(() => {
 })
 
 // ── SEO ───────────────────────────────────────────────────────────────────
-const sharedOgImage = useSharedOgImage()
 const currentPageUrl = useSeoUrl('/reservations')
 const requestUrl = useRequestURL()
 
@@ -302,10 +307,17 @@ useBreadcrumbSchema([
 ])
 
 const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Restaurant')
+const seoTitle = computed(() => `${brandName.value} | ${resCopy.value.reserveCta}`)
+const seoDescription = computed(() => resCopy.value.seoReservationDescription(brandName.value))
 useSeoMeta({
-  title: computed(() => `${brandName.value} | ${resCopy.value.reserveCta}`),
-  description: computed(() => resCopy.value.seoReservationDescription(brandName.value)),
-  ogImage: sharedOgImage,
+  title: seoTitle,
+  description: seoDescription,
+  ogTitle: seoTitle,
+  ogDescription: seoDescription,
+  ogSiteName: computed(() => brandName.value),
+  twitterTitle: seoTitle,
+  twitterDescription: seoDescription,
+  ogImage: useTenantOgImage(),
   ogUrl: currentPageUrl,
   ogType: 'website'
 })

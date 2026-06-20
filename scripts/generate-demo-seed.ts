@@ -78,22 +78,20 @@ PRAGMA foreign_keys = ON;
 INSERT OR IGNORE INTO themes (id, name, slug, version, description, status)
 VALUES ('saya-theme-v1', 'Saya', 'saya', '1.0.0', 'Restaurant website theme', 'active');
 
--- Cleanly replace the protected demo tenant. Cascades remove demo site content,
--- locations, media, menus, reviews, posts, translations, bookings, billing,
--- credits, ChowBot state, domains, and other demo-owned child rows.
-DELETE FROM organization WHERE id IN ('org-demo', 'org_demo');
-DELETE FROM user WHERE id IN ('user-demo', 'user_demo', 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re');
+-- Cleanly replace the protected demo tenant and MCP fixture orgs.
+-- Every org-scoped table declares ON DELETE CASCADE back to organization(id),
+-- and D1 honors that cascade within a single wrangler d1 execute --file run
+-- (verified: deleting organization cascades through sites -> experiences ->
+-- experience_bookings without a constraint error). So deleting the org row
+-- is sufficient; there is no need to hand-maintain a child-table delete list
+-- that has to be kept in sync with every new table added to the schema.
+DELETE FROM organization WHERE id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
 
--- Guard against legacy demo scripts that may have claimed the demo domains.
+-- Delete users (after member rows are deleted)
+DELETE FROM user WHERE id IN ('user-demo', 'user_demo', 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re', 'user-mcp-free', 'user-mcp-growth', 'user-mcp-managed');
+
+-- Guard against legacy demo scripts that may have claimed the demo domains
 DELETE FROM site_domains WHERE domain IN ('demo.localhost', 'demo.krabiclaw.com');
--- Explicit child-row cleanup before deleting MCP fixture orgs.
--- D1 does not reliably cascade foreign key deletes when PRAGMA foreign_keys is
--- set at the session level via wrangler d1 execute --file, so orphaned sites
--- from a previous CI run would cause resolveCreationOrganization to create a
--- brand-new org (with no entitlements) instead of reusing the fixture org.
-DELETE FROM sites WHERE organization_id IN ('org-mcp-free', 'org-mcp-growth', 'org-mcp-managed');
-DELETE FROM organization WHERE id IN ('org-mcp-free', 'org-mcp-growth', 'org-mcp-managed');
-DELETE FROM user WHERE id IN ('user-mcp-free', 'user-mcp-growth', 'user-mcp-managed');
 
 -- Users
 INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)

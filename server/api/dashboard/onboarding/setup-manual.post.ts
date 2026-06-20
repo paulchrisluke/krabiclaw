@@ -4,6 +4,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
+import { updateLocation } from '~/server/utils/location-management'
 
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
 
@@ -20,9 +21,10 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const body = await readBody(event) as { name?: unknown; vertical?: unknown }
+  const body = await readBody(event) as { name?: unknown; vertical?: unknown; details?: Record<string, unknown> | null }
   const name = typeof body?.name === 'string' ? body.name.trim() : ''
   if (!name) return jsonResponse({ error: 'name is required' }, { status: 400 })
+  const details = body.details && typeof body.details === 'object' ? body.details : null
 
   const vertical = typeof body?.vertical === 'string' && VALID_VERTICALS.includes(body.vertical as never)
     ? (body.vertical as 'restaurant' | 'experience')
@@ -47,6 +49,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const organizationId = result.data.organizationId as string
+  const siteId = result.data.siteId as string | undefined
   const orgRow = await db.prepare(`SELECT slug FROM organization WHERE id = ? LIMIT 1`)
     .bind(organizationId).first<{ slug: string }>()
 
@@ -54,5 +57,31 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Organization not found after site creation. Data integrity issue.' }, { status: 500 })
   }
 
-  return jsonResponse({ success: true, orgSlug: orgRow.slug })
+  const locationRow = siteId
+    ? await db.prepare(`
+      SELECT id, slug FROM business_locations
+      WHERE site_id = ? AND organization_id = ? AND status = 'active'
+      ORDER BY is_primary DESC, created_at ASC
+      LIMIT 1
+    `).bind(siteId, organizationId).first<{ id: string; slug: string | null }>()
+    : null
+
+  if (siteId) {
+    if (locationRow?.id) {
+      await updateLocation(db, organizationId, siteId, locationRow.id, {
+        title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name,
+        city: typeof details?.city === 'string' && details.city.trim() ? details.city.trim() : undefined,
+        address: typeof details?.address === 'string' && details.address.trim() ? details.address.trim() : undefined,
+        phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : undefined,
+        website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : undefined,
+        opening_hours: typeof details?.openingHours === 'string' && details.openingHours.trim() ? details.openingHours.trim() : undefined,
+        notification_phone: typeof details?.notificationPhone === 'string' && details.notificationPhone.trim() ? details.notificationPhone.trim() : undefined,
+        timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : undefined,
+        is_primary: typeof details?.isPrimary === 'boolean' ? details.isPrimary : undefined,
+        status: 'active',
+      }, session.user.id)
+    }
+  }
+
+  return jsonResponse({ success: true, orgSlug: orgRow.slug, siteId, locationSlug: locationRow?.slug ?? null })
 })

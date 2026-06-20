@@ -136,7 +136,8 @@
             <div class="lg:col-span-3">
               <p class="font-medium text-highlighted">{{ review.author }}</p>
               <time v-if="reviewDateTime(review)" :datetime="reviewDateTime(review)" class="mt-1 block text-sm text-muted">
-                {{ reviewDateLabel(review) }}
+                <template v-if="review.date">{{ review.date }}</template>
+                <NuxtTime v-else-if="review.createdAt" :datetime="review.createdAt" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
               </time>
             </div>
             <div class="mt-4 lg:col-span-9 lg:mt-0">
@@ -286,7 +287,8 @@ import { formatMoneyAmount } from '~/shared/money'
 
 const { resolveMedia } = useMedia()
 const route = useRoute()
-const { siteId } = useTenantSite()
+const { siteId, site } = useTenantSite()
+const siteName = computed(() => site?.brand_name || 'KrabiClaw')
 const config = useRuntimeConfig()
 const turnstileEnabled = computed(() => config.public.turnstileEnabled === true)
 const turnstileSiteKey = computed(() => config.public.turnstileSiteKey)
@@ -463,16 +465,6 @@ const reviewSummary = computed(() => {
 
 const reviewDateTime = (review: Review) => review.datetime ?? review.createdAt ?? ''
 
-const reviewDateLabel = (review: Review) => {
-  if (review.date) return review.date
-  if (!review.createdAt) return ''
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  }).format(new Date(review.createdAt))
-}
-
 const schemaImage = computed(() =>
   mainMedia.value.url ?? undefined
 )
@@ -581,17 +573,21 @@ watch(() => item.value?.slug, async () => {
 })
 
 // SEO Meta
+const seoTitle = () => item.value ? `${item.value.name} | Menu | ${siteName.value}` : `Menu Item Not Found | ${siteName.value}`
+const seoDescription = () => truncateForSeo(item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.', 160)
+
 useSeoMeta({
-  title: () => item.value ? `${item.value.name} | Menu | Saya Kitchen` : 'Menu Item Not Found | Saya Kitchen',
-  description: () => item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.',
-  ogTitle: () => item.value ? `${item.value.name} | Menu | Saya Kitchen` : 'Menu Item Not Found',
-  ogDescription: () => item.value ? item.value.description : 'Menu item not found',
+  title: seoTitle,
+  description: seoDescription,
+  ogTitle: seoTitle,
+  ogDescription: seoDescription,
+  ogSiteName: () => siteName.value,
   ogImage,
   ogUrl: currentPageUrl,
   ogType: 'website',
   twitterCard: 'summary_large_image',
-  twitterTitle: () => item.value ? item.value.name : 'Menu Item Not Found',
-  twitterDescription: () => item.value ? item.value.description : 'Menu item not found',
+  twitterTitle: seoTitle,
+  twitterDescription: seoDescription,
   twitterImage: ogImage
 })
 

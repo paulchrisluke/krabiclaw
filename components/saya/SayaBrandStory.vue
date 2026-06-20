@@ -1,6 +1,5 @@
 <template>
-  <section class="bg-inverted text-inverted">
-    <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+  <AppSection bg="black" padding="xl">
 
       <!-- Filled state -->
       <template v-if="headline || body">
@@ -46,11 +45,12 @@
           Add your story in the dashboard →
         </NuxtLink>
       </template>
-    </div>
-  </section>
+  </AppSection>
 </template>
 
 <script setup lang="ts">
+import AppSection from '~/components/ui/AppSection.vue'
+
 interface Props {
   data?: {
     headline?: string

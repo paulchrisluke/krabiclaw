@@ -505,8 +505,8 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(site.vertical)},
   ${sqlValue(site.contentSource)},
   ${sqlValue(site.mediaSource)},
-  'media-kiku-logo',
-  'media-kiku-about'
+  NULL,
+  NULL
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
@@ -575,6 +575,7 @@ export function renderKikuzukiMediaBlock(): string {
       sqlValue(location.status),
       'NULL',
       'NULL',
+      sqlValue('Asia/Bangkok'),
     ].join(', ')})`)
     .join(',\n')
 
@@ -596,7 +597,8 @@ INSERT OR REPLACE INTO business_locations (
   price_level, categories,
   instagram_url, facebook_url,
   is_primary, status,
-  hero_image_asset_id, hero_video_asset_id
+  hero_image_asset_id, hero_video_asset_id,
+  timezone
 ) VALUES
 ${locationRowsNoHero};
 
@@ -610,7 +612,7 @@ ${mediaRows};
 
 ${heroUpdates}
 
-UPDATE sites SET logo_asset_id = ${sqlValue(compiledKikuzukiSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledKikuzukiSeed.site.primaryLocationId)} WHERE id = ${sqlValue(identity.siteId)};
+UPDATE sites SET logo_asset_id = ${sqlValue(compiledKikuzukiSeed.site.logoAssetId ?? null)}, og_image_asset_id = 'media-kiku-about', primary_location_id = ${sqlValue(compiledKikuzukiSeed.site.primaryLocationId)} WHERE id = ${sqlValue(identity.siteId)};
 -- END GENERATED: kikuzuki_media`
 }
 
@@ -713,6 +715,7 @@ export function renderKikuzukiExperienceBlock(): string {
       sqlValue(experience.durationMinutes),
       sqlValue(experience.maxCapacity),
       sqlJson(experience.timeSlots.length > 0 ? experience.timeSlots : null),
+      'NULL',
       sqlValue(experience.availableNote),
       sqlValue(experience.status),
       sqlValue(experience.sortOrder),
@@ -728,7 +731,7 @@ INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id,
    title, slug, tagline, body,
    image_asset_id, price, price_amount, duration_minutes, max_capacity,
-   time_slots, available_note,
+   time_slots, recurring_slots, available_note,
    status, sort_order, featured, featured_sort_order,
    seo_title, seo_description)
 VALUES
