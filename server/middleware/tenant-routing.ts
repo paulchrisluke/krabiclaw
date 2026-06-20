@@ -43,32 +43,13 @@ export default defineEventHandler(async (event) => {
           event.context.canonicalDomain &&
           !event.context.canonicalDomain.endsWith(`.${freeDomain}`);
 
-        // Derive protocol from x-forwarded-proto, socket, or default to https.
-        // Cloudflare for SaaS custom hostnames have no edge-level "Always Use
-        // HTTPS" enforcement (that zone setting only covers krabiclaw.com's own
-        // hostnames), so the Worker must force the upgrade itself.
-        let protocol = "https";
-        const xfProto = event.node.req.headers["x-forwarded-proto"];
-        if (typeof xfProto === "string") {
-          const proto = xfProto?.split(",")[0]?.trim()?.toLowerCase();
-          protocol = proto === "http" || proto === "https" ? proto : "https";
-        } else if (event.node.req.socket && 'encrypted' in event.node.req.socket && (event.node.req.socket as { encrypted?: boolean }).encrypted)
-          protocol = "https";
-        else if (event.node.req.socket) protocol = "http";
-        // Optionally allow override via env/config (validate)
-        if (env.DEFAULT_PROTOCOL) {
-          const envProto = env.DEFAULT_PROTOCOL.toLowerCase();
-          protocol =
-            envProto === "http" || envProto === "https" ? envProto : protocol;
-        }
-
         const hostMismatch =
           canonicalIsCustom &&
           event.context.tenantHost &&
           event.context.tenantHost !== event.context.canonicalDomain;
 
         if (
-          (hostMismatch || protocol === "http") &&
+          hostMismatch &&
           event.context.canonicalDomain &&
           !pathname.startsWith("/api/")
         ) {
