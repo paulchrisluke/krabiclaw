@@ -2086,10 +2086,25 @@ async function executeTool(
       const { createExperience } = await import("~/server/utils/experiences");
       const title = toSqlText(input.title);
       if (!title) return { error: "title is required" };
-      const locationId = toSqlText(input.location_id)
-        ?? (await db.prepare(`SELECT primary_location_id FROM sites WHERE id = ?`).bind(siteId).first<{ primary_location_id: string | null }>())?.primary_location_id
-        ?? (await db.prepare(`SELECT id FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`).bind(siteId).first<{ id: string }>())?.id
-        ?? null;
+      const explicitLocationId = toSqlText(input.location_id);
+      let locationId = explicitLocationId;
+      if (explicitLocationId) {
+        const location = await db
+          .prepare(
+            `
+            SELECT 1 FROM business_locations
+            WHERE id = ? AND organization_id = ? AND site_id = ?
+            LIMIT 1
+          `,
+          )
+          .bind(explicitLocationId, orgId, siteId)
+          .first();
+        if (!location) return { error: "Location not found or access denied" };
+      } else {
+        locationId = (await db.prepare(`SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ?`).bind(siteId, orgId).first<{ primary_location_id: string | null }>())?.primary_location_id
+          ?? (await db.prepare(`SELECT id FROM business_locations WHERE site_id = ? AND organization_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`).bind(siteId, orgId).first<{ id: string }>())?.id
+          ?? null;
+      }
       if (!locationId) return { error: "location_id is required" };
       const slots = Array.isArray(input.time_slots)
         ? input.time_slots.map(String)

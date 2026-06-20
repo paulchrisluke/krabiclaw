@@ -51,10 +51,10 @@ export default defineEventHandler(async (event) => {
 
   const rating = body.rating === undefined || body.rating === null || String(body.rating).trim() === ''
     ? undefined
-    : Number(body.rating)
+    : (() => { const n = Number(body.rating); return Number.isFinite(n) ? n : undefined })()
   const reviewCount = body.review_count === undefined || body.review_count === null || String(body.review_count).trim() === ''
     ? undefined
-    : Number(body.review_count)
+    : (() => { const n = Number(body.review_count); return Number.isFinite(n) ? n : undefined })()
 
   const result = await updateLocation(
     db,

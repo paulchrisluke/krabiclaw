@@ -2618,6 +2618,9 @@ export async function executeMcpToolCall(
         throw mcpProtocolError(MCP_ERROR.invalidParams, "Experience not found.");
       }
       const startDate = requiredString(args, "date");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "Date must be YYYY-MM-DD format");
+      }
       const daysRaw = (args as Record<string, unknown>).days;
       const days = Math.min(Math.max(typeof daysRaw === "number" ? daysRaw : 1, 1), 31);
       const cursor = new Date(`${startDate}T00:00:00Z`);

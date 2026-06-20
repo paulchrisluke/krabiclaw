@@ -145,7 +145,7 @@ useSeoMeta({
   ogSiteName: () => siteName.value,
   twitterTitle: () => `Locations · ${siteName.value}`,
   twitterDescription: 'Find all our restaurant locations.',
-  ogImage: useSharedOgImage(),
+  ogImage: useTenantOgImage(),
   ogUrl: useSeoUrl('/locations')
 })
 </script>

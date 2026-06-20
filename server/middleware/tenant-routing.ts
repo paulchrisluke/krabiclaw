@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
         if (typeof xfProto === "string") {
           const proto = xfProto?.split(",")[0]?.trim()?.toLowerCase();
           protocol = proto === "http" || proto === "https" ? proto : "https";
-        } else if ((event.node.req.socket as ApiValue)?.encrypted)
+        } else if (event.node.req.socket && 'encrypted' in event.node.req.socket && (event.node.req.socket as { encrypted?: boolean }).encrypted)
           protocol = "https";
         else if (event.node.req.socket) protocol = "http";
         // Optionally allow override via env/config (validate)

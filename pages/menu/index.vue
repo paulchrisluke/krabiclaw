@@ -217,7 +217,7 @@ useSeoMeta({
   ogSiteName: () => restaurantName.value,
   twitterTitle: () => `Menu · ${restaurantName.value}`,
   twitterDescription: () => `Full menu at ${restaurantName.value}.`,
-  ogImage: useSharedOgImage(),
+  ogImage: useTenantOgImage(),
   ogUrl: useSeoUrl('/menu')
 })
 </script>

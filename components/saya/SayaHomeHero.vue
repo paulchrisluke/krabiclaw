@@ -40,7 +40,7 @@
     <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
 
     <!-- Content -->
-    <AppSection bg="black" class="relative z-10 py-36">
+    <AppSection bg="black" padding="none" class="relative z-10 py-36">
       <p v-if="hero.eyebrow || businessCity" class="saya-eyebrow mb-8 text-white/70">
         {{ hero.eyebrow || businessCity }}
       </p>

@@ -516,9 +516,21 @@ const form = reactive({
   guest_email: '',
   guest_phone: '',
   party_size: '1',
-  booking_date: minDate.value,
+  booking_date: '',
   time_slot: '',
   notes: '',
+})
+
+// Sync booking_date with minDate to prevent stale dates across midnight
+watch(minDate, (newDate) => {
+  if (!form.booking_date) {
+    form.booking_date = newDate
+  }
+})
+onMounted(() => {
+  if (!form.booking_date) {
+    form.booking_date = minDate.value
+  }
 })
 
 interface SlotAvailabilityItem {

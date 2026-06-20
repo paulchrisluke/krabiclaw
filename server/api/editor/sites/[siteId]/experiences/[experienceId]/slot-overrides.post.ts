@@ -38,6 +38,11 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'status must be "closed" or "open"' }, { status: 400 })
   }
 
+  const capacityOverride = body.capacity_override == null || body.capacity_override === '' ? null : Number(body.capacity_override)
+  if (capacityOverride !== null && !Number.isFinite(capacityOverride)) {
+    return jsonResponse({ error: 'capacity_override must be a valid number' }, { status: 400 })
+  }
+
   const effectiveSlots = resolveEffectiveTimeSlots(experience, overrideDate)
   if (!effectiveSlots.includes(timeSlot)) {
     return jsonResponse({ error: 'time_slot is not an effective slot for that date' }, { status: 400 })
@@ -52,7 +57,7 @@ export default defineEventHandler(async (event) => {
       override_date: overrideDate,
       time_slot: timeSlot,
       status,
-      capacity_override: body.capacity_override == null || body.capacity_override === '' ? null : Number(body.capacity_override),
+      capacity_override: capacityOverride,
       note: body.note ? String(body.note).trim() : null,
     },
     session.user.id,

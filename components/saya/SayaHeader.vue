@@ -152,6 +152,7 @@ interface I18nComposable {
 
 
 import { getVerticalCopy } from '~/utils/vertical-copy'
+import { DEFAULT_BUSINESS_NAME } from '~/config/constants'
 
 const { site } = useTenantSite()
 const { locale } = useI18n()
@@ -179,7 +180,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', syncHeaderHeight)
 })
 
-const restaurantName = computed(() => (site as Site | null)?.brand_name || 'KrabiClaw')
+const restaurantName = computed(() => (site as Site | null)?.brand_name || DEFAULT_BUSINESS_NAME)
 const logoUrl = computed(() => (site as Site | null)?.logo_url || null)
 
 useUpgradeModal()

@@ -26,6 +26,10 @@
     {
       "key": "source_locale",
       "value": "en"
+    },
+    {
+      "key": "brand_color",
+      "value": "#1E40AF"
     }
   ],
   "siteLocales": [
@@ -791,6 +795,7 @@
       "body": "Our flagship pizza making class brings guests right up to the bench and oven. You will learn how we stretch our dough, build a balanced pie, and work with high-heat live fire without feeling rushed.\n\nEach booking includes dough, toppings, one personal pizza, and a glass of house wine or sparkling lemonade. Great for couples, visitors, and anyone who wants a hands-on dinner plan in Brooklyn.",
       "imageAssetId": "media-demo-exp-class",
       "price": "$95 per guest",
+      "priceAmount": 95,
       "durationMinutes": 120,
       "maxCapacity": 10,
       "timeSlots": [
@@ -816,6 +821,7 @@
       "body": "This evening is part tasting, part dinner party. We pair a rotating lineup of natural wines with off-menu pies, seasonal antipasti, and a little background on why each pairing works.\n\nBest for date nights, visiting friends, and anyone who wants the room at its loudest and warmest. Seats are shared at the table, and the menu changes with the week.",
       "imageAssetId": "media-demo-exp-wine",
       "price": "$78 per guest",
+      "priceAmount": 78,
       "durationMinutes": 150,
       "maxCapacity": 16,
       "timeSlots": [
@@ -840,6 +846,7 @@
       "body": "Family Pizza Night is our easiest way to turn a Sunday dinner into something a little more memorable. Kids shape mini pies, grown-ups share large-format pizzas and salads, and the kitchen keeps the pacing relaxed.\n\nIdeal for families, birthday dinners, and mixed-age groups who want an experience that feels special without feeling formal.",
       "imageAssetId": "media-demo-exp-family",
       "price": "$140 per table",
+      "priceAmount": 140,
       "durationMinutes": 105,
       "maxCapacity": 6,
       "timeSlots": [
