@@ -395,35 +395,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_site_content_site_level_unique
   ON site_content(organization_id, site_id, page, field)
   WHERE location_id IS NULL;
 
-CREATE TABLE IF NOT EXISTS site_content_drafts (
-  id TEXT PRIMARY KEY,
-  organization_id TEXT NOT NULL,
-  site_id TEXT NOT NULL,
-  location_id TEXT,
-  page TEXT NOT NULL,
-  field TEXT NOT NULL,
-  content TEXT,
-  hero_title TEXT,
-  hero_subtitle TEXT,
-  hero_image_asset_id TEXT,
-  hero_video_asset_id TEXT,
-  value TEXT,
-  type TEXT NOT NULL DEFAULT 'text',
-  source TEXT NOT NULL DEFAULT 'manual',
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_by TEXT,
-  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
-  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
-  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE,
-  FOREIGN KEY (hero_image_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL,
-  FOREIGN KEY (hero_video_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL,
-  UNIQUE(organization_id, site_id, location_id, page, field)
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_site_content_drafts_site_level_unique
-  ON site_content_drafts(organization_id, site_id, page, field)
-  WHERE location_id IS NULL;
-
 
 CREATE TABLE IF NOT EXISTS site_locales (
   id TEXT PRIMARY KEY,

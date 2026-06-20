@@ -4,9 +4,6 @@
 -- Add component field to site_content table
 ALTER TABLE site_content ADD COLUMN component TEXT;
 
--- Add component field to site_content_drafts table
-ALTER TABLE site_content_drafts ADD COLUMN component TEXT;
-
 -- Add component field to site_content_translations table
 ALTER TABLE site_content_translations ADD COLUMN component TEXT;
 

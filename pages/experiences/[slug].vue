@@ -523,12 +523,12 @@ const form = reactive({
 
 // Sync booking_date with minDate to prevent stale dates across midnight
 watch(minDate, (newDate) => {
-  if (!form.booking_date) {
+  if (!form.booking_date && newDate) {
     form.booking_date = newDate
   }
 })
 onMounted(() => {
-  if (!form.booking_date) {
+  if (!form.booking_date && minDate.value) {
     form.booking_date = minDate.value
   }
 })
