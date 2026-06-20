@@ -13,6 +13,11 @@ SET location_id = COALESCE(
 )
 WHERE location_id IS NULL;
 
+-- Anything still NULL belongs to a site with zero business_locations (orphaned
+-- test/preview data) — there is no valid location to assign, so it cannot be
+-- carried forward into a NOT NULL column.
+DELETE FROM reservation_submissions WHERE location_id IS NULL;
+
 CREATE TABLE reservation_submissions_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
