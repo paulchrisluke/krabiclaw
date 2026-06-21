@@ -1379,7 +1379,7 @@ export async function executeMcpToolCall(
       userId: site.userId,
       organizationId: workspace.site?.organization_id ?? site.organizationId,
       siteId: workspace.site?.id ?? site.siteId,
-      locationId: explicitLocationId ? (workspace.location?.id ?? null) : (workspace.location?.id ?? null),
+      locationId: workspace.location?.id ?? null,
     });
   }
 

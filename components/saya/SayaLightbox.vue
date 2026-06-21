@@ -3,7 +3,7 @@
     <template #content>
       <div class="relative h-dvh w-full bg-black text-white">
         <!-- Header -->
-        <div class="absolute inset-x-0 top-0 z-30 flex items-center gap-3 px-4 pt-4 pb-4 bg-linear-to-b from-black/70 to-transparent">
+        <div class="absolute inset-x-0 top-0 z-30 flex items-center gap-3 px-4 pt-4 pb-4 bg-gradient-to-b from-black/70 to-transparent">
           <button
             class="flex size-10 items-center justify-center rounded-full bg-black/30 backdrop-blur-md"
             aria-label="Close"
@@ -47,7 +47,7 @@
             >
 
             <!-- Bottom caption gradient -->
-            <div class="absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/90 via-black/55 to-transparent px-5 pb-8 pt-40">
+            <div class="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-5 pb-8 pt-40">
               <slot name="caption" :item="item" :index="i">
                 <p v-if="item.description" class="text-lg leading-snug">{{ item.description }}</p>
               </slot>

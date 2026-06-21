@@ -458,13 +458,23 @@ Common workflows: update menus and items, create and publish posts, triage conta
 
       const result = await executeMcpToolCall(event, toolName, rawArgs);
 
+      const isRender = isMcpRenderResponse(result);
+      const structuredContent = isRender ? result.structuredContent : result;
+      const modelText = isRender && result.fallbackText
+        ? result.fallbackText
+        : JSON.stringify(structuredContent, null, 2);
+
       // After any mutating tool call, purge KV HTML cache for the site so the
       // next browser load gets fresh SSR HTML with the correct /_nuxt/ asset hashes.
       // Fire-and-forget — never block the MCP response on cache ops.
       const mutatedTool = MCP_TOOLS.find((t) => t.name === toolName);
       const isReadOnly = mutatedTool?.annotations?.readOnlyHint !== false;
       if (!isReadOnly) {
-        const siteId = typeof rawArgs.site_id === "string" ? rawArgs.site_id.trim() : null;
+        const ctxSiteId = structuredContent && typeof structuredContent === 'object' && 'context' in structuredContent
+          ? (structuredContent.context as Record<string, unknown>)?.site_id
+          : null;
+        const rawSiteId = ctxSiteId ?? rawArgs.site_id;
+        const siteId = typeof rawSiteId === "string" ? rawSiteId.trim() : null;
         if (siteId) {
           const env = cloudflareEnv(event);
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -493,7 +503,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
             // Use Cloudflare's waitUntil when available so the purge
             // can outlive the response; fall back to a detached promise.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const ctx = (event.context.cloudflare as any)?.context as { waitUntil?: (p: Promise<unknown>) => void } | undefined
+            const ctx = (event.context.cloudflare as any)?.context as { waitUntil?: (_p: Promise<unknown>) => void } | undefined
             if (ctx?.waitUntil) {
               ctx.waitUntil(purgeAsync)
             }
@@ -502,11 +512,6 @@ Common workflows: update menus and items, create and publish posts, triage conta
         }
       }
 
-      const isRender = isMcpRenderResponse(result);
-      const structuredContent = isRender ? result.structuredContent : result;
-      const modelText = isRender && result.fallbackText
-        ? result.fallbackText
-        : JSON.stringify(structuredContent, null, 2);
       const tool =
         isWidgetEnabledForTool(toolName) && isRender
           ? MCP_TOOLS.find((t) => t.name === toolName)
