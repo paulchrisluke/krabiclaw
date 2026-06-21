@@ -13,6 +13,11 @@ const optionalInteger = (value: unknown) => {
   return parsed !== null && Number.isInteger(parsed) ? parsed : null
 }
 
+const stringArrayOrNull = (value: unknown) => {
+  if (!Array.isArray(value)) return null
+  return value.map(String).map(item => item.trim()).filter(Boolean)
+}
+
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const experienceId = getRouterParam(event, 'experienceId')
@@ -44,7 +49,14 @@ export default defineEventHandler(async (event) => {
   if ('tagline' in body) updates.tagline = body.tagline ? String(body.tagline).trim() : null
   if ('body' in body) updates.body = body.body ? String(body.body).trim() : null
   if ('image_asset_id' in body) updates.image_asset_id = body.image_asset_id ? String(body.image_asset_id) : null
+  if ('video_asset_id' in body) updates.video_asset_id = body.video_asset_id ? String(body.video_asset_id) : null
+  if ('highlights' in body) updates.highlights = stringArrayOrNull(body.highlights)
+  if ('included_items' in body) updates.included_items = stringArrayOrNull(body.included_items)
+  if ('what_to_bring' in body) updates.what_to_bring = stringArrayOrNull(body.what_to_bring)
+  if ('meeting_point' in body) updates.meeting_point = body.meeting_point ? String(body.meeting_point).trim() : null
+  if ('cancellation_policy' in body) updates.cancellation_policy = body.cancellation_policy ? String(body.cancellation_policy).trim() : null
   if ('price' in body) updates.price = body.price ? String(body.price).trim() : null
+  if ('price_amount' in body) updates.price_amount = optionalNumber(body.price_amount)
   if ('duration_minutes' in body) updates.duration_minutes = optionalInteger(body.duration_minutes)
   if ('max_capacity' in body) updates.max_capacity = optionalInteger(body.max_capacity)
   if ('time_slots' in body) updates.time_slots = Array.isArray(body.time_slots) ? body.time_slots.map(String) : null

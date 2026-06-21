@@ -3,6 +3,7 @@ import { createPreviewToken } from "~/server/utils/preview-token";
 import { getFreeSiteDomain } from "~/server/utils/tenant-hosts";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { hasEntitlement } from "~/server/utils/billing";
+import { getPageContent } from "~/server/utils/content-management";
 import {
   requestImageUpload,
   buildImageUrl,
@@ -1659,6 +1660,12 @@ export async function executeMcpToolCall(
       const locationId = requiredString(args, "location_id");
       const assetId = requiredString(args, "asset_id");
       await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+      const currentLocation = await getLocationForMcp(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        locationId,
+      ) as { hero_video_asset_id?: string | null };
       const result = await updateLocation(
         site.db,
         site.organizationId,
@@ -1670,6 +1677,12 @@ export async function executeMcpToolCall(
       assertDomainSuccess(result);
       return {
         ...result.data,
+        ...(currentLocation.hero_video_asset_id
+          ? {
+              warning:
+                "This location already has a hero video, which takes display priority over a hero image. The video will keep showing. Call clear_location_hero_video first if you want this image to display instead.",
+            }
+          : {}),
         context: await mutationContextPayload(site, { locationId }),
       };
     }
@@ -1677,12 +1690,56 @@ export async function executeMcpToolCall(
       const locationId = requiredString(args, "location_id");
       const assetId = requiredString(args, "asset_id");
       await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
+      const currentLocation = await getLocationForMcp(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        locationId,
+      ) as { hero_image_asset_id?: string | null };
       const result = await updateLocation(
         site.db,
         site.organizationId,
         site.siteId,
         locationId,
         { hero_video_asset_id: assetId } as never,
+        site.userId,
+      );
+      assertDomainSuccess(result);
+      return {
+        ...result.data,
+        ...(currentLocation.hero_image_asset_id
+          ? {
+              warning:
+                "This location already has a hero image, but the new hero video will take display priority over it.",
+            }
+          : {}),
+        context: await mutationContextPayload(site, { locationId }),
+      };
+    }
+    case "clear_location_hero_image": {
+      const locationId = requiredString(args, "location_id");
+      const result = await updateLocation(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        locationId,
+        { hero_image_asset_id: null } as never,
+        site.userId,
+      );
+      assertDomainSuccess(result);
+      return {
+        ...result.data,
+        context: await mutationContextPayload(site, { locationId }),
+      };
+    }
+    case "clear_location_hero_video": {
+      const locationId = requiredString(args, "location_id");
+      const result = await updateLocation(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        locationId,
+        { hero_video_asset_id: null } as never,
         site.userId,
       );
       assertDomainSuccess(result);
@@ -2584,6 +2641,12 @@ export async function executeMcpToolCall(
         const assetId = requiredString(args, "asset_id");
         const locationId = optionalString(args, "location_id");
         await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+        const currentHero = await getCurrentHomeHeroState(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          locationId,
+        );
         const update = await updateHomeHero(site.db, site.organizationId, site.siteId, {
           image_asset_id: assetId,
           location_id: locationId,
@@ -2593,6 +2656,12 @@ export async function executeMcpToolCall(
           ...update,
           asset_id: assetId,
           public_url: asset?.public_url ?? null,
+          ...(currentHero.hero_video_asset_id
+            ? {
+                warning:
+                  "This page already has a hero video, which takes display priority over a hero image. The video will keep showing. Call clear_home_hero_video first if you want this image to display instead.",
+              }
+            : {}),
           context: await mutationContextPayload(site, { locationId }),
         };
       } catch (error) {
@@ -2603,8 +2672,48 @@ export async function executeMcpToolCall(
         const assetId = requiredString(args, "asset_id");
         const locationId = optionalString(args, "location_id");
         await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
+        const currentHero = await getCurrentHomeHeroState(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          locationId,
+        );
         const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
           video_asset_id: assetId,
+          location_id: locationId,
+        });
+        return {
+          ...updated,
+          ...(currentHero.hero_image_asset_id
+            ? {
+                warning:
+                  "This page already has a hero image, but the new hero video will take display priority over it.",
+              }
+            : {}),
+          context: await mutationContextPayload(site, { locationId }),
+        };
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "clear_home_hero_image":
+      try {
+        const locationId = optionalString(args, "location_id");
+        const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
+          image_asset_id: null,
+          location_id: locationId,
+        });
+        return {
+          ...updated,
+          context: await mutationContextPayload(site, { locationId }),
+        };
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "clear_home_hero_video":
+      try {
+        const locationId = optionalString(args, "location_id");
+        const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
+          video_asset_id: null,
           location_id: locationId,
         });
         return {
@@ -2860,6 +2969,41 @@ export async function executeMcpToolCall(
           requiredString(args, "experience_id"),
           { video_asset_id: assetId },
         );
+      return {
+        experience,
+        context: await mutationContextPayload(site, {
+          locationId: experience && typeof experience.location_id === "string" ? experience.location_id : null,
+        }),
+      };
+    }
+    case "reorder_experience_gallery": {
+      const experienceId = requiredString(args, "experience_id");
+      const current = await getExperienceById(site.db, site.siteId, experienceId);
+      if (!current) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, `No experience found with id "${experienceId}".`);
+      }
+      const raw = objectArray(args.images, "images");
+      const images = raw.map((img) => {
+        if (typeof img.url !== "string" || !img.url) {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, "Each gallery item must have a non-empty url string");
+        }
+        if (img.kind !== "image" && img.kind !== "video") {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, 'Each gallery item must have kind "image" or "video"');
+        }
+        return { url: img.url, kind: img.kind as "image" | "video" };
+      });
+      const key = (item: { url: string; kind: string }) => `${item.kind}:${item.url}`;
+      const currentKeys = (current.images ?? []).map(key).sort();
+      const nextKeys = images.map(key).sort();
+      const isSamePermutation =
+        currentKeys.length === nextKeys.length && currentKeys.every((k, i) => k === nextKeys[i]);
+      if (!isSamePermutation) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "images must be a reordering of the experience's existing gallery (same url/kind values, new order). To add or remove gallery items, use update_experience instead.",
+        );
+      }
+      const experience = await updateExperience(site.db, site.siteId, experienceId, { images });
       return {
         experience,
         context: await mutationContextPayload(site, {
@@ -3549,6 +3693,26 @@ export async function executeMcpToolCall(
         `Unhandled tool: ${toolName}`,
       );
   }
+}
+
+async function getCurrentHomeHeroState(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  locationId?: string | null,
+) {
+  const content = await getPageContent(
+    db,
+    organizationId,
+    siteId,
+    "home",
+    locationId ?? undefined,
+  );
+  const hero = content.find((entry) => entry.field === "hero");
+  return {
+    hero_image_asset_id: hero?.hero_image_asset_id ?? null,
+    hero_video_asset_id: hero?.hero_video_asset_id ?? null,
+  };
 }
 
 function humanizeEntitlement(entitlement: string) {

@@ -30,6 +30,11 @@ export interface Experience {
   time_slots: string[] | null
   recurring_slots: RecurringSlots | null
   available_note: string | null
+  highlights: string[]
+  included_items: string[]
+  what_to_bring: string[]
+  meeting_point: string | null
+  cancellation_policy: string | null
   status: 'active' | 'inactive' | 'sold_out'
   sort_order: number
   featured: boolean
@@ -64,6 +69,11 @@ interface ExperienceRow {
   time_slots: string | null
   recurring_slots: string | null
   available_note: string | null
+  highlights: string | null
+  included_items: string | null
+  what_to_bring: string | null
+  meeting_point: string | null
+  cancellation_policy: string | null
   status: string
   sort_order: number
   featured: number
@@ -75,6 +85,17 @@ interface ExperienceRow {
 }
 
 function parseRow(row: ExperienceRow): Experience {
+  const parseStringArray = (value: string | null): string[] => {
+    if (!value) return []
+    try {
+      const parsed = JSON.parse(value)
+      if (!Array.isArray(parsed)) return []
+      return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    } catch {
+      return []
+    }
+  }
+
   let time_slots: string[] | null = null
   if (row.time_slots) {
     try { time_slots = JSON.parse(row.time_slots) } catch { time_slots = null }
@@ -96,6 +117,11 @@ function parseRow(row: ExperienceRow): Experience {
   return {
     ...row,
     status: row.status as Experience['status'],
+    highlights: parseStringArray(row.highlights),
+    included_items: parseStringArray(row.included_items),
+    what_to_bring: parseStringArray(row.what_to_bring),
+    meeting_point: row.meeting_point ?? null,
+    cancellation_policy: row.cancellation_policy ?? null,
     time_slots,
     recurring_slots,
     images,
@@ -108,7 +134,7 @@ const SELECT = `
          e.title, e.slug, e.tagline, e.body, e.image_asset_id,
          e.video_asset_id, e.images,
          e.price, e.price_amount, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
-         e.available_note, e.status, e.sort_order,
+         e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point, e.cancellation_policy, e.status, e.sort_order,
          e.featured, e.featured_sort_order,
          e.seo_title, e.seo_description, e.created_at, e.updated_at,
          img.public_url AS image_url,
@@ -197,6 +223,11 @@ export interface CreateExperienceInput {
   time_slots?: string[] | null
   recurring_slots?: RecurringSlots | null
   available_note?: string | null
+  highlights?: string[] | null
+  included_items?: string[] | null
+  what_to_bring?: string[] | null
+  meeting_point?: string | null
+  cancellation_policy?: string | null
   status?: ExperienceStatus
   sort_order?: number
   featured?: boolean
@@ -331,6 +362,9 @@ export async function createExperience(
   const validRecurringSlots = assertRecurringSlots(input.recurring_slots)
   const recurringSlotsJson = validRecurringSlots ? JSON.stringify(validRecurringSlots) : null
   const imagesJson = input.images?.length ? JSON.stringify(input.images) : null
+  const highlightsJson = input.highlights?.length ? JSON.stringify(input.highlights) : null
+  const includedItemsJson = input.included_items?.length ? JSON.stringify(input.included_items) : null
+  const whatToBringJson = input.what_to_bring?.length ? JSON.stringify(input.what_to_bring) : null
   const status = input.status !== undefined ? assertExperienceStatus(input.status, 'status') : 'active'
 
   const result = await db
@@ -338,9 +372,9 @@ export async function createExperience(
       `INSERT INTO experiences
        (id, organization_id, site_id, location_id, title, slug, tagline, body,
         image_asset_id, video_asset_id, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots,
-        available_note, status, sort_order, featured, featured_sort_order,
+        available_note, highlights, included_items, what_to_bring, meeting_point, cancellation_policy, status, sort_order, featured, featured_sort_order,
         seo_title, seo_description, created_at, updated_at, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
     .bind(
       id, organizationId, siteId,
@@ -359,6 +393,11 @@ export async function createExperience(
       slotsJson,
       recurringSlotsJson,
       input.available_note ?? null,
+      highlightsJson,
+      includedItemsJson,
+      whatToBringJson,
+      input.meeting_point ?? null,
+      input.cancellation_policy ?? null,
       status,
       input.sort_order ?? 0,
       input.featured ? 1 : 0,
@@ -425,6 +464,11 @@ export async function updateExperience(
     params.push(validRecurringSlots ? JSON.stringify(validRecurringSlots) : null)
   }
   if (input.available_note !== undefined) { sets.push('available_note = ?'); params.push(input.available_note ?? null) }
+  if (input.highlights !== undefined) { sets.push('highlights = ?'); params.push(input.highlights?.length ? JSON.stringify(input.highlights) : null) }
+  if (input.included_items !== undefined) { sets.push('included_items = ?'); params.push(input.included_items?.length ? JSON.stringify(input.included_items) : null) }
+  if (input.what_to_bring !== undefined) { sets.push('what_to_bring = ?'); params.push(input.what_to_bring?.length ? JSON.stringify(input.what_to_bring) : null) }
+  if (input.meeting_point !== undefined) { sets.push('meeting_point = ?'); params.push(input.meeting_point ?? null) }
+  if (input.cancellation_policy !== undefined) { sets.push('cancellation_policy = ?'); params.push(input.cancellation_policy ?? null) }
   if (input.status !== undefined) {
     sets.push('status = ?')
     params.push(assertExperienceStatus(input.status, 'status'))

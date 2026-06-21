@@ -141,6 +141,14 @@ function normalizeStringField(value: unknown, field: string) {
   return value;
 }
 
+function normalizeHeroAssetField(
+  value: unknown,
+  field: string,
+): string | null {
+  if (value === null) return null;
+  return normalizeStringField(value, field) || null;
+}
+
 function normalizeContentChanges(
   page: string,
   changes: Record<string, unknown>,
@@ -170,12 +178,16 @@ function normalizeContentChanges(
           normalizeStringField(heroSubtitle, "hero.hero_subtitle") || undefined;
       if (heroImageAssetId !== undefined)
         heroChange.hero_image_asset_id =
-          normalizeStringField(heroImageAssetId, "hero.hero_image_asset_id") ||
-          undefined;
+          normalizeHeroAssetField(
+            heroImageAssetId,
+            "hero.hero_image_asset_id",
+          );
       if (heroVideoAssetId !== undefined)
         heroChange.hero_video_asset_id =
-          normalizeStringField(heroVideoAssetId, "hero.hero_video_asset_id") ||
-          undefined;
+          normalizeHeroAssetField(
+            heroVideoAssetId,
+            "hero.hero_video_asset_id",
+          );
 
       if (
         heroTitle !== undefined ||
@@ -190,16 +202,25 @@ function normalizeContentChanges(
 
     const heroAlias = HERO_FIELD_ALIASES[rawField];
     if (heroAlias) {
-      const value = normalizeStringField(rawValue, rawField);
       hasHeroChange = true;
-      if (heroAlias === "hero.title")
+      if (heroAlias === "hero.title") {
+        const value = normalizeStringField(rawValue, rawField);
         heroChange.hero_title = value || undefined;
-      if (heroAlias === "hero.subtitle")
+      }
+      if (heroAlias === "hero.subtitle") {
+        const value = normalizeStringField(rawValue, rawField);
         heroChange.hero_subtitle = value || undefined;
+      }
       if (heroAlias === "hero.image")
-        heroChange.hero_image_asset_id = value || undefined;
+        heroChange.hero_image_asset_id = normalizeHeroAssetField(
+          rawValue,
+          rawField,
+        );
       if (heroAlias === "hero.video")
-        heroChange.hero_video_asset_id = value || undefined;
+        heroChange.hero_video_asset_id = normalizeHeroAssetField(
+          rawValue,
+          rawField,
+        );
       continue;
     }
 
@@ -789,10 +810,10 @@ export async function updateHomeHero(
         ? { hero_subtitle: input.subtitle ?? "" }
         : {}),
       ...(input.image_asset_id !== undefined
-        ? { hero_image_asset_id: input.image_asset_id ?? "" }
+        ? { hero_image_asset_id: input.image_asset_id }
         : {}),
       ...(input.video_asset_id !== undefined
-        ? { hero_video_asset_id: input.video_asset_id ?? "" }
+        ? { hero_video_asset_id: input.video_asset_id }
         : {}),
     },
   };

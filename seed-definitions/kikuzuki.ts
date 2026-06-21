@@ -211,7 +211,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       facebookUrl: '',
       isPrimary: true,
       status: 'active',
-      heroVideoAssetId: 'media-kiku-hero-video',
+      heroVideoAssetId: 'media-kiku-location-hero-video',
     },
     {
       id: 'loc-kikuzuki-tkma',
@@ -254,6 +254,14 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     },
   ],
   mediaAssets: [
+    // Teppanyaki experience
+    {
+      id: 'media-kiku-teppanyaki',
+      locationId: 'loc-kikuzuki',
+      ...cfImg('621ade99-405f-4ce0-d745-8917375a6700', 'teppanyaki'),
+      altText: 'Kikuzuki teppanyaki experience',
+      category: 'food',
+    },
     // Logo
     {
       id: 'media-kiku-logo',
@@ -263,10 +271,10 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       altText: 'Kikuzuki logo',
       category: 'other',
     },
-    // Hero video
+    // Hero video (homepage)
     {
       id: 'media-kiku-hero-video',
-      locationId: 'loc-kikuzuki',
+      locationId: null,
       kind: 'video',
       provider: 'cloudflare_r2',
       source: 'uploaded',
@@ -275,6 +283,21 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/62e7d792-4f12-4252-f37e-8a576dc1d500/public',
       mimeType: 'video/mp4',
       fileName: 'kikuzuki-hero-video.mp4',
+      altText: 'Kikuzuki restaurant atmosphere',
+      category: 'interior',
+    },
+    // Hero video (primary location)
+    {
+      id: 'media-kiku-location-hero-video',
+      locationId: 'loc-kikuzuki',
+      kind: 'video',
+      provider: 'cloudflare_r2',
+      source: 'uploaded',
+      r2Key: 'sites/3ad92fb5-4ecf-4f81-aa16-278a7dc3c859/media/e864ac34-9b1f-4162-9e5c-aa21cbddb45f.mp4',
+      publicUrl: 'https://media.krabiclaw.com/sites/3ad92fb5-4ecf-4f81-aa16-278a7dc3c859/media/e864ac34-9b1f-4162-9e5c-aa21cbddb45f.mp4',
+      thumbnailUrl: null,
+      mimeType: 'video/mp4',
+      fileName: 'kikuzuki-location-hero-video.mp4',
       altText: 'Kikuzuki restaurant atmosphere',
       category: 'interior',
     },
@@ -448,7 +471,31 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       source: 'manual',
     },
   ],
-  experiences: [],
+  experiences: [
+    {
+      id: 'exp-kiku-teppanyaki',
+      locationId: 'loc-kikuzuki',
+      title: 'Teppanyaki Experience',
+      slug: 'teppanyaki-experience',
+      tagline: 'Live Japanese teppanyaki with premium ingredients, chef flair, and an unforgettable dining show.',
+      body:
+        "Welcome to the newest, most electrifying dining experience in Ao Nang. Kikuzuki has opened its very own live teppanyaki counter, bringing Japanese culinary theatre right in front of your eyes.\n\nThis isn't just dinner, it's a show.\n\nAt Kikuzuki Teppanyaki, guests sit around the grill while our chef fires up premium ingredients: Japanese wagyu, local seafood, scallops, lobster, snow fish, vegetables, and rice. Everything is cooked à la minute with skill, flair, and a big hit of fun. Expect flames, aroma, precision cuts, and a touch of Japanese humour from the chef as he cooks right in front of you.\n\nWhat makes it special:\n- Only a few seats at the chef's counter, an intimate, up-close experience\n- Premium ingredients imported from Japan plus the best local Andaman seafood\n- Personal interaction with the chef throughout the meal\n- Signature sets designed exclusively for the teppanyaki grill\n- Perfect for celebrations, date nights, and unforgettable holiday moments\n\nThink of it as Japanese fine dining with a bit of showmanship and a lot of flavour. Warm lights, sizzling sounds, the smell of wagyu hitting the grill, it's immersive, exciting, and something you won't find anywhere else in Ao Nang.",
+      imageAssetId: 'media-kiku-teppanyaki',
+      price: 'THB 45.00 / guest',
+      priceAmount: 45,
+      durationMinutes: 90,
+      maxCapacity: 6,
+      timeSlots: ['15:00', '17:00', '19:00', '21:00'],
+      availableNote: 'Available on multiple dates. Reserve online or contact the restaurant directly.',
+      status: 'active',
+      sortOrder: 1,
+      featured: true,
+      featuredSortOrder: 1,
+      seoTitle: 'Teppanyaki Experience — Kikuzuki Ao Nang',
+      seoDescription:
+        'Live Japanese teppanyaki at Kikuzuki Ao Nang. Premium wagyu and Andaman seafood cooked tableside by our chef. Limited seats, 1 hour 30 minutes, up to 6 guests.',
+    },
+  ],
   reviews: [
     // Take Me Away by KIKUZUKI (loc-kikuzuki-tkma) — real reviews fetched from Google Places
     { id: 'review-tkma-1', locationId: 'loc-kikuzuki-tkma', authorName: 'aideedee', reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/c0ddb24c-e687-4f3f-2376-7baa63e8a000/public', rating: 5, content: 'Amazing food, but even more to highlight is the staff, makes this experience and the time there just amazing! Thanks you and see you soon!', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },

@@ -5,12 +5,15 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { uploadToR2, buildR2Key, deleteFromR2 } from '~/server/utils/cloudflare-r2'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
+import { deleteImage, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 
 const MAX_BYTES = 50 * 1024 * 1024
+const IMAGE_MAX_BYTES = 10 * 1024 * 1024
 
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'])
-const IMAGE_MIME_TYPES = new Set(['image/avif'])
-const ALLOWED_MIME_TYPES = new Set([...VIDEO_MIME_TYPES, ...IMAGE_MIME_TYPES, 'application/pdf', 'image/svg+xml'])
+const R2_IMAGE_MIME_TYPES = new Set(['image/avif'])
+const POSTER_IMAGE_MIME_TYPES = new Set(['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp'])
+const ALLOWED_MIME_TYPES = new Set([...VIDEO_MIME_TYPES, ...R2_IMAGE_MIME_TYPES, 'application/pdf', 'image/svg+xml'])
 const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo'])
 type MediaCategory = 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo'
 
@@ -27,12 +30,35 @@ function sanitizeFilename(raw: string | undefined): string {
 }
 
 function sniffMimeType(data: Uint8Array): string {
+  if (data.byteLength >= 8
+    && data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47
+    && data[4] === 0x0d && data[5] === 0x0a && data[6] === 0x1a && data[7] === 0x0a) {
+    return 'image/png'
+  }
+
+  if (data.byteLength >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) {
+    return 'image/jpeg'
+  }
+
+  if (data.byteLength >= 6) {
+    const gifHeader = String.fromCharCode(data[0] ?? 0, data[1] ?? 0, data[2] ?? 0, data[3] ?? 0, data[4] ?? 0, data[5] ?? 0)
+    if (gifHeader === 'GIF87a' || gifHeader === 'GIF89a') {
+      return 'image/gif'
+    }
+  }
+
   if (data.byteLength >= 5 && data[0] === 0x25 && data[1] === 0x50 && data[2] === 0x44 && data[3] === 0x46 && data[4] === 0x2d) {
     return 'application/pdf'
   }
 
   if (data.byteLength >= 4 && data[0] === 0x1a && data[1] === 0x45 && data[2] === 0xdf && data[3] === 0xa3) {
     return 'video/webm'
+  }
+
+  if (data.byteLength >= 12
+    && data[0] === 0x52 && data[1] === 0x49 && data[2] === 0x46 && data[3] === 0x46
+    && data[8] === 0x57 && data[9] === 0x45 && data[10] === 0x42 && data[11] === 0x50) {
+    return 'image/webp'
   }
 
   if (data.byteLength >= 12
@@ -55,6 +81,10 @@ function sniffMimeType(data: Uint8Array): string {
   }
 
   return 'application/octet-stream'
+}
+
+function toArrayBuffer(data: Uint8Array): ArrayBuffer {
+  return data.slice().buffer
 }
 
 async function assertPublicMediaUrl(publicUrl: string, expectedContentType: string): Promise<void> {
@@ -174,8 +204,54 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    const posterPart = formData.find(part => part.name === 'poster' && part.data)
+    let thumbnailUrl: string | null = null
+    let posterImageId: string | null = null
+    let posterWarning: string | null = null
+
+    if (posterPart?.data) {
+      const posterDetectedContentType = sniffMimeType(posterPart.data)
+      const posterDeclaredContentType = typeof posterPart.type === 'string'
+        ? posterPart.type.split(';', 1)[0]?.toLowerCase().trim() || ''
+        : ''
+      const posterFilename = sanitizeFilename(posterPart.filename || 'poster-image')
+      const posterSize = posterPart.data.byteLength
+
+      if (posterSize > IMAGE_MAX_BYTES) {
+        return jsonResponse({ error: 'Poster image too large (max 10 MB)' }, { status: 413 })
+      }
+
+      if (!POSTER_IMAGE_MIME_TYPES.has(posterDetectedContentType)) {
+        return jsonResponse({ error: `Unsupported poster image type: ${posterDetectedContentType}` }, { status: 415 })
+      }
+
+      if (posterDeclaredContentType && posterDeclaredContentType !== posterDetectedContentType) {
+        return jsonResponse({ error: 'Poster file type mismatch' }, { status: 400 })
+      }
+
+      try {
+        const uploadedPoster = await uploadImageBuffer(
+          env,
+          toArrayBuffer(posterPart.data),
+          posterFilename,
+          posterDetectedContentType,
+        )
+        posterImageId = uploadedPoster.imageId
+        thumbnailUrl = uploadedPoster.publicUrl
+      } catch (posterError) {
+        const normalizedPosterError = posterError instanceof Error ? posterError : new Error('Unknown poster upload error')
+        console.error('media_upload_poster_failed', {
+          siteId,
+          userId: session.user.id,
+          filename: posterFilename,
+          error: normalizedPosterError.message,
+        })
+        posterWarning = 'The poster image could not be uploaded, so this video will not have a thumbnail yet.'
+      }
+    }
+
     const assetId = crypto.randomUUID()
-    const kind = VIDEO_MIME_TYPES.has(contentType) ? 'video' : IMAGE_MIME_TYPES.has(contentType) ? 'image' : 'file'
+    const kind = VIDEO_MIME_TYPES.has(contentType) ? 'video' : R2_IMAGE_MIME_TYPES.has(contentType) ? 'image' : 'file'
     const r2Key = buildR2Key(siteId, assetId, filename)
 
     const publicUrl = await uploadToR2(env, r2Key, filePart.data, contentType)
@@ -192,6 +268,7 @@ export default defineEventHandler(async (event) => {
         source: 'uploaded',
         r2_key: r2Key,
         public_url: publicUrl,
+        thumbnail_url: thumbnailUrl,
         mime_type: contentType,
         file_name: filename,
         file_size: fileSize,
@@ -211,10 +288,23 @@ export default defineEventHandler(async (event) => {
           error: normalizedCleanupError.message,
         })
       }
+      if (posterImageId) {
+        try {
+          await deleteImage(env, posterImageId)
+        } catch (cleanupError) {
+          const normalizedCleanupError = cleanupError instanceof Error ? cleanupError : new Error('Unknown poster cleanup error')
+          console.error('media_upload_poster_cleanup_failed', {
+            siteId,
+            assetId,
+            posterImageId,
+            error: normalizedCleanupError.message,
+          })
+        }
+      }
       throw persistError
     }
 
-    return jsonResponse({ id: assetId, publicUrl, kind, status: 'active' })
+    return jsonResponse({ id: assetId, publicUrl, thumbnailUrl, kind, status: 'active', posterWarning })
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Unknown media upload error')
     console.error('media_upload_failed', { error: normalizedError.message, stack: normalizedError.stack })

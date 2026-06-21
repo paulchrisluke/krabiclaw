@@ -46,7 +46,10 @@
         <UIcon name="i-heroicons-arrow-up-tray" class="size-7 text-muted" />
         <p class="text-sm text-muted">Drag and drop images or videos here, or <span class="text-primary cursor-pointer">click to browse</span></p>
         <p class="text-xs text-muted">Images up to {{ formatSize(IMAGE_MAX_SIZE_BYTES) }} via Cloudflare Images · Videos up to {{ formatSize(VIDEO_MAX_SIZE_BYTES) }} via R2</p>
+        <p class="text-xs text-muted">Keep hero videos short (15s or less) and a few MB for fast page loads.</p>
       </div>
+
+      <input ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploadLoading" @change="onFileSelect" />
 
       <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-heroicons-exclamation-triangle" class="mb-4" />
       <div v-if="pendingRetryFile" class="mb-4">
@@ -124,12 +127,23 @@
       <div v-if="hasMore" class="mt-6 text-center">
         <UButton color="neutral" variant="ghost" :loading="loadingMore" @click="loadMore">Load more</UButton>
       </div>
+
+      <VideoPosterPrompt
+        :open="posterPromptOpen"
+        :uploading="uploadLoading"
+        :video-name="pendingVideoFile?.name ?? null"
+        @update:open="posterPromptOpen = $event"
+        @submit="submitVideoUpload"
+      />
     </UPageBody>
   </UPage>
 </template>
 
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
+
+import VideoPosterPrompt from '~/components/media/VideoPosterPrompt.vue'
+import { IMAGE_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '~/composables/useMediaUpload'
 
 const siteId = await useDashboardSiteId()
 const siteApiBase = `/api/dashboard/editor`
@@ -176,21 +190,23 @@ const assets = ref<MediaAsset[]>([])
 const loading = ref(false)
 const loadingMore = ref(false)
 const deleting = ref(false)
-const uploadLoading = ref(false)
-const uploadError = ref<string | null>(null)
-const pendingRetryFile = ref<File | null>(null)
 const isDragging = ref(false)
 const dragCounter = ref(0)
 const fileInput = ref<HTMLInputElement | null>(null)
+const posterPromptOpen = ref(false)
+const pendingVideoFile = ref<File | null>(null)
 const search = ref('')
 const kindFilter = ref('')
 const selected = ref(new Set<string>())
 const offset = ref(0)
 const hasMore = ref(false)
 const LIMIT = 50
-const IMAGE_MAX_SIZE_BYTES = 10 * 1024 * 1024
-const VIDEO_MAX_SIZE_BYTES = 50 * 1024 * 1024
-const CONFIRM_RETRY_DELAYS_MS = [250, 500]
+const {
+  uploading: uploadLoading,
+  error: uploadError,
+  pendingRetryFile,
+  upload,
+} = useMediaUpload(siteApiBase)
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {
@@ -203,25 +219,6 @@ function getErrorMessage(error: unknown, fallback: string): string {
     if (typeof message === 'string' && message) return message
   }
   return fallback
-}
-
-function getErrorStatus(error: unknown): number {
-  if (!error || typeof error !== 'object') return 0
-
-  const errorRecord = error as Record<string, unknown>
-  const statusCode = errorRecord.statusCode
-  if (typeof statusCode === 'number') return statusCode
-
-  const status = errorRecord.status
-  if (typeof status === 'number') return status
-
-  const data = errorRecord.data
-  if (data && typeof data === 'object') {
-    const dataStatusCode = (data as Record<string, unknown>).statusCode
-    if (typeof dataStatusCode === 'number') return dataStatusCode
-  }
-
-  return 0
 }
 
 const kindTabs = [
@@ -332,12 +329,12 @@ function handleDrop(e: DragEvent) {
   dragCounter.value = 0
   isDragging.value = false
   const file = e.dataTransfer?.files[0]
-  if (file) uploadFile(file)
+  if (file) handleSelectedFile(file)
 }
 
-function _onFileSelect(e: Event) {
+function onFileSelect(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) uploadFile(file)
+  if (file) handleSelectedFile(file)
   if (fileInput.value) fileInput.value.value = ''
 }
 
@@ -346,101 +343,47 @@ function openUploadPicker() {
   fileInput.value?.click()
 }
 
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-async function cleanupPendingUpload(assetId: string) {
-  await $fetch(`${siteApiBase}/media/${assetId}`, { method: 'DELETE' })
-}
-
-async function confirmPendingUpload(assetId: string) {
-  let lastError: ApiValue = null
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      await $fetch(`${siteApiBase}/media/${assetId}/confirm`, { method: 'POST' })
-      return
-    } catch (err) {
-      lastError = err
-      const status = getErrorStatus(err)
-      if (status === 409) return
-      const retryDelay = CONFIRM_RETRY_DELAYS_MS[attempt]
-      if (retryDelay !== undefined && (!status || status >= 500 || status === 408 || status === 429)) {
-        await sleep(retryDelay)
-        continue
-      }
-      break
-    }
+function handleSelectedFile(file: File) {
+  if (file.type.startsWith('video/')) {
+    pendingVideoFile.value = file
+    posterPromptOpen.value = true
+    return
   }
 
-  throw lastError ?? new Error('Failed to confirm uploaded file.')
+  void uploadFile(file)
+}
+
+async function submitVideoUpload(poster: File | null) {
+  posterPromptOpen.value = false
+  const videoFile = pendingVideoFile.value
+  pendingVideoFile.value = null
+  if (!videoFile) return
+  await uploadFile(videoFile, poster)
 }
 
 async function retryPendingUpload() {
-  const file = pendingRetryFile.value
-  if (!file) return
-  pendingRetryFile.value = null
-  await uploadFile(file)
+  const pendingUpload = pendingRetryFile.value
+  if (!pendingUpload) return
+  await uploadFile(pendingUpload.file, pendingUpload.options.poster ?? null)
 }
 
-async function uploadFile(file: File) {
-  if (uploadLoading.value) return
-  uploadLoading.value = true
-  uploadError.value = null
-  pendingRetryFile.value = null
-  const isImage = file.type.startsWith('image/')
-  const isVideo = file.type.startsWith('video/')
-
+async function uploadFile(file: File, poster: File | null = null) {
   try {
-    if (!isImage && !isVideo) {
-      uploadError.value = 'Only images and videos are supported.'
-      return
-    }
-
-    if (isImage && file.size > IMAGE_MAX_SIZE_BYTES) {
-      uploadError.value = `Images must be under ${formatSize(IMAGE_MAX_SIZE_BYTES)}.`
-      return
-    }
-
-    if (isVideo && file.size > VIDEO_MAX_SIZE_BYTES) {
-      uploadError.value = `Videos must be under ${formatSize(VIDEO_MAX_SIZE_BYTES)}.`
-      return
-    }
-
-    if (isImage) {
-      const { assetId, uploadUrl } = await $fetch<{ assetId: string; uploadUrl: string }>(
-        `${siteApiBase}/media/request-upload`,
-        { method: 'POST', body: { filename: file.name } }
-      )
-      const form = new FormData()
-      form.append('file', file)
-      try {
-        const res = await fetch(uploadUrl, { method: 'POST', body: form })
-        if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
-      } catch (error) {
-        await cleanupPendingUpload(assetId).catch(() => {})
-        throw error
-      }
-
-      try {
-        await confirmPendingUpload(assetId)
-      } catch (error) {
-        await cleanupPendingUpload(assetId).catch(() => {})
-        pendingRetryFile.value = file
-        throw error
-      }
-    } else {
-      const form = new FormData()
-      form.append('file', file)
-      await $fetch(`${siteApiBase}/media/upload`, { method: 'POST', body: form })
-    }
+    const result = await upload(file, { poster })
+    if (!result) return
     toast.add({ title: 'File uploaded', icon: 'i-heroicons-check-circle', color: 'success' })
+    if (result.posterWarning) {
+      toast.add({ title: 'Video uploaded without a poster image', description: result.posterWarning, color: 'warning' })
+    } else if (result.kind === 'video' && !poster) {
+      toast.add({
+        title: 'Video uploaded without a poster image',
+        description: 'Without a poster, this video may appear blank while it loads.',
+        color: 'warning'
+      })
+    }
     await load()
   } catch (err) {
     uploadError.value = getErrorMessage(err, 'Upload failed.')
-  } finally {
-    uploadLoading.value = false
   }
 }
 

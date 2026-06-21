@@ -8,6 +8,11 @@ const optionalInteger = (value: unknown) => {
   return Number.isFinite(parsed) && Number.isInteger(parsed) ? parsed : null
 }
 
+const stringArrayOrNull = (value: unknown) => {
+  if (!Array.isArray(value)) return null
+  return value.map(String).map(item => item.trim()).filter(Boolean)
+}
+
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
@@ -62,7 +67,14 @@ export default defineEventHandler(async (event) => {
     tagline: body.tagline ? String(body.tagline).trim() : null,
     body: body.body ? String(body.body).trim() : null,
     image_asset_id: body.image_asset_id ? String(body.image_asset_id) : null,
+    video_asset_id: body.video_asset_id ? String(body.video_asset_id) : null,
+    highlights: stringArrayOrNull(body.highlights),
+    included_items: stringArrayOrNull(body.included_items),
+    what_to_bring: stringArrayOrNull(body.what_to_bring),
+    meeting_point: body.meeting_point ? String(body.meeting_point).trim() : null,
+    cancellation_policy: body.cancellation_policy ? String(body.cancellation_policy).trim() : null,
     price: body.price ? String(body.price).trim() : null,
+    price_amount: body.price_amount === null || body.price_amount === undefined || body.price_amount === '' ? null : Number(body.price_amount),
     duration_minutes: optionalInteger(body.duration_minutes),
     max_capacity: optionalInteger(body.max_capacity),
     time_slots: Array.isArray(body.time_slots) ? body.time_slots.map(String) : null,

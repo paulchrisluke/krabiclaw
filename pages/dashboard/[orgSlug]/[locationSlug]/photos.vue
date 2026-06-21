@@ -8,7 +8,13 @@
         <UButton icon="i-heroicons-arrow-up-tray" color="primary" variant="soft" :loading="uploading" :disabled="!selectedLocationId" @click="openUploadPicker">Upload</UButton>
         <UButton icon="i-heroicons-paper-clip" color="neutral" variant="soft" :disabled="!selectedLocationId" @click="openAttachModal">Attach existing</UButton>
         <UButton icon="i-heroicons-arrow-path" color="neutral" variant="ghost" :loading="loading" @click="loadPhotos">Refresh</UButton>
-        <input ref="fileInput" type="file" accept="image/*" class="hidden" :disabled="uploading" @change="onFileSelect" />
+        <input ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploading" @change="onFileSelect" />
+      </div>
+
+      <div v-if="pendingRetryFile" class="mb-4">
+        <UButton size="sm" color="neutral" variant="soft" :loading="uploading" :disabled="uploading" @click="retryPendingUpload">
+          Retry confirm
+        </UButton>
       </div>
 
       <div v-if="loading" class="grid grid-cols-3 gap-3 md:grid-cols-5 xl:grid-cols-7">
@@ -17,10 +23,10 @@
 
       <div v-else-if="filteredAssets.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
         <UIcon name="i-heroicons-photo" class="mx-auto size-9 text-muted" />
-        <p class="mt-3 text-sm font-medium text-highlighted">No location photos yet</p>
-        <p class="mt-1 text-sm text-muted">Upload images here or attach existing media to this location.</p>
+        <p class="mt-3 text-sm font-medium text-highlighted">No location media yet</p>
+        <p class="mt-1 text-sm text-muted">Upload images or videos here, or attach existing media to this location.</p>
         <div class="mt-5 flex justify-center gap-2">
-          <UButton icon="i-heroicons-arrow-up-tray" :loading="uploading" @click="openUploadPicker">Upload photo</UButton>
+          <UButton icon="i-heroicons-arrow-up-tray" :loading="uploading" @click="openUploadPicker">Upload file</UButton>
           <UButton color="neutral" variant="soft" icon="i-heroicons-paper-clip" @click="openAttachModal">Attach existing</UButton>
         </div>
       </div>
@@ -56,7 +62,7 @@
             <div class="flex items-center justify-between gap-4">
               <div>
                 <h2 class="text-lg font-semibold text-highlighted">Attach existing media</h2>
-                <p class="mt-1 text-sm text-muted">Choose images from the site media library for this location gallery.</p>
+                <p class="mt-1 text-sm text-muted">Choose images or videos from the site media library for this location gallery.</p>
               </div>
               <UButton icon="i-heroicons-arrow-path" color="neutral" variant="ghost" :loading="attachLoading" @click="loadAttachableMedia" />
             </div>
@@ -86,12 +92,22 @@
           </div>
         </template>
       </UModal>
+
+      <VideoPosterPrompt
+        :open="posterPromptOpen"
+        :uploading="uploading"
+        :video-name="pendingVideoFile?.name ?? null"
+        @update:open="posterPromptOpen = $event"
+        @submit="submitVideoUpload"
+      />
     </UPageBody>
   </UPage>
 </template>
 
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
+
+import VideoPosterPrompt from '~/components/media/VideoPosterPrompt.vue'
 
 interface LocationRow {
   id: string
@@ -117,12 +133,14 @@ const selectedLocationId = ref('')
 const assets = ref<MediaAsset[]>([])
 const attachableAssets = ref<MediaAsset[]>([])
 const loading = ref(true)
-const uploading = ref(false)
 const attachOpen = ref(false)
 const attachLoading = ref(false)
 const categoryFilter = ref('all')
 const fileInput = ref<HTMLInputElement | null>(null)
+const posterPromptOpen = ref(false)
+const pendingVideoFile = ref<File | null>(null)
 const { paths, buildHeaderLinks } = useDashboardSiteLinks(siteId, sitePublicUrl)
+const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload()
 
 const _headerLinks = computed(() => buildHeaderLinks([
   { label: 'Media library', icon: 'i-heroicons-squares-2x2', to: paths.value.media, color: 'neutral' as const, variant: 'soft' as const },
@@ -167,7 +185,7 @@ async function loadPhotos() {
   }
   loading.value = true
   try {
-    const params = new URLSearchParams({ kind: 'image', locationId: selectedLocationId.value, limit: '100' })
+    const params = new URLSearchParams({ locationId: selectedLocationId.value, limit: '100' })
     const res = await $fetch<{ media: MediaAsset[] }>(`/api/dashboard/editor/media?${params}`)
     assets.value = res.media ?? []
   } catch (error) {
@@ -184,47 +202,72 @@ function openUploadPicker() {
 
 function onFileSelect(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
-  if (file) uploadPhoto(file)
+  if (file) handleSelectedFile(file)
   if (fileInput.value) fileInput.value.value = ''
 }
 
-async function confirmPendingUpload(assetId: string) {
-  await $fetch(`/api/dashboard/editor/media/${assetId}/confirm`, { method: 'POST' })
-}
-
-async function uploadPhoto(file: File) {
-  if (!file.type.startsWith('image/')) {
-    toast.add({ description: 'Choose an image file', color: 'error' })
+function handleSelectedFile(file: File) {
+  if (file.type.startsWith('video/')) {
+    pendingVideoFile.value = file
+    posterPromptOpen.value = true
     return
   }
-  uploading.value = true
+
+  void uploadSelectedFile(file)
+}
+
+async function submitVideoUpload(poster: File | null) {
+  posterPromptOpen.value = false
+  const videoFile = pendingVideoFile.value
+  pendingVideoFile.value = null
+  if (!videoFile) return
+  await uploadSelectedFile(videoFile, poster)
+}
+
+async function retryPendingUpload() {
+  const pendingUpload = pendingRetryFile.value
+  if (!pendingUpload) return
+  await uploadSelectedFile(pendingUpload.file, pendingUpload.options.poster ?? null, pendingUpload.options)
+}
+
+async function uploadSelectedFile(file: File, poster: File | null = null, existingOptions?: { category?: string | null, locationId?: string | null }) {
   try {
-    const { assetId, uploadUrl } = await $fetch<{ assetId: string; uploadUrl: string }>(`/api/dashboard/editor/media/request-upload`, {
-      method: 'POST',
-      body: {
-        filename: file.name,
-        locationId: selectedLocationId.value,
-        category: categoryFilter.value === 'all' ? 'other' : categoryFilter.value
-      }
+    const options = existingOptions ?? {
+      locationId: selectedLocationId.value,
+      category: categoryFilter.value === 'all' ? 'other' : categoryFilter.value,
+    }
+    const result = await upload(file, {
+      ...options,
+      poster,
     })
-    const form = new FormData()
-    form.append('file', file)
-    const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: form })
-    if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.status}`)
-    await confirmPendingUpload(assetId)
-    toast.add({ description: 'Photo uploaded', color: 'success' })
+    if (!result) {
+      if (uploadError.value) toast.add({ description: uploadError.value, color: 'error' })
+      return
+    }
+
+    toast.add({
+      description: result.kind === 'video' ? 'Video uploaded' : 'Photo uploaded',
+      color: 'success'
+    })
+    if (result.posterWarning) {
+      toast.add({ title: 'Video uploaded without a poster image', description: result.posterWarning, color: 'warning' })
+    } else if (result.kind === 'video' && !poster) {
+      toast.add({
+        title: 'Video uploaded without a poster image',
+        description: 'Without a poster, this video may appear blank while it loads.',
+        color: 'warning'
+      })
+    }
     await loadPhotos()
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to upload photo', color: 'error' })
-  } finally {
-    uploading.value = false
+    toast.add({ description: uploadError.value ?? (error instanceof Error ? error.message : 'Failed to upload file'), color: 'error' })
   }
 }
 
 async function loadAttachableMedia() {
   attachLoading.value = true
   try {
-    const params = new URLSearchParams({ kind: 'image', limit: '100' })
+    const params = new URLSearchParams({ limit: '100' })
     const res = await $fetch<{ media: MediaAsset[] }>(`/api/dashboard/editor/media?${params}`)
     attachableAssets.value = (res.media ?? []).filter(asset => asset.location_id !== selectedLocationId.value)
   } catch (error) {
