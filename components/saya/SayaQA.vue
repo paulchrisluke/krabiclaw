@@ -34,7 +34,7 @@
           <div>
             <p class="text-default leading-relaxed text-sm mb-2">{{ item.topAnswer.text }}</p>
             <p class="text-[10px] text-muted font-bold uppercase tracking-widest">
-              {{ $t('saya.qa.response_from_restaurant', { date: formatDate(item.topAnswer.updateTime) }) }}
+              {{ $t('saya.qa.response_from_owner', { date: formatDate(item.topAnswer.updateTime) }) }}
             </p>
           </div>
         </div>

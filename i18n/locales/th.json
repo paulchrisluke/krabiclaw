@@ -142,7 +142,7 @@
       "subtitle": "คำถามที่พบบ่อย",
       "google_guest": "แขก Google",
       "asked_by": "ถามโดย {author} • {date}",
-      "response_from_restaurant": "การตอบกลับ • {date}",
+      "response_from_owner": "การตอบกลับจากเจ้าของ • {date}",
       "no_answer": "ยังไม่มีคำตอบ",
       "empty_title": "ยังไม่มีคำถาม",
       "empty_prompt": "มีคำถามไหม? ถามเราได้เลย เรายินดีช่วยเสมอ",

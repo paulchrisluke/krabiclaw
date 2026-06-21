@@ -57,7 +57,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 
 const { locations } = useBootstrap()
 const pending = ref(false)
-const restaurantName = computed(() => site?.brand_name || 'Our Restaurant')
+const siteName = computed(() => site?.brand_name || 'Our Site')
 
 if (locations.value.length === 1) {
   await navigateTo(`/locations/${locations.value[0].slug}/photos`, { replace: true, redirectCode: 301 })
@@ -65,13 +65,13 @@ if (locations.value.length === 1) {
 
 const currentPageUrl = useSeoUrl('/photos')
 useSeoMeta({
-  title: computed(() => `Photos | ${restaurantName.value}`),
-  description: computed(() => `Photo gallery from ${restaurantName.value}.`),
-  ogTitle: computed(() => `Photos | ${restaurantName.value}`),
-  ogDescription: computed(() => `Photo gallery from ${restaurantName.value}.`),
-  ogSiteName: computed(() => restaurantName.value),
-  twitterTitle: computed(() => `Photos | ${restaurantName.value}`),
-  twitterDescription: computed(() => `Photo gallery from ${restaurantName.value}.`),
+  title: computed(() => `Photos | ${siteName.value}`),
+  description: computed(() => `Photo gallery from ${siteName.value}.`),
+  ogTitle: computed(() => `Photos | ${siteName.value}`),
+  ogDescription: computed(() => `Photo gallery from ${siteName.value}.`),
+  ogSiteName: computed(() => siteName.value),
+  twitterTitle: computed(() => `Photos | ${siteName.value}`),
+  twitterDescription: computed(() => `Photo gallery from ${siteName.value}.`),
   ogImage: useTenantOgImage(),
   ogUrl: currentPageUrl
 })

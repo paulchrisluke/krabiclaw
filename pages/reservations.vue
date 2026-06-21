@@ -306,7 +306,7 @@ useBreadcrumbSchema([
   { name: 'Reservations', url: `/reservations` }
 ])
 
-const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Restaurant')
+const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Our Site')
 const seoTitle = computed(() => `${brandName.value} | ${resCopy.value.reserveCta}`)
 const seoDescription = computed(() => resCopy.value.seoReservationDescription(brandName.value))
 useSeoMeta({
@@ -325,8 +325,8 @@ useSeoMeta({
 useSchemaOrg([
   ({
     '@context': 'https://schema.org',
-    '@type': 'Restaurant',
-    name: (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Restaurant',
+    '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
+    name: (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Our Site',
     url: requestUrl.origin,
     reservationUrl: `${requestUrl.origin}/reservations`,
     potentialAction: {

@@ -257,7 +257,7 @@ useSeoMeta({
 
 useSchemaOrg([
   computed(() => ({
-    '@type': ['Restaurant', 'LocalBusiness'],
+    '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
     name: `${siteName.value} — ${location.value?.title ?? ''}`,
     ...(aggregate.value?.rating ? {
       aggregateRating: {

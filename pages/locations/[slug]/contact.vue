@@ -269,7 +269,7 @@ useSchemaOrg([
       return { '@type': 'OpeningHoursSpecification', dayOfWeek: `https://schema.org/${h.day}`, opens, closes }
     }).filter((h: ApiValue) => h && h.opens)
     return {
-      '@type': ['LocalBusiness', 'Restaurant'],
+      '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
       name: `${siteName.value} — ${loc.title}`,
       address: { '@type': 'PostalAddress', streetAddress: formattedAddress.value },
       telephone: loc.phone,

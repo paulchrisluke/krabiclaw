@@ -99,8 +99,8 @@ const route = useRoute()
 const requestURL = useRequestURL()
 
 useSeoMeta({
-  title: computed(() => `Order Online | ${getField('restaurant.name', 'Our Restaurant')}`),
-  description: computed(() => orderCopy.value.seoReservationDescription(getField('restaurant.name', 'Our Restaurant'))),
+  title: computed(() => `Order Online | ${site?.brand_name || 'Our Site'}`),
+  description: computed(() => orderCopy.value.seoReservationDescription(site?.brand_name || 'Our Site')),
   ogImage: sharedOgImage,
   ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
 })
