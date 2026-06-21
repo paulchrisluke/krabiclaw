@@ -84,7 +84,7 @@
           </UFormField>
           <UFormField label="Additional media gallery" help="Add more images or videos to show in a carousel.">
             <div class="space-y-3">
-              <div v-for="(media, index) in form.images" :key="index" class="flex items-center gap-3">
+              <div v-for="(media, index) in form.images" :key="media._key" class="flex items-center gap-3">
                 <div class="flex-1">
                   <MediaPicker
                     v-model="media.asset_id"
@@ -99,6 +99,7 @@
                   color="neutral"
                   variant="ghost"
                   icon="i-heroicons-chevron-up"
+                  aria-label="Move image up"
                   :disabled="index === 0"
                   @click="moveGalleryMedia(index, -1)"
                 />
@@ -107,6 +108,7 @@
                   color="neutral"
                   variant="ghost"
                   icon="i-heroicons-chevron-down"
+                  aria-label="Move image down"
                   :disabled="index === form.images.length - 1"
                   @click="moveGalleryMedia(index, 1)"
                 />
@@ -443,7 +445,7 @@ const emptyForm = () => ({
   image_url: null as string | null,
   video_asset_id: null as string | null,
   video_url: null as string | null,
-  images: [] as Array<{ asset_id: string | null; url: string | null; kind: 'image' | 'video' }>,
+  images: [] as Array<{ _key: string; asset_id: string | null; url: string | null; kind: 'image' | 'video' }>,
   price: '',
   price_amount: '',
   duration_minutes: '',
@@ -480,7 +482,7 @@ function handleVideoChange(asset: { id: string; publicUrl: string; thumbnailUrl:
 }
 
 function addGalleryMedia() {
-  form.images.push({ asset_id: null, url: null, kind: 'image' })
+  form.images.push({ _key: crypto.randomUUID(), asset_id: null, url: null, kind: 'image' })
 }
 
 function removeGalleryMedia(index: number) {
@@ -513,7 +515,7 @@ function openEdit(exp: ApiRecord) {
     image_url: exp.image_url ?? null,
     video_asset_id: exp.video_asset_id ?? null,
     video_url: exp.video_url ?? null,
-    images: Array.isArray(exp.images) ? [...exp.images] : [],
+    images: Array.isArray(exp.images) ? exp.images.map((img: { asset_id?: string | null; url: string | null; kind: 'image' | 'video' }) => ({ _key: crypto.randomUUID(), asset_id: img.asset_id ?? null, url: img.url, kind: img.kind })) : [],
     price: exp.price ?? '',
     price_amount: exp.price_amount != null ? String(exp.price_amount) : '',
     duration_minutes: exp.duration_minutes != null ? String(exp.duration_minutes) : '',

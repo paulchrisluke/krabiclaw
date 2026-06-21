@@ -8,8 +8,11 @@ const optionalInteger = (value: unknown) => {
   return Number.isFinite(parsed) && Number.isInteger(parsed) ? parsed : null
 }
 
+class InvalidFieldError extends Error {}
+
 const stringArrayOrNull = (value: unknown) => {
-  if (!Array.isArray(value)) return null
+  if (value === null || value === undefined) return null
+  if (!Array.isArray(value)) throw new InvalidFieldError()
   return value.map(String).map(item => item.trim()).filter(Boolean)
 }
 
@@ -62,15 +65,27 @@ export default defineEventHandler(async (event) => {
     if (parsed === null) return jsonResponse({ error: 'featured_sort_order must be an integer' }, { status: 400 })
   }
 
+  let highlights: string[] | null
+  let includedItems: string[] | null
+  let whatToBring: string[] | null
+  try {
+    highlights = stringArrayOrNull(body.highlights)
+    includedItems = stringArrayOrNull(body.included_items)
+    whatToBring = stringArrayOrNull(body.what_to_bring)
+  } catch (err) {
+    if (err instanceof InvalidFieldError) return jsonResponse({ error: 'highlights, included_items, and what_to_bring must be arrays' }, { status: 400 })
+    throw err
+  }
+
   const experience = await createExperience(db, site.organization_id, siteId, {
     title,
     tagline: body.tagline ? String(body.tagline).trim() : null,
     body: body.body ? String(body.body).trim() : null,
     image_asset_id: body.image_asset_id ? String(body.image_asset_id) : null,
     video_asset_id: body.video_asset_id ? String(body.video_asset_id) : null,
-    highlights: stringArrayOrNull(body.highlights),
-    included_items: stringArrayOrNull(body.included_items),
-    what_to_bring: stringArrayOrNull(body.what_to_bring),
+    highlights,
+    included_items: includedItems,
+    what_to_bring: whatToBring,
     meeting_point: body.meeting_point ? String(body.meeting_point).trim() : null,
     cancellation_policy: body.cancellation_policy ? String(body.cancellation_policy).trim() : null,
     price: body.price ? String(body.price).trim() : null,

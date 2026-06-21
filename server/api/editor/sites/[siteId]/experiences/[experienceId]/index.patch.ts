@@ -13,8 +13,11 @@ const optionalInteger = (value: unknown) => {
   return parsed !== null && Number.isInteger(parsed) ? parsed : null
 }
 
+class InvalidFieldError extends Error {}
+
 const stringArrayOrNull = (value: unknown) => {
-  if (!Array.isArray(value)) return null
+  if (value === null || value === undefined) return null
+  if (!Array.isArray(value)) throw new InvalidFieldError()
   return value.map(String).map(item => item.trim()).filter(Boolean)
 }
 
@@ -50,9 +53,14 @@ export default defineEventHandler(async (event) => {
   if ('body' in body) updates.body = body.body ? String(body.body).trim() : null
   if ('image_asset_id' in body) updates.image_asset_id = body.image_asset_id ? String(body.image_asset_id) : null
   if ('video_asset_id' in body) updates.video_asset_id = body.video_asset_id ? String(body.video_asset_id) : null
-  if ('highlights' in body) updates.highlights = stringArrayOrNull(body.highlights)
-  if ('included_items' in body) updates.included_items = stringArrayOrNull(body.included_items)
-  if ('what_to_bring' in body) updates.what_to_bring = stringArrayOrNull(body.what_to_bring)
+  try {
+    if ('highlights' in body) updates.highlights = stringArrayOrNull(body.highlights)
+    if ('included_items' in body) updates.included_items = stringArrayOrNull(body.included_items)
+    if ('what_to_bring' in body) updates.what_to_bring = stringArrayOrNull(body.what_to_bring)
+  } catch (err) {
+    if (err instanceof InvalidFieldError) return jsonResponse({ error: 'highlights, included_items, and what_to_bring must be arrays' }, { status: 400 })
+    throw err
+  }
   if ('meeting_point' in body) updates.meeting_point = body.meeting_point ? String(body.meeting_point).trim() : null
   if ('cancellation_policy' in body) updates.cancellation_policy = body.cancellation_policy ? String(body.cancellation_policy).trim() : null
   if ('price' in body) updates.price = body.price ? String(body.price).trim() : null

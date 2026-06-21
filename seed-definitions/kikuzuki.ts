@@ -481,8 +481,8 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       body:
         "Welcome to the newest, most electrifying dining experience in Ao Nang. Kikuzuki has opened its very own live teppanyaki counter, bringing Japanese culinary theatre right in front of your eyes.\n\nThis isn't just dinner, it's a show.\n\nAt Kikuzuki Teppanyaki, guests sit around the grill while our chef fires up premium ingredients: Japanese wagyu, local seafood, scallops, lobster, snow fish, vegetables, and rice. Everything is cooked à la minute with skill, flair, and a big hit of fun. Expect flames, aroma, precision cuts, and a touch of Japanese humour from the chef as he cooks right in front of you.\n\nWhat makes it special:\n- Only a few seats at the chef's counter, an intimate, up-close experience\n- Premium ingredients imported from Japan plus the best local Andaman seafood\n- Personal interaction with the chef throughout the meal\n- Signature sets designed exclusively for the teppanyaki grill\n- Perfect for celebrations, date nights, and unforgettable holiday moments\n\nThink of it as Japanese fine dining with a bit of showmanship and a lot of flavour. Warm lights, sizzling sounds, the smell of wagyu hitting the grill, it's immersive, exciting, and something you won't find anywhere else in Ao Nang.",
       imageAssetId: 'media-kiku-teppanyaki',
-      price: 'THB 45.00 / guest',
-      priceAmount: 45,
+      price: 'THB 4,500.00 / guest',
+      priceAmount: 4500,
       durationMinutes: 90,
       maxCapacity: 6,
       timeSlots: ['15:00', '17:00', '19:00', '21:00'],

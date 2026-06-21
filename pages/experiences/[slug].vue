@@ -193,7 +193,7 @@
 
             <div v-if="experience.meeting_point" class="mt-10 border-t border-default pt-10">
               <h2 class="text-xl font-semibold text-default mb-5">Meeting point</h2>
-              <p class="text-default leading-7">{{ experience.meeting_point }}</p>
+              <p class="whitespace-pre-line text-default leading-7">{{ experience.meeting_point }}</p>
             </div>
 
             <div v-if="experience.cancellation_policy" class="mt-10 border-t border-default pt-10">
