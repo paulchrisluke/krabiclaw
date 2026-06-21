@@ -376,13 +376,56 @@ const siteListItem = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    organizationId: { type: 'string' },
+    organizationName: { type: ['string', 'null'] },
     name: { type: 'string', description: 'Brand name or subdomain slug.' },
     subdomain: { type: 'string' },
     orgSlug: { type: 'string', description: 'Organization slug — use with locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}' },
     publicUrl: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'live', 'paused'] },
+    active: { type: 'boolean', description: 'True when this is the currently active MCP site context.' },
   },
-  required: ['id', 'name', 'subdomain', 'orgSlug', 'status'],
+  required: ['id', 'organizationId', 'name', 'subdomain', 'orgSlug', 'status', 'active'],
+}
+
+const locationListItemObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    slug: { type: 'string' },
+    title: { type: 'string' },
+    city: { type: ['string', 'null'] },
+    status: { type: 'string' },
+    is_primary: { type: 'boolean' },
+    active: { type: 'boolean', description: 'True when this is the currently active MCP location context.' },
+  },
+  required: ['id', 'slug', 'title', 'status', 'is_primary', 'active'],
+}
+
+const workspaceContextObject = {
+  type: 'object',
+  properties: {
+    organization_id: { type: ['string', 'null'] },
+    organization_name: { type: ['string', 'null'] },
+    organization_slug: { type: ['string', 'null'] },
+    site_id: { type: ['string', 'null'] },
+    site_name: { type: ['string', 'null'] },
+    site_subdomain: { type: ['string', 'null'] },
+    location_id: { type: ['string', 'null'] },
+    location_slug: { type: ['string', 'null'] },
+    location_title: { type: ['string', 'null'] },
+  },
+}
+
+const organizationListItemObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: ['string', 'null'] },
+    slug: { type: ['string', 'null'] },
+    active: { type: 'boolean', description: 'True when this is the currently active MCP organization context.' },
+  },
+  required: ['id', 'active'],
 }
 
 // ---
@@ -428,7 +471,7 @@ function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'output
     ...siteIdSchema,
     ...propertyDefs,
   }
-  const required = ['site_id', ...(definition.required ?? [])]
+  const required = [...(definition.required ?? [])]
   const combinators: Record<string, unknown> = {}
   if (oneOf !== undefined) combinators.oneOf = oneOf
   if (anyOf !== undefined) combinators.anyOf = anyOf
@@ -493,6 +536,7 @@ function openWorldDestructiveAnnotations(): McpToolAnnotations {
 
 const READ_ONLY_TOOL_NAMES = [
   'get_current_user',
+  'get_workspace_context',
   'show_generated_images',
   'list_sites',
   'show_site_preview',
@@ -529,6 +573,7 @@ const READ_ONLY_TOOL_NAMES = [
 ] as const
 
 const BOUNDED_WRITE_TOOL_NAMES = [
+  'set_workspace_context',
   'save_generated_image',
   'save_generated_image_file',
   'upload_user_photo',
@@ -666,6 +711,56 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         user: currentUserObject,
       },
       required: ['user'],
+    },
+  })),
+  globalTool(withToolAnnotations({
+    name: 'get_workspace_context',
+    description: 'Get the active MCP organization, site, and location context, plus the accessible sites and locations available for this user.',
+    domain: 'context',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: { type: 'object', properties: {}, additionalProperties: true },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        context: workspaceContextObject,
+        organizations: { type: 'array', items: organizationListItemObject },
+        sites: { type: 'array', items: siteListItem },
+        locations: { type: 'array', items: locationListItemObject },
+      },
+      required: ['context', 'organizations', 'sites', 'locations'],
+    },
+  })),
+  globalTool(withToolAnnotations({
+    name: 'set_workspace_context',
+    description: 'Persist the active MCP site and optional location so later tool calls can omit raw IDs. Pass site_id to switch sites. Pass location_id to switch locations within the active or specified site.',
+    domain: 'context',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        organization_id: { type: 'string' },
+        site_id: { type: 'string' },
+        location_id: { type: 'string' },
+      },
+      oneOf: [
+        { required: ['organization_id'] },
+        { required: ['site_id'] },
+        { required: ['location_id'] },
+      ],
+      additionalProperties: true,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        context: workspaceContextObject,
+        organizations: { type: 'array', items: organizationListItemObject },
+        sites: { type: 'array', items: siteListItem },
+        locations: { type: 'array', items: locationListItemObject },
+      },
+      required: ['success', 'context', 'organizations', 'sites', 'locations'],
     },
   })),
   globalTool(withToolAnnotations({
@@ -1115,14 +1210,14 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'list_locations',
-    description: 'List site locations.',
+    description: 'List site locations in a compact format with ids, slugs, titles, and active-state markers so you can target location-scoped tools reliably.',
     domain: 'locations',
     minimumRole: 'editor',
     confirmRequired: false,
     outputSchema: {
       type: 'object',
       properties: {
-        locations: { type: 'array', items: locationObject },
+        locations: { type: 'array', items: locationListItemObject },
       },
       required: ['locations'],
     },

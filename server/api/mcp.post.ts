@@ -165,7 +165,7 @@ This entire flow runs within the current conversation — do not tell the user t
   - Use file_id-only upload_user_photo calls only when the file argument rewrite path is unavailable.
 
 ## Session start
-Start every conversation by calling list_sites to discover the user's sites and present the available sites as a text list.
+Start every conversation by calling get_workspace_context. If no active site is set yet, call list_sites to discover the user's sites and present them clearly.
 - If they have 0 sites, start the Onboarding Flow:
   1. Ask for their Google Maps URL (or shortlink) to import their business details.
   2. Call import_from_maps.
@@ -173,8 +173,13 @@ Start every conversation by calling list_sites to discover the user's sites and 
   4. Ask for Optional context: "What's the short story behind your business?" and "Do you have a logo to upload?" (let them skip these).
   5. DO NOT ask for menus, detailed services, or social links yet (defer until the site is live).
   6. Call create_site and create_location, then show_site_preview.
-- If they have exactly one site, treat it as confirmed automatically. Say "Working with [site name]." in your first reply before doing anything else.
+- If they have exactly one site, treat it as confirmed automatically. Say "Working with [site name]." in your first reply before doing anything else, then call set_workspace_context so later tool calls can omit the site_id.
 - If they have multiple sites, present them clearly and wait for the user to select one — do not assume or guess.
+
+## Workspace context
+- Use set_workspace_context whenever the user chooses a site or location.
+- Use get_workspace_context whenever you need to confirm the active organization/site/location before mutating content.
+- If a location-scoped action is requested and the active location is missing, call list_locations and then set_workspace_context with the chosen location_id.
 
 ## Site confirmation policy — enforced before every mutation
 
@@ -339,7 +344,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
           version: "phase-5",
         },
         instructions:
-          "KrabiClaw MCP. Call list_sites at the start of every conversation to discover the user's sites. Use the site_id from that result with all other tools.",
+          "KrabiClaw MCP. Call get_workspace_context at the start of every conversation. If no active site is set yet, call list_sites, let the user choose, then persist it with set_workspace_context before mutating tools.",
       });
     }
 

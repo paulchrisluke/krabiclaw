@@ -110,6 +110,12 @@ import { requireMcpSite, requireMcpUser } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
 import { renderWidget } from "~/server/utils/mcp-render";
 import {
+  resolveMcpWorkspace,
+  upsertMcpWorkspacePreference,
+  type McpLocationSummary,
+  type McpSiteSummary,
+} from "~/server/utils/mcp-context";
+import {
   getPlaceDetails,
   PlaceDetailsError,
   searchPlaces,
@@ -677,6 +683,181 @@ function resolveMatchingPolicy(raw: unknown): MatchingPolicy {
   };
 }
 
+function workspaceContextPayload(
+  organization: Awaited<ReturnType<typeof resolveMcpWorkspace>>["organization"],
+  site: McpSiteSummary | null,
+  location: McpLocationSummary | null,
+) {
+  return {
+    organization_id: organization?.id ?? site?.organization_id ?? null,
+    organization_name: organization?.name ?? site?.organization_name ?? null,
+    organization_slug: organization?.slug ?? site?.organization_slug ?? null,
+    site_id: site?.id ?? null,
+    site_name: site?.brand_name ?? site?.subdomain ?? null,
+    site_subdomain: site?.subdomain ?? null,
+    location_id: location?.id ?? null,
+    location_slug: location?.slug ?? null,
+    location_title: location?.title ?? null,
+  };
+}
+
+function workspaceOrganizationsPayload(
+  workspace: Awaited<ReturnType<typeof resolveMcpWorkspace>>,
+) {
+  return workspace.organizations.map((organization) => ({
+    ...organization,
+    active: organization.id === workspace.organization?.id,
+  }));
+}
+
+function workspaceSitesPayload(
+  workspace: Awaited<ReturnType<typeof resolveMcpWorkspace>>,
+) {
+  return workspace.sites.map((site) => ({
+    id: site.id,
+    organizationId: site.organization_id,
+    organizationName: site.organization_name,
+    name: site.brand_name ?? site.subdomain ?? site.id,
+    subdomain: site.subdomain ?? "",
+    orgSlug: site.organization_slug ?? "",
+    publicUrl:
+      site.public_url ??
+      (site.subdomain ? `https://${site.subdomain}.krabiclaw.com` : null),
+    status: site.status ?? "draft",
+    active: site.id === workspace.site?.id,
+  }));
+}
+
+function workspaceLocationsPayload(
+  workspace: Awaited<ReturnType<typeof resolveMcpWorkspace>>,
+) {
+  return workspace.locations.map((location) => ({
+    ...location,
+    active: location.id === workspace.location?.id,
+  }));
+}
+
+async function mutationContextPayload(
+  site: {
+    db: D1Database;
+    userId: string;
+    isPlatformAdmin: boolean;
+    siteId: string;
+  },
+  options: {
+    organizationId?: string | null;
+    locationId?: string | null;
+  } = {},
+) {
+  const workspace = await resolveMcpWorkspace(
+    site.db,
+    site.userId,
+    site.isPlatformAdmin,
+    {
+      organizationId: options.organizationId ?? null,
+      siteId: site.siteId,
+      locationId: options.locationId ?? null,
+    },
+  );
+  return workspaceContextPayload(
+    workspace.organization,
+    workspace.site,
+    workspace.location,
+  );
+}
+
+async function resolveMenuLocationId(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  menuId: string,
+) {
+  const row = await db
+    .prepare(
+      `
+      SELECT location_id
+      FROM menus
+      WHERE id = ? AND organization_id = ? AND site_id = ?
+      LIMIT 1
+    `,
+    )
+    .bind(menuId, organizationId, siteId)
+    .first<{ location_id: string | null }>();
+  return row?.location_id ?? null;
+}
+
+function toolRequiresArgument(
+  schema: Record<string, unknown>,
+  key: string,
+) {
+  return Array.isArray(schema.required) && schema.required.includes(key);
+}
+
+function rethrowWorkspaceError(error: unknown): never {
+  if (error instanceof Error && error.message) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, error.message);
+  }
+  throw error;
+}
+
+async function normalizeWorkspaceArguments(
+  event: H3Event,
+  toolName: string,
+  schema: Record<string, unknown>,
+  rawArguments: Record<string, unknown>,
+) {
+  const args = { ...rawArguments };
+
+  if (["get_current_user", "get_workspace_context", "set_workspace_context", "import_from_maps", "list_sites", "create_site"].includes(toolName)) {
+    return args;
+  }
+
+  const properties =
+    schema.properties && typeof schema.properties === "object"
+      ? (schema.properties as Record<string, unknown>)
+      : {};
+  const supportsSite = "site_id" in properties;
+  const supportsLocation = "location_id" in properties;
+  const needsLocation = toolRequiresArgument(schema, "location_id");
+  const hasSite = typeof args.site_id === "string" && args.site_id.trim();
+  const hasLocation = typeof args.location_id === "string" && args.location_id.trim();
+
+  if (!supportsSite && !needsLocation) {
+    return args;
+  }
+
+  if ((!supportsSite || hasSite) && (!needsLocation || hasLocation)) {
+    return args;
+  }
+
+  const user = await requireMcpUser(event);
+  let workspace;
+  try {
+    workspace = await resolveMcpWorkspace(
+      user.db,
+      user.userId,
+      user.isPlatformAdmin,
+      {
+        siteId: hasSite ? String(args.site_id) : null,
+        locationId: hasLocation ? String(args.location_id) : null,
+        requireSite: supportsSite || needsLocation,
+        requireLocation: needsLocation,
+      },
+    );
+  } catch (error) {
+    rethrowWorkspaceError(error);
+  }
+
+  if (!hasSite && supportsSite && workspace.site) {
+    args.site_id = workspace.site.id;
+  }
+  if (!hasLocation && supportsLocation && workspace.location && needsLocation) {
+    args.location_id = workspace.location.id;
+  }
+
+  return args;
+}
+
 export async function executeMcpToolCall(
   event: H3Event,
   toolName: string,
@@ -690,7 +871,14 @@ export async function executeMcpToolCall(
     );
   }
 
-  validateRequiredArguments(tool.inputSchema, rawArguments);
+  const normalizedArguments = await normalizeWorkspaceArguments(
+    event,
+    toolName,
+    tool.inputSchema,
+    rawArguments,
+  );
+
+  validateRequiredArguments(tool.inputSchema, normalizedArguments);
 
   if (toolName === "list_sites") {
     const user = await requireMcpUser(event);
@@ -708,13 +896,22 @@ export async function executeMcpToolCall(
       user.userId,
       user.isPlatformAdmin,
     );
+    const workspace = await resolveMcpWorkspace(
+      user.db,
+      user.userId,
+      user.isPlatformAdmin,
+    );
+    const workspaceSitesById = new Map(workspace.sites.map((site) => [site.id, site] as const));
     const sites = allSites.map((s: Record<string, unknown>) => ({
       id: s.id,
+      organizationId: s.organization_id,
+      organizationName: workspaceSitesById.get(String(s.id))?.organization_name ?? null,
       name: s.brand_name ?? s.slug,
       subdomain: s.subdomain,
       orgSlug: s.slug,
       publicUrl: s.subdomain ? `https://${s.subdomain}.krabiclaw.com` : null,
       status: s.status ?? "draft",
+      active: s.id === workspace.site?.id,
     }));
     const currentUser = {
       id: user.userId,
@@ -766,6 +963,71 @@ export async function executeMcpToolCall(
     };
   }
 
+  if (toolName === "get_workspace_context") {
+    const user = await requireMcpUser(event);
+    const workspace = await resolveMcpWorkspace(
+      user.db,
+      user.userId,
+      user.isPlatformAdmin,
+    );
+    return {
+      context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location),
+      organizations: workspaceOrganizationsPayload(workspace),
+      sites: workspaceSitesPayload(workspace),
+      locations: workspaceLocationsPayload(workspace),
+    };
+  }
+
+  if (toolName === "set_workspace_context") {
+    const user = await requireMcpUser(event);
+    const organizationId = optionalString(normalizedArguments, "organization_id");
+    const siteId = optionalString(normalizedArguments, "site_id");
+    const locationId = optionalString(normalizedArguments, "location_id");
+    let workspace;
+    try {
+      workspace = await resolveMcpWorkspace(
+        user.db,
+        user.userId,
+        user.isPlatformAdmin,
+        {
+          organizationId,
+          siteId,
+          locationId,
+          requireSite: Boolean(siteId) || Boolean(locationId),
+          requireLocation: Boolean(locationId),
+        },
+      );
+    } catch (error) {
+      rethrowWorkspaceError(error);
+    }
+
+    await upsertMcpWorkspacePreference(user.db, {
+      userId: user.userId,
+      organizationId: workspace.site?.organization_id ?? null,
+      siteId: workspace.site?.id ?? null,
+      locationId: locationId ? workspace.location?.id ?? null : workspace.location?.id ?? null,
+    });
+
+    const refreshed = await resolveMcpWorkspace(
+      user.db,
+      user.userId,
+      user.isPlatformAdmin,
+      {
+        organizationId: workspace.organization?.id ?? null,
+        siteId: workspace.site?.id ?? null,
+        locationId: workspace.location?.id ?? null,
+      },
+    );
+
+    return {
+      success: true,
+      context: workspaceContextPayload(refreshed.organization, refreshed.site, refreshed.location),
+      organizations: workspaceOrganizationsPayload(refreshed),
+      sites: workspaceSitesPayload(refreshed),
+      locations: workspaceLocationsPayload(refreshed),
+    };
+  }
+
   if (toolName === "import_from_maps") {
     const user = await requireMcpUser(event);
     const apiKey = (user.env as Record<string, unknown>)
@@ -776,7 +1038,7 @@ export async function executeMcpToolCall(
         "Google Places API not configured.",
       );
 
-    const rawUrl = requiredString(rawArguments, "url");
+    const rawUrl = requiredString(normalizedArguments, "maps_url");
 
     let parsedUrl: URL;
     try {
@@ -792,8 +1054,8 @@ export async function executeMcpToolCall(
       );
     }
 
-    const hint = (rawArguments.parsed_hint ?? null) as ParsedHint | null;
-    const policy = resolveMatchingPolicy(rawArguments.matching_policy);
+    const hint = (normalizedArguments.parsed_hint ?? null) as ParsedHint | null;
+    const policy = resolveMatchingPolicy(normalizedArguments.matching_policy);
 
     // Resolve short URLs (maps.app.goo.gl).
     // Use redirect:follow GET instead of redirect:manual HEAD —
@@ -995,7 +1257,7 @@ export async function executeMcpToolCall(
 
   if (toolName === "show_generated_images") {
     await requireMcpUser(event);
-    const raw = objectArray(rawArguments.images, "images");
+    const raw = objectArray(normalizedArguments.images, "images");
     if (raw.length === 0) {
       throw mcpProtocolError(
         MCP_ERROR.invalidParams,
@@ -1021,8 +1283,8 @@ export async function executeMcpToolCall(
     }));
 
     let activeSiteName: string | null = null;
-    const rawSiteId = optionalString(rawArguments, "site_id");
-    const rawTargetForName = optionalString(rawArguments, "target");
+    const rawSiteId = optionalString(normalizedArguments, "site_id");
+    const rawTargetForName = optionalString(normalizedArguments, "target");
     if (rawTargetForName && rawSiteId) {
       const authorizedSite = await requireMcpSite(event, rawSiteId, "editor");
       const siteRow = await authorizedSite.db
@@ -1038,8 +1300,8 @@ export async function executeMcpToolCall(
       activeSiteName = (nameVal ? nameVal : siteRow?.subdomain) ?? null;
     }
 
-    const picker = pickerConfigFromShowGeneratedImages(rawArguments, activeSiteName);
-    const isDebug = rawArguments.debug === true;
+    const picker = pickerConfigFromShowGeneratedImages(normalizedArguments, activeSiteName);
+    const isDebug = normalizedArguments.debug === true;
     return renderWidget(
       "show_generated_images",
       {
@@ -1066,17 +1328,57 @@ export async function executeMcpToolCall(
   if (toolName === "create_site") {
     const user = await requireMcpUser(event);
     const result = await runSiteCreation(user.env, user.db, user.userId, {
-      name: requiredString(rawArguments, "name"),
-      subdomain: requiredString(rawArguments, "subdomain"),
-      vertical: requiredString(rawArguments, "vertical") as SiteVertical,
+      name: requiredString(normalizedArguments, "name"),
+      subdomain: requiredString(normalizedArguments, "subdomain"),
+      vertical: requiredString(normalizedArguments, "vertical") as SiteVertical,
     });
     assertDomainSuccess(result);
-    return normalizeSiteCreationData(result.data);
+    const normalized = normalizeSiteCreationData(result.data);
+    const createdSite = await resolveMcpWorkspace(
+      user.db,
+      user.userId,
+      user.isPlatformAdmin,
+      { siteId: normalized.siteId, requireSite: true },
+    );
+    await upsertMcpWorkspacePreference(user.db, {
+      userId: user.userId,
+      organizationId: createdSite.site?.organization_id ?? null,
+      siteId: createdSite.site?.id ?? normalized.siteId,
+      locationId: createdSite.location?.id ?? null,
+    });
+    return normalized;
   }
 
-  const siteId = requiredString(rawArguments, "site_id");
+  const siteId = requiredString(normalizedArguments, "site_id");
   const site = await requireMcpSite(event, siteId, tool.minimumRole);
-  const args = omit(rawArguments, ["site_id"]);
+  const args = omit(normalizedArguments, ["site_id"]);
+  const explicitSiteId = optionalString(rawArguments, "site_id");
+  const explicitLocationId = optionalString(rawArguments, "location_id");
+
+  if (explicitSiteId || explicitLocationId) {
+    let workspace;
+    try {
+      workspace = await resolveMcpWorkspace(
+        site.db,
+        site.userId,
+        site.isPlatformAdmin,
+        {
+          siteId: site.siteId,
+          locationId: explicitLocationId,
+          requireSite: true,
+          requireLocation: Boolean(explicitLocationId),
+        },
+      );
+    } catch (error) {
+      rethrowWorkspaceError(error);
+    }
+    await upsertMcpWorkspacePreference(site.db, {
+      userId: site.userId,
+      organizationId: workspace.site?.organization_id ?? site.organizationId,
+      siteId: workspace.site?.id ?? site.siteId,
+      locationId: explicitLocationId ? (workspace.location?.id ?? null) : (workspace.location?.id ?? null),
+    });
+  }
 
   if (
     tool.requiredEntitlement &&
@@ -1157,14 +1459,24 @@ export async function executeMcpToolCall(
       );
     }
     case "get_site":
-      return {
-        site: await getSiteForMcp(
+      {
+        const siteRecord = await getSiteForMcp(
           site.db,
           site.siteId,
           site.userId,
           site.isPlatformAdmin,
-        ),
-      };
+        );
+        const workspace = await resolveMcpWorkspace(
+          site.db,
+          site.userId,
+          site.isPlatformAdmin,
+          { siteId: site.siteId },
+        );
+        return {
+          site: siteRecord,
+          context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location),
+        };
+      }
     case "get_site_settings":
       return {
         settings: await loadSiteSettings(
@@ -1192,7 +1504,10 @@ export async function executeMcpToolCall(
         },
       );
       assertDomainSuccess(result);
-      return result.data;
+      return {
+        ...result.data,
+        context: await mutationContextPayload(site),
+      };
     }
     case "set_default_currency": {
       const { isCurrencyCode } = await import("~/shared/currencies");
@@ -1209,7 +1524,11 @@ export async function executeMcpToolCall(
         site.userId,
       );
       assertDomainSuccess(result);
-      return { default_currency: currency, updated: true };
+      return {
+        default_currency: currency,
+        updated: true,
+        context: await mutationContextPayload(site),
+      };
     }
     case "set_logo": {
       const assetId = requiredString(args, "asset_id");
@@ -1227,6 +1546,7 @@ export async function executeMcpToolCall(
         id: site.siteId,
         updated: true,
         logo_asset_id: assetId,
+        context: await mutationContextPayload(site),
       };
     }
     case "set_brand_color": {
@@ -1249,35 +1569,40 @@ export async function executeMcpToolCall(
         brand_color: resolvedColor,
         updated: true,
         description: `Set brand color to ${resolvedColor} from "${colorInput}"`,
+        context: await mutationContextPayload(site),
       };
     }
     case "list_locations": {
-      const rows = await site.db
-        .prepare(
-          `
-        SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
-               rating, review_count, description, short_description, status, is_primary,
-               address, opening_hours, hero_image_asset_id, hero_video_asset_id, price_level,
-               facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-               created_at, updated_at
-        FROM business_locations
-        WHERE organization_id = ? AND site_id = ?
-        ORDER BY is_primary DESC, title ASC
-      `,
-        )
-        .bind(site.organizationId, site.siteId)
-        .all();
-      return { locations: rows.results ?? [] };
+      const workspace = await resolveMcpWorkspace(
+        site.db,
+        site.userId,
+        site.isPlatformAdmin,
+        { siteId: site.siteId },
+      );
+      return {
+        context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location),
+        locations: workspaceLocationsPayload(workspace),
+      };
     }
     case "get_location":
-      return {
-        location: await getLocationForMcp(
+      {
+        const locationId = requiredString(args, "location_id");
+        const workspace = await resolveMcpWorkspace(
+          site.db,
+          site.userId,
+          site.isPlatformAdmin,
+          { siteId: site.siteId, locationId },
+        );
+        return {
+          location: await getLocationForMcp(
           site.db,
           site.organizationId,
           site.siteId,
-          requiredString(args, "location_id"),
-        ),
-      };
+            locationId,
+          ),
+          context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location),
+        };
+      }
     case "create_location": {
       const result = await createLocation(
         site.env,
@@ -1301,59 +1626,83 @@ export async function executeMcpToolCall(
         );
       }
       assertDomainSuccess(result);
-      return result.data;
+      return {
+        ...result.data,
+        context: await mutationContextPayload(site, {
+          locationId:
+            typeof (result.data as { location?: { id?: string } }).location?.id === "string"
+              ? (result.data as { location: { id: string } }).location.id
+              : null,
+        }),
+      };
     }
     case "update_location": {
+      const locationId = requiredString(args, "location_id");
       const result = await updateLocation(
         site.db,
         site.organizationId,
         site.siteId,
-        requiredString(args, "location_id"),
+        locationId,
         omit(args, ["location_id"]) as never,
         site.userId,
       );
       assertDomainSuccess(result);
-      return result.data;
+      return {
+        ...result.data,
+        context: await mutationContextPayload(site, { locationId }),
+      };
     }
     case "set_location_hero_image": {
+      const locationId = requiredString(args, "location_id");
       const assetId = requiredString(args, "asset_id");
       await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
       const result = await updateLocation(
         site.db,
         site.organizationId,
         site.siteId,
-        requiredString(args, "location_id"),
+        locationId,
         { hero_image_asset_id: assetId } as never,
         site.userId,
       );
       assertDomainSuccess(result);
-      return result.data;
+      return {
+        ...result.data,
+        context: await mutationContextPayload(site, { locationId }),
+      };
     }
     case "set_location_hero_video": {
+      const locationId = requiredString(args, "location_id");
       const assetId = requiredString(args, "asset_id");
       await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
       const result = await updateLocation(
         site.db,
         site.organizationId,
         site.siteId,
-        requiredString(args, "location_id"),
+        locationId,
         { hero_video_asset_id: assetId } as never,
         site.userId,
       );
       assertDomainSuccess(result);
-      return result.data;
+      return {
+        ...result.data,
+        context: await mutationContextPayload(site, { locationId }),
+      };
     }
     case "delete_location": {
+      const locationId = requiredString(args, "location_id");
       const result = await deleteLocation(
         site.env,
         site.db,
         site.organizationId,
         site.siteId,
-        requiredString(args, "location_id"),
+        locationId,
         site.userId,
       );
       assertDomainSuccess(result);
-      return result.data;
+      return {
+        ...result.data,
+        context: await mutationContextPayload(site, { locationId }),
+      };
     }
     case "list_menus":
       return {
@@ -1374,8 +1723,8 @@ export async function executeMcpToolCall(
         ),
       };
     case "create_menu":
-      return {
-        menu: await createMenu(
+      {
+        const menu = await createMenu(
           site.db,
           site.organizationId,
           site.siteId,
@@ -1385,35 +1734,61 @@ export async function executeMcpToolCall(
             locationId: optionalString(args, "location_id") ?? null,
           },
           site.userId,
-        ),
-      };
+        );
+        return {
+          menu,
+          context: await mutationContextPayload(site, {
+            locationId:
+              typeof menu.location_id === "string" ? menu.location_id : null,
+          }),
+        };
+      }
     case "update_menu":
-      return {
-        menu: await updateMenu(
+      {
+        const menu = await updateMenu(
           site.db,
           site.organizationId,
           site.siteId,
           requiredString(args, "menu_id"),
           omit(args, ["menu_id"]) as never,
           site.userId,
-        ),
-      };
+        );
+        return {
+          menu,
+          context: await mutationContextPayload(site, {
+            locationId: typeof menu.location_id === "string" ? menu.location_id : null,
+          }),
+        };
+      }
     case "delete_menu":
-      await deleteMenu(site.db, site.organizationId, site.siteId, requiredString(args, "menu_id"));
-      return { deleted: true };
+      {
+        const menuId = requiredString(args, "menu_id");
+        const locationId = await resolveMenuLocationId(site.db, site.organizationId, site.siteId, menuId);
+        await deleteMenu(site.db, site.organizationId, site.siteId, menuId);
+        return { deleted: true, context: await mutationContextPayload(site, { locationId }) };
+      }
     case "create_menu_item": {
       const createMenuItemArgs = normalizeMenuItemArgs(args, {
         requireSection: true,
       });
-      return {
-        item: await createMenuItem(
+      const item = await createMenuItem(
           site.db,
           site.organizationId,
           site.siteId,
           requiredString(createMenuItemArgs, "menu_id"),
           omit(createMenuItemArgs, ["menu_id", "price"]) as never,
           site.userId,
-        ),
+        );
+      return {
+        item,
+        context: await mutationContextPayload(site, {
+          locationId: await resolveMenuLocationId(
+            site.db,
+            site.organizationId,
+            site.siteId,
+            item.menu_id,
+          ),
+        }),
       };
     }
     case "add_menu_items_batch": {
@@ -1532,29 +1907,42 @@ export async function executeMcpToolCall(
       const updateMenuItemArgs = normalizeMenuItemArgs(args, {
         requireSection: false,
       });
-      return {
-        item: await updateMenuItem(
+      const item = await updateMenuItem(
           site.db,
           site.organizationId,
           site.siteId,
           requiredString(updateMenuItemArgs, "menu_item_id"),
           omit(updateMenuItemArgs, ["menu_item_id", "price"]) as never,
           site.userId,
-        ),
+        );
+      return {
+        item,
+        context: await mutationContextPayload(site, {
+          locationId: await resolveMenuLocationId(site.db, site.organizationId, site.siteId, item.menu_id),
+        }),
       };
     }
     case "set_menu_item_image": {
       const assetId = requiredString(args, "asset_id");
       await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-      return {
-        item: await updateMenuItem(
+      const item = await updateMenuItem(
           site.db,
           site.organizationId,
           site.siteId,
           requiredString(args, "menu_item_id"),
           { image_asset_id: assetId } as never,
           site.userId,
-        ),
+        );
+      return {
+        item,
+        context: await mutationContextPayload(site, {
+          locationId: await resolveMenuLocationId(
+            site.db,
+            site.organizationId,
+            site.siteId,
+            item.menu_id,
+          ),
+        }),
       };
     }
     case "delete_menu_item": {
@@ -1627,38 +2015,57 @@ export async function executeMcpToolCall(
         ),
       };
     case "create_post":
-      return {
-        post: await createPost(
+      {
+        const post = await createPost(
           site.db,
           site.organizationId,
           site.siteId,
           args as never,
           site.userId,
-        ),
-      };
+        );
+        return {
+          post,
+          context: await mutationContextPayload(site, {
+            locationId: post && typeof post.location_id === "string" ? post.location_id : null,
+          }),
+        };
+      }
     case "update_post":
-      return {
-        post: await updatePost(
+      {
+        const post = await updatePost(
           site.db,
           site.organizationId,
           site.siteId,
           requiredString(args, "post_id"),
           omit(args, ["post_id"]) as never,
           site.userId,
-        ),
-      };
+        );
+        return {
+          post,
+          context: await mutationContextPayload(site, {
+            locationId:
+              post && typeof post.location_id === "string"
+                ? post.location_id
+                : null,
+          }),
+        };
+      }
     case "set_post_image": {
       const assetId = requiredString(args, "asset_id");
       await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-      return {
-        post: await updatePost(
+      const post = await updatePost(
           site.db,
           site.organizationId,
           site.siteId,
           requiredString(args, "post_id"),
           { image_asset_id: assetId },
           site.userId,
-        ),
+        );
+      return {
+        post,
+        context: await mutationContextPayload(site, {
+          locationId: post && typeof post.location_id === "string" ? post.location_id : null,
+        }),
       };
     }
     case "publish_post": {
@@ -1823,6 +2230,9 @@ export async function executeMcpToolCall(
 
       return {
         post: await getPost(site.db, site.organizationId, site.siteId, postId),
+        context: await mutationContextPayload(site, {
+          locationId: post && typeof post.location_id === "string" ? post.location_id : null,
+        }),
       };
     }
     case "delete_post": {
@@ -1835,6 +2245,7 @@ export async function executeMcpToolCall(
           site.siteId,
           postId,
         ),
+        context: await mutationContextPayload(site),
       };
     }
     case "get_site_media_assets":
@@ -1888,6 +2299,9 @@ export async function executeMcpToolCall(
         site_id: site.siteId,
         activate_url: `${baseUrl}/api/mcp/media/${assetId}/activate`,
         activation_token: activationToken,
+        context: await mutationContextPayload(site, {
+          locationId: optionalString(args, "location_id"),
+        }),
       };
       return uploadPayload;
     }
@@ -1914,6 +2328,7 @@ export async function executeMcpToolCall(
         public_url: publicUrl,
         thumbnail_url: thumbnailUrl,
         status: "active",
+        context: await mutationContextPayload(site),
       };
     }
     case "update_media_asset": {
@@ -1927,7 +2342,12 @@ export async function executeMcpToolCall(
           category: (optionalString(args, "category") as never) ?? undefined,
         },
       );
-      return { updated };
+      return {
+        updated,
+        context: await mutationContextPayload(site, {
+          locationId: optionalString(args, "location_id"),
+        }),
+      };
     }
     case "delete_media_asset":
       await deleteMediaAsset(
@@ -1936,7 +2356,7 @@ export async function executeMcpToolCall(
         requiredString(args, "asset_id"),
         site.siteId,
       );
-      return { deleted: true };
+      return { deleted: true, context: await mutationContextPayload(site) };
     case "get_facebook_connection": {
       const connection = await getFacebookPagesConnection(
         site.env as never,
@@ -2004,6 +2424,7 @@ export async function executeMcpToolCall(
         success: true,
         post_id: result.id,
         page_name: connection.facebook_page_name,
+        context: await mutationContextPayload(site),
       };
     }
     case "sync_facebook_page": {
@@ -2091,6 +2512,7 @@ export async function executeMcpToolCall(
           cover: pageInfo.cover?.source ?? null,
           picture: pageInfo.picture?.data?.url ?? null,
         },
+        context: await mutationContextPayload(site, { locationId }),
       };
     }
     case "import_menu_from_media": {
@@ -2119,44 +2541,56 @@ export async function executeMcpToolCall(
       );
     case "update_page_content":
       try {
-        return await updatePageContent(
+        const locationId = optionalString(args, "location_id");
+        const updated = await updatePageContent(
           site.db,
           site.organizationId,
           site.siteId,
           {
             page: requiredString(args, "page"),
             changes: objectRecord(args.changes, "changes"),
-            location_id: optionalString(args, "location_id"),
+            location_id: locationId,
           },
         );
+        return {
+          ...updated,
+          context: await mutationContextPayload(site, { locationId }),
+        };
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
     case "update_home_hero":
       try {
-        return await updateHomeHero(site.db, site.organizationId, site.siteId, {
+        const locationId = optionalString(args, "location_id");
+        const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
           title: optionalString(args, "title"),
           subtitle: optionalString(args, "subtitle"),
           image_asset_id: optionalString(args, "image_asset_id"),
           video_asset_id: optionalString(args, "video_asset_id"),
-          location_id: optionalString(args, "location_id"),
+          location_id: locationId,
         });
+        return {
+          ...updated,
+          context: await mutationContextPayload(site, { locationId }),
+        };
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
     case "set_home_hero_image":
       try {
         const assetId = requiredString(args, "asset_id");
+        const locationId = optionalString(args, "location_id");
         await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
         const update = await updateHomeHero(site.db, site.organizationId, site.siteId, {
           image_asset_id: assetId,
-          location_id: optionalString(args, "location_id"),
+          location_id: locationId,
         });
         const asset = await getMediaAsset(site.db, assetId, site.siteId);
         return {
           ...update,
           asset_id: assetId,
           public_url: asset?.public_url ?? null,
+          context: await mutationContextPayload(site, { locationId }),
         };
       } catch (error) {
         return rethrowAsInvalidParams(error);
@@ -2164,11 +2598,16 @@ export async function executeMcpToolCall(
     case "set_home_hero_video":
       try {
         const assetId = requiredString(args, "asset_id");
+        const locationId = optionalString(args, "location_id");
         await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
-        return await updateHomeHero(site.db, site.organizationId, site.siteId, {
+        const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
           video_asset_id: assetId,
-          location_id: optionalString(args, "location_id"),
+          location_id: locationId,
         });
+        return {
+          ...updated,
+          context: await mutationContextPayload(site, { locationId }),
+        };
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
@@ -2176,7 +2615,7 @@ export async function executeMcpToolCall(
       try {
         const assetId = requiredString(args, "asset_id");
         await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-        return await updatePageContent(
+        const updated = await updatePageContent(
           site.db,
           site.organizationId,
           site.siteId,
@@ -2186,20 +2625,31 @@ export async function executeMcpToolCall(
             location_id: null,
           },
         );
+        return {
+          ...updated,
+          context: await mutationContextPayload(site),
+        };
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
     case "delete_content_field":
-      return await deleteContentField(
+      {
+        const locationId = optionalString(args, "location_id");
+        const result = await deleteContentField(
         site.db,
         site.organizationId,
         site.siteId,
         {
           page: requiredString(args, "page"),
           field: requiredString(args, "field"),
-          location_id: optionalString(args, "location_id"),
+          location_id: locationId,
         },
-      );
+        );
+        return {
+          ...result,
+          context: await mutationContextPayload(site, { locationId }),
+        };
+      }
     case "list_location_qa":
       return {
         items: await listLocationQa(
@@ -2209,41 +2659,58 @@ export async function executeMcpToolCall(
         ),
       };
     case "create_location_qa": {
+      const locationId = requiredString(args, "location_id");
       const result = await createLocationQa(
         site.db,
         site.organizationId,
         site.siteId,
-        requiredString(args, "location_id"),
+        locationId,
         omit(args, ["location_id"]) as never,
       );
       assertDomainSuccess(result);
-      return result.data;
+      return {
+        ...result.data,
+        context: await mutationContextPayload(site, { locationId }),
+      };
     }
     case "update_location_qa":
-      return await updateLocationQa(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        requiredString(args, "location_id"),
-        requiredString(args, "qa_id"),
-        omit(args, ["location_id", "qa_id"]),
-      );
+      {
+        const locationId = requiredString(args, "location_id");
+        const updated = await updateLocationQa(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          locationId,
+          requiredString(args, "qa_id"),
+          omit(args, ["location_id", "qa_id"]),
+        );
+        return {
+          ...updated,
+          context: await mutationContextPayload(site, { locationId }),
+        };
+      }
     case "delete_location_qa": {
+      const locationId = requiredString(args, "location_id");
       const result = await deleteLocationQa(
         site.db,
         site.siteId,
-        requiredString(args, "location_id"),
+        locationId,
         requiredString(args, "qa_id"),
       );
       assertDomainSuccess(result);
-      return result.data;
+      return {
+        ...result.data,
+        context: await mutationContextPayload(site, { locationId }),
+      };
     }
     case "reorder_location_qa":
-      return await reorderLocationQa(
+      {
+        const locationId = requiredString(args, "location_id");
+        const updated = await reorderLocationQa(
         site.db,
         site.organizationId,
         site.siteId,
-        requiredString(args, "location_id"),
+        locationId,
         objectArray(args.updates, "updates").map((item) => {
           const sortOrder = item.sort_order;
           if (
@@ -2258,7 +2725,12 @@ export async function executeMcpToolCall(
           }
           return { id: requiredString(item, "id"), sort_order: sortOrder };
         }),
-      );
+        );
+        return {
+          ...updated,
+          context: await mutationContextPayload(site, { locationId }),
+        };
+      }
     case "list_location_reviews":
       return {
         reviews: await listLocationReviews(
@@ -2278,7 +2750,10 @@ export async function executeMcpToolCall(
         reply,
       );
       assertDomainSuccess(result);
-      return result.data;
+      return {
+        ...result.data,
+        context: await mutationContextPayload(site),
+      };
     }
     case "list_experiences":
       return {
@@ -2311,8 +2786,7 @@ export async function executeMcpToolCall(
           "location_id is required because this site does not have a primary location yet. Call list_locations or create_location first, then retry create_experience with that location_id.",
         );
       }
-      return {
-        experience: await createExperience(
+      const experience = await createExperience(
           site.db,
           site.organizationId,
           site.siteId,
@@ -2322,7 +2796,10 @@ export async function executeMcpToolCall(
             price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null,
           },
           site.userId,
-        ),
+        );
+      return {
+        experience,
+        context: await mutationContextPayload(site, { locationId }),
       };
     }
     case "update_experience": {
@@ -2331,8 +2808,7 @@ export async function executeMcpToolCall(
       if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
       }
-      return {
-        experience: await updateExperience(
+      const experience = await updateExperience(
           site.db,
           site.siteId,
           requiredString(args, "experience_id"),
@@ -2342,31 +2818,50 @@ export async function executeMcpToolCall(
               ? { price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null }
               : {}),
           },
-        ),
+        );
+      return {
+        experience,
+        context: await mutationContextPayload(site, {
+          locationId:
+            experience && typeof experience.location_id === "string"
+              ? experience.location_id
+              : null,
+        }),
       };
     }
     case "set_experience_image": {
       const assetId = requiredString(args, "asset_id");
       await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-      return {
-        experience: await updateExperience(
+      const experience = await updateExperience(
           site.db,
           site.siteId,
           requiredString(args, "experience_id"),
           { image_asset_id: assetId },
-        ),
+        );
+      return {
+        experience,
+        context: await mutationContextPayload(site, {
+          locationId:
+            experience && typeof experience.location_id === "string"
+              ? experience.location_id
+              : null,
+        }),
       };
     }
     case "set_experience_video": {
       const assetId = requiredString(args, "asset_id");
       await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
-      return {
-        experience: await updateExperience(
+      const experience = await updateExperience(
           site.db,
           site.siteId,
           requiredString(args, "experience_id"),
           { video_asset_id: assetId },
-        ),
+        );
+      return {
+        experience,
+        context: await mutationContextPayload(site, {
+          locationId: experience && typeof experience.location_id === "string" ? experience.location_id : null,
+        }),
       };
     }
     case "delete_experience":
@@ -2376,6 +2871,7 @@ export async function executeMcpToolCall(
           site.siteId,
           requiredString(args, "experience_id"),
         ),
+        context: await mutationContextPayload(site),
       };
     case "list_experience_bookings":
       return {
@@ -2397,6 +2893,7 @@ export async function executeMcpToolCall(
             | "confirmed"
             | "cancelled",
         ),
+        context: await mutationContextPayload(site),
       };
     case "get_experience_availability": {
       const experienceId = requiredString(args, "experience_id");
@@ -2460,21 +2957,25 @@ export async function executeMcpToolCall(
     case "list_locales":
       return await listSiteLocales(site.db, site.organizationId, site.siteId);
     case "upsert_locale":
-      return {
-        locale: await upsertSiteLocale(
+      {
+        const locale = await upsertSiteLocale(
           site.db,
           site.organizationId,
           site.siteId,
           args as never,
-        ),
-      };
+        );
+        return { locale, context: await mutationContextPayload(site) };
+      }
     case "delete_locale":
-      return await deleteSiteLocale(
+      {
+        const result = await deleteSiteLocale(
         site.db,
         site.organizationId,
         site.siteId,
         requiredString(args, "locale"),
-      );
+        );
+        return { ...result, context: await mutationContextPayload(site) };
+      }
     case "get_translation_inventory":
       return await buildTranslationInventory(
         site.db,
@@ -2505,7 +3006,7 @@ export async function executeMcpToolCall(
         site.siteId,
         job.id,
       );
-      return { job, first_batch: result };
+      return { job, first_batch: result, context: await mutationContextPayload(site) };
     }
     case "list_translation_jobs": {
       const rows = await site.db
@@ -2559,13 +3060,16 @@ export async function executeMcpToolCall(
       return { job, items: items.results ?? [] };
     }
     case "run_translation_job_batch":
-      return await processTranslationJobBatch(
+      {
+        const result = await processTranslationJobBatch(
         site.db,
         site.env,
         site.organizationId,
         site.siteId,
         requiredString(args, "job_id"),
-      );
+        );
+        return { ...result, context: await mutationContextPayload(site) };
+      }
     case "get_translation_review_items":
       return await listTranslationReviewItems(
         site.db,
@@ -2578,7 +3082,8 @@ export async function executeMcpToolCall(
         },
       );
     case "save_translation_review_item":
-      return await saveTranslationReviewItem(
+      {
+        const result = await saveTranslationReviewItem(
         site.db,
         site.organizationId,
         site.siteId,
@@ -2590,16 +3095,21 @@ export async function executeMcpToolCall(
           field: requiredString(args, "field"),
           fields: objectRecord(args.fields, "fields"),
         },
-      );
+        );
+        return { ...result, context: await mutationContextPayload(site) };
+      }
     case "publish_translations":
-      return await publishTranslationDrafts(
+      {
+        const result = await publishTranslationDrafts(
         site.db,
         site.organizationId,
         site.siteId,
         requiredString(args, "locale"),
         parseScope(optionalString(args, "scope") ?? undefined),
         site.userId,
-      );
+        );
+        return { ...result, context: await mutationContextPayload(site) };
+      }
     case "get_contact_inquiries":
       return {
         submissions: await listContactSubmissions(site.db, site.siteId),
@@ -2617,14 +3127,18 @@ export async function executeMcpToolCall(
         ),
       };
     case "update_notification_settings":
-      return {
-        notifications: await updateNotificationsSettings(
+      {
+        const notifications = await updateNotificationsSettings(
           site.db,
           site.organizationId,
           site.siteId,
           requiredString(args, "whatsapp_phone"),
-        ),
-      };
+        );
+        return {
+          notifications,
+          context: await mutationContextPayload(site),
+        };
+      }
     case "get_google_business_connection":
       return {
         connection: await getGoogleBusinessLocationConnectionForMcp(
@@ -2682,7 +3196,10 @@ export async function executeMcpToolCall(
         },
       );
       assertDomainSuccess(result);
-      return result.data;
+      return {
+        ...result.data,
+        context: await mutationContextPayload(site),
+      };
     }
     case "save_generated_image": {
       if (!hasCloudflareImagesConfig(site.env))
@@ -2733,6 +3250,7 @@ export async function executeMcpToolCall(
         thumbnailUrl: uploaded.thumbnailUrl,
         nextStep:
           "Upload complete. This image is in the media library but not assigned yet. Call a placement tool like set_home_hero_image or set_logo next.",
+        context: await mutationContextPayload(site),
       };
     }
     case "save_generated_image_file": {
@@ -2771,6 +3289,7 @@ export async function executeMcpToolCall(
         assetId,
         publicUrl: uploaded.publicUrl,
         thumbnailUrl: uploaded.thumbnailUrl,
+        context: await mutationContextPayload(site),
       };
     }
     case "upload_user_photo": {
@@ -2825,6 +3344,7 @@ export async function executeMcpToolCall(
         assetId,
         publicUrl: uploaded.publicUrl,
         thumbnailUrl: uploaded.thumbnailUrl,
+        context: await mutationContextPayload(site),
       };
     }
     // ─── Domain management ──────────────────────────────────────────────────
@@ -2884,6 +3404,7 @@ export async function executeMcpToolCall(
           status: d.status,
           instructions: domainInstructions(d),
         })),
+        context: await mutationContextPayload(site),
       };
     }
     case "set_canonical_domain": {
@@ -2900,6 +3421,7 @@ export async function executeMcpToolCall(
         domain: record.domain,
         role: record.role,
         status: record.status,
+        context: await mutationContextPayload(site),
       };
     }
     case "delete_domain": {
@@ -2911,7 +3433,7 @@ export async function executeMcpToolCall(
         "owner",
         site.userId,
       );
-      return { deleted: true, domain_id: domainId };
+      return { deleted: true, domain_id: domainId, context: await mutationContextPayload(site) };
     }
     case "sync_domain": {
       const domainId = requiredString(args, "domain_id");
@@ -2929,6 +3451,7 @@ export async function executeMcpToolCall(
         ssl_status: record.cloudflare_ssl_status ?? null,
         dns_status: record.dns_status ?? null,
         instructions: domainInstructions(record),
+        context: await mutationContextPayload(site),
       };
     }
     // ─── Analytics ──────────────────────────────────────────────────────────

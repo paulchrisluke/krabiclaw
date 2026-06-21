@@ -22,7 +22,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const { organization, site } = dashboard
-  const organizationId = organization?.id as string
+  if (!organization?.id) {
+    return jsonResponse({ error: 'Organization not found' }, { status: 400 })
+  }
+  const organizationId = organization.id as string
   const siteId = site.id as string
 
   const body = await readBody<Record<string, unknown>>(event)

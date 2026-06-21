@@ -98,9 +98,14 @@ function expectStatus(label, response, expected = 200) {
   else fail(`${label}: expected ${expected}, got ${response.status}`, response.body)
 }
 
+function expectValue(label, condition, detail) {
+  if (condition) pass(label)
+  else fail(label, detail)
+}
+
 function findHero(content) {
-  return Array.isArray(content?.content)
-    ? content.content.find(item => item?.field === 'hero')
+  return Array.isArray(content?.fields)
+    ? content.fields.find(item => item?.field === 'hero')
     : null
 }
 
@@ -139,9 +144,19 @@ async function main() {
   if (sites.some(site => site?.id === siteId)) pass('list_sites includes editable site')
   else fail('list_sites does not include editable site', { siteId, sites })
 
+  const setWorkspace = await mcp(headers, 'set_workspace_context', { site_id: siteId })
+  expectStatus('set_workspace_context succeeds', setWorkspace)
+  const setWorkspaceData = resultData(setWorkspace.body)
+  expectValue('set_workspace_context stores active site', setWorkspaceData?.context?.site_id === siteId, setWorkspaceData)
+
+  const getWorkspace = await mcp(headers, 'get_workspace_context')
+  expectStatus('get_workspace_context succeeds', getWorkspace)
+  const workspaceData = resultData(getWorkspace.body)
+  expectValue('get_workspace_context returns active site', workspaceData?.context?.site_id === siteId, workspaceData)
+  expectValue('get_workspace_context marks one active site', Array.isArray(workspaceData?.sites) && workspaceData.sites.some(site => site?.id === siteId && site?.active === true), workspaceData)
+
   const draftTitle = `MCP edit check ${Date.now()}`
   const save = await mcp(headers, 'update_page_content', {
-    site_id: siteId,
     page: 'home',
     changes: {
       'hero.title': draftTitle,
@@ -149,9 +164,11 @@ async function main() {
     },
   })
   expectStatus('update_page_content succeeds', save)
+  const saveData = resultData(save.body)
+  expectValue('update_page_content echoes active site context', saveData?.context?.site_id === siteId, saveData)
 
-  const content = await mcp(headers, 'get_page_content', { site_id: siteId, page: 'home' })
-  expectStatus('get_page_content succeeds', content)
+  const content = await mcp(headers, 'get_page_fields', { page: 'home' })
+  expectStatus('get_page_fields succeeds', content)
   const hero = findHero(resultData(content.body))
   if (hero?.hero_title === draftTitle) pass('canonical content includes updated hero title')
   else fail('canonical content did not include updated hero title', hero)

@@ -243,6 +243,13 @@ async function main() {
   expectValue('saved image fixture returns reusable assetId', Boolean(assetId), rawBase64Image)
 
   const locationId = await createLocation(headers, siteId)
+  const workspaceSet = await mcp(headers, 'set_workspace_context', {
+    site_id: siteId,
+    location_id: locationId,
+  })
+  expectStatus('set_workspace_context with location succeeds', workspaceSet)
+  const workspacePayload = data(workspaceSet.body)
+  expectValue('workspace context stores active location', workspacePayload?.context?.location_id === locationId, workspacePayload)
   const { itemId } = await createMenuAndItem(headers, siteId)
   const postId = await createPost(headers, siteId)
   const experienceId = await createExperience(headers, siteId)
@@ -252,6 +259,7 @@ async function main() {
     asset_id: assetId,
   }, (payload) => {
     expectValue('set_logo returns logo asset id', payload?.logo_asset_id === assetId, payload)
+    expectValue('set_logo returns context', payload?.context?.site_id === siteId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_home_hero_image', {
@@ -259,6 +267,7 @@ async function main() {
     asset_id: assetId,
   }, (payload) => {
     expectValue('set_home_hero_image updates home page', payload?.page === 'home', payload)
+    expectValue('set_home_hero_image returns context', payload?.context?.site_id === siteId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_story_image', {
@@ -266,6 +275,7 @@ async function main() {
     asset_id: dataUrlImage?.assetId,
   }, (payload) => {
     expectValue('set_story_image updates about page', payload?.page === 'about', payload)
+    expectValue('set_story_image returns context', payload?.context?.site_id === siteId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_location_hero_image', {
@@ -274,6 +284,7 @@ async function main() {
     asset_id: assetId,
   }, (payload) => {
     expectValue('set_location_hero_image updates location hero', payload?.location?.hero_image_asset_id === assetId, payload)
+    expectValue('set_location_hero_image returns location context', payload?.context?.location_id === locationId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_menu_item_image', {
@@ -282,6 +293,7 @@ async function main() {
     asset_id: assetId,
   }, (payload) => {
     expectValue('set_menu_item_image updates menu item image', payload?.item?.image_asset_id === assetId, payload)
+    expectValue('set_menu_item_image returns site context', payload?.context?.site_id === siteId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_post_image', {
@@ -290,6 +302,7 @@ async function main() {
     asset_id: assetId,
   }, (payload) => {
     expectValue('set_post_image updates post image', payload?.post?.image_asset_id === assetId, payload)
+    expectValue('set_post_image returns site context', payload?.context?.site_id === siteId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_experience_image', {
@@ -298,6 +311,7 @@ async function main() {
     asset_id: assetId,
   }, (payload) => {
     expectValue('set_experience_image updates experience image', payload?.experience?.image_asset_id === assetId, payload)
+    expectValue('set_experience_image returns site context', payload?.context?.site_id === siteId, payload)
   })
 
   process.exit(failed ? 1 : 0)
