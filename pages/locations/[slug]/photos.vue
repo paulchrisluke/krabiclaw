@@ -117,7 +117,8 @@ const lightboxItems = computed(() =>
   sorted.value.map((p: ApiValue) => ({
     url: p.local_url || p.google_url || p.thumbnail_url,
     kind: 'image' as const,
-    description: p.description
+    description: p.description,
+    alt: p.description || p.category || ''
   }))
 )
 

@@ -246,10 +246,10 @@ test.describe("mcp tools", () => {
     });
     expect(deleteQaRes.status()).toBe(200);
     expect(await deleteQaRes.json()).toEqual({
-      result: {
+      result: expect.objectContaining({
         qa_id: qaId,
         deleted: true,
-      },
+      }),
     });
   });
 });

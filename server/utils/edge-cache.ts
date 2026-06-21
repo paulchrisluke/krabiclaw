@@ -20,3 +20,30 @@ export function buildHtmlCacheKey(event: H3Event): string | null {
   const tenantSuffix = previewTenant ? `:${previewTenant}` : ''
   return `html:${host}${tenantSuffix}:${event.path}`
 }
+
+/**
+ * Purge all KV-cached HTML entries for the given site hostnames.
+ * Called after any mutating MCP tool call so the next browser load gets
+ * fresh SSR HTML with the correct /_nuxt/ asset hashes.
+ *
+ * KV keys are structured as: html:<host>:<pathname>
+ * We list by prefix html:<host>: and delete all matches.
+ */
+export async function purgeSiteKvCache(
+  kv: KVNamespace,
+  hostnames: string[],
+): Promise<void> {
+  const deletions: Promise<void>[] = []
+  for (const hostname of hostnames) {
+    const prefix = `html:${hostname}:`
+    let cursor: string | undefined
+    do {
+      const list: KVNamespaceListResult<unknown, string> = await kv.list({ prefix, cursor, limit: 100 })
+      for (const key of list.keys) {
+        deletions.push(kv.delete(key.name))
+      }
+      cursor = list.list_complete ? undefined : list.cursor
+    } while (cursor)
+  }
+  await Promise.all(deletions)
+}

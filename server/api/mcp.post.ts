@@ -19,6 +19,7 @@ import {
 import { MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { isWidgetEnabledForTool } from "~/server/utils/mcp-widget-config";
+import { purgeSiteKvCache } from "~/server/utils/edge-cache";
 
 const WIDGET_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 
@@ -456,6 +457,51 @@ Common workflows: update menus and items, create and publish posts, triage conta
             );
 
       const result = await executeMcpToolCall(event, toolName, rawArgs);
+
+      // After any mutating tool call, purge KV HTML cache for the site so the
+      // next browser load gets fresh SSR HTML with the correct /_nuxt/ asset hashes.
+      // Fire-and-forget — never block the MCP response on cache ops.
+      const mutatedTool = MCP_TOOLS.find((t) => t.name === toolName);
+      const isReadOnly = mutatedTool?.annotations?.readOnlyHint !== false;
+      if (!isReadOnly) {
+        const siteId = typeof rawArgs.site_id === "string" ? rawArgs.site_id.trim() : null;
+        if (siteId) {
+          const env = cloudflareEnv(event);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const db = (env as any).DB as D1Database | undefined;
+          if (kv && db) {
+            // Look up all active hostnames for this site (subdomain + custom domains)
+            const purgeAsync = db
+              .prepare(
+                `SELECT domain FROM site_domains
+                 WHERE site_id = ? AND status = 'active'
+                 LIMIT 20`,
+              )
+              .bind(siteId)
+              .all<{ domain: string }>()
+              .then(({ results }) => {
+                const hostnames = (results ?? []).map((r) => r.domain)
+                if (hostnames.length > 0) {
+                  return purgeSiteKvCache(kv, hostnames)
+                }
+              })
+              .catch((err: unknown) => {
+                console.warn("[mcp-cache-purge] failed:", String(err))
+              })
+            // Use Cloudflare's waitUntil when available so the purge
+            // can outlive the response; fall back to a detached promise.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const ctx = (event.context.cloudflare as any)?.context as { waitUntil?: (p: Promise<unknown>) => void } | undefined
+            if (ctx?.waitUntil) {
+              ctx.waitUntil(purgeAsync)
+            }
+            // purgeAsync already runs detached whether or not waitUntil is available
+          }
+        }
+      }
+
       const isRender = isMcpRenderResponse(result);
       const structuredContent = isRender ? result.structuredContent : result;
       const modelText = isRender && result.fallbackText

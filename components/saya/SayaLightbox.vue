@@ -26,7 +26,7 @@
         >
           <section
             v-for="(item, i) in items"
-            :key="item.url"
+            :key="`${item.url}-${i}`"
             class="relative h-dvh w-full snap-start snap-always"
           >
             <video
@@ -112,7 +112,7 @@ watch(items, () => {
   videoRefs.value = {}
 })
 
-function setVideoRef(el: any, index: number) {
+function setVideoRef(el: Element | ComponentPublicInstance | null, index: number) {
   if (el instanceof HTMLVideoElement) {
     videoRefs.value[index] = el
   }
