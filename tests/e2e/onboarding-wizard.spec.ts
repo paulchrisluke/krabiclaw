@@ -16,7 +16,7 @@ async function loginFreshUser(page: Page, baseURL: string, userId: string) {
 // `skipVertical` must match the wizard's own skip-vertical prop at the call
 // site (true on the add-location flow) — the vertical step never renders
 // there, so waiting on it would hang.
-// The add-location flow (pages/dashboard/[orgSlug]/new.vue) stays on /new and
+// The add-location flow (pages/dashboard/[orgSlug]/sites/[siteSlug]/new.vue) stays on /new and
 // shows a live preview of the new location instead of navigating away, so
 // every call site waits on the wizard's own "Done" message.
 async function completeManualWizard(
@@ -133,7 +133,8 @@ test.describe('onboarding wizard UI', () => {
 
     await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible({ timeout: 10_000 })
     await page.getByRole('button', { name: 'Go to my dashboard' }).click()
-    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}$`))
+    // Org root auto-redirects to the single site's workspace once context loads.
+    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}/sites/[^/]+$`))
   })
 
   test('transfer handoff wizard shows social and domain steps on a paid plan', async ({ page, baseURL, request }) => {
@@ -236,6 +237,7 @@ test.describe('onboarding wizard UI', () => {
 
     await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible({ timeout: 10_000 })
     await page.getByRole('button', { name: 'Go to my dashboard' }).click()
-    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}$`))
+    // Org root auto-redirects to the single site's workspace once context loads.
+    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}/sites/[^/]+$`))
   })
 })

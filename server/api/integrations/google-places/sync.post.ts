@@ -2,7 +2,7 @@ import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { syncPlaceToLocation } from '../../../utils/google-places'
 import { getDashboardSite } from '~/server/utils/dashboard-context'
-import { hasEntitlement } from '~/server/utils/billing'
+import { hasSiteEntitlement } from '~/server/utils/billing'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  if (!await hasEntitlement(env, db, site.organization_id, 'google_business')) {
+  if (!await hasSiteEntitlement(db, site.id, 'google_business')) {
     return jsonResponse({ error: 'Google Business sync requires a Growth plan or higher.' }, { status: 403 })
   }
 

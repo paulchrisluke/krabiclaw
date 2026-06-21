@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateExperience } from '~/server/utils/experiences'
+import { InvalidFieldError, stringArrayOrNull } from '~/server/utils/validation-helpers'
 
 const optionalNumber = (value: unknown) => {
   if (value === null || value === undefined || value === '') return null
@@ -11,14 +12,6 @@ const optionalNumber = (value: unknown) => {
 const optionalInteger = (value: unknown) => {
   const parsed = optionalNumber(value)
   return parsed !== null && Number.isInteger(parsed) ? parsed : null
-}
-
-class InvalidFieldError extends Error {}
-
-const stringArrayOrNull = (value: unknown) => {
-  if (value === null || value === undefined) return null
-  if (!Array.isArray(value)) throw new InvalidFieldError()
-  return value.map(String).map(item => item.trim()).filter(Boolean)
 }
 
 export default defineEventHandler(async (event) => {

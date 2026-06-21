@@ -78,7 +78,6 @@ import {
   listTranslationReviewItems,
   saveTranslationReviewItem,
 } from "~/server/utils/translation-review";
-import { hasEntitlement, type BillingEnv } from "~/server/utils/billing";
 import { contentRegistry, getFieldDef } from "~/config/content-registry";
 import type { MenuItem, UpdateMenuItemRequest } from "~/server/types/menu";
 import {
@@ -2461,10 +2460,6 @@ async function executeTool(
         return { error: "title must be at most 120 characters" };
       if (!validPriorities.includes(priority))
         return { error: "priority must be low, normal, high, or urgent" };
-
-      // Check org entitlement before insert
-      if (!(await hasEntitlement(env as unknown as BillingEnv, db, orgId, "managed_service")))
-        return { error: "Work requests require a Managed plan or above." };
 
       const result = await createWorkRequest(env, db, orgId, siteId, {
         type,

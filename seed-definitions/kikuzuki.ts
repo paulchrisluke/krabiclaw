@@ -478,6 +478,25 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       title: 'Teppanyaki Experience',
       slug: 'teppanyaki-experience',
       tagline: 'Live Japanese teppanyaki with premium ingredients, chef flair, and an unforgettable dining show.',
+      highlights: [
+        'Live teppanyaki counter with direct chef interaction and tableside cooking',
+        'Premium Japanese wagyu, fresh seafood, and seasonal vegetables prepared to order',
+        'Flames, knife work, and playful chef theatrics for a true dining show',
+        'Intimate seating ideal for celebrations, date nights, and special occasions',
+      ],
+      includedItems: [
+        'Chef-selected wagyu beef and premium seafood course',
+        'Seasonal vegetables, rice, sauces, and teppanyaki accompaniments',
+        'Welcome beverage and paired non-alcoholic drinks',
+        'Tableside preparation and service from the Kikuzuki teppanyaki team',
+      ],
+      whatToBring: [
+        'Smart casual attire or anything comfortable for a premium dinner',
+        'A light layer if you prefer cooler indoor dining',
+        'Your appetite and a phone for photos of the live cooking show',
+      ],
+      meetingPoint: 'Kikuzuki Japanese Restaurant, teppanyaki counter at the Ao Nang location',
+      cancellationPolicy: 'Free cancellation up to 24 hours before your reservation. Cancellations made within 24 hours, late arrivals, and no-shows are non-refundable because seating is limited and ingredients are prepared fresh for each guest.',
       body:
         "Welcome to the newest, most electrifying dining experience in Ao Nang. Kikuzuki has opened its very own live teppanyaki counter, bringing Japanese culinary theatre right in front of your eyes.\n\nThis isn't just dinner, it's a show.\n\nAt Kikuzuki Teppanyaki, guests sit around the grill while our chef fires up premium ingredients: Japanese wagyu, local seafood, scallops, lobster, snow fish, vegetables, and rice. Everything is cooked à la minute with skill, flair, and a big hit of fun. Expect flames, aroma, precision cuts, and a touch of Japanese humour from the chef as he cooks right in front of you.\n\nWhat makes it special:\n- Only a few seats at the chef's counter, an intimate, up-close experience\n- Premium ingredients imported from Japan plus the best local Andaman seafood\n- Personal interaction with the chef throughout the meal\n- Signature sets designed exclusively for the teppanyaki grill\n- Perfect for celebrations, date nights, and unforgettable holiday moments\n\nThink of it as Japanese fine dining with a bit of showmanship and a lot of flavour. Warm lights, sizzling sounds, the smell of wagyu hitting the grill, it's immersive, exciting, and something you won't find anywhere else in Ao Nang.",
       imageAssetId: 'media-kiku-teppanyaki',

@@ -426,7 +426,7 @@ const siteListItem = {
     organizationName: { type: ['string', 'null'] },
     name: { type: 'string', description: 'Brand name or subdomain slug.' },
     subdomain: { type: 'string' },
-    orgSlug: { type: 'string', description: 'Organization slug — use with locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}' },
+    orgSlug: { type: 'string', description: 'Organization slug — combine with this site\'s subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/{locationSlug}' },
     publicUrl: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'live', 'paused'] },
     active: { type: 'boolean', description: 'True when this is the currently active MCP site context.' },
@@ -1863,7 +1863,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_site_media_assets',
-    description: 'List media assets (images and videos) for a site. Use this first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/{locationSlug}/media — orgSlug comes from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
+    description: 'List media assets (images and videos) for a site. Use this first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/{locationSlug}/media — orgSlug and subdomain come from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1943,7 +1943,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_facebook_connection',
-    description: 'Check whether a Facebook Page is connected to this site. If not connected, direct the user to the dashboard integrations page to connect: https://krabiclaw.com/dashboard/{orgSlug}/~/settings/integrations',
+    description: 'Check whether a Facebook Page is connected to this site. If not connected, direct the user to the dashboard general settings page to connect: https://krabiclaw.com/dashboard/{orgSlug}/~/settings/general',
     domain: 'integrations',
     minimumRole: 'editor',
     confirmRequired: false,

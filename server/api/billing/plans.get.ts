@@ -9,8 +9,6 @@ export interface PlanPrice {
 }
 
 export interface PlanLimits {
-  locations: number | "unlimited";
-  sites: number | "unlimited";
   aiCredits: number | "unlimited";
   customDomain: boolean;
   googleBusiness: boolean;
@@ -51,8 +49,6 @@ const STARTER_PLAN: Plan = {
     "Basic SEO — get found by search & AI",
   ],
   limits: {
-    locations: 1,
-    sites: 1,
     aiCredits: 500,
     customDomain: false,
     googleBusiness: false,
@@ -76,8 +72,6 @@ const PLAN_CTA: Record<string, { label: string; href: string }> = {
 };
 
 const DEFAULT_PLAN_LIMITS: PlanLimits = {
-  locations: 1,
-  sites: 1,
   aiCredits: 0,
   customDomain: false,
   googleBusiness: false,

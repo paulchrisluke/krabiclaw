@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { getHeader } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 
@@ -75,14 +76,28 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     throw createError({ statusCode: 404, message: 'No organization found' })
   }
 
-  const site = await db.prepare(`
-    SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
-           status, onboarding_status, plan, primary_location_id, default_currency, source_locale
-    FROM sites
-    WHERE organization_id = ?
-    ORDER BY created_at ASC
-    LIMIT 1
-  `).bind(organization.id).first<DashboardSiteRow>()
+  // The active site is resolved explicitly from the `siteSlug` route segment, sent on
+  // every /api/dashboard/* request via the x-dashboard-site-slug header (see
+  // plugins/dashboard-site-header.ts). Falling back to the org's first site is only
+  // for legacy callers that haven't been migrated to the explicit sites/ route yet.
+  const siteSlug = getHeader(event, 'x-dashboard-site-slug')
+
+  const site = siteSlug
+    ? await db.prepare(`
+        SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
+               status, onboarding_status, plan, primary_location_id, default_currency, source_locale
+        FROM sites
+        WHERE organization_id = ? AND subdomain = ?
+        LIMIT 1
+      `).bind(organization.id, siteSlug).first<DashboardSiteRow>()
+    : await db.prepare(`
+        SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
+               status, onboarding_status, plan, primary_location_id, default_currency, source_locale
+        FROM sites
+        WHERE organization_id = ?
+        ORDER BY created_at ASC
+        LIMIT 1
+      `).bind(organization.id).first<DashboardSiteRow>()
 
   if (!site && options.requireSite !== false) {
     throw createError({ statusCode: 404, message: 'Site not found' })
@@ -111,6 +126,23 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
       locationHeroImageUrl: configByKey.location_hero_image_url ?? null,
     } : null
   }
+}
+
+export interface DashboardSiteSummaryRow {
+  id: string
+  brand_name: string | null
+  subdomain: string | null
+  plan: string | null
+}
+
+export async function listOrganizationSites(db: D1Database, organizationId: string) {
+  const sites = await db.prepare(`
+    SELECT id, brand_name, subdomain, plan
+    FROM sites
+    WHERE organization_id = ?
+    ORDER BY created_at ASC
+  `).bind(organizationId).all<DashboardSiteSummaryRow>()
+  return sites.results ?? []
 }
 
 export async function getDashboardSite(event: H3Event) {

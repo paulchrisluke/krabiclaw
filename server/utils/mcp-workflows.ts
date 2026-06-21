@@ -1,5 +1,5 @@
 import { contentRegistry, getFieldDef } from "~/config/content-registry";
-import { hasEntitlement } from "~/server/utils/billing";
+import { hasSiteEntitlement } from "~/server/utils/billing";
 import {
   getGoogleBusinessAccounts,
   getGoogleBusinessAuthUrl,
@@ -909,12 +909,7 @@ export async function getGoogleBusinessLocationConnectionForMcp(
   siteId: string,
   locationId: string,
 ) {
-  const entitled = await hasEntitlement(
-    env,
-    db,
-    organizationId,
-    "google_business",
-  );
+  const entitled = await hasSiteEntitlement(db, siteId, "google_business");
   if (!entitled) {
     throw new Error("Google Business integration requires a paid plan.");
   }
@@ -943,12 +938,7 @@ export async function getGoogleBusinessLocationAuthUrlForMcp(
   locationId: string,
   userId: string,
 ) {
-  const entitled = await hasEntitlement(
-    env,
-    db,
-    organizationId,
-    "google_business",
-  );
+  const entitled = await hasSiteEntitlement(db, siteId, "google_business");
   if (!entitled) {
     throw new Error("Google Business integration requires a paid plan.");
   }
@@ -972,12 +962,7 @@ export async function listGoogleBusinessAccountsForMcp(
   organizationId: string,
   siteId: string,
 ) {
-  const entitled = await hasEntitlement(
-    env,
-    db,
-    organizationId,
-    "google_business",
-  );
+  const entitled = await hasSiteEntitlement(db, siteId, "google_business");
   if (!entitled) {
     throw new Error("Google Business integration requires a paid plan.");
   }
@@ -1022,12 +1007,7 @@ export async function syncGoogleBusinessLocationsForMcp(
   accountId: string,
   locationIds: string[],
 ) {
-  const entitled = await hasEntitlement(
-    env,
-    db,
-    organizationId,
-    "google_business",
-  );
+  const entitled = await hasSiteEntitlement(db, siteId, "google_business");
   if (!entitled) {
     throw new Error("Google Business integration requires a paid plan.");
   }

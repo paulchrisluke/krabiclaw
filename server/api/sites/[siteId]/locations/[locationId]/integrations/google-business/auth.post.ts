@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getGoogleBusinessAuthUrl } from '~/server/utils/google-business'
-import { hasEntitlement } from '~/server/utils/billing'
+import { hasSiteEntitlement } from '~/server/utils/billing'
 import { signOAuthState } from '~/server/utils/encryption'
 
 export default defineEventHandler(async (event) => {
@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Location not found' }, { status: 404 })
     }
 
-    const entitled = await hasEntitlement(env, db, site.organization_id, 'google_business')
+    const entitled = await hasSiteEntitlement(db, site.id, 'google_business')
     if (!entitled) {
       return jsonResponse({
         error: 'Google Business integration requires a paid plan. Upgrade your plan to access this feature.'

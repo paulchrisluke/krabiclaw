@@ -125,14 +125,18 @@ Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locat
 ## Dashboard Model
 
 - **Organization** is the restaurant brand workspace and billing/team boundary.
-- **One org can have multiple sites** (multi-site constraint removed in migration `0017`).
-- Each site has its own plan and Stripe subscription (`site_billing`). The Stripe *customer* stays at org level (`organization_billing.stripe_customer_id`).
-- **Locations** are the persistent dashboard working context, selected from the header on every dashboard page.
+- **One org can have multiple sites** (multi-site constraint removed in migration `0017`). Sites are explicit everywhere — there is no "first site in org" fallback in dashboard routing or billing.
+- Each site has its own plan and Stripe subscription (`site_billing`). The Stripe *customer* stays at org level (`organization_billing.stripe_customer_id`) — one payment method covers every site in the org.
+- A new site always starts on `free`, even under a paid org. If the org already has another site on a paid plan and a saved card on file, the dashboard offers to auto-subscribe the new site immediately (`POST /api/billing/site-subscribe`, no Checkout redirect). Otherwise it's a normal Checkout upgrade later.
+- **Locations** are the persistent dashboard working context within a site, selected from the header on every dashboard page.
 - Public tenant routes remain location/experience-centric under `/locations/[slug]` and `/experiences/[slug]`.
-- Dashboard routes follow the Vercel-style workspace shape:
-  - `/dashboard/{orgSlug}` — restaurant workspace
-  - `/dashboard/{orgSlug}/{locationSlug}` — location workspace
-  - `/dashboard/{orgSlug}/~/settings/billing` — org billing
+- Dashboard routes follow the Vercel-style workspace shape, with an explicit site segment:
+  - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
+  - `/dashboard/{orgSlug}/sites/{siteSlug}` — site workspace (`siteSlug` is the site's `subdomain`)
+  - `/dashboard/{orgSlug}/sites/{siteSlug}/{locationSlug}` — location workspace
+  - `/dashboard/{orgSlug}/sites/new` — create another site under this org
+  - `/dashboard/{orgSlug}/~/settings/billing` — org billing (lists every site's plan/subscription, not just one)
   - `/dashboard/account/settings` — personal account settings
-- App-facing dashboard APIs use `/api/dashboard/*`; server code resolves the canonical restaurant site from the active Better Auth organization.
+- App-facing dashboard APIs use `/api/dashboard/*`; the active site is resolved server-side from the `x-dashboard-site-slug` header (auto-attached by `plugins/dashboard-site-header.ts` based on the route's `siteSlug`), not by guessing the org's oldest site.
+- **Site transfers move only the site** — its locations, content, billing, and entitlements reparent into the recipient's own existing org. The org itself, its other sites, and org-level billing/credits never move.
 - Dashboard is home for: billing, org settings, inbox triage (contact, reservations, reviews), managed service work queue, analytics.

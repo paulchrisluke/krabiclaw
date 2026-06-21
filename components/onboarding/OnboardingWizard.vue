@@ -307,6 +307,7 @@ type DetailsSource = 'imported' | 'manual'
 const props = defineProps<{
   siteId: string | null
   existingOrgSlug?: string | null
+  existingSiteSlug?: string | null
   setupEndpoint?: string
   setupManualEndpoint?: string
   skipVertical?: boolean
@@ -391,6 +392,7 @@ const detailsRequireBasics = computed(() => detailsSource.value === 'manual')
 const scrollRef = ref<HTMLElement | null>(null)
 const importedSiteId = ref<string | null>(props.siteId ?? null)
 const importedOrgSlug = ref<string | null>(null)
+const importedSiteSlug = ref<string | null>(null)
 const importedLocationSlug = ref<string | null>(null)
 const checklistStarterPrompt = ref<string | null>(null)
 const preConfirmStep = ref<WizardStep>('awaiting_url')
@@ -437,14 +439,17 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 const workspaceEntryPath = computed(() => {
   const slug = importedOrgSlug.value ?? props.existingOrgSlug ?? null
-  return slug ? `/dashboard/${slug}` : null
+  const siteSlug = importedSiteSlug.value ?? props.existingSiteSlug ?? null
+  if (!slug) return null
+  return siteSlug ? `/dashboard/${slug}/sites/${siteSlug}` : `/dashboard/${slug}`
 })
 
 const brandWorkspacePath = computed(() => {
   const slug = importedOrgSlug.value ?? props.existingOrgSlug ?? null
+  const siteSlug = importedSiteSlug.value ?? props.existingSiteSlug ?? null
   const locationSlug = importedLocationSlug.value
-  if (!slug || !locationSlug) return workspaceEntryPath.value
-  return `/dashboard/${slug}/${locationSlug}/pages`
+  if (!slug || !siteSlug || !locationSlug) return workspaceEntryPath.value
+  return `/dashboard/${slug}/sites/${siteSlug}/${locationSlug}/pages`
 })
 
 const chatgptGuidePath = computed(() => {
@@ -622,8 +627,9 @@ async function handleReply(reply: QuickReply) {
 
   if (reply.action === 'add_location') {
     const slug = importedOrgSlug.value ?? props.existingOrgSlug
+    const siteSlugForLocation = importedSiteSlug.value ?? props.existingSiteSlug
     await markOnboardingComplete()
-    await router.push(slug ? `/dashboard/${slug}/new` : '/dashboard')
+    await router.push(slug && siteSlugForLocation ? `/dashboard/${slug}/sites/${siteSlugForLocation}/new` : '/dashboard')
     return
   }
 }
@@ -764,6 +770,7 @@ async function submitDetails() {
       success: boolean
       siteId?: string | null
       orgSlug?: string | null
+      siteSlug?: string | null
       locationSlug?: string | null
       error?: string
     }>(endpoint, { method: 'POST', body })
@@ -775,6 +782,7 @@ async function submitDetails() {
     tools[0]!.done = true
     importedSiteId.value = res.siteId ?? props.siteId ?? null
     importedOrgSlug.value = res.orgSlug ?? null
+    importedSiteSlug.value = res.siteSlug ?? props.existingSiteSlug ?? null
     await refreshChecklistStarterPrompt(importedSiteId.value)
     await finishCreation(res.orgSlug, res.locationSlug)
   } catch (err) {

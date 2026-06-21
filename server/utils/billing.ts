@@ -130,19 +130,6 @@ export async function getSiteEntitlements(db: D1Database, siteId: string): Promi
   return parseEntitlementRows(rows.results ?? [])
 }
 
-// Backward-compat shim
-export async function getOrganizationEntitlements(
-  env: BillingEnv,
-  db: D1Database,
-  organizationId: string,
-): Promise<EntitlementsMap> {
-  void env
-  const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`)
-    .bind(organizationId).first<{ id: string }>()
-  if (site) return getSiteEntitlements(db, site.id)
-  return getPlanEntitlements('free')
-}
-
 export async function hasSiteEntitlement(db: D1Database, siteId: string, key: string): Promise<boolean> {
   const row = await db.prepare(`SELECT value FROM site_entitlements WHERE site_id = ? AND key = ? LIMIT 1`)
     .bind(siteId, key).first<EntitlementValueRow>()
@@ -193,20 +180,6 @@ export async function setSiteEntitlementsFromPlan(
   await db.batch(statements)
 }
 
-// Backward-compat shim
-export async function setOrganizationEntitlementsFromPlan(
-  env: BillingEnv,
-  db: D1Database,
-  organizationId: string,
-  plan: string,
-): Promise<void> {
-  void env
-  const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`)
-    .bind(organizationId).first<{ id: string }>()
-  if (!site) return
-  await setSiteEntitlementsFromPlan(db, site.id, organizationId, plan)
-}
-
 // ── Plan entitlements definition ──────────────────────────────────────────────
 
 export function getPlanEntitlements(plan: string): EntitlementsMap {
@@ -235,6 +208,34 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
     default:
       return base
   }
+}
+
+export async function applySiteSubscription(
+  db: D1Database,
+  siteId: string,
+  organizationId: string,
+  customerId: string,
+  subscriptionId: string,
+  subscriptionItemId: string | null,
+  plan: string,
+  periodEnd: string | null,
+): Promise<void> {
+  const now = new Date().toISOString()
+
+  // Ensure org has a Stripe customer record
+  await db.prepare(`
+    INSERT OR IGNORE INTO organization_billing (id, organization_id, stripe_customer_id, updated_at)
+    VALUES (?, ?, ?, ?)
+  `).bind(`billing-${organizationId}`, organizationId, customerId, now).run()
+
+  await db.prepare(`
+    INSERT OR REPLACE INTO site_billing
+      (id, site_id, organization_id, stripe_subscription_id, stripe_subscription_item_id,
+       plan, status, current_period_end, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
+  `).bind(`sb-${siteId}`, siteId, organizationId, subscriptionId, subscriptionItemId, plan, periodEnd, now).run()
+
+  await setSiteEntitlementsFromPlan(db, siteId, organizationId, plan)
 }
 
 // ── Stripe helpers ────────────────────────────────────────────────────────────

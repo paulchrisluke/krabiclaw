@@ -304,6 +304,13 @@ async function getLocationNotificationPhone(db: D1Database, locationId: string):
   return row?.notification_phone ?? null
 }
 
+async function getLocationNotificationEmail(db: D1Database, locationId: string): Promise<string | null> {
+  const row = await db.prepare(`
+    SELECT email FROM business_locations WHERE id = ? LIMIT 1
+  `).bind(locationId).first<{ email: string | null }>()
+  return row?.email?.trim() || null
+}
+
 async function notifyOwner(
   env: NotificationEnv,
   db: D1Database,
@@ -323,15 +330,20 @@ async function notifyOwner(
 
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
   const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId) : null
+  const ownerEmail = await getOwnerEmail(db, opts.organizationId)
+  const locationEmail = opts.locationId ? await getLocationNotificationEmail(db, opts.locationId) : null
 
   // Collect unique phones — location manager + owner (site-level), deduped
   const phones = [...new Set([locationPhone, sitePhone].filter(Boolean))] as string[]
+  // Collect unique emails — location inbox + owner/admin fallback, deduped
+  const emails = [...new Set([locationEmail, ownerEmail].filter(Boolean))] as string[]
 
   const channels = await getOwnerNotificationChannels(db, opts, phones.length > 0)
 
-  if (channels.includes('email')) {
-    const ownerEmail = await getOwnerEmail(db, opts.organizationId)
-    if (ownerEmail) await sendEmailNotification(env, db, { ...opts, to: ownerEmail })
+  if (channels.includes('email') && emails.length > 0) {
+    await Promise.allSettled(emails.map(to =>
+      sendEmailNotification(env, db, { ...opts, to })
+    ))
   }
 
   if (channels.includes('whatsapp') && opts.whatsapp && phones.length > 0) {

@@ -42,34 +42,56 @@
 
 
 
-        <UCard v-if="billing">
-          <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p class="text-sm text-muted">Current plan</p>
-              <div class="mt-2 flex flex-wrap items-center gap-2">
-                <h2 class="text-3xl font-semibold capitalize text-highlighted">{{ billing.plan }}</h2>
-                <UBadge :color="billing.plan === 'free' ? 'neutral' : 'primary'" variant="soft">
-                  {{ billing.subscriptionStatus || 'active' }}
-                </UBadge>
-              </div>
-              <p v-if="billing.currentPeriodEnd" class="mt-2 text-sm text-muted">
-                Renews {{ formatDate(billing.currentPeriodEnd) }}
-              </p>
+        <UCard v-if="sites.length">
+          <template #header>
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold">Sites</h2>
+              <UButton
+                v-if="sites.some(s => s.plan !== 'free')"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                :loading="portalLoading"
+                @click="openBillingPortal"
+              >
+                Manage subscriptions
+              </UButton>
             </div>
+          </template>
 
-            <UButton
-              v-if="billing.plan !== 'free'"
-              :loading="portalLoading"
-              icon="i-heroicons-credit-card"
-              @click="openBillingPortal"
+          <ul class="-mx-4 -mb-4 sm:-mx-6 sm:-mb-6 divide-y divide-default">
+            <li
+              v-for="s in sites"
+              :key="s.siteId"
+              class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6"
             >
-              Manage Subscription
-            </UButton>
-          </div>
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted truncate">{{ s.brandName ?? s.subdomain }}</p>
+                <p class="text-xs text-muted">
+                  {{ s.subdomain }}.krabiclaw.com
+                  <span v-if="s.currentPeriodEnd"> · Renews {{ formatDate(s.currentPeriodEnd) }}</span>
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <UBadge :color="s.plan === 'free' ? 'neutral' : 'primary'" variant="soft" class="capitalize">
+                  {{ s.plan }}
+                </UBadge>
+                <UButton
+                  size="xs"
+                  color="neutral"
+                  variant="outline"
+                  :class="selectedSiteId === s.siteId ? 'ring-2 ring-primary' : ''"
+                  @click="selectedSiteId = s.siteId"
+                >
+                  Change plan
+                </UButton>
+              </div>
+            </li>
+          </ul>
         </UCard>
 
         <!-- Payment method -->
-        <UCard v-if="billing?.plan !== 'free' || savedCard">
+        <UCard v-if="sites.some(s => s.plan !== 'free') || savedCard">
           <template #header>
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
@@ -77,7 +99,7 @@
                 <h2 class="font-semibold">Payment method</h2>
               </div>
               <UButton
-                v-if="billing?.plan !== 'free'"
+                v-if="sites.some(s => s.plan !== 'free')"
                 size="xs"
                 color="neutral"
                 variant="ghost"
@@ -202,19 +224,28 @@
         </UCard>
 
 
+        <UAlert
+          v-if="selectedSite"
+          color="primary"
+          variant="soft"
+          icon="i-heroicons-information-circle"
+          :title="`Changing the plan for ${selectedSite.brandName ?? selectedSite.subdomain}`"
+          description="Pick a plan below to apply it to this site only — other sites in your organization keep their own plan."
+        />
+
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <UCard
             v-for="plan in plans"
             :key="plan.id"
-            :class="billing?.plan === plan.id ? 'ring-2 ring-primary' : ''"
+            :class="selectedSite?.plan === plan.id ? 'ring-2 ring-primary' : ''"
           >
             <div class="flex h-full flex-col">
               <div>
                 <div class="flex items-center justify-between gap-3">
                   <h2 class="text-lg font-semibold text-highlighted">{{ plan.name }}</h2>
                   <div class="flex gap-2">
-                    <UBadge v-if="plan.badge && billing?.plan !== plan.id" color="primary" variant="soft">{{ plan.badge }}</UBadge>
-                    <UBadge v-if="billing?.plan === plan.id" color="primary" variant="soft">Current</UBadge>
+                    <UBadge v-if="plan.badge && selectedSite?.plan !== plan.id" color="primary" variant="soft">{{ plan.badge }}</UBadge>
+                    <UBadge v-if="selectedSite?.plan === plan.id" color="primary" variant="soft">Current</UBadge>
                   </div>
                 </div>
                 <p class="mt-2 text-3xl font-semibold text-highlighted">
@@ -232,7 +263,7 @@
                 </li>
               </ul>
 
-              <template v-if="billing?.plan !== plan.id">
+              <template v-if="selectedSite && selectedSite.plan !== plan.id">
                 <UButton
                   v-if="plan.id === 'free'"
                   color="neutral"
@@ -283,6 +314,31 @@ const router = useRouter()
 const loading = ref(true)
 const billing = ref<ApiRecord | null>(null)
 const credits = ref<ApiRecord | null>(null)
+
+interface SiteBillingSummary {
+  siteId: string
+  brandName: string | null
+  subdomain: string | null
+  plan: string
+  subscriptionStatus?: string
+  currentPeriodEnd?: string
+  cancelAtPeriodEnd?: boolean
+}
+const sites = ref<SiteBillingSummary[]>([])
+const selectedSiteId = ref<string | null>(null)
+const selectedSite = computed(() => sites.value.find(s => s.siteId === selectedSiteId.value) ?? null)
+
+async function loadSites() {
+  try {
+    const res = await $fetch<{ sites: SiteBillingSummary[] }>('/api/billing/sites')
+    sites.value = res.sites ?? []
+    if (!selectedSiteId.value && sites.value.length === 1) {
+      selectedSiteId.value = sites.value[0]!.siteId
+    }
+  } catch {
+    sites.value = []
+  }
+}
 const creditsLoading = ref(true)
 const upgrading = ref<string | null>(null)
 const portalLoading = ref(false)
@@ -389,12 +445,16 @@ const loadBillingData = async () => {
 }
 
 const upgradeToPlan = async (plan: string) => {
+  if (!selectedSiteId.value) {
+    errorMessage.value = 'Choose a site above before changing its plan'
+    return
+  }
   errorMessage.value = ''
   upgrading.value = plan
   try {
     const response = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
       method: 'POST',
-      body: { plan, interval: annual.value ? 'year' : 'month' }
+      body: { plan, interval: annual.value ? 'year' : 'month', siteId: selectedSiteId.value }
     })
     if (response?.checkoutUrl) {
       await navigateTo(response.checkoutUrl, { external: true })
@@ -444,7 +504,7 @@ const formatDate = (dateString: string) => {
 }
 
 onMounted(async () => {
-  const { success, plan, canceled, ...restQuery } = route.query
+  const { success, plan, canceled, siteId, ...restQuery } = route.query
 
   if (success === 'true') {
     addToast('Payment successful. Your plan has been updated.', 'success')
@@ -454,13 +514,17 @@ onMounted(async () => {
   }
 
   // Consolidate parameter cleanup in a single replace call
-  if (success || plan || canceled) {
+  if (success || plan || canceled || siteId) {
     router.replace({ query: restQuery })
   }
 
   // Auto-start checkout if plan query param exists
   const { isAuthenticated } = useAuth()
-  await Promise.all([loadBillingData(), loadCredits(), loadPaymentMethod()])
+  await Promise.all([loadBillingData(), loadCredits(), loadPaymentMethod(), loadSites()])
+
+  if (typeof siteId === 'string' && sites.value.some(s => s.siteId === siteId)) {
+    selectedSiteId.value = siteId
+  }
 
   if (isAuthenticated.value && plan) {
     const planId = Array.isArray(plan) ? plan[0] : String(plan)

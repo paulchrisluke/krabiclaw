@@ -24,6 +24,13 @@ interface DashboardSite {
   locationHeroImageUrl?: string | null
 }
 
+interface DashboardSiteSummary {
+  id: string
+  brand_name: string | null
+  subdomain: string | null
+  plan: string | null
+}
+
 interface DashboardLocation {
   id: string
   slug: string
@@ -36,6 +43,7 @@ interface DashboardContextResponse {
   success: boolean
   organization: DashboardOrganization
   site: DashboardSite | null
+  sites: DashboardSiteSummary[]
   locations: DashboardLocation[]
   selectedLocation: DashboardLocation | null
 }
@@ -71,6 +79,7 @@ export function useDashboardSite() {
   const organization = computed(() => state.value?.organization ?? null)
   const site = computed(() => state.value?.site ?? null)
   const siteId = computed(() => site.value?.id ?? null)
+  const sites = computed(() => state.value?.sites ?? [])
   const locations = computed(() => state.value?.locations ?? [])
   const selectedLocation = computed(() => state.value?.selectedLocation ?? null)
 
@@ -80,6 +89,7 @@ export function useDashboardSite() {
     organization,
     site,
     siteId,
+    sites,
     locations,
     selectedLocation,
     refresh,

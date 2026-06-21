@@ -1,5 +1,5 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
-import { verifyStripeWebhook, setSiteEntitlementsFromPlan, getPlanFromStripePrice } from '../../utils/billing'
+import { verifyStripeWebhook, setSiteEntitlementsFromPlan, getPlanFromStripePrice, applySiteSubscription } from '../../utils/billing'
 import { completePaidSiteTransfer, deleteSiteCustomDomains } from '../../utils/site-transfer'
 import Stripe from 'stripe'
 import { getHeader } from 'h3'
@@ -139,35 +139,6 @@ async function resolveSiteFromSubscription(
   return { siteId: billing.site_id, organizationId: billing.organization_id }
 }
 
-async function applySiteSubscription(
-  env: Record<string, string | undefined>,
-  db: D1Database,
-  siteId: string,
-  organizationId: string,
-  customerId: string,
-  subscriptionId: string,
-  subscriptionItemId: string | null,
-  plan: string,
-  periodEnd: string | null,
-): Promise<void> {
-  const now = new Date().toISOString()
-
-  // Ensure org has a Stripe customer record
-  await db.prepare(`
-    INSERT OR IGNORE INTO organization_billing (id, organization_id, stripe_customer_id, updated_at)
-    VALUES (?, ?, ?, ?)
-  `).bind(`billing-${organizationId}`, organizationId, customerId, now).run()
-
-  await db.prepare(`
-    INSERT OR REPLACE INTO site_billing
-      (id, site_id, organization_id, stripe_subscription_id, stripe_subscription_item_id,
-       plan, status, current_period_end, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
-  `).bind(`sb-${siteId}`, siteId, organizationId, subscriptionId, subscriptionItemId, plan, periodEnd, now).run()
-
-  await setSiteEntitlementsFromPlan(db, siteId, organizationId, plan)
-}
-
 // ── Event handlers ────────────────────────────────────────────────────────────
 
 async function handleCheckoutCompleted(
@@ -215,7 +186,7 @@ async function handleCheckoutCompleted(
     // the site actually belongs to that org, otherwise it silently no-ops and
     // sites.plan (read by the transfer onboarding wizard) never updates.
     await completePaidSiteTransfer(env, db, transferId)
-    await applySiteSubscription(env, db, resolvedSiteId, organizationId, customerId, subscriptionId, expanded?.items?.data?.[0]?.id ?? null, plan, expanded?.billing_cycle_anchor ? new Date(expanded.billing_cycle_anchor * 1000).toISOString() : null)
+    await applySiteSubscription(db, resolvedSiteId, organizationId, customerId, subscriptionId, expanded?.items?.data?.[0]?.id ?? null, plan, expanded?.billing_cycle_anchor ? new Date(expanded.billing_cycle_anchor * 1000).toISOString() : null)
     return
   }
 
@@ -232,7 +203,7 @@ async function handleCheckoutCompleted(
 
   const customerId = session.customer as string
   const expanded = expandedSub(session)
-  await applySiteSubscription(env, db, resolvedSiteId, organizationId, customerId, subscriptionId, expanded?.items?.data?.[0]?.id ?? null, plan, expanded?.billing_cycle_anchor ? new Date(expanded.billing_cycle_anchor * 1000).toISOString() : null)
+  await applySiteSubscription(db, resolvedSiteId, organizationId, customerId, subscriptionId, expanded?.items?.data?.[0]?.id ?? null, plan, expanded?.billing_cycle_anchor ? new Date(expanded.billing_cycle_anchor * 1000).toISOString() : null)
   console.log(`Checkout completed for site ${resolvedSiteId}, plan ${plan}`)
 }
 

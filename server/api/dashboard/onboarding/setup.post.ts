@@ -79,6 +79,7 @@ export default defineEventHandler(async (event) => {
 
   let siteId: string
   let organizationId: string
+  let siteSubdomain: string | null = null
 
   if (!dashboard?.site) {
     const baseSubdomain = slugify(place.name).slice(0, 40)
@@ -95,6 +96,7 @@ export default defineEventHandler(async (event) => {
     }
     siteId = result.data.siteId as string
     organizationId = result.data.organizationId as string
+    siteSubdomain = result.data.subdomain as string
   } else {
     return jsonResponse({ error: 'You already have a site. Onboarding is for new sites only.' }, { status: 400 })
   }
@@ -185,6 +187,7 @@ export default defineEventHandler(async (event) => {
     placeName: place.name,
     orgSlug: orgRow?.slug ?? null,
     siteId,
+    siteSlug: siteSubdomain,
     locationSlug: locationRow.slug ?? null,
   })
 })

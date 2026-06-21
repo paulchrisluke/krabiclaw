@@ -2,7 +2,7 @@ import { createError, getRequestURL, type H3Event } from "h3";
 import { createPreviewToken } from "~/server/utils/preview-token";
 import { getFreeSiteDomain } from "~/server/utils/tenant-hosts";
 import { cloudflareEnv } from "~/server/utils/api-response";
-import { hasEntitlement } from "~/server/utils/billing";
+import { hasSiteEntitlement } from "~/server/utils/billing";
 import { getPageContent } from "~/server/utils/content-management";
 import {
   requestImageUpload,
@@ -1386,10 +1386,9 @@ export async function executeMcpToolCall(
 
   if (
     tool.requiredEntitlement &&
-    !(await hasEntitlement(
-      site.env,
+    !(await hasSiteEntitlement(
       site.db,
-      site.organizationId,
+      site.siteId,
       tool.requiredEntitlement,
     ))
   ) {
@@ -2135,7 +2134,7 @@ export async function executeMcpToolCall(
       const wantsInstagram = channels.includes("instagram");
 
       if (wantsFacebook || wantsInstagram) {
-        if (!(await hasEntitlement(site.env, site.db, site.organizationId, "managed_service"))) {
+        if (!(await hasSiteEntitlement(site.db, site.siteId, "managed_service"))) {
           throw createError({
             statusCode: 403,
             statusMessage:
@@ -2429,7 +2428,7 @@ export async function executeMcpToolCall(
         const orgSlug = site.organizationSlug || site.organizationId;
         return {
           connected: false,
-          connectUrl: `${platformDomain}/dashboard/${orgSlug}/~/settings/integrations`,
+          connectUrl: `${platformDomain}/dashboard/${orgSlug}/~/settings/general`,
         };
       }
       return {
@@ -2440,10 +2439,9 @@ export async function executeMcpToolCall(
       };
     }
     case "publish_to_facebook": {
-      const allowed = await hasEntitlement(
-        site.env,
+      const allowed = await hasSiteEntitlement(
         site.db,
-        site.organizationId,
+        site.siteId,
         "managed_service",
       );
       if (!allowed) {
@@ -2488,10 +2486,9 @@ export async function executeMcpToolCall(
       };
     }
     case "sync_facebook_page": {
-      const allowed = await hasEntitlement(
-        site.env,
+      const allowed = await hasSiteEntitlement(
         site.db,
-        site.organizationId,
+        site.siteId,
         "managed_service",
       );
       if (!allowed) {

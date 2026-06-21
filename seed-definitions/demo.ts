@@ -574,6 +574,23 @@ export const demoFixture: CuratedSiteDefinition = {
       title: 'Pizza Making Class',
       slug: 'pizza-making-class',
       tagline: 'Stretch dough, top your pie, and fire it yourself.',
+      highlights: [
+        'Hands-on dough stretching and shaping with a live instructor',
+        'Personal pizza fired in a wood oven and served fresh from the peel',
+        'Small-group class designed for first-timers and returning guests',
+      ],
+      includedItems: [
+        'Dough, toppings, apron, and all class materials',
+        'One personal pizza cooked during the session',
+        'A glass of house wine or sparkling lemonade',
+      ],
+      whatToBring: [
+        'Comfortable clothes that can handle a little flour',
+        'Closed-toe shoes for working around the oven',
+        'An appetite and a phone for photos',
+      ],
+      meetingPoint: 'Ember & Slice Brooklyn, main dining room host stand',
+      cancellationPolicy: 'Free cancellation up to 24 hours before the class. Cancellations within 24 hours, late arrivals, and no-shows are non-refundable because ingredients and seating are prepared in advance.',
       body:
         'Our flagship pizza making class brings guests right up to the bench and oven. You will learn how we stretch our dough, build a balanced pie, and work with high-heat live fire without feeling rushed.\n\nEach booking includes dough, toppings, one personal pizza, and a glass of house wine or sparkling lemonade. Great for couples, visitors, and anyone who wants a hands-on dinner plan in Brooklyn.',
       imageAssetId: 'media-demo-exp-class',
@@ -597,6 +614,23 @@ export const demoFixture: CuratedSiteDefinition = {
       title: 'Natural Wine & Pizza Night',
       slug: 'natural-wine-and-pizza-night',
       tagline: 'Small pours, hot pies, and long-table energy.',
+      highlights: [
+        'Curated natural wine pours paired with off-menu pizza and seasonal plates',
+        'Shared long-table seating that encourages conversation and a lively room',
+        'A rotating menu that changes with the week and the season',
+      ],
+      includedItems: [
+        'Guided wine tasting pours',
+        'Shared dinner of off-menu pies and seasonal antipasti',
+        'Table service and pairing notes from the team',
+      ],
+      whatToBring: [
+        'Smart casual attire for an evening dinner service',
+        'A light jacket if you prefer cooler indoor seating',
+        'An open palate for a changing wine list',
+      ],
+      meetingPoint: 'Ember & Slice Brooklyn, shared dining room seating host stand',
+      cancellationPolicy: 'Free cancellation up to 24 hours before the reservation. Cancellations within 24 hours, late arrivals, and no-shows are non-refundable due to limited shared seating and wine prep.',
       body:
         'This evening is part tasting, part dinner party. We pair a rotating lineup of natural wines with off-menu pies, seasonal antipasti, and a little background on why each pairing works.\n\nBest for date nights, visiting friends, and anyone who wants the room at its loudest and warmest. Seats are shared at the table, and the menu changes with the week.',
       imageAssetId: 'media-demo-exp-wine',
@@ -620,6 +654,23 @@ export const demoFixture: CuratedSiteDefinition = {
       title: 'Family Pizza Night',
       slug: 'family-pizza-night',
       tagline: 'Big-table dinner, easy pacing, and pizza for all ages.',
+      highlights: [
+        'Family-friendly pacing with kids welcome to join the pizza action',
+        'Large-format pizzas and salads shared at the table',
+        'Relaxed Sunday service designed for mixed-age groups',
+      ],
+      includedItems: [
+        'Mini pies for kids and large-format pizzas for the table',
+        'Salads and shared sides',
+        'Full table service throughout the dinner',
+      ],
+      whatToBring: [
+        'Casual family-friendly clothes',
+        'Any kids’ preferred drinks or snacks if needed',
+        'Patience for a little flour and a lot of fun',
+      ],
+      meetingPoint: 'Ember & Slice Brooklyn, family night host stand near the front entrance',
+      cancellationPolicy: 'Free cancellation up to 24 hours before the booking. Cancellations within 24 hours, late arrivals, and no-shows are non-refundable because food and table space are reserved specifically for your group.',
       body:
         'Family Pizza Night is our easiest way to turn a Sunday dinner into something a little more memorable. Kids shape mini pies, grown-ups share large-format pizzas and salads, and the kitchen keeps the pacing relaxed.\n\nIdeal for families, birthday dinners, and mixed-age groups who want an experience that feels special without feeling formal.',
       imageAssetId: 'media-demo-exp-family',

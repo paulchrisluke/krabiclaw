@@ -21,7 +21,7 @@
           <template v-if="inLocationWorkspace">
             <div v-if="collapsed" class="flex items-center justify-center w-full">
               <UButton
-                :to="orgBase ?? '/dashboard'"
+                :to="siteBase ?? orgBase ?? '/dashboard'"
                 icon="i-lucide-arrow-left"
                 color="neutral"
                 variant="ghost"
@@ -31,7 +31,7 @@
             </div>
             <NuxtLink
               v-else
-              :to="orgBase ?? '/dashboard'"
+              :to="siteBase ?? orgBase ?? '/dashboard'"
               class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
             >
               <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
@@ -63,7 +63,7 @@
           <template v-else-if="inConversationsWorkspace">
             <div v-if="collapsed" class="flex items-center justify-center w-full">
               <UButton
-                :to="orgBase ?? '/dashboard'"
+                :to="siteBase ?? orgBase ?? '/dashboard'"
                 icon="i-lucide-arrow-left"
                 color="neutral"
                 variant="ghost"
@@ -73,7 +73,7 @@
             </div>
             <NuxtLink
               v-else
-              :to="orgBase ?? '/dashboard'"
+              :to="siteBase ?? orgBase ?? '/dashboard'"
               class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
             >
               <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
@@ -354,6 +354,7 @@
     </UDashboardGroup>
     <BillingCreditPurchaseModal />
     <BillingServiceUpsellModal />
+    <BillingSiteSubscribeModal />
   </div>
 </template>
 
@@ -408,6 +409,7 @@ async function checkPlatformStatus() {
 
 const organization = dashboard.organization
 const site = dashboard.site
+const sites = dashboard.sites
 const selectedLocation = dashboard.selectedLocation
 const locations = dashboard.locations
 const activeSiteId = dashboard.siteId
@@ -426,7 +428,16 @@ const orgSlug = computed(() => organization.value?.slug ?? null)
 const orgSettingsBase = computed(() => orgSlug.value ? `/dashboard/${orgSlug.value}/~/settings` : null)
 
 const orgBase = computed(() => orgSlug.value ? `/dashboard/${orgSlug.value}` : null)
-const projectBase = computed(() => orgBase.value && selectedLocation.value?.slug ? `${orgBase.value}/${selectedLocation.value.slug}` : orgBase.value)
+
+const siteSlugFromRoute = computed(() => {
+  const slug = route.params.siteSlug
+  return typeof slug === 'string' ? slug : null
+})
+// The active site's slug — prefer the route segment (explicit), fall back to whatever
+// site dashboard-context.ts resolved (e.g. org root pages with no sites/ segment yet).
+const activeSiteSlug = computed(() => siteSlugFromRoute.value ?? site.value?.subdomain ?? null)
+const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBase.value}/sites/${activeSiteSlug.value}` : orgBase.value)
+const projectBase = computed(() => siteBase.value && selectedLocation.value?.slug ? `${siteBase.value}/${selectedLocation.value.slug}` : siteBase.value)
 
 const locationSlugFromRoute = computed(() => {
   const slug = route.params.locationSlug
@@ -446,8 +457,8 @@ const inSettingsWorkspace = computed(() => {
   return /^\/dashboard\/[^/]+\/~\/settings/.test(route.path)
 })
 const inConversationsWorkspace = computed(() => {
-  if (!orgBase.value) return /^\/dashboard\/[^/]+\/conversations(?:\/|$)/.test(route.path)
-  return route.path === `${orgBase.value}/conversations` || route.path.startsWith(`${orgBase.value}/conversations/`)
+  if (!siteBase.value) return /^\/dashboard\/[^/]+\/sites\/[^/]+\/conversations(?:\/|$)/.test(route.path)
+  return route.path === `${siteBase.value}/conversations` || route.path.startsWith(`${siteBase.value}/conversations/`)
 })
 const siteConversations = computed(() => activeSiteId.value ? chowBotHistory.forSite(activeSiteId.value) : [])
 const activeConversationId = computed(() => chowBot.conversationId.value)
@@ -472,6 +483,18 @@ const organizationMenuItems = computed(() => [
       icon: 'i-heroicons-plus',
       to: '/dashboard/onboarding'
     }
+  ],
+  sites.value.map((s) => ({
+    label: s.brand_name ?? s.subdomain ?? 'Site',
+    icon: s.subdomain === activeSiteSlug.value ? 'i-heroicons-check' : 'i-lucide-globe',
+    to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
+  })),
+  [
+    {
+      label: 'Add site',
+      icon: 'i-heroicons-plus',
+      to: orgBase.value ? `${orgBase.value}/sites/new` : undefined
+    }
   ]
 ])
 
@@ -485,18 +508,18 @@ const locationMenuItems = computed(() => [
     {
       label: 'All locations',
       icon: 'i-lucide-layout-dashboard',
-      to: orgBase.value ?? '/dashboard'
+      to: siteBase.value ?? orgBase.value ?? '/dashboard'
     }
   ]
 ])
 
 const mainNavigation = computed(() => [
   [
-    { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: orgBase.value ?? '/dashboard' },
-    { label: 'Conversations', icon: 'i-lucide-messages-square', to: orgBase.value ? `${orgBase.value}/conversations` : '/dashboard' },
+    { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: siteBase.value ?? orgBase.value ?? '/dashboard' },
+    { label: 'Conversations', icon: 'i-lucide-messages-square', to: siteBase.value ? `${siteBase.value}/conversations` : '/dashboard' },
   ],
   [
-    { label: 'Translations', icon: 'i-lucide-languages', to: orgBase.value ? `${orgBase.value}/translations` : '/dashboard' },
+    { label: 'Translations', icon: 'i-lucide-languages', to: siteBase.value ? `${siteBase.value}/translations` : '/dashboard' },
     { label: 'Support', icon: 'i-lucide-headphones', to: orgBase.value ? `${orgBase.value}/support` : '/dashboard' },
   ],
   [
@@ -582,10 +605,11 @@ const navigationItems = computed(() => {
 const navbarTitle = computed(() => {
   if (inAdminWorkspace.value) return 'Platform Admin'
   const parts = route.path.split('/').filter(Boolean)
+  // /dashboard/{org}/~/settings/{page} or /dashboard/{org}/sites/{site}/{locationSlug?}/{page}
   const segment = parts.at(2) === '~'
     ? parts.at(4)
-    : inLocationWorkspace.value
-      ? parts.at(3)
+    : parts.at(2) === 'sites'
+      ? (inLocationWorkspace.value ? parts.at(5) : parts.at(4))
       : parts.at(2)
   if (!segment) return 'Overview'
   const labels: Record<string, string> = {

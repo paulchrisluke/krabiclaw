@@ -24,19 +24,23 @@ function appendQuery(path: string, query: Record<string, string | null | undefin
 export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: MaybeRef<string | null | undefined>, orgSlug?: MaybeRef<string | null | undefined>) {
   void siteId
   const dashboard = useDashboardSite()
+  const route = useRoute()
 
   const paths = computed(() => {
     const base = '/dashboard'
     const slug = orgSlug ? unref(orgSlug) : dashboard.organization.value?.slug
+    const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : dashboard.site.value?.subdomain
     const locationSlug = dashboard.selectedLocation.value?.slug
     const orgBase = slug ? `${base}/${slug}` : base
-    const projectBase = slug && locationSlug ? `${orgBase}/${locationSlug}` : orgBase
+    const siteBase = slug && siteSlug ? `${orgBase}/sites/${siteSlug}` : orgBase
+    const projectBase = siteSlug && locationSlug ? `${siteBase}/${locationSlug}` : siteBase
     const settingsBase = `${orgBase}/~/settings`
     return {
       base,
       org: orgBase,
+      site: siteBase,
       project: projectBase,
-      conversations: `${orgBase}/conversations`,
+      conversations: `${siteBase}/conversations`,
       pages: `${projectBase}/pages`,
       content: `${projectBase}/content`,
       menu: `${projectBase}/menu`,
@@ -48,8 +52,8 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
       reservations: `${projectBase}/reservations`,
       order: `${projectBase}/order`,
       media: `${projectBase}/media`,
-      locations: orgBase,
-      translations: `${orgBase}/translations`,
+      locations: siteBase,
+      translations: `${siteBase}/translations`,
       settings: settingsBase,
       settingsGeneral: `${settingsBase}/general`,
       settingsBilling: `${settingsBase}/billing`,
@@ -92,7 +96,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
   const overviewLink = computed<DashboardActionLink>(() => ({
     label: 'Site',
     icon: 'i-heroicons-home',
-    to: paths.value.org,
+    to: paths.value.site,
     color: 'neutral',
     variant: 'soft'
   }))
@@ -110,7 +114,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
 
   const locationPath = (locationId: string) => {
     const location = dashboard.locations.value.find(candidate => candidate.id === locationId || candidate.slug === locationId)
-    return `${paths.value.org}/${location?.slug ?? locationId}`
+    return `${paths.value.site}/${location?.slug ?? locationId}`
   }
   const locationMenuPath = (locationId: string) => appendQuery(paths.value.menu, { locationId })
   const locationContentPath = (locationId: string) => appendQuery(paths.value.content, { locationId, page: 'location' })
