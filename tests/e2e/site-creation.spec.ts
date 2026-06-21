@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { devLoginHeaders, devLoginUrl } from './test-env'
 
 test.describe('site creation contracts', () => {
-  test('legacy dashboard creation proxy requires an explicit vertical', async ({ request, baseURL }) => {
+  test('dashboard site creation requires an explicit vertical', async ({ request, baseURL }) => {
     const suffix = Date.now()
     const ownerLogin = await request.get(devLoginUrl(baseURL!, `e2e-site-creation-vertical-${suffix}`), {
       headers: devLoginHeaders(),
@@ -11,7 +11,7 @@ test.describe('site creation contracts', () => {
     expect(ownerLogin.status()).toBe(302)
     const missingVerticalRes = await request.post(`${baseURL}/api/dashboard/site`, {
       data: {
-        restaurantName: `Missing Vertical ${suffix}`,
+        name: `Missing Vertical ${suffix}`,
         subdomain: `missing-vertical-${suffix}`,
       },
     })
@@ -22,7 +22,7 @@ test.describe('site creation contracts', () => {
 
     const invalidVerticalRes = await request.post(`${baseURL}/api/dashboard/site`, {
       data: {
-        restaurantName: `Invalid Vertical ${suffix}`,
+        name: `Invalid Vertical ${suffix}`,
         subdomain: `invalid-vertical-${suffix}`,
         vertical: 'invalid',
       },

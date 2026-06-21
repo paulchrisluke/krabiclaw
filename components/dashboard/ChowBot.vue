@@ -468,7 +468,7 @@ async function handleSetupMessage(text: string) {
     await $fetch('/api/dashboard/site', {
       method: 'POST',
       body: {
-        restaurantName: setupRestaurantName.value,
+        name: setupRestaurantName.value,
         subdomain: requestedSubdomain,
         vertical: setupVertical.value ?? 'restaurant',
       }
