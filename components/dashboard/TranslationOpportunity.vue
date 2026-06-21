@@ -8,7 +8,7 @@
           </div>
           <div>
             <UBadge color="primary" variant="soft">Growth opportunity</UBadge>
-            <h2 class="mt-3 text-lg font-semibold text-highlighted">Help more guests find and understand your restaurant</h2>
+            <h2 class="mt-3 text-lg font-semibold text-highlighted">Help more guests find and understand your site</h2>
             <p class="mt-1 max-w-2xl text-sm leading-6 text-muted">
               ChowBot can prepare translated drafts for your menu, location details, and site pages. You review everything before it goes live.
             </p>

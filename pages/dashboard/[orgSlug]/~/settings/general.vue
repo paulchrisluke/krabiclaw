@@ -70,7 +70,7 @@
             <div class="flex items-center justify-between gap-3">
               <div>
                 <h2 class="font-semibold text-highlighted">Facebook and Instagram</h2>
-                <p class="mt-1 text-sm text-muted">Restaurant-site publishing connection.</p>
+                <p class="mt-1 text-sm text-muted">Site publishing connection.</p>
               </div>
               <UBadge
                 v-if="!hasFacebookAccess"
@@ -144,7 +144,7 @@
             <div class="flex items-center justify-between gap-3">
               <div>
                 <h2 class="font-semibold text-highlighted">WhatsApp Notifications</h2>
-                <p class="mt-1 text-sm text-muted">Restaurant-site alert recipient.</p>
+                <p class="mt-1 text-sm text-muted">Site alert recipient.</p>
               </div>
               <UBadge
                 :label="whatsappPhone ? 'Configured' : 'Not configured'"

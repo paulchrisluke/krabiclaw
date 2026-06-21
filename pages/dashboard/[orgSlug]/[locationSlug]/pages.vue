@@ -82,7 +82,7 @@ const pageRows = computed(() => [
     label: 'About',
     icon: 'i-heroicons-book-open',
     scope: 'Brand',
-    description: 'Restaurant story, editorial imagery, journey copy, and brand-level CTA.',
+    description: 'Brand story, editorial imagery, journey copy, and brand-level CTA.',
     actions: [
       { label: 'Edit page', icon: 'i-heroicons-pencil-square', to: contentUrl('about'), color: 'primary' as const, variant: 'soft' as const },
       previewAction('/about')
