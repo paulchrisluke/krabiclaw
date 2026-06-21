@@ -12,7 +12,7 @@ KrabiClaw ships as a ChatGPT plugin backed by a full MCP server at `/api/mcp.pos
 
 - OAuth2 authorization at `/api/auth/oauth2/` — ChatGPT handles auth before any tool call
 - 90+ MCP tools covering: site setup, locations, menus, experiences, posts, media, translation, Google Business, Facebook, analytics, work requests
-- Widget system (HTML responses rendered inline in ChatGPT) for rich interactions: `show_welcome`, `import_from_maps`, `show_site_preview`, `show_vertical_picker`, `request_photo_upload`, image generation previews
+- Widget system (HTML responses rendered inline in ChatGPT) — currently scoped to `request_photo_upload` only; `list_sites`, `import_from_maps`, `show_site_preview`, `show_generated_images`, and onboarding all return plain text (a custom widget was overkill for basic list/selection output)
 - Image generation via ChatGPT's native `image_generation` Responses API tool (`gpt-image-1` / `gpt-image-2`) — not DALL-E
 - Plugin landing page at `/plugin`
 
@@ -22,7 +22,7 @@ The dashboard is still the home for billing, org settings, inbox triage, analyti
 
 ## Verticals
 
-KrabiClaw supports multiple business verticals. The `show_vertical_picker` MCP tool lets ChatGPT present the selection interactively during onboarding.
+KrabiClaw supports multiple business verticals. ChatGPT asks the user directly during onboarding (plain text) and passes the chosen vertical to `create_site`.
 
 | Vertical | Description |
 |----------|-------------|

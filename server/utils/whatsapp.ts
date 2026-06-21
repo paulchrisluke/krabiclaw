@@ -2,6 +2,8 @@
 // All messages use pre-approved templates (WhatsApp requires this for business-initiated messages).
 // Phone numbers stored and sent in E.164 format (+66946230215).
 
+import { logOnlyWhatsAppMessageId, shouldSendRealWhatsApp } from './whatsapp-delivery'
+
 const GRAPH_API_VERSION = 'v25.0'
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 
@@ -9,6 +11,7 @@ interface WhatsAppEnv {
   WHATSAPP_PHONE_NUMBER_ID?: string
   WHATSAPP_ACCESS_TOKEN?: string
   MAX_WHATSAPP_MEDIA_BYTES?: string
+  WHATSAPP_DELIVERY_MODE?: string
 }
 
 const DEFAULT_MAX_WHATSAPP_MEDIA_BYTES = 20 * 1024 * 1024
@@ -241,6 +244,15 @@ export async function sendWhatsAppNotification(
     now
   ).run()
 
+  if (!shouldSendRealWhatsApp(env)) {
+    const messageId = logOnlyWhatsAppMessageId('notification')
+    await db.prepare(
+      `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`
+    ).bind(messageId, now, notificationId).run()
+    console.log('whatsapp_delivery_log_only', { notificationId, template: opts.template, to: normalizedPhone })
+    return { success: true, messageId }
+  }
+
   if (!phoneNumberId || !accessToken) {
     await db.prepare(
       `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`
@@ -325,6 +337,11 @@ export async function sendWhatsAppOtp(
   const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID
   const accessToken = env.WHATSAPP_ACCESS_TOKEN
 
+  if (!shouldSendRealWhatsApp(env)) {
+    console.log('whatsapp_delivery_log_only', { kind: 'otp', to: normalizePhone(toPhone) })
+    return
+  }
+
   if (!phoneNumberId || !accessToken) {
     throw new Error('WhatsApp env vars not configured')
   }
@@ -359,6 +376,12 @@ export async function sendWhatsAppText(
 ): Promise<SendWhatsAppResult> {
   const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID
   const accessToken = env.WHATSAPP_ACCESS_TOKEN
+
+  if (!shouldSendRealWhatsApp(env)) {
+    const messageId = logOnlyWhatsAppMessageId('text')
+    console.log('whatsapp_delivery_log_only', { kind: 'text', to: normalizePhone(toPhone) })
+    return { success: true, messageId }
+  }
 
   if (!phoneNumberId || !accessToken) {
     return { success: false, error: 'WhatsApp env vars not configured' }

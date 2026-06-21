@@ -492,9 +492,7 @@ function openWorldDestructiveAnnotations(): McpToolAnnotations {
 }
 
 const READ_ONLY_TOOL_NAMES = [
-  'show_welcome',
   'get_current_user',
-  'show_vertical_picker',
   'show_generated_images',
   'list_sites',
   'show_site_preview',
@@ -571,6 +569,7 @@ const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'create_menu',
   'update_menu',
   'create_menu_item',
+  'add_menu_items_batch',
   'update_menu_item',
   'rename_menu_section',
   'reorder_menu_items',
@@ -655,29 +654,6 @@ function withToolAnnotations(definition: RawMcpToolDefinition): McpToolDefinitio
 
 export const MCP_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
-    name: 'show_welcome',
-    description: 'Show the welcome screen. Lists existing sites, exposes the current authenticated account, and renders a site picker or a "Create your first site" CTA. Call this at the start of every conversation.',
-    domain: 'onboarding',
-    minimumRole: 'editor',
-    confirmRequired: false,
-    inputSchema: { type: 'object', properties: {}, additionalProperties: true },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        sites: {
-          type: 'array',
-          description: 'All sites the caller can access. Empty array means no sites yet.',
-          items: siteListItem,
-        },
-        currentUser: currentUserObject,
-      },
-      required: ['sites', 'currentUser'],
-    },
-    widgetName: 'welcome-list',
-    widgetInvoking: 'Loading your sites…',
-    widgetInvoked: 'Sites loaded',
-  })),
-  globalTool(withToolAnnotations({
     name: 'get_current_user',
     description: 'Get the currently authenticated KrabiClaw account identity for debugging and workflow confirmation.',
     domain: 'account',
@@ -691,22 +667,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['user'],
     },
-  })),
-  globalTool(withToolAnnotations({
-    name: 'show_vertical_picker',
-    description: 'Show a clickable business-type picker widget. The user taps one option and it is sent back to the model. Call this after the user clicks "Create a new site" but before asking for their Maps URL.',
-    domain: 'onboarding',
-    minimumRole: 'editor',
-    confirmRequired: false,
-    inputSchema: { type: 'object', properties: {}, additionalProperties: true },
-    outputSchema: {
-      type: 'object',
-      description: 'Renders an interactive widget. The selected vertical is returned as a follow-up user message.',
-      properties: {},
-    },
-    widgetName: 'vertical-picker',
-    widgetInvoking: 'Loading business types…',
-    widgetInvoked: 'Choose your business type',
   })),
   globalTool(withToolAnnotations({
     name: 'import_from_maps',
@@ -781,9 +741,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['business', 'photos', 'missingPhotos'],
     },
-    widgetName: 'photo-album',
-    widgetInvoking: 'Importing from Google Maps…',
-    widgetInvoked: 'Business imported',
   })),
   globalTool(withToolAnnotations({
     name: 'show_generated_images',
@@ -818,9 +775,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       additionalProperties: true,
     },
     outputSchema: generatedImagePickerOutputSchema,
-    widgetName: 'image-carousel',
-    widgetInvoking: 'Loading generated images…',
-    widgetInvoked: 'Pick your image',
   })),
   siteTool({
     name: 'save_generated_image',
@@ -938,9 +892,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['sites', 'currentUser'],
     },
-    widgetName: 'welcome-list',
-    widgetInvoking: 'Loading your sites…',
-    widgetInvoked: 'Sites loaded',
   })),
   globalTool(withToolAnnotations({
     name: 'create_site',
@@ -1007,9 +958,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       required: ['site', 'pages'],
     },
-    widgetName: 'site-preview',
-    widgetInvoking: 'Building your site preview…',
-    widgetInvoked: 'Site preview ready',
   }),
   siteTool({
     name: 'get_site',
@@ -1421,6 +1369,76 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       properties: { item: menuItemObject },
       required: ['item'],
+    },
+  }),
+  siteTool({
+    name: 'add_menu_items_batch',
+    description: 'Add multiple brand-new menu items in one call. Use this when the user is adding new items, not revising existing ones.',
+    domain: 'menus',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      menu_id: { type: 'string' },
+      items: {
+        type: 'array',
+        description: 'Up to 100 new menu items to add.',
+        items: {
+          type: 'object',
+          properties: {
+            section: { type: 'string', description: 'Required menu section name, for example Cocktails, Mains, or Desserts.' },
+            name: { type: 'string' },
+            description: { type: ['string', 'null'] },
+            price_amount: { type: ['string', 'number', 'null'], description: 'Canonical price field for menu items.' },
+            price: { type: ['string', 'number', 'null'], description: 'Legacy alias accepted for compatibility. Prefer price_amount.' },
+            image_asset_id: { type: ['string', 'null'] },
+            available: { type: 'boolean' },
+            featured: { type: 'boolean' },
+            featured_sort_order: { type: 'number' },
+            sort_order: { type: 'number' },
+            allergens: { type: 'array', items: { type: 'string' } },
+            ingredients: { type: 'array', items: { type: 'string' } },
+            dietary_notes: { type: 'array', items: { type: 'string' } },
+            preparation: { type: ['string', 'null'] },
+            serving_note: { type: ['string', 'null'] },
+          },
+          required: ['section', 'name'],
+          additionalProperties: true,
+        },
+      },
+    },
+    required: ['menu_id', 'items'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        added: { type: 'number' },
+        created: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              section: { type: 'string' },
+              price_amount: { type: ['string', 'number', 'null'] },
+            },
+            required: ['id', 'name', 'section'],
+          },
+        },
+        skipped: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              reason: { type: 'string' },
+              existing_item_id: { type: ['string', 'null'] },
+            },
+            required: ['name', 'reason'],
+          },
+        },
+        menu_id: { type: 'string' },
+      },
+      required: ['added', 'created', 'skipped', 'menu_id'],
     },
   }),
   siteTool({

@@ -18,6 +18,7 @@ import {
 } from "~/server/utils/mcp-auth";
 import { MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { cloudflareEnv } from "~/server/utils/api-response";
+import { isWidgetEnabledForTool } from "~/server/utils/mcp-widget-config";
 
 const WIDGET_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 
@@ -25,17 +26,6 @@ const WIDGET_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 // ChatGPT caches widget resources by URI, so the same ui://widget/foo.html
 // URI will continue to serve the old widget until the URI changes.
 const WIDGET_VERSION = "v9";
-
-// Keep global widget rendering conservative, then selectively enable stable tools below.
-const WIDGETS_ENABLED = false;
-const ENABLED_WIDGET_TOOLS = new Set([
-  "show_welcome",
-  "request_photo_upload",
-  "show_generated_images",
-  "show_vertical_picker",
-  "import_from_maps",
-  "show_site_preview",
-]);
 
 function widgetResourceUri(name: string) {
   return `ui://widget/${name}@${WIDGET_VERSION}.html`;
@@ -79,6 +69,7 @@ function mcpAuthRequiredResult(challenge: string) {
 export default defineEventHandler(async (event) => {
   let requestId: string | number | null | undefined;
   let requestMethod: string | undefined;
+  let requestToolName: string | undefined;
   try {
     // Return 401 with WWW-Authenticate before any protocol parsing so OAuth
     // clients (e.g. ChatGPT) can discover the authorization server on first touch.
@@ -100,6 +91,18 @@ export default defineEventHandler(async (event) => {
         : null;
       requestId = rawBody?.id as string | number | undefined;
       requestMethod = rawBody?.method as string | undefined;
+      requestToolName = rawBody?.params && typeof rawBody.params === "object"
+        && !Array.isArray(rawBody.params)
+        && typeof (rawBody.params as Record<string, unknown>).name === "string"
+        ? String((rawBody.params as Record<string, unknown>).name)
+        : undefined;
+      console.warn("[MCP_AUTH]", JSON.stringify({
+        event: "credential_missing",
+        ray_id: getHeader(event, "cf-ray") ?? null,
+        user_agent: getHeader(event, "user-agent") ?? null,
+        mcp_method: requestMethod ?? null,
+        tool_name: requestToolName ?? null,
+      }));
       setResponseStatus(event, 401);
       setMcpAuthChallenge(event, authChallenge);
       if (requestMethod === "tools/call") {
@@ -122,6 +125,10 @@ export default defineEventHandler(async (event) => {
     const request = readMcpRequest(event, body);
     requestId = request.id;
     requestMethod = request.method;
+    requestToolName = request.method === "tools/call"
+      && typeof request.params?.name === "string"
+      ? request.params.name
+      : undefined;
 
     // MCP protocol handshake — required before any tools/list or tools/call
     if (request.method === "initialize") {
@@ -158,7 +165,7 @@ This entire flow runs within the current conversation — do not tell the user t
   - Use file_id-only upload_user_photo calls only when the file argument rewrite path is unavailable.
 
 ## Session start
-Start every conversation by calling show_welcome to discover the user's sites and present the available sites as a text list.
+Start every conversation by calling list_sites to discover the user's sites and present the available sites as a text list.
 - If they have 0 sites, start the Onboarding Flow:
   1. Ask for their Google Maps URL (or shortlink) to import their business details.
   2. Call import_from_maps.
@@ -166,7 +173,7 @@ Start every conversation by calling show_welcome to discover the user's sites an
   4. Ask for Optional context: "What's the short story behind your business?" and "Do you have a logo to upload?" (let them skip these).
   5. DO NOT ask for menus, detailed services, or social links yet (defer until the site is live).
   6. Call create_site and create_location, then show_site_preview.
-- If they have exactly one site, the widget confirms it automatically. Say "Working with [site name]." in your first reply before doing anything else.
+- If they have exactly one site, treat it as confirmed automatically. Say "Working with [site name]." in your first reply before doing anything else.
 - If they have multiple sites, present them clearly and wait for the user to select one — do not assume or guess.
 
 ## Site confirmation policy — enforced before every mutation
@@ -175,22 +182,22 @@ Before calling any mutating tool, the active site must be confirmed for this con
 
 A site is confirmed when:
 - 0 sites: onboarding completed and create_site succeeded
-- 1 site: you have said "Working with [site name]." in this conversation (the widget confirms automatically)
-- Multiple sites: the user explicitly chose one via the show_welcome widget
+- 1 site: you have said "Working with [site name]." in this conversation (confirmed automatically)
+- Multiple sites: the user explicitly chose one from the list_sites result
 
 Tool categories:
-- **Read-only** (list_*, get_*, show_*) — safe to call once show_welcome returns
+- **Read-only** (list_*, get_*, show_*) — safe to call once list_sites returns
 - **Preview/generate** (generate_*, show_generated_images) — require a confirmed site
 - **Mutating** (set_*, update_*, create_*, delete_*, publish_*) — require a confirmed site
 
-If the user asks you to mutate content before a site is confirmed, call show_welcome first, confirm the active site, then proceed.
+If the user asks you to mutate content before a site is confirmed, call list_sites first, confirm the active site, then proceed.
 
 When calling show_generated_images after native image_generation, always include the active site name in the labels:
 - use_label: "Use as homepage hero for [site name]"  (or the appropriate placement)
 - subtitle: can reference the site name to make the target obvious
 After applying, always confirm: "[Placement] updated for [site name]." — never leave the target ambiguous.
 
-All other tools require a site_id obtained from list_sites or show_welcome. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
+All other tools require a site_id obtained from list_sites. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
 
 Common workflows: update menus and items, create and publish posts, triage contact and reservation submissions, update page content directly, upload media, translate content, reply to reviews, manage experiences and bookings, and generate or replace images for any content section.`,
       });
@@ -210,11 +217,6 @@ Common workflows: update menus and items, create and publish posts, triage conta
     // Widget resources served as ui://widget/{name}.html with the MCP Apps UI MIME type.
     // ChatGPT fetches these when it sees openai/outputTemplate on a tool definition.
     const WIDGETS = [
-      { name: "welcome-list", title: "Site Picker" },
-      { name: "vertical-picker", title: "Business Type Picker" },
-      { name: "photo-album", title: "Business Photos" },
-      { name: "image-carousel", title: "Image Carousel" },
-      { name: "site-preview", title: "Site Preview" },
       { name: "photo-upload", title: "Photo Upload" },
     ] as const;
 
@@ -337,7 +339,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
           version: "phase-5",
         },
         instructions:
-          "KrabiClaw MCP. Call show_welcome at the start of every conversation to display the site picker and discover the user's sites. Use the site_id from that interaction with all other tools.",
+          "KrabiClaw MCP. Call list_sites at the start of every conversation to discover the user's sites. Use the site_id from that result with all other tools.",
       });
     }
 
@@ -387,7 +389,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
         outputSchema: tool.outputSchema,
         annotations: tool.annotations,
         securitySchemes: tool.securitySchemes,
-        ...((WIDGETS_ENABLED || ENABLED_WIDGET_TOOLS.has(tool.name)) && tool.widgetName
+        ...(isWidgetEnabledForTool(tool.name) && tool.widgetName
           ? {
               _meta: {
                 securitySchemes: tool.securitySchemes,
@@ -455,7 +457,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
         ? result.fallbackText
         : JSON.stringify(structuredContent, null, 2);
       const tool =
-        (WIDGETS_ENABLED || ENABLED_WIDGET_TOOLS.has(toolName)) && isRender
+        isWidgetEnabledForTool(toolName) && isRender
           ? MCP_TOOLS.find((t) => t.name === toolName)
           : null;
       return mcpSuccess(request.id, {
@@ -506,7 +508,11 @@ Common workflows: update menus and items, create and publish posts, triage conta
       mcpError.code,
       mcpError.message,
       "method:",
-      requestId,
+      requestMethod ?? null,
+      "tool:",
+      requestToolName ?? null,
+      "request_id:",
+      requestId ?? null,
     );
     setResponseStatus(event, status);
     if (status === 401) {

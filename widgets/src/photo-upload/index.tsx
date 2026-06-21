@@ -15,10 +15,9 @@ const styles = `
   .title { font-size: 16px; font-weight: 700; color: var(--ui-text); margin-bottom: 4px; }
   .subtitle { font-size: 13px; color: var(--ui-text-muted); margin-bottom: 16px; }
   .drop-zone { border: 2px dashed var(--ui-border); border-radius: 12px; padding: 32px 16px; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
-  .drop-zone:hover, .drop-zone.over { border-color: var(--ui-text); background: var(--ui-bg-muted); }
-  .drop-icon { font-size: 32px; margin-bottom: 8px; }
-  .drop-text { font-size: 14px; color: var(--ui-text-muted); margin-bottom: 4px; }
-  .drop-hint { font-size: 12px; color: var(--ui-text-muted); }
+  .drop-zone:hover { border-color: var(--ui-text); background: var(--ui-bg-muted); }
+  .drop-icon { display: block; margin: 0 auto 8px; color: var(--ui-text-muted); }
+  .drop-text { font-size: 14px; color: var(--ui-text-muted); }
   .progress-wrap { margin-top: 16px; }
   .progress-label { font-size: 13px; color: var(--ui-text-muted); margin-bottom: 6px; }
   .progress-bar { height: 6px; background: var(--ui-border); border-radius: 3px; overflow: hidden; }
@@ -37,7 +36,6 @@ function App() {
   const [state, setState] = useState<UploadState>('idle')
   const [progress, setProgress] = useState(0)
   const [preview, setPreview] = useState<string | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [_publicUrl, setPublicUrl] = useState<string | null>(null)
   const [bootstrapError, setBootstrapError] = useState<string | null>(null)
@@ -175,15 +173,15 @@ function App() {
     <div className="widget">
       {state === 'idle' && (
         <div
-          className={`drop-zone${isDragging ? ' over' : ''}`}
+          className="drop-zone"
           onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleFiles(e.dataTransfer.files) }}
         >
-          <div className="drop-icon">🖼️</div>
+          <svg className="drop-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
           <div className="drop-text">Click to choose a photo</div>
-          <div className="drop-hint">or drag and drop here</div>
           <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFiles(e.target.files)} />
         </div>
       )}

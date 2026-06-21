@@ -692,7 +692,7 @@ export async function executeMcpToolCall(
 
   validateRequiredArguments(tool.inputSchema, rawArguments);
 
-  if (toolName === "show_welcome" || toolName === "list_sites") {
+  if (toolName === "list_sites") {
     const user = await requireMcpUser(event);
     const userRecord = await user.db
       .prepare(`SELECT id, email, name, role FROM user WHERE id = ? LIMIT 1`)
@@ -724,7 +724,7 @@ export async function executeMcpToolCall(
       isPlatformAdmin: user.isPlatformAdmin,
     };
     return renderWidget(
-      "welcome-list",
+      "list_sites",
       { sites, currentUser },
       sites.length === 0
         ? "Welcome to KrabiClaw. You have no sites yet — let's create one."
@@ -764,15 +764,6 @@ export async function executeMcpToolCall(
         isPlatformAdmin: user.isPlatformAdmin,
       },
     };
-  }
-
-  if (toolName === "show_vertical_picker") {
-    await requireMcpUser(event);
-    return renderWidget(
-      "vertical-picker",
-      {},
-      "What type of business is this? Choose: restaurant or experience.",
-    );
   }
 
   if (toolName === "import_from_maps") {
@@ -996,7 +987,7 @@ export async function executeMcpToolCall(
     };
 
     return renderWidget(
-      "photo-album",
+      "import_from_maps",
       structuredContent,
       `Imported: ${details.name} — ${details.formattedAddress}. ${photos.length} photo${photos.length !== 1 ? "s" : ""} found.`,
     );
@@ -1050,7 +1041,7 @@ export async function executeMcpToolCall(
     const picker = pickerConfigFromShowGeneratedImages(rawArguments, activeSiteName);
     const isDebug = rawArguments.debug === true;
     return renderWidget(
-      "image-carousel",
+      "show_generated_images",
       {
         title: picker.title,
         subtitle: picker.subtitle,
@@ -1150,7 +1141,7 @@ export async function executeMcpToolCall(
         locationRows.results?.[0]?.hero_image_public_url ?? null;
       const siteName = String((siteRow as Record<string, unknown>).brand_name ?? subdomain ?? site.siteId);
       return renderWidget(
-        "site-preview",
+        "show_site_preview",
         {
           site: {
             id: site.siteId,
@@ -1424,6 +1415,112 @@ export async function executeMcpToolCall(
           site.userId,
         ),
       };
+    }
+    case "add_menu_items_batch": {
+      const menuId = requiredString(args, "menu_id");
+      const menu = await getMenuWithItems(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        menuId,
+      );
+      if (!menu) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "Menu not found.");
+      }
+
+      const rawItems = args.items;
+      if (!Array.isArray(rawItems)) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "items must be an array.",
+        );
+      }
+
+      const items = rawItems.slice(0, 100);
+      const existingKeys = new Set(
+        menu.items.map((item) => item.slug || menuItemLookupKey(item.name)),
+      );
+      const inputKeys = new Set<string>();
+      const created: Array<{
+        id: string;
+        name: string;
+        section: string;
+        price_amount: string | number | null;
+      }> = [];
+      const skipped: Array<{
+        name: string;
+        reason: string;
+        existing_item_id?: string;
+      }> = [];
+
+      for (const item of items) {
+        const itemRecord =
+          item && typeof item === "object"
+            ? (item as Record<string, unknown>)
+            : null;
+        const name = itemRecord ? toolString(itemRecord, "name", 200)?.trim() : "";
+        if (!itemRecord || !name) {
+          skipped.push({ name: "", reason: "missing_name" });
+          continue;
+        }
+
+        const section = itemRecord
+          ? toolString(itemRecord, "section", 100)?.trim()
+          : "";
+        if (!section) {
+          skipped.push({ name, reason: "missing_section" });
+          continue;
+        }
+
+        const key = menuItemLookupKey(name);
+        const existing = menu.items.find(
+          (menuItem) =>
+            menuItem.slug === key ||
+            menuItem.name.toLowerCase() === name.toLowerCase(),
+        );
+        if (existing || existingKeys.has(key)) {
+          skipped.push({
+            name,
+            reason: "already_exists",
+            existing_item_id: existing?.id,
+          });
+          continue;
+        }
+        if (inputKeys.has(key)) {
+          skipped.push({ name, reason: "duplicate_in_request" });
+          continue;
+        }
+
+        inputKeys.add(key);
+
+        const createMenuItemArgs = normalizeMenuItemArgs(itemRecord, {
+          requireSection: true,
+        });
+        try {
+          const createdItem = await createMenuItem(
+            site.db,
+            site.organizationId,
+            site.siteId,
+            menuId,
+            createMenuItemArgs as never,
+            site.userId,
+          );
+          existingKeys.add(
+            createdItem.slug || menuItemLookupKey(createdItem.name),
+          );
+          created.push({
+            id: createdItem.id,
+            name: createdItem.name,
+            section: createdItem.section,
+            price_amount: createdItem.price_amount,
+          });
+        } catch (error) {
+          if (!isUniqueConstraintError(error)) throw error;
+          skipped.push({ name, reason: "unique_conflict" });
+        }
+      }
+
+      return { added: created.length, created, skipped, menu_id: menuId };
     }
     case "update_menu_item": {
       const updateMenuItemArgs = normalizeMenuItemArgs(args, {
@@ -3067,6 +3164,28 @@ function normalizeMenuItemArgs(
   }
 
   return normalized;
+}
+
+function menuItemLookupKey(name: string) {
+  const key = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  return key || name.trim().toLowerCase();
+}
+
+function toolString(
+  record: Record<string, unknown>,
+  key: string,
+  maxLength: number,
+): string | undefined {
+  const value = record[key];
+  return typeof value === "string" ? value.slice(0, maxLength) : undefined;
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /UNIQUE constraint failed/i.test(message);
 }
 
 function getDateString(date: Date): string {

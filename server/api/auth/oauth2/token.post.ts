@@ -1,4 +1,4 @@
-import { getRequestURL, getHeaders } from 'h3'
+import { getHeader, getRequestURL, getHeaders } from 'h3'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 
 // This route takes precedence over server/api/auth/[...].ts for token exchange.
@@ -7,6 +7,7 @@ import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 // returns the cached response rather than getting "invalid code" from consumeVerificationValue.
 
 export default defineEventHandler(async (event) => {
+  const startedAt = Date.now()
   const cfEnv = event.context.cloudflare?.env as CloudflareEnv | undefined
   if (!cfEnv?.DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
 
@@ -16,6 +17,13 @@ export default defineEventHandler(async (event) => {
   const params = new URLSearchParams(rawBody)
   const code = params.get('code')
   const grantType = params.get('grant_type')
+  const clientFingerprint = await safeFingerprint(params.get('client_id'))
+  const requestFields = {
+    grant_type: grantType ?? 'unknown',
+    client_fingerprint: clientFingerprint,
+    ray_id: getHeader(event, 'cf-ray') ?? null,
+    user_agent: getHeader(event, 'user-agent') ?? null,
+  }
 
   const buildRequest = () => {
     const url = getRequestURL(event)
@@ -26,12 +34,14 @@ export default defineEventHandler(async (event) => {
   // Only wrap authorization_code — pass refresh_token and others straight through.
   if (grantType !== 'authorization_code' || !code) {
     const res = await auth.handler(buildRequest())
-    if (res.status >= 400) {
-      const text = await res.text()
-      console.error('[Token] non-code grant error:', { status: res.status, body: text })
-      return new Response(text, { status: res.status, headers: res.headers })
-    }
-    return res
+    const responseBody = await res.text()
+    logTokenExchange(res.status >= 400 ? 'warn' : 'info', {
+      ...requestFields,
+      status: res.status,
+      duration_ms: Date.now() - startedAt,
+      ...tokenResponseSummary(responseBody),
+    })
+    return new Response(responseBody, { status: res.status, headers: res.headers })
   }
 
   const now = new Date().toISOString()
@@ -57,7 +67,13 @@ export default defineEventHandler(async (event) => {
         `SELECT response_body, http_status FROM token_exchange_cache WHERE code = ? AND state = 'done'`
       ).bind(code).first<{ response_body: string; http_status: number }>()
       if (cached) {
-        console.log('[Token] idempotency: returning cached exchange result')
+        logTokenExchange(cached.http_status >= 400 ? 'warn' : 'info', {
+          ...requestFields,
+          status: cached.http_status,
+          duration_ms: Date.now() - startedAt,
+          idempotency_cache: 'hit',
+          ...tokenResponseSummary(cached.response_body),
+        })
         return new Response(cached.response_body, {
           status: cached.http_status,
           headers: { 'Content-Type': 'application/json' },
@@ -72,9 +88,13 @@ export default defineEventHandler(async (event) => {
   const res = await auth.handler(buildRequest())
   const responseBody = await res.text()
 
-  if (res.status >= 400) {
-    console.error('[Token] code exchange error:', { status: res.status, body: responseBody })
-  }
+  logTokenExchange(res.status >= 400 ? 'warn' : 'info', {
+    ...requestFields,
+    status: res.status,
+    duration_ms: Date.now() - startedAt,
+    idempotency_cache: claimed ? 'miss' : 'timeout',
+    ...tokenResponseSummary(responseBody),
+  })
 
   // Persist result so concurrent duplicates can use it.
   await cfEnv.DB.prepare(
@@ -85,3 +105,39 @@ export default defineEventHandler(async (event) => {
 
   return new Response(responseBody, { status: res.status, headers: res.headers })
 })
+
+async function safeFingerprint(value: string | null) {
+  if (!value) return null
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return Buffer.from(digest).toString('base64url').slice(0, 12)
+}
+
+function tokenResponseSummary(responseBody: string) {
+  try {
+    const body = JSON.parse(responseBody) as Record<string, unknown>
+    return {
+      oauth_error: typeof body.error === 'string' ? body.error : null,
+      access_token_issued: typeof body.access_token === 'string',
+      refresh_token_issued: typeof body.refresh_token === 'string',
+      id_token_issued: typeof body.id_token === 'string',
+      expires_in: typeof body.expires_in === 'number' ? body.expires_in : null,
+      scope: typeof body.scope === 'string' ? body.scope : null,
+    }
+  } catch {
+    return {
+      oauth_error: 'invalid_response_body',
+      access_token_issued: false,
+      refresh_token_issued: false,
+      id_token_issued: false,
+      expires_in: null,
+      scope: null,
+    }
+  }
+}
+
+function logTokenExchange(level: 'info' | 'warn', fields: Record<string, unknown>) {
+  console[level]('[OAUTH_TOKEN]', JSON.stringify({
+    event: 'token_exchange',
+    ...fields,
+  }))
+}

@@ -70,20 +70,20 @@ test.describe('OAuth discovery endpoints', () => {
         'content-type': 'application/json',
         'mcp-protocol-version': MCP_VERSION,
         'mcp-method': 'tools/call',
-        'mcp-name': 'show_welcome',
+        'mcp-name': 'list_sites',
       },
       data: {
         jsonrpc: '2.0',
         id: 'auth-tool-check',
         method: 'tools/call',
         params: {
-          name: 'show_welcome',
+          name: 'list_sites',
           arguments: {},
         },
         _meta: {
           'io.modelcontextprotocol/version': MCP_VERSION,
           'io.modelcontextprotocol/method': 'tools/call',
-          'io.modelcontextprotocol/name': 'show_welcome',
+          'io.modelcontextprotocol/name': 'list_sites',
         },
       },
     })

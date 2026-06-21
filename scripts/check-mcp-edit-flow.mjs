@@ -108,11 +108,11 @@ async function main() {
   console.log(`Checking MCP edit flow at ${BASE_URL}`)
   const headers = await getAuthHeaders()
 
-  const welcome = await mcp(headers, 'show_welcome')
-  expectStatus('show_welcome succeeds', welcome)
+  const welcome = await mcp(headers, 'list_sites')
+  expectStatus('list_sites succeeds', welcome)
   const welcomeData = resultData(welcome.body)
-  if (Array.isArray(welcomeData?.sites)) pass('show_welcome returns sites array')
-  else fail('show_welcome did not return sites array', welcome.body)
+  if (Array.isArray(welcomeData?.sites)) pass('list_sites returns sites array')
+  else fail('list_sites did not return sites array', welcome.body)
 
   let siteId = SITE_ID
   if (!siteId) {

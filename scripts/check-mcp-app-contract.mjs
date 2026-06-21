@@ -105,7 +105,7 @@ async function main() {
   if (wwwAuth.includes('resource_metadata=')) pass('WWW-Authenticate includes resource_metadata')
   else fail('WWW-Authenticate missing resource_metadata', wwwAuth)
 
-  const unauthTool = await request('tools/call', { name: 'show_welcome', arguments: {} })
+  const unauthTool = await request('tools/call', { name: 'list_sites', arguments: {} })
   expectStatus('unauthenticated tools/call returns 401', unauthTool.res.status, 401)
   const toolChallenge = unauthTool.body?.result?._meta?.['mcp/www_authenticate']?.[0] ?? ''
   if (
@@ -182,12 +182,12 @@ async function main() {
     }
   }
 
-  const welcome = await request('tools/call', { name: 'show_welcome', arguments: {} }, headers)
-  expectStatus('show_welcome tools/call succeeds', welcome.res.status, 200)
+  const welcome = await request('tools/call', { name: 'list_sites', arguments: {} }, headers)
+  expectStatus('list_sites tools/call succeeds', welcome.res.status, 200)
   if (welcome.body?.result?.structuredContent && Array.isArray(welcome.body.result.structuredContent.sites)) {
-    pass('show_welcome returns structuredContent.sites')
+    pass('list_sites returns structuredContent.sites')
   } else {
-    fail('show_welcome missing structuredContent.sites', welcome.body)
+    fail('list_sites missing structuredContent.sites', welcome.body)
   }
 
   process.exit(failed ? 1 : 0)

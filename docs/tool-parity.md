@@ -93,7 +93,7 @@ Tracks which tools exist across surfaces and where gaps are. Update this when ad
 
 | ChowBot tool | Status / Action |
 |--------------|----------------|
-| `add_menu_items_batch` | **Gap** — MCP has no bulk menu item insert |
+| `add_menu_items_batch` | Present in ChowBot and MCP |
 | `sync_menu_items` | **Gap** — MCP has no reconcile/upsert tool |
 | `publish_menu` | **Gap** — MCP has no menu publish step |
 | `generate_image` | **Design divergence** — MCP uses 7 targeted `generate_*` tools; ChowBot collapses to one generic — decide whether to split |
@@ -110,7 +110,7 @@ Tracks which tools exist across surfaces and where gaps are. Update this when ad
 
 | MCP tool | Reason |
 |----------|--------|
-| `show_welcome`, `show_site_preview`, `show_vertical_picker`, `show_generated_images` | UI widget tools — MCP/ChatGPT canvas only |
+| `show_site_preview`, `show_generated_images` | MCP-only onboarding/preview tools (plain text response, no widget — MCP/ChatGPT canvas only) |
 | `save_generated_image`, `save_generated_image_file`, `upload_user_photo` | MCP native image generation save flow; ChowBot auto-saves inline |
 | `request_media_upload`, `confirm_media_upload`, `request_photo_upload` | Browser upload flow; ChowBot uses WhatsApp pending media |
 | `create_site`, `list_sites` | Platform-level onboarding; ChowBot is always scoped to one org |

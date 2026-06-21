@@ -173,6 +173,20 @@ async function main() {
   const aliasedMenuItemData = data(aliasedMenuItem.body)?.item
   expectValue('legacy price alias is normalized to price_amount', moneyEquals(aliasedMenuItemData?.price_amount, 14.25), aliasedMenuItemData)
 
+  const batchedMenuItems = await mcp(headers, 'add_menu_items_batch', {
+    site_id: siteId,
+    menu_id: menuId,
+    items: [
+      { section: 'Shots', name: 'B-52', price_amount: '7' },
+      { section: 'Shots', name: 'Lemon Drop', price: '8' },
+      { section: 'Shots', name: 'B-52', price_amount: '7' },
+    ],
+  })
+  expectStatus('add_menu_items_batch succeeds', batchedMenuItems)
+  const batchPayload = data(batchedMenuItems.body)
+  expectValue('add_menu_items_batch adds two items', batchPayload?.added === 2, batchPayload)
+  expectValue('add_menu_items_batch reports one duplicate skip', Array.isArray(batchPayload?.skipped) && batchPayload.skipped.length === 1, batchPayload)
+
   const itemUpdate = await mcp(headers, 'update_menu_item', {
     site_id: siteId,
     menu_item_id: menuItemId,

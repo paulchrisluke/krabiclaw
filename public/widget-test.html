@@ -49,12 +49,24 @@
     .log-empty { font-size: 11px; color: #475569; text-align: center; padding: 10px 0; }
     .clear-btn { font-size: 11px; color: #475569; background: none; border: none; cursor: pointer; }
     .clear-btn:hover { color: #94a3b8; }
+    .api-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .api-row input { font-size: 11px; padding: 3px 6px; border-radius: 4px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; width: 220px; }
+    .api-status { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 9px; }
+    .api-status.live    { background: rgba(52,211,153,0.15); color: #34d399; }
+    .api-status.offline { background: rgba(248,113,113,0.15); color: #f87171; }
+    .stale-badge { font-size: 9px; color: #fcd34d; margin-left: 4px; }
   </style>
 </head>
 <body>
 
 <div class="topbar">
   <div class="topbar-title">Widget Harness</div>
+  <div class="api-row">
+    <span class="row-label off">Nuxt API</span>
+    <input id="api-base" type="text" value="http://localhost:3000" />
+    <button class="tab off" id="api-refresh" onclick="loadLiveConfig()">↺ Reload live config</button>
+    <span class="api-status offline" id="api-status">checking…</span>
+  </div>
   <div class="tool-row" id="row-enabled"></div>
   <div class="tool-row" id="row-disabled"></div>
 </div>
@@ -84,160 +96,17 @@
 // Shared placeholder image — swap for a real Cloudflare Images URL when testing specifics
 const IMG = 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&fit=crop'
 
-const TOOLS = [
-  // ── image-carousel / generate tools (all ENABLED) ───────────────────────
-  {
-    name: 'generate_home_hero_image',
-    widget: 'image-carousel',
-    enabled: true,
-    fixture: {
-      title: 'Homepage Hero',
-      subtitle: 'Choose the image that best sets the tone for the homepage.',
-      images: [{ assetId: 'img-hero-1', publicUrl: IMG }],
-      useLabel: 'Use as homepage hero',
-      regenerateLabel: 'Try again',
-      assignTool: 'set_home_hero_image',
-      assignArgs: { site_id: 'site-demo' },
-      regenerateTool: 'generate_home_hero_image',
-      regenerateArgs: { site_id: 'site-demo' },
-      successMessage: 'Homepage hero image updated.',
-    },
-  },
-  {
-    name: 'generate_logo',
-    widget: 'image-carousel',
-    enabled: true,
-    fixture: {
-      title: 'Logo Concepts',
-      subtitle: 'Choose the mark that feels most like the brand.',
-      images: [{ assetId: 'img-logo-1', publicUrl: IMG }],
-      useLabel: 'Use this logo',
-      regenerateLabel: 'Try again',
-      assignTool: 'set_logo',
-      assignArgs: { site_id: 'site-demo' },
-      regenerateTool: 'generate_logo',
-      regenerateArgs: { site_id: 'site-demo' },
-      successMessage: 'Logo updated.',
-    },
-  },
-  {
-    name: 'generate_story_image',
-    widget: 'image-carousel',
-    enabled: true,
-    fixture: {
-      title: 'Story Images',
-      subtitle: 'Choose the image that best tells the brand story.',
-      images: [{ assetId: 'img-story-1', publicUrl: IMG }],
-      useLabel: 'Use as story image',
-      regenerateLabel: 'Try again',
-      assignTool: 'set_story_image',
-      assignArgs: { site_id: 'site-demo' },
-      regenerateTool: 'generate_story_image',
-      regenerateArgs: { site_id: 'site-demo' },
-      successMessage: 'Story image updated.',
-    },
-  },
-  {
-    name: 'generate_location_hero_image',
-    widget: 'image-carousel',
-    enabled: true,
-    fixture: {
-      title: 'Location Hero',
-      subtitle: 'Choose the image that best represents this location.',
-      images: [{ assetId: 'img-loc-1', publicUrl: IMG }],
-      useLabel: 'Use as location hero',
-      regenerateLabel: 'Try again',
-      assignTool: 'set_location_hero_image',
-      assignArgs: { site_id: 'site-demo', location_id: 'loc-1' },
-      regenerateTool: 'generate_location_hero_image',
-      regenerateArgs: { site_id: 'site-demo', location_id: 'loc-1' },
-      successMessage: 'Location hero image updated.',
-    },
-  },
-  {
-    name: 'generate_post_image',
-    widget: 'image-carousel',
-    enabled: true,
-    fixture: {
-      title: 'Post Images',
-      subtitle: 'Choose the image that best fits this post.',
-      images: [{ assetId: 'img-post-1', publicUrl: IMG }],
-      useLabel: 'Use for this post',
-      regenerateLabel: 'Try again',
-      assignTool: 'set_post_image',
-      assignArgs: { site_id: 'site-demo', post_id: 'post-1' },
-      regenerateTool: 'generate_post_image',
-      regenerateArgs: { site_id: 'site-demo', post_id: 'post-1' },
-      successMessage: 'Post image updated.',
-    },
-  },
-  {
-    name: 'generate_menu_item_image',
-    widget: 'image-carousel',
-    enabled: true,
-    fixture: {
-      title: 'Menu Item Images',
-      subtitle: 'Choose the image that best sells this item.',
-      images: [{ assetId: 'img-menu-1', publicUrl: IMG }],
-      useLabel: 'Use for this menu item',
-      regenerateLabel: 'Try again',
-      assignTool: 'set_menu_item_image',
-      assignArgs: { site_id: 'site-demo', menu_item_id: 'mi-1' },
-      regenerateTool: 'generate_menu_item_image',
-      regenerateArgs: { site_id: 'site-demo', menu_item_id: 'mi-1' },
-      successMessage: 'Menu item image updated.',
-    },
-  },
-  {
-    name: 'generate_experience_image',
-    widget: 'image-carousel',
-    enabled: true,
-    fixture: {
-      title: 'Experience Images',
-      subtitle: 'Choose the image that best captures the experience.',
-      images: [{ assetId: 'img-exp-1', publicUrl: IMG }],
-      useLabel: 'Use for this experience',
-      regenerateLabel: 'Try again',
-      assignTool: 'set_experience_image',
-      assignArgs: { site_id: 'site-demo', experience_id: 'exp-1' },
-      regenerateTool: 'generate_experience_image',
-      regenerateArgs: { site_id: 'site-demo', experience_id: 'exp-1' },
-      successMessage: 'Experience image updated.',
-    },
-  },
-  {
-    // Native ChatGPT image_generation path — no regenerateTool since regen goes through image_generation again
-    name: 'show_generated_images',
-    widget: 'image-carousel',
-    enabled: true,
-    fixture: {
-      title: 'Homepage Hero',
-      subtitle: 'Tap to use — or ask ChatGPT to generate another.',
-      images: [{ assetId: 'img-native-1', publicUrl: IMG }],
-      useLabel: 'Use as homepage hero',
-      assignTool: 'set_home_hero_image',
-      assignArgs: { site_id: 'site-demo' },
-      regenerateTool: null,
-      regenerateArgs: null,
-      successMessage: 'Homepage hero image updated.',
-    },
-  },
-  // ── photo-upload (ENABLED) ───────────────────────────────────────────────
-  {
-    name: 'request_photo_upload',
-    widget: 'photo-upload',
-    enabled: true,
-    fixture: {
-      asset_id: 'asset-123',
-      upload_url: 'https://upload.imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/00000000-0000-0000-0000-000000000000',
-      site_id: 'site-pottery',
-    },
-  },
-  // ── DISABLED widgets ─────────────────────────────────────────────────────
-  {
-    name: 'show_welcome',
-    widget: 'welcome-list',
-    enabled: false,
+// Sample toolOutput payloads, keyed by MCP tool name. This is the ONLY thing this file
+// hardcodes — which tools exist, which widget they use, and whether they're enabled is
+// fetched live from /api/dev/widget-config (server/utils/mcp-widget-config.ts), the same
+// source mcp.post.ts enforces in prod. Add a fixture here when you add a new widget tool;
+// if a tool fires live with no fixture, it falls back to `{}` and gets flagged "no fixture".
+// `widget` here is only used as an offline fallback (when /api/dev/widget-config can't be
+// reached) — when live, the widgetName from MCP_TOOLS always wins. Widget-to-file naming is
+// a stable convention, not the thing that drifted; `enabled` (deliberately absent here) was.
+const FIXTURES = {
+  list_sites: {
+    widget: null, // welcome-list widget deleted — list_sites is text-only now
     fixture: {
       sites: [
         { id: 'site-pottery', name: 'Pottery House Krabi', subdomain: 'pottery-house', publicUrl: 'https://pottery-house.krabiclaw.com', status: 'live' },
@@ -246,16 +115,8 @@ const TOOLS = [
       currentUser: { id: 'u1', email: 'paul@example.com', name: 'Paul', role: null, isPlatformAdmin: false },
     },
   },
-  {
-    name: 'show_vertical_picker',
-    widget: 'vertical-picker',
-    enabled: false,
-    fixture: {},
-  },
-  {
-    name: 'import_from_maps',
-    widget: 'photo-album',
-    enabled: false,
+  import_from_maps: {
+    widget: null, // photo-album widget deleted — import_from_maps is text-only now
     fixture: {
       business: {
         name: 'Pottery House Krabi',
@@ -275,10 +136,8 @@ const TOOLS = [
       missingPhotos: false,
     },
   },
-  {
-    name: 'show_site_preview',
-    widget: 'site-preview',
-    enabled: false,
+  show_site_preview: {
+    widget: null, // site-preview widget deleted — show_site_preview is text-only now
     fixture: {
       site: { id: 'site-pottery', name: 'Pottery House Krabi', subdomain: 'pottery-house', publicUrl: 'https://pottery-house.krabiclaw.com' },
       pages: [
@@ -289,31 +148,89 @@ const TOOLS = [
       ogImageUrl: null,
     },
   },
-]
+  show_generated_images: {
+    widget: null, // image-carousel widget deleted — show_generated_images is text-only now
+    fixture: {
+      title: 'Homepage Hero',
+      subtitle: 'Tap to use — or ask ChatGPT to generate another.',
+      images: [{ assetId: 'img-native-1', publicUrl: IMG }],
+      useLabel: 'Use as homepage hero',
+      target: 'home_hero',
+      site_id: 'site-demo',
+    },
+  },
+  request_photo_upload: {
+    widget: 'photo-upload',
+    fixture: {
+      asset_id: 'asset-123',
+      upload_url: 'https://upload.imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/00000000-0000-0000-0000-000000000000',
+      site_id: 'site-pottery',
+    },
+  },
+}
 
-let current = TOOLS[0]
+let TOOLS = []
+let current = null
+
+function apiBase() {
+  return document.getElementById('api-base').value.trim().replace(/\/$/, '')
+}
+
+async function loadLiveConfig() {
+  const statusEl = document.getElementById('api-status')
+  statusEl.textContent = 'checking…'
+  statusEl.className = 'api-status offline'
+  try {
+    const res = await fetch(apiBase() + '/api/dev/widget-config')
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const config = await res.json()
+    statusEl.textContent = 'live (widgetsEnabled=' + config.widgetsEnabled + ')'
+    statusEl.className = 'api-status live'
+    TOOLS = config.tools.map((t) => ({
+      name: t.name,
+      widget: t.widgetName,
+      enabled: t.enabled,
+      hasFixture: Object.prototype.hasOwnProperty.call(FIXTURES, t.name),
+      fixture: FIXTURES[t.name]?.fixture ?? {},
+    }))
+    buildTabs()
+    if (TOOLS.length) pick(TOOLS.find((t) => t.name === current?.name) || TOOLS[0])
+  } catch (err) {
+    statusEl.textContent = 'offline: ' + err.message
+    statusEl.className = 'api-status offline'
+    log('ext', 'Could not reach ' + apiBase() + '/api/dev/widget-config — run `yarn dev` and reload. Falling back to fixture-only list (enabled/disabled split unknown).')
+    // Fallback so the harness is still usable with the Nuxt server down — but every tab
+    // is marked unknown rather than guessing, since that's the whole point of this rewrite.
+    TOOLS = Object.keys(FIXTURES).map((name) => ({ name, widget: FIXTURES[name].widget, enabled: null, hasFixture: true, fixture: FIXTURES[name].fixture }))
+    buildTabs()
+    if (TOOLS.length) pick(TOOLS[0])
+  }
+}
 
 function buildTabs() {
-  const enabled  = document.getElementById('row-enabled')
-  const disabled = document.getElementById('row-disabled')
+  const enabledRow  = document.getElementById('row-enabled')
+  const disabledRow = document.getElementById('row-disabled')
+  enabledRow.innerHTML = ''
+  disabledRow.innerHTML = ''
 
   const onLabel  = document.createElement('span')
   onLabel.className = 'row-label on'
   onLabel.textContent = '● Enabled'
-  enabled.appendChild(onLabel)
+  enabledRow.appendChild(onLabel)
 
   const offLabel = document.createElement('span')
   offLabel.className = 'row-label off'
-  offLabel.textContent = '○ Disabled'
-  disabled.appendChild(offLabel)
+  offLabel.textContent = '○ Disabled / Unknown'
+  disabledRow.appendChild(offLabel)
 
   TOOLS.forEach((tool) => {
     const btn = document.createElement('button')
     btn.className = 'tab ' + (tool.enabled ? 'on' : 'off')
     btn.dataset.name = tool.name
-    btn.innerHTML = tool.name + '<span class="badge">' + tool.widget + '</span>'
+    btn.innerHTML = tool.name + '<span class="badge">' + (tool.widget || '?') + '</span>' +
+      (tool.hasFixture ? '' : '<span class="stale-badge">no fixture</span>')
     btn.onclick = () => pick(tool)
-    ;(tool.enabled ? enabled : disabled).appendChild(btn)
+    ;(tool.enabled ? enabledRow : disabledRow).appendChild(btn)
   })
 }
 
@@ -325,11 +242,13 @@ function setActive(tool) {
 
 function updateMeta(tool) {
   const el = document.getElementById('tool-meta')
+  const statusLabel = tool.enabled === null ? 'unknown (offline)' : tool.enabled ? 'enabled' : 'disabled'
+  const statusPill = tool.enabled === null ? 'off' : tool.enabled ? 'on' : 'off'
   el.innerHTML =
     '<strong>tool</strong> ' + tool.name + '<br>' +
-    '<strong>widget</strong> ' + tool.widget + '<br>' +
-    '<strong>status</strong> <span class="pill ' + (tool.enabled ? 'on' : 'off') + '">' +
-    (tool.enabled ? 'enabled' : 'disabled') + '</span>'
+    '<strong>widget</strong> ' + (tool.widget || '(unknown — server offline)') + '<br>' +
+    '<strong>status</strong> <span class="pill ' + statusPill + '">' + statusLabel + '</span>' +
+    (tool.hasFixture ? '' : '<br><strong>fixture</strong> none — add one to FIXTURES in widget-test.html')
 }
 
 function pick(tool) {
@@ -346,6 +265,10 @@ function applyJson() {
 }
 
 function render(widget, data) {
+  if (!widget) {
+    document.getElementById('frame').srcdoc = '<body style="font:12px monospace;color:#94a3b8;padding:16px">No widget name — reload live config.</body>'
+    return
+  }
   document.getElementById('frame').srcdoc = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -387,8 +310,7 @@ window.addEventListener('message', (e) => {
   if (d.t === 'ext')   log('ext',   'openExternal → ' + d.u)
 })
 
-buildTabs()
-pick(TOOLS[0])
+loadLiveConfig()
 </script>
 </body>
 </html>

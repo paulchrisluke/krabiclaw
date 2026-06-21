@@ -18,9 +18,13 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => ({
     const missing = requiredBindings.filter((key) => !env?.[key])
 
     if (missing.length > 0) {
+      const cfRay = getHeader(event, 'cf-ray') ?? 'no-cf-ray'
+      const host = getHeader(event, 'host') ?? 'no-host'
+      const path = event.path ?? 'no-path'
       console.error(
-        `[cloudflareEnv] FATAL: Missing bindings: ${missing.join(', ')}. ` +
-        'Ensure wrangler.toml sets remote = false and Cloudflare dev bindings are active.'
+        `[cloudflareEnv] FATAL: Missing bindings: ${missing.join(', ')} ` +
+        `for ${host}${path} (cf-ray: ${cfRay}). In local dev, run via wrangler dev/yarn dev. ` +
+        'In production this means the Workers runtime did not attach bindings to this request — escalate to Cloudflare support with the cf-ray above if it recurs on real traffic.'
       )
 
       if (process.env.CI === 'true') {
@@ -34,5 +38,5 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => ({
     return env ?? {}
   })()
 } as CloudflareEnv)
-import { createError, type H3Event } from 'h3'
+import { createError, getHeader, type H3Event } from 'h3'
 import type { CloudflareEnv } from './auth'

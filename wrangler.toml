@@ -53,6 +53,12 @@ remote = false
 [ai]
 binding = "AI"
 
+[observability]
+enabled = true
+
+[observability.traces]
+enabled = true
+
 # Preview environment — CI deploys here on every PR; Playwright smoke tests run
 # against preview.krabiclaw.com. Dedicated resources isolated from staging/prod.
 #
@@ -74,6 +80,7 @@ NUXT_PUBLIC_PLATFORM_DOMAIN = "https://preview.krabiclaw.com"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw"
 EMAIL_DELIVERY_MODE = "log_only"
+WHATSAPP_DELIVERY_MODE = "log_only"
 E2E_ALLOW_DEV_ROUTES = "true"
 E2E_DEV_ROUTE_SECRET = "ci-dev-route-secret"
 
@@ -97,6 +104,9 @@ remote = false
 [env.preview.ai]
 binding = "AI"
 
+[env.preview.observability]
+enabled = false
+
 # Stable staging environment — uses dedicated non-production data/resources and
 # a fixed platform host for manual QA. NUXT_PUBLIC_FREE_SITE_DOMAIN is krabiclaw.com
 # (same as preview) because *.staging.krabiclaw.com is not covered by the zone's
@@ -114,6 +124,7 @@ NUXT_PUBLIC_PLATFORM_DOMAIN = "https://staging.krabiclaw.com"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw Staging"
 EMAIL_DELIVERY_MODE = "log_only"
+WHATSAPP_DELIVERY_MODE = "log_only"
 E2E_ALLOW_DEV_ROUTES = "true"
 E2E_DEV_ROUTE_SECRET = "ci-dev-route-secret"
 
@@ -136,3 +147,6 @@ remote = false
 
 [env.staging.ai]
 binding = "AI"
+
+[env.staging.observability]
+enabled = false
