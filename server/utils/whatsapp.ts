@@ -6,6 +6,7 @@ import { logOnlyWhatsAppMessageId, shouldSendRealWhatsApp } from './whatsapp-del
 
 function maskPhone(phone: string): string {
   if (!phone || phone.length < 4) return '***';
+  if (phone.length < 8) return phone.slice(0, 2) + '*'.repeat(phone.length - 2);
   return phone.slice(0, 3) + '*'.repeat(phone.length - 7) + phone.slice(-4);
 }
 

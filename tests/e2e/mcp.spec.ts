@@ -57,7 +57,7 @@ function mcpData<T>(body: { result?: { content?: Array<{ type?: string; text?: s
 }
 
 async function ensureSite(request: APIRequestContext, baseURL: string) {
-  const suffix = Date.now()
+  const suffix = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
   const res = await mcpRequest(request, baseURL, {
     method: 'tools/call',
     toolName: 'create_site',
@@ -951,10 +951,11 @@ test.describe('stateless MCP server', () => {
     })
     expect(startJobCall.status()).toBe(403)
 
+    const locationId = await ensureLocation(request, baseURL!, siteId)
     const gbConnectionCall = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_google_business_connection',
-      args: { site_id: siteId, location_id: 'loc-missing' },
+      args: { site_id: siteId, location_id: locationId },
     })
     expect(gbConnectionCall.status()).toBe(403)
   })

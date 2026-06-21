@@ -112,7 +112,7 @@ watch(items, () => {
   videoRefs.value = {}
 })
 
-function setVideoRef(el: Element | null, index: number) {
+function setVideoRef(el: any, index: number) {
   if (el instanceof HTMLVideoElement) {
     videoRefs.value[index] = el
   }

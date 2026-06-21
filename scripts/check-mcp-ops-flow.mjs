@@ -185,7 +185,7 @@ async function main() {
   expectStatus('add_menu_items_batch succeeds', batchedMenuItems)
   const batchPayload = data(batchedMenuItems.body)
   expectValue('add_menu_items_batch adds two items', batchPayload?.added === 2, batchPayload)
-  expectValue('add_menu_items_batch reports one duplicate skip', Array.isArray(batchPayload?.skipped) && batchPayload.skipped.length === 1 && batchPayload.skipped[0].reason.includes('already exists'), batchPayload)
+  expectValue('add_menu_items_batch reports one duplicate skip', Array.isArray(batchPayload?.skipped) && batchPayload.skipped.length === 1 && batchPayload.skipped[0].reason.includes('already_exists'), batchPayload)
 
   const itemUpdate = await mcp(headers, 'update_menu_item', {
     site_id: siteId,
