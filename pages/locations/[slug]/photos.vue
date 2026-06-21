@@ -66,62 +66,7 @@
       </UPage>
 
     <!-- Lightbox -->
-    <UModal v-model:open="lightboxOpen" fullscreen :portal="false" :ui="{ content: 'bg-black/92 flex items-center justify-center' }">
-      <template #content>
-        <div class="relative flex h-full w-full items-center justify-center p-16">
-          <!-- Close -->
-          <button
-            class="absolute right-6 top-6 flex size-11 items-center justify-center rounded-full bg-white/12 text-white transition hover:bg-white/25"
-            aria-label="Close"
-            @click="lightboxOpen = false"
-          >
-            <UIcon name="i-heroicons-x-mark" class="size-5" />
-          </button>
-
-          <!-- Prev -->
-          <button
-            v-if="lightboxIdx > 0"
-            class="absolute left-6 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/12 text-white transition hover:bg-white/25"
-            aria-label="Previous"
-            @click="lightboxIdx--"
-          >
-            <UIcon name="i-heroicons-chevron-left" class="size-5" />
-          </button>
-
-          <!-- Next -->
-          <button
-            v-if="lightboxIdx < sorted.length - 1"
-            class="absolute right-6 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/12 text-white transition hover:bg-white/25"
-            aria-label="Next"
-            @click="lightboxIdx++"
-          >
-            <UIcon name="i-heroicons-chevron-right" class="size-5" />
-          </button>
-
-          <!-- Image -->
-          <img
-            v-if="sorted[lightboxIdx]"
-            :src="sorted[lightboxIdx].local_url || sorted[lightboxIdx].google_url || sorted[lightboxIdx].thumbnail_url"
-            alt=""
-            class="max-h-[85vh] max-w-[90vw] object-contain"
-            @click.stop
-          >
-
-          <!-- Caption -->
-          <div
-            v-if="sorted[lightboxIdx]?.description"
-            class="absolute bottom-6 left-1/2 -translate-x-1/2 max-w-xl rounded-xl bg-black/40 px-5 py-3 text-center text-sm leading-relaxed text-white backdrop-blur-sm"
-          >
-            {{ sorted[lightboxIdx].description }}
-          </div>
-
-          <!-- Counter -->
-          <div class="absolute left-6 top-6 tabular-nums text-sm text-white/70">
-            {{ lightboxIdx + 1 }} / {{ sorted.length }}
-          </div>
-        </div>
-      </template>
-      </UModal>
+    <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="lightboxItems" :title="location?.title" />
     </template>
   </div>
 </template>
@@ -168,15 +113,13 @@ function openLightbox(i: number) {
   lightboxOpen.value = true
 }
 
-// Keyboard navigation
-function onKeydown(e: KeyboardEvent) {
-  if (!lightboxOpen.value) return
-  if (e.key === 'Escape') lightboxOpen.value = false
-  if (e.key === 'ArrowRight' && lightboxIdx.value < sorted.value.length - 1) lightboxIdx.value++
-  if (e.key === 'ArrowLeft' && lightboxIdx.value > 0) lightboxIdx.value--
-}
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+const lightboxItems = computed(() =>
+  sorted.value.map((p: ApiValue) => ({
+    url: p.local_url || p.google_url || p.thumbnail_url,
+    kind: 'image' as const,
+    description: p.description
+  }))
+)
 
 
 const config = useRuntimeConfig()

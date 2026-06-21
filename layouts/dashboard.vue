@@ -26,7 +26,7 @@
                 color="neutral"
                 variant="ghost"
                 size="sm"
-                aria-label="Back to Restaurant"
+                aria-label="Back to Dashboard"
               />
             </div>
             <NuxtLink
@@ -68,7 +68,7 @@
                 color="neutral"
                 variant="ghost"
                 size="sm"
-                aria-label="Back to Restaurant"
+                aria-label="Back to Dashboard"
               />
             </div>
             <NuxtLink
@@ -77,7 +77,7 @@
               class="flex items-center gap-2 px-2.5 py-1.5 text-sm font-semibold text-muted hover:text-highlighted hover:bg-muted rounded-lg transition-colors w-full"
             >
               <UIcon name="i-lucide-arrow-left" class="size-4 shrink-0" />
-              <span class="truncate">Back to Restaurant</span>
+              <span class="truncate">Back to Dashboard</span>
             </NuxtLink>
           </template>
 

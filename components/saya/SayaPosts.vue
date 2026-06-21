@@ -96,67 +96,39 @@
       </UButton>
     </div>
 
-    <!-- Full-screen modal for post details -->
-    <UModal v-model:open="modalOpen" fullscreen :portal="false" :ui="{ content: 'bg-black flex items-center justify-center' }">
-      <template #body v-if="selectedPost">
-        <div class="relative h-full w-full">
-          <!-- Close button -->
-          <button
-            class="absolute right-4 top-4 z-20 flex size-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white transition hover:bg-black/60"
-            aria-label="Close"
-            @click="modalOpen = false"
-          >
-            <UIcon name="i-heroicons-x-mark" class="size-5" />
-          </button>
-
-          <!-- Media - full bleed -->
-          <div v-if="selectedPost.media?.[0]" class="h-full w-full">
-            <video
-              v-if="selectedPost.media[0].mediaFormat === 'VIDEO'"
-              :src="selectedPost.media[0].googleUrl"
-              autoplay
-              muted
-              loop
-              playsinline
-              class="h-full w-full object-cover"
-            />
-            <img
-              v-else
-              :src="selectedPost.media[0].googleUrl"
-              :alt="selectedPost.title || t('saya.posts.image_alt')"
-              class="h-full w-full object-cover"
-            >
-          </div>
-
-          <!-- Content overlay at bottom -->
-          <div class="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 pt-32">
-            <time :datetime="selectedPost.createTime" class="text-[10px] text-white/60 font-bold uppercase tracking-widest mb-2 block">
-              {{ formatDate(selectedPost.createTime) }}
-            </time>
-            <h3 class="text-xl font-bold text-white mb-3 leading-tight">{{ selectedPost.title || t('saya.posts.business_update') }}</h3>
-            <div class="text-white/90 text-sm leading-relaxed whitespace-pre-line line-clamp-6">{{ selectedPost.summary }}</div>
-            <div v-if="selectedPost.event" class="mt-4 rounded-xl bg-white/10 backdrop-blur-md p-3 text-sm">
-              <p class="mb-1 font-bold text-white">{{ t('saya.posts.event_details_label') }}</p>
-              <p class="text-white/90">{{ selectedPost.event.title }} • {{ formatDate(selectedPost.event.startDate) }}</p>
-            </div>
-            <div v-if="selectedPost.offer" class="mt-4 rounded-xl bg-white/10 backdrop-blur-md p-3 text-sm">
-              <p class="mb-1 font-bold text-white">{{ t('saya.posts.special_offer_label') }}</p>
-              <p class="text-white/90">{{ selectedPost.offer.title }} <span v-if="selectedPost.offer.couponCode">• {{ t('saya.posts.code_label') }} {{ selectedPost.offer.couponCode }}</span></p>
-            </div>
-            <UButton
-              v-if="selectedPost.callToAction"
-              :to="selectedPost.callToAction.url"
-              variant="solid"
-              color="neutral"
-              size="lg"
-              class="mt-4 rounded-full bg-white! text-black! hover:bg-zinc-200!"
-            >
-              {{ (selectedPost.callToAction.actionType ?? '').replaceAll('_', ' ') }}
-            </UButton>
-          </div>
+    <!-- Full-screen lightbox for post details -->
+    <SayaLightbox
+      v-if="selectedPost"
+      v-model:open="modalOpen"
+      :items="lightboxItems"
+      :index="0"
+      :title="selectedPost.title || t('saya.posts.business_update')"
+    >
+      <template #caption>
+        <time :datetime="selectedPost.createTime" class="text-[10px] text-white/60 font-bold uppercase tracking-widest mb-2 block">
+          {{ formatDate(selectedPost.createTime) }}
+        </time>
+        <div class="text-white/90 text-sm leading-relaxed whitespace-pre-line line-clamp-6">{{ selectedPost.summary }}</div>
+        <div v-if="selectedPost.event" class="mt-4 rounded-xl bg-white/10 backdrop-blur-md p-3 text-sm">
+          <p class="mb-1 font-bold text-white">{{ t('saya.posts.event_details_label') }}</p>
+          <p class="text-white/90">{{ selectedPost.event.title }} • {{ formatDate(selectedPost.event.startDate) }}</p>
         </div>
+        <div v-if="selectedPost.offer" class="mt-4 rounded-xl bg-white/10 backdrop-blur-md p-3 text-sm">
+          <p class="mb-1 font-bold text-white">{{ t('saya.posts.special_offer_label') }}</p>
+          <p class="text-white/90">{{ selectedPost.offer.title }} <span v-if="selectedPost.offer.couponCode">• {{ t('saya.posts.code_label') }} {{ selectedPost.offer.couponCode }}</span></p>
+        </div>
+        <UButton
+          v-if="selectedPost.callToAction"
+          :to="selectedPost.callToAction.url"
+          variant="solid"
+          color="neutral"
+          size="lg"
+          class="mt-4 rounded-full bg-white! text-black! hover:bg-zinc-200!"
+        >
+          {{ (selectedPost.callToAction.actionType ?? '').replaceAll('_', ' ') }}
+        </UButton>
       </template>
-    </UModal>
+    </SayaLightbox>
   </AppSection>
 </template>
 
@@ -179,6 +151,12 @@ function openModal(post) {
   selectedPost.value = post
   modalOpen.value = true
 }
+
+const lightboxItems = computed(() => {
+  const media = selectedPost.value?.media?.[0]
+  if (!media) return []
+  return [{ url: media.googleUrl, kind: media.mediaFormat === 'VIDEO' ? 'video' : 'image', alt: selectedPost.value.title || t('saya.posts.image_alt') }]
+})
 
 const displayedPosts = computed(() => {
   return props.limit ? props.posts.slice(0, props.limit) : props.posts

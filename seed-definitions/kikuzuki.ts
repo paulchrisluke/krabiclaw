@@ -1,5 +1,5 @@
 import { compileCuratedSiteFixture } from './compile.ts'
-import type { CuratedSiteDefinition } from './contracts.ts'
+import type { CuratedMenuItemDefinition, CuratedSiteDefinition } from './contracts.ts'
 import { renderSiteBillingSql, renderSiteEntitlementsSql } from './billing-sql.ts'
 
 function escapeSql(value: string): string {
@@ -31,6 +31,90 @@ function cfImg(cloudflareImageId: string, slug: string) {
     category: 'food' as const,
   }
 }
+
+const aoNangMenuItems: CuratedMenuItemDefinition[] = [
+  // Sushi
+  { id: 'item-kiku-tuna-sushi', section: 'Sushi', name: 'Tuna Sushi', slug: 'tuna-sushi', description: 'Tuna', priceAmount: 75, imageAssetId: 'media-kiku-tuna-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-salmon-sushi', section: 'Sushi', name: 'Salmon Sushi', slug: 'salmon-sushi', description: 'Salmon', priceAmount: 65, imageAssetId: 'media-kiku-salmon-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-chutoro-sushi', section: 'Sushi', name: 'Chutoro Sushi', slug: 'chutoro-sushi', description: 'Medium-fatty bluefin tuna', priceAmount: 210, imageAssetId: 'media-kiku-chutoro-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-ama-ebi-sushi', section: 'Sushi', name: 'Ama Ebi Sushi', slug: 'ama-ebi-sushi', description: 'Sweet shrimp', priceAmount: 100, imageAssetId: 'media-kiku-ama-ebi-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-a4-beef-sushi-tamago', section: 'Sushi', name: 'A4 Beef Sushi Tamago', slug: 'a4-beef-sushi-tamago', description: 'A4 wagyu beef with egg', priceAmount: 300, imageAssetId: 'media-kiku-a4-beef-sushi-tamago', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-uni-nigiri', section: 'Sushi', name: 'Uni Nigiri', slug: 'uni-nigiri', description: 'Sea urchin', priceAmount: 260, imageAssetId: 'media-kiku-uni-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-ebi-sushi', section: 'Sushi', name: 'Ebi Sushi', slug: 'ebi-sushi', description: 'Shrimp', priceAmount: 80, imageAssetId: 'media-kiku-ebi-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-katsuo-sushi', section: 'Sushi', name: 'Katsuo Sushi', slug: 'katsuo-sushi', description: 'Bonito / skipjack tuna', priceAmount: 80, imageAssetId: 'media-kiku-katsuo-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-omakase-sushi-7', section: 'Sushi', name: 'Omakase Sushi 7 Kinds', slug: 'omakase-sushi-7-kinds', description: "Chef's selection, 7 kinds", priceAmount: 504, imageAssetId: 'media-kiku-omakase-sushi-7', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-tamago-nigiri', section: 'Sushi', name: 'Tamago Nigiri', slug: 'tamago-nigiri', description: 'Sweet egg', priceAmount: 65, imageAssetId: 'media-kiku-tamago-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-herring-nigiri', section: 'Sushi', name: 'Herring Nigiri', slug: 'herring-nigiri', description: 'Herring', priceAmount: 80, imageAssetId: 'media-kiku-herring-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-toro-salmon', section: 'Sushi', name: 'Toro Salmon', slug: 'toro-salmon', description: 'Toro salmon', priceAmount: 80, imageAssetId: 'media-kiku-toro-salmon', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-omakase-sushi-3', section: 'Sushi', name: 'Omakase Sushi 3 Kinds', slug: 'omakase-sushi-3-kinds', description: "Chef's selection, 3 kinds", priceAmount: 305, imageAssetId: 'media-kiku-omakase-sushi-3', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-negi-toro-nigiri', section: 'Sushi', name: 'Negi Toro Nigiri', slug: 'negi-toro-nigiri', description: 'Negitoro', priceAmount: 250, imageAssetId: 'media-kiku-negi-toro-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-hotate-sushi', section: 'Sushi', name: 'Hotate Sushi', slug: 'hotate-sushi', description: 'Scallop', priceAmount: 80, imageAssetId: 'media-kiku-hotate-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-unagi-sushi', section: 'Sushi', name: 'Unagi Sushi', slug: 'unagi-sushi', description: 'Japanese eel', priceAmount: 100, imageAssetId: 'media-kiku-unagi-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-foie-gras-sushi', section: 'Sushi', name: 'Foie Gras Sushi', slug: 'foie-gras-sushi', description: 'Foie gras liver', priceAmount: 290, imageAssetId: 'media-kiku-foie-gras-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-seabass-sushi', section: 'Sushi', name: 'Seabass Sushi', slug: 'seabass-sushi', description: 'Seabass', priceAmount: 80, imageAssetId: 'media-kiku-seabass-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-hamachi-sushi', section: 'Sushi', name: 'Hamachi Sushi', slug: 'hamachi-sushi', description: 'Yellowtail', priceAmount: 100, imageAssetId: 'media-kiku-hamachi-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-madai-sushi', section: 'Sushi', name: 'Madai Sushi', slug: 'madai-sushi', description: 'Sea bream', priceAmount: 80, imageAssetId: 'media-kiku-madai-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-tako-sushi', section: 'Sushi', name: 'Tako Sushi', slug: 'tako-sushi', description: 'Octopus', priceAmount: 75, imageAssetId: 'media-kiku-tako-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-ika-sushi', section: 'Sushi', name: 'Ika Sushi', slug: 'ika-sushi', description: 'Squid', priceAmount: 70, imageAssetId: 'media-kiku-ika-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-akagai-sushi', section: 'Sushi', name: 'Akagai Sushi', slug: 'akagai-sushi', description: 'Ark shell clam', priceAmount: 70, imageAssetId: 'media-kiku-akagai-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-a4-beef-sushi', section: 'Sushi', name: 'A4 Beef Sushi', slug: 'a4-beef-sushi', description: 'A4 wagyu beef', priceAmount: 280, imageAssetId: 'media-kiku-a4-beef-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-akami-sushi', section: 'Sushi', name: 'Akami Sushi', slug: 'akami-sushi', description: 'Lean bluefin tuna', priceAmount: 160, imageAssetId: 'media-kiku-akami-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-ikura-nigiri', section: 'Sushi', name: 'Ikura Nigiri', slug: 'ikura-nigiri', description: 'Salmon roe', priceAmount: 180, imageAssetId: 'media-kiku-ikura-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-ikura-uni-nigiri', section: 'Sushi', name: 'Ikura & Uni Nigiri', slug: 'ikura-uni-nigiri', description: 'Salmon roe and sea urchin', priceAmount: 260, imageAssetId: 'media-kiku-ikura-uni-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-kinki-nigiri', section: 'Sushi', name: 'Kinki Nigiri', slug: 'kinki-nigiri', description: 'Kinki fish', priceAmount: 200, imageAssetId: 'media-kiku-kinki-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-otoro-sushi', section: 'Sushi', name: 'Otoro Sushi', slug: 'otoro-sushi', description: 'Fatty bluefin tuna', priceAmount: 260, imageAssetId: 'media-kiku-otoro-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-shime-saba-sushi', section: 'Sushi', name: 'Shime Saba Sushi', slug: 'shime-saba-sushi', description: 'Marinated mackerel', priceAmount: 75, imageAssetId: 'media-kiku-shime-saba-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-tobiko-nigiri', section: 'Sushi', name: 'Tobiko Nigiri', slug: 'tobiko-nigiri', description: 'Flying fish roe', priceAmount: 200, imageAssetId: 'media-kiku-tobiko-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-omakase-sushi-10', section: 'Sushi', name: 'Omakase Sushi 10 Kinds', slug: 'omakase-sushi-10-kinds', description: "Chef's selection, 10 kinds", priceAmount: 1120, imageAssetId: 'media-kiku-omakase-sushi-10', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  // Sashimi
+  { id: 'item-kiku-chutoro-sashimi', section: 'Sashimi', name: 'Chutoro Sashimi', slug: 'chutoro-sashimi', description: 'Medium-fatty bluefin tuna', priceAmount: 690, imageAssetId: 'media-kiku-chutoro-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-uni-sashimi', section: 'Sashimi', name: 'Uni Sashimi 30g', slug: 'uni-sashimi-30g', description: 'Sea urchin, 30g', priceAmount: 680, imageAssetId: 'media-kiku-uni-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-tuna-sashimi', section: 'Sashimi', name: 'Tuna Sashimi', slug: 'tuna-sashimi', description: 'Tuna', priceAmount: 340, imageAssetId: 'media-kiku-tuna-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-akagai-sashimi', section: 'Sashimi', name: 'Akagai Sashimi', slug: 'akagai-sashimi', description: 'Ark shell clam', priceAmount: 290, imageAssetId: 'media-kiku-akagai-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-nori-seaweed', section: 'Sashimi', name: 'Nori Seaweed', slug: 'nori-seaweed', description: 'Seaweed', priceAmount: 50, imageAssetId: 'media-kiku-nori-seaweed', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-toro-salmon-sashimi', section: 'Sashimi', name: 'Toro Salmon Sashimi', slug: 'toro-salmon-sashimi', description: 'Toro salmon', priceAmount: 340, imageAssetId: 'media-kiku-toro-salmon-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-kinki-sashimi', section: 'Sashimi', name: 'Kinki Sashimi', slug: 'kinki-sashimi', description: 'Kinki fish, half fish', priceAmount: 890, imageAssetId: 'media-kiku-kinki-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-hotate-sashimi', section: 'Sashimi', name: 'Hotate Sashimi', slug: 'hotate-sashimi', description: 'Scallop', priceAmount: 370, imageAssetId: 'media-kiku-hotate-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-herring-sashimi', section: 'Sashimi', name: 'Herring Sashimi', slug: 'herring-sashimi', description: 'Herring', priceAmount: 360, imageAssetId: 'media-kiku-herring-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-akami-sashimi', section: 'Sashimi', name: 'Akami Sashimi', slug: 'akami-sashimi', description: 'Lean bluefin tuna', priceAmount: 490, imageAssetId: 'media-kiku-akami-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-ama-ebi-sashimi', section: 'Sashimi', name: 'Ama Ebi Sashimi', slug: 'ama-ebi-sashimi', description: 'Sweet shrimp', priceAmount: 300, imageAssetId: 'media-kiku-ama-ebi-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-salmon-sashimi', section: 'Sashimi', name: 'Salmon Sashimi', slug: 'salmon-sashimi', description: 'Salmon', priceAmount: 300, imageAssetId: 'media-kiku-salmon-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-seabass-sashimi', section: 'Sashimi', name: 'Seabass Sashimi', slug: 'seabass-sashimi', description: 'White seabass', priceAmount: 300, imageAssetId: 'media-kiku-seabass-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-ankimo-sashimi', section: 'Sashimi', name: 'Ankimo Sashimi', slug: 'ankimo-sashimi', description: 'Monkfish liver', priceAmount: 450, imageAssetId: 'media-kiku-ankimo-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-ika-sashimi', section: 'Sashimi', name: 'Ika Sashimi', slug: 'ika-sashimi', description: 'Squid with nori seaweed', priceAmount: 290, imageAssetId: 'media-kiku-ika-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-ikura-sashimi', section: 'Sashimi', name: 'Ikura Sashimi', slug: 'ikura-sashimi', description: 'Salmon roe, 40g', priceAmount: 430, imageAssetId: 'media-kiku-ikura-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-katsuo-sashimi', section: 'Sashimi', name: 'Katsuo Sashimi', slug: 'katsuo-sashimi', description: 'Bonito / skipjack tuna', priceAmount: 340, imageAssetId: 'media-kiku-katsuo-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-otoro-sashimi', section: 'Sashimi', name: 'Otoro Sashimi', slug: 'otoro-sashimi', description: 'Fatty bluefin tuna', priceAmount: 880, imageAssetId: 'media-kiku-otoro-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-madai-sashimi', section: 'Sashimi', name: 'Madai Sashimi', slug: 'madai-sashimi', description: 'Sea bream', priceAmount: 370, imageAssetId: 'media-kiku-madai-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-hamachi-sashimi', section: 'Sashimi', name: 'Hamachi Sashimi', slug: 'hamachi-sashimi', description: 'Yellowtail', priceAmount: 390, imageAssetId: 'media-kiku-hamachi-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-shime-saba-sashimi', section: 'Sashimi', name: 'Shime Saba Sashimi', slug: 'shime-saba-sashimi', description: 'Marinated mackerel', priceAmount: 270, imageAssetId: 'media-kiku-shime-saba-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-tako-sashimi', section: 'Sashimi', name: 'Tako Sashimi', slug: 'tako-sashimi', description: 'Octopus', priceAmount: 320, imageAssetId: 'media-kiku-tako-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-tobiko-sashimi', section: 'Sashimi', name: 'Tobiko Sashimi', slug: 'tobiko-sashimi', description: 'Flying fish roe, 40g', priceAmount: 350, imageAssetId: 'media-kiku-tobiko-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-tamagoyaki-sashimi', section: 'Sashimi', name: 'Tamagoyaki Sashimi', slug: 'tamagoyaki-sashimi', description: 'Japanese omelet / sweet egg', priceAmount: 130, imageAssetId: 'media-kiku-tamagoyaki-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-omakase-sashimi-3', section: 'Sashimi', name: 'Omakase Sashimi 3 Kinds', slug: 'omakase-sashimi-3-kinds', description: "Chef's selection, 3 kinds", priceAmount: 710, imageAssetId: 'media-kiku-omakase-sashimi-3', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-omakase-sashimi-5', section: 'Sashimi', name: 'Omakase Sashimi 5 Kinds', slug: 'omakase-sashimi-5-kinds', description: "Chef's selection, 5 kinds", priceAmount: 1200, imageAssetId: 'media-kiku-omakase-sashimi-5', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-omakase-sashimi-7', section: 'Sashimi', name: 'Omakase Sashimi 7 Kinds', slug: 'omakase-sashimi-7-kinds', description: "Chef's selection, 7 kinds", priceAmount: 1650, imageAssetId: 'media-kiku-omakase-sashimi-7', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-omakase-sashimi-9', section: 'Sashimi', name: 'Omakase Sashimi 9 Kinds', slug: 'omakase-sashimi-9-kinds', description: "Chef's selection, 9 kinds", priceAmount: 1650, imageAssetId: 'media-kiku-omakase-sashimi-9', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  // Carpaccio / Usuzukuri
+  { id: 'item-kiku-salmon-tuna-hamachi-usuzukuri', section: 'Carpaccio / Usuzukuri', name: 'Salmon, Tuna, Hamachi Usuzukuri', slug: 'salmon-tuna-hamachi-usuzukuri', description: 'Salmon, tuna, and hamachi carpaccio, ponzu sauce', priceAmount: 490, imageAssetId: 'media-kiku-salmon-tuna-hamachi-usuzukuri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-salmon-usuzukuri', section: 'Carpaccio / Usuzukuri', name: 'Salmon Usuzukuri', slug: 'salmon-usuzukuri', description: 'Salmon carpaccio, ponzu sauce', priceAmount: 450, imageAssetId: 'media-kiku-salmon-usuzukuri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-hamachi-usuzukuri', section: 'Carpaccio / Usuzukuri', name: 'Hamachi Usuzukuri', slug: 'hamachi-usuzukuri', description: 'Hamachi carpaccio, ponzu sauce', priceAmount: 480, imageAssetId: 'media-kiku-hamachi-usuzukuri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  // Oishii
+  { id: 'item-kiku-pirikara-yakko-tofu', section: 'Oishii', name: 'Pirikara Yakko (Tofu)', slug: 'pirikara-yakko-tofu', description: 'Spicy chilled tofu', priceAmount: 170, imageAssetId: 'media-kiku-pirikara-tofu', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-pirikara-kyuri', section: 'Oishii', name: 'Pirikara Kyuri', slug: 'pirikara-kyuri', description: 'Japanese cucumber salad with dried bonito', priceAmount: 85, imageAssetId: 'media-kiku-pirikara-kyuri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-pirikara-yakko-jellyfish', section: 'Oishii', name: 'Pirikara Yakko (Jellyfish)', slug: 'pirikara-yakko-jellyfish', description: 'Spicy jellyfish with sesame oil', priceAmount: 130, imageAssetId: 'media-kiku-pirikara-jellyfish', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-ebi-yaki', section: 'Oishii', name: 'Ebi Yaki', slug: 'ebi-yaki', description: 'Grilled shrimp', priceAmount: 50, imageAssetId: 'media-kiku-ebi-yaki', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-mentaiko', section: 'Oishii', name: 'Mentaiko', slug: 'mentaiko', description: 'Cod roe / mentaiko', priceAmount: 260, imageAssetId: 'media-kiku-mentaiko', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-ebi-roll', section: 'Oishii', name: 'Ebi Vegetables Roll Mayonnaise Wasabi Dip', slug: 'ebi-vegetables-roll-mayonnaise-wasabi-dip', description: 'Shrimp and vegetable roll with mayonnaise wasabi dip', priceAmount: 125, imageAssetId: 'media-kiku-ebi-roll', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  // Tataki
+  { id: 'item-kiku-tuna-tataki', section: 'Tataki', name: 'Tuna Tataki', slug: 'tuna-tataki', description: 'Seared tuna', priceAmount: 380, imageAssetId: 'media-kiku-tuna-tataki', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-wagyu-tataki', section: 'Tataki', name: 'Wagyu Rump Beef Tataki', slug: 'wagyu-rump-beef-tataki', description: 'Seared wagyu rump beef', priceAmount: 480, imageAssetId: 'media-kiku-wagyu-tataki', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  // Dessert
+  { id: 'item-kiku-mango-sticky-rice-roll', section: 'Dessert', name: 'Mango Sticky Rice Roll', slug: 'mango-sticky-rice-roll', description: 'Mango sticky rice roll', priceAmount: 280, imageAssetId: 'media-kiku-mango-sticky-rice-roll', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-chocolate-lava', section: 'Dessert', name: 'Mini Chocolate Lava Vanilla Ice-cream', slug: 'mini-chocolate-lava-vanilla-ice-cream', description: 'Mini chocolate lava cake with vanilla ice cream', priceAmount: 165, imageAssetId: 'media-kiku-chocolate-lava', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-rum-raisin-ice-cream', section: 'Dessert', name: 'Rum & Raisin Ice-cream', slug: 'rum-raisin-ice-cream', description: 'Rum raisin ice cream', priceAmount: 75, imageAssetId: 'media-kiku-rum-raisin-ice-cream', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-vanilla-ice-cream', section: 'Dessert', name: 'Vanilla Ice-cream', slug: 'vanilla-ice-cream', description: 'Vanilla ice cream', priceAmount: 75, imageAssetId: 'media-kiku-vanilla-ice-cream', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+]
 
 export const kikuzukiFixture: CuratedSiteDefinition = {
   fixtureId: 'kikuzuki',
@@ -127,6 +211,45 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       isPrimary: true,
       status: 'active',
       heroVideoAssetId: 'media-kiku-hero-video',
+    },
+    {
+      id: 'loc-kikuzuki-tkma',
+      slug: 'take-me-away-by-kikuzuki',
+      title: 'Take Me Away by KIKUZUKI',
+      city: 'Krabi',
+      address: {
+        addressLines: ['117, Tambon Nong Thale'],
+        locality: 'Tambon Nong Thale',
+        administrativeArea: 'Krabi',
+        postalCode: '81000',
+        country: 'TH',
+      },
+      phone: '081 154 3606',
+      email: 'contact@kikuzuki.com',
+      mapsUrl: 'https://maps.google.com/?cid=15622597294485639973',
+      latitude: 8.0572977,
+      longitude: 98.7493211,
+      description:
+        "Take Me Away by KIKUZUKI is the Kikuzuki group's second location, serving fresh sushi, sashimi, and yakiniku skewers just behind Klong Muang Beach in Krabi.",
+      shortDescription: 'Sushi, sashimi, and yakiniku near Klong Muang Beach, Krabi.',
+      openingHours: [
+        { openDay: 'TUESDAY', openTime: '12:00', closeTime: '22:30' },
+        { openDay: 'WEDNESDAY', openTime: '12:00', closeTime: '22:30' },
+        { openDay: 'THURSDAY', openTime: '12:00', closeTime: '22:30' },
+        { openDay: 'FRIDAY', openTime: '12:00', closeTime: '22:30' },
+        { openDay: 'SATURDAY', openTime: '12:00', closeTime: '22:30' },
+        { openDay: 'SUNDAY', openTime: '12:00', closeTime: '22:30' },
+      ],
+      rating: 4.9,
+      reviewCount: 60,
+      priceLevel: '',
+      categories: ['Japanese Restaurant', 'Sushi'],
+      instagramUrl: '',
+      facebookUrl: '',
+      isPrimary: false,
+      status: 'active',
+      heroImageAssetId: 'media-tkma-hero',
+      notificationPhone: '081 154 3606',
     },
   ],
   mediaAssets: [
@@ -244,6 +367,12 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     { id: 'media-kiku-chocolate-lava', locationId: 'loc-kikuzuki', ...cfImg('18934da6-254f-4150-a45c-d671c81b9600', 'mini-chocolate-lava-vanilla-ice-cream'), mimeType: 'image/png', altText: 'Mini chocolate lava vanilla ice cream' },
     { id: 'media-kiku-rum-raisin-ice-cream', locationId: 'loc-kikuzuki', ...cfImg('0873c414-074c-4b21-78d6-fbfbc8606900', 'rum-raisin-ice-cream'), mimeType: 'image/png', altText: 'Rum and raisin ice cream' },
     { id: 'media-kiku-vanilla-ice-cream', locationId: 'loc-kikuzuki', ...cfImg('449c4abf-a28e-43a8-905d-bf8967aa4000', 'vanilla-ice-cream'), mimeType: 'image/png', altText: 'Vanilla ice cream' },
+    // Take Me Away by KIKUZUKI (loc-kikuzuki-tkma) — real photos from Google Places
+    { id: 'media-tkma-hero', locationId: 'loc-kikuzuki-tkma', ...cfImg('fa7aa50b-46c7-4170-9466-dfb501733100', 'tkma-hero'), altText: 'Take Me Away by KIKUZUKI', category: 'exterior' },
+    { id: 'media-tkma-interior-1', locationId: 'loc-kikuzuki-tkma', ...cfImg('e529e128-e90d-450c-8546-5a70f1d6f900', 'tkma-interior-1'), altText: 'Take Me Away by KIKUZUKI interior', category: 'interior' },
+    { id: 'media-tkma-food-1', locationId: 'loc-kikuzuki-tkma', ...cfImg('d9c0f1ef-5f64-4927-51b1-4e30f59d1a00', 'tkma-food-1'), altText: 'Sushi at Take Me Away by KIKUZUKI' },
+    { id: 'media-tkma-food-2', locationId: 'loc-kikuzuki-tkma', ...cfImg('f0b1e4a4-28b3-466b-8947-300100c5e500', 'tkma-food-2'), altText: 'Sashimi at Take Me Away by KIKUZUKI' },
+    { id: 'media-tkma-food-3', locationId: 'loc-kikuzuki-tkma', ...cfImg('d299dd02-5b40-4133-cb85-b947259d4500', 'tkma-food-3'), altText: 'Yakiniku skewers at Take Me Away by KIKUZUKI' },
   ],
   siteContent: [
     {
@@ -320,7 +449,14 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     },
   ],
   experiences: [],
-  reviews: [],
+  reviews: [
+    // Take Me Away by KIKUZUKI (loc-kikuzuki-tkma) — real reviews fetched from Google Places
+    { id: 'review-tkma-1', locationId: 'loc-kikuzuki-tkma', authorName: 'aideedee', reviewerPhotoUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKlYt_FUz2ysB4sEYetDo9xP7qEo24JiUvCfwdC2iVoOD-QeA=s128-c0x00000000-cc-rp-mo-ba4', rating: 5, content: 'Amazing food, but even more to highlight is the staff, makes this experience and the time there just amazing! Thanks you and see you soon!', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'review-tkma-2', locationId: 'loc-kikuzuki-tkma', authorName: 'Sarah G', reviewerPhotoUrl: 'https://lh3.googleusercontent.com/a/ACg8ocJ-9r3k3BDl_wGyvhc81R1Niqw32aZ0iJjtEwaDDoq5aKiZuA=s128-c0x00000000-cc-rp-mo-ba2', rating: 5, content: 'Delicious fresh sushi, had the salmon and tuna rolls, both excellent. Also the Yaki Niku beef skewers were very tasty and perfectly cooked medium rare. Good quality miso soup. Unexpectedly, they also do a proper barista coffee, enjoyed a cappuccino and a piccolo.\nSet just behind Klong Muang beach it was perfect for a light lunch, open from 1pm.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'review-tkma-3', locationId: 'loc-kikuzuki-tkma', authorName: 'Yaniv Freeman', reviewerPhotoUrl: 'https://lh3.googleusercontent.com/a-/ALV-UjUY11KnLBglARAfODChYB-OYneMgadBp_hgBoM68gJ-s6BS-BM=s128-c0x00000000-cc-rp-mo-ba4', rating: 5, content: "The most professional and delicious sushi we've ever had in Krabi! ❤️ An amazing, high-quality place with such a cool vibe. The owners are awesome, and they have the best flavored beers and alcohol we've ever tasted. Excellent desserts too—the most beautiful and tasty sushi spot in Klong Muang! ❤️\nWe love it", ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'review-tkma-4', locationId: 'loc-kikuzuki-tkma', authorName: 'Glasshouse', reviewerPhotoUrl: 'https://lh3.googleusercontent.com/a-/ALV-UjW8coPLNXiXiQ9A-C-zhm2UWI6xNapbxoPbj4rjHKQdmdbtV5E=s128-c0x00000000-cc-rp-mo', rating: 5, content: 'Love this its so great to meet new friends, eat great food and have a few 🍸', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'review-tkma-5', locationId: 'loc-kikuzuki-tkma', authorName: 'Mike Sperle', reviewerPhotoUrl: 'https://lh3.googleusercontent.com/a-/ALV-UjXVbhHD2ah14dfWTRQcD9ofXKGiiFbnoL3m9Rj_9nNNnOwygnq3Xg=s128-c0x00000000-cc-rp-mo-ba4', rating: 5, content: "Well I arrived, tired and wet! I was looking for something that was more fresh then the local Thai food! With real home style Japanese fixing! First I tried some meat! Wow! Cooked to my request medium rare! Then a bit of not so sweet Sake to wash it down! Hmmm that warmed me and I tried some fresh sashimi. That was it! I dont leave reviews. But this little spot on the road was fabulous 👌! There was a Scottish man there that made the time a bit enjoyable.  Claimed he was married to the owner.  But you know those Scottish! Lol! Left a bit dryer and alot happier.", ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+  ],
   menus: [
     {
       id: 'menu-kiku-ao-nang',
@@ -329,89 +465,16 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       description: '',
       sectionOrder: ['Sushi', 'Sashimi', 'Carpaccio / Usuzukuri', 'Oishii', 'Tataki', 'Dessert'],
       status: 'published',
-      items: [
-        // Sushi
-        { id: 'item-kiku-tuna-sushi', section: 'Sushi', name: 'Tuna Sushi', slug: 'tuna-sushi', description: 'Tuna', priceAmount: 75, imageAssetId: 'media-kiku-tuna-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-salmon-sushi', section: 'Sushi', name: 'Salmon Sushi', slug: 'salmon-sushi', description: 'Salmon', priceAmount: 65, imageAssetId: 'media-kiku-salmon-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-chutoro-sushi', section: 'Sushi', name: 'Chutoro Sushi', slug: 'chutoro-sushi', description: 'Medium-fatty bluefin tuna', priceAmount: 210, imageAssetId: 'media-kiku-chutoro-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-ama-ebi-sushi', section: 'Sushi', name: 'Ama Ebi Sushi', slug: 'ama-ebi-sushi', description: 'Sweet shrimp', priceAmount: 100, imageAssetId: 'media-kiku-ama-ebi-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-a4-beef-sushi-tamago', section: 'Sushi', name: 'A4 Beef Sushi Tamago', slug: 'a4-beef-sushi-tamago', description: 'A4 wagyu beef with egg', priceAmount: 300, imageAssetId: 'media-kiku-a4-beef-sushi-tamago', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-uni-nigiri', section: 'Sushi', name: 'Uni Nigiri', slug: 'uni-nigiri', description: 'Sea urchin', priceAmount: 260, imageAssetId: 'media-kiku-uni-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-ebi-sushi', section: 'Sushi', name: 'Ebi Sushi', slug: 'ebi-sushi', description: 'Shrimp', priceAmount: 80, imageAssetId: 'media-kiku-ebi-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-katsuo-sushi', section: 'Sushi', name: 'Katsuo Sushi', slug: 'katsuo-sushi', description: 'Bonito / skipjack tuna', priceAmount: 80, imageAssetId: 'media-kiku-katsuo-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-omakase-sushi-7', section: 'Sushi', name: 'Omakase Sushi 7 Kinds', slug: 'omakase-sushi-7-kinds', description: "Chef's selection, 7 kinds", priceAmount: 504, imageAssetId: 'media-kiku-omakase-sushi-7', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-tamago-nigiri', section: 'Sushi', name: 'Tamago Nigiri', slug: 'tamago-nigiri', description: 'Sweet egg', priceAmount: 65, imageAssetId: 'media-kiku-tamago-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-herring-nigiri', section: 'Sushi', name: 'Herring Nigiri', slug: 'herring-nigiri', description: 'Herring', priceAmount: 80, imageAssetId: 'media-kiku-herring-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-toro-salmon', section: 'Sushi', name: 'Toro Salmon', slug: 'toro-salmon', description: 'Toro salmon', priceAmount: 80, imageAssetId: 'media-kiku-toro-salmon', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-omakase-sushi-3', section: 'Sushi', name: 'Omakase Sushi 3 Kinds', slug: 'omakase-sushi-3-kinds', description: "Chef's selection, 3 kinds", priceAmount: 305, imageAssetId: 'media-kiku-omakase-sushi-3', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-negi-toro-nigiri', section: 'Sushi', name: 'Negi Toro Nigiri', slug: 'negi-toro-nigiri', description: 'Negitoro', priceAmount: 250, imageAssetId: 'media-kiku-negi-toro-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-hotate-sushi', section: 'Sushi', name: 'Hotate Sushi', slug: 'hotate-sushi', description: 'Scallop', priceAmount: 80, imageAssetId: 'media-kiku-hotate-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-unagi-sushi', section: 'Sushi', name: 'Unagi Sushi', slug: 'unagi-sushi', description: 'Japanese eel', priceAmount: 100, imageAssetId: 'media-kiku-unagi-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-foie-gras-sushi', section: 'Sushi', name: 'Foie Gras Sushi', slug: 'foie-gras-sushi', description: 'Foie gras liver', priceAmount: 290, imageAssetId: 'media-kiku-foie-gras-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-seabass-sushi', section: 'Sushi', name: 'Seabass Sushi', slug: 'seabass-sushi', description: 'Seabass', priceAmount: 80, imageAssetId: 'media-kiku-seabass-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-hamachi-sushi', section: 'Sushi', name: 'Hamachi Sushi', slug: 'hamachi-sushi', description: 'Yellowtail', priceAmount: 100, imageAssetId: 'media-kiku-hamachi-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-madai-sushi', section: 'Sushi', name: 'Madai Sushi', slug: 'madai-sushi', description: 'Sea bream', priceAmount: 80, imageAssetId: 'media-kiku-madai-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-tako-sushi', section: 'Sushi', name: 'Tako Sushi', slug: 'tako-sushi', description: 'Octopus', priceAmount: 75, imageAssetId: 'media-kiku-tako-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-ika-sushi', section: 'Sushi', name: 'Ika Sushi', slug: 'ika-sushi', description: 'Squid', priceAmount: 70, imageAssetId: 'media-kiku-ika-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-akagai-sushi', section: 'Sushi', name: 'Akagai Sushi', slug: 'akagai-sushi', description: 'Ark shell clam', priceAmount: 70, imageAssetId: 'media-kiku-akagai-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-a4-beef-sushi', section: 'Sushi', name: 'A4 Beef Sushi', slug: 'a4-beef-sushi', description: 'A4 wagyu beef', priceAmount: 280, imageAssetId: 'media-kiku-a4-beef-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-akami-sushi', section: 'Sushi', name: 'Akami Sushi', slug: 'akami-sushi', description: 'Lean bluefin tuna', priceAmount: 160, imageAssetId: 'media-kiku-akami-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-ikura-nigiri', section: 'Sushi', name: 'Ikura Nigiri', slug: 'ikura-nigiri', description: 'Salmon roe', priceAmount: 180, imageAssetId: 'media-kiku-ikura-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-ikura-uni-nigiri', section: 'Sushi', name: 'Ikura & Uni Nigiri', slug: 'ikura-uni-nigiri', description: 'Salmon roe and sea urchin', priceAmount: 260, imageAssetId: 'media-kiku-ikura-uni-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-kinki-nigiri', section: 'Sushi', name: 'Kinki Nigiri', slug: 'kinki-nigiri', description: 'Kinki fish', priceAmount: 200, imageAssetId: 'media-kiku-kinki-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-otoro-sushi', section: 'Sushi', name: 'Otoro Sushi', slug: 'otoro-sushi', description: 'Fatty bluefin tuna', priceAmount: 260, imageAssetId: 'media-kiku-otoro-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-shime-saba-sushi', section: 'Sushi', name: 'Shime Saba Sushi', slug: 'shime-saba-sushi', description: 'Marinated mackerel', priceAmount: 75, imageAssetId: 'media-kiku-shime-saba-sushi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-tobiko-nigiri', section: 'Sushi', name: 'Tobiko Nigiri', slug: 'tobiko-nigiri', description: 'Flying fish roe', priceAmount: 200, imageAssetId: 'media-kiku-tobiko-nigiri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-omakase-sushi-10', section: 'Sushi', name: 'Omakase Sushi 10 Kinds', slug: 'omakase-sushi-10-kinds', description: "Chef's selection, 10 kinds", priceAmount: 1120, imageAssetId: 'media-kiku-omakase-sushi-10', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        // Sashimi
-        { id: 'item-kiku-chutoro-sashimi', section: 'Sashimi', name: 'Chutoro Sashimi', slug: 'chutoro-sashimi', description: 'Medium-fatty bluefin tuna', priceAmount: 690, imageAssetId: 'media-kiku-chutoro-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-uni-sashimi', section: 'Sashimi', name: 'Uni Sashimi 30g', slug: 'uni-sashimi-30g', description: 'Sea urchin, 30g', priceAmount: 680, imageAssetId: 'media-kiku-uni-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-tuna-sashimi', section: 'Sashimi', name: 'Tuna Sashimi', slug: 'tuna-sashimi', description: 'Tuna', priceAmount: 340, imageAssetId: 'media-kiku-tuna-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-akagai-sashimi', section: 'Sashimi', name: 'Akagai Sashimi', slug: 'akagai-sashimi', description: 'Ark shell clam', priceAmount: 290, imageAssetId: 'media-kiku-akagai-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-nori-seaweed', section: 'Sashimi', name: 'Nori Seaweed', slug: 'nori-seaweed', description: 'Seaweed', priceAmount: 50, imageAssetId: 'media-kiku-nori-seaweed', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-toro-salmon-sashimi', section: 'Sashimi', name: 'Toro Salmon Sashimi', slug: 'toro-salmon-sashimi', description: 'Toro salmon', priceAmount: 340, imageAssetId: 'media-kiku-toro-salmon-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-kinki-sashimi', section: 'Sashimi', name: 'Kinki Sashimi', slug: 'kinki-sashimi', description: 'Kinki fish, half fish', priceAmount: 890, imageAssetId: 'media-kiku-kinki-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-hotate-sashimi', section: 'Sashimi', name: 'Hotate Sashimi', slug: 'hotate-sashimi', description: 'Scallop', priceAmount: 370, imageAssetId: 'media-kiku-hotate-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-herring-sashimi', section: 'Sashimi', name: 'Herring Sashimi', slug: 'herring-sashimi', description: 'Herring', priceAmount: 360, imageAssetId: 'media-kiku-herring-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-akami-sashimi', section: 'Sashimi', name: 'Akami Sashimi', slug: 'akami-sashimi', description: 'Lean bluefin tuna', priceAmount: 490, imageAssetId: 'media-kiku-akami-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-ama-ebi-sashimi', section: 'Sashimi', name: 'Ama Ebi Sashimi', slug: 'ama-ebi-sashimi', description: 'Sweet shrimp', priceAmount: 300, imageAssetId: 'media-kiku-ama-ebi-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-salmon-sashimi', section: 'Sashimi', name: 'Salmon Sashimi', slug: 'salmon-sashimi', description: 'Salmon', priceAmount: 300, imageAssetId: 'media-kiku-salmon-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-seabass-sashimi', section: 'Sashimi', name: 'Seabass Sashimi', slug: 'seabass-sashimi', description: 'White seabass', priceAmount: 300, imageAssetId: 'media-kiku-seabass-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-ankimo-sashimi', section: 'Sashimi', name: 'Ankimo Sashimi', slug: 'ankimo-sashimi', description: 'Monkfish liver', priceAmount: 450, imageAssetId: 'media-kiku-ankimo-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-ika-sashimi', section: 'Sashimi', name: 'Ika Sashimi', slug: 'ika-sashimi', description: 'Squid with nori seaweed', priceAmount: 290, imageAssetId: 'media-kiku-ika-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-ikura-sashimi', section: 'Sashimi', name: 'Ikura Sashimi', slug: 'ikura-sashimi', description: 'Salmon roe, 40g', priceAmount: 430, imageAssetId: 'media-kiku-ikura-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-katsuo-sashimi', section: 'Sashimi', name: 'Katsuo Sashimi', slug: 'katsuo-sashimi', description: 'Bonito / skipjack tuna', priceAmount: 340, imageAssetId: 'media-kiku-katsuo-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-otoro-sashimi', section: 'Sashimi', name: 'Otoro Sashimi', slug: 'otoro-sashimi', description: 'Fatty bluefin tuna', priceAmount: 880, imageAssetId: 'media-kiku-otoro-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-madai-sashimi', section: 'Sashimi', name: 'Madai Sashimi', slug: 'madai-sashimi', description: 'Sea bream', priceAmount: 370, imageAssetId: 'media-kiku-madai-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-hamachi-sashimi', section: 'Sashimi', name: 'Hamachi Sashimi', slug: 'hamachi-sashimi', description: 'Yellowtail', priceAmount: 390, imageAssetId: 'media-kiku-hamachi-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-shime-saba-sashimi', section: 'Sashimi', name: 'Shime Saba Sashimi', slug: 'shime-saba-sashimi', description: 'Marinated mackerel', priceAmount: 270, imageAssetId: 'media-kiku-shime-saba-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-tako-sashimi', section: 'Sashimi', name: 'Tako Sashimi', slug: 'tako-sashimi', description: 'Octopus', priceAmount: 320, imageAssetId: 'media-kiku-tako-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-tobiko-sashimi', section: 'Sashimi', name: 'Tobiko Sashimi', slug: 'tobiko-sashimi', description: 'Flying fish roe, 40g', priceAmount: 350, imageAssetId: 'media-kiku-tobiko-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-tamagoyaki-sashimi', section: 'Sashimi', name: 'Tamagoyaki Sashimi', slug: 'tamagoyaki-sashimi', description: 'Japanese omelet / sweet egg', priceAmount: 130, imageAssetId: 'media-kiku-tamagoyaki-sashimi', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-omakase-sashimi-3', section: 'Sashimi', name: 'Omakase Sashimi 3 Kinds', slug: 'omakase-sashimi-3-kinds', description: "Chef's selection, 3 kinds", priceAmount: 710, imageAssetId: 'media-kiku-omakase-sashimi-3', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-omakase-sashimi-5', section: 'Sashimi', name: 'Omakase Sashimi 5 Kinds', slug: 'omakase-sashimi-5-kinds', description: "Chef's selection, 5 kinds", priceAmount: 1200, imageAssetId: 'media-kiku-omakase-sashimi-5', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-omakase-sashimi-7', section: 'Sashimi', name: 'Omakase Sashimi 7 Kinds', slug: 'omakase-sashimi-7-kinds', description: "Chef's selection, 7 kinds", priceAmount: 1650, imageAssetId: 'media-kiku-omakase-sashimi-7', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-omakase-sashimi-9', section: 'Sashimi', name: 'Omakase Sashimi 9 Kinds', slug: 'omakase-sashimi-9-kinds', description: "Chef's selection, 9 kinds", priceAmount: 1650, imageAssetId: 'media-kiku-omakase-sashimi-9', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        // Carpaccio / Usuzukuri
-        { id: 'item-kiku-salmon-tuna-hamachi-usuzukuri', section: 'Carpaccio / Usuzukuri', name: 'Salmon, Tuna, Hamachi Usuzukuri', slug: 'salmon-tuna-hamachi-usuzukuri', description: 'Salmon, tuna, and hamachi carpaccio, ponzu sauce', priceAmount: 490, imageAssetId: 'media-kiku-salmon-tuna-hamachi-usuzukuri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-salmon-usuzukuri', section: 'Carpaccio / Usuzukuri', name: 'Salmon Usuzukuri', slug: 'salmon-usuzukuri', description: 'Salmon carpaccio, ponzu sauce', priceAmount: 450, imageAssetId: 'media-kiku-salmon-usuzukuri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-hamachi-usuzukuri', section: 'Carpaccio / Usuzukuri', name: 'Hamachi Usuzukuri', slug: 'hamachi-usuzukuri', description: 'Hamachi carpaccio, ponzu sauce', priceAmount: 480, imageAssetId: 'media-kiku-hamachi-usuzukuri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        // Oishii
-        { id: 'item-kiku-pirikara-yakko-tofu', section: 'Oishii', name: 'Pirikara Yakko (Tofu)', slug: 'pirikara-yakko-tofu', description: 'Spicy chilled tofu', priceAmount: 170, imageAssetId: 'media-kiku-pirikara-tofu', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-pirikara-kyuri', section: 'Oishii', name: 'Pirikara Kyuri', slug: 'pirikara-kyuri', description: 'Japanese cucumber salad with dried bonito', priceAmount: 85, imageAssetId: 'media-kiku-pirikara-kyuri', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-pirikara-yakko-jellyfish', section: 'Oishii', name: 'Pirikara Yakko (Jellyfish)', slug: 'pirikara-yakko-jellyfish', description: 'Spicy jellyfish with sesame oil', priceAmount: 130, imageAssetId: 'media-kiku-pirikara-jellyfish', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-ebi-yaki', section: 'Oishii', name: 'Ebi Yaki', slug: 'ebi-yaki', description: 'Grilled shrimp', priceAmount: 50, imageAssetId: 'media-kiku-ebi-yaki', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-mentaiko', section: 'Oishii', name: 'Mentaiko', slug: 'mentaiko', description: 'Cod roe / mentaiko', priceAmount: 260, imageAssetId: 'media-kiku-mentaiko', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-ebi-roll', section: 'Oishii', name: 'Ebi Vegetables Roll Mayonnaise Wasabi Dip', slug: 'ebi-vegetables-roll-mayonnaise-wasabi-dip', description: 'Shrimp and vegetable roll with mayonnaise wasabi dip', priceAmount: 125, imageAssetId: 'media-kiku-ebi-roll', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        // Tataki
-        { id: 'item-kiku-tuna-tataki', section: 'Tataki', name: 'Tuna Tataki', slug: 'tuna-tataki', description: 'Seared tuna', priceAmount: 380, imageAssetId: 'media-kiku-tuna-tataki', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-wagyu-tataki', section: 'Tataki', name: 'Wagyu Rump Beef Tataki', slug: 'wagyu-rump-beef-tataki', description: 'Seared wagyu rump beef', priceAmount: 480, imageAssetId: 'media-kiku-wagyu-tataki', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        // Dessert
-        { id: 'item-kiku-mango-sticky-rice-roll', section: 'Dessert', name: 'Mango Sticky Rice Roll', slug: 'mango-sticky-rice-roll', description: 'Mango sticky rice roll', priceAmount: 280, imageAssetId: 'media-kiku-mango-sticky-rice-roll', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-chocolate-lava', section: 'Dessert', name: 'Mini Chocolate Lava Vanilla Ice-cream', slug: 'mini-chocolate-lava-vanilla-ice-cream', description: 'Mini chocolate lava cake with vanilla ice cream', priceAmount: 165, imageAssetId: 'media-kiku-chocolate-lava', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-rum-raisin-ice-cream', section: 'Dessert', name: 'Rum & Raisin Ice-cream', slug: 'rum-raisin-ice-cream', description: 'Rum raisin ice cream', priceAmount: 75, imageAssetId: 'media-kiku-rum-raisin-ice-cream', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-        { id: 'item-kiku-vanilla-ice-cream', section: 'Dessert', name: 'Vanilla Ice-cream', slug: 'vanilla-ice-cream', description: 'Vanilla ice cream', priceAmount: 75, imageAssetId: 'media-kiku-vanilla-ice-cream', allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-      ],
+      items: aoNangMenuItems,
+    },
+    {
+      id: 'menu-kiku-tkma',
+      locationId: 'loc-kikuzuki-tkma',
+      name: 'Take Me Away by KIKUZUKI',
+      description: '',
+      sectionOrder: ['Sushi', 'Sashimi', 'Carpaccio / Usuzukuri', 'Oishii', 'Tataki', 'Dessert'],
+      status: 'published',
+      items: aoNangMenuItems.map((item) => ({ ...item, id: item.id.replace('item-kiku-', 'item-tkma-') })),
     },
   ],
   locationQa: [],
@@ -576,6 +639,7 @@ export function renderKikuzukiMediaBlock(): string {
       'NULL',
       'NULL',
       sqlValue('Asia/Bangkok'),
+      sqlValue(location.notificationPhone ?? null),
     ].join(', ')})`)
     .join(',\n')
 
@@ -598,7 +662,7 @@ INSERT OR REPLACE INTO business_locations (
   instagram_url, facebook_url,
   is_primary, status,
   hero_image_asset_id, hero_video_asset_id,
-  timezone
+  timezone, notification_phone
 ) VALUES
 ${locationRowsNoHero};
 
@@ -737,6 +801,37 @@ INSERT OR REPLACE INTO experiences
 VALUES
 ${experienceRows};
 -- END GENERATED: kikuzuki_experiences`
+}
+
+export function renderKikuzukiReviewsBlock(): string {
+  const { identity } = compiledKikuzukiSeed
+  if (compiledKikuzukiSeed.reviews.length === 0) return '-- No reviews defined for Kikuzuki'
+
+  const reviewRows = compiledKikuzukiSeed.reviews
+    .map((review) => `  (${[
+      sqlValue(review.id),
+      sqlValue(identity.organizationId),
+      sqlValue(identity.siteId),
+      sqlValue(review.locationId),
+      sqlValue(review.authorName),
+      sqlValue(review.reviewerPhotoUrl),
+      sqlValue(review.rating),
+      sqlValue(review.content),
+      sqlValue(review.ownerReply),
+      sqlValue(review.ownerReplyAt),
+      sqlValue(review.status),
+      sqlValue(review.source),
+    ].join(', ')})`)
+    .join(',\n')
+
+  return `-- BEGIN GENERATED: kikuzuki_reviews
+INSERT OR IGNORE INTO reviews
+  (id, organization_id, site_id, location_id,
+   author_name, reviewer_photo_url, rating, content,
+   owner_reply, owner_reply_at, status, source)
+VALUES
+${reviewRows};
+-- END GENERATED: kikuzuki_reviews`
 }
 
 export function renderKikuzukiBillingBlock(): string {

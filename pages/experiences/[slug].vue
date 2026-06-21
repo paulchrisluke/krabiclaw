@@ -115,58 +115,11 @@
             </div>
 
             <!-- Lightbox -->
-            <UModal v-model:open="lightboxOpen" fullscreen :portal="false" :ui="{ content: 'bg-black flex items-center justify-center' }">
-              <template #content>
-                <div class="relative h-full w-full">
-                  <!-- Close button -->
-                  <button
-                    class="absolute right-4 top-4 z-20 flex size-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white transition hover:bg-black/60"
-                    aria-label="Close"
-                    @click="lightboxOpen = false"
-                  >
-                    <UIcon name="i-heroicons-x-mark" class="size-5" />
-                  </button>
-
-                  <!-- Navigation buttons -->
-                  <button
-                    v-if="lightboxIdx > 0"
-                    class="absolute left-4 top-1/2 z-20 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white transition hover:bg-black/60"
-                    aria-label="Previous"
-                    @click="lightboxIdx--"
-                  >
-                    <UIcon name="i-heroicons-chevron-left" class="size-5" />
-                  </button>
-                  <button
-                    v-if="lightboxIdx < imageItems.length - 1"
-                    class="absolute right-4 top-1/2 z-20 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white transition hover:bg-black/60"
-                    aria-label="Next"
-                    @click="lightboxIdx++"
-                  >
-                    <UIcon name="i-heroicons-chevron-right" class="size-5" />
-                  </button>
-
-                  <!-- Image - full bleed -->
-                  <img
-                    v-if="imageItems[lightboxIdx]"
-                    :src="imageItems[lightboxIdx]?.url"
-                    :alt="experience.title"
-                    class="h-full w-full object-cover"
-                    @click.stop
-                  >
-
-                  <!-- Counter -->
-                  <div v-if="imageItems.length > 1" class="absolute left-4 top-4 z-20 rounded-full bg-black/40 backdrop-blur-md px-3 py-1 text-xs font-medium text-white">
-                    {{ lightboxIdx + 1 }} / {{ imageItems.length }}
-                  </div>
-
-                  <!-- Title overlay at bottom -->
-                  <div class="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-6 pt-20">
-                    <p class="text-lg font-semibold text-white">{{ experience.title }}</p>
-                    <p v-if="experience.tagline" class="mt-1 text-sm text-white/80">{{ experience.tagline }}</p>
-                  </div>
-                </div>
+            <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="imageItems" :title="experience.title">
+              <template v-if="experience.tagline" #caption>
+                <p class="text-sm text-white/80">{{ experience.tagline }}</p>
               </template>
-            </UModal>
+            </SayaLightbox>
 
             <!-- Mobile: title + key facts (hidden on desktop) -->
             <div class="mt-7 lg:hidden space-y-4">
@@ -490,15 +443,6 @@ function openLightbox(mediaIdx: number) {
   lightboxIdx.value = imgIdx >= 0 ? imgIdx : 0
   lightboxOpen.value = true
 }
-
-function onKeydown(e: KeyboardEvent) {
-  if (!lightboxOpen.value) return
-  if (e.key === 'Escape') lightboxOpen.value = false
-  if (e.key === 'ArrowRight' && lightboxIdx.value < imageItems.value.length - 1) lightboxIdx.value++
-  if (e.key === 'ArrowLeft' && lightboxIdx.value > 0) lightboxIdx.value--
-}
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 // ── Booking form ──────────────────────────────────────────────────────────────
 

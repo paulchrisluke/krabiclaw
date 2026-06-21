@@ -22,13 +22,6 @@
             {{ $t('saya.header.menu') }}
           </NuxtLink>
 
-          <UDropdownMenu v-if="locations.length > 1" :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
-            <button class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default">
-              {{ $t('saya.header.locations') }}
-              <UIcon name="i-heroicons-chevron-down" class="size-3 opacity-60" />
-            </button>
-          </UDropdownMenu>
-
           <NuxtLink
             v-if="!hasExperiences"
             to="/reservations"
@@ -43,6 +36,13 @@
           >
             {{ $t('saya.header.experiences') }}
           </NuxtLink>
+
+          <UDropdownMenu v-if="locations.length > 1" :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
+            <button class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default">
+              {{ $t('saya.header.locations') }}
+              <UIcon name="i-heroicons-chevron-down" class="size-3 opacity-60" />
+            </button>
+          </UDropdownMenu>
         </nav>
 
         <div class="flex items-center justify-end gap-2 col-start-3">

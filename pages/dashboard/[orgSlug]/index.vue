@@ -77,7 +77,7 @@
               <div class="aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
                 <img
                   v-if="location.hero_url"
-                  :src="location.thumbnail_url ?? location.hero_url"
+                  :src="location.hero_url"
                   :alt="location.title"
                   class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   loading="lazy"
