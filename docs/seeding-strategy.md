@@ -81,11 +81,11 @@ Schema DDL only: `CREATE TABLE`, `ALTER TABLE`, index definitions. Applied autom
 
 ## Tenant inventory
 
-| Tenant | Typed definition | Generator | Flags | CI-reproducible |
-|---|---|---|---|---|
-| Demo | `seed-definitions/demo.ts` | `generate-demo-seed.ts` | `--local` / `--preview` / `--remote` / `--staging` | ✓ |
-| Pottery House | `seed-definitions/pottery-house.ts` | `generate-pottery-house-seed.ts` | `--local` / `--preview` / `--remote` / `--staging` | ✓ |
-| Kikuzuki | `seed-definitions/kikuzuki.ts` | `generate-kikuzuki-seed.ts` | `--local` / `--preview` / `--staging` / `--remote` | ✓ |
+| Tenant        | Typed definition                    | Generator                        | Flags                                              | CI-reproducible |
+| ------------- | ----------------------------------- | -------------------------------- | -------------------------------------------------- | --------------- |
+| Demo          | `seed-definitions/demo.ts`          | `generate-demo-seed.ts`          | `--local` / `--preview` / `--remote` / `--staging` | ✓               |
+| Pottery House | `seed-definitions/pottery-house.ts` | `generate-pottery-house-seed.ts` | `--local` / `--preview` / `--remote` / `--staging` | ✓               |
+| Kikuzuki      | `seed-definitions/kikuzuki.ts`      | `generate-kikuzuki-seed.ts`      | `--local` / `--preview` / `--staging` / `--remote` | ✓               |
 
 All three tenants are on the typed fixture path. CI generates from source on every run — committed SQL files are never used as-is without regeneration.
 
@@ -115,13 +115,14 @@ Historical backfill tooling:
 
 Seeds run on every PR (preview) and every push to `staging`. They are not conditional on file changes. The generate scripts run first, so the `.ts` fixture is the actual source of truth in CI — not the committed SQL.
 
-| Trigger | Environment | What runs |
-|---|---|---|
-| PR opened/updated | `preview` | generate demo + pottery house → apply SQL; generate kikuzuki → apply ephemeral |
-| Push to `staging` | `staging` | same as above against staging D1 |
-| Push to `main` | `production` | migrations only, no seed |
+| Trigger           | Environment  | What runs                                                                      |
+| ----------------- | ------------ | ------------------------------------------------------------------------------ |
+| PR opened/updated | `preview`    | generate demo + pottery house → apply SQL; generate kikuzuki → apply ephemeral |
+| Push to `staging` | `staging`    | same as above against staging D1                                               |
+| Push to `main`    | `production` | migrations only, no seed                                                       |
 
 Scripts:
+
 - `yarn seed:kikuzuki` — local D1
 - `yarn seed:kikuzuki:preview` — preview D1 (CI)
 - `yarn seed:kikuzuki:staging` — staging D1
@@ -144,6 +145,26 @@ client:verify             → all checks must pass
 `approved.json` is the gate. No client site is applied without it.
 
 Approved import replay (`client:replay`) is the standard path for re-seeding any approved import in any environment, gated by hash verification. Reserved for paid clients or support-grade regression cases — exploratory tenants use a curated typed fixture instead.
+
+---
+
+## Tenant transfer: curated fixture → real client
+
+Kikuzuki and Pottery House currently live on the curated-fixture path (typed `seed-definitions/*.ts` + ephemeral generator + CI reseed), but both are real businesses and the eventual goal is to hand them off as independent client-owned sites. This is the runbook for that handoff — it does not exist yet for either tenant, so do this when the actual transfer happens, not before.
+
+### Why this matters
+
+`yarn seed:<tenant>:remote` is the only path that can overwrite a live tenant's production data, and CI never calls it (`prod-deploy` runs migrations only — see CI seeding table above). So a transferred tenant's production data is already safe from CI by construction. The risk is entirely human: someone runs `seed:kikuzuki:remote` again out of habit after the tenant has gone live and started taking real edits through the dashboard/MCP. `business_locations`, `media_assets`, `menus`, `sites`, and `site_domains` use `INSERT OR REPLACE` in the generated SQL — a rerun silently reverts those rows to whatever is hardcoded in the fixture file, clobbering anything the client changed directly (hours, phone, hero image, location title, menu name).
+
+Preview and staging seeding (`generate-kikuzuki-seed.ts --preview` / `--staging` in CI) target `krabiclaw-db-preview` / `krabiclaw-db-staging` — separate databases from production — so they do not put a transferred tenant's real data at risk. Don't use `staging.krabiclaw.com` as a sandbox for the actual business owner once transferred, though: CI reseeds it on every push to `staging` and on the nightly cron, so anything done there outside of E2E assertions gets wiped on the next run.
+
+### Steps to take at transfer time
+
+1. **Stop using `--remote` for this tenant.** Remove or guard the `--remote` branch in `scripts/generate-<tenant>-seed.ts` so it can't be run again by accident.
+2. **Pull the tenant out of CI seeding.** Delete its `generate-<tenant>-seed.ts --preview` / `--staging` lines from `.github/workflows/ci.yml` (`e2e-smoke` and `e2e-staging` jobs). Continuing to reseed preview/staging with a fixture that no longer reflects the live site's real state is misleading, not just unnecessary.
+3. **Replace its E2E coverage.** Either retire the assertions that depended on the seeded fixture, point them at read-only production canaries instead (same pattern as `prod-smoke`/canaries in CLAUDE.md), or stand up a fresh synthetic tenant to cover the feature being tested (e.g. the second-location flow) without depending on a tenant that now has real client edits.
+4. **Archive, don't delete, the fixture.** Move `seed-definitions/<tenant>.ts` and `scripts/generate-<tenant>-seed.ts` under `scripts/archive/`-style historical reference (same treatment as the June 11, 2026 media backfill tooling) so the original recipe is preserved but nothing in the active workflow can re-run it.
+5. **Treat the tenant like any other client from this point on.** Future changes flow only through the dashboard/MCP/API. If you ever need to bulk-restore or clone its state, build a `client:import` manifest from the live site and use `client:replay` — never resurrect the old typed fixture.
 
 ---
 
