@@ -24,8 +24,8 @@
                 </div>
                 <div class="flex items-center gap-4">
                   <UBadge v-if="sessionData?.user?.emailVerified" color="success" variant="subtle" size="sm">Verified</UBadge>
-                  <UButton color="neutral" variant="soft" size="sm">
-                    Manage
+                  <UButton color="neutral" variant="soft" size="sm" to="/forgot-password">
+                    Reset password
                   </UButton>
                 </div>
               </div>

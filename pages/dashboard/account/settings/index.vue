@@ -117,7 +117,7 @@
           </div>
           <template #footer>
             <div class="flex items-center justify-between text-sm text-muted">
-              <span>Email is managed via your social login provider.</span>
+              <span>Your account email works across Google, WhatsApp, and email/password sign-in.</span>
             </div>
           </template>
         </UCard>

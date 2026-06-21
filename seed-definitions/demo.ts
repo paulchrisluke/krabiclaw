@@ -1655,6 +1655,11 @@ export function renderCompiledDemoExperienceSeedBlock(): string {
       sqlJson(experience.timeSlots),
       'NULL',
       sqlValue(experience.availableNote),
+      sqlValue(experience.highlights?.length ? JSON.stringify(experience.highlights) : null),
+      sqlValue(experience.includedItems?.length ? JSON.stringify(experience.includedItems) : null),
+      sqlValue(experience.whatToBring?.length ? JSON.stringify(experience.whatToBring) : null),
+      sqlValue(experience.meetingPoint ?? null),
+      sqlValue(experience.cancellationPolicy ?? null),
       sqlValue(experience.status),
       sqlValue(experience.sortOrder),
       sqlValue(experience.featured),
@@ -1671,6 +1676,7 @@ INSERT OR REPLACE INTO experiences
    title, slug, tagline, body,
    image_asset_id, price, price_amount, duration_minutes, max_capacity,
    time_slots, recurring_slots, available_note,
+   highlights, included_items, what_to_bring, meeting_point, cancellation_policy,
    status, sort_order, featured, featured_sort_order,
    seo_title, seo_description)
 VALUES

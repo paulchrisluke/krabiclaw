@@ -133,8 +133,10 @@ test.describe('onboarding wizard UI', () => {
 
     await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible({ timeout: 10_000 })
     await page.getByRole('button', { name: 'Go to my dashboard' }).click()
-    // Org root auto-redirects to the single site's workspace once context loads.
-    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}/sites/[^/]+$`))
+    // This recipient already owns "Recipient Home Base" from the setup above, so accepting
+    // the transfer leaves their org with two sites — org root shows the picker instead of
+    // auto-redirecting into a single site's workspace.
+    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}$`))
   })
 
   test('transfer handoff wizard shows social and domain steps on a paid plan', async ({ page, baseURL, request }) => {

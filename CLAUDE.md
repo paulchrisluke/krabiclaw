@@ -88,8 +88,7 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - **One org can have multiple sites** — the unique-per-org constraint was removed in migration `0017`.
 - Each site has its own plan and Stripe subscription (`site_billing` table).
 - The Stripe *customer* stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
-- Multiple physical locations live under `business_locations`. Locations are **unlimited on all plans**.
-- Multiple physical locations live under `business_locations`, not separate orgs.
+- Multiple physical locations live under `business_locations`, not separate orgs. Locations are **unlimited on all plans**.
 - Dashboard route shape (site is always explicit — no implicit "first site in org"):
   - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
   - `/dashboard/{orgSlug}/sites/{siteSlug}` — site workspace (`siteSlug` is the site's `subdomain`)

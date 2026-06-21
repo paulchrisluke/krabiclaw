@@ -190,7 +190,7 @@ async function loadSettings() {
 }
 
 onMounted(() => {
-  loadSettings().catch(() => {})
+  loadSettings().catch((err) => console.warn('pages_settings_load_failed', err))
 })
 
 useSeoMeta({ title: 'Pages | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

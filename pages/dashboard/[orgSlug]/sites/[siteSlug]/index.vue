@@ -168,7 +168,7 @@ const credits = computed(() => data.value?.credits ?? null)
 const events = computed(() => data.value?.events ?? [])
 
 const avgRating = computed(() => {
-  const rated = locations.value.filter(l => l.rating)
+  const rated = locations.value.filter(l => l.rating != null)
   if (!rated.length) return null
   return (rated.reduce((s, l) => s + (l.rating ?? 0), 0) / rated.length).toFixed(1)
 })

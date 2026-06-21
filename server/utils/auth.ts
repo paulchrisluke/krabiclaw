@@ -7,6 +7,7 @@ import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
 import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { notifyAdminNewUserSignup } from '~/server/utils/admin-notifications'
+import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 
 export interface CloudflareEnv {
   DB: D1Database
@@ -33,6 +34,9 @@ export interface CloudflareEnv {
   FACEBOOK_APP_SECRET?: string
   FACEBOOK_REDIRECT_URI?: string
   FACEBOOK_CONFIG_ID?: string
+  RESEND_API_KEY?: string
+  EMAIL_FROM?: string
+  EMAIL_DELIVERY_MODE?: string
   MEDIA_BUCKET?: R2Bucket
   [key: string]: ApiValue
 }
@@ -87,6 +91,44 @@ export function createAuth(env: CloudflareEnv) {
           }
         }
       }
+    },
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: true,
+      minPasswordLength: 8,
+      maxPasswordLength: 128,
+      autoSignIn: false,
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user, url }) => {
+        void sendPasswordResetEmail(env, {
+          email: user.email,
+          resetUrl: url,
+        }).catch((error) => {
+          console.error('auth_reset_password_email_failed', {
+            email: user.email,
+            error,
+          })
+        })
+      },
+      onPasswordReset: async ({ user }) => {
+        console.info('auth_password_reset_complete', { email: user.email })
+      },
+    },
+    emailVerification: {
+      sendOnSignUp: true,
+      sendOnSignIn: true,
+      autoSignInAfterVerification: false,
+      sendVerificationEmail: async ({ user, url }) => {
+        void sendVerificationEmail(env, {
+          email: user.email,
+          verificationUrl: url,
+        }).catch((error) => {
+          console.error('auth_verification_email_failed', {
+            email: user.email,
+            error,
+          })
+        })
+      },
     },
     plugins: [
       jwt({

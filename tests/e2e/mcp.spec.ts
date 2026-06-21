@@ -7,6 +7,12 @@ const MCP_VERSION = '2026-07-28'
 const POTTERY_HOUSE_USER_ID = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
 const POTTERY_HOUSE_SITE_ID = 'site-pottery-house'
 const POTTERY_HOUSE_LOCATION_ID = 'loc-pottery-beachfront'
+// Fixed fixture sites seeded by generate-demo-seed.ts with the matching plan already
+// active. Entitlement checks are site-scoped (hasSiteEntitlement), so a plan-gated tool
+// call needs the org's actual paid site, not a brand-new site from ensureSite() (which
+// always starts on `free` per the second-site billing rule).
+const MCP_GROWTH_SITE_ID = 'site-mcp-growth'
+const MCP_MANAGED_SITE_ID = 'site-mcp-managed'
 
 async function mcpRequest(
   request: APIRequestContext,
@@ -151,7 +157,7 @@ test.describe('stateless MCP server', () => {
   test('owner can use content, notifications, submissions, and translation workflow tools', async ({ request, baseURL }) => {
     test.setTimeout(180_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-    const siteId = await ensureSite(request, baseURL!)
+    const siteId = MCP_GROWTH_SITE_ID
 
     const sitesList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -527,7 +533,7 @@ test.describe('stateless MCP server', () => {
   test('owner can use menus, posts, media, experiences, and Google Business workflow tools', async ({ request, baseURL }) => {
     test.setTimeout(180_000)
     await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
-    const siteId = await ensureSite(request, baseURL!)
+    const siteId = MCP_MANAGED_SITE_ID
     const locationId = await ensureLocation(request, baseURL!, siteId)
 
     const menu = await mcpRequest(request, baseURL!, {
