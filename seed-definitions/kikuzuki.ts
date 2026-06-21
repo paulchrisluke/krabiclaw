@@ -142,6 +142,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
   },
   siteConfig: [
     { key: 'source_locale', value: 'en' },
+    { key: 'brand_color', value: '#ea201c' },
   ],
   siteLocales: [
     {
@@ -269,9 +270,9 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       kind: 'video',
       provider: 'cloudflare_r2',
       source: 'uploaded',
-      r2Key: 'sites/3ad92fb5-4ecf-4f81-aa16-278a7dc3c859/media/e864ac34-9b1f-4162-9e5c-aa21cbddb45f.mp4',
-      publicUrl: 'https://media.krabiclaw.com/sites/3ad92fb5-4ecf-4f81-aa16-278a7dc3c859/media/e864ac34-9b1f-4162-9e5c-aa21cbddb45f.mp4',
-      thumbnailUrl: null,
+      r2Key: 'sites/3ad92fb5-4ecf-4f81-aa16-278a7dc3c859/media/441c05bf-99be-430c-8092-004a23c8d609.mp4',
+      publicUrl: 'https://media.krabiclaw.com/sites/3ad92fb5-4ecf-4f81-aa16-278a7dc3c859/media/441c05bf-99be-430c-8092-004a23c8d609.mp4',
+      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/62e7d792-4f12-4252-f37e-8a576dc1d500/public',
       mimeType: 'video/mp4',
       fileName: 'kikuzuki-hero-video.mp4',
       altText: 'Kikuzuki restaurant atmosphere',
@@ -383,7 +384,6 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       content: 'Robatayaki & sushi in Ao Nang, Krabi.',
       heroTitle: 'A little piece of Japan in Krabi.',
       heroSubtitle: 'Robatayaki, sushi, and warm hospitality in the heart of Ao Nang.',
-      heroImageAssetId: 'media-kiku-about',
       heroVideoAssetId: 'media-kiku-hero-video',
       type: 'text',
       source: 'manual',
