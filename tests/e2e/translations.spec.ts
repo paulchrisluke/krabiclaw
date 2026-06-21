@@ -10,7 +10,7 @@ test.describe('restaurant translations', () => {
     const contextResponse = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextResponse.status()).toBe(200)
     const contextBody = await contextResponse.json()
-    const siteId = await ensureSite(request, baseURL!, contextBody.restaurant?.id ?? null)
+    const siteId = await ensureSite(request, baseURL!, contextBody.site?.id ?? null)
 
     const localeCode = `qaa-${Date.now().toString(36).slice(-8)}`
     const sourceTitle = `Translation test ${Date.now()}`

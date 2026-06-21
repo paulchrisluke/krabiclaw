@@ -1436,7 +1436,13 @@ export async function executeMcpToolCall(
         );
       }
 
-      const items = rawItems.slice(0, 100);
+      if (rawItems.length > 100) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "Maximum 100 items allowed per batch request.",
+        );
+      }
+      const items = rawItems;
       const existingKeys = new Set(
         menu.items.map((item) => item.slug || menuItemLookupKey(item.name)),
       );

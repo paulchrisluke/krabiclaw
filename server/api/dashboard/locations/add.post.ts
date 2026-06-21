@@ -32,12 +32,12 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const dashboard = await getDashboardContext(event, { requireRestaurant: true })
-  if (!dashboard?.restaurant) {
+  const dashboard = await getDashboardContext(event, { requireSite: true })
+  if (!dashboard?.site) {
     return jsonResponse({ error: 'No site found. Complete onboarding first.' }, { status: 400 })
   }
 
-  const { restaurant: site, organization } = dashboard
+  const { site, organization } = dashboard
   const siteId = site.id as string
   const organizationId = organization?.id as string
 

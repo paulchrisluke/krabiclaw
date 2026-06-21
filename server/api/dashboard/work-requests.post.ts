@@ -5,8 +5,8 @@ import { createWorkRequest } from "~/server/utils/work-request-management";
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event);
-  const { db, organization, restaurant } = await getDashboardContext(event, {
-    requireRestaurant: false,
+  const { db, organization, site } = await getDashboardContext(event, {
+    requireSite: false,
   });
 
   const body = (await readBody(event).catch(() => ({}))) as {
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
       : body.source === "whatsapp"
         ? "whatsapp"
         : "dashboard";
-  const result = await createWorkRequest(env, db, organization.id, restaurant?.id ?? null, {
+  const result = await createWorkRequest(env, db, organization.id, site?.id ?? null, {
     type,
     title: title ?? "",
     description,

@@ -290,9 +290,9 @@ definePageMeta({ layout: 'dashboard' })
 const { data: sessionData } = useAuth()
 const route = useRoute()
 const toast = useToast()
-const dashboard = useDashboardRestaurant()
+const dashboard = useDashboardSite()
 const hasFacebookAccess = computed(() => {
-  const plan = dashboard.restaurant.value?.plan
+  const plan = dashboard.site.value?.plan
   return plan === 'growth' || plan === 'managed' || plan === 'seo_accelerator'
 })
 const organizationsState = authClient.useListOrganizations()
@@ -390,14 +390,14 @@ async function loadSiteIntegrations() {
   loadingIntegrations.value = true
   try {
     if (!dashboard.state.value) await dashboard.refresh()
-    if (!dashboard.restaurant.value) {
+    if (!dashboard.site.value) {
       whatsappPhone.value = null
       whatsappForm.phone = ''
       facebookConnection.value = { connected: false }
       return
     }
 
-    const plan = dashboard.restaurant.value.plan
+    const plan = dashboard.site.value.plan
     const canUseFacebook = plan === 'growth' || plan === 'managed' || plan === 'seo_accelerator'
 
     const [notificationsRes, facebookRes] = await Promise.all([

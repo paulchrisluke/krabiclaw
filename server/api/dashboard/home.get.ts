@@ -2,10 +2,10 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 
 export default defineEventHandler(async (event) => {
-  const { db, organization, restaurant } = await getDashboardContext(event, { requireRestaurant: false })
+  const { db, organization, site } = await getDashboardContext(event, { requireSite: false })
 
-  if (!restaurant) {
-    return jsonResponse({ organization, restaurant: null, locations: [], credits: null, events: [] })
+  if (!site) {
+    return jsonResponse({ organization, site: null, locations: [], credits: null, events: [] })
   }
 
   const [locationsResult, credits, eventsResult] = await Promise.all([
@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
       LEFT JOIN sites s ON s.id = bl.site_id
       WHERE bl.organization_id = ? AND bl.site_id = ?
       ORDER BY bl.is_primary DESC, bl.title ASC
-    `).bind(organization.id, restaurant.id).all<{
+    `).bind(organization.id, site.id).all<{
       id: string; slug: string; title: string; city: string | null
       rating: number | null; review_count: number | null
       is_primary: number; status: string; updated_at: string
@@ -64,7 +64,7 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({
     organization,
-    restaurant,
+    site,
     locations: (locationsResult.results ?? []).map(l => ({
       ...l,
       is_primary: Boolean(l.is_primary),

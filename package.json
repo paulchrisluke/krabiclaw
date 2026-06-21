@@ -63,6 +63,7 @@
     "test:mcp:prod": "node scripts/test-mcp-oauth.mjs --base-url https://krabiclaw.com",
     "canary:prod": "node scripts/canary-prod.mjs",
     "canary:notifications": "node scripts/canary-notifications.mjs",
+    "canary:status": "node scripts/canary-provider-status.mjs",
     "rollback:prod": "node scripts/rollback-prod.mjs",
     "fixture:pottery-house": "node scripts/fixtures/pottery-house-krabi.fixture.mjs",
     "lint:seeds": "node scripts/lint-seeds.mjs",

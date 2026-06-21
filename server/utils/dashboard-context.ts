@@ -10,7 +10,7 @@ export interface DashboardOrganizationRow {
   role: string
 }
 
-export interface DashboardRestaurantRow {
+export interface DashboardSiteRow {
   id: string
   organization_id: string
   brand_name: string | null
@@ -41,7 +41,7 @@ interface DashboardPreferenceRow {
 }
 
 interface DashboardContextOptions {
-  requireRestaurant?: boolean
+  requireSite?: boolean
 }
 
 export async function getDashboardContext(event: H3Event, options: DashboardContextOptions = {}) {
@@ -75,26 +75,26 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     throw createError({ statusCode: 404, message: 'No organization found' })
   }
 
-  const restaurant = await db.prepare(`
+  const site = await db.prepare(`
     SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
            status, onboarding_status, plan, primary_location_id, default_currency, source_locale
     FROM sites
     WHERE organization_id = ?
     ORDER BY created_at ASC
     LIMIT 1
-  `).bind(organization.id).first<DashboardRestaurantRow>()
+  `).bind(organization.id).first<DashboardSiteRow>()
 
-  if (!restaurant && options.requireRestaurant !== false) {
-    throw createError({ statusCode: 404, message: 'Restaurant site not found' })
+  if (!site && options.requireSite !== false) {
+    throw createError({ statusCode: 404, message: 'Site not found' })
   }
 
-  const siteConfig = restaurant
+  const siteConfig = site
     ? await db.prepare(`
         SELECT key, value
         FROM site_config
         WHERE organization_id = ? AND site_id = ?
           AND key IN ('hero_image_url', 'location_hero_image_url')
-      `).bind(organization.id, restaurant.id).all<{ key: string; value: string | null }>()
+      `).bind(organization.id, site.id).all<{ key: string; value: string | null }>()
     : { results: [] as { key: string; value: string | null }[] }
 
   const configByKey = Object.fromEntries((siteConfig.results ?? []).map((row) => [row.key, row.value]))
@@ -105,22 +105,22 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     session,
     userId: session.user.id,
     organization,
-    restaurant: restaurant ? {
-      ...restaurant,
+    site: site ? {
+      ...site,
       heroImageUrl: configByKey.hero_image_url ?? null,
       locationHeroImageUrl: configByKey.location_hero_image_url ?? null,
     } : null
   }
 }
 
-export async function getDashboardRestaurant(event: H3Event) {
-  const context = await getDashboardContext(event, { requireRestaurant: true })
-  if (!context.restaurant) {
-    throw createError({ statusCode: 404, message: 'Restaurant site not found' })
+export async function getDashboardSite(event: H3Event) {
+  const context = await getDashboardContext(event, { requireSite: true })
+  if (!context.site) {
+    throw createError({ statusCode: 404, message: 'Site not found' })
   }
   return {
     ...context,
-    restaurant: context.restaurant
+    site: context.site
   }
 }
 

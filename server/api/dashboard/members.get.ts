@@ -2,7 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 
 export default defineEventHandler(async (event) => {
-  const { db, organization } = await getDashboardContext(event, { requireRestaurant: false })
+  const { db, organization } = await getDashboardContext(event, { requireSite: false })
 
   const members = await db.prepare(`
     SELECT m.id, m.role, m.createdAt,

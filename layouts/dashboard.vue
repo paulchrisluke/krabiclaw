@@ -312,7 +312,7 @@
             <span class="text-sm font-semibold text-highlighted">{{ navbarTitle }}</span>
             <template #left>
               <UDropdownMenu
-                v-if="!inAdminWorkspace && restaurant"
+                v-if="!inAdminWorkspace && site"
                 :items="locationMenuItems"
                 :content="{ align: 'start', collisionPadding: 12 }"
                 :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-64' }"
@@ -331,7 +331,7 @@
 
             <template #right>
               <UColorModeButton variant="ghost" color="neutral" size="sm" />
-              <UTooltip v-if="!inAdminWorkspace && !inConversationsWorkspace && restaurant" text="ChowBot">
+              <UTooltip v-if="!inAdminWorkspace && !inConversationsWorkspace && site" text="ChowBot">
                 <UButton
                   icon="i-lucide-bot"
                   color="neutral"
@@ -375,7 +375,7 @@ const route = useRoute()
 const { data: sessionData, signOut } = useAuth()
 const toast = useToast()
 const stoppingImpersonation = ref(false)
-const dashboard = useDashboardRestaurant()
+const dashboard = useDashboardSite()
 const organizationsState = authClient.useListOrganizations()
 
 const colorMode = useColorMode()
@@ -407,7 +407,7 @@ async function checkPlatformStatus() {
 }
 
 const organization = dashboard.organization
-const restaurant = dashboard.restaurant
+const site = dashboard.site
 const selectedLocation = dashboard.selectedLocation
 const locations = dashboard.locations
 const activeSiteId = dashboard.siteId
@@ -492,7 +492,7 @@ const locationMenuItems = computed(() => [
 
 const mainNavigation = computed(() => [
   [
-    { label: 'Restaurant', icon: 'i-lucide-layout-dashboard', to: orgBase.value ?? '/dashboard' },
+    { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: orgBase.value ?? '/dashboard' },
     { label: 'Conversations', icon: 'i-lucide-messages-square', to: orgBase.value ? `${orgBase.value}/conversations` : '/dashboard' },
   ],
   [

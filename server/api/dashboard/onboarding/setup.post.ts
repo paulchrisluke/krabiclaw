@@ -75,12 +75,12 @@ export default defineEventHandler(async (event) => {
   }
 
   // Resolve or create the site — mirrors MCP create_site using runSiteCreation
-  const dashboard = await getDashboardContext(event, { requireRestaurant: false })
+  const dashboard = await getDashboardContext(event, { requireSite: false })
 
   let siteId: string
   let organizationId: string
 
-  if (!dashboard?.restaurant) {
+  if (!dashboard?.site) {
     const baseSubdomain = slugify(place.name).slice(0, 40)
     const result = await runSiteCreation(env as SiteEnv, db, session.user.id, {
       name: place.name,

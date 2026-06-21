@@ -5,7 +5,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
 
-const dashboard = useDashboardRestaurant()
+const dashboard = useDashboardSite()
 const dashboardError = ref<string | null>(null)
 
 onMounted(async () => {

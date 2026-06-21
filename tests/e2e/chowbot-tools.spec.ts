@@ -29,13 +29,13 @@ test.describe("mcp tools", () => {
     expect(contextRes.status()).toBe(200);
     const context = (await contextRes.json()) as {
       organization?: { id?: string };
-      restaurant?: { id?: string | null };
+      site?: { id?: string | null };
     };
     const organizationId = context.organization?.id;
     const siteId = await ensureSite(
       request,
       baseURL!,
-      context.restaurant?.id ?? null,
+      context.site?.id ?? null,
     );
     expect(organizationId).toEqual(expect.any(String));
 
@@ -106,12 +106,12 @@ test.describe("mcp tools", () => {
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`);
     expect(contextRes.status()).toBe(200);
     const context = (await contextRes.json()) as {
-      restaurant?: { id?: string | null };
+      site?: { id?: string | null };
     };
     const siteId = await ensureSite(
       request,
       baseURL!,
-      context.restaurant?.id ?? null,
+      context.site?.id ?? null,
     );
 
     const beforeRes = await request.get(

@@ -154,6 +154,19 @@
         <div class="mb-10 text-center">
           <h2 class="text-3xl font-extrabold text-default m-0 mb-3">How to connect</h2>
           <p class="text-muted m-0">Takes about 2 minutes. You'll need a KrabiClaw account first.</p>
+          <div class="mt-4 flex flex-col items-center gap-3">
+            <p class="text-sm text-muted leading-relaxed max-w-lg mx-auto">
+              <strong>Beta Note:</strong> This developer setup is temporary. Once approved for the ChatGPT App Store, it will be a simple one-click install.
+            </p>
+            <div class="flex items-center justify-center gap-3">
+              <a href="/web-app-manifest-192x192.png" download class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline bg-primary/10 px-3 py-1.5 rounded-lg transition-colors">
+                <UIcon name="i-heroicons-arrow-down-tray" class="size-4" /> Download App Icon
+              </a>
+              <a href="/install-krabiclaw-chatgpt-plugin.png" target="_blank" class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline bg-primary/10 px-3 py-1.5 rounded-lg transition-colors">
+                <UIcon name="i-heroicons-photo" class="size-4" /> View Setup Screenshot
+              </a>
+            </div>
+          </div>
         </div>
 
         <div class="grid md:grid-cols-3 gap-6">
@@ -163,8 +176,8 @@
               1
             </div>
             <div>
-              <p class="font-bold text-default text-[15px] mb-2 m-0">Open ChatGPT Settings</p>
-              <p class="text-sm text-muted m-0 leading-relaxed">Go to <strong>Settings → Connectors</strong>, or click <strong>Explore GPTs</strong> and choose <strong>Add MCP server</strong>.</p>
+              <p class="font-bold text-default text-[15px] mb-2 m-0">Enable Developer Mode</p>
+              <p class="text-sm text-muted m-0 leading-relaxed">Go to <strong>ChatGPT Settings → Connectors → Advanced</strong>, enable Developer mode, and click <strong>Create an App</strong>.</p>
             </div>
           </div>
 
@@ -174,14 +187,14 @@
               2
             </div>
             <div>
-              <p class="font-bold text-default text-[15px] mb-2 m-0">Paste the server URL</p>
-              <div class="flex items-center gap-2 bg-muted/50 border border-default rounded-xl px-3 py-2 font-mono text-[12px] text-highlighted mb-3">
+              <p class="font-bold text-default text-[15px] mb-2 m-0">Configure App Details</p>
+              <p class="text-sm text-muted mb-3 m-0 leading-relaxed">Set Title to <strong>KrabiClaw</strong>, upload our app icon, and check the consent box. Under Authentication, select <strong>OAuth</strong> and paste this URL:</p>
+              <div class="flex items-center gap-2 bg-muted/50 border border-default rounded-xl px-3 py-2 font-mono text-[12px] text-highlighted">
                 <span class="truncate">https://krabiclaw.com/api/mcp</span>
                 <button class="ml-auto flex items-center justify-center w-6 h-6 rounded bg-white border border-default text-muted hover:text-default transition-all cursor-pointer shadow-sm" aria-label="Copy server URL" @click="copyUrl">
                   <UIcon :name="copied ? 'i-heroicons-check' : 'i-heroicons-clipboard'" class="size-3.5" :class="copied ? 'text-green-500' : ''" />
                 </button>
               </div>
-              <p class="text-[13px] text-muted m-0 leading-relaxed">Set Authentication to <strong>OAuth</strong>.</p>
             </div>
           </div>
 
@@ -191,8 +204,8 @@
               3
             </div>
             <div>
-              <p class="font-bold text-default text-[15px] mb-2 m-0">Sign in and authorize</p>
-              <p class="text-sm text-muted m-0 leading-relaxed">ChatGPT will redirect you to KrabiClaw to authorize access. Then start building!</p>
+              <p class="font-bold text-default text-[15px] mb-2 m-0">Connect & Start Chatting</p>
+              <p class="text-sm text-muted m-0 leading-relaxed">Click <strong>Create</strong>, then hit <strong>Connect</strong>. Start a new chat, add the KrabiClaw app, and try asking an example prompt!</p>
             </div>
           </div>
         </div>

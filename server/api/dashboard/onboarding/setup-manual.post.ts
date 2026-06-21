@@ -30,8 +30,8 @@ export default defineEventHandler(async (event) => {
     ? (body.vertical as 'restaurant' | 'experience')
     : 'restaurant'
 
-  const dashboard = await getDashboardContext(event, { requireRestaurant: false })
-  if (dashboard?.restaurant) {
+  const dashboard = await getDashboardContext(event, { requireSite: false })
+  if (dashboard?.site) {
     return jsonResponse({ error: 'You already have a site. Onboarding is for new sites only.' }, { status: 400 })
   }
 

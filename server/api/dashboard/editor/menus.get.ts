@@ -6,18 +6,18 @@ import { getMenus } from '~/server/utils/menu-management'
 
 export default defineEventHandler(async (event) => {
   const locationId = getQuery(event).locationId as string | undefined
-  const { db, organization, restaurant } = await getDashboardContext(event, { requireRestaurant: true })
+  const { db, organization, site } = await getDashboardContext(event, { requireSite: true })
 
-  if (!restaurant) {
-    return jsonResponse({ error: 'Restaurant not found' }, { status: 404 })
+  if (!site) {
+    return jsonResponse({ error: 'Site not found' }, { status: 404 })
   }
 
-  const menus = await getMenus(db, organization.id, restaurant.id, locationId)
+  const menus = await getMenus(db, organization.id, site.id, locationId)
 
   return jsonResponse({
     success: true,
     menus,
-    siteId: restaurant.id,
+    siteId: site.id,
     locationId
   })
 })

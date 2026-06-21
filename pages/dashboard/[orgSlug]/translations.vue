@@ -164,11 +164,11 @@ const config = useRuntimeConfig()
 const rawWhatsapp = config.public.whatsappNumber || '16197200000'
 const WHATSAPP_NUMBER = /^\d+$/.test(String(rawWhatsapp)) ? String(rawWhatsapp) : '16197200000'
 
-const dashboard = useDashboardRestaurant()
+const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 
 const siteId = computed(() => dashboard.siteId.value ?? '')
-const plan = computed(() => dashboard.restaurant.value?.plan ?? 'free')
+const plan = computed(() => dashboard.site.value?.plan ?? 'free')
 
 const isFree = computed(() => !plan.value || plan.value === 'free')
 const isGrowth = computed(() => plan.value === 'growth')

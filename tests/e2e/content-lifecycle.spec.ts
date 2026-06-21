@@ -43,8 +43,8 @@ test.describe('content write lifecycle', () => {
     await loginAs(request, baseURL!)
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
-    const context = await contextRes.json() as { restaurant?: { id?: string | null } }
-    const siteId = await ensureSite(request, baseURL!, context.restaurant?.id ?? null)
+    const context = await contextRes.json() as { site?: { id?: string | null } }
+    const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
 
     const field = 'story.body'
     const value = `delete-field sentinel ${Date.now()}`
@@ -76,8 +76,8 @@ test.describe('content write lifecycle', () => {
     await loginAs(request, baseURL!)
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
-    const context = await contextRes.json() as { restaurant?: { id?: string | null } }
-    const siteId = await ensureSite(request, baseURL!, context.restaurant?.id ?? null)
+    const context = await contextRes.json() as { site?: { id?: string | null } }
+    const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
 
     const policyValue = `E2E reservation policy ${Date.now()}`
     const saveRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/save`, {

@@ -12,14 +12,14 @@ test.describe('pottery house dashboard', () => {
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json() as {
       organization?: { slug?: string | null }
-      restaurant?: { id?: string | null }
+      site?: { id?: string | null }
     }
 
     const orgSlug = context.organization?.slug
-    const restaurantId = context.restaurant?.id
+    const siteId = context.site?.id
 
     // If current dev session is the Pottery House owner workspace, verify core dashboard pages.
-    if (restaurantId === 'site-pottery-house' && orgSlug) {
+    if (siteId === 'site-pottery-house' && orgSlug) {
       for (const route of [
         `/dashboard/${orgSlug}`,
         `/dashboard/${orgSlug}/support`,

@@ -192,6 +192,7 @@
                     :guide-to="chatgptGuidePath"
                     guide-label="ChatGPT setup guide"
                     :starter-prompt="chatgptStarterPrompt"
+                    :examples="quickActionExamples"
                     :dashboard-to="workspaceEntryPath"
                     dashboard-label="Open the dashboard"
                   />
@@ -266,6 +267,11 @@
 
 <script setup lang="ts">
 import { marked } from 'marked'
+import {
+  buildOnboardingStarterPrompt,
+  getQuickActionPrompts,
+  type OnboardingChecklistResponse,
+} from '~/composables/useOnboardingPrompts'
 
 interface WizardMessage {
   id: string
@@ -462,70 +468,13 @@ const chatgptStarterPrompt = computed(() => {
   return 'Help me finish my restaurant site. First ask me for my hero headline, brand story, and top menu sections.'
 })
 
-interface ChecklistResponse {
-  success: boolean
-  vertical: string
-  brandName: string | null
-  city: string | null
-  items: {
-    business_info: boolean
-    hero_image: boolean
-    menu_or_experiences: boolean
-    story: boolean
-    post: boolean
-  }
-}
-
-function buildChecklistStarterPrompt(checklist: ChecklistResponse): string {
-  const name = checklist.brandName ?? 'my business'
-  const city = checklist.city ? ` in ${checklist.city}` : ''
-  const isExperience = checklist.vertical === 'experience'
-
-  const items = [
-    {
-      label: 'Business info imported from Google Maps',
-      prompt: `Show me a summary of my site for ${name}`,
-      complete: checklist.items.business_info,
-    },
-    {
-      label: 'Hero image added',
-      prompt: `Generate a hero image for ${name}'s homepage`,
-      complete: checklist.items.hero_image,
-    },
-    {
-      label: isExperience ? 'Experiences listed' : 'Menu added',
-      prompt: isExperience
-        ? `Add our signature experience to ${name} — include a description, duration, price per person, and max capacity`
-        : `Build a menu for ${name}. Ask me about our sections and dishes.`,
-      complete: checklist.items.menu_or_experiences,
-    },
-    {
-      label: 'About section written',
-      prompt: `Write an About section for ${name}${city}. Ask me a few questions first.`,
-      complete: checklist.items.story,
-    },
-    {
-      label: 'First post published',
-      prompt: `Write a launch post announcing ${name}'s new website is live`,
-      complete: checklist.items.post,
-    },
-  ]
-
-  const firstMissing = items.find(item => !item.complete)
-  if (!firstMissing) {
-    return isExperience
-      ? `Help me review ${name}'s experience site and suggest the next highest-impact improvement. Ask me one question at a time.`
-      : `Help me review ${name}'s restaurant site and suggest the next highest-impact improvement. Ask me one question at a time.`
-  }
-
-  return `Help me finish ${name}'s ${isExperience ? 'experience' : 'restaurant'} site. Start with "${firstMissing.label}" first. Ask me one question at a time and then help me complete this: ${firstMissing.prompt}`
-}
+const quickActionExamples = computed(() => getQuickActionPrompts(selectedVertical.value))
 
 async function refreshChecklistStarterPrompt(siteId: string | null) {
   if (!siteId || props.isAddingLocation) return
   try {
-    const checklist = await $fetch<ChecklistResponse>(`/api/dashboard/onboarding/checklist?siteId=${encodeURIComponent(siteId)}`)
-    checklistStarterPrompt.value = buildChecklistStarterPrompt(checklist)
+    const checklist = await $fetch<OnboardingChecklistResponse>(`/api/dashboard/onboarding/checklist?siteId=${encodeURIComponent(siteId)}`)
+    checklistStarterPrompt.value = buildOnboardingStarterPrompt(checklist)
   } catch (error) {
     console.error('onboarding_checklist_prompt_failed', error)
     checklistStarterPrompt.value = null

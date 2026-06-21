@@ -45,10 +45,10 @@ export default defineEventHandler(async (event) => {
     siteId = site.id
     brandName = site.brand_name
   } else {
-    const dashboard = await getDashboardContext(event, { requireRestaurant: false })
-    if (!dashboard?.restaurant) return jsonResponse(EMPTY_CHECKLIST)
-    siteId = dashboard.restaurant.id
-    brandName = dashboard.restaurant.brand_name
+    const dashboard = await getDashboardContext(event, { requireSite: false })
+    if (!dashboard?.site) return jsonResponse(EMPTY_CHECKLIST)
+    siteId = dashboard.site.id
+    brandName = dashboard.site.brand_name
   }
 
   try {

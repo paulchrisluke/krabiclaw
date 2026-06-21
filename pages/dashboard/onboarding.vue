@@ -270,13 +270,13 @@ const loadContext = async () => {
     const response = await $fetch<{
       success: boolean
       organization?: { id: string; slug: string; name: string } | null
-      restaurant?: ApiRecord | null
+      site?: ApiRecord | null
       locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
     }>('/api/dashboard/context')
 
     if (response.organization) orgSlug.value = response.organization.slug ?? null
-    if (response.restaurant) {
-      siteData.value = response.restaurant
+    if (response.site) {
+      siteData.value = response.site
       siteLocations.value = response.locations ?? []
       const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]
       if (primary) selectedLocationId.value = primary.id

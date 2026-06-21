@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
   if (!message?.trim()) return jsonResponse({ error: 'message is required' }, { status: 400 })
 
   const isPlatformAdmin = (session.user as { role?: string }).role === 'admin'
-  const dashboard = body.siteId ? null : await getDashboardContext(event, { requireRestaurant: false })
+  const dashboard = body.siteId ? null : await getDashboardContext(event, { requireSite: false })
   const site = body.siteId && isPlatformAdmin
     ? await db.prepare(`SELECT id, organization_id FROM sites WHERE id = ? LIMIT 1`)
         .bind(body.siteId).first<{ id: string; organization_id: string }>()
@@ -35,9 +35,9 @@ export default defineEventHandler(async (event) => {
           WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner','admin')
           LIMIT 1
         `).bind(body.siteId, session.user.id).first<{ id: string; organization_id: string }>()
-      : dashboard?.restaurant
+      : dashboard?.site
 
-  if (!site) return jsonResponse({ error: 'Create a restaurant before publishing to Facebook.' }, { status: 400 })
+  if (!site) return jsonResponse({ error: 'Create a site before publishing to Facebook.' }, { status: 400 })
 
   const allowed = await hasEntitlement(env, db, site.organization_id, 'managed_service')
   if (!allowed) return jsonResponse({ error: 'Facebook sync is included in the Managed plan and above.' }, { status: 403 })

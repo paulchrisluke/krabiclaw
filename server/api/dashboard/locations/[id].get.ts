@@ -15,17 +15,17 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const dashboard = await getDashboardContext(event, { requireRestaurant: true })
-  if (!dashboard?.restaurant) {
+  const dashboard = await getDashboardContext(event, { requireSite: true })
+  if (!dashboard?.site) {
     return jsonResponse({ error: 'No site found' }, { status: 400 })
   }
 
-  const { organization, restaurant } = dashboard
+  const { organization, site } = dashboard
   if (!organization) {
     return jsonResponse({ error: 'Organization not found' }, { status: 400 })
   }
   const organizationId = organization.id as string
-  const siteId = restaurant.id as string
+  const siteId = site.id as string
 
   const location = await db.prepare(`
     SELECT * FROM business_locations

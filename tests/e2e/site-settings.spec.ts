@@ -26,9 +26,9 @@ async function ensureSite(request: APIRequestContext, baseURL: string, siteId: s
   const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
   expect(contextRes.status()).toBe(200)
   const context = await contextRes.json() as {
-    restaurant?: { id?: string | null }
+    site?: { id?: string | null }
   }
-  const createdSiteId = context.restaurant?.id ?? null
+  const createdSiteId = context.site?.id ?? null
   expect(createdSiteId).toEqual(expect.any(String))
   return createdSiteId
 }
@@ -42,9 +42,9 @@ test.describe('site settings', () => {
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json() as {
-      restaurant?: { id?: string | null }
+      site?: { id?: string | null }
     }
-    const siteId = await ensureSite(request, baseURL!, context.restaurant?.id ?? null)
+    const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
 
     const beforeRes = await request.get(`${baseURL}/api/sites/${siteId}/settings`)
     expect(beforeRes.status()).toBe(200)

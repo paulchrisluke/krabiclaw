@@ -1,5 +1,5 @@
 export function useOrgSettings() {
-  const { organization } = useDashboardRestaurant()
+  const { organization } = useDashboardSite()
 
   const orgBase = computed(() => {
     const slug = organization.value?.slug

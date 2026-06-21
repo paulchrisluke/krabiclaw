@@ -451,7 +451,7 @@ interface DayHours {
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const dashboard = useDashboardRestaurant()
+const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = await useDashboardSiteId()
 const routeLocation = String(route.params.locationSlug || '')

@@ -163,7 +163,7 @@ interface Domain {
 }
 
 const toast = useToast()
-const dashboard = useDashboardRestaurant()
+const dashboard = useDashboardSite()
 
 const loading = ref(true)
 const domains = ref<Domain[]>([])

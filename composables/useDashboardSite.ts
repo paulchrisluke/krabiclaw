@@ -6,10 +6,11 @@ interface DashboardOrganization {
   role: string
 }
 
-interface DashboardRestaurant {
+interface DashboardSite {
   id: string
   organization_id: string
   brand_name: string | null
+  vertical: 'restaurant' | 'experience' | null
   subdomain: string | null
   custom_domain: string | null
   public_url: string | null
@@ -34,15 +35,15 @@ interface DashboardLocation {
 interface DashboardContextResponse {
   success: boolean
   organization: DashboardOrganization
-  restaurant: DashboardRestaurant | null
+  site: DashboardSite | null
   locations: DashboardLocation[]
   selectedLocation: DashboardLocation | null
 }
 
-export function useDashboardRestaurant() {
+export function useDashboardSite() {
   // Only initialize state on client to avoid hydration mismatches
-  const state = useState<DashboardContextResponse | null>('dashboard:restaurant-context', () => null)
-  const pending = useState<boolean>('dashboard:restaurant-context:pending', () => false)
+  const state = useState<DashboardContextResponse | null>('dashboard:site-context', () => null)
+  const pending = useState<boolean>('dashboard:site-context:pending', () => false)
 
   async function refresh() {
     const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
@@ -68,8 +69,8 @@ export function useDashboardRestaurant() {
   }
 
   const organization = computed(() => state.value?.organization ?? null)
-  const restaurant = computed(() => state.value?.restaurant ?? null)
-  const siteId = computed(() => restaurant.value?.id ?? null)
+  const site = computed(() => state.value?.site ?? null)
+  const siteId = computed(() => site.value?.id ?? null)
   const locations = computed(() => state.value?.locations ?? [])
   const selectedLocation = computed(() => state.value?.selectedLocation ?? null)
 
@@ -77,7 +78,7 @@ export function useDashboardRestaurant() {
     state,
     pending,
     organization,
-    restaurant,
+    site,
     siteId,
     locations,
     selectedLocation,
@@ -87,11 +88,11 @@ export function useDashboardRestaurant() {
 }
 
 export async function useDashboardSiteId() {
-  const dashboard = useDashboardRestaurant()
+  const dashboard = useDashboardSite()
   if (!dashboard.state.value) await dashboard.refresh()
   const siteId = dashboard.siteId.value
   if (!siteId) {
-    throw createError({ statusCode: 404, message: 'Restaurant site not found' })
+    throw createError({ statusCode: 404, message: 'Site not found' })
   }
   return siteId
 }

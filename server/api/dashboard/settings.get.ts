@@ -5,10 +5,10 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getConfig } from '~/server/utils/site-config'
 
 export default defineEventHandler(async (event) => {
-  const { db, organization, restaurant } = await getDashboardContext(event, { requireRestaurant: true })
+  const { db, organization, site: dashboardSite } = await getDashboardContext(event, { requireSite: true })
 
-  if (!restaurant) {
-    return jsonResponse({ error: 'Restaurant not found' }, { status: 404 })
+  if (!dashboardSite) {
+    return jsonResponse({ error: 'Site not found' }, { status: 404 })
   }
 
   const site = await db.prepare(`
@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     FROM sites s
     WHERE s.id = ? AND s.organization_id = ?
     LIMIT 1
-  `).bind(restaurant.id, organization.id).first()
+  `).bind(dashboardSite.id, organization.id).first()
 
   if (!site) {
     return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })

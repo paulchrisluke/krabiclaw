@@ -32,10 +32,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const { db, session, organization, restaurant } = await getDashboardContext(event, { requireRestaurant: true })
+  const { db, session, organization, site } = await getDashboardContext(event, { requireSite: true })
 
-  if (!restaurant) {
-    return jsonResponse({ error: 'Restaurant not found' }, { status: 404 })
+  if (!site) {
+    return jsonResponse({ error: 'Site not found' }, { status: 404 })
   }
 
   if (forceSubdomainRegistrationFailure) {
@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) => {
     const result = await updateSiteSettingsFields(
       db,
       env,
-      restaurant.id,
+      site.id,
       organization.id,
       body,
       session.user.id,

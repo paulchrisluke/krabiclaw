@@ -12,7 +12,10 @@
 
       <div v-else class="space-y-6">
         <!-- Onboarding checklist (shown until dismissed or all items complete) -->
-        <DashboardOnboardingChecklist :org-slug="String(route.params.orgSlug)" />
+        <DashboardOnboardingChecklist :org-slug="String(route.params.orgSlug)" @visible="onboardingVisible = $event" />
+
+        <!-- Persistent fallback once the checklist is dismissed/complete, so MCP prompts stay discoverable -->
+        <DashboardMcpQuickActions v-if="!onboardingVisible" :org-slug="String(route.params.orgSlug)" />
 
         <!-- Usage strip -->
         <div v-if="credits" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -128,7 +131,8 @@ definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Dashboard | KrabiClaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()
-const dashboardState = useDashboardRestaurant()
+const dashboardState = useDashboardSite()
+const onboardingVisible = ref(true)
 
 interface Location {
   id: string; slug: string; title: string; city: string | null
@@ -146,8 +150,9 @@ interface SiteEvent {
 const { data, pending } = await useAsyncData(
   `dashboard-home-${route.params.orgSlug}`,
   async () => {
+    const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
     await dashboardState.refresh()
-    return $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[] }>('/api/dashboard/home')
+    return $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[] }>('/api/dashboard/home', { headers })
   },
   // Reuse the SSR payload on first hydration (avoids a redundant duplicate fetch
   // on initial load), but force a fresh fetch on every subsequent client-side

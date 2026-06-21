@@ -128,9 +128,9 @@ definePageMeta({ layout: 'dashboard' })
 const WHATSAPP_NUMBER = '16197200000'
 const whatsappLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi Paul & Julia, I need some help with my restaurant site.')}`
 
-const dashboard = useDashboardRestaurant()
+const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
-const plan = computed(() => dashboard.restaurant.value?.plan ?? 'free')
+const plan = computed(() => dashboard.site.value?.plan ?? 'free')
 const isFree = computed(() => !plan.value || plan.value === 'free')
 const { open: openUpsell } = useServiceUpsell()
 

@@ -13,9 +13,9 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Location ID is required' }, { status: 400 })
   }
 
-  const { db, userId, organization, restaurant } = await getDashboardContext(event, { requireRestaurant: false })
-  if (!restaurant) {
-    return jsonResponse({ error: 'Restaurant workspace has not been created yet' }, { status: 400 })
+  const { db, userId, organization, site } = await getDashboardContext(event, { requireSite: false })
+  if (!site) {
+    return jsonResponse({ error: 'Site workspace has not been created yet' }, { status: 400 })
   }
 
   const location = await db.prepare(`
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     FROM business_locations
     WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active'
     LIMIT 1
-  `).bind(locationId, organization.id, restaurant.id).first<{ id: string }>()
+  `).bind(locationId, organization.id, site.id).first<{ id: string }>()
 
   if (!location) {
     return jsonResponse({ error: 'Location not found' }, { status: 404 })

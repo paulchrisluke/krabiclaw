@@ -9,10 +9,11 @@ Tracks which tools exist across surfaces and where gaps are. Update this when ad
 
 ---
 
-## ✅ Exact name match — true parity (73 tools)
+## ✅ Exact name match — true parity (74 tools)
 
 | Tool |
 |------|
+| `add_menu_items_batch` |
 | `create_experience` |
 | `create_location` |
 | `create_location_qa` |
@@ -89,11 +90,10 @@ Tracks which tools exist across surfaces and where gaps are. Update this when ad
 
 ---
 
-## 🟠 ChowBot-only — no MCP equivalent (10 tools)
+## 🟠 ChowBot-only — no MCP equivalent (9 tools)
 
 | ChowBot tool | Status / Action |
 |--------------|----------------|
-| `add_menu_items_batch` | Present in ChowBot and MCP |
 | `sync_menu_items` | **Gap** — MCP has no reconcile/upsert tool |
 | `publish_menu` | **Gap** — MCP has no menu publish step |
 | `generate_image` | **Design divergence** — MCP uses 7 targeted `generate_*` tools; ChowBot collapses to one generic — decide whether to split |
@@ -129,7 +129,7 @@ Tracks which tools exist across surfaces and where gaps are. Update this when ad
 
 | Category | Count |
 |----------|-------|
-| True parity (exact name match) | 73 |
-| ChowBot-only (gaps or candidates for removal) | 10 |
+| True parity (exact name match) | 74 |
+| ChowBot-only (gaps or candidates for removal) | 9 |
 | MCP-only, intentionally surface-specific | 35 |
 | **MCP-only, ChowBot should add** | **0** |

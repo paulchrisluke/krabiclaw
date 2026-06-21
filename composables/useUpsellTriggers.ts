@@ -3,10 +3,10 @@ import type { UpsellType } from './useServiceUpsell'
 const SESSION_KEY = 'kc-upsell-shown'
 
 export const useUpsellTriggers = () => {
-  const { restaurant } = useDashboardRestaurant()
+  const { site } = useDashboardSite()
   const { open } = useServiceUpsell()
 
-  const currentPlan = computed(() => restaurant.value?.plan ?? 'free')
+  const currentPlan = computed(() => site.value?.plan ?? 'free')
 
   const shouldSuggestGrowth = computed(() =>
     currentPlan.value === 'free' || currentPlan.value === null

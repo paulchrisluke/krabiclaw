@@ -227,8 +227,20 @@ function buildTabs() {
     const btn = document.createElement('button')
     btn.className = 'tab ' + (tool.enabled ? 'on' : 'off')
     btn.dataset.name = tool.name
-    btn.innerHTML = tool.name + '<span class="badge">' + (tool.widget || '?') + '</span>' +
-      (tool.hasFixture ? '' : '<span class="stale-badge">no fixture</span>')
+    
+    btn.textContent = tool.name
+    const badge = document.createElement('span')
+    badge.className = 'badge'
+    badge.textContent = tool.widget || '?'
+    btn.appendChild(badge)
+    
+    if (!tool.hasFixture) {
+      const staleBadge = document.createElement('span')
+      staleBadge.className = 'stale-badge'
+      staleBadge.textContent = 'no fixture'
+      btn.appendChild(staleBadge)
+    }
+
     btn.onclick = () => pick(tool)
     ;(tool.enabled ? enabledRow : disabledRow).appendChild(btn)
   })
@@ -244,11 +256,37 @@ function updateMeta(tool) {
   const el = document.getElementById('tool-meta')
   const statusLabel = tool.enabled === null ? 'unknown (offline)' : tool.enabled ? 'enabled' : 'disabled'
   const statusPill = tool.enabled === null ? 'off' : tool.enabled ? 'on' : 'off'
-  el.innerHTML =
-    '<strong>tool</strong> ' + tool.name + '<br>' +
-    '<strong>widget</strong> ' + (tool.widget || '(unknown — server offline)') + '<br>' +
-    '<strong>status</strong> <span class="pill ' + statusPill + '">' + statusLabel + '</span>' +
-    (tool.hasFixture ? '' : '<br><strong>fixture</strong> none — add one to FIXTURES in widget-test.html')
+  
+  el.innerHTML = ''
+  
+  const strTool = document.createElement('strong')
+  strTool.textContent = 'tool'
+  el.appendChild(strTool)
+  el.appendChild(document.createTextNode(' ' + tool.name))
+  el.appendChild(document.createElement('br'))
+  
+  const strWidget = document.createElement('strong')
+  strWidget.textContent = 'widget'
+  el.appendChild(strWidget)
+  el.appendChild(document.createTextNode(' ' + (tool.widget || '(unknown — server offline)')))
+  el.appendChild(document.createElement('br'))
+  
+  const strStatus = document.createElement('strong')
+  strStatus.textContent = 'status'
+  el.appendChild(strStatus)
+  el.appendChild(document.createTextNode(' '))
+  const spanPill = document.createElement('span')
+  spanPill.className = 'pill ' + statusPill
+  spanPill.textContent = statusLabel
+  el.appendChild(spanPill)
+  
+  if (!tool.hasFixture) {
+    el.appendChild(document.createElement('br'))
+    const strFixture = document.createElement('strong')
+    strFixture.textContent = 'fixture'
+    el.appendChild(strFixture)
+    el.appendChild(document.createTextNode(' none — add one to FIXTURES in widget-test.html'))
+  }
 }
 
 function pick(tool) {

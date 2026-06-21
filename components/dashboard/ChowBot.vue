@@ -226,11 +226,12 @@
 // -nocheck
 import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
+import { getQuickActionPrompts } from '~/composables/useOnboardingPrompts'
 
 const props = defineProps<{ embedded?: boolean; setupMode?: boolean }>()
 const setupMode = computed(() => Boolean(props.setupMode))
 
-const dashboard = useDashboardRestaurant()
+const dashboard = useDashboardSite()
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, currentPageOverride } = useChowBot()
 const orgSettings = useOrgSettings()
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
@@ -263,12 +264,7 @@ const setupRestaurantName = ref('')
 const setupSubdomain = ref('')
 const creatingRestaurant = ref(false)
 
-const regularStarterPrompts = [
-  'Show me my latest posts',
-  "Write a post about today's special",
-  "What's on our menu?",
-  'Give me a restaurant overview',
-]
+const regularStarterPrompts = computed(() => getQuickActionPrompts(dashboard.site.value?.vertical))
 
 const setupStarterPrompts = [
   'Start from Google Business',
@@ -276,7 +272,7 @@ const setupStarterPrompts = [
   'Build manually with ChowBot',
 ]
 
-const starterPrompts = computed(() => setupMode.value && !siteId.value ? setupStarterPrompts : regularStarterPrompts)
+const starterPrompts = computed(() => setupMode.value && !siteId.value ? setupStarterPrompts : regularStarterPrompts.value)
 const emptyTitle = computed(() => setupMode.value && !siteId.value ? "Let's get your restaurant started" : 'What can I help with?')
 const emptyDescription = computed(() => setupMode.value && !siteId.value
   ? 'Choose a starting point. I will create the workspace, then keep going from here.'

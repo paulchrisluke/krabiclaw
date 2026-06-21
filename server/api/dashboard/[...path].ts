@@ -4,21 +4,21 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 export default defineEventHandler(async (event): Promise<Response> => {
   const rawPath = getRouterParam(event, 'path')
   const path = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath || '')
-  const { restaurant } = await getDashboardContext(event, { requireRestaurant: false })
+  const { site } = await getDashboardContext(event, { requireSite: false })
 
-  if (!restaurant) {
-    return jsonResponse({ error: 'Restaurant workspace has not been created yet' }, { status: 400 })
+  if (!site) {
+    return jsonResponse({ error: 'Site workspace has not been created yet' }, { status: 400 })
   }
 
   let target: string
   if (path === 'restaurant') {
-    target = `/api/sites/${restaurant.id}`
+    target = `/api/sites/${site.id}`
   } else if (path.startsWith('editor/')) {
-    target = `/api/editor/sites/${restaurant.id}/${path.slice('editor/'.length)}`
+    target = `/api/editor/sites/${site.id}/${path.slice('editor/'.length)}`
   } else if (path.startsWith('ai/')) {
-    target = `/api/ai/${restaurant.id}/${path.slice('ai/'.length)}`
+    target = `/api/ai/${site.id}/${path.slice('ai/'.length)}`
   } else {
-    target = `/api/sites/${restaurant.id}/${path}`
+    target = `/api/sites/${site.id}/${path}`
   }
 
   const method = event.method

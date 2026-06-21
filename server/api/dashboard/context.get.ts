@@ -5,13 +5,13 @@ import {
 } from '~/server/utils/dashboard-context'
 
 export default defineEventHandler(async (event) => {
-  const { db, userId, organization, restaurant } = await getDashboardContext(event, { requireRestaurant: false })
+  const { db, userId, organization, site } = await getDashboardContext(event, { requireSite: false })
 
-  if (!restaurant) {
+  if (!site) {
     return jsonResponse({
       success: true,
       organization,
-      restaurant: null,
+      site: null,
       locations: [],
       selectedLocation: null
     })
@@ -21,13 +21,13 @@ export default defineEventHandler(async (event) => {
     db,
     userId,
     organization.id,
-    restaurant.id
+    site.id
   )
 
   return jsonResponse({
     success: true,
     organization,
-    restaurant,
+    site,
     locations,
     selectedLocation
   })

@@ -141,12 +141,12 @@ const loadContext = async () => {
   try {
     const response = await $fetch<{
       success: boolean
-      restaurant?: ApiRecord | null
+      site?: ApiRecord | null
       locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
     }>('/api/dashboard/context')
 
-    if (response.restaurant) {
-      siteData.value = response.restaurant
+    if (response.site) {
+      siteData.value = response.site
       siteLocations.value = response.locations ?? []
     } else {
       contextError.value = 'Workspace data could not be loaded.'

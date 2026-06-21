@@ -9,8 +9,8 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const dashboard = await getDashboardContext(event, { requireRestaurant: false })
-  if (!dashboard?.restaurant) return jsonResponse({ error: 'Restaurant not found' }, { status: 404 })
+  const dashboard = await getDashboardContext(event, { requireSite: false })
+  if (!dashboard?.site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   try {
     const now = new Date().toISOString()
@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
       UPDATE sites
       SET onboarding_status = 'completed', updated_at = ?
       WHERE id = ? AND organization_id = ?
-    `).bind(now, dashboard.restaurant.id, dashboard.restaurant.organization_id).run()
+    `).bind(now, dashboard.site.id, dashboard.site.organization_id).run()
 
     return jsonResponse({ success: true })
   } catch (err) {

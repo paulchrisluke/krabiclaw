@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const { locationId, pageId } = body
-  const dashboard = body.siteId ? null : await getDashboardContext(event, { requireRestaurant: false })
+  const dashboard = body.siteId ? null : await getDashboardContext(event, { requireSite: false })
   const site = body.siteId
     ? await db.prepare(`
         SELECT s.id, s.organization_id FROM sites s
@@ -36,9 +36,9 @@ export default defineEventHandler(async (event) => {
         WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
         LIMIT 1
       `).bind(body.siteId, session.user.id).first<{ id: string; organization_id: string }>()
-    : dashboard?.restaurant
+    : dashboard?.site
 
-  if (!site) return jsonResponse({ error: 'Create a restaurant before syncing Facebook.' }, { status: 400 })
+  if (!site) return jsonResponse({ error: 'Create a site before syncing Facebook.' }, { status: 400 })
 
   const allowed = await hasEntitlement(env, db, site.organization_id, 'managed_service')
   if (!allowed) return jsonResponse({ error: 'Facebook sync is included in the Managed plan and above.' }, { status: 403 })

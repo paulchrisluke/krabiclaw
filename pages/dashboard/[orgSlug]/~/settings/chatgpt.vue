@@ -42,9 +42,19 @@
                   {{ copied ? 'Copied' : 'Copy' }}
                 </UButton>
               </div>
-              <p class="mt-2 text-xs text-muted">
-                Set authentication to <strong>OAuth</strong> when ChatGPT asks.
-              </p>
+              <div class="mt-4 flex flex-col gap-3">
+                <p class="text-xs text-muted leading-relaxed">
+                  <strong>Beta Note:</strong> This developer setup is temporary. Once approved for the ChatGPT App Store, it will be a simple one-click install.
+                </p>
+                <div class="flex items-center gap-2">
+                  <UButton as="a" href="/web-app-manifest-192x192.png" download target="_blank" size="xs" color="neutral" variant="ghost" icon="i-heroicons-arrow-down-tray">
+                    Download App Icon
+                  </UButton>
+                  <UButton as="a" href="/install-krabiclaw-chatgpt-plugin.png" target="_blank" size="xs" color="neutral" variant="ghost" icon="i-heroicons-photo">
+                    View Setup Screenshot
+                  </UButton>
+                </div>
+              </div>
             </div>
 
             <div class="flex flex-wrap gap-2">
@@ -94,18 +104,18 @@ const mcpUrl = computed(() => {
 const steps = [
   {
     number: 1,
-    title: 'Open ChatGPT settings',
-    body: 'Go to Settings → Connectors, or use Explore GPTs and choose Add MCP server.',
+    title: 'Enable Developer Mode',
+    body: 'Go to ChatGPT Settings → Connectors → Advanced, enable Developer mode, and click "Create an App".',
   },
   {
     number: 2,
-    title: 'Paste the server URL',
-    body: 'Add the KrabiClaw MCP URL below and choose OAuth authentication.',
+    title: 'Configure App Details',
+    body: 'Set title to "KrabiClaw", upload our app icon, paste the MCP URL below, choose OAuth authentication, and check the consent box.',
   },
   {
     number: 3,
-    title: 'Sign in and authorize',
-    body: 'ChatGPT redirects you back to KrabiClaw to approve access, then you can start editing.',
+    title: 'Connect & Start Chatting',
+    body: 'Click Create, then Connect. Start a new chat, add the KrabiClaw app, and try asking an example prompt.',
   },
 ] as const
 

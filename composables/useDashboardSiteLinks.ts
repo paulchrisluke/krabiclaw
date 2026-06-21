@@ -23,7 +23,7 @@ function appendQuery(path: string, query: Record<string, string | null | undefin
 
 export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: MaybeRef<string | null | undefined>, orgSlug?: MaybeRef<string | null | undefined>) {
   void siteId
-  const dashboard = useDashboardRestaurant()
+  const dashboard = useDashboardSite()
 
   const paths = computed(() => {
     const base = '/dashboard'

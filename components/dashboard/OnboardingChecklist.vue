@@ -93,23 +93,16 @@
 </template>
 
 <script setup lang="ts">
+import {
+  buildOnboardingChecklistItems,
+  buildOnboardingStarterPrompt,
+  type OnboardingChecklistResponse,
+} from '~/composables/useOnboardingPrompts'
+
 const props = defineProps<{ orgSlug: string }>()
+const emit = defineEmits<{ visible: [boolean] }>()
 
-interface ChecklistResponse {
-  success: boolean
-  vertical: string
-  brandName: string
-  city: string | null
-  items: {
-    business_info: boolean
-    hero_image: boolean
-    menu_or_experiences: boolean
-    story: boolean
-    post: boolean
-  }
-}
-
-const { data, refresh } = await useFetch<ChecklistResponse>('/api/dashboard/onboarding/checklist', {
+const { data, refresh } = await useFetch<OnboardingChecklistResponse>('/api/dashboard/onboarding/checklist', {
   server: false,
   lazy: true,
 })
@@ -149,65 +142,14 @@ async function copyStarterPrompt() {
   }
 }
 
-const items = computed(() => {
-  const name = data.value?.brandName ?? 'your business'
-  const city = data.value?.city ? ` in ${data.value.city}` : ''
-  const isExperience = data.value?.vertical === 'experience'
-  const completed = data.value?.items
-
-  return [
-    {
-      key: 'business_info',
-      label: 'Business info imported from Google Maps',
-      prompt: `Show me a summary of my site for ${name}`,
-      complete: completed?.business_info ?? false,
-    },
-    {
-      key: 'hero_image',
-      label: 'Hero image added',
-      prompt: `Generate a hero image for ${name}'s homepage`,
-      complete: completed?.hero_image ?? false,
-    },
-    {
-      key: 'menu_or_experiences',
-      label: isExperience ? 'Experiences listed' : 'Menu added',
-      prompt: isExperience
-        ? `Add our signature experience to ${name} — include a description, duration, price per person, and max capacity`
-        : `Build a menu for ${name}. Ask me about our sections and dishes.`,
-      complete: completed?.menu_or_experiences ?? false,
-    },
-    {
-      key: 'story',
-      label: 'About section written',
-      prompt: `Write an About section for ${name}${city}. Ask me a few questions first.`,
-      complete: completed?.story ?? false,
-    },
-    {
-      key: 'post',
-      label: 'First post published',
-      prompt: `Write a launch post announcing ${name}'s new website is live`,
-      complete: completed?.post ?? false,
-    },
-  ]
-})
-
-const firstIncompleteItem = computed(() => items.value.find(item => !item.complete) ?? null)
-
-const starterPrompt = computed(() => {
-  const name = data.value?.brandName ?? 'my business'
-  const isExperience = data.value?.vertical === 'experience'
-  const firstMissing = firstIncompleteItem.value
-
-  if (!firstMissing) {
-    return isExperience
-      ? `Help me review ${name}'s experience site and suggest the next highest-impact improvement. Ask me one question at a time.`
-      : `Help me review ${name}'s restaurant site and suggest the next highest-impact improvement. Ask me one question at a time.`
-  }
-
-  return `Help me finish ${name}'s ${isExperience ? 'experience' : 'restaurant'} site. Start with "${firstMissing.label}" first. Ask me one question at a time and then help me complete this: ${firstMissing.prompt}`
-})
+const items = computed(() => buildOnboardingChecklistItems(data.value))
+const starterPrompt = computed(() => buildOnboardingStarterPrompt(data.value, items.value))
 
 const completedCount = computed(() => items.value.filter(i => i.complete).length)
 const total = computed(() => items.value.length)
 const allDone = computed(() => completedCount.value === total.value)
+
+watch([dismissed, allDone], ([isDismissed, isAllDone]) => {
+  emit('visible', !isDismissed && !isAllDone)
+}, { immediate: true })
 </script>

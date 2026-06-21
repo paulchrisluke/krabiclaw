@@ -25,10 +25,10 @@ test.describe('role permission matrix', () => {
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json() as {
       organization?: { id?: string }
-      restaurant?: { id?: string | null }
+      site?: { id?: string | null }
     }
     const organizationId = context.organization?.id
-    const siteId = await ensureSite(request, baseURL!, context.restaurant?.id ?? null)
+    const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
     expect(organizationId).toEqual(expect.any(String))
 
     const createUser = async (role: 'admin' | 'editor' | 'member') => {
@@ -104,10 +104,10 @@ test.describe('role permission matrix', () => {
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json() as {
       organization?: { id?: string }
-      restaurant?: { id?: string | null }
+      site?: { id?: string | null }
     }
     const organizationId = context.organization?.id
-    const siteId = await ensureSite(request, baseURL!, context.restaurant?.id ?? null)
+    const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
     expect(organizationId).toEqual(expect.any(String))
 
     const createUser = async (role: 'admin' | 'editor' | 'member') => {

@@ -85,9 +85,9 @@ test.describe('onboarding wizard UI', () => {
     await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
     await completeManualWizard(page, `Handoff Source ${suffix}`)
     const ownerContext = await (await page.request.get(`${baseURL}/api/dashboard/context`)).json() as {
-      restaurant?: { id: string }
+      site?: { id: string }
     }
-    const sourceSiteId = ownerContext.restaurant?.id
+    const sourceSiteId = ownerContext.site?.id
     expect(sourceSiteId).toBeTruthy()
 
     // Recipient needs an existing owner org to accept into (mirrors a real signup).

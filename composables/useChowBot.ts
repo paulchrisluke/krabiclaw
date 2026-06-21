@@ -29,7 +29,7 @@ export const useChowBot = () => {
   const history = useChowBotHistory()
 
   // Defer dashboard context access to avoid hydration issues
-  const dashboard = useDashboardRestaurant()
+  const dashboard = useDashboardSite()
   const siteId = computed(() => import.meta.server ? null : dashboard.siteId.value)
   const selectedLocation = computed(() => import.meta.server ? null : dashboard.selectedLocation.value)
 

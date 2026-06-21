@@ -76,12 +76,12 @@ test.describe('dashboard functional smoke', () => {
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json()
-    const siteId = context?.restaurant?.id as string | undefined
-    const hasRestaurant = Boolean(siteId)
+    const siteId = context?.site?.id as string | undefined
+    const hasSite = Boolean(siteId)
 
     const uniqueTitle = `Dashboard E2E ${Date.now()}`
 
-    if (!hasRestaurant) {
+    if (!hasSite) {
       const saveRes = await request.post(`${baseURL}/api/dashboard/editor/content/save`, {
         data: {
           page: 'home',
@@ -92,7 +92,7 @@ test.describe('dashboard functional smoke', () => {
       })
       expect(saveRes.status()).toBe(400)
       const saveBody = await saveRes.json()
-      expect(String(saveBody.error || '')).toContain('Restaurant workspace has not been created yet')
+      expect(String(saveBody.error || '')).toContain('Site workspace has not been created yet')
       return
     }
 

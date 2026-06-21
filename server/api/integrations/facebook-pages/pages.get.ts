@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const query = getQuery(event) as { siteId?: string }
-  const dashboard = query.siteId ? null : await getDashboardContext(event, { requireRestaurant: false })
+  const dashboard = query.siteId ? null : await getDashboardContext(event, { requireSite: false })
   const site = query.siteId
     ? await db.prepare(`
         SELECT s.id, s.organization_id FROM sites s
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
         WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
         LIMIT 1
       `).bind(query.siteId, session.user.id).first<{ id: string; organization_id: string }>()
-    : dashboard?.restaurant
+    : dashboard?.site
 
   if (!site) return jsonResponse({ pages: [], connected_page_id: null })
 

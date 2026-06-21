@@ -2,7 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 
 export default defineEventHandler(async (event) => {
-  const { db, organization } = await getDashboardContext(event, { requireRestaurant: false })
+  const { db, organization } = await getDashboardContext(event, { requireSite: false })
   const query = getQuery(event)
   const limit = Math.min(Number(query.limit) || 20, 50)
   const locationId = query.locationId as string | undefined

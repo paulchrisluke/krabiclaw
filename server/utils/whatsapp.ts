@@ -4,6 +4,11 @@
 
 import { logOnlyWhatsAppMessageId, shouldSendRealWhatsApp } from './whatsapp-delivery'
 
+function maskPhone(phone: string): string {
+  if (!phone || phone.length < 4) return '***';
+  return phone.slice(0, 3) + '*'.repeat(phone.length - 7) + phone.slice(-4);
+}
+
 const GRAPH_API_VERSION = 'v25.0'
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 
@@ -249,7 +254,7 @@ export async function sendWhatsAppNotification(
     await db.prepare(
       `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`
     ).bind(messageId, now, notificationId).run()
-    console.log('whatsapp_delivery_log_only', { notificationId, template: opts.template, to: normalizedPhone })
+    console.log('whatsapp_delivery_log_only', { notificationId, template: opts.template, to: maskPhone(normalizedPhone) })
     return { success: true, messageId }
   }
 
@@ -338,7 +343,7 @@ export async function sendWhatsAppOtp(
   const accessToken = env.WHATSAPP_ACCESS_TOKEN
 
   if (!shouldSendRealWhatsApp(env)) {
-    console.log('whatsapp_delivery_log_only', { kind: 'otp', to: normalizePhone(toPhone) })
+    console.log('whatsapp_delivery_log_only', { kind: 'otp', to: maskPhone(normalizePhone(toPhone)) })
     return
   }
 
@@ -379,7 +384,13 @@ export async function sendWhatsAppText(
 
   if (!shouldSendRealWhatsApp(env)) {
     const messageId = logOnlyWhatsAppMessageId('text')
-    console.log('whatsapp_delivery_log_only', { kind: 'text', to: normalizePhone(toPhone) })
+    let normalized: string
+    try {
+      normalized = normalizePhone(toPhone)
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+    console.log('whatsapp_delivery_log_only', { kind: 'text', to: maskPhone(normalized) })
     return { success: true, messageId }
   }
 
