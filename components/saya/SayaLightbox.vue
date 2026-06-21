@@ -1,5 +1,5 @@
 <template>
-  <UModal v-model:open="openModel" fullscreen :portal="false" :ui="{ content: 'bg-black overflow-hidden' }">
+  <UModal v-model:open="openModel" fullscreen :ui="{ content: 'bg-black overflow-hidden' }">
     <template #content>
       <div class="relative h-dvh w-full bg-black text-white">
         <!-- Header -->

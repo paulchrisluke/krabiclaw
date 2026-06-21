@@ -453,81 +453,14 @@ export async function getMenuWithItems(
   };
 }
 
-// Get active menu for a scope (brand or location)
-export async function getActiveMenu(
+async function loadPublishedMenuById(
   db: D1Database,
   organizationId: string,
   siteId: string,
-  locationId?: string | null,
+  menuRow: Record<string, unknown>,
   locale?: string,
-): Promise<MenuWithItems | null> {
-  // First try to get location-specific menu
-  if (locationId) {
-    const locationMenu = await db
-      .prepare(
-        `
-      SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
-             created_at, updated_at, created_by, updated_by
-      FROM menus 
-      WHERE organization_id = ? AND site_id = ? AND location_id = ? AND status = 'published'
-      LIMIT 1
-    `,
-      )
-      .bind(organizationId, siteId, locationId)
-      .first<Record<string, unknown>>();
-
-    if (locationMenu) {
-      const mappedMenu = mapMenu(locationMenu);
-      const items = await db
-        .prepare(
-          `
-        SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
-               mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
-               mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
-               mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
-        FROM menu_items mi
-        LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
-        WHERE mi.menu_id = ?
-        ORDER BY mi.sort_order, mi.name
-      `,
-        )
-        .bind(locationMenu.id)
-        .all();
-
-      const menuWithItems = {
-        ...mappedMenu,
-        items: sortMenuItems(
-          (items.results || []).map(mapMenuItem),
-          mappedMenu.section_order ?? [],
-        ),
-      };
-      return applyPublishedMenuTranslations(
-        db,
-        organizationId,
-        siteId,
-        menuWithItems,
-        locale,
-      );
-    }
-  }
-
-  // Fall back to brand/default menu
-  const brandMenu = await db
-    .prepare(
-      `
-    SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
-           created_at, updated_at, created_by, updated_by
-    FROM menus 
-    WHERE organization_id = ? AND site_id = ? AND location_id IS NULL AND status = 'published'
-    LIMIT 1
-  `,
-    )
-    .bind(organizationId, siteId)
-    .first<Record<string, unknown>>();
-
-  if (!brandMenu) return null;
-  const mappedMenu = mapMenu(brandMenu);
-
+): Promise<MenuWithItems> {
+  const mappedMenu = mapMenu(menuRow);
   const items = await db
     .prepare(
       `
@@ -541,7 +474,7 @@ export async function getActiveMenu(
     ORDER BY mi.sort_order, mi.name
   `,
     )
-    .bind(brandMenu.id)
+    .bind(menuRow.id)
     .all();
 
   const menuWithItems = {
@@ -558,6 +491,74 @@ export async function getActiveMenu(
     menuWithItems,
     locale,
   );
+}
+
+// Get active menu for a scope (brand or location)
+export async function getActiveMenu(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  locationId?: string | null,
+  locale?: string,
+): Promise<MenuWithItems | null> {
+  // First try to get location-specific menu
+  if (locationId) {
+    const locationMenu = await db
+      .prepare(
+        `
+      SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+             created_at, updated_at, created_by, updated_by
+      FROM menus
+      WHERE organization_id = ? AND site_id = ? AND location_id = ? AND status = 'published'
+      LIMIT 1
+    `,
+      )
+      .bind(organizationId, siteId, locationId)
+      .first<Record<string, unknown>>();
+
+    if (locationMenu) {
+      return loadPublishedMenuById(db, organizationId, siteId, locationMenu, locale);
+    }
+  }
+
+  // Fall back to brand/default menu (no location_id)
+  const brandMenu = await db
+    .prepare(
+      `
+    SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+           created_at, updated_at, created_by, updated_by
+    FROM menus
+    WHERE organization_id = ? AND site_id = ? AND location_id IS NULL AND status = 'published'
+    LIMIT 1
+  `,
+    )
+    .bind(organizationId, siteId)
+    .first<Record<string, unknown>>();
+
+  if (brandMenu) {
+    return loadPublishedMenuById(db, organizationId, siteId, brandMenu, locale);
+  }
+
+  // Sites with only location-scoped menus (no brand-level menu) still need a
+  // default to show on non-location pages, so fall back to the primary
+  // (or first) active location's published menu.
+  const fallbackLocationMenu = await db
+    .prepare(
+      `
+    SELECT m.id, m.organization_id, m.site_id, m.location_id, m.name, m.description, m.status, m.section_order,
+           m.created_at, m.updated_at, m.created_by, m.updated_by
+    FROM menus m
+    JOIN business_locations bl ON bl.id = m.location_id
+    WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published' AND bl.status = 'active'
+    ORDER BY bl.is_primary DESC, bl.title ASC
+    LIMIT 1
+  `,
+    )
+    .bind(organizationId, siteId)
+    .first<Record<string, unknown>>();
+
+  if (!fallbackLocationMenu) return null;
+  return loadPublishedMenuById(db, organizationId, siteId, fallbackLocationMenu, locale);
 }
 
 // Get public menu item by slug

@@ -369,7 +369,6 @@
               v-for="post in recentPosts"
               :key="post.id"
               fullscreen
-              :portal="false"
             >
               <!-- Trigger tile -->
               <article
