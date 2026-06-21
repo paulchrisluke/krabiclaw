@@ -14,7 +14,7 @@
 
           <div class="min-w-0 flex-1">
             <div v-if="title" class="truncate text-base font-semibold">{{ title }}</div>
-            <div v-if="items.length > 1" class="text-xs text-white/70">{{ indexModel + 1 }} / {{ items.length }}</div>
+            <div v-if="items.length > 1" class="text-xs text-white/70">{{ currentIndex + 1 }} / {{ items.length }}</div>
           </div>
         </div>
 
@@ -36,6 +36,7 @@
               muted
               loop
               playsinline
+              preload="metadata"
               class="h-full w-full object-cover"
             />
             <img
@@ -102,7 +103,16 @@ const items = computed(() => props.items ?? [])
 const scroller = ref<HTMLElement | null>(null)
 const videoRefs = ref<Record<number, HTMLVideoElement>>({})
 
-function setVideoRef(el: Element | ComponentPublicInstance | null, index: number) {
+const currentIndex = computed(() => {
+  if (!items.value.length) return 0
+  return Math.min(Math.max(indexModel.value, 0), items.value.length - 1)
+})
+
+watch(items, () => {
+  videoRefs.value = {}
+})
+
+function setVideoRef(el: Element | null, index: number) {
   if (el instanceof HTMLVideoElement) {
     videoRefs.value[index] = el
   }
@@ -112,7 +122,7 @@ function syncVideos() {
   for (const [key, video] of Object.entries(videoRefs.value)) {
     const i = Number(key)
 
-    if (i === indexModel.value) {
+    if (i === currentIndex.value) {
       video.play().catch(() => {})
     } else {
       video.pause()
@@ -138,7 +148,7 @@ watch(() => props.open, async (open) => {
   }
 
   scroller.value?.scrollTo({
-    top: indexModel.value * getPageHeight(),
+    top: currentIndex.value * getPageHeight(),
     behavior: 'auto'
   })
 
@@ -158,11 +168,11 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') openModel.value = false
   if (e.key === 'ArrowDown' && indexModel.value < items.value.length - 1) {
     indexModel.value++
-    scroller.value?.scrollTo({ top: indexModel.value * getPageHeight(), behavior: 'smooth' })
+    scroller.value?.scrollTo({ top: currentIndex.value * getPageHeight(), behavior: 'smooth' })
   }
   if (e.key === 'ArrowUp' && indexModel.value > 0) {
     indexModel.value--
-    scroller.value?.scrollTo({ top: indexModel.value * getPageHeight(), behavior: 'smooth' })
+    scroller.value?.scrollTo({ top: currentIndex.value * getPageHeight(), behavior: 'smooth' })
   }
 }
 onMounted(() => window.addEventListener('keydown', onKeydown))
