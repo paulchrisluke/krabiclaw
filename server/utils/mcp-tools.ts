@@ -744,7 +744,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         site_id: { type: 'string' },
         location_id: { type: 'string' },
       },
-      oneOf: [
+      anyOf: [
         { required: ['organization_id'] },
         { required: ['site_id'] },
         { required: ['location_id'] },

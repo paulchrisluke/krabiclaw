@@ -997,13 +997,16 @@ export async function executeMcpToolCall(
           requireLocation: Boolean(locationId),
         },
       );
+      if (!workspace.organization && !workspace.site && !workspace.location) {
+        throw new Error("Workspace context is empty. At least one of organization, site, or location must be resolved.");
+      }
     } catch (error) {
       rethrowWorkspaceError(error);
     }
 
     await upsertMcpWorkspacePreference(user.db, {
       userId: user.userId,
-      organizationId: workspace.site?.organization_id ?? null,
+      organizationId: workspace.site?.organization_id ?? workspace.organization?.id ?? null,
       siteId: workspace.site?.id ?? null,
       locationId: locationId ? workspace.location?.id ?? null : workspace.location?.id ?? null,
     });

@@ -50,7 +50,7 @@ async function main() {
     INSERT INTO canary_runs (id, run_type, environment, status, organization_id, site_id, details_json, created_at)
     VALUES (
       'canary-status-${sqlEscape(crypto.randomUUID())}',
-      'provider_status',
+      'notifications',
       'production',
       '${sqlEscape(status)}',
       '${sqlEscape(orgId)}',

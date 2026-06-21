@@ -154,18 +154,22 @@ export async function resolveMcpWorkspace(
   const preferredSiteId = normalizeId(preference?.site_id)
   const scopedSites = requestedOrganizationId
     ? sites.filter((entry) => entry.organization_id === requestedOrganizationId)
-    : preferredOrganizationId
-      ? sites.filter((entry) => entry.organization_id === preferredOrganizationId)
-      : sites
+    : requestedSiteId
+      ? sites
+      : preferredOrganizationId
+        ? sites.filter((entry) => entry.organization_id === preferredOrganizationId)
+        : sites
   let site = requestedSiteId
     ? scopedSites.find((entry) => entry.id === requestedSiteId) ?? null
     : null
 
-  if (!site && preferredSiteId) {
-    site = scopedSites.find((entry) => entry.id === preferredSiteId) ?? null
-  }
-  if (!site && scopedSites.length === 1) {
-    site = scopedSites[0] ?? null
+  if (!requestedSiteId) {
+    if (!site && preferredSiteId) {
+      site = scopedSites.find((entry) => entry.id === preferredSiteId) ?? null
+    }
+    if (!site && scopedSites.length === 1) {
+      site = scopedSites[0] ?? null
+    }
   }
   const organization = site
     ? organizations.find((entry) => entry.id === site.organization_id) ?? null
@@ -195,14 +199,16 @@ export async function resolveMcpWorkspace(
     ? locations.find((entry) => entry.id === requestedLocationId) ?? null
     : null
 
-  if (!location && preferredLocationId) {
-    location = locations.find((entry) => entry.id === preferredLocationId) ?? null
-  }
-  if (!location && site?.primary_location_id) {
-    location = locations.find((entry) => entry.id === site.primary_location_id) ?? null
-  }
-  if (!location && locations.length === 1) {
-    location = locations[0] ?? null
+  if (!requestedLocationId) {
+    if (!location && preferredLocationId) {
+      location = locations.find((entry) => entry.id === preferredLocationId) ?? null
+    }
+    if (!location && site?.primary_location_id) {
+      location = locations.find((entry) => entry.id === site.primary_location_id) ?? null
+    }
+    if (!location && locations.length === 1) {
+      location = locations[0] ?? null
+    }
   }
 
   if (options.requireLocation && !location) {

@@ -153,7 +153,7 @@ async function main() {
   expectStatus('get_workspace_context succeeds', getWorkspace)
   const workspaceData = resultData(getWorkspace.body)
   expectValue('get_workspace_context returns active site', workspaceData?.context?.site_id === siteId, workspaceData)
-  expectValue('get_workspace_context marks one active site', Array.isArray(workspaceData?.sites) && workspaceData.sites.some(site => site?.id === siteId && site?.active === true), workspaceData)
+  expectValue('get_workspace_context marks one active site', Array.isArray(workspaceData?.sites) && workspaceData.sites.filter(site => site?.active === true).length === 1 && workspaceData.sites.find(site => site?.active === true)?.id === siteId, workspaceData)
 
   const draftTitle = `MCP edit check ${Date.now()}`
   const save = await mcp(headers, 'update_page_content', {

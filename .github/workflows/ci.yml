@@ -253,7 +253,7 @@ jobs:
     # per run, which adds up fast at merge frequency. Real-send coverage still runs daily
     # via prod-daily-canary. Re-enable (if: github.event_name == 'push' && github.ref == 'refs/heads/main')
     # once merge cadence slows.
-    if: false
+    if: vars.ENABLE_REAL_SEND_TESTS == 'true'
     runs-on: ubuntu-latest
     needs: [prod-smoke]
     steps:
@@ -291,7 +291,7 @@ jobs:
     # WhatsApp message per run. Real-send coverage still runs daily via prod-daily-canary.
     # Re-enable (if: github.event_name == 'push' && github.ref == 'refs/heads/main')
     # once merge cadence slows.
-    if: false
+    if: vars.ENABLE_REAL_SEND_TESTS == 'true'
     runs-on: ubuntu-latest
     needs: [prod-auth-canary]
     steps:

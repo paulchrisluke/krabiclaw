@@ -15,14 +15,14 @@
         <!-- Desktop nav -->
         <nav class="hidden items-center gap-1 lg:flex" :aria-label="$t('saya.header.nav_aria')">
           <NuxtLink
-            v-if="locations.length === 1 && hasMenu"
+            v-if="hasMenu"
             to="/menu"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
             {{ $t('saya.header.menu') }}
           </NuxtLink>
 
-          <UDropdownMenu v-else-if="locations.length > 1" :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
+          <UDropdownMenu v-if="locations.length > 1" :items="locationDropdownItems" :ui="{ content: 'saya-theme min-w-64' }">
             <button class="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default">
               {{ $t('saya.header.locations') }}
               <UIcon name="i-heroicons-chevron-down" class="size-3 opacity-60" />
@@ -77,14 +77,14 @@
       >
         <nav class="grid gap-1" :aria-label="$t('saya.header.mobile_nav_aria')">
           <NuxtLink
-            v-if="locations.length === 1 && hasMenu"
+            v-if="hasMenu"
             to="/menu"
             class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted"
             @click="mobileMenuOpen = false"
           >
             {{ $t('saya.header.menu') }}
           </NuxtLink>
-          <template v-else-if="locations.length > 1">
+          <template v-if="locations.length > 1">
             <div class="pb-2 pt-1">
               <p class="px-4 text-xs font-medium uppercase tracking-widest text-muted">{{ $t('saya.header.locations') }}</p>
             </div>

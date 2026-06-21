@@ -78,21 +78,27 @@ test.describe("mcp tools", () => {
       });
       expect(res.status()).toBe(200);
       return res.json() as Promise<{
-        result: { post_id?: string; deleted?: boolean };
+        result: { post_id?: string; deleted?: boolean; context?: unknown };
       }>;
     };
 
     const ownerPostId = await createDraftPost(`Owner MCP delete ${Date.now()}`);
     const ownerDelete = await execDeletePostTool(ownerUserId!, ownerPostId);
-    expect(ownerDelete.result).toEqual({ post_id: ownerPostId, deleted: true });
+    expect(ownerDelete.result).toEqual(
+      expect.objectContaining({ post_id: ownerPostId, deleted: true }),
+    );
 
     const adminPostId = await createDraftPost(`Admin MCP delete ${Date.now()}`);
     const adminDelete = await execDeletePostTool(admin.id, adminPostId);
-    expect(adminDelete.result).toEqual({ post_id: adminPostId, deleted: true });
+    expect(adminDelete.result).toEqual(
+      expect.objectContaining({ post_id: adminPostId, deleted: true }),
+    );
 
     const editorPostId = await createDraftPost(`Editor MCP delete ${Date.now()}`);
     const editorDelete = await execDeletePostTool(editor.id, editorPostId);
-    expect(editorDelete.result).toEqual({ post_id: editorPostId, deleted: true });
+    expect(editorDelete.result).toEqual(
+      expect.objectContaining({ post_id: editorPostId, deleted: true }),
+    );
   });
 
   test("update_site_settings rollback preserves original brand and subdomain through MCP tool path", async ({
