@@ -1734,11 +1734,14 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'list_posts',
-    description: 'List posts.',
+    description: 'List posts. Pass location_id to see only posts scoped to one location; omit to see all posts site-wide (including site-wide ones with no location).',
     domain: 'posts',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { status: { type: 'string' } },
+    inputSchema: {
+      status: { type: 'string' },
+      location_id: { type: 'string', description: 'Filter to posts restricted to this location.' },
+    },
     outputSchema: {
       type: 'object',
       properties: { posts: { type: 'array', items: postObject } },

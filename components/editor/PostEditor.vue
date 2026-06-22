@@ -33,6 +33,15 @@
           <UInput v-model="title" :placeholder="titlePlaceholder" size="lg" />
         </UFormField>
 
+        <UFormField v-if="locationOptions.length > 0" label="Location">
+          <USelect
+            v-model="locationId"
+            :items="[{ value: '', label: 'All locations (site-wide)' }, ...locationOptions]"
+            value-key="value"
+            label-key="label"
+          />
+        </UFormField>
+
         <div v-if="showExcerpt || showCategory" class="grid gap-4 sm:grid-cols-2">
           <UFormField v-if="showExcerpt" label="Excerpt">
             <UTextarea v-model="excerpt" :rows="3" placeholder="One or two sentences that summarize the post." />
@@ -150,6 +159,12 @@ const imageAssetId = defineModel<string | null>('imageAssetId', { default: null 
 const imagePreviewUrl = defineModel<string | null>('imagePreviewUrl', { default: null })
 const imageKind = defineModel<string | null>('imageKind', { default: 'image' })
 const selectedChannels = defineModel<string[]>('selectedChannels', { default: [] })
+const locationId = defineModel<string>('locationId', { default: '' })
+
+interface LocationOption {
+  value: string
+  label: string
+}
 
 const props = withDefaults(defineProps<{
   eyebrow: string
@@ -158,6 +173,7 @@ const props = withDefaults(defineProps<{
   siteId?: string
   categories?: string[]
   channelOptions?: ChannelOption[]
+  locationOptions?: LocationOption[]
   showExcerpt?: boolean
   showCategory?: boolean
   showImage?: boolean
@@ -183,6 +199,7 @@ const props = withDefaults(defineProps<{
   siteId: '',
   categories: () => [],
   channelOptions: () => [],
+  locationOptions: () => [],
   showExcerpt: false,
   showCategory: false,
   showImage: false,

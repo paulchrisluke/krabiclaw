@@ -28,7 +28,7 @@
 <script setup lang="ts">
 const props = defineProps<{
   locationSlug: string
-  active: 'overview' | 'menu' | 'reviews' | 'photos' | 'qa' | 'contact'
+  active: 'overview' | 'menu' | 'posts' | 'reviews' | 'photos' | 'qa' | 'contact'
 }>()
 
 const { menu } = useBootstrap()
@@ -47,6 +47,7 @@ const items = computed(() => {
     list.push({ key: 'menu', label: t('saya.subnav.menu'), href: `/locations/${props.locationSlug}/menu` })
   }
   list.push(
+    { key: 'posts',    label: t('saya.subnav.posts'),   href: `/locations/${props.locationSlug}/posts` },
     { key: 'reviews',  label: t('saya.subnav.reviews'), href: `/locations/${props.locationSlug}/reviews` },
     { key: 'photos',   label: t('saya.subnav.photos'),  href: `/locations/${props.locationSlug}/photos` },
     { key: 'qa',       label: t('saya.subnav.qa'),      href: `/locations/${props.locationSlug}/qa` },

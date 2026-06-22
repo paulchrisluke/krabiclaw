@@ -188,10 +188,7 @@ useUpgradeModal()
 // Shared bootstrap — same key as page component + footer → single SSR request
 const { locations: bootstrapLocations, hasExperiences, menu } = useBootstrap()
 
-const hasMenu = computed(() => {
-  const m = menu.value as { items?: unknown[] } | null
-  return !!(m && m.items && m.items.length > 0)
-})
+const hasMenu = computed(() => (menu.value?.items?.length ?? 0) > 0)
 
 
 const locations = computed(() => bootstrapLocations.value)

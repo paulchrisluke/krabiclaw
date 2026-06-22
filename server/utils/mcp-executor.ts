@@ -2072,6 +2072,7 @@ export async function executeMcpToolCall(
           site.organizationId,
           site.siteId,
           optionalString(args, "status") ?? undefined,
+          optionalString(args, "location_id") ?? undefined,
         ),
       };
     case "get_post":

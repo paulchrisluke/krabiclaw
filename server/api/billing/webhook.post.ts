@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { verifyStripeWebhook, setSiteEntitlementsFromPlan, getPlanFromStripePrice, applySiteSubscription } from '../../utils/billing'
 import { completePaidSiteTransfer, deleteSiteCustomDomains } from '../../utils/site-transfer'
-import Stripe from 'stripe'
+import type Stripe from 'stripe'
 import { getHeader } from 'h3'
 
 interface ExpandedCheckoutSubscription {
@@ -62,9 +62,16 @@ export default defineEventHandler(async (event) => {
   const e2eAuthorized = e2eOverride && expectedDevSecret && providedDevSecret && timingSafeEqualText(providedDevSecret, expectedDevSecret)
 
   const rawBody = body.toString()
-  const verifiedSignature = verifyStripeWebhook(env, rawBody, signature)
-  if (!verifiedSignature && !e2eAuthorized) {
-    console.warn('Stripe webhook rejected: invalid signature')
+  const verification = await verifyStripeWebhook(env, rawBody, signature)
+  if (!verification.ok && !e2eAuthorized) {
+    const configuredSecretSuffix = env.STRIPE_WEBHOOK_SECRET.slice(-6)
+    const signatureParts = signature.split(',').map(part => part.trim())
+    console.warn('Stripe webhook rejected: invalid signature', {
+      configuredSecretSuffix,
+      signatureParts,
+      verificationError: verification.error,
+      bodyLength: rawBody.length,
+    })
     return jsonResponse({ error: 'Invalid webhook signature' }, { status: 401 })
   }
 
@@ -72,9 +79,8 @@ export default defineEventHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   try {
-    const stripe = new Stripe(env.STRIPE_SECRET_KEY)
-    const webhookEvent = verifiedSignature
-      ? stripe.webhooks.constructEvent(rawBody, signature, env.STRIPE_WEBHOOK_SECRET)
+    const webhookEvent = verification.ok
+      ? verification.event
       : JSON.parse(rawBody) as Stripe.Event
 
     const existingEvent = await db.prepare(`SELECT id FROM stripe_webhook_events WHERE stripe_event_id = ? LIMIT 1`)

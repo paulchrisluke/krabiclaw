@@ -5,6 +5,19 @@
       <h1 class="saya-display-md text-default">
         <em class="saya-italic">{{ postsCopy.postsEyebrow }}</em>
       </h1>
+
+      <!-- Multi-location pills -->
+      <div v-if="locations.length > 1" class="mt-8 flex flex-wrap gap-3">
+        <NuxtLink
+          v-for="loc in locations"
+          :key="loc.id"
+          :to="`/locations/${loc.slug}/posts`"
+          class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
+        >
+          <UIcon name="i-heroicons-map-pin" class="size-3.5 opacity-70" />
+          {{ loc.title }}
+        </NuxtLink>
+      </div>
     </header>
 
     <!-- Post grid -->
@@ -44,7 +57,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const { locale } = useI18n()
 const postsCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
-const { googleBusiness } = useBootstrap()
+const { googleBusiness, locations } = useBootstrap()
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
 const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
 

@@ -51,7 +51,19 @@
                   @click="activeTab = tab; loadPosts()"
                 >{{ tab }}</button>
               </div>
-              <UButton v-if="loading" size="xs" color="neutral" variant="ghost" loading />
+              <div class="flex items-center gap-2">
+                <USelect
+                  v-if="locations.length > 1"
+                  v-model="selectedLocationId"
+                  :items="locationFilterItems"
+                  value-key="value"
+                  label-key="label"
+                  size="xs"
+                  class="w-44"
+                  @update:model-value="loadPosts"
+                />
+                <UButton v-if="loading" size="xs" color="neutral" variant="ghost" loading />
+              </div>
             </div>
 
             <!-- Empty state -->
@@ -89,7 +101,10 @@
             </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium text-highlighted">{{ post.title || post.body?.slice(0, 60) }}</p>
-                <p class="truncate text-xs text-muted">{{ formatDate(post.updated_at) }}</p>
+                <div class="flex items-center gap-2">
+                  <p class="truncate text-xs text-muted">{{ formatDate(post.updated_at) }}</p>
+                  <UBadge v-if="locations.length > 1" color="neutral" variant="subtle" size="xs">{{ locationTitle(post.location_id) }}</UBadge>
+                </div>
               </div>
               <UBadge :color="post.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs" class="shrink-0">{{ post.status }}</UBadge>
             </div>
@@ -105,10 +120,12 @@
             v-model:image-preview-url="editForm.imagePreviewUrl"
             v-model:image-kind="editForm.imageKind"
             v-model:selected-channels="selectedChannels"
+            v-model:location-id="editForm.location_id"
             :eyebrow="composing ? 'New post' : 'Site post'"
             :status-text="String(selectedPost?.status ?? '')"
             :site-id="siteId"
             :channel-options="channelOptions"
+            :location-options="locationItemsWithoutAll"
             :show-image="true"
             :show-channels="true"
             :show-preview="true"
@@ -146,18 +163,47 @@ const _headerLinks = computed(() => buildHeaderLinks([
   { label: 'New post', icon: 'i-heroicons-plus', color: 'primary' as const, onClick: openCompose }
 ]))
 
+interface LocationRow {
+  id: string
+  title: string
+}
+
 // Posts list
 const posts = ref<ApiRecord[]>([])
+const locations = ref<LocationRow[]>([])
 const loading = ref(false)
 const activeTab = ref('all')
+const selectedLocationId = ref('all')
+
+const locationFilterItems = computed(() => [
+  { value: 'all', label: 'All locations' },
+  ...locations.value.map(location => ({ value: location.id, label: location.title }))
+])
+const locationItemsWithoutAll = computed(() => locations.value.map(location => ({ value: location.id, label: location.title })))
+
+function locationTitle(locationId: string | null) {
+  if (!locationId) return 'All locations'
+  return locations.value.find(l => l.id === locationId)?.title ?? 'Unknown location'
+}
 
 const loadPosts = async () => {
   loading.value = true
   try {
-    const status = activeTab.value === 'all' ? undefined : activeTab.value
-    const res = await $fetch<{ posts: ApiRecord[] }>(`/api/dashboard/editor/posts${status ? `?status=${status}` : ''}`)
+    const query: Record<string, string> = {}
+    if (activeTab.value !== 'all') query.status = activeTab.value
+    if (selectedLocationId.value !== 'all') query.location_id = selectedLocationId.value
+    const res = await $fetch<{ posts: ApiRecord[] }>(`/api/dashboard/editor/posts`, { query })
     posts.value = res.posts ?? []
   } catch { toast.add({ description: 'Failed to load posts', color: 'error' }) } finally { loading.value = false }
+}
+
+async function loadLocations() {
+  try {
+    const res = await $fetch<{ locations: LocationRow[] }>(`/api/dashboard/locations`)
+    locations.value = res.locations ?? []
+  } catch {
+    locations.value = []
+  }
 }
 
 async function loadSitePublicUrl() {
@@ -179,13 +225,13 @@ async function loadFacebookConnection() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadPosts(), loadSitePublicUrl(), loadFacebookConnection()])
+  await Promise.all([loadPosts(), loadLocations(), loadSitePublicUrl(), loadFacebookConnection()])
 })
 
 // Selection / compose
 const selectedPost = ref<ApiRecord | null>(null)
 const composing = ref(false)
-const editForm = reactive({ title: '', body: '', image_asset_id: '' as string | null, imagePreviewUrl: '' as string | null, imageKind: 'image' as string | null })
+const editForm = reactive({ title: '', body: '', image_asset_id: '' as string | null, imagePreviewUrl: '' as string | null, imageKind: 'image' as string | null, location_id: '' })
 const selectedChannels = ref<string[]>(['site'])
 
 const facebookConnected = ref(false)
@@ -205,6 +251,7 @@ const openCompose = () => {
   editForm.image_asset_id = null
   editForm.imagePreviewUrl = null
   editForm.imageKind = 'image'
+  editForm.location_id = selectedLocationId.value !== 'all' ? selectedLocationId.value : ''
   selectedChannels.value = ['site']
 }
 
@@ -216,6 +263,7 @@ const closeEditor = () => {
   editForm.image_asset_id = null
   editForm.imagePreviewUrl = null
   editForm.imageKind = 'image'
+  editForm.location_id = ''
   selectedChannels.value = []
 }
 
@@ -227,6 +275,7 @@ const selectPost = (post: ApiRecord) => {
   editForm.image_asset_id = post.image_asset_id ?? null
   editForm.imagePreviewUrl = post.public_url ?? null
   editForm.imageKind = post.kind ?? 'image'
+  editForm.location_id = post.location_id ?? ''
   selectedChannels.value = ['site']
 }
 
@@ -240,12 +289,12 @@ const handleSave = async () => {
   try {
     if (selectedPost.value) {
       const res = await $fetch<ApiRecord>(`/api/dashboard/editor/posts/${selectedPost.value.id}`, {
-        method: 'PATCH', body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id },
+        method: 'PATCH', body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id, location_id: editForm.location_id || null },
       })
       selectedPost.value = res.post
     } else {
       const res = await $fetch<ApiRecord>(`/api/dashboard/editor/posts`, {
-        method: 'POST', body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id },
+        method: 'POST', body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id, location_id: editForm.location_id || undefined },
       })
       selectedPost.value = res.post
       composing.value = false
@@ -262,10 +311,10 @@ const handlePublish = async () => {
   try {
     // Save any edits first
     let postId = selectedPost.value?.id
-    if (!postId || editForm.body !== selectedPost.value?.body || editForm.title !== (selectedPost.value?.title ?? '') || editForm.image_asset_id !== selectedPost.value?.image_asset_id) {
+    if (!postId || editForm.body !== selectedPost.value?.body || editForm.title !== (selectedPost.value?.title ?? '') || editForm.image_asset_id !== selectedPost.value?.image_asset_id || editForm.location_id !== (selectedPost.value?.location_id ?? '')) {
       const method = postId ? 'PATCH' : 'POST'
       const url = postId ? `/api/dashboard/editor/posts/${postId}` : `/api/dashboard/editor/posts`
-      const res = await $fetch<ApiRecord>(url, { method, body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id } })
+      const res = await $fetch<ApiRecord>(url, { method, body: { title: editForm.title, body: editForm.body, image_asset_id: editForm.image_asset_id, location_id: editForm.location_id || (postId ? null : undefined) } })
       postId = res.post.id
       selectedPost.value = res.post
     }
