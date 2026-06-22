@@ -27,7 +27,7 @@ useSeoMeta({
 
 // Google Analytics for krabiclaw.com platform
 useHead(() => {
-  if (!isPlatform.value) return {}
+  if (!isPlatform) return {}
 
   return {
     script: [
