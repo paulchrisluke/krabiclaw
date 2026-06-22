@@ -24,10 +24,12 @@ export default defineEventHandler(async (event) => {
   const siteId = body.siteId
   const plan = body.plan
   const interval = body.interval ?? 'month'
+  const txId = typeof body.txId === 'string' ? body.txId.trim() : ''
   if (!siteId) return jsonResponse({ error: 'siteId is required' }, { status: 400 })
   if (!plan || !ALLOWED_PLANS.includes(plan)) {
     return jsonResponse({ error: `Invalid plan. Allowed values are ${ALLOWED_PLANS.join(', ')}` }, { status: 400 })
   }
+  if (!txId) return jsonResponse({ error: 'txId is required' }, { status: 400 })
 
   const site = await db.prepare(`SELECT id, organization_id FROM sites WHERE id = ? LIMIT 1`)
     .bind(siteId).first<{ id: string; organization_id: string }>()
@@ -82,7 +84,7 @@ export default defineEventHandler(async (event) => {
       default_payment_method: pmId,
       payment_behavior: 'error_if_incomplete',
       metadata: { organization_id: orgId, site_id: siteId, plan },
-    }, { idempotencyKey: body.txId })
+    }, { idempotencyKey: txId })
   } catch (err) {
     const stripeErr = err as { code?: string }
     if (stripeErr.code === 'authentication_required' || stripeErr.code === 'card_declined') {

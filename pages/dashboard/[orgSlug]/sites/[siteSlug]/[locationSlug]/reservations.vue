@@ -21,7 +21,7 @@
         <USkeleton v-for="i in 5" :key="i" class="h-24 rounded-lg" />
       </div>
 
-      <UCard v-else-if="reservations.length === 0" :ui="{ root: 'border-dashed', body: 'px-6 py-12 text-center' }">
+      <UCard v-else-if="reservations.length === 0" class="border-dashed" :ui="{ body: 'px-6 py-12 text-center' }">
         <UIcon name="i-heroicons-calendar-days" class="mx-auto size-9 text-muted" />
         <p class="mt-3 text-sm font-medium text-highlighted">No reservation requests yet</p>
       </UCard>

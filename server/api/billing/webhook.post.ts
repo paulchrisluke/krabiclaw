@@ -8,6 +8,7 @@ interface ExpandedCheckoutSubscription {
   id?: string
   items?: { data?: Array<{ id?: string }> }
   billing_cycle_anchor?: number
+  current_period_end?: number
 }
 
 interface SubscriptionTimingFields {
@@ -114,6 +115,13 @@ function checkoutSubscriptionId(session: Stripe.Checkout.Session): string {
   return expanded?.id ?? (typeof session.subscription === 'string' ? session.subscription : '')
 }
 
+function checkoutSubscriptionPeriodEnd(session: Stripe.Checkout.Session): string | null {
+  const expanded = expandedSub(session)
+  return expanded?.current_period_end
+    ? new Date(expanded.current_period_end * 1000).toISOString()
+    : null
+}
+
 // Resolve site_id from subscription metadata; fall back to customer→org→site for old subscriptions
 async function resolveSiteFromSubscription(
   db: D1Database,
@@ -186,7 +194,7 @@ async function handleCheckoutCompleted(
     // the site actually belongs to that org, otherwise it silently no-ops and
     // sites.plan (read by the transfer onboarding wizard) never updates.
     await completePaidSiteTransfer(env, db, transferId)
-    await applySiteSubscription(db, resolvedSiteId, organizationId, customerId, subscriptionId, expanded?.items?.data?.[0]?.id ?? null, plan, expanded?.billing_cycle_anchor ? new Date(expanded.billing_cycle_anchor * 1000).toISOString() : null)
+    await applySiteSubscription(db, resolvedSiteId, organizationId, customerId, subscriptionId, expanded?.items?.data?.[0]?.id ?? null, plan, checkoutSubscriptionPeriodEnd(session))
     return
   }
 
@@ -203,7 +211,7 @@ async function handleCheckoutCompleted(
 
   const customerId = session.customer as string
   const expanded = expandedSub(session)
-  await applySiteSubscription(db, resolvedSiteId, organizationId, customerId, subscriptionId, expanded?.items?.data?.[0]?.id ?? null, plan, expanded?.billing_cycle_anchor ? new Date(expanded.billing_cycle_anchor * 1000).toISOString() : null)
+  await applySiteSubscription(db, resolvedSiteId, organizationId, customerId, subscriptionId, expanded?.items?.data?.[0]?.id ?? null, plan, checkoutSubscriptionPeriodEnd(session))
   console.log(`Checkout completed for site ${resolvedSiteId}, plan ${plan}`)
 }
 

@@ -19,6 +19,7 @@ export interface ChowbotMessage {
 
 export const useChowBot = () => {
   const isOpen = useState<boolean>('chowbot:open', () => false)
+  const draftMessage = useState<string | null>('chowbot:draftMessage', () => null)
   const messages = useState<ChowbotMessage[]>('chowbot:messages', () => [])
   const isLoading = useState<boolean>('chowbot:loading', () => false)
   const conversationId = useState<string | null>('chowbot:convId', () => null)
@@ -49,6 +50,7 @@ export const useChowBot = () => {
   const toggle = () => { isOpen.value = !isOpen.value }
   const open = () => { isOpen.value = true }
   const close = () => { isOpen.value = false }
+  const setDraftMessage = (text: string) => { draftMessage.value = text }
 
   const clearMessages = () => {
     messages.value = []
@@ -250,7 +252,7 @@ export const useChowBot = () => {
   }
 
   return {
-    isOpen, messages, isLoading, siteId, conversationId, currentPageOverride,
-    toggle, open, close, sendMessage, clearMessages, startNewConversation, loadConversation,
+    isOpen, messages, isLoading, siteId, conversationId, currentPageOverride, draftMessage,
+    toggle, open, close, sendMessage, clearMessages, startNewConversation, loadConversation, setDraftMessage,
   }
 }

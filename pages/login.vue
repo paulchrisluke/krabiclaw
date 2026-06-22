@@ -54,7 +54,7 @@
                 <UInput v-model="emailForm.email" type="email" placeholder="you@example.com" size="lg" class="w-full" :disabled="loading" autocomplete="email" />
               </UFormField>
               <UFormField label="Password">
-                <UInput v-model="emailForm.password" type="password" placeholder="••••••••" size="lg" class="w-full" :disabled="loading" autocomplete="current-password" @keydown.enter="handleEmailSignIn" />
+                <UInput v-model="emailForm.password" type="password" placeholder="••••••••" size="lg" class="w-full" :disabled="loading" autocomplete="current-password" />
               </UFormField>
               <div class="flex items-center justify-between gap-3 text-sm">
                 <NuxtLink to="/forgot-password" class="text-primary font-medium hover:underline no-underline">
@@ -175,7 +175,7 @@ const handleEmailSignIn = async () => {
     const result = await authClient.signIn.email({
       email,
       password,
-      rememberMe: true,
+      rememberMe: false,
     })
 
     if (result?.error) {

@@ -15,8 +15,8 @@ definePageMeta({ layout: 'saya' })
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { googleBusiness } = useBootstrap()
-const googleQA = computed(() => googleBusiness.value?.qa || [])
+const { googleBusiness, qaList } = useBootstrap()
+const googleQA = computed(() => qaList.value || [])
 const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
 
 const currentPageUrl = useSeoUrl('/qa')

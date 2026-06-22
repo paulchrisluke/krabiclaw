@@ -233,7 +233,7 @@ const props = defineProps<{ embedded?: boolean; setupMode?: boolean }>()
 const setupMode = computed(() => Boolean(props.setupMode))
 
 const dashboard = useDashboardSite()
-const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, currentPageOverride } = useChowBot()
+const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, currentPageOverride, draftMessage } = useChowBot()
 const orgSettings = useOrgSettings()
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
@@ -253,6 +253,12 @@ async function purchaseCredits(bundle: 500 | 2500 | 5000) {
 }
 
 const input = ref('')
+
+watch(draftMessage, (text: string | null) => {
+  if (!text) return
+  input.value = text
+  draftMessage.value = null
+})
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const pendingFile = ref<File | null>(null)
 const pendingText = ref<{ name: string; content: string } | null>(null)

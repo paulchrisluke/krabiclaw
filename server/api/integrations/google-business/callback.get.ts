@@ -49,8 +49,14 @@ export default defineEventHandler(async (event) => {
     if (!organization?.slug) return `/dashboard?gb=${status}`
     const encodedOrgSlug = encodeURIComponent(organization.slug)
 
-    const site = await db.prepare(`SELECT subdomain FROM sites WHERE id = ? LIMIT 1`)
-      .bind(siteId).first<{ subdomain: string | null }>()
+    let site: { subdomain: string | null } | null = null
+    try {
+      site = await db.prepare(`SELECT subdomain FROM sites WHERE id = ? LIMIT 1`)
+        .bind(siteId).first<{ subdomain: string | null }>()
+    } catch (e) {
+      console.error('Google Business redirect site query failed:', e)
+      return `/dashboard/${encodedOrgSlug}?gb=${status}`
+    }
     if (!site?.subdomain) return `/dashboard/${encodedOrgSlug}?gb=${status}`
     const siteBase = `/dashboard/${encodedOrgSlug}/sites/${encodeURIComponent(site.subdomain)}`
     if (!locationId) return `${siteBase}?gb=${status}`

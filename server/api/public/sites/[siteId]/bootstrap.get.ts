@@ -144,7 +144,11 @@ export default defineEventHandler(async (event) => {
   const needsGlobalPosts = page === "home" || page === "posts";
   // Pages that display location hero images (cards or detail header)
   const needsLocationHeroMedia =
-    !page || page === "home" || page === "locations" || !!locationSlug;
+    !page ||
+    page === "home" ||
+    page === "locations" ||
+    page === "photos" ||
+    !!locationSlug;
 
   // Build batch — one subrequest to D1 for all inline queries
   const batchStmts: D1PreparedStatement[] = [];

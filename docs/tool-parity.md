@@ -9,7 +9,7 @@ Tracks which tools exist across surfaces and where gaps are. Update this when ad
 
 ---
 
-## ✅ Exact name match — true parity (74 tools)
+## ✅ Exact name match — true parity (75 tools)
 
 | Tool |
 |------|
@@ -64,16 +64,17 @@ Tracks which tools exist across surfaces and where gaps are. Update this when ad
 | `reply_to_review` |
 | `run_translation_job_batch` |
 | `save_translation_review_item` |
+| `set_about_story_image` |
 | `set_experience_image` |
 | `set_experience_video` |
 | `set_home_hero_image` |
 | `set_home_hero_video` |
+| `set_home_story_image` |
 | `set_location_hero_image` |
 | `set_location_hero_video` |
 | `set_logo` |
 | `set_menu_item_image` |
 | `set_post_image` |
-| `set_story_image` |
 | `start_translation_job` |
 | `update_experience` |
 | `update_experience_booking` |

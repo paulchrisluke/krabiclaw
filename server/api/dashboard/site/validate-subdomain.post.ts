@@ -54,6 +54,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return jsonResponse({
+      available: false,
+      message: 'Subdomain is required'
+    }, { status: 400 })
+  }
   const { subdomain } = body
 
   if (!subdomain || typeof subdomain !== 'string') {

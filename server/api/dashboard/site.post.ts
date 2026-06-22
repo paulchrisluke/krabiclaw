@@ -7,8 +7,18 @@ import { defineEventHandler, readBody } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<Record<string, unknown>>(event)
-  const name = (body?.name as string | undefined)?.trim()
-  const subdomain = (body?.subdomain as string | undefined)?.trim()
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  const rawName = body.name
+  const rawSubdomain = body.subdomain
+  if (typeof rawName !== 'string' || typeof rawSubdomain !== 'string') {
+    return jsonResponse({ error: 'name and subdomain must be strings' }, { status: 400 })
+  }
+
+  const name = rawName.trim()
+  const subdomain = rawSubdomain.trim()
   const vertical = body?.vertical as string | undefined
 
   if (!name || !subdomain) {

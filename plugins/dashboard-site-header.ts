@@ -18,5 +18,9 @@ export default defineNuxtPlugin(() => {
       options.headers = headers
     },
   })
-  globalThis.$fetch = dashboardFetch as typeof globalThis.$fetch
+  return {
+    provide: {
+      $fetch: dashboardFetch,
+    },
+  }
 })

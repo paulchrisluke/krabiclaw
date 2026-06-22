@@ -1,5 +1,5 @@
 <template>
-  <NuxtLayout name="saya">
+  <div>
     <div v-if="!isPlatform">
       <!-- No order links configured — redirect feel -->
       <div v-if="!hasOrderLinks" class="flex min-h-96 flex-col items-center justify-center gap-6 px-4 py-24 text-center">
@@ -70,11 +70,11 @@
         </section>
       </template>
     </div>
-  </NuxtLayout>
+  </div>
 </template>
 
 <script setup>
-definePageMeta({ layout: false })
+definePageMeta({ layout: 'saya' })
 
 const { isPlatform, site } = useTenantSite()
 const { locale } = useI18n()
@@ -100,7 +100,7 @@ const requestURL = useRequestURL()
 
 useSeoMeta({
   title: computed(() => `Order Online | ${site?.brand_name || 'Our Site'}`),
-  description: computed(() => orderCopy.value.seoReservationDescription(site?.brand_name || 'Our Site')),
+  description: computed(() => orderCopy.value.seoOrderDescription(site?.brand_name || 'Our Site')),
   ogImage: sharedOgImage,
   ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
 })

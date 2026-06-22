@@ -95,7 +95,11 @@ type VerticalCopy = {
   reservationPoliciesHeading: string
   callButtonLabel: string
   contactFormButtonLabel: string
+  locationLabel: string
+  selectLocationLabel: string
+  chooseLocationLabel: string
   oneGuestLabel: string
+  seoOrderDescription: (_name: string) => string
   thankYouLabel: (_name: string) => string
   confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) => string
   confirmSoonLabel: (_word: string) => string
@@ -207,7 +211,11 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       reservationPoliciesHeading: "Reservation Policies",
       callButtonLabel: "Call",
       contactFormButtonLabel: "Contact Form",
+      locationLabel: "Location",
+      selectLocationLabel: "Select a location",
+      chooseLocationLabel: "Please choose a location.",
       oneGuestLabel: "1 Guest",
+      seoOrderDescription: (_name: string) => `Order online from ${_name}.`,
       thankYouLabel: (_name: string) => `Thank you, ${_name}!`,
       confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
         `We've received your request for ${_guests} ${_guestLabel} on ${_date} at ${_time}.`,
@@ -317,7 +325,11 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       reservationPoliciesHeading: "Booking Policies",
       callButtonLabel: "Call",
       contactFormButtonLabel: "Contact Form",
+      locationLabel: "Studio",
+      selectLocationLabel: "Select a studio",
+      chooseLocationLabel: "Please choose a studio.",
       oneGuestLabel: "1 Guest",
+      seoOrderDescription: (_name: string) => `Order online from ${_name}.`,
       thankYouLabel: (_name: string) => `Thank you, ${_name}!`,
       confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
         `We've received your request for ${_guests} ${_guestLabel} on ${_date} at ${_time}.`,
@@ -429,7 +441,11 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       reservationPoliciesHeading: "นโยบายการจอง",
       callButtonLabel: "โทร",
       contactFormButtonLabel: "แบบฟอร์มติดต่อ",
+      locationLabel: "สาขา",
+      selectLocationLabel: "เลือกสาขา",
+      chooseLocationLabel: "กรุณาเลือกสาขา",
       oneGuestLabel: "1 แขก",
+      seoOrderDescription: (_name: string) => `สั่งออนไลน์จาก ${_name}`,
       thankYouLabel: (_name: string) => `ขอบคุณ ${_name}!`,
       confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
         `เราได้รับคำขอของคุณสำหรับ ${_guests} ${_guestLabel} วันที่ ${_date} เวลา ${_time}`,
@@ -539,7 +555,11 @@ const registry: Record<LocaleCode, Record<SiteVertical, VerticalCopy>> = {
       reservationPoliciesHeading: "นโยบายการจอง",
       callButtonLabel: "โทร",
       contactFormButtonLabel: "แบบฟอร์มติดต่อ",
+      locationLabel: "สตูดิโอ",
+      selectLocationLabel: "เลือกสตูดิโอ",
+      chooseLocationLabel: "กรุณาเลือกสตูดิโอ",
       oneGuestLabel: "1 แขก",
+      seoOrderDescription: (_name: string) => `สั่งออนไลน์จาก ${_name}`,
       thankYouLabel: (_name: string) => `ขอบคุณ ${_name}!`,
       confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
         `เราได้รับคำขอของคุณสำหรับ ${_guests} ${_guestLabel} วันที่ ${_date} เวลา ${_time}`,

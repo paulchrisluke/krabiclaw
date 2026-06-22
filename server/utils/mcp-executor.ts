@@ -294,7 +294,8 @@ function resolveMcpBaseUrl(event: H3Event): string {
 type GeneratedImageTarget =
   | "logo"
   | "home_hero"
-  | "story_image"
+  | "about_story_image"
+  | "home_story_image"
   | "location_hero"
   | "post_image"
   | "menu_item_image"
@@ -345,14 +346,23 @@ function assignmentForGeneratedTarget(
         useLabel: `Use as homepage hero${forSite}`,
         successMessage: `Homepage hero image updated${forSite}.`,
       };
-    case "story_image":
+    case "about_story_image":
       return {
-        assignTool: "set_story_image",
+        assignTool: "set_about_story_image",
         assignArgs: { site_id: siteId },
         title: "Story Images",
-        subtitle: "Choose the image that best tells the brand story.",
-        useLabel: `Use as story image${forSite}`,
-        successMessage: `Story image updated${forSite}.`,
+        subtitle: "Choose the image that best tells the brand story on the About page.",
+        useLabel: `Use as About story image${forSite}`,
+        successMessage: `About page story image updated${forSite}.`,
+      };
+    case "home_story_image":
+      return {
+        assignTool: "set_home_story_image",
+        assignArgs: { site_id: siteId },
+        title: "Story Images",
+        subtitle: "Choose the image that best tells the brand story on the homepage.",
+        useLabel: `Use as homepage story image${forSite}`,
+        successMessage: `Homepage story image updated${forSite}.`,
       };
     case "location_hero": {
       const locationId = requiredString(args, "location_id");
@@ -411,7 +421,7 @@ function pickerConfigFromShowGeneratedImages(
   const regenerateLabel = optionalString(rawArguments, "regenerate_label");
   const successMessage = optionalString(rawArguments, "success_message");
   const VALID_TARGETS = new Set<string>([
-    "logo", "home_hero", "story_image", "location_hero",
+    "logo", "home_hero", "about_story_image", "home_story_image", "location_hero",
     "post_image", "menu_item_image", "experience_image",
   ]);
   const rawTargetStr = optionalString(rawArguments, "target");
@@ -1394,7 +1404,7 @@ export async function executeMcpToolCall(
   ) {
     throw createError({
       statusCode: 403,
-      statusMessage: `${humanizeEntitlement(tool.requiredEntitlement)} is not enabled for this organization.`,
+      statusMessage: `${humanizeEntitlement(tool.requiredEntitlement)} is not enabled for this site.`,
     });
   }
 
@@ -2720,7 +2730,7 @@ export async function executeMcpToolCall(
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
-    case "set_story_image":
+    case "set_about_story_image":
       try {
         const assetId = requiredString(args, "asset_id");
         await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
@@ -2730,6 +2740,27 @@ export async function executeMcpToolCall(
           site.siteId,
           {
             page: "about",
+            changes: { "story.image": assetId },
+            location_id: null,
+          },
+        );
+        return {
+          ...updated,
+          context: await mutationContextPayload(site),
+        };
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "set_home_story_image":
+      try {
+        const assetId = requiredString(args, "asset_id");
+        await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+        const updated = await updatePageContent(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          {
+            page: "home",
             changes: { "story.image": assetId },
             location_id: null,
           },

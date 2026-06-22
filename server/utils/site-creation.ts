@@ -180,9 +180,9 @@ async function performSeeding(
     // caller can offer to subscribe this new site too (see POST /api/billing/site-subscribe).
     const existingPaidSite = await db.prepare(`
       SELECT sb.plan FROM site_billing sb
-      WHERE sb.organization_id = ? AND sb.status = 'active' AND sb.plan != 'free'
+      WHERE sb.organization_id = ? AND sb.site_id != ? AND sb.status = 'active' AND sb.plan != 'free'
       ORDER BY sb.updated_at DESC LIMIT 1
-    `).bind(organizationId).first<{ plan: string }>()
+    `).bind(organizationId, siteId).first<{ plan: string }>()
 
     return {
       status: 200,

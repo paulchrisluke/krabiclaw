@@ -137,7 +137,7 @@ const handleEmailSignup = async () => {
       return
     }
 
-    await router.push(`/login?signup=success&email=${encodeURIComponent(email)}`)
+    await router.push('/login?signup=success')
   } catch (err) {
     console.error('Email sign-up error:', err)
     error.value = 'Sign up failed. Please try again.'

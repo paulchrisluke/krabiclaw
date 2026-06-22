@@ -278,7 +278,7 @@ Flow:
 
 - Stripe is the source of truth for plan names, prices, and `marketing_features`.
 - `server/utils/billing.ts` → `getPlanEntitlements(plan)` defines what each plan unlocks in D1.
-- Entitlements are stored per-org in the `organization_entitlements` table and checked at API level.
+- Entitlements are stored per-site in the `site_entitlements` table and checked at API level.
 - Key entitlement keys:
   - `custom_domains`
   - `google_business`

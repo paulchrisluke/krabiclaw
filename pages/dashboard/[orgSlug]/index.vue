@@ -11,15 +11,15 @@
           <UButton icon="i-lucide-plus" label="Add site" size="sm" color="primary" variant="soft" :to="`/dashboard/${orgSlug}/sites/new`" />
         </div>
 
-        <div v-if="sites.length === 0" class="py-16 text-center">
+        <div v-if="sitesWithSubdomain.length === 0" class="py-16 text-center">
           <UIcon name="i-lucide-globe" class="size-8 text-muted mx-auto mb-3" />
-          <p class="text-sm text-muted">No sites yet.</p>
+          <p class="text-sm text-muted">No sites available.</p>
           <UButton label="Add your first site" size="sm" color="primary" class="mt-4" :to="`/dashboard/${orgSlug}/sites/new`" />
         </div>
 
         <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <NuxtLink
-            v-for="s in sites"
+            v-for="s in sitesWithSubdomain"
             :key="s.id"
             :to="`/dashboard/${orgSlug}/sites/${s.subdomain}`"
             class="group block"
@@ -51,13 +51,17 @@ const dashboard = useDashboardSite()
 const pending = ref(true)
 
 const sites = computed(() => dashboard.sites.value)
+const sitesWithSubdomain = computed(() => sites.value.filter((site): site is (typeof sites.value)[number] & { subdomain: string } => Boolean(site.subdomain)))
 
 onMounted(async () => {
-  if (!dashboard.state.value) await dashboard.refresh()
-  pending.value = false
-  // A single-site org skips the picker entirely — go straight to that site's overview.
-  if (sites.value.length === 1 && sites.value[0]!.subdomain) {
-    await router.replace(`/dashboard/${orgSlug}/sites/${sites.value[0]!.subdomain}`)
+  try {
+    await dashboard.refresh()
+    // A single-site org skips the picker entirely — go straight to that site's overview.
+    if (sites.value.length === 1 && sites.value[0]!.subdomain) {
+      await router.replace(`/dashboard/${orgSlug}/sites/${sites.value[0]!.subdomain}`)
+    }
+  } finally {
+    pending.value = false
   }
 })
 </script>

@@ -630,7 +630,8 @@ const BOUNDED_WRITE_TOOL_NAMES = [
   'set_home_hero_video',
   'clear_home_hero_image',
   'clear_home_hero_video',
-  'set_story_image',
+  'set_about_story_image',
+  'set_home_story_image',
   'set_location_hero_image',
   'set_location_hero_video',
   'clear_location_hero_image',
@@ -904,7 +905,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         },
         target: {
           type: 'string',
-          enum: ['logo', 'home_hero', 'story_image', 'location_hero', 'post_image', 'menu_item_image', 'experience_image'],
+          enum: ['logo', 'home_hero', 'about_story_image', 'home_story_image', 'location_hero', 'post_image', 'menu_item_image', 'experience_image'],
           description: 'Optional target that the widget should update directly after the user selects an image.',
         },
         site_id: { type: 'string', description: 'Required with target. Site ID that owns the target content.' },
@@ -967,7 +968,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'upload_user_photo',
-    description: 'Primary path for a user-provided image attachment. This tool only uploads the image into the site media library; it does not place the image on any page by itself. First inspect the attached image visually and ask the user to confirm the target site, placement, and that this exact image should be used. Only after confirmation, call this tool with file set to the ChatGPT attachment path so the host can rewrite it into an authorized file reference. Use file_id only as a secondary fallback when a rewritten file argument is unavailable. After upload succeeds, immediately call the appropriate assignment tool such as set_home_hero_image, set_logo, set_story_image, set_location_hero_image, set_post_image, or set_experience_image. Do NOT use save_generated_image_file for user uploads; that tool is only for ChatGPT native image_generation output.',
+    description: 'Primary path for a user-provided image attachment. This tool only uploads the image into the site media library; it does not place the image on any page by itself. First inspect the attached image visually and ask the user to confirm the target site, placement, and that this exact image should be used. Only after confirmation, call this tool with file set to the ChatGPT attachment path so the host can rewrite it into an authorized file reference. Use file_id only as a secondary fallback when a rewritten file argument is unavailable. After upload succeeds, immediately call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, or set_experience_image. Do NOT use save_generated_image_file for user uploads; that tool is only for ChatGPT native image_generation output.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1863,7 +1864,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_site_media_assets',
-    description: 'List media assets (images and videos) for a site. Use this first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/{locationSlug}/media — orgSlug and subdomain come from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
+    description: 'List media assets (images and videos) for a site. Use this first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_about_story_image, set_home_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video uploads, direct the user to the dashboard media library: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/{locationSlug}/media — orgSlug and subdomain come from list_sites, locationSlug from list_locations. After the user uploads, call get_site_media_assets to get the public_url and place it on the page.',
     domain: 'media',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -2212,8 +2213,29 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
-    name: 'set_story_image',
-    description: 'Assign a saved media asset as the About page story image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id.',
+    name: 'set_about_story_image',
+    description: 'Assign a saved media asset as the About page (/about) story image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id. Use set_home_story_image instead if the user means the story section on the homepage — the two pages have separate story.image fields and this tool only ever writes to /about. It is common to reuse the same asset_id for both.',
+    domain: 'content',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
+    },
+    required: ['asset_id'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        page: { type: 'string' },
+        changes_count: { type: 'number' },
+        public_path: { type: 'string' },
+      },
+      required: ['success', 'page', 'changes_count'],
+    },
+  }),
+  siteTool({
+    name: 'set_home_story_image',
+    description: 'Assign a saved media asset as the homepage (/) story image. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id. Use set_about_story_image instead if the user means the story section on the About page — the two pages have separate story.image fields and this tool only ever writes to home. It is common to reuse the same asset_id for both.',
     domain: 'content',
     minimumRole: 'editor',
     confirmRequired: false,

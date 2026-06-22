@@ -595,7 +595,7 @@ const groupConfig: Record<string, Array<{ id: string; label: string; icon: strin
   ],
   about: [
     { id: 'hero',    label: 'Hero Section',    icon: 'i-heroicons-photo',      fields: ['hero.title', 'hero.subtitle'] },
-    { id: 'story',   label: 'Story',           icon: 'i-heroicons-book-open',  fields: ['story.image', 'story.title', 'story.body'] },
+    { id: 'story',   label: 'Story',           icon: 'i-heroicons-book-open',  fields: ['story.image', 'story.headline', 'story.body'] },
     { id: 'journey', label: 'Journey',         icon: 'i-heroicons-map',        fields: ['journey.title', 'journey.body'] },
     { id: 'cta',     label: 'Call to Action',  icon: 'i-heroicons-megaphone',  fields: ['cta.title'] },
   ],

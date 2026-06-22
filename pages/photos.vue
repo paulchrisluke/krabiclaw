@@ -1,6 +1,5 @@
 <template>
-  <NuxtLayout name="saya">
-    <div class="min-h-screen bg-default text-default">
+  <div class="min-h-screen bg-default text-default">
       <div v-if="pending" class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
         <USkeleton class="h-64 w-full" />
       </div>
@@ -46,11 +45,10 @@
         <p class="mt-4 text-sm text-muted">Add a location and connect Google Business to sync photos.</p>
       </div>
     </div>
-  </NuxtLayout>
 </template>
 
 <script setup>
-definePageMeta({ layout: false })
+definePageMeta({ layout: 'saya' })
 
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })

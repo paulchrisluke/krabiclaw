@@ -281,7 +281,7 @@ async function saveReview() {
       title: reviewForm.title || null,
       content: reviewForm.content,
       status: reviewForm.status,
-      created_at: reviewForm.created_at ? `${reviewForm.created_at}T00:00:00.000Z` : new Date().toISOString()
+      created_at: reviewForm.created_at || new Date().toISOString().slice(0, 10)
     }
 
     if (editingReviewId.value) {

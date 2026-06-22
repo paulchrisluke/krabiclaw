@@ -178,6 +178,57 @@
                     </p>
                   </div>
                 </div>
+                <div v-if="msg.socialCard" class="mt-2 rounded-xl border border-default bg-elevated px-4 py-3 space-y-3">
+                  <div class="flex items-center gap-2">
+                    <UIcon name="i-simple-icons-facebook" class="size-4 text-[#1877F2] shrink-0" />
+                    <span class="text-[13px] font-semibold text-highlighted">Facebook & Instagram</span>
+                    <UBadge
+                      :label="facebookConnected ? 'Connected' : hasFacebookAccess ? 'Ready to connect' : 'Upgrade required'"
+                      :color="facebookConnected ? 'success' : hasFacebookAccess ? 'info' : 'warning'"
+                      variant="soft"
+                      size="xs"
+                    />
+                  </div>
+                  <p class="text-[12px] text-muted leading-relaxed">
+                    <template v-if="hasFacebookAccess">
+                      Connect your Facebook Page and posts you publish there will automatically sync to your site. Instagram Business accounts linked to the Page sync too.
+                    </template>
+                    <template v-else>
+                      Upgrade to Growth or above to connect your Facebook Page and automatically sync Facebook and linked Instagram Business posts to your site.
+                    </template>
+                  </p>
+                  <div class="flex gap-2 pt-1">
+                    <UButton
+                      v-if="hasFacebookAccess && !facebookConnected"
+                      size="sm"
+                      color="primary"
+                      icon="i-simple-icons-facebook"
+                      :loading="connectingFacebook"
+                      @click="startFacebookConnect"
+                    >
+                      Connect Facebook
+                    </UButton>
+                    <UButton
+                      v-else-if="!hasFacebookAccess && importedOrgSlug"
+                      size="sm"
+                      color="primary"
+                      variant="outline"
+                      icon="i-heroicons-arrow-up-circle"
+                      :to="`/dashboard/${importedOrgSlug}/~/settings/billing`"
+                    >
+                      Upgrade to Growth
+                    </UButton>
+                    <UButton
+                      v-else
+                      size="sm"
+                      color="neutral"
+                      :variant="facebookConnected ? 'solid' : 'ghost'"
+                      @click="workspaceEntryPath && router.push(workspaceEntryPath)"
+                    >
+                      {{ facebookConnected ? 'Open dashboard' : 'Set up later' }}
+                    </UButton>
+                  </div>
+                </div>
                 <div v-if="msg.polishCard" class="mt-2">
                   <PolishSuggestionsCard
                     :vertical="selectedVertical"
@@ -279,6 +330,7 @@ interface WizardMessage {
   text?: string
   tools?: { label: string; done: boolean }[]
   handoff?: boolean
+  socialCard?: boolean
   polishCard?: boolean
   mcpCard?: boolean
   placePreview?: { name: string; address: string; phone?: string | null; mapsUrl?: string | null }
@@ -300,7 +352,7 @@ interface QuickReply {
   action?: string
 }
 
-type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_search' | 'awaiting_manual_name' | 'confirm' | 'details' | 'importing' | 'imported'
+type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'details' | 'importing' | 'imported'
 type Vertical = 'restaurant' | 'experience'
 type DetailsSource = 'imported' | 'manual'
 
@@ -320,6 +372,9 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const toast = useToast()
+const connectingFacebook = ref(false)
+const facebookConnected = ref(false)
+const hasFacebookAccess = ref(false)
 
 const WELCOME_POINTS: [string, string][] = props.isAddingLocation
   ? [
@@ -373,7 +428,6 @@ const dragCounter = ref(0)
 const isDragging = computed(() => dragCounter.value > 0)
 
 const inputPlaceholder = computed(() => {
-  if (step.value === 'awaiting_search') return 'Paste your Facebook link or type your business name…'
   if (step.value === 'awaiting_manual_name') return 'Your business name…'
   return 'Paste your Google Maps link…'
 })
@@ -409,6 +463,7 @@ onMounted(async () => {
   }
   // If the user already has a site (returning to onboarding workspace), skip to imported state
   if (props.siteId && props.existingOrgSlug) {
+    await refreshSocialStatus(props.siteId)
     step.value = 'imported'
     messages.value.push({
       id: crypto.randomUUID(),
@@ -493,6 +548,7 @@ function pushUser(text: string) {
 async function pushBot(text: string, extra?: {
   tools?: { label: string; done: boolean }[]
   handoff?: boolean
+  socialCard?: boolean
   polishCard?: boolean
   mcpCard?: boolean
   placePreview?: WizardMessage['placePreview']
@@ -512,6 +568,47 @@ async function scrollBottom() {
 }
 
 watch([messages, typing], scrollBottom)
+
+async function refreshSocialStatus(siteId: string | null) {
+  if (!siteId || props.isAddingLocation) return
+
+  try {
+    const [contextRes, facebookRes] = await Promise.all([
+      $fetch<{ context?: { organization?: { entitlements?: Record<string, string | boolean> } } }>(`/api/editor/sites/${siteId}/context`),
+      $fetch<{ connected: boolean }>(`/api/integrations/facebook-pages/connection?siteId=${encodeURIComponent(siteId)}`),
+    ])
+
+    hasFacebookAccess.value = contextRes.context?.organization?.entitlements?.managed_service === true
+    facebookConnected.value = facebookRes.connected === true
+  } catch (error) {
+    console.error('onboarding_social_status_failed', error)
+    hasFacebookAccess.value = false
+    facebookConnected.value = false
+  }
+}
+
+async function startFacebookConnect() {
+  const siteId = importedSiteId.value ?? props.siteId ?? null
+  if (!siteId) return
+
+  connectingFacebook.value = true
+  try {
+    const res = await $fetch<{ success: boolean; authUrl?: string; error?: string }>(
+      '/api/integrations/facebook-pages/auth',
+      { method: 'POST', body: { siteId } }
+    )
+    if (!res.authUrl) throw new Error(res.error || 'No authorization URL returned')
+    window.location.href = res.authUrl
+  } catch (error) {
+    console.error('facebook_connect_failed', error)
+    toast.add({
+      title: 'Failed to connect Facebook',
+      description: error instanceof Error ? error.message : 'Please try again',
+      color: 'error',
+    })
+    connectingFacebook.value = false
+  }
+}
 
 // ─── State machine ────────────────────────────────────────────────────────────
 
@@ -533,18 +630,12 @@ async function advance(target: WizardStep) {
     await pushBot("Got it. How would you like to add your business details?")
     replies.value = [
       { label: 'Google Maps', sub: 'Paste your Maps link', icon: 'i-heroicons-globe-alt', primary: true, action: 'ask_url' },
-      { label: 'Facebook', sub: 'Paste your page link', icon: 'i-heroicons-globe-alt', action: 'ask_facebook' },
       { label: 'Start manually', sub: 'Type your business name', icon: 'i-heroicons-pencil', action: 'ask_manual' },
     ]
   }
 
   if (target === 'awaiting_url') {
     await pushBot("Paste your Google Maps link below — the full URL from your browser or a short maps.app.goo.gl link both work.")
-    awaitingInput.value = true
-  }
-
-  if (target === 'awaiting_search') {
-    await pushBot("Paste your Facebook page link, or just type your business name — I'll find you on Google.")
     awaitingInput.value = true
   }
 
@@ -584,12 +675,6 @@ async function handleReply(reply: QuickReply) {
   if (reply.action === 'ask_url') {
     pushUser(reply.label)
     await advance('awaiting_url')
-    return
-  }
-
-  if (reply.action === 'ask_facebook') {
-    pushUser(reply.label)
-    await advance('awaiting_search')
     return
   }
 
@@ -643,8 +728,6 @@ async function handleTextSubmit() {
   pushUser(input)
   if (step.value === 'awaiting_url') {
     await runLookup(input)
-  } else if (step.value === 'awaiting_search') {
-    await runSearch(input)
   } else if (step.value === 'awaiting_manual_name') {
     detailsSource.value = 'manual'
     seedDetailsFromManual(input)
@@ -705,35 +788,6 @@ async function runLookup(mapsUrl: string) {
   }
 }
 
-async function runSearch(query: string) {
-  step.value = 'importing'
-  importing.value = true
-  importError.value = null
-  const tools = await showLookupTools('Searching Google for your business…')
-
-  try {
-    const res = await $fetch<{
-      success: boolean
-      preview?: { placeId: string; name: string; address: string; city?: string | null; phone?: string | null; mapsUrl?: string | null; websiteUrl?: string | null; openingHours?: string[] | null }
-      error?: string
-    }>('/api/dashboard/onboarding/search-place', { method: 'POST', body: { query } })
-
-    if (!res.success || !res.preview) {
-      throw new Error(res.error ?? 'Could not find your business. Try a more specific name.')
-    }
-
-    tools[0]!.done = true
-    await pushBot("Found it — does this look right?", { placePreview: res.preview })
-    showConfirm(res.preview, 'awaiting_search')
-  } catch (err) {
-    importError.value = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
-    step.value = 'awaiting_search'
-    awaitingInput.value = true
-  } finally {
-    importing.value = false
-  }
-}
-
 async function submitDetails() {
   const basicRequired = detailsRequireBasics.value
   const requiredFields = basicRequired
@@ -784,7 +838,7 @@ async function submitDetails() {
     importedOrgSlug.value = res.orgSlug ?? null
     importedSiteSlug.value = res.siteSlug ?? props.existingSiteSlug ?? null
     await refreshChecklistStarterPrompt(importedSiteId.value)
-    await finishCreation(res.orgSlug, res.locationSlug)
+    await finishCreation(res.orgSlug, res.siteSlug ?? importedSiteSlug.value ?? props.existingSiteSlug ?? null, res.locationSlug)
   } catch (err) {
     importError.value = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
     step.value = 'details'
@@ -831,16 +885,18 @@ function seedDetailsFromManual(name: string) {
   detailsForm.isPrimary = !props.isAddingLocation
 }
 
-async function finishCreation(orgSlug: string | null | undefined, locationSlug?: string | null) {
+async function finishCreation(orgSlug: string | null | undefined, siteSlug: string | null | undefined, locationSlug?: string | null) {
   emit('site-created', orgSlug ?? null, locationSlug ?? null)
   importedLocationSlug.value = locationSlug ?? null
+  await refreshSocialStatus(importedSiteId.value)
   await sleep(300)
-  const domain = orgSlug ? `**${orgSlug}.krabiclaw.com**` : 'your new workspace'
+  const domainSlug = siteSlug ?? orgSlug
+  const domain = domainSlug ? `**${domainSlug}.krabiclaw.com**` : 'your new workspace'
   const offerLabel = selectedVertical.value === 'experience' ? 'experiences' : 'menu'
   await pushBot(`Done. Your workspace is live at ${domain}.`)
   await pushBot(
     `Head to your dashboard to keep building — add your ${offerLabel}, hero image and story — or connect ChatGPT to manage it from there.`,
-    { handoff: true, polishCard: true, mcpCard: true },
+    { handoff: true, socialCard: !props.isAddingLocation, polishCard: true, mcpCard: true },
   )
   step.value = 'imported'
   replies.value = [

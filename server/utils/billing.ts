@@ -224,8 +224,12 @@ export async function applySiteSubscription(
 
   // Ensure org has a Stripe customer record
   await db.prepare(`
-    INSERT OR IGNORE INTO organization_billing (id, organization_id, stripe_customer_id, updated_at)
+    INSERT INTO organization_billing (id, organization_id, stripe_customer_id, updated_at)
     VALUES (?, ?, ?, ?)
+    ON CONFLICT(organization_id) DO UPDATE SET
+      id = excluded.id,
+      stripe_customer_id = excluded.stripe_customer_id,
+      updated_at = excluded.updated_at
   `).bind(`billing-${organizationId}`, organizationId, customerId, now).run()
 
   await db.prepare(`

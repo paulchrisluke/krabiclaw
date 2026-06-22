@@ -150,7 +150,6 @@
 
       <!-- Featured content (menu items / experiences) -->
       <LazySayaFeaturedContent
-        v-if="featuredItems.length"
         :data="{
           items: featuredItems,
           hasMenu: hasMenu,

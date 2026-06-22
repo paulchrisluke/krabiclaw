@@ -35,12 +35,12 @@
                 <UInput v-model="reservationForm.phone" size="lg" type="tel" :placeholder="resCopy.phonePlaceholder" class="w-full" />
               </UFormField>
 
-              <UFormField v-if="hasMultipleLocations" label="Location" name="location_id" required>
+              <UFormField v-if="hasMultipleLocations" :label="resCopy.locationLabel" name="location_id" required>
                 <USelect
                   v-model="reservationForm.location_id"
                   size="lg"
                   :items="locationSelectOptions"
-                  placeholder="Select a location"
+                  :placeholder="resCopy.selectLocationLabel"
                   class="w-full"
                 />
               </UFormField>
@@ -303,7 +303,7 @@ const validateReservation = (state: typeof reservationForm.value) => {
   if (!state.email)   errors.push({ name: 'email',  message: 'Please enter your email.' })
   else if (!emailPattern.test(state.email)) errors.push({ name: 'email', message: 'Please enter a valid email address.' })
   if (!state.phone)   errors.push({ name: 'phone',  message: 'Please enter your phone number.' })
-  if (hasMultipleLocations.value && !state.location_id) errors.push({ name: 'location_id', message: 'Please choose a location.' })
+  if (hasMultipleLocations.value && !state.location_id) errors.push({ name: 'location_id', message: resCopy.value.chooseLocationLabel })
   if (!state.date)    errors.push({ name: 'date',   message: 'Please pick a date on the calendar.' })
   if (!state.time)    errors.push({ name: 'time',   message: 'Please choose a time.' })
   if (!state.guests)  errors.push({ name: 'guests', message: 'Please choose your party size.' })

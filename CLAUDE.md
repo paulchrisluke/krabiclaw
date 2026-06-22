@@ -439,6 +439,18 @@ Example:
 
 ---
 
+## Saya Empty States
+
+Saya components never render a blank section or a skeleton-only placeholder when content is missing. Every list-style section (menu items, experiences, locations, posts) shows a **filled example** — realistic placeholder content shown directly on the live site, matching Shopify's unconfigured-storefront pattern (e.g. "Example product title", "$19.99 USD").
+
+- `config/saya-empty-states.ts` is the single source of truth for example content and ChowBot prompt hints, one entry per section. Add new sections here, not inline in components.
+- `components/saya/SayaEmptyExample.vue` renders one example card; `components/saya/SayaMcpHint.vue` renders the owner-only "Try: ..." affordance that pre-fills and opens ChowBot via `useChowBot().setDraftMessage()` + `.open()`.
+- The hint only renders in dashboard edit mode (`useEditMode().editMode`, i.e. `?edit=true`) — real site visitors only ever see the clean example, never the hint UI.
+- Reviews and Q&A keep their existing icon+message empty state (no fabricated reviews/answers) but Q&A still gets a hint since it's merchant-answerable.
+- `config/content-registry.ts` field `defaultValue` is the render-time fallback for scalar `site_content` fields (`usePageContent().getField()` falls back to it automatically when no value is in the DB and the caller passes no explicit default). **These must always be generic, vertical-neutral copy** — never tenant- or demo-identity-specific text (no business names, no "Saya Kitchen", no real addresses/phone numbers). The "Saya fallback copy on any tenant page" regression below is about leaking *demo-tenant identity*, not about having a generic instructional fallback — a generic fallback rendering on an empty tenant page is the intended behavior, not the regression.
+
+---
+
 ## Client Onboarding Pipeline
 
 ### Canonical Command

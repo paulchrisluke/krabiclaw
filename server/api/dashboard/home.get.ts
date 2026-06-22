@@ -50,10 +50,10 @@ export default defineEventHandler(async (event) => {
       FROM site_events e
       LEFT JOIN user u ON u.id = e.actor_id
       LEFT JOIN business_locations l ON l.id = e.location_id
-      WHERE e.organization_id = ?
+      WHERE e.organization_id = ? AND e.site_id = ?
       ORDER BY e.created_at DESC
       LIMIT 15
-    `).bind(organization.id).all<{
+    `).bind(organization.id, site.id).all<{
       id: string; event_type: string; entity_type: string | null
       entity_id: string | null; location_id: string | null
       metadata: string | null; created_at: string

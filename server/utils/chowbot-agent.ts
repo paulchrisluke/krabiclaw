@@ -317,7 +317,6 @@ function getComponentFromField(field: string): string | null {
     "story.headline": "SayaBrandStory",
     "story.body": "SayaBrandStory",
     "story.image": "SayaBrandStory",
-    "story.title": "SayaBrandStory",
     "journey.title": "SayaBrandStory",
     "journey.body": "SayaBrandStory",
     "experience.body": "SayaBrandStory",
@@ -2619,7 +2618,7 @@ async function executeTool(
       return { updated: true, ...result };
     }
 
-    case "set_story_image": {
+    case "set_about_story_image": {
       const assetId = toSqlText(input.asset_id);
       if (!assetId) return { error: "asset_id is required." };
       const id = `${orgId}::${siteId}::site::about::story.image`;
@@ -2629,6 +2628,30 @@ async function executeTool(
         site_id: siteId,
         location_id: undefined,
         page: "about",
+        field: "story.image",
+        value: assetId,
+        type: "image",
+        source: "manual",
+        content: assetId,
+        hero_title: undefined,
+        hero_subtitle: undefined,
+        hero_image_asset_id: undefined,
+        hero_video_asset_id: undefined,
+        component: "SayaBrandStory",
+      });
+      return { updated: true, asset_id: assetId };
+    }
+
+    case "set_home_story_image": {
+      const assetId = toSqlText(input.asset_id);
+      if (!assetId) return { error: "asset_id is required." };
+      const id = `${orgId}::${siteId}::site::home::story.image`;
+      await upsertSiteContent(db, {
+        id,
+        organization_id: orgId,
+        site_id: siteId,
+        location_id: undefined,
+        page: "home",
         field: "story.image",
         value: assetId,
         type: "image",

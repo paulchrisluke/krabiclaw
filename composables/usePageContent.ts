@@ -136,9 +136,12 @@ export const usePageContent = (pageName?: string) => {
   /**
    * Get a field value from the DB.
    * Returns the DB value if it exists, otherwise the provided defaultValue.
-   * Returns null when both are absent — callers can use this to show placeholder UI.
+   * If no defaultValue is passed, falls back to the field's registry defaultValue
+   * (generic, vertical-neutral copy — never tenant/demo-specific) before returning null.
    */
-  const getField = (field: string, defaultValue: string | null = null): string | null => {
+  const getField = (field: string, defaultValue?: string | null): string | null => {
+    const fallback = defaultValue !== undefined ? defaultValue : getFieldDef(page.value, field)?.defaultValue ?? null
+
     if (Object.prototype.hasOwnProperty.call(previewOverrides.value, field)) {
       return previewOverrides.value[field] ?? null
     }
@@ -146,16 +149,19 @@ export const usePageContent = (pageName?: string) => {
     if (['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'].includes(field)) {
       const heroRow = contentMap.value['hero']
       const fieldRow = contentMap.value[field]
-      if (field === 'hero.title') return heroRow?.hero_title ?? fieldRow?.content ?? defaultValue
-      if (field === 'hero.subtitle') return heroRow?.hero_subtitle ?? fieldRow?.content ?? defaultValue
-      if (field === 'hero.image') return heroRow?.hero_public_url ?? fieldRow?.content ?? defaultValue
-      if (field === 'hero.video') return heroRow?.hero_video_public_url ?? fieldRow?.content ?? defaultValue
+      if (field === 'hero.title') return heroRow?.hero_title ?? fieldRow?.content ?? fallback
+      if (field === 'hero.subtitle') return heroRow?.hero_subtitle ?? fieldRow?.content ?? fallback
+      if (field === 'hero.image') return heroRow?.hero_public_url ?? fieldRow?.content ?? fallback
+      if (field === 'hero.video') return heroRow?.hero_video_public_url ?? fieldRow?.content ?? fallback
     }
     const row = contentMap.value[field]
-    if (!row) return defaultValue
-    const val = row.content
+    if (!row) return fallback
+    // Media fields store an asset id in hero_image_asset_id/hero_video_asset_id
+    // rather than a literal URL in content — getPageContent resolves those to
+    // hero_public_url/hero_video_public_url via JOIN for every row, not just hero.*.
+    const val = row.content || row.hero_public_url || row.hero_video_public_url
     if (val && val.trim() !== '') return val
-    return defaultValue
+    return fallback
   }
 
   /**
