@@ -1,7 +1,7 @@
 // GET /api/admin/fulfillment — service add-on purchases awaiting fulfillment
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformOwner } from '~/server/utils/platform-auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
 
 interface FulfillmentRow {
   id: string
@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!isPlatformOwner(session.user.email, env)) return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
+  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
   const query = getQuery(event)
   const showAll = query.all === '1'

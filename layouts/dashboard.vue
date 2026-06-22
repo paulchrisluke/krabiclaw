@@ -584,6 +584,7 @@ const orgSettingsNavigation = computed(() => {
     { label: 'General', icon: 'i-lucide-sliders', to: `${org}/general` },
     { label: 'ChatGPT', icon: 'i-lucide-bot', to: `${org}/chatgpt` },
     { label: 'Domains', icon: 'i-lucide-globe', to: `${org}/domains` },
+    { label: 'Analytics', icon: 'i-lucide-bar-chart-3', to: `${org}/analytics` },
     { label: 'Billing', icon: 'i-lucide-credit-card', to: `${org}/billing` },
     { label: 'Members', icon: 'i-lucide-users', to: `${org}/members` },
   ]]
@@ -614,6 +615,7 @@ const navbarTitle = computed(() => {
   if (!segment) return 'Overview'
   const labels: Record<string, string> = {
     account: 'Account',
+    analytics: 'Analytics',
     billing: 'Billing',
     chatgpt: 'ChatGPT',
     conversations: 'Conversations',

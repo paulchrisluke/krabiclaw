@@ -1,7 +1,7 @@
 // GET /api/admin/organizations/[orgId]/billing — admin billing status for a single org
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformOwner } from '~/server/utils/platform-auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
 
 export default defineEventHandler(async (event) => {
   const orgId = getRouterParam(event, 'orgId')
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!isPlatformOwner(session.user.email, env)) return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
+  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
   const sitesBilling = await db.prepare(`
     SELECT s.id AS site_id, s.brand_name, sb.stripe_subscription_id, sb.plan, sb.status,

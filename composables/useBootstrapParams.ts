@@ -37,7 +37,6 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
     const segments = path.split("/");
     const sub = segments.length > 3 ? segments[3] : undefined;
     const page = sub || "location";
-    const includeMenu = page === "location" || page === "menu";
     const fullData =
       page === "reviews" || page === "photos" || page === "qa" || page === "posts"
         ? page
@@ -46,7 +45,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       page,
       location: slug ?? null,
       experience: null,
-      menu: includeMenu,
+      menu: true,
       data: fullData,
     };
   }
@@ -58,7 +57,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       page: "experiences",
       location: null,
       experience: experienceMatch[1] ?? null,
-      menu: false,
+      menu: true,
       data: null,
     };
   }

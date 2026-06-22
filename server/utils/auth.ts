@@ -170,10 +170,12 @@ export function createAuth(env: CloudflareEnv) {
         },
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
-        scopes: ['openid', 'offline_access', 'tenant'],
+        scopes: ['openid', 'offline_access', 'tenant', 'platform_admin'],
         validAudiences: [
           ...(env.BETTER_AUTH_URL ? [`${env.BETTER_AUTH_URL}/api/mcp`] : []),
+          ...(env.BETTER_AUTH_URL ? [`${env.BETTER_AUTH_URL}/api/mcp/platform`] : []),
           'https://krabiclaw.com/api/mcp',
+          'https://krabiclaw.com/api/mcp/platform',
         ],
         // Well-known metadata is served at /api/auth/.well-known/* by the plugin's
         // onRequest hook. Root-level /.well-known/* are covered by Nitro routes.

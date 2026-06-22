@@ -3,7 +3,7 @@
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="themeStyles"
   >
-    <UTheme :ui="{}">
+    <UTheme :ui="{ button: { compoundVariants: [{ color: 'primary', variant: 'solid', class: 'text-[var(--brand-color-foreground)] bg-primary hover:bg-primary/75 active:bg-primary/75 disabled:bg-primary aria-disabled:bg-primary outline-primary/25 focus-visible:outline-3' }] } }">
       <SayaHeader />
       <main class="grow">
         <slot />
@@ -106,19 +106,5 @@ useHead(() => {
 .saya-theme {
   --ui-primary: var(--brand-color);
   --color-primary: var(--brand-color);
-}
-
-/* Tenant-specific base styles for accessibility */
-.saya-theme .u-button-solid-primary,
-.saya-theme .u-button-solid-primary *,
-.saya-theme .u-button--solid.u-button--primary,
-.saya-theme .u-button--solid.u-button--primary * {
-  color: var(--brand-color-foreground, white) !important;
-}
-
-/* Ensure icons also inherit the contrast color when in a primary button */
-.saya-theme .u-button-solid-primary .u-icon,
-.saya-theme .u-button--solid.u-button--primary .u-icon {
-  color: var(--brand-color-foreground, white) !important;
 }
 </style>

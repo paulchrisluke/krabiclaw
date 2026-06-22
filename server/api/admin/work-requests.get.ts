@@ -1,7 +1,7 @@
 // GET /api/admin/work-requests — platform admin views all work requests
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { getAuthSession } from "~/server/utils/auth";
-import { isPlatformOwner } from "~/server/utils/platform-auth";
+import { isPlatformAdmin } from "~/server/utils/platform-auth";
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event);
@@ -12,19 +12,11 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env);
   if (!session?.user?.email)
     return jsonResponse({ error: "Authentication required" }, { status: 401 });
-  if (!isPlatformOwner(session.user.email, env))
+  if (!isPlatformAdmin(session.user, env))
     return jsonResponse(
-      { error: "Platform owner access required" },
+      { error: "Platform admin access required" },
       { status: 403 },
     );
-
-  // Require DB user role 'admin'
-  const userRow = await db
-    .prepare("SELECT role FROM user WHERE lower(email) = lower(?) LIMIT 1")
-    .bind(session.user.email)
-    .first<{ role: string }>();
-  if (!userRow || userRow.role !== "admin")
-    return jsonResponse({ error: "Admin role required" }, { status: 403 });
 
   const query = getQuery(event);
   const statusFilter = query.status ? String(query.status) : null;

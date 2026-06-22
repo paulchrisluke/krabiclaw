@@ -1,7 +1,7 @@
 // POST /api/admin/ai/generate - ChowBot for platform content
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformOwner } from '~/server/utils/platform-auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { callAiGateway } from '~/server/utils/ai-gateway'
 
 const MAX_PROMPT_LENGTH = 5000
@@ -16,8 +16,8 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformOwner(session.user.email, env)) {
-    return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
+  if (!isPlatformAdmin(session.user, env)) {
+    return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
   }
 
   let body: { prompt?: string }

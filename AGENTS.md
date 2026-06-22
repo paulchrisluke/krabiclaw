@@ -37,6 +37,7 @@ ChowBot and dashboard CMS are supported product surfaces. Keep MCP and ChowBot a
   3. Call `show_generated_images` with returned `assetId` and `publicUrl`
 
 Canonical generated-image contracts:
+
 - Native generation: `save_generated_image_file({ site_id, attachment_id, prompt })` — always use this after `image_generation`; passing base64 to `save_generated_image` is blocked by OpenAI safety checks
 - Raw base64 (non-native, rare): `save_generated_image({ site_id, image_data_base64, prompt })`
 
@@ -87,7 +88,7 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - Organizations map to a team or agency using Better Auth’s `organization` plugin.
 - **One org can have multiple sites** — the unique-per-org constraint was removed in migration `0017`.
 - Each site has its own plan and Stripe subscription (`site_billing` table).
-- The Stripe *customer* stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
+- The Stripe _customer_ stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
 - Multiple physical locations live under `business_locations`, not separate orgs. Locations are **unlimited on all plans**.
 - Dashboard route shape (site is always explicit — no implicit "first site in org"):
   - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
@@ -128,6 +129,7 @@ Seeds use a two-tier insert strategy so that MCP edits survive a reseed:
 - **Content tables** (`site_content`, `menu_items`, `reviews`, `location_qa`, `posts`, `post_channel_jobs`, `*_translations`) → `INSERT OR IGNORE` — first seed wins; MCP changes are never overwritten by a reseed
 
 Production is never reseeded (only migrated), so this only affects local dev, preview, and staging. If you need to force-push updated content from a seed definition to an already-seeded environment, delete the affected rows first or use an MCP tool call directly.
+
 - Layout name for Saya theme pages: `layout: 'saya'`
 - `tenant` layout is dead
 
@@ -448,8 +450,8 @@ Saya components never render a blank section or a skeleton-only placeholder when
 - `config/saya-empty-states.ts` is the single source of truth for example content and ChowBot prompt hints, one entry per section. Add new sections here, not inline in components.
 - `components/saya/SayaEmptyExample.vue` renders one example card; `components/saya/SayaMcpHint.vue` renders the owner-only "Try: ..." affordance that pre-fills and opens ChowBot via `useChowBot().setDraftMessage()` + `.open()`.
 - The hint only renders in dashboard edit mode (`useEditMode().editMode`, i.e. `?edit=true`) — real site visitors only ever see the clean example, never the hint UI.
-- Reviews and Q&A keep their existing icon+message empty state (no fabricated reviews/answers) but Q&A still gets a hint since it's merchant-answerable.
-- `config/content-registry.ts` field `defaultValue` is the render-time fallback for scalar `site_content` fields (`usePageContent().getField()` falls back to it automatically when no value is in the DB and the caller passes no explicit default). **These must always be generic, vertical-neutral copy** — never tenant- or demo-identity-specific text (no business names, no "Saya Kitchen", no real addresses/phone numbers). The "Saya fallback copy on any tenant page" regression below is about leaking *demo-tenant identity*, not about having a generic instructional fallback — a generic fallback rendering on an empty tenant page is the intended behavior, not the regression.
+- Filled examples are only for **core** sections (menu, experiences, locations) where an empty section usually means an unfinished site. **Supplementary/optional** sections (posts, reviews, Q&A) use the low-key icon+message empty state instead — a live, fully-operational business may legitimately never post updates or get reviews, so a fabricated "Example post title" shown to a real visitor would incorrectly imply the site is broken. Posts/Reviews/Q&A still get a hint when merchant-actionable (posts, Q&A; not reviews, which aren't merchant-authored).
+- `config/content-registry.ts` field `defaultValue` is the render-time fallback for scalar `site_content` fields (`usePageContent().getField()` falls back to it automatically when no value is in the DB and the caller passes no explicit default). **These must always be generic, vertical-neutral copy** — never tenant- or demo-identity-specific text (no business names, no "Saya Kitchen", no real addresses/phone numbers). The "Saya fallback copy on any tenant page" regression below is about leaking _demo-tenant identity_, not about having a generic instructional fallback — a generic fallback rendering on an empty tenant page is the intended behavior, not the regression.
 
 ---
 

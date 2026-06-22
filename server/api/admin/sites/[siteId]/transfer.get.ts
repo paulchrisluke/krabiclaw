@@ -1,7 +1,7 @@
 // GET /api/admin/sites/[siteId]/transfer — fetch the pending transfer for a site
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformOwner } from '~/server/utils/platform-auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const userId = session.user.id
-  const isPlatAdmin = isPlatformOwner(session.user.email, env)
+  const isPlatAdmin = isPlatformAdmin(session.user, env)
 
   const site = await db
     .prepare(

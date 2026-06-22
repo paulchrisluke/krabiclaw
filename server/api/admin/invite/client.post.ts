@@ -1,6 +1,7 @@
 // POST /api/admin/invite/client — create org for a new restaurant client + invitation link
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
 
 function slugify(str: string) {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48)
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if ((session.user as { role?: string }).role !== 'admin') return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
+  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
   const body = await readBody(event).catch(() => ({})) as { email?: string; restaurantName?: string }
   const email = body.email?.trim().toLowerCase()

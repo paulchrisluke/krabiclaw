@@ -33,20 +33,7 @@
       </button>
     </div>
 
-    <!-- Empty state when no posts at all -->
-    <div
-      v-if="googlePosts.length === 0"
-      class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8"
-    >
-        <UCard class="rounded-3xl border-dashed bg-muted/20" :ui="{ body: 'flex flex-col items-center py-20 text-center' }">
-          <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
-            <UIcon name="i-heroicons-newspaper" class="size-7" />
-          </div>
-          <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ $t('saya.posts.empty_title') }}</h3>
-          <p class="mt-2 max-w-sm text-sm text-muted">{{ $t('saya.posts.empty_desc') }}</p>
-        </UCard>
-      </div>
-    </div>
+  </div>
 </template>
 
 <script setup>

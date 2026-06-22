@@ -1,7 +1,7 @@
 // DELETE /api/admin/content/[page] - Remove platform page content
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformOwner } from '~/server/utils/platform-auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
 
 const ALLOWED_PAGES = ['about', 'contact', 'help']
 
@@ -17,8 +17,8 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email || !session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformOwner(session.user.email, env)) {
-    return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
+  if (!isPlatformAdmin(session.user, env)) {
+    return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
   }
 
   try {

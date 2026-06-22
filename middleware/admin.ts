@@ -1,7 +1,7 @@
 export default defineNuxtRouteMiddleware(async () => {
   const fetch = useRequestFetch()
-  const session = await fetch<{ user?: { role?: string } }>('/api/auth/get-session').catch(() => null)
-  if (session?.user?.role !== 'admin') {
+  const access = await fetch<{ allowed?: boolean }>('/api/admin/access').catch(() => null)
+  if (!access?.allowed) {
     return navigateTo('/login')
   }
 })

@@ -1,7 +1,8 @@
 // DELETE /api/admin/blog/posts/[postId] - Delete platform blog post
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformOwner } from '~/server/utils/platform-auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { deletePlatformBlogPost } from '~/server/utils/platform-content'
 
 export default defineEventHandler(async (event) => {
   const postId = getRouterParam(event, 'postId')
@@ -14,19 +15,16 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformOwner(session.user.email, env)) {
-    return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
+  if (!isPlatformAdmin(session.user, env)) {
+    return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
   }
 
   try {
-    const result = await db.prepare(`DELETE FROM platform_blog_posts WHERE id = ?`).bind(postId).run()
-  if (!result.meta.changes || result.meta.changes === 0) {
-      return jsonResponse({ error: 'Post not found' }, { status: 404 })
-    }
+    return jsonResponse(await deletePlatformBlogPost(db, postId))
   } catch (err) {
-    console.error('Failed to delete blog post:', err)
-    return jsonResponse({ error: 'Failed to delete post' }, { status: 500 })
+    const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? Number((err as { statusCode: number }).statusCode) : 500
+    const message = err instanceof Error ? err.message : 'Failed to delete post'
+    if (statusCode >= 500) console.error('Failed to delete blog post:', err)
+    return jsonResponse({ error: message }, { status: statusCode })
   }
-
-  return jsonResponse({ success: true })
 })

@@ -128,8 +128,8 @@
 
 /* WCAG accessibility: any element that uses bg-primary as a background must
    read --primary-foreground for its text colour so contrast is always ≥4.5:1.
-   Nuxt UI solid primary buttons generate a bg-primary class, so this covers them too. */
-.bg-primary { color: var(--primary-foreground, #fff) !important; }
+   Nuxt UI solid primary buttons are configured in app.config.ts to use
+   text-[var(--primary-foreground)] instead of the default text-inverted. */
 
 /* Menu dotted leader line */
 .saya-dotted-leader {
