@@ -343,7 +343,11 @@ const generatePost = async () => {
         reader.onerror = () => reject(reader.error || new Error('Failed to read file'))
         reader.readAsDataURL(file)
       })
-      image_base64 = dataUrl.split(',')[1]
+      const commaIndex = dataUrl.indexOf(',')
+      if (commaIndex === -1 || commaIndex === dataUrl.length - 1) {
+        throw new Error('Failed to read image data.')
+      }
+      image_base64 = dataUrl.slice(commaIndex + 1)
     }
 
     const res = await $fetch<ApiRecord>(`/api/dashboard/ai/posts/generate`, {

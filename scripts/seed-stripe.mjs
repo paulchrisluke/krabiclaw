@@ -230,7 +230,7 @@ async function main() {
     features: [
       'Restaurant or experience site live in minutes',
       'Your own domain (yourbusiness.com)',
-      'Unlimited locations — one site covers all your branches',
+      'Unlimited locations per site — add more sites anytime',
       'Edit menus, content & photos through ChatGPT',
       'Bookings, ticketed experiences & delivery links',
       'WhatsApp booking & reservation notifications',

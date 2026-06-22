@@ -12,8 +12,8 @@
           color="neutral"
           variant="soft"
           icon="i-lucide-languages"
-          title="No restaurant yet"
-          description="Translations will be available after your restaurant workspace is set up."
+          title="No site yet"
+          description="Translations will be available after your site workspace is set up."
         />
 
         <!-- Free plan → upsell -->
@@ -27,14 +27,14 @@
                 <h2 class="text-lg font-bold text-highlighted">Translations are included in Growth</h2>
                 <p class="mt-1 text-sm text-muted max-w-md">
                   Upgrade to Growth and we'll translate your entire site into one language — menu, pages, and all.
-                  You focus on the restaurant, we handle the words.
+                  You focus on the site, we handle the words.
                 </p>
               </div>
               <div class="flex flex-col sm:flex-row gap-3">
                 <UButton color="primary" size="lg" @click="openUpsell('growth', 'translations-page')">
                   Get Growth — $49/mo
                 </UButton>
-                <UButton color="neutral" variant="soft" size="lg" :href="whatsappLink('I want to learn more about translations for my restaurant')" target="_blank">
+                <UButton color="neutral" variant="soft" size="lg" :href="whatsappLink('I want to learn more about translations for my site')" target="_blank" rel="noopener noreferrer">
                   Ask us on WhatsApp
                 </UButton>
               </div>
@@ -69,7 +69,7 @@
                     {{ locale.status }}
                   </UBadge>
                 </div>
-                <UButton size="xs" color="neutral" variant="soft" :href="whatsappLink(`I need an update to my ${localeLabel(locale.locale)} translation`)" target="_blank">
+                <UButton size="xs" color="neutral" variant="soft" :href="whatsappLink(`I need an update to my ${localeLabel(locale.locale)} translation`)" target="_blank" rel="noopener noreferrer">
                   Request update
                 </UButton>
               </div>
@@ -85,12 +85,13 @@
                   variant="outline"
                   :href="whatsappLink(`I'd like my site translated into ${option.label}`)"
                   target="_blank"
+                  rel="noopener noreferrer"
                   class="justify-start"
                 >
                   {{ option.label }}
                 </UButton>
               </div>
-              <p class="mt-3 text-xs text-muted">Need a different language? <a :href="whatsappLink('I need a language translation not listed')" target="_blank" class="text-primary hover:underline">Message us on WhatsApp</a></p>
+              <p class="mt-3 text-xs text-muted">Need a different language? <a :href="whatsappLink('I need a language translation not listed')" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">Message us on WhatsApp</a></p>
             </div>
           </UCard>
 
@@ -132,7 +133,7 @@
                     {{ locale.status }}
                   </UBadge>
                 </div>
-                <UButton size="xs" color="neutral" variant="soft" :href="whatsappLink(`I need an update to my ${localeLabel(locale.locale)} translation`)" target="_blank">
+                <UButton size="xs" color="neutral" variant="soft" :href="whatsappLink(`I need an update to my ${localeLabel(locale.locale)} translation`)" target="_blank" rel="noopener noreferrer">
                   Request update
                 </UButton>
               </div>
@@ -141,11 +142,12 @@
             <div class="mt-5 pt-4 border-t border-default flex items-center justify-between">
               <p class="text-sm text-muted">Need another language?</p>
               <UButton
-                color="primary"
-                variant="soft"
-                icon="i-heroicons-plus"
-                :href="whatsappLink('I want to add another language translation to my site')"
-                target="_blank"
+              color="primary"
+              variant="soft"
+              icon="i-heroicons-plus"
+              :href="whatsappLink('I want to add another language translation to my site')"
+              target="_blank"
+              rel="noopener noreferrer"
               >
                 Request a language
               </UButton>

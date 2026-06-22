@@ -11,10 +11,10 @@ export interface SiteContent {
   type: string
   source: string
   content?: string
-  hero_title?: string
-  hero_subtitle?: string
-  hero_image_asset_id?: string
-  hero_video_asset_id?: string
+  hero_title?: string | null
+  hero_subtitle?: string | null
+  hero_image_asset_id?: string | null
+  hero_video_asset_id?: string | null
   /** Resolved public URL of hero_image_asset_id — injected by getPageContent JOINs */
   hero_public_url?: string | null
   hero_kind?: string | null
@@ -266,6 +266,10 @@ export const deleteSiteContentField = async (
 }
 
 export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, 'updated_at'>) => {
+  const hasHeroTitle = content.hero_title !== undefined
+  const hasHeroSubtitle = content.hero_subtitle !== undefined
+  const hasHeroImageAssetId = content.hero_image_asset_id !== undefined
+  const hasHeroVideoAssetId = content.hero_video_asset_id !== undefined
   const values = [
     content.id || crypto.randomUUID(),
     content.organization_id,
@@ -277,10 +281,10 @@ export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, '
     content.type || 'text',
     content.source || 'manual',
     content.content || null,
-    content.hero_title || null,
-    content.hero_subtitle || null,
-    content.hero_image_asset_id || null,
-    content.hero_video_asset_id || null,
+    content.hero_title ?? null,
+    content.hero_subtitle ?? null,
+    content.hero_image_asset_id ?? null,
+    content.hero_video_asset_id ?? null,
     content.component || null,
   ]
 
@@ -290,16 +294,16 @@ export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, '
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(organization_id, site_id, page, field) WHERE location_id IS NULL DO UPDATE SET
         content = excluded.content,
-        hero_title = excluded.hero_title,
-        hero_subtitle = excluded.hero_subtitle,
-        hero_image_asset_id = COALESCE(excluded.hero_image_asset_id, site_content.hero_image_asset_id),
-        hero_video_asset_id = COALESCE(excluded.hero_video_asset_id, site_content.hero_video_asset_id),
+        hero_title = CASE WHEN ? THEN excluded.hero_title ELSE site_content.hero_title END,
+        hero_subtitle = CASE WHEN ? THEN excluded.hero_subtitle ELSE site_content.hero_subtitle END,
+        hero_image_asset_id = CASE WHEN ? THEN excluded.hero_image_asset_id ELSE site_content.hero_image_asset_id END,
+        hero_video_asset_id = CASE WHEN ? THEN excluded.hero_video_asset_id ELSE site_content.hero_video_asset_id END,
         value = excluded.value,
         type = excluded.type,
         source = excluded.source,
         component = excluded.component,
         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-    `).bind(...values)
+    `).bind(...values, hasHeroTitle ? 1 : 0, hasHeroSubtitle ? 1 : 0, hasHeroImageAssetId ? 1 : 0, hasHeroVideoAssetId ? 1 : 0)
   }
 
   return db.prepare(`
@@ -307,16 +311,16 @@ export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, '
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(organization_id, site_id, location_id, page, field) DO UPDATE SET
       content = excluded.content,
-      hero_title = excluded.hero_title,
-      hero_subtitle = excluded.hero_subtitle,
-      hero_image_asset_id = COALESCE(excluded.hero_image_asset_id, site_content.hero_image_asset_id),
-      hero_video_asset_id = COALESCE(excluded.hero_video_asset_id, site_content.hero_video_asset_id),
+      hero_title = CASE WHEN ? THEN excluded.hero_title ELSE site_content.hero_title END,
+      hero_subtitle = CASE WHEN ? THEN excluded.hero_subtitle ELSE site_content.hero_subtitle END,
+      hero_image_asset_id = CASE WHEN ? THEN excluded.hero_image_asset_id ELSE site_content.hero_image_asset_id END,
+      hero_video_asset_id = CASE WHEN ? THEN excluded.hero_video_asset_id ELSE site_content.hero_video_asset_id END,
       value = excluded.value,
       type = excluded.type,
       source = excluded.source,
       component = excluded.component,
       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).bind(...values)
+  `).bind(...values, hasHeroTitle ? 1 : 0, hasHeroSubtitle ? 1 : 0, hasHeroImageAssetId ? 1 : 0, hasHeroVideoAssetId ? 1 : 0)
 }
 
 export const upsertSiteContent = async (db: D1Database, content: Omit<SiteContent, 'updated_at'>) => {

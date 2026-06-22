@@ -74,21 +74,17 @@
       </article>
 
       <template v-if="posts.length === 0 && showEmptyState">
-        <div v-for="i in (limit || 3)" :key="`placeholder-${i}`" class="flex flex-col bg-default border border-default rounded-3xl overflow-hidden">
-          <div class="flex aspect-4/5 items-center justify-center bg-muted p-8">
-            <div class="h-full w-full animate-pulse rounded-2xl bg-default" />
-          </div>
-          <div class="p-8 flex flex-col grow">
-            <div class="h-3 bg-default rounded animate-pulse mb-3" />
-            <div class="h-6 bg-default rounded animate-pulse mb-4" />
-            <div class="flex-1 space-y-2">
-              <div class="h-3 bg-default rounded animate-pulse" />
-              <div class="h-3 bg-default rounded animate-pulse w-4/5" />
-            </div>
-          </div>
-        </div>
+        <SayaEmptyExample
+          v-for="(example, i) in sayaEmptyStates.posts.examples.slice(0, limit || 3)"
+          :key="`placeholder-${i}`"
+          :item="example"
+          icon="i-heroicons-megaphone"
+          aspect="4/5"
+        />
       </template>
     </div>
+
+    <SayaMcpHint v-if="posts.length === 0 && showEmptyState" :hint="sayaEmptyStates.posts.hint" />
 
     <div v-if="showViewMore && limit && posts.length > 0" class="mt-12 text-center">
       <UButton to="/posts" color="primary" variant="outline" size="xl">
@@ -133,6 +129,10 @@
 </template>
 
 <script setup>
+import SayaEmptyExample from '~/components/saya/SayaEmptyExample.vue'
+import SayaMcpHint from '~/components/saya/SayaMcpHint.vue'
+import { sayaEmptyStates } from '~/config/saya-empty-states'
+
 const props = defineProps({
   posts: { type: Array, default: () => [] },
   limit: { type: Number, default: undefined },

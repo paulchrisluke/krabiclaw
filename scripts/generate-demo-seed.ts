@@ -48,6 +48,8 @@ VALUES (${sqlValue(siteId)}, ${sqlValue(orgId)}, 'saya-theme-v1', 'saya', ${sqlV
 INSERT OR IGNORE INTO business_locations (id, organization_id, site_id, slug, title, city, address, phone, email, maps_url, status, is_primary, created_at, updated_at)
 VALUES (${sqlValue(locationId)}, ${sqlValue(orgId)}, ${sqlValue(siteId)}, 'main', ${sqlValue(name)}, 'Krabi', '{}', NULL, NULL, NULL, 'active', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
+UPDATE sites SET primary_location_id = ${sqlValue(locationId)} WHERE id = ${sqlValue(siteId)};
+
 ${renderSiteBillingSql(siteId, orgId, { status, plan }, sqlValue)}
 
 ${renderSiteEntitlementsSql(siteId, orgId, plan, sqlValue)}`

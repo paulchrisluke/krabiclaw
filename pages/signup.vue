@@ -74,6 +74,7 @@ definePageMeta({
 })
 
 import { authClient } from '~/lib/auth-client'
+import { validatePassword } from '~/utils/password-validation'
 
 const router = useRouter()
 const loading = ref(false)
@@ -101,7 +102,6 @@ const handleGoogleSignIn = async () => {
   }
 }
 
-// Handle Email Sign Up (if enabled later)
 const handleEmailSignup = async () => {
   validationErrors.value.email = ''
   validationErrors.value.password = ''
@@ -116,20 +116,7 @@ const handleEmailSignup = async () => {
     validationErrors.value.email = 'Please enter a valid email address.'
   }
 
-  if (!password) {
-    validationErrors.value.password = 'Password is required.'
-  } else {
-    const unmet = []
-    if (password.length < 8) unmet.push('be at least 8 characters')
-    if (password.length > 128) unmet.push('be at most 128 characters')
-    if (!/[a-z]/.test(password)) unmet.push('include a lowercase letter')
-    if (!/[A-Z]/.test(password)) unmet.push('include an uppercase letter')
-    if (!/\d/.test(password)) unmet.push('include a number')
-    if (!/[^A-Za-z0-9]/.test(password)) unmet.push('include a special character')
-    if (unmet.length) {
-      validationErrors.value.password = `Password must ${unmet.join(', ')}.`
-    }
-  }
+  validationErrors.value.password = validatePassword(password)
 
   if (validationErrors.value.email || validationErrors.value.password) {
     error.value = 'Please correct the highlighted fields.'
@@ -142,7 +129,7 @@ const handleEmailSignup = async () => {
       email,
       password,
       name: email.split('@')[0],
-      callbackURL: '/login'
+      callbackURL: `${window.location.origin}/login?verified=1`
     })
 
     if (result?.error) {
@@ -150,7 +137,7 @@ const handleEmailSignup = async () => {
       return
     }
 
-    await router.push('/login')
+    await router.push('/login?signup=success')
   } catch (err) {
     console.error('Email sign-up error:', err)
     error.value = 'Sign up failed. Please try again.'

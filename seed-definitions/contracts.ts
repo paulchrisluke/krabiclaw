@@ -155,6 +155,11 @@ export interface CuratedExperienceDefinition {
   tagline: string
   body: string
   imageAssetId: string
+  highlights?: string[] | null
+  includedItems?: string[] | null
+  whatToBring?: string[] | null
+  meetingPoint?: string | null
+  cancellationPolicy?: string | null
   price: string
   priceAmount: number | null
   durationMinutes: number | null
@@ -347,6 +352,11 @@ export interface CompiledSeedExperience {
   tagline: string
   body: string
   imageAssetId: string
+  highlights: string[] | null
+  includedItems: string[] | null
+  whatToBring: string[] | null
+  meetingPoint: string | null
+  cancellationPolicy: string | null
   price: string
   priceAmount: number | null
   durationMinutes: number | null

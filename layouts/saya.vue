@@ -28,7 +28,7 @@ const themeStyles = computed(() => {
     '--brand-color': brandColor.value,
     '--ui-primary': brandColor.value,
     '--color-primary': brandColor.value,
-    '--brand-text-color': brandTextColor.value
+    '--brand-color-foreground': brandTextColor.value
   }
 })
 
@@ -113,12 +113,12 @@ useHead(() => {
 .saya-theme .u-button-solid-primary *,
 .saya-theme .u-button--solid.u-button--primary,
 .saya-theme .u-button--solid.u-button--primary * {
-  color: var(--brand-text-color, white) !important;
+  color: var(--brand-color-foreground, white) !important;
 }
 
 /* Ensure icons also inherit the contrast color when in a primary button */
 .saya-theme .u-button-solid-primary .u-icon,
 .saya-theme .u-button--solid.u-button--primary .u-icon {
-  color: var(--brand-text-color, white) !important;
+  color: var(--brand-color-foreground, white) !important;
 }
 </style>

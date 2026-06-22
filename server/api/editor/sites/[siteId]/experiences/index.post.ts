@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createExperience } from '~/server/utils/experiences'
+import { InvalidFieldError, stringArrayOrNull } from '~/server/utils/validation-helpers'
 
 const optionalInteger = (value: unknown) => {
   if (value === null || value === undefined || value === '') return null
@@ -57,12 +58,31 @@ export default defineEventHandler(async (event) => {
     if (parsed === null) return jsonResponse({ error: 'featured_sort_order must be an integer' }, { status: 400 })
   }
 
+  let highlights: string[] | null
+  let includedItems: string[] | null
+  let whatToBring: string[] | null
+  try {
+    highlights = stringArrayOrNull(body.highlights)
+    includedItems = stringArrayOrNull(body.included_items)
+    whatToBring = stringArrayOrNull(body.what_to_bring)
+  } catch (err) {
+    if (err instanceof InvalidFieldError) return jsonResponse({ error: 'highlights, included_items, and what_to_bring must be arrays' }, { status: 400 })
+    throw err
+  }
+
   const experience = await createExperience(db, site.organization_id, siteId, {
     title,
     tagline: body.tagline ? String(body.tagline).trim() : null,
     body: body.body ? String(body.body).trim() : null,
     image_asset_id: body.image_asset_id ? String(body.image_asset_id) : null,
+    video_asset_id: body.video_asset_id ? String(body.video_asset_id) : null,
+    highlights,
+    included_items: includedItems,
+    what_to_bring: whatToBring,
+    meeting_point: body.meeting_point ? String(body.meeting_point).trim() : null,
+    cancellation_policy: body.cancellation_policy ? String(body.cancellation_policy).trim() : null,
     price: body.price ? String(body.price).trim() : null,
+    price_amount: body.price_amount === null || body.price_amount === undefined || body.price_amount === '' ? null : Number(body.price_amount),
     duration_minutes: optionalInteger(body.duration_minutes),
     max_capacity: optionalInteger(body.max_capacity),
     time_slots: Array.isArray(body.time_slots) ? body.time_slots.map(String) : null,

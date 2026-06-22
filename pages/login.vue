@@ -16,6 +16,7 @@
           <h1 class="text-[36px] font-extrabold tracking-tight text-default m-0 mb-2">{{ isOAuthFlow ? 'Connect your account' : 'Welcome back' }}</h1>
           <p class="text-[15px] text-muted mb-7">{{ isOAuthFlow ? 'Sign in to grant access to an external application.' : 'Sign in to manage your restaurant.' }}</p>
 
+          <UAlert v-if="notice" color="success" variant="soft" :description="notice" class="mb-4" />
           <UAlert v-if="error" color="error" variant="soft" :description="error" class="mb-4" />
 
           <div class="space-y-3">
@@ -46,6 +47,33 @@
               <div class="flex-1 h-px bg-default" />
               <span class="text-[12px] text-dimmed uppercase tracking-[0.18em]">or continue with</span>
               <div class="flex-1 h-px bg-default" />
+            </div>
+
+            <form class="space-y-3" @submit.prevent="handleEmailSignIn">
+              <UFormField label="Email">
+                <UInput v-model="emailForm.email" type="email" placeholder="you@example.com" size="lg" class="w-full" :disabled="loading" autocomplete="email" />
+              </UFormField>
+              <UFormField label="Password">
+                <UInput v-model="emailForm.password" type="password" placeholder="••••••••" size="lg" class="w-full" :disabled="loading" autocomplete="current-password" />
+              </UFormField>
+              <div class="flex items-center justify-between gap-3 text-sm">
+                <NuxtLink to="/forgot-password" class="text-primary font-medium hover:underline no-underline">
+                  Forgot password?
+                </NuxtLink>
+                <UButton type="submit" size="lg" :loading="loading">
+                  Sign in with email
+                </UButton>
+              </div>
+            </form>
+
+            <div class="rounded-xl border border-default/60 bg-elevated/60 p-3 space-y-2">
+              <p class="text-sm text-muted">Need to verify your email before signing in?</p>
+              <div class="flex flex-col gap-2 sm:flex-row">
+                <UInput v-model="verificationEmail" type="email" placeholder="Enter your account email" class="flex-1" :disabled="loading || resendingVerification" />
+                <UButton color="neutral" variant="soft" :loading="resendingVerification" @click="handleResendVerification">
+                  Resend verification
+                </UButton>
+              </div>
             </div>
 
             <!-- WhatsApp OTP — Step 1 -->
@@ -82,6 +110,8 @@
 <script setup>
 definePageMeta({ layout: 'platform', auth: false })
 
+import { authClient } from '~/lib/auth-client'
+
 useSeoMeta({
   robots: 'noindex, nofollow'
 })
@@ -91,6 +121,24 @@ const isOAuthFlow = computed(() => !!route.query.client_id)
 
 const loading = ref(false)
 const error = ref(null)
+const notice = ref(null)
+const resendingVerification = ref(false)
+const queryEmail = typeof route.query.email === 'string' ? route.query.email : ''
+const emailForm = ref({
+  email: queryEmail,
+  password: ''
+})
+const verificationEmail = ref(queryEmail)
+
+if (route.query.signup === 'success') {
+  notice.value = queryEmail
+    ? `We sent a verification email to ${queryEmail}. Verify your email, then sign in here.`
+    : 'We sent a verification email. Verify your email, then sign in here.'
+} else if (route.query.verified === '1') {
+  notice.value = 'Your email is verified. You can sign in now.'
+} else if (route.query.reset === 'success') {
+  notice.value = 'Your password was updated. Sign in with your new password.'
+}
 
 onMounted(async () => {
   const session = await authClient.getSession()
@@ -106,6 +154,70 @@ const handleGoogleSignIn = async () => {
     error.value = 'Google sign in failed. Please try again.'
   } finally {
     loading.value = false
+  }
+}
+
+const handleEmailSignIn = async () => {
+  const email = emailForm.value.email.trim()
+  const password = emailForm.value.password
+
+  if (!email || !password) {
+    error.value = 'Enter your email and password to sign in.'
+    return
+  }
+
+  loading.value = true
+  error.value = null
+  notice.value = null
+  verificationEmail.value = email
+
+  try {
+    const result = await authClient.signIn.email({
+      email,
+      password,
+      rememberMe: false,
+    })
+
+    if (result?.error) {
+      error.value = result.error.message ?? 'Email sign in failed. Please try again.'
+      return
+    }
+
+    window.location.href = '/api/post-login'
+  } catch (err) {
+    error.value = err?.message ?? 'Email sign in failed. Please try again.'
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleResendVerification = async () => {
+  const email = verificationEmail.value.trim()
+  if (!email) {
+    error.value = 'Enter your email address to resend verification.'
+    return
+  }
+
+  resendingVerification.value = true
+  error.value = null
+  notice.value = null
+
+  try {
+    const result = await authClient.sendVerificationEmail({
+      email,
+      callbackURL: `${window.location.origin}/login?verified=1`,
+    })
+
+    if (result?.error) {
+      error.value = result.error.message ?? 'Could not resend verification email.'
+      return
+    }
+
+    notice.value = `If ${email} is registered, a fresh verification email is on the way.`
+  } catch (err) {
+    error.value = err?.message ?? 'Could not resend verification email.'
+  } finally {
+    resendingVerification.value = false
   }
 }
 

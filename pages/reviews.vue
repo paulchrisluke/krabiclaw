@@ -60,25 +60,25 @@ const hasMore = computed(() => visibleCount.value < allReviews.value.length)
 const remaining = computed(() => allReviews.value.length - visibleCount.value)
 function loadMore() { visibleCount.value += PAGE_SIZE }
 
-const restaurantName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Restaurant')
+const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
 
 const currentPageUrl = useSeoUrl('/reviews')
 useSeoMeta({
-  title: computed(() => `Reviews | ${restaurantName.value}`),
-  description: computed(() => `Guest reviews for ${restaurantName.value}.`),
-  ogTitle: computed(() => `Reviews | ${restaurantName.value}`),
-  ogDescription: computed(() => `Guest reviews for ${restaurantName.value}.`),
-  ogSiteName: computed(() => restaurantName.value),
-  twitterTitle: computed(() => `Reviews | ${restaurantName.value}`),
-  twitterDescription: computed(() => `Guest reviews for ${restaurantName.value}.`),
+  title: computed(() => `Reviews | ${siteName.value}`),
+  description: computed(() => `Guest reviews for ${siteName.value}.`),
+  ogTitle: computed(() => `Reviews | ${siteName.value}`),
+  ogDescription: computed(() => `Guest reviews for ${siteName.value}.`),
+  ogSiteName: computed(() => siteName.value),
+  twitterTitle: computed(() => `Reviews | ${siteName.value}`),
+  twitterDescription: computed(() => `Guest reviews for ${siteName.value}.`),
   ogImage: useTenantOgImage(),
   ogUrl: currentPageUrl
 })
 
 useSchemaOrg([
   computed(() => ({
-    '@type': 'Restaurant',
-    name: restaurantName.value,
+    '@type': getBusinessSchemaTypes(site?.vertical),
+    name: siteName.value,
     review: allReviews.value.map(r => ({
       '@type': 'Review',
       author: { '@type': 'Person', name: r.reviewer?.displayName || 'Guest' },

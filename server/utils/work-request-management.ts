@@ -1,4 +1,4 @@
-import { hasEntitlement } from '~/server/utils/billing'
+import { hasEntitlement, hasSiteEntitlement } from '~/server/utils/billing'
 
 type SetupEnv = Parameters<typeof hasEntitlement>[0]
 
@@ -51,7 +51,10 @@ export async function createWorkRequest(
   const priority = (input.priority as WorkRequestPriority | undefined) ?? 'normal'
   const source = input.source ?? 'dashboard'
 
-  if (!(await hasEntitlement(env, db, organizationId, 'managed_service'))) {
+  const entitled = siteId
+    ? await hasSiteEntitlement(db, siteId, 'managed_service')
+    : await hasEntitlement(env, db, organizationId, 'managed_service')
+  if (!entitled) {
     return { status: 403, data: { error: 'Work requests require a managed-service plan.' } }
   }
   if (!VALID_WORK_REQUEST_TYPES.includes(type)) {

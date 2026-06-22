@@ -82,7 +82,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       page: "about",
       location: null,
       experience: null,
-      menu: false,
+      menu: true,
       data: null,
     };
   if (path.startsWith("/contact"))
@@ -90,7 +90,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       page: "contact",
       location: null,
       experience: null,
-      menu: false,
+      menu: true,
       data: null,
     };
   if (path.startsWith("/reservations"))
@@ -98,7 +98,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       page: "reservations",
       location: null,
       experience: null,
-      menu: false,
+      menu: true,
       data: null,
     };
   if (path.startsWith("/order"))
@@ -106,7 +106,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       page: "order",
       location: null,
       experience: null,
-      menu: false,
+      menu: true,
       data: null,
     };
   if (path.startsWith("/qa"))
@@ -114,7 +114,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       page: "qa",
       location: null,
       experience: null,
-      menu: false,
+      menu: true,
       data: "qa",
     };
   if (path.startsWith("/reviews"))
@@ -122,7 +122,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       page: "reviews",
       location: null,
       experience: null,
-      menu: false,
+      menu: true,
       data: null,
     };
   if (path.startsWith("/posts"))
@@ -130,7 +130,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       page: "posts",
       location: null,
       experience: null,
-      menu: false,
+      menu: true,
       data: null,
     };
   if (path.startsWith("/experiences"))
@@ -138,7 +138,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       page: "experiences",
       location: null,
       experience: null,
-      menu: false,
+      menu: true,
       data: null,
     };
   if (path.startsWith("/photos"))
@@ -146,7 +146,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       page: "photos",
       location: null,
       experience: null,
-      menu: false,
+      menu: true,
       data: null,
     };
   if (path === "/menu" || path.startsWith("/menu/"))

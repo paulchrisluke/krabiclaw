@@ -27,16 +27,16 @@
           </UCard>
         </section>
 
-        <!-- Restaurants Section -->
+        <!-- Sites Section -->
         <section class="space-y-4">
-          <h3 class="text-xl font-semibold text-highlighted">Restaurants</h3>
+          <h3 class="text-xl font-semibold text-highlighted">Sites</h3>
 
           <div v-if="status === 'pending'" class="space-y-4">
             <USkeleton v-for="i in 2" :key="i" class="h-32 w-full rounded-lg" />
           </div>
 
           <div v-else-if="!billingItems?.length" class="text-sm text-muted">
-            You are not a member of any restaurants.
+            You are not a member of any sites.
           </div>
 
           <div v-else class="space-y-6">

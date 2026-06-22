@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateExperience } from '~/server/utils/experiences'
+import { InvalidFieldError, stringArrayOrNull } from '~/server/utils/validation-helpers'
 
 const optionalNumber = (value: unknown) => {
   if (value === null || value === undefined || value === '') return null
@@ -44,7 +45,19 @@ export default defineEventHandler(async (event) => {
   if ('tagline' in body) updates.tagline = body.tagline ? String(body.tagline).trim() : null
   if ('body' in body) updates.body = body.body ? String(body.body).trim() : null
   if ('image_asset_id' in body) updates.image_asset_id = body.image_asset_id ? String(body.image_asset_id) : null
+  if ('video_asset_id' in body) updates.video_asset_id = body.video_asset_id ? String(body.video_asset_id) : null
+  try {
+    if ('highlights' in body) updates.highlights = stringArrayOrNull(body.highlights)
+    if ('included_items' in body) updates.included_items = stringArrayOrNull(body.included_items)
+    if ('what_to_bring' in body) updates.what_to_bring = stringArrayOrNull(body.what_to_bring)
+  } catch (err) {
+    if (err instanceof InvalidFieldError) return jsonResponse({ error: 'highlights, included_items, and what_to_bring must be arrays' }, { status: 400 })
+    throw err
+  }
+  if ('meeting_point' in body) updates.meeting_point = body.meeting_point ? String(body.meeting_point).trim() : null
+  if ('cancellation_policy' in body) updates.cancellation_policy = body.cancellation_policy ? String(body.cancellation_policy).trim() : null
   if ('price' in body) updates.price = body.price ? String(body.price).trim() : null
+  if ('price_amount' in body) updates.price_amount = optionalNumber(body.price_amount)
   if ('duration_minutes' in body) updates.duration_minutes = optionalInteger(body.duration_minutes)
   if ('max_capacity' in body) updates.max_capacity = optionalInteger(body.max_capacity)
   if ('time_slots' in body) updates.time_slots = Array.isArray(body.time_slots) ? body.time_slots.map(String) : null

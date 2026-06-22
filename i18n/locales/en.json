@@ -142,7 +142,7 @@
       "subtitle": "Common Inquiries",
       "google_guest": "Google Guest",
       "asked_by": "Asked by {author} • {date}",
-      "response_from_restaurant": "Response from Restaurant • {date}",
+      "response_from_owner": "Response from the owner • {date}",
       "no_answer": "No answer yet.",
       "empty_title": "No questions yet.",
       "empty_prompt": "Got a question? Ask us anything and we'll be happy to help.",

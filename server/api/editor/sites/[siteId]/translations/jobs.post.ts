@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { hasEntitlement } from '~/server/utils/billing'
+import { hasSiteEntitlement } from '~/server/utils/billing'
 import { isDemoOrg } from '~/server/utils/demo'
 import { createTranslationJob } from '~/server/utils/translation-inventory'
 import { processTranslationJobBatch } from '~/server/utils/translation-processor'
@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  if (!(await hasEntitlement(env, db, site.organization_id, 'translation'))) {
+  if (!(await hasSiteEntitlement(db, siteId, 'translation'))) {
     return jsonResponse({ error: 'Translation requires a Growth plan or above.' }, { status: 403 })
   }
 

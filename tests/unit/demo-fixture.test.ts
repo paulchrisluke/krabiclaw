@@ -156,7 +156,7 @@ test("demo content block includes site content for all pages including home hero
   assert.match(sql, /INSERT OR IGNORE INTO site_content/);
   assert.match(sql, /hero_video_asset_id/);
   assert.match(sql, /Wood fire\. Brooklyn nights\./);
-  assert.match(sql, /story\.title/);
+  assert.match(sql, /story\.headline/);
   assert.match(sql, /hero\.kicker/);
 });
 

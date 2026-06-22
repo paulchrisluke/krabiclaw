@@ -84,7 +84,7 @@
           </UFormField>
           <UFormField label="Additional media gallery" help="Add more images or videos to show in a carousel.">
             <div class="space-y-3">
-              <div v-for="(media, index) in form.images" :key="index" class="flex items-center gap-3">
+              <div v-for="(media, index) in form.images" :key="media._key" class="flex items-center gap-3">
                 <div class="flex-1">
                   <MediaPicker
                     v-model="media.asset_id"
@@ -94,6 +94,24 @@
                     @change="(asset) => handleGalleryMediaChange(index, asset)"
                   />
                 </div>
+                <UButton
+                  size="sm"
+                  color="neutral"
+                  variant="ghost"
+                  icon="i-heroicons-chevron-up"
+                  aria-label="Move image up"
+                  :disabled="index === 0"
+                  @click="moveGalleryMedia(index, -1)"
+                />
+                <UButton
+                  size="sm"
+                  color="neutral"
+                  variant="ghost"
+                  icon="i-heroicons-chevron-down"
+                  aria-label="Move image down"
+                  :disabled="index === form.images.length - 1"
+                  @click="moveGalleryMedia(index, 1)"
+                />
                 <UButton size="sm" color="error" variant="ghost" icon="i-heroicons-x-mark" @click="removeGalleryMedia(index)" />
               </div>
               <UButton size="sm" color="neutral" variant="soft" icon="i-heroicons-plus" @click="addGalleryMedia">
@@ -181,6 +199,21 @@
           </UFormField>
           <UFormField label="Availability note" help="Short note shown when near capacity, e.g. 'Last 2 spots'.">
             <UInput v-model="form.available_note" class="w-full" />
+          </UFormField>
+          <UFormField label="Highlights" help="One highlight per line.">
+            <UTextarea v-model="form.highlights_input" :rows="4" placeholder="Hands-on clay shaping&#10;Small-group instruction&#10;Tea and snacks included" class="w-full" />
+          </UFormField>
+          <UFormField label="What's included" help="One included item per line.">
+            <UTextarea v-model="form.included_items_input" :rows="4" placeholder="Materials and tools&#10;Apron&#10;Welcome drink" class="w-full" />
+          </UFormField>
+          <UFormField label="What to bring" help="One item per line.">
+            <UTextarea v-model="form.what_to_bring_input" :rows="4" placeholder="Comfortable clothes&#10;Closed-toe shoes&#10;Booking confirmation" class="w-full" />
+          </UFormField>
+          <UFormField label="Meeting point" help="Short arrival or check-in instruction.">
+            <UTextarea v-model="form.meeting_point" :rows="3" placeholder="Meet at the main studio reception 10 minutes before your start time." class="w-full" />
+          </UFormField>
+          <UFormField label="Cancellation policy">
+            <UTextarea v-model="form.cancellation_policy" :rows="4" placeholder="Free cancellation up to 24 hours before the experience starts." class="w-full" />
           </UFormField>
         </div>
       </template>
@@ -392,6 +425,17 @@ function copyRecurring(mode: 'all' | 'weekdays' | 'weekend') {
   }
 }
 
+function linesToArray(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+function arrayToLines(value: string[] | null | undefined): string {
+  return Array.isArray(value) ? value.join('\n') : ''
+}
+
 const emptyForm = () => ({
   title: '',
   location_id: '',
@@ -401,12 +445,17 @@ const emptyForm = () => ({
   image_url: null as string | null,
   video_asset_id: null as string | null,
   video_url: null as string | null,
-  images: [] as Array<{ asset_id: string | null; url: string | null; kind: 'image' | 'video' }>,
+  images: [] as Array<{ _key: string; asset_id: string | null; url: string | null; kind: 'image' | 'video' }>,
   price: '',
   price_amount: '',
   duration_minutes: '',
   max_capacity: '',
   available_note: '',
+  highlights_input: '',
+  included_items_input: '',
+  what_to_bring_input: '',
+  meeting_point: '',
+  cancellation_policy: '',
   status: 'active' as 'active' | 'inactive' | 'sold_out',
   featured: false,
   featured_sort_order: 0,
@@ -433,11 +482,18 @@ function handleVideoChange(asset: { id: string; publicUrl: string; thumbnailUrl:
 }
 
 function addGalleryMedia() {
-  form.images.push({ asset_id: null, url: null, kind: 'image' })
+  form.images.push({ _key: crypto.randomUUID(), asset_id: null, url: null, kind: 'image' })
 }
 
 function removeGalleryMedia(index: number) {
   form.images.splice(index, 1)
+}
+
+function moveGalleryMedia(index: number, direction: -1 | 1) {
+  const target = index + direction
+  if (target < 0 || target >= form.images.length) return
+  const [item] = form.images.splice(index, 1)
+  if (item) form.images.splice(target, 0, item)
 }
 
 function handleGalleryMediaChange(index: number, asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
@@ -459,12 +515,17 @@ function openEdit(exp: ApiRecord) {
     image_url: exp.image_url ?? null,
     video_asset_id: exp.video_asset_id ?? null,
     video_url: exp.video_url ?? null,
-    images: Array.isArray(exp.images) ? [...exp.images] : [],
+    images: Array.isArray(exp.images) ? exp.images.map((img: { asset_id?: string | null; url: string | null; kind: 'image' | 'video' }) => ({ _key: crypto.randomUUID(), asset_id: img.asset_id ?? null, url: img.url, kind: img.kind })) : [],
     price: exp.price ?? '',
     price_amount: exp.price_amount != null ? String(exp.price_amount) : '',
     duration_minutes: exp.duration_minutes != null ? String(exp.duration_minutes) : '',
     max_capacity: exp.max_capacity != null ? String(exp.max_capacity) : '',
     available_note: exp.available_note ?? '',
+    highlights_input: arrayToLines(exp.highlights),
+    included_items_input: arrayToLines(exp.included_items),
+    what_to_bring_input: arrayToLines(exp.what_to_bring),
+    meeting_point: exp.meeting_point ?? '',
+    cancellation_policy: exp.cancellation_policy ?? '',
     status: exp.status ?? 'active',
     featured: exp.featured ?? false,
     featured_sort_order: exp.featured_sort_order != null ? String(exp.featured_sort_order) : '0',
@@ -508,6 +569,9 @@ async function save() {
               .filter(([, slots]) => (slots as string[]).length > 0),
           )
         : null,
+      highlights: linesToArray(form.highlights_input),
+      included_items: linesToArray(form.included_items_input),
+      what_to_bring: linesToArray(form.what_to_bring_input),
       images: form.images.filter(img => img.url).map(img => ({
         url: img.url,
         kind: img.kind,

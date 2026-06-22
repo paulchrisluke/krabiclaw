@@ -118,6 +118,7 @@
       <OnboardingWizard
         :site-id="siteId"
         :existing-org-slug="orgSlug"
+        :existing-site-slug="siteData?.subdomain ?? null"
         @site-created="onSiteCreated"
       />
       <OnboardingPreviewPane

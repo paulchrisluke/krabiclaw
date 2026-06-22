@@ -48,7 +48,18 @@ export default defineEventHandler(async (event) => {
 
     if (!organization?.slug) return `/dashboard?gb=${status}`
     const encodedOrgSlug = encodeURIComponent(organization.slug)
-    if (!locationId) return `/dashboard/${encodedOrgSlug}?gb=${status}`
+
+    let site: { subdomain: string | null } | null = null
+    try {
+      site = await db.prepare(`SELECT subdomain FROM sites WHERE id = ? LIMIT 1`)
+        .bind(siteId).first<{ subdomain: string | null }>()
+    } catch (e) {
+      console.error('Google Business redirect site query failed:', e)
+      return `/dashboard/${encodedOrgSlug}?gb=${status}`
+    }
+    if (!site?.subdomain) return `/dashboard/${encodedOrgSlug}?gb=${status}`
+    const siteBase = `/dashboard/${encodedOrgSlug}/sites/${encodeURIComponent(site.subdomain)}`
+    if (!locationId) return `${siteBase}?gb=${status}`
 
     try {
       const location = await db.prepare(`
@@ -57,11 +68,11 @@ export default defineEventHandler(async (event) => {
         LIMIT 1
       `).bind(locationId, organizationId, siteId).first<{ slug: string }>()
       return location?.slug
-        ? `/dashboard/${encodedOrgSlug}/${encodeURIComponent(location.slug)}?gb=${status}`
-        : `/dashboard/${encodedOrgSlug}?gb=${status}`
+        ? `${siteBase}/${encodeURIComponent(location.slug)}?gb=${status}`
+        : `${siteBase}?gb=${status}`
     } catch (e) {
       console.error('Google Business redirect location query failed:', e)
-      return `/dashboard/${encodedOrgSlug}?gb=${status}`
+      return `${siteBase}?gb=${status}`
     }
   }
 

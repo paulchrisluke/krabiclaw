@@ -2,7 +2,8 @@ import { createError, getRequestURL, type H3Event } from "h3";
 import { createPreviewToken } from "~/server/utils/preview-token";
 import { getFreeSiteDomain } from "~/server/utils/tenant-hosts";
 import { cloudflareEnv } from "~/server/utils/api-response";
-import { hasEntitlement } from "~/server/utils/billing";
+import { hasSiteEntitlement } from "~/server/utils/billing";
+import { getPageContent } from "~/server/utils/content-management";
 import {
   requestImageUpload,
   buildImageUrl,
@@ -293,7 +294,8 @@ function resolveMcpBaseUrl(event: H3Event): string {
 type GeneratedImageTarget =
   | "logo"
   | "home_hero"
-  | "story_image"
+  | "about_story_image"
+  | "home_story_image"
   | "location_hero"
   | "post_image"
   | "menu_item_image"
@@ -344,14 +346,23 @@ function assignmentForGeneratedTarget(
         useLabel: `Use as homepage hero${forSite}`,
         successMessage: `Homepage hero image updated${forSite}.`,
       };
-    case "story_image":
+    case "about_story_image":
       return {
-        assignTool: "set_story_image",
+        assignTool: "set_about_story_image",
         assignArgs: { site_id: siteId },
         title: "Story Images",
-        subtitle: "Choose the image that best tells the brand story.",
-        useLabel: `Use as story image${forSite}`,
-        successMessage: `Story image updated${forSite}.`,
+        subtitle: "Choose the image that best tells the brand story on the About page.",
+        useLabel: `Use as About story image${forSite}`,
+        successMessage: `About page story image updated${forSite}.`,
+      };
+    case "home_story_image":
+      return {
+        assignTool: "set_home_story_image",
+        assignArgs: { site_id: siteId },
+        title: "Story Images",
+        subtitle: "Choose the image that best tells the brand story on the homepage.",
+        useLabel: `Use as homepage story image${forSite}`,
+        successMessage: `Homepage story image updated${forSite}.`,
       };
     case "location_hero": {
       const locationId = requiredString(args, "location_id");
@@ -410,7 +421,7 @@ function pickerConfigFromShowGeneratedImages(
   const regenerateLabel = optionalString(rawArguments, "regenerate_label");
   const successMessage = optionalString(rawArguments, "success_message");
   const VALID_TARGETS = new Set<string>([
-    "logo", "home_hero", "story_image", "location_hero",
+    "logo", "home_hero", "about_story_image", "home_story_image", "location_hero",
     "post_image", "menu_item_image", "experience_image",
   ]);
   const rawTargetStr = optionalString(rawArguments, "target");
@@ -1385,16 +1396,15 @@ export async function executeMcpToolCall(
 
   if (
     tool.requiredEntitlement &&
-    !(await hasEntitlement(
-      site.env,
+    !(await hasSiteEntitlement(
       site.db,
-      site.organizationId,
+      site.siteId,
       tool.requiredEntitlement,
     ))
   ) {
     throw createError({
       statusCode: 403,
-      statusMessage: `${humanizeEntitlement(tool.requiredEntitlement)} is not enabled for this organization.`,
+      statusMessage: `${humanizeEntitlement(tool.requiredEntitlement)} is not enabled for this site.`,
     });
   }
 
@@ -1659,6 +1669,12 @@ export async function executeMcpToolCall(
       const locationId = requiredString(args, "location_id");
       const assetId = requiredString(args, "asset_id");
       await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+      const currentLocation = await getLocationForMcp(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        locationId,
+      ) as { hero_video_asset_id?: string | null };
       const result = await updateLocation(
         site.db,
         site.organizationId,
@@ -1670,6 +1686,12 @@ export async function executeMcpToolCall(
       assertDomainSuccess(result);
       return {
         ...result.data,
+        ...(currentLocation.hero_video_asset_id
+          ? {
+              warning:
+                "This location already has a hero video, which takes display priority over a hero image. The video will keep showing. Call clear_location_hero_video first if you want this image to display instead.",
+            }
+          : {}),
         context: await mutationContextPayload(site, { locationId }),
       };
     }
@@ -1677,12 +1699,56 @@ export async function executeMcpToolCall(
       const locationId = requiredString(args, "location_id");
       const assetId = requiredString(args, "asset_id");
       await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
+      const currentLocation = await getLocationForMcp(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        locationId,
+      ) as { hero_image_asset_id?: string | null };
       const result = await updateLocation(
         site.db,
         site.organizationId,
         site.siteId,
         locationId,
         { hero_video_asset_id: assetId } as never,
+        site.userId,
+      );
+      assertDomainSuccess(result);
+      return {
+        ...result.data,
+        ...(currentLocation.hero_image_asset_id
+          ? {
+              warning:
+                "This location already has a hero image, but the new hero video will take display priority over it.",
+            }
+          : {}),
+        context: await mutationContextPayload(site, { locationId }),
+      };
+    }
+    case "clear_location_hero_image": {
+      const locationId = requiredString(args, "location_id");
+      const result = await updateLocation(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        locationId,
+        { hero_image_asset_id: null } as never,
+        site.userId,
+      );
+      assertDomainSuccess(result);
+      return {
+        ...result.data,
+        context: await mutationContextPayload(site, { locationId }),
+      };
+    }
+    case "clear_location_hero_video": {
+      const locationId = requiredString(args, "location_id");
+      const result = await updateLocation(
+        site.db,
+        site.organizationId,
+        site.siteId,
+        locationId,
+        { hero_video_asset_id: null } as never,
         site.userId,
       );
       assertDomainSuccess(result);
@@ -2078,7 +2144,7 @@ export async function executeMcpToolCall(
       const wantsInstagram = channels.includes("instagram");
 
       if (wantsFacebook || wantsInstagram) {
-        if (!(await hasEntitlement(site.env, site.db, site.organizationId, "managed_service"))) {
+        if (!(await hasSiteEntitlement(site.db, site.siteId, "managed_service"))) {
           throw createError({
             statusCode: 403,
             statusMessage:
@@ -2372,7 +2438,7 @@ export async function executeMcpToolCall(
         const orgSlug = site.organizationSlug || site.organizationId;
         return {
           connected: false,
-          connectUrl: `${platformDomain}/dashboard/${orgSlug}/~/settings/integrations`,
+          connectUrl: `${platformDomain}/dashboard/${orgSlug}/~/settings/general`,
         };
       }
       return {
@@ -2383,10 +2449,9 @@ export async function executeMcpToolCall(
       };
     }
     case "publish_to_facebook": {
-      const allowed = await hasEntitlement(
-        site.env,
+      const allowed = await hasSiteEntitlement(
         site.db,
-        site.organizationId,
+        site.siteId,
         "managed_service",
       );
       if (!allowed) {
@@ -2431,10 +2496,9 @@ export async function executeMcpToolCall(
       };
     }
     case "sync_facebook_page": {
-      const allowed = await hasEntitlement(
-        site.env,
+      const allowed = await hasSiteEntitlement(
         site.db,
-        site.organizationId,
+        site.siteId,
         "managed_service",
       );
       if (!allowed) {
@@ -2584,6 +2648,12 @@ export async function executeMcpToolCall(
         const assetId = requiredString(args, "asset_id");
         const locationId = optionalString(args, "location_id");
         await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+        const currentHero = await getCurrentHomeHeroState(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          locationId,
+        );
         const update = await updateHomeHero(site.db, site.organizationId, site.siteId, {
           image_asset_id: assetId,
           location_id: locationId,
@@ -2593,6 +2663,12 @@ export async function executeMcpToolCall(
           ...update,
           asset_id: assetId,
           public_url: asset?.public_url ?? null,
+          ...(currentHero.hero_video_asset_id
+            ? {
+                warning:
+                  "This page already has a hero video, which takes display priority over a hero image. The video will keep showing. Call clear_home_hero_video first if you want this image to display instead.",
+              }
+            : {}),
           context: await mutationContextPayload(site, { locationId }),
         };
       } catch (error) {
@@ -2603,8 +2679,34 @@ export async function executeMcpToolCall(
         const assetId = requiredString(args, "asset_id");
         const locationId = optionalString(args, "location_id");
         await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
+        const currentHero = await getCurrentHomeHeroState(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          locationId,
+        );
         const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
           video_asset_id: assetId,
+          location_id: locationId,
+        });
+        return {
+          ...updated,
+          ...(currentHero.hero_image_asset_id
+            ? {
+                warning:
+                  "This page already has a hero image, but the new hero video will take display priority over it.",
+              }
+            : {}),
+          context: await mutationContextPayload(site, { locationId }),
+        };
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "clear_home_hero_image":
+      try {
+        const locationId = optionalString(args, "location_id");
+        const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
+          image_asset_id: null,
           location_id: locationId,
         });
         return {
@@ -2614,7 +2716,21 @@ export async function executeMcpToolCall(
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
-    case "set_story_image":
+    case "clear_home_hero_video":
+      try {
+        const locationId = optionalString(args, "location_id");
+        const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
+          video_asset_id: null,
+          location_id: locationId,
+        });
+        return {
+          ...updated,
+          context: await mutationContextPayload(site, { locationId }),
+        };
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "set_about_story_image":
       try {
         const assetId = requiredString(args, "asset_id");
         await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
@@ -2624,6 +2740,27 @@ export async function executeMcpToolCall(
           site.siteId,
           {
             page: "about",
+            changes: { "story.image": assetId },
+            location_id: null,
+          },
+        );
+        return {
+          ...updated,
+          context: await mutationContextPayload(site),
+        };
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "set_home_story_image":
+      try {
+        const assetId = requiredString(args, "asset_id");
+        await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+        const updated = await updatePageContent(
+          site.db,
+          site.organizationId,
+          site.siteId,
+          {
+            page: "home",
             changes: { "story.image": assetId },
             location_id: null,
           },
@@ -2860,6 +2997,41 @@ export async function executeMcpToolCall(
           requiredString(args, "experience_id"),
           { video_asset_id: assetId },
         );
+      return {
+        experience,
+        context: await mutationContextPayload(site, {
+          locationId: experience && typeof experience.location_id === "string" ? experience.location_id : null,
+        }),
+      };
+    }
+    case "reorder_experience_gallery": {
+      const experienceId = requiredString(args, "experience_id");
+      const current = await getExperienceById(site.db, site.siteId, experienceId);
+      if (!current) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, `No experience found with id "${experienceId}".`);
+      }
+      const raw = objectArray(args.images, "images");
+      const images = raw.map((img) => {
+        if (typeof img.url !== "string" || !img.url) {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, "Each gallery item must have a non-empty url string");
+        }
+        if (img.kind !== "image" && img.kind !== "video") {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, 'Each gallery item must have kind "image" or "video"');
+        }
+        return { url: img.url, kind: img.kind as "image" | "video" };
+      });
+      const key = (item: { url: string; kind: string }) => `${item.kind}:${item.url}`;
+      const currentKeys = (current.images ?? []).map(key).sort();
+      const nextKeys = images.map(key).sort();
+      const isSamePermutation =
+        currentKeys.length === nextKeys.length && currentKeys.every((k, i) => k === nextKeys[i]);
+      if (!isSamePermutation) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "images must be a reordering of the experience's existing gallery (same url/kind values, new order). To add or remove gallery items, use update_experience instead.",
+        );
+      }
+      const experience = await updateExperience(site.db, site.siteId, experienceId, { images });
       return {
         experience,
         context: await mutationContextPayload(site, {
@@ -3549,6 +3721,26 @@ export async function executeMcpToolCall(
         `Unhandled tool: ${toolName}`,
       );
   }
+}
+
+async function getCurrentHomeHeroState(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  locationId?: string | null,
+) {
+  const content = await getPageContent(
+    db,
+    organizationId,
+    siteId,
+    "home",
+    locationId ?? undefined,
+  );
+  const hero = content.find((entry) => entry.field === "hero");
+  return {
+    hero_image_asset_id: hero?.hero_image_asset_id ?? null,
+    hero_video_asset_id: hero?.hero_video_asset_id ?? null,
+  };
 }
 
 function humanizeEntitlement(entitlement: string) {

@@ -46,7 +46,7 @@ const postsCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
 const { googleBusiness } = useBootstrap()
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
-const restaurantName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Restaurant')
+const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
 
 // Progressive reveal — 6 at a time
 const PAGE_SIZE = 6
@@ -58,13 +58,13 @@ function loadMore() { visibleCount.value += PAGE_SIZE }
 
 const currentPageUrl = useSeoUrl('/posts')
 useSeoMeta({
-  title: computed(() => `Updates | ${restaurantName.value}`),
-  description: computed(() => `Latest news and updates from ${restaurantName.value}.`),
-  ogTitle: computed(() => `Updates | ${restaurantName.value}`),
-  ogDescription: computed(() => `Latest news and updates from ${restaurantName.value}.`),
-  ogSiteName: computed(() => restaurantName.value),
-  twitterTitle: computed(() => `Updates | ${restaurantName.value}`),
-  twitterDescription: computed(() => `Latest news and updates from ${restaurantName.value}.`),
+  title: computed(() => `Updates | ${siteName.value}`),
+  description: computed(() => `Latest news and updates from ${siteName.value}.`),
+  ogTitle: computed(() => `Updates | ${siteName.value}`),
+  ogDescription: computed(() => `Latest news and updates from ${siteName.value}.`),
+  ogSiteName: computed(() => siteName.value),
+  twitterTitle: computed(() => `Updates | ${siteName.value}`),
+  twitterDescription: computed(() => `Latest news and updates from ${siteName.value}.`),
   ogImage: useTenantOgImage(),
   ogUrl: currentPageUrl
 })

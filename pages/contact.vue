@@ -1,5 +1,4 @@
 <template>
-  <NuxtLayout :name="isPlatform ? 'platform' : 'saya'">
 
     <!-- ── TENANT: Brand contact page ────────────────────────── -->
     <div v-if="!isPlatform">
@@ -264,7 +263,6 @@
       </div>
     </div>
 
-  </NuxtLayout>
 </template>
 
 <script setup>
@@ -273,6 +271,9 @@ definePageMeta({ layout: false })
 import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 
 const { isPlatform, siteId, site } = useTenantSite()
+
+// Use Nuxt-native dynamic layout to avoid layout transition issues on client navigation.
+setPageLayout(isPlatform ? 'platform' : 'saya')
 const { locale } = useI18n()
 const vertCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 const { t } = useI18n()

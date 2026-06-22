@@ -117,7 +117,7 @@
           </div>
           <template #footer>
             <div class="flex items-center justify-between text-sm text-muted">
-              <span>Email is managed via your social login provider.</span>
+              <span>Your account email works across Google, WhatsApp, and email/password sign-in.</span>
             </div>
           </template>
         </UCard>
@@ -210,7 +210,7 @@
       <div class="p-6 space-y-4">
         <div>
           <h3 class="text-lg font-semibold text-highlighted">Delete your account?</h3>
-          <p class="mt-1 text-sm text-muted">This will permanently delete your account, organization, restaurant site, locations, and menu data. This action cannot be undone.</p>
+          <p class="mt-1 text-sm text-muted">This will permanently delete your account, organization, site, locations, and menu data. This action cannot be undone.</p>
         </div>
 
         <UAlert

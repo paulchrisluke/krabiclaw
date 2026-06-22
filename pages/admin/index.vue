@@ -188,21 +188,21 @@
           </template>
         </UCard>
 
-        <!-- Invite Restaurant Client -->
+        <!-- Invite Client -->
         <UCard>
           <template #header>
             <div>
-              <h2 class="font-semibold text-highlighted">Invite Restaurant Client</h2>
+              <h2 class="font-semibold text-highlighted">Invite Client</h2>
               <p class="mt-0.5 text-sm text-muted">Creates an org and generates an invite link to send via WhatsApp.</p>
             </div>
           </template>
 
           <div class="space-y-3">
-            <UFormField label="Restaurant name">
+            <UFormField label="Business name">
               <UInput v-model="clientRestaurantName" placeholder="Kikuzuki Krabi" class="w-full" />
             </UFormField>
             <UFormField label="Owner email">
-              <UInput v-model="clientEmail" type="email" placeholder="owner@restaurant.com" class="w-full" @keyup.enter="inviteClient" />
+              <UInput v-model="clientEmail" type="email" placeholder="owner@business.com" class="w-full" @keyup.enter="inviteClient" />
             </UFormField>
             <UButton :loading="invitingClient" @click="inviteClient">Generate invite link</UButton>
           </div>
@@ -224,7 +224,7 @@
                   color="success"
                   variant="soft"
                   icon="i-lucide-message-circle"
-                  :href="`https://wa.me/?text=${encodeURIComponent('Hi! Here is your link to set up your restaurant on KrabiClaw: ' + clientInviteResult.inviteUrl)}`"
+                  :href="`https://wa.me/?text=${encodeURIComponent('Hi! Here is your link to set up your site on KrabiClaw: ' + clientInviteResult.inviteUrl)}`"
                   target="_blank"
                 >
                   WhatsApp

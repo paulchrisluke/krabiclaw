@@ -207,7 +207,7 @@
           <span v-else-if="siteId && !setupMode" class="text-xs text-muted">or drag & drop a menu file anywhere</span>
         </div>
         <p v-if="!siteId && !setupMode" class="mt-2 text-center text-xs text-muted">
-          Create your restaurant workspace to use ChowBot.
+          Create your workspace to use ChowBot.
         </p>
       </div>
 
@@ -227,12 +227,13 @@
 import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
 import { getQuickActionPrompts } from '~/composables/useOnboardingPrompts'
+import type { SiteVertical } from '~/utils/vertical-copy'
 
 const props = defineProps<{ embedded?: boolean; setupMode?: boolean }>()
 const setupMode = computed(() => Boolean(props.setupMode))
 
 const dashboard = useDashboardSite()
-const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, currentPageOverride } = useChowBot()
+const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, currentPageOverride, draftMessage } = useChowBot()
 const orgSettings = useOrgSettings()
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
@@ -252,14 +253,21 @@ async function purchaseCredits(bundle: 500 | 2500 | 5000) {
 }
 
 const input = ref('')
+
+watch(draftMessage, (text: string | null) => {
+  if (!text) return
+  input.value = text
+  draftMessage.value = null
+})
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const pendingFile = ref<File | null>(null)
 const pendingText = ref<{ name: string; content: string } | null>(null)
 const isUploading = ref(false)
 const dragCounter = ref(0)
 const isDragging = computed(() => dragCounter.value > 0)
-const setupStep = ref<'source' | 'name' | 'subdomain'>('source')
+const setupStep = ref<'source' | 'vertical' | 'name' | 'subdomain'>('source')
 const setupSource = ref<'google' | 'facebook' | 'manual' | null>(null)
+const setupVertical = ref<SiteVertical | null>(null)
 const setupRestaurantName = ref('')
 const setupSubdomain = ref('')
 const creatingRestaurant = ref(false)
@@ -273,7 +281,7 @@ const setupStarterPrompts = [
 ]
 
 const starterPrompts = computed(() => setupMode.value && !siteId.value ? setupStarterPrompts : regularStarterPrompts.value)
-const emptyTitle = computed(() => setupMode.value && !siteId.value ? "Let's get your restaurant started" : 'What can I help with?')
+const emptyTitle = computed(() => setupMode.value && !siteId.value ? "Let's get your site started" : 'What can I help with?')
 const emptyDescription = computed(() => setupMode.value && !siteId.value
   ? 'Choose a starting point. I will create the workspace, then keep going from here.'
   : 'Ask anything, or drop a menu image to extract it.'
@@ -290,6 +298,7 @@ function handleClearMessages() {
   clearMessages()
   setupStep.value = 'source'
   setupSource.value = null
+  setupVertical.value = null
   setupRestaurantName.value = ''
   setupSubdomain.value = ''
 }
@@ -343,29 +352,45 @@ function normalizeSubdomain(value: string) {
 }
 
 function setupPromptForSource() {
+  const businessWord = setupVertical.value === 'experience' ? 'experience' : 'restaurant'
   if (setupSource.value === 'google') {
-    return 'Help me start from my Google Business profile. I want to set up locations, hours, photos, and restaurant details.'
+    return `Help me start from my Google Business profile. I want to set up locations, hours, photos, and ${businessWord} details.`
   }
   if (setupSource.value === 'facebook') {
-    return 'Help me start from my Facebook or Instagram presence. I want to turn existing social content into my restaurant site.'
+    return `Help me start from my Facebook or Instagram presence. I want to turn existing social content into my ${businessWord} site.`
   }
-  return 'Help me build my restaurant manually from scratch. Start by asking for the most important details.'
+  return `Help me build my ${businessWord} manually from scratch. Start by asking for the most important details.`
 }
 
 function handleSetupStarter(prompt: string) {
   const lower = prompt.toLowerCase()
   setupSource.value = lower.includes('google') ? 'google' : lower.includes('facebook') ? 'facebook' : 'manual'
-  setupStep.value = 'name'
+  setupStep.value = 'vertical'
   messages.value = [
     ...messages.value,
     { role: 'user', content: prompt },
     {
       role: 'assistant',
+      content: 'First, what are you setting up — a restaurant, café, or bar, or a bookable experience like classes, tours, or workshops?',
+    },
+  ]
+}
+
+function handleSetupVerticalReply(text: string) {
+  const lower = text.toLowerCase()
+  setupVertical.value = /experience|class|tour|workshop|studio|activit|pottery|booking/.test(lower) ? 'experience' : 'restaurant'
+  setupStep.value = 'name'
+  const nameWord = setupVertical.value === 'experience' ? 'business' : 'restaurant'
+  messages.value = [
+    ...messages.value,
+    { role: 'user', content: text.trim() },
+    {
+      role: 'assistant',
       content: setupSource.value === 'google'
-        ? 'Great. First, what is the restaurant name? After I create the workspace, I can help connect Google Business from here.'
+        ? `Great. First, what is the ${nameWord} name? After I create the workspace, I can help connect Google Business from here.`
         : setupSource.value === 'facebook'
-          ? 'Perfect. What is the restaurant name? After I create the workspace, I can help connect Meta and turn existing content into the site.'
-          : 'Easy. What is the restaurant name? I will create the workspace first, then we can build it together step by step.',
+          ? `Perfect. What is the ${nameWord} name? After I create the workspace, I can help connect Meta and turn existing content into the site.`
+          : `Easy. What is the ${nameWord} name? I will create the workspace first, then we can build it together step by step.`,
     },
   ]
 }
@@ -375,6 +400,11 @@ async function handleSetupMessage(text: string) {
 
   if (setupStep.value === 'source') {
     handleSetupStarter(text)
+    return
+  }
+
+  if (setupStep.value === 'vertical') {
+    handleSetupVerticalReply(text)
     return
   }
 
@@ -388,7 +418,7 @@ async function handleSetupMessage(text: string) {
         { role: 'user', content: text.trim() },
         {
           role: 'assistant',
-          content: 'Please enter a valid restaurant name or type a domain/address you would like to use.',
+          content: 'Please enter a valid name or type a domain/address you would like to use.',
         },
       ]
       return
@@ -425,12 +455,12 @@ async function handleSetupMessage(text: string) {
   messages.value = [
     ...messages.value,
     { role: 'user', content: text.trim() },
-    { role: 'assistant', content: 'Creating the restaurant workspace...', streaming: true },
+    { role: 'assistant', content: 'Creating the workspace...', streaming: true },
   ]
   creatingRestaurant.value = true
 
   try {
-    const validation = await $fetch<{ available: boolean; message?: string }>('/api/dashboard/restaurant/validate-subdomain', {
+    const validation = await $fetch<{ available: boolean; message?: string }>('/api/dashboard/site/validate-subdomain', {
       method: 'POST',
       body: { subdomain: requestedSubdomain }
     })
@@ -441,12 +471,12 @@ async function handleSetupMessage(text: string) {
       return
     }
 
-    await $fetch('/api/dashboard/restaurant', {
+    await $fetch('/api/dashboard/site', {
       method: 'POST',
       body: {
-        restaurantName: setupRestaurantName.value,
+        name: setupRestaurantName.value,
         subdomain: requestedSubdomain,
-        vertical: 'restaurant',
+        vertical: setupVertical.value ?? 'restaurant',
       }
     })
 
@@ -468,7 +498,7 @@ async function handleSetupMessage(text: string) {
       await sendMessage(setupPromptForSource())
     }
   } catch (error) {
-    updateSetupLastMessage(error instanceof Error ? error.message : 'Could not create the restaurant workspace.', true)
+    updateSetupLastMessage(error instanceof Error ? error.message : 'Could not create the workspace.', true)
   } finally {
     creatingRestaurant.value = false
   }

@@ -1,4 +1,5 @@
-import { betterAuth } from 'better-auth'
+import { APIError, betterAuth } from 'better-auth'
+import { hashPassword } from 'better-auth/crypto'
 import { admin, jwt, organization, phoneNumber } from 'better-auth/plugins'
 import { oauthProvider } from '@better-auth/oauth-provider'
 import { D1Dialect } from '@atinux/kysely-d1'
@@ -7,6 +8,8 @@ import { getHeaders } from 'h3'
 import type { H3Event } from 'h3'
 import { normalizePhone, sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { notifyAdminNewUserSignup } from '~/server/utils/admin-notifications'
+import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
+import { validatePassword } from '~/utils/password-validation'
 
 export interface CloudflareEnv {
   DB: D1Database
@@ -33,6 +36,9 @@ export interface CloudflareEnv {
   FACEBOOK_APP_SECRET?: string
   FACEBOOK_REDIRECT_URI?: string
   FACEBOOK_CONFIG_ID?: string
+  RESEND_API_KEY?: string
+  EMAIL_FROM?: string
+  EMAIL_DELIVERY_MODE?: string
   MEDIA_BUCKET?: R2Bucket
   [key: string]: ApiValue
 }
@@ -87,6 +93,56 @@ export function createAuth(env: CloudflareEnv) {
           }
         }
       }
+    },
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: true,
+      minPasswordLength: 8,
+      maxPasswordLength: 128,
+      password: {
+        async hash(password: string) {
+          const passwordError = validatePassword(password)
+          if (passwordError) {
+            throw APIError.from('BAD_REQUEST', {
+              code: 'INVALID_PASSWORD',
+              message: passwordError,
+            })
+          }
+          return hashPassword(password)
+        },
+      },
+      autoSignIn: false,
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user, url }) => {
+        void sendPasswordResetEmail(env, {
+          email: user.email,
+          resetUrl: url,
+        }).catch((error) => {
+          console.error('auth_reset_password_email_failed', {
+            email: user.email,
+            error,
+          })
+        })
+      },
+      onPasswordReset: async ({ user }) => {
+        console.info('auth_password_reset_complete', { email: user.email })
+      },
+    },
+    emailVerification: {
+      sendOnSignUp: true,
+      sendOnSignIn: true,
+      autoSignInAfterVerification: false,
+      sendVerificationEmail: async ({ user, url }) => {
+        void sendVerificationEmail(env, {
+          email: user.email,
+          verificationUrl: url,
+        }).catch((error) => {
+          console.error('auth_verification_email_failed', {
+            email: user.email,
+            error,
+          })
+        })
+      },
     },
     plugins: [
       jwt({

@@ -255,7 +255,6 @@
 
       <!-- ── Featured content (dishes / experiences) ─────────── -->
       <LazySayaFeaturedContent
-        v-if="featuredContent.length"
         :data="{
           items: featuredContent,
           hasMenu: hasMenu,

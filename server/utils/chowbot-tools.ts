@@ -1602,8 +1602,19 @@ export const CHOWBOT_TOOLS: AiTool[] = [
     },
   },
   {
-    name: "set_story_image",
-    description: "Set the story/about page image.",
+    name: "set_about_story_image",
+    description: "Set the About page (/about) story image. Use set_home_story_image instead for the homepage story section.",
+    input_schema: {
+      type: "object",
+      properties: {
+        asset_id: { type: "string", description: "Media asset ID." },
+      },
+      required: ["asset_id"],
+    },
+  },
+  {
+    name: "set_home_story_image",
+    description: "Set the homepage (/) story image. Use set_about_story_image instead for the About page story section.",
     input_schema: {
       type: "object",
       properties: {

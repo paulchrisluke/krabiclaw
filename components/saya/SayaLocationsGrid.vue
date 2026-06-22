@@ -47,28 +47,24 @@
       </NuxtLink>
     </div>
     <!-- Empty state: no locations yet -->
-    <div v-else class="grid gap-8 md:grid-cols-2">
-      <div
-        v-for="i in 2"
-        :key="i"
-        class="overflow-hidden border border-dashed border-default"
-      >
-        <div class="flex aspect-video items-center justify-center bg-muted">
-          <UIcon name="i-heroicons-map-pin" class="size-10 text-muted" />
-        </div>
-        <div class="p-8 pb-9">
-          <div class="saya-display saya-italic text-4xl text-muted leading-none">
-            {{ i === 1 ? 'Main location' : 'Second location' }}
-          </div>
-          <p class="mt-4 text-sm text-muted">
-            {{ i === 1 ? 'Connect Google Business to sync your address, hours, photos and reviews.' : 'Add a second location once your first is connected.' }}
-          </p>
-        </div>
+    <div v-else>
+      <div class="grid gap-8 md:grid-cols-2">
+        <SayaEmptyExample
+          v-for="(example, i) in sayaEmptyStates.locations.examples"
+          :key="i"
+          :item="example"
+          icon="i-heroicons-map-pin"
+          aspect="video"
+          dashed
+        />
       </div>
-      <div v-if="isAuthenticated" class="md:col-span-2 text-center pt-2">
-        <UButton to="/dashboard" color="neutral" variant="outline" size="sm" class="rounded-full">
-          Connect Google Business →
-        </UButton>
+      <div class="text-center pt-8">
+        <SayaMcpHint :hint="sayaEmptyStates.locations.hint" />
+        <div v-if="isAuthenticated" class="mt-2">
+          <UButton to="/dashboard" color="neutral" variant="outline" size="sm" class="rounded-full">
+            Connect Google Business →
+          </UButton>
+        </div>
       </div>
     </div>
   </AppSection>
@@ -76,6 +72,9 @@
 
 <script setup lang="ts">
 import AppSection from '~/components/ui/AppSection.vue'
+import SayaEmptyExample from '~/components/saya/SayaEmptyExample.vue'
+import SayaMcpHint from '~/components/saya/SayaMcpHint.vue'
+import { sayaEmptyStates } from '~/config/saya-empty-states'
 
 interface Props {
   data?: {

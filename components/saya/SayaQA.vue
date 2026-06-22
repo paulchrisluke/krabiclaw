@@ -34,7 +34,7 @@
           <div>
             <p class="text-default leading-relaxed text-sm mb-2">{{ item.topAnswer.text }}</p>
             <p class="text-[10px] text-muted font-bold uppercase tracking-widest">
-              {{ $t('saya.qa.response_from_restaurant', { date: formatDate(item.topAnswer.updateTime) }) }}
+              {{ $t('saya.qa.response_from_owner', { date: formatDate(item.topAnswer.updateTime) }) }}
             </p>
           </div>
         </div>
@@ -50,6 +50,7 @@
         </div>
         <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ $t('saya.qa.empty_title') }}</h3>
         <p class="mt-2 max-w-sm text-sm text-muted">{{ $t('saya.qa.empty_prompt') }}</p>
+        <SayaMcpHint :hint="sayaEmptyStates.qa.hint" />
       </div>
     </div>
 
@@ -63,6 +64,8 @@
 
 <script setup>
 import AppSection from '~/components/ui/AppSection.vue'
+import SayaMcpHint from '~/components/saya/SayaMcpHint.vue'
+import { sayaEmptyStates } from '~/config/saya-empty-states'
 import { UButton } from '#components'
 
 const props = defineProps({

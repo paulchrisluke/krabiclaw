@@ -15,19 +15,19 @@ definePageMeta({ layout: 'saya' })
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { googleBusiness } = useBootstrap()
-const googleQA = computed(() => googleBusiness.value?.qa || [])
-const restaurantName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Restaurant')
+const { googleBusiness, qaList } = useBootstrap()
+const googleQA = computed(() => qaList.value || [])
+const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
 
 const currentPageUrl = useSeoUrl('/qa')
 useSeoMeta({
-  title: computed(() => `Q&A | ${restaurantName.value}`),
-  description: computed(() => `Frequently asked questions about ${restaurantName.value}.`),
-  ogTitle: computed(() => `Q&A | ${restaurantName.value}`),
-  ogDescription: computed(() => `Frequently asked questions about ${restaurantName.value}.`),
-  ogSiteName: computed(() => restaurantName.value),
-  twitterTitle: computed(() => `Q&A | ${restaurantName.value}`),
-  twitterDescription: computed(() => `Frequently asked questions about ${restaurantName.value}.`),
+  title: computed(() => `Q&A | ${siteName.value}`),
+  description: computed(() => `Frequently asked questions about ${siteName.value}.`),
+  ogTitle: computed(() => `Q&A | ${siteName.value}`),
+  ogDescription: computed(() => `Frequently asked questions about ${siteName.value}.`),
+  ogSiteName: computed(() => siteName.value),
+  twitterTitle: computed(() => `Q&A | ${siteName.value}`),
+  twitterDescription: computed(() => `Frequently asked questions about ${siteName.value}.`),
   ogImage: useTenantOgImage(),
   ogUrl: currentPageUrl
 })

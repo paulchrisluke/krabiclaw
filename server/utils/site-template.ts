@@ -142,7 +142,7 @@ const VERTICAL_SITE_CONTENT: Partial<
       `${name} is built around generous food, warm service, and a room that feels easy to return to.`,
     ],
     ["about", "story.image", storyMediaId, "media"],
-    ["about", "story.title", "Our Story"],
+    ["about", "story.headline", "Our Story"],
     [
       "about",
       "story.body",
@@ -165,7 +165,7 @@ const VERTICAL_SITE_CONTENT: Partial<
       `${name} is built around hands-on learning, skilled instruction, and a space that invites you to try something new.`,
     ],
     ["about", "story.image", storyMediaId, "media"],
-    ["about", "story.title", "Our Story"],
+    ["about", "story.headline", "Our Story"],
     [
       "about",
       "story.body",

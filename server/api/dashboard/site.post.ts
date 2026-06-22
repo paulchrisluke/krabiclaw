@@ -1,7 +1,4 @@
-// Thin proxy to canonical site creation logic.
-// Accepts the legacy { restaurantName, subdomain } body shape, but requires
-// callers to explicitly send vertical so we do not silently create the wrong
-// kind of site.
+// Thin proxy to canonical site creation logic for dashboard callers.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
@@ -10,8 +7,18 @@ import { defineEventHandler, readBody } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<Record<string, unknown>>(event)
-  const name = ((body?.name ?? body?.restaurantName) as string | undefined)?.trim()
-  const subdomain = (body?.subdomain as string | undefined)?.trim()
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  const rawName = body.name
+  const rawSubdomain = body.subdomain
+  if (typeof rawName !== 'string' || typeof rawSubdomain !== 'string') {
+    return jsonResponse({ error: 'name and subdomain must be strings' }, { status: 400 })
+  }
+
+  const name = rawName.trim()
+  const subdomain = rawSubdomain.trim()
   const vertical = body?.vertical as string | undefined
 
   if (!name || !subdomain) {
@@ -35,8 +42,5 @@ export default defineEventHandler(async (event) => {
     subdomain,
     vertical: vertical as SiteVertical
   })
-
-  // Re-map siteId → restaurantId for legacy callers
-  const { siteId, ...rest } = result.data
-  return jsonResponse({ restaurantId: siteId, ...rest }, { status: result.status })
+  return jsonResponse(result.data as ApiValue, { status: result.status })
 })

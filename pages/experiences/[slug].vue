@@ -161,6 +161,46 @@
               <!-- eslint-enable vue/no-v-html -->
             </div>
 
+            <div v-if="experience.highlights?.length" class="mt-10 border-t border-default pt-10">
+              <h2 class="text-xl font-semibold text-default mb-6">Highlights</h2>
+              <ul class="space-y-3 text-default">
+                <li v-for="item in experience.highlights" :key="item" class="flex items-start gap-3">
+                  <UIcon name="i-heroicons-sparkles" class="mt-0.5 size-4 shrink-0 text-primary" />
+                  <span>{{ item }}</span>
+                </li>
+              </ul>
+            </div>
+
+            <div v-if="experience.included_items?.length" class="mt-10 border-t border-default pt-10">
+              <h2 class="text-xl font-semibold text-default mb-6">What's included</h2>
+              <ul class="space-y-3 text-default">
+                <li v-for="item in experience.included_items" :key="item" class="flex items-start gap-3">
+                  <UIcon name="i-heroicons-check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
+                  <span>{{ item }}</span>
+                </li>
+              </ul>
+            </div>
+
+            <div v-if="experience.what_to_bring?.length" class="mt-10 border-t border-default pt-10">
+              <h2 class="text-xl font-semibold text-default mb-6">What to bring</h2>
+              <ul class="space-y-3 text-default">
+                <li v-for="item in experience.what_to_bring" :key="item" class="flex items-start gap-3">
+                  <UIcon name="i-heroicons-briefcase" class="mt-0.5 size-4 shrink-0 text-primary" />
+                  <span>{{ item }}</span>
+                </li>
+              </ul>
+            </div>
+
+            <div v-if="experience.meeting_point" class="mt-10 border-t border-default pt-10">
+              <h2 class="text-xl font-semibold text-default mb-5">Meeting point</h2>
+              <p class="whitespace-pre-line text-default leading-7">{{ experience.meeting_point }}</p>
+            </div>
+
+            <div v-if="experience.cancellation_policy" class="mt-10 border-t border-default pt-10">
+              <h2 class="text-xl font-semibold text-default mb-5">Cancellation policy</h2>
+              <p class="whitespace-pre-line text-default leading-7">{{ experience.cancellation_policy }}</p>
+            </div>
+
             <!-- Where you'll meet -->
             <div v-if="experienceLocation" class="mt-10 border-t border-default pt-10">
               <h2 class="text-xl font-semibold text-default mb-5">Where you'll meet</h2>

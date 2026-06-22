@@ -1,18 +1,19 @@
 <template>
-  <AppSection v-if="items.length" :bg="bg" :padding="padding">
+  <AppSection :bg="bg" :padding="padding">
     <div class="mb-12 flex flex-wrap items-end justify-between gap-4">
       <div class="max-w-2xl">
         <p class="saya-kicker mb-6">{{ sectionKicker }}</p>
         <h2 class="saya-display-md text-default">{{ sectionHeading }}</h2>
       </div>
       <NuxtLink
+        v-if="items.length"
         :to="linkTarget"
         class="border-b border-default pb-1 text-xs uppercase tracking-widest text-default no-underline transition hover:opacity-60"
       >
         View all →
       </NuxtLink>
     </div>
-    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    <div v-if="items.length" class="grid grid-cols-2 gap-4 sm:grid-cols-4">
       <NuxtLink
         v-for="(item, i) in items"
         :key="i"
@@ -48,11 +49,20 @@
         </div>
       </NuxtLink>
     </div>
+    <template v-else>
+      <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <SayaEmptyExample v-for="(example, i) in emptyState.examples" :key="i" :item="example" aspect="square" />
+      </div>
+      <SayaMcpHint :hint="emptyState.hint" />
+    </template>
   </AppSection>
 </template>
 
 <script setup lang="ts">
 import AppSection from '~/components/ui/AppSection.vue'
+import SayaEmptyExample from '~/components/saya/SayaEmptyExample.vue'
+import SayaMcpHint from '~/components/saya/SayaMcpHint.vue'
+import { sayaEmptyStates } from '~/config/saya-empty-states'
 
 interface Props {
   data?: {
@@ -82,6 +92,8 @@ const { site } = useTenantSite()
 const items = computed(() => props.data?.items || [])
 const hasMenu = computed(() => props.data?.hasMenu || false)
 const linkTarget = computed(() => hasMenu.value ? '/menu' : '/experiences')
+
+const emptyState = computed(() => hasMenu.value ? sayaEmptyStates.menu : sayaEmptyStates.experiences)
 
 const sectionKicker = computed(() => hasMenu.value ? 'The menu' : 'Experiences')
 const sectionHeading = computed(() => {

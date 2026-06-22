@@ -18,7 +18,7 @@
                 KrabiClaw for ChatGPT
               </h1>
               <p class="text-lg text-muted m-0">
-                Build, edit, and manage your restaurant website entirely through conversation
+                Build, edit, and manage your site entirely through conversation
               </p>
             </div>
           </div>
@@ -90,7 +90,7 @@
               </div>
               <div class="p-4 flex-1 flex flex-col relative">
                 <div class="bg-white rounded-xl overflow-hidden shadow-sm relative -mt-8 z-10 p-5 h-full">
-                  <p class="text-xs text-gray-600 mb-3 leading-relaxed">Here are <strong>all the tools available</strong> for your restaurant:</p>
+                  <p class="text-xs text-gray-600 mb-3 leading-relaxed">Here are <strong>all the tools available</strong> for your site:</p>
                   <ul class="text-[11px] text-gray-600 space-y-2 pl-4 list-disc marker:text-gray-300">
                     <li>Create multi-language menus</li>
                     <li>Change hero text and styling</li>
@@ -232,6 +232,6 @@ async function copyUrl() {
 
 useSeoMeta({
   title: 'Get the KrabiClaw App for ChatGPT',
-  description: 'Add KrabiClaw to ChatGPT and manage your restaurant website entirely through conversation.',
+  description: 'Add KrabiClaw to ChatGPT and manage your restaurant or experience website entirely through conversation.',
 })
 </script>

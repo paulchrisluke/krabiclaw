@@ -126,7 +126,7 @@
 definePageMeta({ layout: 'dashboard' })
 
 const WHATSAPP_NUMBER = '16197200000'
-const whatsappLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi Paul & Julia, I need some help with my restaurant site.')}`
+const whatsappLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi Paul & Julia, I need some help with my site.')}`
 
 const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()

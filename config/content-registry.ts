@@ -109,14 +109,14 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Hero Title',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'Saya Kitchen',
+        defaultValue: 'Welcome',
         placeholder: 'Enter hero title...'
       },
       'hero.subtitle': {
         label: 'Hero Subtitle',
         type: 'textarea',
         sources: ['manual'],
-        defaultValue: 'Authentic Japanese Robatayaki in Krabi, Thailand',
+        defaultValue: 'Tell visitors what makes your business worth a visit.',
         placeholder: 'Enter hero subtitle...'
       },
       'story.headline': {
@@ -158,13 +158,13 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'CTA Heading',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'Ready to Experience Saya Kitchen?'
+        defaultValue: 'Talk about your business'
       },
       'cta.description': {
         label: 'CTA Description',
         type: 'richtext',
         sources: ['manual'],
-        defaultValue: "From our open-flame robatayaki grill to hand-rolled sushi, every dish at Saya is crafted with intention. Join us for an evening you won't forget."
+        defaultValue: 'Share what makes your business worth visiting, and invite customers to take the next step.'
       },
       'business.name': {
         label: 'Business Name',
@@ -268,7 +268,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'Page Subtitle',
         type: 'textarea',
         sources: ['manual'],
-        defaultValue: 'Japanese fire, Southern Thai hospitality',
+        defaultValue: 'Tell visitors a bit about who you are.',
         placeholder: 'A short tagline shown under the page title'
       },
       'story.image': {
@@ -278,8 +278,8 @@ export const contentRegistry: Record<string, PageDefinition> = {
         sources: ['manual'],
         defaultValue: ''
       },
-      'story.title': {
-        label: 'Story Title',
+      'story.headline': {
+        label: 'Story Headline',
         type: 'text',
         sources: ['manual'],
         defaultValue: 'Our Story',
@@ -310,8 +310,8 @@ export const contentRegistry: Record<string, PageDefinition> = {
         label: 'CTA Heading',
         type: 'text',
         sources: ['manual'],
-        defaultValue: 'Come dine with us',
-        placeholder: 'e.g. Come dine with us'
+        defaultValue: 'Come visit us',
+        placeholder: 'e.g. Come visit us'
       }
     }
   },
@@ -343,7 +343,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
     locationScoped: true,
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Location & Hours' },
-      'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Visit us in Ao Nang, Krabi' },
+      'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Find us and see when we’re open.' },
       'hero.image': {
         label: 'Hero Image',
         type: 'media',
@@ -444,7 +444,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
     ],
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Our Menu' },
-      'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Robatayaki, sushi, and seasonal plates' },
+      'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'A look at what we serve.' },
       'menu_items': {
         label: 'Menu Items',
         type: 'menu_items',
@@ -519,8 +519,8 @@ export const contentRegistry: Record<string, PageDefinition> = {
     label: 'Reservations',
     path: '/reservations',
     fields: {
-      'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Reserve a Table' },
-      'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Plan your evening around the grill' },
+      'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Reservations' },
+      'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Plan your visit with us.' },
       'policies.body': {
         label: 'Reservation Policies',
         type: 'richtext',

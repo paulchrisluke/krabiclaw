@@ -35,6 +35,16 @@
                 <UInput v-model="reservationForm.phone" size="lg" type="tel" :placeholder="resCopy.phonePlaceholder" class="w-full" />
               </UFormField>
 
+              <UFormField v-if="hasMultipleLocations" :label="resCopy.locationLabel" name="location_id" required>
+                <USelect
+                  v-model="reservationForm.location_id"
+                  size="lg"
+                  :items="locationSelectOptions"
+                  :placeholder="resCopy.selectLocationLabel"
+                  class="w-full"
+                />
+              </UFormField>
+
               <!-- Date — Calendar (client-only: skips SSR of the full date grid) -->
               <UFormField :label="resCopy.dateLabel" name="date" required>
                 <div class="space-y-3">
@@ -149,6 +159,7 @@
 
           <UCard class="mb-6 rounded-2xl bg-muted">
             <h3 class="mb-4 text-lg font-semibold text-default">{{ resCopy.contactInfoHeading }}</h3>
+            <p v-if="selectedLocation" class="mb-3 text-sm text-muted">{{ selectedLocation.title }}</p>
             <div class="space-y-2">
               <p class="text-muted"><strong class="text-default">{{ resCopy.phoneLabelShort }}:</strong> {{ contactPhone }}</p>
               <p class="text-muted"><strong class="text-default">{{ resCopy.emailLabelShort }}:</strong> {{ contactEmail }}</p>
@@ -188,7 +199,7 @@ const { getField } = usePageContent('reservations')
 const { site, siteId } = useTenantSite()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-const { hasExperiences } = useBootstrap()
+const { hasExperiences, locations, config } = useBootstrap()
 const { formatDate } = useLocaleDate()
 
 // Sites with experiences book per-experience on /experiences/[slug]; this generic
@@ -242,13 +253,49 @@ onMounted(async () => {
 })
 if (!process.client) policiesBody.value = rawPoliciesHtml
 
-// ── Contact ───────────────────────────────────────────────────────────────
-const contactPhone = computed(() => getField('contact.phone', (site as ApiValue)?.config?.phone || ''))
-const contactEmail = computed(() => getField('contact.email', (site as ApiValue)?.config?.email || ''))
-
 // ── Form state ────────────────────────────────────────────────────────────
-const reservationForm = ref({ name: '', email: '', phone: '', date: '', time: '', guests: '', requests: '' })
+const reservationForm = ref({ name: '', email: '', phone: '', location_id: '', date: '', time: '', guests: '', requests: '' })
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// ── Contact ───────────────────────────────────────────────────────────────
+const hasMultipleLocations = computed(() => locations.value.length > 1)
+const locationSelectOptions = computed(() =>
+  locations.value.map(location => ({
+    label: String(location.title ?? ''),
+    value: String(location.id ?? ''),
+  })),
+)
+const selectedLocation = computed(() =>
+  locations.value.find(location => String(location.id ?? '') === reservationForm.value.location_id)
+  ?? locations.value.find(location => Boolean(location.is_primary))
+  ?? locations.value[0]
+  ?? null,
+)
+
+watch(
+  locations,
+  (nextLocations) => {
+    if (reservationForm.value.location_id || nextLocations.length === 0) return
+    const primary = nextLocations.find(location => Boolean(location.is_primary)) ?? nextLocations[0]
+    reservationForm.value.location_id = String(primary?.id ?? '')
+  },
+  { immediate: true },
+)
+
+const contactPhone = computed(() =>
+  String(
+    selectedLocation.value?.phone
+    ?? getField('contact.phone', config.value.contact_phone || '')
+    ?? '',
+  ),
+)
+const contactEmail = computed(() =>
+  String(
+    selectedLocation.value?.email
+    ?? getField('contact.email', config.value.contact_email || '')
+    ?? '',
+  ),
+)
 
 const validateReservation = (state: typeof reservationForm.value) => {
   const errors: { name: string; message: string }[] = []
@@ -256,6 +303,7 @@ const validateReservation = (state: typeof reservationForm.value) => {
   if (!state.email)   errors.push({ name: 'email',  message: 'Please enter your email.' })
   else if (!emailPattern.test(state.email)) errors.push({ name: 'email', message: 'Please enter a valid email address.' })
   if (!state.phone)   errors.push({ name: 'phone',  message: 'Please enter your phone number.' })
+  if (hasMultipleLocations.value && !state.location_id) errors.push({ name: 'location_id', message: resCopy.value.chooseLocationLabel })
   if (!state.date)    errors.push({ name: 'date',   message: 'Please pick a date on the calendar.' })
   if (!state.time)    errors.push({ name: 'time',   message: 'Please choose a time.' })
   if (!state.guests)  errors.push({ name: 'guests', message: 'Please choose your party size.' })
@@ -277,7 +325,16 @@ async function handleReservation() {
     })
     lastSubmission.value = { ...reservationForm.value, id: res?.id, cancellationToken: res?.cancellationToken }
     submitted.value = true
-    reservationForm.value = { name: '', email: '', phone: '', date: '', time: '', guests: '', requests: '' }
+    reservationForm.value = {
+      name: '',
+      email: '',
+      phone: '',
+      location_id: reservationForm.value.location_id,
+      date: '',
+      time: '',
+      guests: '',
+      requests: '',
+    }
     selectedDate.value = undefined
     toast.add({ description: "Reservation request received! We'll confirm shortly.", color: 'success' })
   } catch (err) {
@@ -306,7 +363,7 @@ useBreadcrumbSchema([
   { name: 'Reservations', url: `/reservations` }
 ])
 
-const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Restaurant')
+const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Our Site')
 const seoTitle = computed(() => `${brandName.value} | ${resCopy.value.reserveCta}`)
 const seoDescription = computed(() => resCopy.value.seoReservationDescription(brandName.value))
 useSeoMeta({
@@ -325,8 +382,8 @@ useSeoMeta({
 useSchemaOrg([
   ({
     '@context': 'https://schema.org',
-    '@type': 'Restaurant',
-    name: (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Restaurant',
+    '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
+    name: (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Our Site',
     url: requestUrl.origin,
     reservationUrl: `${requestUrl.origin}/reservations`,
     potentialAction: {

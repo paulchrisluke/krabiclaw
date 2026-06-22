@@ -96,6 +96,8 @@ const WHATSAPP_NUMBER = typeof rawWhatsapp === 'string' && /^[1-9]\d{1,14}$/.tes
 const { isOpen, type, close } = useServiceUpsell()
 const toast = useToast()
 const loading = ref(false)
+const dashboard = useDashboardSite()
+const isExperience = computed(() => dashboard.site.value?.vertical === 'experience')
 
 interface UpsellContent {
   headline: string
@@ -106,87 +108,94 @@ interface UpsellContent {
   cta: string
 }
 
-const contentMap: Record<UpsellType, UpsellContent> = {
-  growth: {
-    headline: 'Let us handle translations & updates',
-    subheading: 'You focus on the food — we keep your site accurate, translated, and found by tourists.',
-    bullets: [
-      'One language translation (English, Chinese, or German)',
-      'Menu updates via WhatsApp — just send us a message',
-      'Monthly traffic & performance snapshot',
-      'Google Business profile basics included',
-    ],
-    price: '$49',
-    priceNote: '/ month',
-    cta: 'Get Growth — $49/mo',
-  },
-  managed: {
-    headline: 'We run your restaurant online, end to end',
-    subheading: 'Send us a voice note on WhatsApp. We handle menu updates, translations, posts, and your Google presence.',
-    bullets: [
-      'Unlimited language translations',
-      'Menu, posts & seasonal content managed for you',
-      'Full Google Business profile management',
-      'Custom domain + free SSL',
-      'Priority WhatsApp support — we respond fast',
-    ],
-    price: '$149',
-    priceNote: '/ month',
-    cta: 'Get Managed — $149/mo',
-  },
-  seo_accelerator: {
-    headline: "Julia's SEO playbook — applied to your restaurant",
-    subheading: "Julia grew tiffycooks.com to 1M active impressions/day. We apply that same strategy to get tourists finding you first.",
-    bullets: [
-      'Local & travel keyword targeting for your area',
-      'Google Maps authority building',
-      'Monthly content cadence — blog, photos, posts',
-      'Competitive analysis & monthly reporting',
-      'Everything in Managed included',
-    ],
-    price: '$349',
-    priceNote: '/ month',
-    cta: 'Get SEO Accelerator — $349/mo',
-  },
-  translation: {
-    headline: 'Add another language to your site',
-    subheading: 'We translate your full menu, pages, and descriptions into a new language — one-time, done right.',
-    bullets: [
-      'Full site translation by a native speaker + AI',
-      'Menu items, descriptions, and allergen notes',
-      'Ready within 3–5 business days',
-    ],
-    price: '$45',
-    priceNote: 'one-time per language',
-    cta: 'Add Translation — $45',
-  },
-  seasonal: {
-    headline: 'Seasonal relaunch package',
-    subheading: 'Fresh photos, updated menu, and a promotion post — all set before your next busy season.',
-    bullets: [
-      'Menu refresh with seasonal items',
-      'Updated promotional content & featured photos',
-      'Google Business post announcing the update',
-    ],
-    price: '$99',
-    priceNote: 'one-time',
-    cta: 'Get Seasonal Relaunch — $99',
-  },
-  gbp_setup: {
-    headline: 'Google Business optimization',
-    subheading: "We audit and optimize your Google Business profile so you show up when tourists search nearby restaurants.",
-    bullets: [
-      'Full profile audit & keyword optimization',
-      'Category, attributes, and hours review',
-      'Photo uploads and Q&A setup',
-    ],
-    price: '$49',
-    priceNote: 'one-time',
-    cta: 'Get Google Business Setup — $49',
-  },
+function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent> {
+  const foodWord = experience ? 'craft' : 'food'
+  const menuWord = experience ? 'offerings' : 'menu'
+  const menuCapitalized = experience ? 'Offerings' : 'Menu'
+  const businessWord = experience ? 'business' : 'restaurant'
+
+  return {
+    growth: {
+      headline: 'Let us handle translations & updates',
+      subheading: `You focus on the ${foodWord} — we keep your site accurate, translated, and found by tourists.`,
+      bullets: [
+        'One language translation (English, Chinese, or German)',
+        `${menuCapitalized} updates via WhatsApp — just send us a message`,
+        'Monthly traffic & performance snapshot',
+        'Google Business profile basics included',
+      ],
+      price: '$49',
+      priceNote: '/ month',
+      cta: 'Get Growth — $49/mo',
+    },
+    managed: {
+      headline: `We run your ${businessWord} online, end to end`,
+      subheading: `Send us a voice note on WhatsApp. We handle ${menuWord} updates, translations, posts, and your Google presence.`,
+      bullets: [
+        'Unlimited language translations',
+        `${menuCapitalized}, posts & seasonal content managed for you`,
+        'Full Google Business profile management',
+        'Custom domain + free SSL',
+        'Priority WhatsApp support — we respond fast',
+      ],
+      price: '$149',
+      priceNote: '/ month',
+      cta: 'Get Managed — $149/mo',
+    },
+    seo_accelerator: {
+      headline: `Julia's SEO playbook — applied to your ${businessWord}`,
+      subheading: "Julia grew tiffycooks.com to 1M active impressions/day. We apply that same strategy to get tourists finding you first.",
+      bullets: [
+        'Local & travel keyword targeting for your area',
+        'Google Maps authority building',
+        'Monthly content cadence — blog, photos, posts',
+        'Competitive analysis & monthly reporting',
+        'Everything in Managed included',
+      ],
+      price: '$349',
+      priceNote: '/ month',
+      cta: 'Get SEO Accelerator — $349/mo',
+    },
+    translation: {
+      headline: 'Add another language to your site',
+      subheading: `We translate your full ${menuWord}, pages, and descriptions into a new language — one-time, done right.`,
+      bullets: [
+        'Full site translation by a native speaker + AI',
+        experience ? 'Offerings, descriptions, and key details' : 'Menu items, descriptions, and allergen notes',
+        'Ready within 3–5 business days',
+      ],
+      price: '$45',
+      priceNote: 'one-time per language',
+      cta: 'Add Translation — $45',
+    },
+    seasonal: {
+      headline: 'Seasonal relaunch package',
+      subheading: `Fresh photos, updated ${menuWord}, and a promotion post — all set before your next busy season.`,
+      bullets: [
+        experience ? 'Offerings refresh with seasonal updates' : 'Menu refresh with seasonal items',
+        'Updated promotional content & featured photos',
+        'Google Business post announcing the update',
+      ],
+      price: '$99',
+      priceNote: 'one-time',
+      cta: 'Get Seasonal Relaunch — $99',
+    },
+    gbp_setup: {
+      headline: 'Google Business optimization',
+      subheading: `We audit and optimize your Google Business profile so you show up when tourists search nearby ${experience ? 'businesses' : 'restaurants'}.`,
+      bullets: [
+        'Full profile audit & keyword optimization',
+        'Category, attributes, and hours review',
+        'Photo uploads and Q&A setup',
+      ],
+      price: '$49',
+      priceNote: 'one-time',
+      cta: 'Get Google Business Setup — $49',
+    },
+  }
 }
 
-const content = computed<UpsellContent>(() => contentMap[type.value ?? 'growth'])
+const content = computed<UpsellContent>(() => buildContentMap(isExperience.value)[type.value ?? 'growth'])
 
 const whatsappLink = computed(() => {
   const planName = content.value.headline

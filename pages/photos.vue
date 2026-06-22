@@ -1,6 +1,5 @@
 <template>
-  <NuxtLayout name="saya">
-    <div class="min-h-screen bg-default text-default">
+  <div class="min-h-screen bg-default text-default">
       <div v-if="pending" class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
         <USkeleton class="h-64 w-full" />
       </div>
@@ -46,18 +45,17 @@
         <p class="mt-4 text-sm text-muted">Add a location and connect Google Business to sync photos.</p>
       </div>
     </div>
-  </NuxtLayout>
 </template>
 
 <script setup>
-definePageMeta({ layout: false })
+definePageMeta({ layout: 'saya' })
 
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const { locations } = useBootstrap()
 const pending = ref(false)
-const restaurantName = computed(() => site?.brand_name || 'Our Restaurant')
+const siteName = computed(() => site?.brand_name || 'Our Site')
 
 if (locations.value.length === 1) {
   await navigateTo(`/locations/${locations.value[0].slug}/photos`, { replace: true, redirectCode: 301 })
@@ -65,13 +63,13 @@ if (locations.value.length === 1) {
 
 const currentPageUrl = useSeoUrl('/photos')
 useSeoMeta({
-  title: computed(() => `Photos | ${restaurantName.value}`),
-  description: computed(() => `Photo gallery from ${restaurantName.value}.`),
-  ogTitle: computed(() => `Photos | ${restaurantName.value}`),
-  ogDescription: computed(() => `Photo gallery from ${restaurantName.value}.`),
-  ogSiteName: computed(() => restaurantName.value),
-  twitterTitle: computed(() => `Photos | ${restaurantName.value}`),
-  twitterDescription: computed(() => `Photo gallery from ${restaurantName.value}.`),
+  title: computed(() => `Photos | ${siteName.value}`),
+  description: computed(() => `Photo gallery from ${siteName.value}.`),
+  ogTitle: computed(() => `Photos | ${siteName.value}`),
+  ogDescription: computed(() => `Photo gallery from ${siteName.value}.`),
+  ogSiteName: computed(() => siteName.value),
+  twitterTitle: computed(() => `Photos | ${siteName.value}`),
+  twitterDescription: computed(() => `Photo gallery from ${siteName.value}.`),
   ogImage: useTenantOgImage(),
   ogUrl: currentPageUrl
 })

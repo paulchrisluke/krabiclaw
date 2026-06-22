@@ -389,7 +389,6 @@
 </template>
 
 <script setup lang="ts">
-// -nocheck
 definePageMeta({ layout: 'dashboard' })
 
 interface BusinessLocation {
@@ -901,7 +900,7 @@ const loadLocationWorkspace = async () => {
   error.value = null
   try {
     const [settingsResponse, locationResponse, menusResponse] = await Promise.all([
-      $fetch<ApiRecord>(`/api/dashboard/settings`),
+      $fetch<{ success: boolean; settings: ApiRecord }>(`/api/dashboard/settings`),
       $fetch<{ success: boolean; location: BusinessLocation }>(`/api/dashboard/locations/${locationId.value}`),
       $fetch<{ success: boolean; menus: ApiRecord[] }>(`/api/dashboard/editor/menus?locationId=${locationId.value}`)
     ])

@@ -1,5 +1,7 @@
 // Subdomain validation API endpoint
 import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
+import { defineEventHandler, readBody } from 'h3'
 
 const reservedSubdomains = [
   'www', 'app', 'api', 'admin', 'dashboard', 'login', 'signup', 
@@ -37,16 +39,36 @@ function validateSubdomainFormat(subdomain: string): { valid: boolean; reason?: 
 }
 
 export default defineEventHandler(async (event) => {
+  const env = cloudflareEnv(event)
+  const db = env.DB
+  if (!db) {
+    return jsonResponse({ 
+      available: false, 
+      message: 'Database not available' 
+    }, { status: 500 })
+  }
+
+  const session = await getAuthSession(event, env)
+  if (!session?.user?.id) {
+    return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+  }
+
   const body = await readBody(event)
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return jsonResponse({
+      available: false,
+      message: 'Subdomain is required'
+    }, { status: 400 })
+  }
   const { subdomain } = body
-  
+
   if (!subdomain || typeof subdomain !== 'string') {
     return jsonResponse({ 
       available: false, 
       message: 'Subdomain is required' 
     }, { status: 400 })
   }
-  
+
   // Validate format
   const formatValidation = validateSubdomainFormat(subdomain)
   if (!formatValidation.valid) {
@@ -55,17 +77,7 @@ export default defineEventHandler(async (event) => {
       message: formatValidation.reason 
     }, { status: 400 })
   }
-  
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  
-  if (!db) {
-    return jsonResponse({ 
-      available: false, 
-      message: 'Database not available' 
-    }, { status: 500 })
-  }
-  
+
   try {
     // Check if subdomain already exists
     const existing = await db.prepare(`

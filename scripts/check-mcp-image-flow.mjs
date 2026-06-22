@@ -270,12 +270,20 @@ async function main() {
     expectValue('set_home_hero_image returns context', payload?.context?.site_id === siteId, payload)
   })
 
-  await assertImageAssignmentTool(headers, 'set_story_image', {
+  await assertImageAssignmentTool(headers, 'set_about_story_image', {
     site_id: siteId,
     asset_id: dataUrlImage?.assetId,
   }, (payload) => {
-    expectValue('set_story_image updates about page', payload?.page === 'about', payload)
-    expectValue('set_story_image returns context', payload?.context?.site_id === siteId, payload)
+    expectValue('set_about_story_image updates about page', payload?.page === 'about', payload)
+    expectValue('set_about_story_image returns context', payload?.context?.site_id === siteId, payload)
+  })
+
+  await assertImageAssignmentTool(headers, 'set_home_story_image', {
+    site_id: siteId,
+    asset_id: rawBase64Image?.assetId,
+  }, (payload) => {
+    expectValue('set_home_story_image updates home page', payload?.page === 'home', payload)
+    expectValue('set_home_story_image returns context', payload?.context?.site_id === siteId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_location_hero_image', {

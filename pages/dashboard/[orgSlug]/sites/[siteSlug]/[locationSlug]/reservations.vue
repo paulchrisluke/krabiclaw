@@ -21,13 +21,13 @@
         <USkeleton v-for="i in 5" :key="i" class="h-24 rounded-lg" />
       </div>
 
-      <div v-else-if="reservations.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
+      <UCard v-else-if="reservations.length === 0" class="border-dashed" :ui="{ body: 'px-6 py-12 text-center' }">
         <UIcon name="i-heroicons-calendar-days" class="mx-auto size-9 text-muted" />
         <p class="mt-3 text-sm font-medium text-highlighted">No reservation requests yet</p>
-      </div>
+      </UCard>
 
-      <div v-else class="divide-y divide-default rounded-lg border border-default bg-default">
-        <div v-for="reservation in reservations" :key="reservation.id" class="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+      <UCard v-else :ui="{ body: 'p-0 sm:p-0' }">
+        <div v-for="reservation in reservations" :key="reservation.id" class="flex flex-col gap-3 border-b border-default p-4 last:border-0 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div class="flex flex-wrap items-center gap-2">
               <p class="font-medium text-highlighted">{{ reservation.name }}</p>
@@ -46,7 +46,7 @@
             <UButton :to="`mailto:${reservation.email}`" icon="i-heroicons-envelope" color="neutral" variant="soft" size="sm">Reply</UButton>
           </div>
         </div>
-      </div>
+      </UCard>
     </UPageBody>
   </UPage>
 </template>

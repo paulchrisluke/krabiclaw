@@ -65,7 +65,8 @@ import {
   WEEKDAY_NAMES,
   type RecurringSlots,
 } from "~/server/utils/experiences";
-import { updateMediaAssetMetadata } from "~/server/utils/media-asset-manager";
+import { buildImageUrl } from "~/server/utils/cloudflare-images";
+import { getMediaAsset, updateMediaAssetMetadata } from "~/server/utils/media-asset-manager";
 import {
   listWorkRequestsForOrganization,
   getNotificationsSettings,
@@ -78,7 +79,6 @@ import {
   listTranslationReviewItems,
   saveTranslationReviewItem,
 } from "~/server/utils/translation-review";
-import { hasEntitlement, type BillingEnv } from "~/server/utils/billing";
 import { contentRegistry, getFieldDef } from "~/config/content-registry";
 import type { MenuItem, UpdateMenuItemRequest } from "~/server/types/menu";
 import {
@@ -175,6 +175,21 @@ function toSqlText(value: ApiValue): string | null | undefined {
   if (typeof value === "string") return value;
   if (typeof value === "number") return String(value);
   return null;
+}
+
+async function resolveMediaAssetPublicUrl(
+  db: D1Database,
+  env: ApiRecord,
+  siteId: string,
+  assetId: string,
+): Promise<string> {
+  const asset = await getMediaAsset(db, assetId, siteId);
+  if (!asset) throw new Error("Media asset not found.");
+  if (asset.public_url) return asset.public_url;
+  if (asset.cloudflare_image_id) {
+    return buildImageUrl(env, asset.cloudflare_image_id, "public");
+  }
+  throw new Error("Media asset does not have a public URL.");
 }
 
 function isValidHttpUrl(value: string): boolean {
@@ -318,7 +333,6 @@ function getComponentFromField(field: string): string | null {
     "story.headline": "SayaBrandStory",
     "story.body": "SayaBrandStory",
     "story.image": "SayaBrandStory",
-    "story.title": "SayaBrandStory",
     "journey.title": "SayaBrandStory",
     "journey.body": "SayaBrandStory",
     "experience.body": "SayaBrandStory",
@@ -2462,10 +2476,6 @@ async function executeTool(
       if (!validPriorities.includes(priority))
         return { error: "priority must be low, normal, high, or urgent" };
 
-      // Check org entitlement before insert
-      if (!(await hasEntitlement(env as unknown as BillingEnv, db, orgId, "managed_service")))
-        return { error: "Work requests require a Managed plan or above." };
-
       const result = await createWorkRequest(env, db, orgId, siteId, {
         type,
         title,
@@ -2624,10 +2634,11 @@ async function executeTool(
       return { updated: true, ...result };
     }
 
-    case "set_story_image": {
+    case "set_about_story_image": {
       const assetId = toSqlText(input.asset_id);
       if (!assetId) return { error: "asset_id is required." };
       const id = `${orgId}::${siteId}::site::about::story.image`;
+      const publicUrl = await resolveMediaAssetPublicUrl(db, env, siteId, assetId);
       await upsertSiteContent(db, {
         id,
         organization_id: orgId,
@@ -2635,17 +2646,42 @@ async function executeTool(
         location_id: undefined,
         page: "about",
         field: "story.image",
-        value: assetId,
+        value: publicUrl,
         type: "image",
         source: "manual",
-        content: assetId,
+        content: publicUrl,
         hero_title: undefined,
         hero_subtitle: undefined,
         hero_image_asset_id: undefined,
         hero_video_asset_id: undefined,
         component: "SayaBrandStory",
       });
-      return { updated: true, asset_id: assetId };
+      return { updated: true, asset_id: assetId, public_url: publicUrl };
+    }
+
+    case "set_home_story_image": {
+      const assetId = toSqlText(input.asset_id);
+      if (!assetId) return { error: "asset_id is required." };
+      const id = `${orgId}::${siteId}::site::home::story.image`;
+      const publicUrl = await resolveMediaAssetPublicUrl(db, env, siteId, assetId);
+      await upsertSiteContent(db, {
+        id,
+        organization_id: orgId,
+        site_id: siteId,
+        location_id: undefined,
+        page: "home",
+        field: "story.image",
+        value: publicUrl,
+        type: "image",
+        source: "manual",
+        content: publicUrl,
+        hero_title: undefined,
+        hero_subtitle: undefined,
+        hero_image_asset_id: undefined,
+        hero_video_asset_id: undefined,
+        component: "SayaBrandStory",
+      });
+      return { updated: true, asset_id: assetId, public_url: publicUrl };
     }
 
     case "get_notification_settings": {

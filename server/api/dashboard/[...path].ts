@@ -11,7 +11,7 @@ export default defineEventHandler(async (event): Promise<Response> => {
   }
 
   let target: string
-  if (path === 'restaurant') {
+  if (path === 'site') {
     target = `/api/sites/${site.id}`
   } else if (path.startsWith('editor/')) {
     target = `/api/editor/sites/${site.id}/${path.slice('editor/'.length)}`

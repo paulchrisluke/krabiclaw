@@ -11,7 +11,7 @@
         <span class="truncate font-mono text-[10.5px] text-dimmed">{{ orgSlug }}</span>
       </div>
       <div class="flex-1" />
-      <UButton color="neutral" variant="ghost" size="sm" @click="router.push(`/dashboard/${orgSlug}`)">
+      <UButton color="neutral" variant="ghost" size="sm" @click="router.push(`/dashboard/${orgSlug}/sites/${siteSlug}`)">
         Back to dashboard
       </UButton>
     </header>
@@ -24,6 +24,7 @@
       <OnboardingWizard
         :site-id="null"
         :existing-org-slug="orgSlug"
+        :existing-site-slug="siteSlug"
         setup-endpoint="/api/dashboard/locations/add"
         setup-manual-endpoint="/api/dashboard/locations/add"
         skip-vertical
@@ -81,6 +82,7 @@ const config = useRuntimeConfig()
 const toast = useToast()
 
 const orgSlug = route.params.orgSlug as string
+const siteSlug = route.params.siteSlug as string
 
 const siteData = ref<ApiRecord | null>(null)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])

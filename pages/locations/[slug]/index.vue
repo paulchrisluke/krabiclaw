@@ -150,7 +150,6 @@
 
       <!-- Featured content (menu items / experiences) -->
       <LazySayaFeaturedContent
-        v-if="featuredItems.length"
         :data="{
           items: featuredItems,
           hasMenu: hasMenu,
@@ -495,7 +494,7 @@ useSchemaOrg([
     const loc = location.value
     if (!loc) return undefined
     return {
-      '@type': ['Restaurant', 'LocalBusiness'],
+      '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
       name: `${siteName.value} — ${loc.title}`,
       description: formattedAddress.value,
       address: { '@type': 'PostalAddress', streetAddress: formattedAddress.value },

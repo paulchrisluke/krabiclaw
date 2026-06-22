@@ -1,5 +1,5 @@
 // Core site creation logic shared by POST /api/sites and the legacy
-// dashboard/restaurant proxy. Handles org creation/lookup, idempotency,
+// dashboard/site proxy. Handles org creation/lookup, idempotency,
 // subdomain uniqueness, seeding, and Cloudflare subdomain registration.
 import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain } from '~/server/utils/domains'
@@ -168,20 +168,32 @@ async function performSeeding(
 
     await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
 
-    // Inherit plan entitlements from the organization's most recent active subscription.
-    // This is intentional for multi-site onboarding: new sites under a paid org
-    // immediately receive the same entitlements without requiring separate subscriptions.
-    const existingBilling = await db.prepare(`
-      SELECT sb.plan FROM site_billing sb
-      WHERE sb.organization_id = ? AND sb.status != 'canceled'
-      ORDER BY sb.updated_at DESC LIMIT 1
-    `).bind(organizationId).first<{ plan: string }>()
-    await setSiteEntitlementsFromPlan(db, siteId, organizationId, existingBilling?.plan ?? 'free')
+    // New sites always start free — a paid org does not grant paid entitlements to
+    // another site until that site has its own Stripe subscription (see
+    // POST /api/billing/site-subscribe for how a site gets upgraded after creation).
+    await setSiteEntitlementsFromPlan(db, siteId, organizationId, 'free')
 
     await db.prepare(`UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`)
       .bind(now, siteId).run()
 
-    return { status: 200, data: { siteId, organizationId, subdomain: resolvedSubdomain, message: 'Site created successfully' } }
+    // Surface whether another site in this org is already on a paid plan, so the
+    // caller can offer to subscribe this new site too (see POST /api/billing/site-subscribe).
+    const existingPaidSite = await db.prepare(`
+      SELECT sb.plan FROM site_billing sb
+      WHERE sb.organization_id = ? AND sb.site_id != ? AND sb.status = 'active' AND sb.plan != 'free'
+      ORDER BY sb.updated_at DESC LIMIT 1
+    `).bind(organizationId, siteId).first<{ plan: string }>()
+
+    return {
+      status: 200,
+      data: {
+        siteId,
+        organizationId,
+        subdomain: resolvedSubdomain,
+        message: 'Site created successfully',
+        offerSubscribePlan: existingPaidSite?.plan ?? null,
+      }
+    }
 
   } catch (seedError) {
     console.error('Seeding failed:', seedError instanceof Error ? seedError : new Error(String(seedError)))

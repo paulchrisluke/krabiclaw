@@ -2,7 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getGoogleBusinessAuthUrl } from '../../../utils/google-business'
-import { hasEntitlement } from '../../../utils/billing'
+import { hasSiteEntitlement } from '../../../utils/billing'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Check Google Business entitlement
-    const hasEntitlementValue = await hasEntitlement(env, db, site.organization_id, 'google_business')
+    const hasEntitlementValue = await hasSiteEntitlement(db, site.id, 'google_business')
     if (!hasEntitlementValue) {
       return jsonResponse({ 
         error: 'Google Business integration requires a paid plan. Upgrade your plan to access this feature.' 

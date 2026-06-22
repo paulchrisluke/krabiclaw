@@ -50,6 +50,7 @@ export default defineEventHandler(async (event) => {
 
   const organizationId = result.data.organizationId as string
   const siteId = result.data.siteId as string | undefined
+  const siteSlug = result.data.subdomain as string | undefined
   const orgRow = await db.prepare(`SELECT slug FROM organization WHERE id = ? LIMIT 1`)
     .bind(organizationId).first<{ slug: string }>()
 
@@ -83,5 +84,5 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return jsonResponse({ success: true, orgSlug: orgRow.slug, siteId, locationSlug: locationRow?.slug ?? null })
+  return jsonResponse({ success: true, orgSlug: orgRow.slug, siteId, siteSlug, locationSlug: locationRow?.slug ?? null })
 })
