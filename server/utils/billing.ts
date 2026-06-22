@@ -282,12 +282,12 @@ export async function verifyStripeWebhook(
   env: BillingEnv,
   payload: string,
   signature: string,
-): { ok: true } | { ok: false; error: string } {
+): Promise<{ ok: true; event: Stripe.Event } | { ok: false; error: string }> {
   if (!env.STRIPE_WEBHOOK_SECRET) throw new Error('Stripe webhook secret not configured')
   const stripe = getStripe(env)
   try {
-    await stripe.webhooks.constructEventAsync(payload, signature, env.STRIPE_WEBHOOK_SECRET)
-    return { ok: true }
+    const event = await stripe.webhooks.constructEventAsync(payload, signature, env.STRIPE_WEBHOOK_SECRET)
+    return { ok: true, event }
   } catch (error) {
     return {
       ok: false,

@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { verifyStripeWebhook, setSiteEntitlementsFromPlan, getPlanFromStripePrice, applySiteSubscription } from '../../utils/billing'
 import { completePaidSiteTransfer, deleteSiteCustomDomains } from '../../utils/site-transfer'
-import Stripe from 'stripe'
+import type Stripe from 'stripe'
 import { getHeader } from 'h3'
 
 interface ExpandedCheckoutSubscription {
@@ -79,9 +79,8 @@ export default defineEventHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   try {
-    const stripe = new Stripe(env.STRIPE_SECRET_KEY)
     const webhookEvent = verification.ok
-      ? await stripe.webhooks.constructEventAsync(rawBody, signature, env.STRIPE_WEBHOOK_SECRET)
+      ? verification.event
       : JSON.parse(rawBody) as Stripe.Event
 
     const existingEvent = await db.prepare(`SELECT id FROM stripe_webhook_events WHERE stripe_event_id = ? LIMIT 1`)

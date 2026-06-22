@@ -1,45 +1,47 @@
 <template>
-  <div class="min-h-screen bg-default text-default">
-    <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
-      <p class="saya-kicker mb-6">Reviews</p>
-      <h1 class="saya-display-md text-default">
-        <template v-if="googleReviewSummary">
-          <span class="flex flex-wrap items-center gap-4">
-            <UIcon name="i-heroicons-star-solid" class="size-8 text-primary" />
-            {{ googleReviewSummary.average }}
-            <span class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
-          </span>
-        </template>
-        <em v-else class="saya-italic">What guests are saying</em>
-      </h1>
+  <UPage class="min-h-screen bg-default text-default">
+    <UPageBody class="p-0">
+      <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
+        <p class="saya-kicker mb-6">Reviews</p>
+        <h1 class="saya-display-md text-default">
+          <template v-if="googleReviewSummary">
+            <span class="flex flex-wrap items-center gap-4">
+              <UIcon name="i-heroicons-star-solid" class="size-8 text-primary" />
+              {{ googleReviewSummary.average }}
+              <span class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
+            </span>
+          </template>
+          <em v-else class="saya-italic">What guests are saying</em>
+        </h1>
 
-      <!-- Multi-location pills -->
-      <div v-if="locations.length > 1" class="mt-8 flex flex-wrap gap-3">
-        <NuxtLink
-          v-for="loc in locations"
-          :key="loc.id"
-          :to="`/locations/${loc.slug}/reviews`"
-          class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
+        <!-- Multi-location pills -->
+        <div v-if="locations.length > 1" class="mt-8 flex flex-wrap gap-3">
+          <NuxtLink
+            v-for="loc in locations"
+            :key="loc.id"
+            :to="`/locations/${loc.slug}/reviews`"
+            class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
+          >
+            <UIcon name="i-heroicons-map-pin" class="size-3.5 opacity-70" />
+            {{ loc.title }}
+          </NuxtLink>
+        </div>
+      </header>
+
+      <!-- Reviews grid -->
+      <LazySayaReviews :reviews="visibleReviews" :rating-summary="googleReviewSummary" :show-title="false" />
+
+      <!-- Load more -->
+      <div v-if="hasMore" class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8 text-center">
+        <button
+          class="inline-flex items-center gap-2 rounded-full border border-default px-8 py-3 text-[11px] font-medium uppercase tracking-widest text-default transition hover:bg-muted"
+          @click="loadMore"
         >
-          <UIcon name="i-heroicons-map-pin" class="size-3.5 opacity-70" />
-          {{ loc.title }}
-        </NuxtLink>
+          Show more <span class="opacity-50">({{ remaining }} remaining)</span>
+        </button>
       </div>
-    </header>
-
-    <!-- Reviews grid -->
-    <LazySayaReviews :reviews="visibleReviews" :rating-summary="googleReviewSummary" :show-title="false" />
-
-    <!-- Load more -->
-    <div v-if="hasMore" class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8 text-center">
-      <button
-        class="inline-flex items-center gap-2 rounded-full border border-default px-8 py-3 text-[11px] font-medium uppercase tracking-widest text-default transition hover:bg-muted"
-        @click="loadMore"
-      >
-        Show more <span class="opacity-50">({{ remaining }} remaining)</span>
-      </button>
-    </div>
-  </div>
+    </UPageBody>
+  </UPage>
 </template>
 
 <script setup>

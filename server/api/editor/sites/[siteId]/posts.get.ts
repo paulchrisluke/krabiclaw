@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const query = getQuery(event)
-  const status = query.status as string | undefined
+  const status = typeof query.status === 'string' ? query.status : undefined
   const locationId = typeof query.location_id === 'string' ? query.location_id : undefined
   const posts = await listPosts(db, site.organization_id, siteId, status, locationId)
   return jsonResponse({ success: true, posts })

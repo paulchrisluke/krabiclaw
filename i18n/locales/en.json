@@ -151,6 +151,7 @@
     },
     "location": {
       "back_to": "Back to {title}",
+      "posts_from": "Updates from {title}",
       "plan_a_visit": "Plan a visit",
       "hours": "Hours",
       "open_now": "Open now",

@@ -563,7 +563,7 @@ export default defineEventHandler(async (event) => {
             name: `posts/${p.id}`,
             summary: p.body,
             title: p.title ?? "",
-            createTime: p.published_at ?? "",
+            createTime: p.published_at ?? p.created_at ?? "",
             media: p.public_url ? [{ googleUrl: p.public_url, mediaFormat: p.kind === "video" ? "VIDEO" : "IMAGE" }] : [],
           })),
         }

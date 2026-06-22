@@ -151,6 +151,7 @@
     },
     "location": {
       "back_to": "กลับไปยัง {title}",
+      "posts_from": "อัปเดตจาก {title}",
       "plan_a_visit": "วางแผนการมาเยือน",
       "hours": "เวลาทำการ",
       "open_now": "เปิดอยู่ตอนนี้",
