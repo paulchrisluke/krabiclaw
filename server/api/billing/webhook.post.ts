@@ -62,9 +62,16 @@ export default defineEventHandler(async (event) => {
   const e2eAuthorized = e2eOverride && expectedDevSecret && providedDevSecret && timingSafeEqualText(providedDevSecret, expectedDevSecret)
 
   const rawBody = body.toString()
-  const verifiedSignature = verifyStripeWebhook(env, rawBody, signature)
-  if (!verifiedSignature && !e2eAuthorized) {
-    console.warn('Stripe webhook rejected: invalid signature')
+  const verification = verifyStripeWebhook(env, rawBody, signature)
+  if (!verification.ok && !e2eAuthorized) {
+    const configuredSecretSuffix = env.STRIPE_WEBHOOK_SECRET.slice(-6)
+    const signatureParts = signature.split(',').map(part => part.trim())
+    console.warn('Stripe webhook rejected: invalid signature', {
+      configuredSecretSuffix,
+      signatureParts,
+      verificationError: verification.error,
+      bodyLength: rawBody.length,
+    })
     return jsonResponse({ error: 'Invalid webhook signature' }, { status: 401 })
   }
 
@@ -73,7 +80,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const stripe = new Stripe(env.STRIPE_SECRET_KEY)
-    const webhookEvent = verifiedSignature
+    const webhookEvent = verification.ok
       ? stripe.webhooks.constructEvent(rawBody, signature, env.STRIPE_WEBHOOK_SECRET)
       : JSON.parse(rawBody) as Stripe.Event
 
