@@ -28,8 +28,11 @@ export default defineEventHandler(async (event) => {
     return jsonResponse(await updatePlatformBlogPost(db, postId, body))
   } catch (err) {
     const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? Number((err as { statusCode: number }).statusCode) : 500
+    if (statusCode >= 500) {
+      console.error('Failed to update blog post:', err)
+      return jsonResponse({ error: 'Failed to update post' }, { status: statusCode })
+    }
     const message = err instanceof Error ? err.message : 'Failed to update post'
-    if (statusCode >= 500) console.error('Failed to update blog post:', err)
     return jsonResponse({ error: message }, { status: statusCode })
   }
 })

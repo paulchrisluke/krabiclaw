@@ -123,7 +123,10 @@ const searchConsoleOptions = computed(() =>
 )
 
 async function loadConnection() {
-  if (!siteId.value) return
+  if (!siteId.value) {
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
     const res = await $fetch<{
@@ -163,6 +166,8 @@ async function connectGoogle() {
         throw new Error('Invalid OAuth redirect URL')
       }
       window.location.href = res.authUrl
+    } else {
+      throw new Error('Failed to start Google connection')
     }
   } catch (err) {
     toast.add({ description: getErrorMessage(err, 'Failed to start Google connection'), color: 'error' })

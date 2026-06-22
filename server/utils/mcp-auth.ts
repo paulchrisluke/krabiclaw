@@ -78,6 +78,9 @@ export async function requireMcpUser(
     throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
   }
 
+  // Session-based auth has no token to derive scopes from, so we assume the caller's
+  // requested scopes are granted outright. This is safe because forbiddenScopes and
+  // requirePlatformAdmin below still enforce the real restrictions for this surface.
   const user = {
     env,
     db,

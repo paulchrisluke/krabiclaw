@@ -39,6 +39,12 @@ export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
   const authChallenge = oauthChallenge(baseUrl)
+  const platformAdminAuthOptions = {
+    audiences: [`${baseUrl}/api/mcp/platform`, 'https://krabiclaw.com/api/mcp/platform'],
+    requiredScopes: ['platform_admin'],
+    forbiddenScopes: ['tenant'],
+    requirePlatformAdmin: true,
+  }
   let requestId: string | number | null | undefined
   let requestMethod: string | undefined
   let requestToolName: string | undefined
@@ -75,12 +81,7 @@ export default defineEventHandler(async (event) => {
     requestToolName = request.method === 'tools/call' && typeof request.params?.name === 'string' ? request.params.name : undefined
 
     if (request.method === 'initialize') {
-      await requireMcpUser(event, {
-        audiences: [`${baseUrl}/api/mcp/platform`, 'https://krabiclaw.com/api/mcp/platform'],
-        requiredScopes: ['platform_admin'],
-        forbiddenScopes: ['tenant'],
-        requirePlatformAdmin: true,
-      })
+      await requireMcpUser(event, platformAdminAuthOptions)
       return mcpSuccess(request.id, {
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: {}, resources: {}, prompts: {} },
@@ -95,46 +96,28 @@ export default defineEventHandler(async (event) => {
     }
 
     if (request.method === 'ping') {
+      // Intentionally unauthenticated: MCP clients use ping as a liveness check before
+      // the OAuth handshake completes, and it returns no information beyond {}.
       return mcpSuccess(request.id, {})
     }
 
     if (request.method === 'resources/list') {
-      await requireMcpUser(event, {
-        audiences: [`${baseUrl}/api/mcp/platform`, 'https://krabiclaw.com/api/mcp/platform'],
-        requiredScopes: ['platform_admin'],
-        forbiddenScopes: ['tenant'],
-        requirePlatformAdmin: true,
-      })
+      await requireMcpUser(event, platformAdminAuthOptions)
       return mcpSuccess(request.id, { resources: [] })
     }
 
     if (request.method === 'resources/templates/list') {
-      await requireMcpUser(event, {
-        audiences: [`${baseUrl}/api/mcp/platform`, 'https://krabiclaw.com/api/mcp/platform'],
-        requiredScopes: ['platform_admin'],
-        forbiddenScopes: ['tenant'],
-        requirePlatformAdmin: true,
-      })
+      await requireMcpUser(event, platformAdminAuthOptions)
       return mcpSuccess(request.id, { resourceTemplates: [] })
     }
 
     if (request.method === 'prompts/list') {
-      await requireMcpUser(event, {
-        audiences: [`${baseUrl}/api/mcp/platform`, 'https://krabiclaw.com/api/mcp/platform'],
-        requiredScopes: ['platform_admin'],
-        forbiddenScopes: ['tenant'],
-        requirePlatformAdmin: true,
-      })
+      await requireMcpUser(event, platformAdminAuthOptions)
       return mcpSuccess(request.id, { prompts: [] })
     }
 
     if (request.method === 'server/discover') {
-      await requireMcpUser(event, {
-        audiences: [`${baseUrl}/api/mcp/platform`, 'https://krabiclaw.com/api/mcp/platform'],
-        requiredScopes: ['platform_admin'],
-        forbiddenScopes: ['tenant'],
-        requirePlatformAdmin: true,
-      })
+      await requireMcpUser(event, platformAdminAuthOptions)
       return mcpSuccess(request.id, {
         supportedVersions: ['2026-07-28', '2025-11-25', '2025-03-26', '2024-11-05'],
         capabilities: { tools: {} },
@@ -144,12 +127,7 @@ export default defineEventHandler(async (event) => {
     }
 
     if (request.method === 'tools/list') {
-      await requireMcpUser(event, {
-        audiences: [`${baseUrl}/api/mcp/platform`, 'https://krabiclaw.com/api/mcp/platform'],
-        requiredScopes: ['platform_admin'],
-        forbiddenScopes: ['tenant'],
-        requirePlatformAdmin: true,
-      })
+      await requireMcpUser(event, platformAdminAuthOptions)
       return mcpSuccess(request.id, {
         tools: PLATFORM_MCP_TOOLS.map(tool => ({
           name: tool.name,

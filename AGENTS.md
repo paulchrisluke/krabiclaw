@@ -445,7 +445,7 @@ Example:
 
 ## Saya Empty States
 
-Saya components never render a blank section or a skeleton-only placeholder when content is missing. Every list-style section (menu items, experiences, locations, posts) shows a **filled example** — realistic placeholder content shown directly on the live site, matching Shopify's unconfigured-storefront pattern (e.g. "Example product title", "$19.99 USD").
+Saya components never render a blank section or a skeleton-only placeholder when content is missing. Every core list-style section (menu items, experiences, locations) shows a **filled example** — realistic placeholder content shown directly on the live site, matching Shopify's unconfigured-storefront pattern (e.g. "Example product title", "$19.99 USD"). Supplementary sections (posts, reviews, Q&A) use a low-key icon+message empty state instead — see below.
 
 - `config/saya-empty-states.ts` is the single source of truth for example content and ChowBot prompt hints, one entry per section. Add new sections here, not inline in components.
 - `components/saya/SayaEmptyExample.vue` renders one example card; `components/saya/SayaMcpHint.vue` renders the owner-only "Try: ..." affordance that pre-fills and opens ChowBot via `useChowBot().setDraftMessage()` + `.open()`.

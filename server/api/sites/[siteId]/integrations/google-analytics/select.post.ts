@@ -5,7 +5,7 @@ import {
   getGoogleAnalyticsConnection,
   getGa4MeasurementId
 } from '~/server/utils/google-analytics'
-import { setConfig } from '~/server/utils/site-config'
+import { deleteConfig, setConfig } from '~/server/utils/site-config'
 
 interface SelectBody {
   ga4_property_id?: string | null
@@ -72,12 +72,18 @@ export default defineEventHandler(async (event) => {
 
     if (ga4PropertyId) {
       await setConfig(db, site.organization_id, site.id, 'ga4_property_id', ga4PropertyId)
+    } else {
+      await deleteConfig(db, site.organization_id, site.id, 'ga4_property_id')
     }
     if (measurementId) {
       await setConfig(db, site.organization_id, site.id, 'google_analytics_measurement_id', measurementId)
+    } else {
+      await deleteConfig(db, site.organization_id, site.id, 'google_analytics_measurement_id')
     }
     if (searchConsoleSiteUrl) {
       await setConfig(db, site.organization_id, site.id, 'search_console_site_url', searchConsoleSiteUrl)
+    } else {
+      await deleteConfig(db, site.organization_id, site.id, 'search_console_site_url')
     }
 
     return jsonResponse({ success: true, ga4_measurement_id: measurementId })

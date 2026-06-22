@@ -150,6 +150,7 @@ export async function updatePlatformBlogPost(
 
   if (input.title !== undefined) {
     assertStringLength(input.title, BLOG_TITLE_MAX, 'title')
+    if (!input.title?.trim()) badRequest('title cannot be blank')
     const slug = normalizeSlugFromTitle(input.title, 'post')
     const existing = await db.prepare(
       'SELECT id FROM platform_blog_posts WHERE slug = ? AND id != ? LIMIT 1'
@@ -161,6 +162,7 @@ export async function updatePlatformBlogPost(
 
   if (input.body !== undefined) {
     assertStringLength(input.body, BLOG_BODY_MAX, 'body')
+    if (!input.body?.trim()) badRequest('body cannot be blank')
     updates.push('body = ?')
     params.push(input.body)
   }
@@ -302,6 +304,7 @@ export async function updatePlatformDoc(
   const params: ApiValue[] = [now]
 
   if (input.title !== undefined) {
+    if (!input.title?.trim()) badRequest('title cannot be blank')
     const slug = normalizeSlugFromTitle(input.title, 'doc')
     const existing = await db.prepare(
       'SELECT id FROM platform_docs WHERE slug = ? AND id != ? LIMIT 1'
@@ -332,6 +335,7 @@ export async function updatePlatformDoc(
   ]
   for (const field of fields) {
     if (input[field] !== undefined) {
+      if (field === 'body' && !input.body?.trim()) badRequest('body cannot be blank')
       updates.push(`${field} = ?`)
       params.push(input[field] as ApiValue)
     }
