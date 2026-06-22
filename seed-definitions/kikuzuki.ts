@@ -866,6 +866,11 @@ export function renderKikuzukiExperienceBlock(): string {
       sqlJson(experience.timeSlots.length > 0 ? experience.timeSlots : null),
       'NULL',
       sqlValue(experience.availableNote),
+      sqlJson((experience.highlights?.length ?? 0) > 0 ? experience.highlights : null),
+      sqlJson((experience.includedItems?.length ?? 0) > 0 ? experience.includedItems : null),
+      sqlJson((experience.whatToBring?.length ?? 0) > 0 ? experience.whatToBring : null),
+      sqlValue(experience.meetingPoint),
+      sqlValue(experience.cancellationPolicy),
       sqlValue(experience.status),
       sqlValue(experience.sortOrder),
       sqlValue(experience.featured),
@@ -880,7 +885,7 @@ INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id,
    title, slug, tagline, body,
    image_asset_id, price, price_amount, duration_minutes, max_capacity,
-   time_slots, recurring_slots, available_note,
+   time_slots, recurring_slots, available_note, highlights, included_items, what_to_bring, meeting_point, cancellation_policy,
    status, sort_order, featured, featured_sort_order,
    seo_title, seo_description)
 VALUES

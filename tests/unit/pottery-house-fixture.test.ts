@@ -135,7 +135,7 @@ test("pottery house content block includes home hero and about page content", ()
   assert.match(sql, /INSERT OR IGNORE INTO site_content/);
   assert.match(sql, /Clay, calm, and a place to return to\./);
   assert.match(sql, /hero_image_asset_id/);
-  assert.match(sql, /story\.title/);
+  assert.match(sql, /story\.headline/);
   assert.match(sql, /journey\.body/);
 });
 

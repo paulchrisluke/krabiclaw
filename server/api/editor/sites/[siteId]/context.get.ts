@@ -143,12 +143,12 @@ export default defineEventHandler(async (event) => {
           brand_name: site.brand_name,
           subdomain: site.subdomain,
           status: site.status,
-          onboarding_status: site.onboarding_status
+          onboarding_status: site.onboarding_status,
+          entitlements
         },
         organization: {
           id: site.organization_id,
-          name: site.organization_name,
-          entitlements
+          name: site.organization_name
         },
         locations: parsedLocations,
         scopes,

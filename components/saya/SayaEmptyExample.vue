@@ -1,5 +1,5 @@
 <template>
-  <div class="group block overflow-hidden bg-elevated text-default" :class="cardClass">
+  <UCard class="group block overflow-hidden bg-elevated text-default" :class="cardClass" :ui="{ body: 'p-0' }">
     <div :class="['overflow-hidden bg-muted flex items-center justify-center', mediaClass]">
       <UIcon :name="icon" class="size-8 text-muted" />
     </div>
@@ -8,7 +8,7 @@
       <p v-if="item.subtitle" class="mt-1 text-xs text-muted">{{ item.subtitle }}</p>
       <p v-if="item.meta" class="mt-0.5 text-xs tabular-nums text-muted">{{ item.meta }}</p>
     </div>
-  </div>
+  </UCard>
 </template>
 
 <script setup lang="ts">

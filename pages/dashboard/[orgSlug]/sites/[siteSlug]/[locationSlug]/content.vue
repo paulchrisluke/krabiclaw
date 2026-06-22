@@ -402,7 +402,7 @@ const platformHostname = computed(() => {
 // ─── Site Context ───────────────────────────────────────────────────────
 const siteData = ref<ApiRecord | null>(null)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
-const organizationEntitlements = ref<ApiRecord>({})
+const siteEntitlements = ref<ApiRecord>({})
 const previewToken = ref('')
 const siteName = computed(() => siteData.value?.brand_name || 'Loading...')
 const siteDomain = computed(() => siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : 'localhost:3000')
@@ -418,7 +418,7 @@ const loadEditorContext = async () => {
     const response = await $fetch<{ context: ApiValue }>(`/api/dashboard/editor/context`)
     siteData.value = response.context.site
     siteLocations.value = response.context.locations || []
-    organizationEntitlements.value = response.context.organization.entitlements || {}
+    siteEntitlements.value = response.context.site.entitlements || {}
     previewToken.value = response.context.previewToken
     applyRouteContentScope()
   } catch (error) {
@@ -640,7 +640,7 @@ const activeFieldDef = computed<FieldDefinition | undefined>(() =>
   activeField.value ? getFieldDef(selectedPageId.value, activeField.value) : undefined
 )
 
-const hasGoogleBusinessEntitlement = computed(() => organizationEntitlements.value.google_business === true)
+const hasGoogleBusinessEntitlement = computed(() => siteEntitlements.value.google_business === true)
 const activeFieldRequiresGoogleUpgrade = computed(() =>
   activeFieldDef.value?.googleLocked === true && !hasGoogleBusinessEntitlement.value
 )

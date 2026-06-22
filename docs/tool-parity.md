@@ -9,7 +9,7 @@ Tracks which tools exist across surfaces and where gaps are. Update this when ad
 
 ---
 
-## ✅ Exact name match — true parity (75 tools)
+## ✅ Exact name match — true parity (74 tools)
 
 | Tool |
 |------|

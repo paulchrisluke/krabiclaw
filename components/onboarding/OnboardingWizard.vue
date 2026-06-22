@@ -178,7 +178,7 @@
                     </p>
                   </div>
                 </div>
-                <div v-if="msg.socialCard" class="mt-2 rounded-xl border border-default bg-elevated px-4 py-3 space-y-3">
+                <UCard v-if="msg.socialCard" class="mt-2" :ui="{ body: 'px-4 py-3 space-y-3' }">
                   <div class="flex items-center gap-2">
                     <UIcon name="i-simple-icons-facebook" class="size-4 text-[#1877F2] shrink-0" />
                     <span class="text-[13px] font-semibold text-highlighted">Facebook & Instagram</span>
@@ -228,7 +228,7 @@
                       {{ facebookConnected ? 'Open dashboard' : 'Set up later' }}
                     </UButton>
                   </div>
-                </div>
+                </UCard>
                 <div v-if="msg.polishCard" class="mt-2">
                   <PolishSuggestionsCard
                     :vertical="selectedVertical"
@@ -574,11 +574,11 @@ async function refreshSocialStatus(siteId: string | null) {
 
   try {
     const [contextRes, facebookRes] = await Promise.all([
-      $fetch<{ context?: { organization?: { entitlements?: Record<string, string | boolean> } } }>(`/api/editor/sites/${siteId}/context`),
+      $fetch<{ context?: { site?: { entitlements?: Record<string, string | boolean> } } }>(`/api/editor/sites/${siteId}/context`),
       $fetch<{ connected: boolean }>(`/api/integrations/facebook-pages/connection?siteId=${encodeURIComponent(siteId)}`),
     ])
 
-    hasFacebookAccess.value = contextRes.context?.organization?.entitlements?.managed_service === true
+    hasFacebookAccess.value = contextRes.context?.site?.entitlements?.managed_service === true
     facebookConnected.value = facebookRes.connected === true
   } catch (error) {
     console.error('onboarding_social_status_failed', error)

@@ -968,13 +968,13 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'upload_user_photo',
-    description: 'Primary path for a user-provided image attachment. This tool only uploads the image into the site media library; it does not place the image on any page by itself. First inspect the attached image visually and ask the user to confirm the target site, placement, and that this exact image should be used. Only after confirmation, call this tool with file set to the ChatGPT attachment path so the host can rewrite it into an authorized file reference. Use file_id only as a secondary fallback when a rewritten file argument is unavailable. After upload succeeds, immediately call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, or set_experience_image. Do NOT use save_generated_image_file for user uploads; that tool is only for ChatGPT native image_generation output.',
+    description: 'Primary path for a user-provided image attachment. This tool only uploads the image into the site media library; it does not place the image on any page by itself. First inspect the attached image visually and ask the user to confirm the target site, placement, and that this exact image should be used. Pass an authorized file reference or attachment identifier that the host can resolve; do not pass raw local paths. Prefer file_id or an equivalent resolved identifier when available. After upload succeeds, immediately call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, or set_experience_image. Do NOT use save_generated_image_file for user uploads; that tool is only for ChatGPT native image_generation output.',
     domain: 'onboarding',
     minimumRole: 'editor',
     confirmRequired: false,
     inputSchema: {
       file: chatgptFileInput,
-      file_id: { type: 'string', description: 'Secondary fallback plain file_id for a user-uploaded image (e.g. file_abc123). Prefer the file argument so ChatGPT can rewrite the attachment into an authorized file reference.' },
+      file_id: { type: 'string', description: 'Resolved file identifier for a user-uploaded image (e.g. file_abc123). Prefer this when the host can supply it directly.' },
       category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'other'], description: 'What this photo will be used for.' },
       description: { type: 'string', description: 'Description of the photo (stored as alt text).' },
       oneOf: [
