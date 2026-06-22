@@ -43,6 +43,7 @@ interface BootstrapPayload {
   reviewsList: ApiRecord[];
   photosList: ApiRecord[];
   qaList: ApiRecord[];
+  postsList: ApiRecord[];
   locales: { code: string; label: string; is_source: boolean }[];
   hasExperiences: boolean;
   experiencesList: Experience[];
@@ -66,6 +67,7 @@ const emptyBootstrap = (): BootstrapPayload => ({
   reviewsList: [],
   photosList: [],
   qaList: [],
+  postsList: [],
   locales: [],
   hasExperiences: false,
   experiencesList: [],
@@ -140,6 +142,9 @@ export const useBootstrap = () => {
     () => (data.value?.photosList ?? []) as ApiRecord[],
   );
   const qaList = computed(() => (data.value?.qaList ?? []) as ApiRecord[]);
+  const postsList = computed(
+    () => (data.value?.postsList ?? []) as ApiRecord[],
+  );
 
   // ── Site locales + experiences flag ──────────────────────
   const locales = computed(() => data.value?.locales ?? []);
@@ -289,6 +294,7 @@ export const useBootstrap = () => {
     reviewsList,
     photosList,
     qaList,
+    postsList,
     locales,
     hasExperiences,
     experiencesList,

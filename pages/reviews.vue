@@ -12,6 +12,19 @@
         </template>
         <em v-else class="saya-italic">What guests are saying</em>
       </h1>
+
+      <!-- Multi-location pills -->
+      <div v-if="locations.length > 1" class="mt-8 flex flex-wrap gap-3">
+        <NuxtLink
+          v-for="loc in locations"
+          :key="loc.id"
+          :to="`/locations/${loc.slug}/reviews`"
+          class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
+        >
+          <UIcon name="i-heroicons-map-pin" class="size-3.5 opacity-70" />
+          {{ loc.title }}
+        </NuxtLink>
+      </div>
     </header>
 
     <!-- Reviews grid -->
@@ -35,7 +48,7 @@ definePageMeta({ layout: 'saya' })
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { googleBusiness } = useBootstrap()
+const { googleBusiness, locations } = useBootstrap()
 const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
 const allReviews = computed(() => googleBusiness.value?.reviews ?? [])
 const googleReviewRating = r => starRatingMap[r.starRating] ?? Number(r.starRating ?? r.rating ?? 0)

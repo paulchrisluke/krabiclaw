@@ -9,6 +9,7 @@
 //   regular pages (/, /about…) → type D
 //   /locations/[slug]/photos   → type E  (photos data included)
 //   /locations/[slug]/qa       → type F  (qa data included)
+//   /locations/[slug]/posts    → type G  (posts data included)
 export interface BootstrapParams {
   page: string | null;
   location: string | null;
@@ -38,7 +39,9 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
     const page = sub || "location";
     const includeMenu = page === "location" || page === "menu";
     const fullData =
-      page === "reviews" || page === "photos" || page === "qa" ? page : null;
+      page === "reviews" || page === "photos" || page === "qa" || page === "posts"
+        ? page
+        : null;
     return {
       page,
       location: slug ?? null,
@@ -147,7 +150,7 @@ function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "tok
       location: null,
       experience: null,
       menu: true,
-      data: null,
+      data: "photos",
     };
   if (path === "/menu" || path.startsWith("/menu/"))
     return {

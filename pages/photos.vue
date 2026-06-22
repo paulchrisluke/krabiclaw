@@ -1,50 +1,70 @@
 <template>
   <div class="min-h-screen bg-default text-default">
-      <div v-if="pending" class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-        <USkeleton class="h-64 w-full" />
-      </div>
+    <div v-if="pending" class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+      <USkeleton class="h-64 w-full" />
+    </div>
 
-      <!-- Single location: redirect handled server-side; this shows if redirect didn't fire -->
-      <div v-else-if="locations.length === 1" class="mx-auto max-w-7xl px-4 py-24 text-center sm:px-6 lg:px-8">
-        <NuxtLink :to="`/locations/${locations[0].slug}/photos`" class="saya-display-md saya-italic text-default no-underline hover:opacity-70">
-          View photos →
-        </NuxtLink>
-      </div>
+    <template v-else>
+      <!-- Page header -->
+      <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8 text-center">
+        <p class="saya-kicker mb-6">Gallery</p>
+        <h1 class="saya-display-md saya-italic text-default">Photos from every room.</h1>
 
-      <!-- Multi-location: link to each location's gallery -->
-      <div v-else-if="locations.length > 1">
-        <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
-          <p class="saya-kicker mb-6">Gallery</p>
-          <h1 class="saya-display-md saya-italic text-default">Photos from every room.</h1>
-        </header>
-        <div class="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
-          <div class="grid gap-6 sm:grid-cols-2">
-            <NuxtLink
-              v-for="loc in locations"
-              :key="loc.id"
-              :to="`/locations/${loc.slug}/photos`"
-              class="group block border border-default text-default no-underline transition hover:border-muted"
-            >
-              <div class="aspect-video overflow-hidden bg-muted">
-                <video v-if="loc.public_url && loc.kind === 'video'" :src="loc.public_url" class="h-full w-full object-cover" autoplay muted loop playsinline />
-                <img v-else-if="loc.public_url" :src="loc.public_url" :alt="loc.title" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-              </div>
-              <div class="p-7">
-                <p class="saya-eyebrow mb-3 text-muted">{{ loc.city || loc.neighborhood }}</p>
-                <div class="saya-display saya-italic text-3xl text-default leading-none">{{ loc.title }}</div>
-                <p class="mt-4 text-xs uppercase tracking-widest text-muted">View photos →</p>
-              </div>
-            </NuxtLink>
-          </div>
+        <!-- Multi-location pills -->
+        <div v-if="locations.length > 1" class="mt-8 flex flex-wrap justify-center gap-3">
+          <NuxtLink
+            v-for="loc in locations"
+            :key="loc.id"
+            :to="`/locations/${loc.slug}/photos`"
+            class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
+          >
+            <UIcon name="i-heroicons-map-pin" class="size-3.5 opacity-70" />
+            {{ loc.title }}
+          </NuxtLink>
         </div>
-      </div>
+      </header>
 
-      <!-- No locations yet -->
-      <div v-else class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
+      <!-- Empty state -->
+      <div v-if="photos.length === 0" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
         <h1 class="saya-display-md text-muted">No photos yet.</h1>
         <p class="mt-4 text-sm text-muted">Add a location and connect Google Business to sync photos.</p>
       </div>
-    </div>
+
+      <template v-else>
+        <!-- Category filter tabs -->
+        <SayaFilterTabs v-model="activeCategory" :tabs="cats" />
+
+        <!-- Gallery -->
+        <UPage class="mx-auto max-w-7xl px-4 pt-12 pb-24 sm:px-6 lg:px-8">
+          <UPageBody>
+            <div class="saya-masonry">
+              <button
+                v-for="(photo, i) in sorted"
+                :key="photo.id"
+                class="group relative block w-full overflow-hidden rounded-2xl bg-black"
+                @click="openLightbox(i)"
+              >
+                <img
+                  :src="photo.local_url || photo.google_url || photo.thumbnail_url"
+                  :alt="photo.description || ''"
+                  loading="lazy"
+                  class="block w-full transition-opacity duration-200 group-hover:opacity-80"
+                />
+                <div class="absolute inset-0 flex items-end bg-linear-to-t from-black/60 to-transparent p-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                  <span class="saya-eyebrow rounded-full bg-white/25 px-4 py-1.5 text-[10px] font-bold tracking-widest text-white backdrop-blur-md border border-white/20">
+                    {{ locationTitle(photo) || photo.category || 'Gallery' }}
+                  </span>
+                </div>
+              </button>
+            </div>
+          </UPageBody>
+        </UPage>
+
+        <!-- Lightbox -->
+        <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="lightboxItems" :title="siteName" />
+      </template>
+    </template>
+  </div>
 </template>
 
 <script setup>
@@ -53,13 +73,49 @@ definePageMeta({ layout: 'saya' })
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { locations } = useBootstrap()
-const pending = ref(false)
+const { locations, photosList, pending } = useBootstrap()
+const photos = photosList
 const siteName = computed(() => site?.brand_name || 'Our Site')
 
-if (locations.value.length === 1) {
-  await navigateTo(`/locations/${locations.value[0].slug}/photos`, { replace: true, redirectCode: 301 })
+const locationsById = computed(() => Object.fromEntries(locations.value.map(l => [l.id, l])))
+function locationTitle(photo) {
+  return locations.value.length > 1 ? locationsById.value[photo.location_id]?.title : null
 }
+
+const cats = [
+  { key: 'ALL', label: 'All' },
+  { key: 'FOOD', label: 'Food' },
+  { key: 'INTERIOR', label: 'Interior' },
+  { key: 'EXTERIOR', label: 'Exterior' },
+  { key: 'MENU', label: 'Menu' },
+  { key: 'TEAM', label: 'Team' }
+]
+const activeCategory = ref('ALL')
+
+const sorted = computed(() => {
+  const filtered = activeCategory.value === 'ALL'
+    ? photos.value
+    : activeCategory.value === 'FOOD'
+      ? photos.value.filter(p => p.category === 'FOOD' || p.category === 'MENU')
+      : photos.value.filter(p => p.category === activeCategory.value)
+  return [...filtered].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
+})
+
+const lightboxOpen = ref(false)
+const lightboxIdx = ref(0)
+function openLightbox(i) {
+  lightboxIdx.value = i
+  lightboxOpen.value = true
+}
+
+const lightboxItems = computed(() =>
+  sorted.value.map(p => ({
+    url: p.local_url || p.google_url || p.thumbnail_url,
+    kind: 'image',
+    description: p.description,
+    alt: p.description || p.category || ''
+  }))
+)
 
 const currentPageUrl = useSeoUrl('/photos')
 useSeoMeta({

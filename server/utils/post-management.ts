@@ -66,7 +66,8 @@ export async function listPosts(
   db: D1Database,
   organizationId: string,
   siteId: string,
-  status?: string
+  status?: string,
+  locationId?: string
 ): Promise<Post[]> {
   let query = `
     SELECT p.*, ma.public_url, ma.kind
@@ -78,6 +79,10 @@ export async function listPosts(
   if (status) {
     query += ` AND p.status = ?`
     params.push(status)
+  }
+  if (locationId) {
+    query += ` AND p.location_id = ?`
+    params.push(locationId)
   }
   query += ` ORDER BY p.updated_at DESC LIMIT 100`
   const result = await db.prepare(query).bind(...params).all()
@@ -232,17 +237,24 @@ export async function deletePost(
 export async function getPublishedPosts(
   db: D1Database,
   siteId: string,
-  limit = 20
+  limit = 20,
+  locationId?: string
 ): Promise<PublishedPostSummary[]> {
-  const result = await db.prepare(`
+  let query = `
     SELECT p.id, p.title, p.body, p.image_asset_id, p.published_at, p.created_at,
            ma.public_url, ma.kind
     FROM posts p
     LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
     WHERE p.site_id = ? AND p.status = 'published'
-    ORDER BY p.published_at DESC
-    LIMIT ?
-  `).bind(siteId, limit).all()
+  `
+  const params: SqlBindValue[] = [siteId]
+  if (locationId) {
+    query += ` AND p.location_id = ?`
+    params.push(locationId)
+  }
+  query += ` ORDER BY p.published_at DESC LIMIT ?`
+  params.push(limit)
+  const result = await db.prepare(query).bind(...params).all()
 
   const rows = (result.results ?? []) as unknown as PublishedPostRow[]
 

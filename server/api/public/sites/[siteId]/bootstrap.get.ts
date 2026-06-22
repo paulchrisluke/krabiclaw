@@ -161,7 +161,8 @@ export default defineEventHandler(async (event) => {
     idxLocReviews = -1;
   let idxFullReviews = -1,
     idxPhotos = -1,
-    idxQa = -1;
+    idxQa = -1,
+    idxLocPosts = -1;
 
   const push = (stmt: D1PreparedStatement) => {
     const i = batchStmts.length;
@@ -236,7 +237,7 @@ export default defineEventHandler(async (event) => {
         .prepare(
           `SELECT author_name AS author, rating, content, created_at AS date
            FROM reviews WHERE site_id = ? AND status = 'approved'
-           ORDER BY created_at DESC LIMIT 10`,
+           ORDER BY created_at DESC LIMIT 50`,
         )
         .bind(siteId),
     );
@@ -249,9 +250,22 @@ export default defineEventHandler(async (event) => {
            FROM posts p
            LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
            WHERE p.site_id = ? AND p.status = 'published'
-           ORDER BY p.published_at DESC LIMIT 6`,
+           ORDER BY p.published_at DESC LIMIT ${page === "posts" ? 50 : 6}`,
         )
         .bind(siteId),
+    );
+
+  if (locationId && dataType === "posts")
+    idxLocPosts = push(
+      db
+        .prepare(
+          `SELECT p.id, p.title, p.body, p.published_at, p.created_at, ma.public_url, ma.kind
+           FROM posts p
+           LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
+           WHERE p.site_id = ? AND p.location_id = ? AND p.status = 'published'
+           ORDER BY p.published_at DESC LIMIT 50`,
+        )
+        .bind(siteId, locationId),
     );
 
   if (locationId)
@@ -277,16 +291,25 @@ export default defineEventHandler(async (event) => {
         .bind(locationId, siteId),
     );
 
-  if (locationId && dataType === "photos")
+  if (dataType === "photos")
     idxPhotos = push(
-      db
-        .prepare(
-          `SELECT id, public_url, thumbnail_url, alt_text, category, created_at
-           FROM media_assets
-           WHERE site_id = ? AND location_id = ? AND kind = 'image' AND status = 'active'
-           ORDER BY created_at DESC LIMIT 100`,
-        )
-        .bind(siteId, locationId),
+      locationId
+        ? db
+            .prepare(
+              `SELECT id, public_url, thumbnail_url, alt_text, category, created_at, location_id
+               FROM media_assets
+               WHERE site_id = ? AND location_id = ? AND kind = 'image' AND status = 'active'
+               ORDER BY created_at DESC LIMIT 100`,
+            )
+            .bind(siteId, locationId)
+        : db
+            .prepare(
+              `SELECT id, public_url, thumbnail_url, alt_text, category, created_at, location_id
+               FROM media_assets
+               WHERE site_id = ? AND kind = 'image' AND status = 'active'
+               ORDER BY created_at DESC LIMIT 100`,
+            )
+            .bind(siteId),
     );
 
   if (dataType === "qa")
@@ -360,6 +383,10 @@ export default defineEventHandler(async (event) => {
   const qaRows =
     idxQa >= 0
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
+      : { results: [] as Record<string, unknown>[] };
+  const locPostRows =
+    idxLocPosts >= 0
+      ? (batchResults[idxLocPosts] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
   const localeRows = batchResults[idxLocale] as {
     results: {
@@ -463,7 +490,7 @@ export default defineEventHandler(async (event) => {
       summary: p.body,
       title: p.title ?? "",
       createTime: p.published_at ?? "",
-      media: p.public_url ? [{ googleUrl: p.public_url, kind: p.kind }] : [],
+      media: p.public_url ? [{ googleUrl: p.public_url, mediaFormat: p.kind === "video" ? "VIDEO" : "IMAGE" }] : [],
     })),
     syncedAt: primary?.last_synced_at ?? null,
   };
@@ -499,6 +526,7 @@ export default defineEventHandler(async (event) => {
     category:
       PUBLIC_PHOTO_CATEGORY[String(asset.category || "other")] ?? "OTHER",
     sort_order: index,
+    location_id: asset.location_id ?? null,
   }));
 
   return jsonResponse({
@@ -528,6 +556,18 @@ export default defineEventHandler(async (event) => {
     ...(dataType === "photos" ? { photosList: photos } : {}),
     // Type F — Q&A for /locations/[slug]/qa
     ...(dataType === "qa" ? { qaList: qaRows?.results ?? [] } : {}),
+    // Type G — posts for /locations/[slug]/posts
+    ...(dataType === "posts"
+      ? {
+          postsList: (locPostRows?.results ?? []).map((p) => ({
+            name: `posts/${p.id}`,
+            summary: p.body,
+            title: p.title ?? "",
+            createTime: p.published_at ?? "",
+            media: p.public_url ? [{ googleUrl: p.public_url, mediaFormat: p.kind === "video" ? "VIDEO" : "IMAGE" }] : [],
+          })),
+        }
+      : {}),
     // Site locales + experiences — always included for header/nav
     locales: (localeRows?.results ?? []).map((l) => ({
       code: l.locale,

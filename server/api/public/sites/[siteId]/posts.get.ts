@@ -9,7 +9,9 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const limit = Math.min(Number(getQuery(event).limit ?? 20), 50)
-  const posts = await getPublishedPosts(db, siteId, limit)
+  const query = getQuery(event)
+  const limit = Math.min(Number(query.limit ?? 20), 50)
+  const locationId = typeof query.location_id === 'string' ? query.location_id : undefined
+  const posts = await getPublishedPosts(db, siteId, limit, locationId)
   return jsonResponse({ success: true, posts })
 })

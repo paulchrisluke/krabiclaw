@@ -278,7 +278,7 @@ export async function requireBillingAccess(
   if (membership.role !== 'owner') throw new Error('Access denied: Only owners can manage billing')
 }
 
-export function verifyStripeWebhook(
+export async function verifyStripeWebhook(
   env: BillingEnv,
   payload: string,
   signature: string,
@@ -286,7 +286,7 @@ export function verifyStripeWebhook(
   if (!env.STRIPE_WEBHOOK_SECRET) throw new Error('Stripe webhook secret not configured')
   const stripe = getStripe(env)
   try {
-    stripe.webhooks.constructEvent(payload, signature, env.STRIPE_WEBHOOK_SECRET)
+    await stripe.webhooks.constructEventAsync(payload, signature, env.STRIPE_WEBHOOK_SECRET)
     return { ok: true }
   } catch (error) {
     return {

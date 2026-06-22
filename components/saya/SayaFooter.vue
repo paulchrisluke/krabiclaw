@@ -189,10 +189,7 @@ const languageItems = computed(() =>
 )
 const locationsError = computed(() => bootstrapError.value)
 
-const hasMenu = computed(() => {
-  const m = menu.value as { items?: unknown[] } | null
-  return !!(m && m.items && m.items.length > 0)
-})
+const hasMenu = computed(() => !!menu.value)
 const year = new Date().getFullYear()
 const logoUrl = computed(() => (site as { logo_url?: string | null } | null)?.logo_url || null)
 const restaurantName = computed(() => {

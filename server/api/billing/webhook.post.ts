@@ -62,7 +62,7 @@ export default defineEventHandler(async (event) => {
   const e2eAuthorized = e2eOverride && expectedDevSecret && providedDevSecret && timingSafeEqualText(providedDevSecret, expectedDevSecret)
 
   const rawBody = body.toString()
-  const verification = verifyStripeWebhook(env, rawBody, signature)
+  const verification = await verifyStripeWebhook(env, rawBody, signature)
   if (!verification.ok && !e2eAuthorized) {
     const configuredSecretSuffix = env.STRIPE_WEBHOOK_SECRET.slice(-6)
     const signatureParts = signature.split(',').map(part => part.trim())
@@ -81,7 +81,7 @@ export default defineEventHandler(async (event) => {
   try {
     const stripe = new Stripe(env.STRIPE_SECRET_KEY)
     const webhookEvent = verification.ok
-      ? stripe.webhooks.constructEvent(rawBody, signature, env.STRIPE_WEBHOOK_SECRET)
+      ? await stripe.webhooks.constructEventAsync(rawBody, signature, env.STRIPE_WEBHOOK_SECRET)
       : JSON.parse(rawBody) as Stripe.Event
 
     const existingEvent = await db.prepare(`SELECT id FROM stripe_webhook_events WHERE stripe_event_id = ? LIMIT 1`)
