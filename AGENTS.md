@@ -37,7 +37,6 @@ ChowBot and dashboard CMS are supported product surfaces. Keep MCP and ChowBot a
   3. Call `show_generated_images` with returned `assetId` and `publicUrl`
 
 Canonical generated-image contracts:
-
 - Native generation: `save_generated_image_file({ site_id, attachment_id, prompt })` — always use this after `image_generation`; passing base64 to `save_generated_image` is blocked by OpenAI safety checks
 - Raw base64 (non-native, rare): `save_generated_image({ site_id, image_data_base64, prompt })`
 
@@ -85,12 +84,11 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 ## Multi-Tenancy
 
-- Organizations map to a team or agency using Better Auth's `organization` plugin.
+- Organizations map to a team or agency using Better Auth’s `organization` plugin.
 - **One org can have multiple sites** — the unique-per-org constraint was removed in migration `0017`.
 - Each site has its own plan and Stripe subscription (`site_billing` table).
 - The Stripe *customer* stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
-- Multiple physical locations live under `business_locations`. Locations are **unlimited on all plans**.
-- Multiple physical locations live under `business_locations`, not separate orgs.
+- Multiple physical locations live under `business_locations`, not separate orgs. Locations are **unlimited on all plans**.
 - Dashboard route shape (site is always explicit — no implicit "first site in org"):
   - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
   - `/dashboard/{orgSlug}/sites/{siteSlug}` — site workspace (`siteSlug` is the site's `subdomain`)
@@ -98,9 +96,9 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
   - `/dashboard/{orgSlug}/sites/new` — create another site under this org
   - `/dashboard/{orgSlug}/~/settings/*` — org settings (billing, members, general, domains, chatgpt — these stay org-scoped, not site-scoped)
   - `/dashboard/account/settings` — personal settings
-- The active site is resolved server-side in `server/utils/dashboard-context.ts` from the `x-dashboard-site-slug` header, which `plugins/dashboard-site-header.ts` auto-attaches to every `/api/dashboard/*` request based on the current route's `siteSlug` param.
-- Second-site billing: a new site always starts on `free`. If the org already has another site on a paid plan and a saved card on file, the dashboard offers to auto-subscribe the new site via `POST /api/billing/site-subscribe`. Otherwise it's a normal Checkout upgrade later.
-- **Site transfers move only the site** — the org itself, its other sites, and org-level billing/credits never move.
+- The active site is resolved server-side in `server/utils/dashboard-context.ts` from the `x-dashboard-site-slug` header, which `plugins/dashboard-site-header.ts` auto-attaches to every `/api/dashboard/*` request based on the current route's `siteSlug` param. Do not add new dashboard API calls that bypass this — they'll silently fall back to the org's oldest site.
+- Second-site billing: a new site always starts on `free`. If the org already has another site on a paid plan and a saved card on file, the dashboard offers to auto-subscribe the new site via `POST /api/billing/site-subscribe` (confirm modal, no Checkout redirect). Otherwise it's a normal Checkout upgrade later. See `server/utils/site-creation.ts`.
+- **Site transfers move only the site** — `executeSiteTransfer()` reparents one site's scoped tables (`site_billing`, `site_entitlements`, `business_locations`, content, etc.) from the source org to the recipient's existing owner org. The org itself, its other sites, and org-level billing/credits never move.
 
 - Tenant resolution lives in `server/middleware/tenant-resolution.ts`:
   - `localhost` / `krabiclaw.com` = platform routes
@@ -130,7 +128,6 @@ Seeds use a two-tier insert strategy so that MCP edits survive a reseed:
 - **Content tables** (`site_content`, `menu_items`, `reviews`, `location_qa`, `posts`, `post_channel_jobs`, `*_translations`) → `INSERT OR IGNORE` — first seed wins; MCP changes are never overwritten by a reseed
 
 Production is never reseeded (only migrated), so this only affects local dev, preview, and staging. If you need to force-push updated content from a seed definition to an already-seeded environment, delete the affected rows first or use an MCP tool call directly.
-
 - Layout name for Saya theme pages: `layout: 'saya'`
 - `tenant` layout is dead
 
@@ -278,7 +275,8 @@ Flow:
 
 - Stripe is the source of truth for plan names, prices, and `marketing_features`.
 - `server/utils/billing.ts` → `getPlanEntitlements(plan)` defines what each plan unlocks in D1.
-- Entitlements are stored per-site in the `site_entitlements` table and checked at API level.
+- Entitlements are stored **per-site** in the `site_entitlements` table (migration `0017` replaced `organization_entitlements`).
+- Billing is **per-site** via `site_billing`. Checkout must pass `site_id` in Stripe session metadata.
 - Key entitlement keys:
   - `custom_domains`
   - `google_business`
@@ -287,10 +285,11 @@ Flow:
   - `ai_credits`
   - `managed_service`
   - `seo_accelerator`
+- `max_locations` and `max_sites` entitlements no longer exist — locations are unlimited on all plans.
 
 - `managed_service = true` on Growth, Managed, and SEO Accelerator (Starter/free is the only tier without it).
 - `managed_service` gates Facebook sync auth/publish/sync endpoints, and the Support page's work-request queue.
-- Entitlement checks must use `hasSiteEntitlement(db, siteId, key)` against the specific site in scope — never the org-level `hasEntitlement()` shim when a `siteId` is already available.
+- Entitlement checks must use `hasSiteEntitlement(db, siteId, key)` against the specific site in scope — never the org-level `hasEntitlement()` shim when a `siteId` is already available, since that shim resolves to the org's oldest site and can silently check the wrong site's plan in a multi-site org.
 - `plans.get.ts`:
   - Only Starter has a static definition
   - All paid plans come from Stripe exclusively
@@ -406,11 +405,12 @@ Flow:
 
 ## Design System Enforcement
 
-- Never bypass Nuxt UI layout components to write custom Tailwind `div` wrappers.
+- Dashboard pages use Nuxt UI layout primitives rather than custom Tailwind page shells.
 - Use:
   - `UCard`
   - `UPage`
   - `UPageBody`
+- Saya theme pages keep their established raw layout shell and theme-specific components, rather than being forced into dashboard page primitives.
 
 - UCard `:ui` prop only accepts:
   - `root`
@@ -428,6 +428,7 @@ Flow:
 
 - Dashboard pages do not use `UPageHeader`.
 - Dashboard page content goes directly in `UPageBody`.
+- Saya public pages should preserve the existing editorial layout pattern, using `div` / `section` wrappers and Saya components where that surface already has an established convention.
 - Admin nav uses `i-lucide-*` icons and must stay consistent with the rest of the dashboard nav.
 - Do not introduce custom `border` or `bg` classes that break global theme inheritance.
 - If a specific visual layout is needed, such as a flat Vercel card, use the Nuxt UI component and override specific tokens through `:ui`.
@@ -437,6 +438,18 @@ Example:
 ```vue
 <UCard :ui="{ shadow: '', rounded: 'rounded-xl', body: { padding: 'p-0' } }">
 ```
+
+---
+
+## Saya Empty States
+
+Saya components never render a blank section or a skeleton-only placeholder when content is missing. Every list-style section (menu items, experiences, locations, posts) shows a **filled example** — realistic placeholder content shown directly on the live site, matching Shopify's unconfigured-storefront pattern (e.g. "Example product title", "$19.99 USD").
+
+- `config/saya-empty-states.ts` is the single source of truth for example content and ChowBot prompt hints, one entry per section. Add new sections here, not inline in components.
+- `components/saya/SayaEmptyExample.vue` renders one example card; `components/saya/SayaMcpHint.vue` renders the owner-only "Try: ..." affordance that pre-fills and opens ChowBot via `useChowBot().setDraftMessage()` + `.open()`.
+- The hint only renders in dashboard edit mode (`useEditMode().editMode`, i.e. `?edit=true`) — real site visitors only ever see the clean example, never the hint UI.
+- Reviews and Q&A keep their existing icon+message empty state (no fabricated reviews/answers) but Q&A still gets a hint since it's merchant-answerable.
+- `config/content-registry.ts` field `defaultValue` is the render-time fallback for scalar `site_content` fields (`usePageContent().getField()` falls back to it automatically when no value is in the DB and the caller passes no explicit default). **These must always be generic, vertical-neutral copy** — never tenant- or demo-identity-specific text (no business names, no "Saya Kitchen", no real addresses/phone numbers). The "Saya fallback copy on any tenant page" regression below is about leaking *demo-tenant identity*, not about having a generic instructional fallback — a generic fallback rendering on an empty tenant page is the intended behavior, not the regression.
 
 ---
 
