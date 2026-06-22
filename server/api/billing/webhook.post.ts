@@ -36,17 +36,25 @@ export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
 
   if (!env.STRIPE_WEBHOOK_SECRET) {
+    console.error('Stripe webhook rejected: STRIPE_WEBHOOK_SECRET not configured')
     return jsonResponse({ error: 'Stripe webhook secret not configured' }, { status: 503 })
   }
 
   let body: string | Buffer | undefined
   try { body = await readRawBody(event) } catch {
+    console.warn('Stripe webhook rejected: unable to read raw request body')
     return jsonResponse({ error: 'Invalid webhook request' }, { status: 400 })
   }
   const signature = getHeader(event, 'stripe-signature') || ''
 
-  if (!body || !signature) return jsonResponse({ error: 'Invalid webhook request' }, { status: 400 })
-  if (!env.STRIPE_SECRET_KEY) return jsonResponse({ error: 'Stripe secret key not configured' }, { status: 503 })
+  if (!body || !signature) {
+    console.warn('Stripe webhook rejected: missing raw body or stripe-signature header')
+    return jsonResponse({ error: 'Invalid webhook request' }, { status: 400 })
+  }
+  if (!env.STRIPE_SECRET_KEY) {
+    console.error('Stripe webhook rejected: STRIPE_SECRET_KEY not configured')
+    return jsonResponse({ error: 'Stripe secret key not configured' }, { status: 503 })
+  }
 
   const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
   const providedDevSecret = getHeader(event, 'x-dev-route-secret') || ''
@@ -56,6 +64,7 @@ export default defineEventHandler(async (event) => {
   const rawBody = body.toString()
   const verifiedSignature = verifyStripeWebhook(env, rawBody, signature)
   if (!verifiedSignature && !e2eAuthorized) {
+    console.warn('Stripe webhook rejected: invalid signature')
     return jsonResponse({ error: 'Invalid webhook signature' }, { status: 401 })
   }
 
