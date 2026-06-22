@@ -2,7 +2,7 @@
 // Record a cash payment: creates Stripe customer + annual/monthly subscription + marks invoice paid out-of-band
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformOwner } from '~/server/utils/platform-auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { getStripe, getPriceIdForPlan, setSiteEntitlementsFromPlan } from '~/server/utils/billing'
 
 const ALLOWED_PLANS = ['growth', 'managed', 'seo_accelerator']
@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!isPlatformOwner(session.user.email, env)) return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
+  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
   if (!env.STRIPE_SECRET_KEY) return jsonResponse({ error: 'Stripe not configured' }, { status: 503 })
 

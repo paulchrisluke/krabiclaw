@@ -1,6 +1,7 @@
 // POST /api/admin/invite/team — promote existing user to admin, or create new admin account
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -9,7 +10,7 @@ export default defineEventHandler(async (event) => {
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if ((session.user as { role?: string }).role !== 'admin') return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
+  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
   const body = await readBody(event).catch(() => ({})) as { email?: string; name?: string }
   const email = body.email?.trim().toLowerCase()

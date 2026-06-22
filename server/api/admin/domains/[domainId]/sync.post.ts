@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { anonymizeId, isPlatformOwner } from '~/server/utils/platform-auth'
+import { anonymizeId, isPlatformAdmin } from '~/server/utils/platform-auth'
 import { domainInstructions, syncDomainWithCloudflare } from '~/server/utils/domains'
 
 const SYNC_TIMEOUT_MS = 20_000
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!isPlatformOwner(session.user.email, env)) return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
+  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
   if (domainSyncInFlight.has(domainId)) return jsonResponse({ error: 'Domain sync already in progress' }, { status: 409 })
 
   domainSyncInFlight.add(domainId)

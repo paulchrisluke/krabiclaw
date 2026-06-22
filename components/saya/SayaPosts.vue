@@ -73,18 +73,20 @@
         </div>
       </article>
 
-      <template v-if="posts.length === 0 && showEmptyState">
-        <SayaEmptyExample
-          v-for="(example, i) in sayaEmptyStates.posts.examples.slice(0, limit || 3)"
-          :key="`placeholder-${i}`"
-          :item="example"
-          icon="i-heroicons-megaphone"
-          aspect="4/5"
-        />
-      </template>
     </div>
 
-    <SayaMcpHint v-if="posts.length === 0 && showEmptyState" :hint="sayaEmptyStates.posts.hint" />
+    <!-- Posts are optional, supplementary content — unlike menu items or locations, a
+         live, fully-operational business legitimately may never post updates. Show a
+         low-key empty state rather than a fabricated example, so it reads as "optional"
+         rather than "this site is unfinished". -->
+    <div v-if="posts.length === 0 && showEmptyState" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default bg-muted/20 py-20 text-center">
+      <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
+        <UIcon name="i-heroicons-newspaper" class="size-7" />
+      </div>
+      <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ t('saya.posts.empty_title') }}</h3>
+      <p class="mt-2 max-w-sm text-sm text-muted">{{ t('saya.posts.empty_desc') }}</p>
+      <SayaMcpHint :hint="sayaEmptyStates.posts.hint" />
+    </div>
 
     <div v-if="showViewMore && limit && posts.length > 0" class="mt-12 text-center">
       <UButton to="/posts" color="primary" variant="outline" size="xl">
@@ -129,7 +131,6 @@
 </template>
 
 <script setup>
-import SayaEmptyExample from '~/components/saya/SayaEmptyExample.vue'
 import SayaMcpHint from '~/components/saya/SayaMcpHint.vue'
 import { sayaEmptyStates } from '~/config/saya-empty-states'
 

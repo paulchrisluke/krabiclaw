@@ -2,7 +2,7 @@
 // Reads the session role and routes: admin → /admin, owner → /dashboard/[slug].
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformOwner } from '~/server/utils/platform-auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const user = session.user as typeof session.user & { role?: string }
 
   // Platform owners and admins always go to admin
-  if (user.role === 'admin' || (typeof user.email === 'string' && user.email.trim() !== '' && isPlatformOwner(user.email, env))) {
+  if (isPlatformAdmin(user, env)) {
     return sendRedirect(event, '/admin')
   }
 

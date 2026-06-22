@@ -6,7 +6,18 @@ function requireAuthSecret(env: ApiRecord): string {
   return secret
 }
 
-export function isPlatformOwner(email: string | null | undefined, env: ApiRecord): boolean {
+function parseRoleList(role: string | null | undefined): string[] {
+  return String(role ?? '')
+    .split(',')
+    .map(value => value.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+export function hasBetterAuthAdminRole(role: string | null | undefined): boolean {
+  return parseRoleList(role).includes('admin')
+}
+
+export function isPlatformOwnerEmail(email: string | null | undefined, env: ApiRecord): boolean {
   if (!email) return false
 
   const platformOwnerEmails = String(env?.PLATFORM_OWNER_EMAILS ?? '')
@@ -27,8 +38,27 @@ export function isPlatformOwner(email: string | null | undefined, env: ApiRecord
   return matched
 }
 
+export function isPlatformAdmin(
+  user: { role?: string | null; email?: string | null | undefined } | null | undefined,
+  env: ApiRecord,
+): boolean {
+  if (!user) return false
+  return hasBetterAuthAdminRole(user.role) || isPlatformOwnerEmail(user.email, env)
+}
+
+export function requirePlatformAdmin(
+  user: { role?: string | null; email?: string | null | undefined } | null | undefined,
+  env: ApiRecord,
+): void {
+  if (!isPlatformAdmin(user, env)) {
+    throw new Error('Platform admin access required')
+  }
+}
+
+// Backward-compatible aliases while older code is migrated.
+export const isPlatformOwner = isPlatformOwnerEmail
 export function requirePlatformOwner(email: string | null | undefined, env: ApiRecord): void {
-  if (!isPlatformOwner(email, env)) {
+  if (!isPlatformOwnerEmail(email, env)) {
     throw new Error('Platform owner access required')
   }
 }

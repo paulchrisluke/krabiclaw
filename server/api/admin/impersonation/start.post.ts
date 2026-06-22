@@ -1,7 +1,7 @@
 import { appendResponseHeader, getHeader } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { anonymizeId, isPlatformOwner } from '~/server/utils/platform-auth'
+import { anonymizeId, isPlatformAdmin } from '~/server/utils/platform-auth'
 
 const IMPERSONATION_START_TIMEOUT_MS = 8_000
 
@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!isPlatformOwner(session.user.email, env)) return jsonResponse({ error: 'Platform owner access required' }, { status: 403 })
+  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
   const body = await readBody<{ userId?: string }>(event)
   const userId = typeof body?.userId === 'string' ? body.userId : ''

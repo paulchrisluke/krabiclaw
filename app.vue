@@ -25,6 +25,27 @@ useSeoMeta({
   twitterImage: defaultOgImage
 })
 
+// Google Analytics for krabiclaw.com platform
+useHead(() => {
+  if (!isPlatform) return {}
+
+  return {
+    script: [
+      {
+        src: 'https://www.googletagmanager.com/gtag/js?id=G-NJ1BSP9BYG',
+        async: true
+      },
+      {
+        key: 'krabiclaw-ga-init',
+        innerHTML: `window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NJ1BSP9BYG');`
+      }
+    ],
+    __dangerouslyDisableSanitizersByTagID: {
+      'krabiclaw-ga-init': ['innerHTML']
+    }
+  }
+})
+
 const loadingColor = computed(() => {
   if (isPlatform) return 'var(--kc-loading-rainbow)'
   return 'var(--saya-primary, var(--kc-coral))'

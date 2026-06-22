@@ -170,9 +170,20 @@ const permissionGroups = computed(() => {
     })
   }
 
+  if (scopes.has('platform_admin')) {
+    groups.push({
+      icon: 'i-lucide-shield-check',
+      title: 'Access internal platform operations',
+      items: [
+        'Manage KrabiClaw platform blog and docs content',
+        'Perform internal platform admin actions',
+      ],
+    })
+  }
+
   // We hide offline_access from the UI (matching Spotify's transparent refresh token behavior)
 
-  const known = new Set(['openid', 'tenant', 'offline_access'])
+  const known = new Set(['openid', 'tenant', 'platform_admin', 'offline_access'])
   const unknown = [...scopes].filter(s => !known.has(s))
   if (unknown.length) {
     groups.push({

@@ -42,12 +42,11 @@ export const sayaEmptyStates: Record<SayaEmptyStateKey, SayaEmptyStateConfig> = 
     ],
     hint: 'Add my second location'
   },
+  // Posts are optional/supplementary — a live, fully-operational business may
+  // legitimately never post updates, so no fabricated example here (unlike
+  // menu/experiences/locations, where absence usually means an unfinished site).
   posts: {
-    examples: [
-      { title: 'Example post title', subtitle: 'Share an update, offer, or event with your customers.' },
-      { title: 'Example post title', subtitle: 'Share an update, offer, or event with your customers.' },
-      { title: 'Example post title', subtitle: 'Share an update, offer, or event with your customers.' }
-    ],
+    examples: [],
     hint: 'Post an update about my business'
   },
   qa: {

@@ -21,6 +21,7 @@ import {
   renderKikuzukiMediaBlock,
   renderKikuzukiMenuBlock,
   renderKikuzukiContentBlock,
+  renderKikuzukiExperienceBlock,
   renderKikuzukiReviewsBlock,
   renderKikuzukiBillingBlock,
 } from '../seed-definitions/kikuzuki.ts'
@@ -82,6 +83,8 @@ ${renderKikuzukiMediaBlock()}
 ${renderKikuzukiMenuBlock()}
 
 ${renderKikuzukiContentBlock()}
+
+${renderKikuzukiExperienceBlock()}
 
 ${renderKikuzukiReviewsBlock()}
 

@@ -1,6 +1,7 @@
 import { createError, getHeader, getHeaders, type H3Event } from 'h3'
 import { createLocalJWKSet, jwtVerify } from 'jose'
 import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
 
 export type McpToolRole = 'owner' | 'admin' | 'editor'
 
@@ -15,6 +16,7 @@ export interface McpUserContext {
   db: D1Database
   userId: string
   isPlatformAdmin: boolean
+  scopes: string[]
 }
 
 export interface McpSiteContext extends McpUserContext {
@@ -38,9 +40,24 @@ interface TokenVerificationResult {
   identity: VerifiedTokenIdentity | null
   jwtReason: string
   opaqueReason: string
+  scopes: string[]
 }
 
-export async function requireMcpUser(event: H3Event): Promise<McpUserContext> {
+interface RequireMcpUserOptions {
+  audiences?: string[]
+  requiredScopes?: string[]
+  requirePlatformAdmin?: boolean
+  forbiddenScopes?: string[]
+}
+
+export async function requireMcpUser(
+  event: H3Event,
+  options: RequireMcpUserOptions = {},
+): Promise<McpUserContext> {
+  const normalizedOptions: RequireMcpUserOptions = {
+    ...options,
+    forbiddenScopes: options.forbiddenScopes ?? (options.requiredScopes?.includes('platform_admin') ? [] : ['platform_admin']),
+  }
   const env = event.context.cloudflare?.env as CloudflareEnv | undefined
   const db = env?.DB
   if (!env || !db) {
@@ -49,7 +66,11 @@ export async function requireMcpUser(event: H3Event): Promise<McpUserContext> {
 
   const authHeader = getHeader(event, 'authorization')
   if (authHeader?.startsWith('Bearer ')) {
-    return verifyBearerToken(event, authHeader.slice(7), env, db)
+    const user = await verifyBearerToken(event, authHeader.slice(7), env, db, normalizedOptions)
+    if (normalizedOptions.requirePlatformAdmin && !user.isPlatformAdmin) {
+      throw createError({ statusCode: 403, statusMessage: 'Platform admin access required' })
+    }
+    return user
   }
 
   const session = await getAuthSession(event, env)
@@ -57,12 +78,27 @@ export async function requireMcpUser(event: H3Event): Promise<McpUserContext> {
     throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
   }
 
-  return {
+  // Session-based auth has no token to derive scopes from, so we assume the caller's
+  // requested scopes are granted outright. This is safe because forbiddenScopes and
+  // requirePlatformAdmin below still enforce the real restrictions for this surface.
+  const user = {
     env,
     db,
     userId: session.user.id,
-    isPlatformAdmin: (session.user as { role?: string }).role === 'admin',
+    isPlatformAdmin: isPlatformAdmin(
+      {
+        role: (session.user as { role?: string | null }).role ?? null,
+        email: session.user.email ?? null,
+      },
+      env,
+    ),
+    scopes: normalizedOptions.requiredScopes ?? ['tenant'],
   }
+  ensureForbiddenScopesAbsent(user.scopes, normalizedOptions.forbiddenScopes)
+  if (normalizedOptions.requirePlatformAdmin && !user.isPlatformAdmin) {
+    throw createError({ statusCode: 403, statusMessage: 'Platform admin access required' })
+  }
+  return user
 }
 
 async function verifyBearerToken(
@@ -70,11 +106,17 @@ async function verifyBearerToken(
   token: string,
   env: CloudflareEnv,
   db: D1Database,
+  options: RequireMcpUserOptions,
 ): Promise<McpUserContext> {
   const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
   const tokenFingerprint = (await sha256Base64Url(token)).slice(0, 12)
 
-  const verification = await verifyJwtOrOpaqueToken(token, baseUrl, db)
+  const audiences = options.audiences?.length
+    ? options.audiences
+    : [`${baseUrl}/api/mcp`, 'https://krabiclaw.com/api/mcp']
+  const requiredScopes = options.requiredScopes?.length ? options.requiredScopes : ['tenant']
+
+  const verification = await verifyJwtOrOpaqueToken(token, baseUrl, db, audiences, requiredScopes)
   if (!verification.identity) {
     logMcpAuth(event, 'warn', 'credential_rejected', {
       token_fingerprint: tokenFingerprint,
@@ -85,11 +127,12 @@ async function verifyBearerToken(
     throw createError({ statusCode: 401, statusMessage: 'Invalid or expired token' })
   }
   const identity = verification.identity
+  ensureForbiddenScopesAbsent(verification.scopes, options.forbiddenScopes)
 
   const user = await db
-    .prepare('SELECT role FROM user WHERE id = ? LIMIT 1')
+    .prepare('SELECT role, email FROM user WHERE id = ? LIMIT 1')
     .bind(identity.userId)
-    .first<{ role?: string }>()
+    .first<{ role?: string; email?: string | null }>()
 
   if (!user) {
     logMcpAuth(event, 'warn', 'credential_rejected', {
@@ -109,7 +152,14 @@ async function verifyBearerToken(
     env,
     db,
     userId: identity.userId,
-    isPlatformAdmin: user.role === 'admin',
+    isPlatformAdmin: isPlatformAdmin(
+      {
+        role: user.role ?? null,
+        email: user.email ?? null,
+      },
+      env,
+    ),
+    scopes: verification.scopes,
   }
 }
 
@@ -117,22 +167,26 @@ async function verifyJwtOrOpaqueToken(
   token: string,
   baseUrl: string,
   db: D1Database,
+  audiences: string[],
+  requiredScopes: string[],
 ): Promise<TokenVerificationResult> {
-  const jwtResult = await verifyJwtAccessToken(token, baseUrl, db)
+  const jwtResult = await verifyJwtAccessToken(token, baseUrl, db, audiences, requiredScopes)
   if (jwtResult.userId) {
     return {
       identity: { userId: jwtResult.userId, tokenKind: 'jwt' },
       jwtReason: jwtResult.reason,
       opaqueReason: 'not_checked',
+      scopes: jwtResult.scopes,
     }
   }
 
-  const opaqueResult = await verifyOpaqueAccessToken(token, db)
+  const opaqueResult = await verifyOpaqueAccessToken(token, db, requiredScopes)
   if (opaqueResult.userId) {
     return {
       identity: { userId: opaqueResult.userId, tokenKind: 'opaque' },
       jwtReason: jwtResult.reason,
       opaqueReason: opaqueResult.reason,
+      scopes: opaqueResult.scopes,
     }
   }
 
@@ -140,15 +194,22 @@ async function verifyJwtOrOpaqueToken(
     identity: null,
     jwtReason: jwtResult.reason,
     opaqueReason: opaqueResult.reason,
+    scopes: [],
   }
 }
 
-async function verifyJwtAccessToken(token: string, baseUrl: string, db: D1Database): Promise<TokenLookupResult> {
+async function verifyJwtAccessToken(
+  token: string,
+  baseUrl: string,
+  db: D1Database,
+  audiences: string[],
+  requiredScopes: string[],
+): Promise<TokenLookupResult & { scopes: string[] }> {
   const { results: keys } = await db
     .prepare('SELECT id, publicKey, alg FROM jwks ORDER BY createdAt DESC')
     .all<{ id: string; publicKey: string; alg: string | null }>()
 
-  if (!keys?.length) return { userId: null, reason: 'jwks_empty' }
+  if (!keys?.length) return { userId: null, reason: 'jwks_empty', scopes: [] }
 
   const jwks = createLocalJWKSet({
     keys: keys.map(k => ({
@@ -161,17 +222,26 @@ async function verifyJwtAccessToken(token: string, baseUrl: string, db: D1Databa
   try {
     const { payload } = await jwtVerify(token, jwks, {
       issuer: baseUrl,
-      audience: [`${baseUrl}/api/mcp`, 'https://krabiclaw.com/api/mcp'],
+      audience: audiences,
     })
+    const scopes = parseScopesFromJwtPayload(payload.scope)
+    const missingScope = requiredScopes.find(scope => !scopes.includes(scope))
+    if (missingScope) {
+      return { userId: null, reason: `${missingScope}_scope_missing`, scopes }
+    }
     return typeof payload.sub === 'string'
-      ? { userId: payload.sub, reason: 'accepted' }
-      : { userId: null, reason: 'subject_missing' }
+      ? { userId: payload.sub, reason: 'accepted', scopes }
+      : { userId: null, reason: 'subject_missing', scopes }
   } catch (error) {
-    return { userId: null, reason: joseErrorReason(error) }
+    return { userId: null, reason: joseErrorReason(error), scopes: [] }
   }
 }
 
-async function verifyOpaqueAccessToken(token: string, db: D1Database): Promise<TokenLookupResult> {
+async function verifyOpaqueAccessToken(
+  token: string,
+  db: D1Database,
+  requiredScopes: string[],
+): Promise<TokenLookupResult & { scopes: string[] }> {
   const hashedToken = await sha256Base64Url(token)
   const accessToken = await db.prepare(`
     SELECT oat.userId, oat.expiresAt, oat.scopes, oc.disabled AS client_disabled
@@ -186,17 +256,18 @@ async function verifyOpaqueAccessToken(token: string, db: D1Database): Promise<T
     client_disabled: number | null
   }>()
 
-  if (!accessToken?.userId || !accessToken.expiresAt) return { userId: null, reason: 'token_not_found' }
-  if (accessToken.client_disabled) return { userId: null, reason: 'client_disabled' }
+  if (!accessToken?.userId || !accessToken.expiresAt) return { userId: null, reason: 'token_not_found', scopes: [] }
+  if (accessToken.client_disabled) return { userId: null, reason: 'client_disabled', scopes: [] }
 
   const expiresAt = new Date(accessToken.expiresAt)
-  if (Number.isNaN(expiresAt.getTime())) return { userId: null, reason: 'expiry_invalid' }
-  if (expiresAt.getTime() <= Date.now()) return { userId: null, reason: 'token_expired' }
+  if (Number.isNaN(expiresAt.getTime())) return { userId: null, reason: 'expiry_invalid', scopes: [] }
+  if (expiresAt.getTime() <= Date.now()) return { userId: null, reason: 'token_expired', scopes: [] }
 
   const scopes = parseTokenScopes(accessToken.scopes)
-  if (!scopes.includes('tenant')) return { userId: null, reason: 'tenant_scope_missing' }
+  const missingScope = requiredScopes.find(scope => !scopes.includes(scope))
+  if (missingScope) return { userId: null, reason: `${missingScope}_scope_missing`, scopes }
 
-  return { userId: accessToken.userId, reason: 'accepted' }
+  return { userId: accessToken.userId, reason: 'accepted', scopes }
 }
 
 function joseErrorReason(error: unknown) {
@@ -236,6 +307,18 @@ function parseTokenScopes(scopes: string | null) {
     return Array.isArray(parsed) ? parsed.filter((scope): scope is string => typeof scope === 'string') : []
   } catch {
     return scopes.split(' ').filter(Boolean)
+  }
+}
+
+function parseScopesFromJwtPayload(scopeClaim: unknown) {
+  if (typeof scopeClaim !== 'string') return []
+  return scopeClaim.split(' ').filter(Boolean)
+}
+
+function ensureForbiddenScopesAbsent(scopes: string[], forbiddenScopes?: string[]) {
+  const blocked = (forbiddenScopes ?? []).find(scope => scopes.includes(scope))
+  if (blocked) {
+    throw createError({ statusCode: 403, statusMessage: `Token scope ${blocked} is not allowed for this MCP surface` })
   }
 }
 

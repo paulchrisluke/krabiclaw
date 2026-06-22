@@ -1,4 +1,5 @@
 <template>
+  <NuxtLayout :name="isPlatform ? 'platform' : 'saya'">
     <!-- ── TENANT: Restaurant about page ─────────────────── -->
     <div v-if="!isPlatform">
 
@@ -173,6 +174,7 @@
         </article>
       </div>
     </div>
+  </NuxtLayout>
 </template>
 
 <script setup>
@@ -185,10 +187,6 @@ import { useDynamicComponent } from '~/composables/useDynamicComponent'
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
 
 const { isPlatform, site } = useTenantSite()
-
-// Use the Nuxt-native dynamic layout API instead of wrapping with <NuxtLayout> in the template.
-// This correctly handles client-side navigation between pages using different layout strategies.
-setPageLayout(isPlatform ? 'platform' : 'saya')
 const { getField, locations, contentBlocks } = useBootstrap()
 const { resolveComponent } = useDynamicComponent()
 const { locale } = useI18n()

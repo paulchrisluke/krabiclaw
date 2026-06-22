@@ -1,7 +1,7 @@
 // POST /api/site-transfer/[token]/accept — authenticated: accept and execute a site transfer
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformOwner } from '~/server/utils/platform-auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { executeSiteTransfer } from '~/server/utils/site-transfer'
 import { getStripe, getPriceIdForPlan } from '~/server/utils/billing'
 import type Stripe from 'stripe'
@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
 
   const userId = session.user.id
   const userEmail = session.user.email?.toLowerCase() ?? ''
-  const isPlatAdmin = isPlatformOwner(session.user.email, env)
+  const isPlatAdmin = isPlatformAdmin(session.user, env)
 
   let acceptBody: { interval?: string } = {}
   try {

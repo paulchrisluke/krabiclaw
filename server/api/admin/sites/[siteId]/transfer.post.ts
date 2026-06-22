@@ -4,7 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { hashEmail, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
 import { rootDomainForPair } from '~/server/utils/domains'
-import { isPlatformOwner } from '~/server/utils/platform-auth'
+import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import {
   buildTransferDomainSnapshot,
   serializeTransferDomainSnapshot,
@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const userId = session.user.id
-  const isPlatAdmin = isPlatformOwner(session.user.email, env)
+  const isPlatAdmin = isPlatformAdmin(session.user, env)
 
   // Verify caller is platform admin or an owner/admin of this site
   const site = await db
