@@ -1,45 +1,44 @@
 <template>
-  <UPage class="min-h-screen bg-default text-default">
-    <UPageBody class="p-0">
-      <template v-if="location">
-        <!-- Sub-nav (Level 2) -->
-        <SayaSubNav
-          :location-slug="slug"
-          active="posts"
-        />
+  <div class="min-h-screen bg-default text-default">
 
-        <!-- Compact Page header -->
-        <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 text-center sm:px-6 lg:px-8">
-          <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
-            ← {{ $t('saya.location.back_to', { title: location?.title }) }}
-          </NuxtLink>
+    <template v-if="location">
+      <!-- Sub-nav (Level 2) -->
+      <SayaSubNav
+        :location-slug="slug"
+        active="posts"
+      />
 
-          <div class="flex flex-col gap-2">
-            <h1 class="saya-display-md text-default">
-              <em class="saya-italic">{{ $t('saya.location.posts_from', { title: location?.title }) }}</em>
-            </h1>
-          </div>
-        </header>
-      </template>
+      <!-- Compact Page header -->
+      <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
+        <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
+          ← {{ $t('saya.location.back_to', { title: location?.title }) }}
+        </NuxtLink>
 
-      <!-- Post grid -->
-      <LazySayaPosts :posts="posts" :show-title="false" />
+        <div class="flex flex-col gap-2">
+          <h1 class="saya-display-md text-default">
+            <em class="saya-italic">{{ $t('saya.location.posts_from', { title: location?.title }) }}</em>
+          </h1>
+        </div>
+      </header>
+    </template>
 
-      <!-- Empty state -->
-      <div
-        v-if="posts.length === 0"
-        class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8"
-      >
-        <UCard class="rounded-3xl border-dashed bg-muted/20" :ui="{ body: 'flex flex-col items-center py-20 text-center' }">
-          <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
-            <UIcon name="i-heroicons-newspaper" class="size-7" />
-          </div>
-          <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ $t('saya.posts.empty_title') }}</h3>
-          <p class="mt-2 max-w-sm text-sm text-muted">{{ $t('saya.posts.empty_desc') }}</p>
-        </UCard>
-      </div>
-    </UPageBody>
-  </UPage>
+    <!-- Post grid -->
+    <LazySayaPosts :posts="posts" :show-title="false" />
+
+    <!-- Empty state -->
+    <div
+      v-if="posts.length === 0"
+      class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8"
+    >
+      <UCard class="rounded-3xl border-dashed bg-muted/20" :ui="{ body: 'flex flex-col items-center py-20 text-center' }">
+        <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
+          <UIcon name="i-heroicons-newspaper" class="size-7" />
+        </div>
+        <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ $t('saya.posts.empty_title') }}</h3>
+        <p class="mt-2 max-w-sm text-sm text-muted">{{ $t('saya.posts.empty_desc') }}</p>
+      </UCard>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">

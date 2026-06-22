@@ -405,11 +405,12 @@ Flow:
 
 ## Design System Enforcement
 
-- Never bypass Nuxt UI layout components to write custom Tailwind `div` wrappers.
+- Dashboard pages use Nuxt UI layout primitives rather than custom Tailwind page shells.
 - Use:
   - `UCard`
   - `UPage`
   - `UPageBody`
+- Saya theme pages keep their established raw layout shell and theme-specific components, rather than being forced into dashboard page primitives.
 
 - UCard `:ui` prop only accepts:
   - `root`
@@ -427,6 +428,7 @@ Flow:
 
 - Dashboard pages do not use `UPageHeader`.
 - Dashboard page content goes directly in `UPageBody`.
+- Saya public pages should preserve the existing editorial layout pattern, using `div` / `section` wrappers and Saya components where that surface already has an established convention.
 - Admin nav uses `i-lucide-*` icons and must stay consistent with the rest of the dashboard nav.
 - Do not introduce custom `border` or `bg` classes that break global theme inheritance.
 - If a specific visual layout is needed, such as a flat Vercel card, use the Nuxt UI component and override specific tokens through `:ui`.
