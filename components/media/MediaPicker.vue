@@ -225,10 +225,11 @@ function onSelect(asset: PickerMediaAsset) {
 }
 
 function onUploaded(asset: PickerMediaAsset) {
-  const kind = asset.kind ?? (asset.publicUrl?.toLowerCase().endsWith('.mp4') ? 'video' : 'image')
+  const url = asset.publicUrl ?? asset.public_url ?? ''
+  const kind = asset.kind ?? (url.toLowerCase().endsWith('.mp4') ? 'video' : 'image')
   pendingAsset.value = {
     id: asset.id,
-    publicUrl: asset.publicUrl ?? asset.public_url ?? '',
+    publicUrl: url,
     thumbnailUrl: asset.thumbnailUrl ?? asset.thumbnail_url ?? '',
     kind,
   }

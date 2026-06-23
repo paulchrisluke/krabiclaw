@@ -322,7 +322,7 @@ function buildPayload() {
     robots: form.robots.trim() || null,
     faq_items: form.faq_items
       .map(item => ({ question: item.question.trim(), answer: item.answer.trim() }))
-      .filter(item => item.question || item.answer),
+      .filter(item => item.question && item.answer),
     how_to_steps: form.how_to_steps
       .map(step => ({
         name: step.name.trim(),
@@ -330,7 +330,7 @@ function buildPayload() {
         image_asset_id: step.image_asset_id.trim() || undefined,
         url: step.url.trim() || undefined,
       }))
-      .filter(step => step.name || step.text || step.image_asset_id || step.url),
+      .filter(step => step.name && step.text),
   }
 }
 

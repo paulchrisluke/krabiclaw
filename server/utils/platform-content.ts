@@ -336,7 +336,7 @@ async function normalizeHowToSteps(db: D1Database, steps: PlatformHowToStepInput
     if (!name) badRequest(`how_to_steps[${index}].name is required`)
     if (!text) badRequest(`how_to_steps[${index}].text is required`)
     const imageAssetId = step.image_asset_id?.trim() || null
-    if (imageAssetId) await ensureMediaAssetExists(db, imageAssetId)
+    if (imageAssetId) await ensureMediaAssetExists(db, imageAssetId, `how_to_steps[${index}].image_asset_id`)
     let url = step.url?.trim() || null
     if (url) {
       try {

@@ -107,15 +107,16 @@ export function usePlatformPageSeo(input: MaybeRefOrGetter<PlatformPageSeoInput>
         logo: `${siteRoot}/krabi-claw-logo.png`,
         description: PLATFORM_DESCRIPTION,
       })
-      graph.push({
-        '@type': 'WebSite',
-        '@id': websiteId,
-        url: siteRoot,
-        name: PLATFORM_NAME,
-        description: PLATFORM_DESCRIPTION,
-        publisher: { '@id': organizationId },
-      })
     }
+
+    graph.push({
+      '@type': 'WebSite',
+      '@id': websiteId,
+      url: siteRoot,
+      name: PLATFORM_NAME,
+      description: PLATFORM_DESCRIPTION,
+      publisher: { '@id': organizationId },
+    })
 
     const webpageNode: ApiRecord = {
       '@type': value.pageType || 'WebPage',

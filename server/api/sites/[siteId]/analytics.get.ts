@@ -11,6 +11,9 @@ interface AnalyticsSummary {
   changePercent: number
   reservations: number
   experienceBookings: number
+  uniqueVisitors: number
+  pagesPerSession: number
+  returningVisitors: number
 }
 
 interface DailyData {
@@ -30,6 +33,8 @@ interface PeriodStats {
   pageViews: number
   sessions: number
   totalDuration: number
+  uniqueVisitors: number
+  returningVisitors: number
 }
 
 function toNumber(value: unknown): number {
@@ -120,12 +125,14 @@ export default defineEventHandler(async (event) => {
 
     // Get aggregated daily analytics
     const dailyStats = await db.prepare(`
-      SELECT 
+      SELECT
         date,
         page_views,
         unique_sessions,
         COALESCE(avg_session_duration, 0) as avg_session_duration,
-        top_pages
+        top_pages,
+        COALESCE(unique_visitors, 0) as unique_visitors,
+        COALESCE(returning_visitors, 0) as returning_visitors
       FROM site_analytics_daily
       WHERE site_id = ? AND date BETWEEN ? AND ?
       ORDER BY date ASC
@@ -140,11 +147,50 @@ export default defineEventHandler(async (event) => {
         return {
           pageViews: acc.pageViews + rowPageViews,
           sessions: acc.sessions + rowSessions,
-          totalDuration: acc.totalDuration + (rowAvgDuration * rowSessions)
+          totalDuration: acc.totalDuration + (rowAvgDuration * rowSessions),
+          uniqueVisitors: 0, // Calculated accurately below
+          returningVisitors: 0 // Calculated accurately below
         }
       },
-      { pageViews: 0, sessions: 0, totalDuration: 0 }
+      { pageViews: 0, sessions: 0, totalDuration: 0, uniqueVisitors: 0, returningVisitors: 0 }
     )
+
+    // Accurate visitor deduplication across the date range
+    const startIso = `${startDate}T00:00:00.000Z`
+    const endDateObj = new Date(`${endDate}T00:00:00.000Z`)
+    endDateObj.setUTCDate(endDateObj.getUTCDate() + 1)
+    const endIso = endDateObj.toISOString()
+
+    const visitorStats = await db.prepare(`
+      SELECT 
+        COUNT(DISTINCT visitor_id) as unique_visitors,
+        (
+          SELECT COUNT(DISTINCT visitor_id)
+          FROM site_pageview_events
+          WHERE site_id = ? 
+            AND created_at < ?
+            AND visitor_id IN (
+              SELECT DISTINCT visitor_id
+              FROM site_pageview_events
+              WHERE site_id = ?
+                AND created_at >= ?
+                AND created_at < ?
+                AND visitor_id IS NOT NULL
+            )
+        ) as returning_visitors
+      FROM site_pageview_events
+      WHERE site_id = ?
+        AND created_at >= ?
+        AND created_at < ?
+        AND visitor_id IS NOT NULL
+    `).bind(
+      siteId, startIso, 
+      siteId, startIso, endIso, 
+      siteId, startIso, endIso
+    ).first() as { unique_visitors: number; returning_visitors: number } | null
+
+    currentPeriodStats.uniqueVisitors = toNumber(visitorStats?.unique_visitors)
+    currentPeriodStats.returningVisitors = toNumber(visitorStats?.returning_visitors)
 
     const avgDuration =
       currentPeriodStats.sessions > 0
@@ -211,7 +257,12 @@ export default defineEventHandler(async (event) => {
       avgSessionDuration: avgDuration,
       changePercent,
       reservations: 0,
-      experienceBookings: 0
+      experienceBookings: 0,
+      uniqueVisitors: currentPeriodStats.uniqueVisitors,
+      pagesPerSession: currentPeriodStats.sessions > 0
+        ? Math.round((currentPeriodStats.pageViews / currentPeriodStats.sessions) * 100) / 100
+        : 0,
+      returningVisitors: currentPeriodStats.returningVisitors
     }
 
     // Fetch additional business metrics (Reservations and Experience Bookings)

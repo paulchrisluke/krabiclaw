@@ -11,6 +11,7 @@
 import { calculateThemeColors } from '~/utils/color-utils'
 
 const { isPlatform, site } = useTenantSite()
+const { config } = useBootstrap()
 const route = useRoute()
 const defaultOgImage = useSharedOgImage()
 const defaultPageUrl = useSeoUrl(() => route.path)
@@ -25,19 +26,30 @@ useSeoMeta({
   twitterImage: defaultOgImage
 })
 
-// Google Analytics for krabiclaw.com platform
+// GA4 measurement ID format ("G-XXXXXXXXXX") — validated before interpolation
+// since the init script below renders with sanitizers disabled.
+const GA4_MEASUREMENT_ID_RE = /^G-[A-Z0-9]+$/i
+
+// Google Analytics: platform uses KrabiClaw's own GA4 property. Tenant (Saya)
+// pages use the site's own connected GA4 property (server/utils/google-analytics.ts),
+// surfaced via site_config → bootstrap config.google_analytics_measurement_id.
+// Sites without a GA connection get no tag at all.
 useHead(() => {
-  if (!isPlatform) return {}
+  const measurementId = isPlatform
+    ? 'G-NJ1BSP9BYG'
+    : config.value.google_analytics_measurement_id
+
+  if (!measurementId || !GA4_MEASUREMENT_ID_RE.test(measurementId)) return {}
 
   return {
     script: [
       {
-        src: 'https://www.googletagmanager.com/gtag/js?id=G-NJ1BSP9BYG',
+        src: `https://www.googletagmanager.com/gtag/js?id=${measurementId}`,
         async: true
       },
       {
         key: 'krabiclaw-ga-init',
-        innerHTML: `window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NJ1BSP9BYG');`
+        innerHTML: `window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', '${measurementId}');`
       }
     ],
     __dangerouslyDisableSanitizersByTagID: {
@@ -55,7 +67,6 @@ const loadingColor = computed(() => {
 // component (not a Nuxt plugin) — useBootstrap() depends on useI18n(),
 // which requires an active component instance.
 if (import.meta.client) {
-  const { config } = useBootstrap()
   watchEffect(() => {
     const brandColor = config.value.brand_color
     if (!brandColor) return

@@ -196,7 +196,7 @@ const BLOG_RECORD_SCHEMA = {
       },
     },
   },
-  required: BLOG_SUMMARY_SCHEMA.required,
+  required: [...BLOG_SUMMARY_SCHEMA.required, 'body', 'components'],
   additionalProperties: false,
 }
 
@@ -255,7 +255,7 @@ const DOC_RECORD_SCHEMA = {
       },
     },
   },
-  required: DOC_SUMMARY_SCHEMA.required,
+  required: [...DOC_SUMMARY_SCHEMA.required, 'body', 'components'],
   additionalProperties: false,
 }
 

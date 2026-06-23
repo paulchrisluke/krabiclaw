@@ -107,6 +107,17 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 ---
 
+## Analytics
+
+There are four independent analytics layers — do not conflate them or assume one supersedes another:
+
+1. **Platform GA4** (`G-NJ1BSP9BYG`, injected in `app.vue`) — KrabiClaw's own marketing-site property, fires only when `isPlatform` is true.
+2. **Per-tenant connected GA4** — a site owner links their own GA4 property via the OAuth flow in `server/utils/google-analytics.ts` / `server/api/sites/[siteId]/integrations/google-analytics/`. The resulting `ga4_measurement_id` lands in `site_config` (already exposed publicly via bootstrap's `config` object — no extra plumbing needed) and `app.vue` injects it as that tenant's own gtag tag. Sites with no connection get no tag from this layer.
+3. **Platform-wide rollup GA4** (`G-Z18L1Y4G7K`, configured in `nuxt.config.ts` via `scripts.registry.googleAnalytics`) — **intentionally unconditional**, fires on every route including every Saya tenant page. This is how KrabiClaw gets cross-customer traffic insight across all tenant sites. It is not a leftover/mistake — do not remove or gate it without explicit instruction.
+4. **Internal pipeline** (`site_pageview_events` → `aggregateAnalyticsForDate()` → `site_analytics_daily`) — powers each site's own dashboard "Analytics overview" tab. Tracked via `server/middleware/zz-pageview-tracking.ts` (SSR) and `plugins/pageview-tracking.client.ts` (SPA navigation + duration ping), using the `kc_visitor_id` (2yr)/`kc_session_id` (30min sliding) anonymous cookie pair defined in `server/utils/pageview-tracking.ts`. This is intentionally not a Better Auth session — anonymous visitors must never create rows in `user`/`session`.
+
+---
+
 ## File Conventions
 
 - `server/utils/auth.ts` — `createAuth(env)` — always takes full CF env

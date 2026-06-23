@@ -3,6 +3,7 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
+import { hasBetterAuthAdminRole } from '~/server/utils/platform-auth'
 
 async function hmacSign(value: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
@@ -108,23 +109,18 @@ export default defineEventHandler(async (event) => {
     `).all<{ id: string; email: string; role?: string | null; has_org: number; is_owner: number; has_site: number }>()
     const rows = results || []
     
-    function hasAdminRole(role: string | null | undefined): boolean {
-      if (!role) return false
-      return role.split(',').map(r => r.trim().toLowerCase()).includes('admin')
-    }
-    
     user = rows.find((row) =>
       row.has_site === 1 &&
       row.is_owner === 1 &&
       row.has_org === 1 &&
-      !hasAdminRole(row.role)
+      !hasBetterAuthAdminRole(row.role)
     ) || rows.find((row) =>
       row.is_owner === 1 &&
       row.has_org === 1 &&
-      !hasAdminRole(row.role)
+      !hasBetterAuthAdminRole(row.role)
     ) || rows.find((row) =>
       row.has_org === 1 &&
-      !hasAdminRole(row.role)
+      !hasBetterAuthAdminRole(row.role)
     ) || null
     if (!user) {
       throw createError({ statusCode: 500, statusMessage: 'No suitable dev user (prefer owner with site, fallback owner with org, fallback member with org)' })

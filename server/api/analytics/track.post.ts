@@ -1,18 +1,28 @@
-// POST /api/analytics/track - Public endpoint to log pageview events
+// POST /api/analytics/track - Public endpoint for client-side pageview/duration pings.
+// Pageviews are also recorded server-side for the initial request by
+// server/middleware/zz-pageview-tracking.ts; this endpoint covers SPA route
+// changes (router.afterEach) and the visibilitychange/sendBeacon duration ping.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import type { H3Event } from 'h3'
+import {
+  getClientIp,
+  getCloudflareGeo,
+  getOrCreateSessionId,
+  getOrCreateVisitorId,
+  hashIp,
+  insertPageviewEvent,
+  isTrackablePath
+} from '~/server/utils/pageview-tracking'
 
 interface PageviewRequest {
   siteId: string
-  sessionId: string
   pagePath: string
   referrer?: string
   userAgent?: string
   durationSeconds?: number
+  eventType?: 'pageview' | 'duration'
 }
 
 const MAX_SITE_ID_LEN = 128
-const MAX_SESSION_ID_LEN = 128
 const MAX_PATH_LEN = 2048
 const MAX_REFERRER_LEN = 2048
 const MAX_UA_LEN = 1024
@@ -37,6 +47,8 @@ export default defineEventHandler(async (event) => {
       )
     }
 
+    const eventType = body.eventType === 'duration' ? 'duration' : 'pageview'
+
     const rawDuration = (body as unknown as Record<string, unknown>).durationSeconds
     let durationSeconds: number | null = null
     if (rawDuration !== undefined && rawDuration !== null && rawDuration !== '') {
@@ -50,23 +62,28 @@ export default defineEventHandler(async (event) => {
       durationSeconds = parsed
     }
 
+    if (eventType === 'duration' && durationSeconds === null) {
+      return jsonResponse({ error: 'durationSeconds is required for duration pings' }, { status: 400 })
+    }
+
     const siteId = typeof body.siteId === 'string' ? body.siteId.trim() : ''
-    const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : ''
     const pagePath = typeof body.pagePath === 'string' ? body.pagePath.trim() : ''
     const referrer = typeof body.referrer === 'string' ? body.referrer.trim() : undefined
     const userAgent = typeof body.userAgent === 'string' ? body.userAgent.trim() : undefined
 
-    // Validate required fields
-    if (!siteId || !sessionId || !pagePath) {
+    if (!siteId || !pagePath) {
       return jsonResponse(
-        { error: 'Missing required fields: siteId, sessionId, pagePath' },
+        { error: 'Missing required fields: siteId, pagePath' },
         { status: 400 }
       )
     }
 
+    if (!isTrackablePath(pagePath)) {
+      return jsonResponse({ ok: true })
+    }
+
     if (
       siteId.length > MAX_SITE_ID_LEN ||
-      sessionId.length > MAX_SESSION_ID_LEN ||
       pagePath.length > MAX_PATH_LEN ||
       (referrer && referrer.length > MAX_REFERRER_LEN) ||
       (userAgent && userAgent.length > MAX_UA_LEN)
@@ -89,8 +106,7 @@ export default defineEventHandler(async (event) => {
       )
     }
 
-    // Extract client IP for hashing (never store raw IP)
-    const clientIp = getClientIP(event) || 'unknown'
+    const clientIp = getClientIp(event)
     const ipHash = await hashIp(clientIp)
     const now = new Date().toISOString()
     const windowEndsAt = new Date(Date.now() + RATE_LIMIT_WINDOW_SECONDS * 1000).toISOString()
@@ -125,24 +141,43 @@ export default defineEventHandler(async (event) => {
       )
     }
 
-    // Insert pageview event
-    const eventId = crypto.randomUUID()
-    await db.prepare(`
-      INSERT INTO site_pageview_events (
-        id, site_id, page_path, referrer, user_agent, 
-        ip_hash, session_id, duration_seconds, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      eventId,
+    const visitorId = getOrCreateVisitorId(event)
+    const sessionId = getOrCreateSessionId(event)
+
+    if (eventType === 'duration') {
+      // Final/duration ping updates the most recent event for this exact page
+      // (not just "most recent in session") — the beacon for the page being left
+      // and the fetch for the next page's pageview are both in flight at once and
+      // can resolve out of order, so matching on page_path avoids attaching the
+      // duration to whichever row happens to land last.
+      await db.prepare(`
+        UPDATE site_pageview_events
+        SET duration_seconds = ?
+        WHERE id = (
+          SELECT id FROM site_pageview_events
+          WHERE site_id = ? AND session_id = ? AND page_path = ?
+          ORDER BY created_at DESC
+          LIMIT 1
+        )
+      `).bind(durationSeconds, siteId, sessionId, pagePath).run()
+
+      return jsonResponse({ ok: true })
+    }
+
+    const geo = getCloudflareGeo(event)
+
+    await insertPageviewEvent(db, {
       siteId,
       pagePath,
-      referrer || null,
-      userAgent || null,
+      referrer: referrer || null,
+      userAgent: userAgent || null,
       ipHash,
       sessionId,
-      durationSeconds ?? null,
-      now
-    ).run()
+      visitorId,
+      country: geo.country || null,
+      region: geo.region || null,
+      city: geo.city || null
+    })
 
     return jsonResponse({ ok: true })
   } catch (error) {
@@ -154,28 +189,3 @@ export default defineEventHandler(async (event) => {
     )
   }
 })
-
-function getClientIP(event: H3Event): string | null {
-  // Try CF header first (Cloudflare Pages)
-  const cfIp = getHeader(event, 'cf-connecting-ip')
-  if (cfIp) return cfIp
-
-  // Fall back to x-forwarded-for
-  const forwarded = getHeader(event, 'x-forwarded-for')
-  if (forwarded) {
-    const first = forwarded.split(',')[0]
-    return first ? first.trim() : null
-  }
-
-  // Fall back to request connection
-  return event.node?.req?.socket?.remoteAddress || null
-}
-
-async function hashIp(ip: string): Promise<string> {
-  // Simple hash for IP anonymization; in production consider crypto-js or similar
-  const encoder = new TextEncoder()
-  const data = encoder.encode(ip)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
-}
