@@ -12,7 +12,7 @@ CREATE TABLE platform_content_components (
   id TEXT PRIMARY KEY,
   content_type TEXT NOT NULL CHECK (content_type IN ('blog_post', 'doc')),
   content_id TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('faq', 'how_to')),
+  type TEXT NOT NULL,
   position INTEGER NOT NULL DEFAULT 0,
   label TEXT,
   status TEXT NOT NULL DEFAULT 'active',

@@ -109,7 +109,7 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 ## Analytics
 
-There are three independent analytics layers — do not conflate them or assume one supersedes another:
+There are four independent analytics layers — do not conflate them or assume one supersedes another:
 
 1. **Platform GA4** (`G-NJ1BSP9BYG`, injected in `app.vue`) — KrabiClaw's own marketing-site property, fires only when `isPlatform` is true.
 2. **Per-tenant connected GA4** — a site owner links their own GA4 property via the OAuth flow in `server/utils/google-analytics.ts` / `server/api/sites/[siteId]/integrations/google-analytics/`. The resulting `ga4_measurement_id` lands in `site_config` (already exposed publicly via bootstrap's `config` object — no extra plumbing needed) and `app.vue` injects it as that tenant's own gtag tag. Sites with no connection get no tag from this layer.

@@ -134,7 +134,12 @@ export const PAGEVIEW_SKIP_PREFIXES = [
 ]
 
 export function isTrackablePath(pathname: string): boolean {
-  if (PAGEVIEW_SKIP_PREFIXES.some((p) => pathname.startsWith(p))) return false
+  if (PAGEVIEW_SKIP_PREFIXES.some((p) => {
+    const prefix = p.endsWith('/') ? p.slice(0, -1) : p
+    return pathname === prefix || pathname.startsWith(prefix + '/')
+  })) {
+    return false
+  }
   // Skip anything that looks like a static asset (has a file extension).
   if (/\.[a-zA-Z0-9]+$/.test(pathname)) return false
   return true

@@ -9,7 +9,8 @@ import {
   getOrCreateSessionId,
   getOrCreateVisitorId,
   hashIp,
-  insertPageviewEvent
+  insertPageviewEvent,
+  isTrackablePath
 } from '~/server/utils/pageview-tracking'
 
 interface PageviewRequest {
@@ -75,6 +76,10 @@ export default defineEventHandler(async (event) => {
         { error: 'Missing required fields: siteId, pagePath' },
         { status: 400 }
       )
+    }
+
+    if (!isTrackablePath(pagePath)) {
+      return jsonResponse({ ok: true })
     }
 
     if (

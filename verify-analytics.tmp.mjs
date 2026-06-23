@@ -16,7 +16,12 @@ const responses = []
 page.on('response', async (res) => {
   if (res.url().includes('/api/analytics/track')) {
     let body = null
-    try { body = await res.text() } catch {}
+    try {
+      body = await res.text()
+    } catch (err) {
+      console.warn('Failed to parse response body in verify-analytics.tmp.mjs:', err)
+      body = null
+    }
     responses.push({ url: res.url(), status: res.status(), body })
   }
 })
