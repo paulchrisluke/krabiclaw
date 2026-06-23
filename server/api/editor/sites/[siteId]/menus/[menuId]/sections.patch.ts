@@ -1,4 +1,5 @@
 // PATCH rename menu section
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { MenuSectionConflictError, MenuSectionNotFoundError, renameMenuSection } from '~/server/utils/menu-management'
@@ -39,23 +40,23 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'New section must be different' }, { status: 400 })
     }
 
-    const site = await db.prepare(`
+    const site = await queryFirst<{ id: string; organization_id: string }>(db, `
       SELECT s.id, s.organization_id
       FROM sites s
       JOIN member om ON s.organization_id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+    `, [siteId, session.user.id])
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
-    const menu = await db.prepare(`
+    const menu = await queryFirst(db, `
       SELECT id FROM menus
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
-    `).bind(menuId, site.organization_id, siteId).first()
+    `, [menuId, site.organization_id, siteId])
 
     if (!menu) {
       return jsonResponse({ error: 'Menu not found' }, { status: 404 })

@@ -1,3 +1,4 @@
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { hashReservationCancelToken, readBearerToken } from '~/server/utils/reservation-cancel-token'
 
@@ -11,11 +12,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const tokenHash = await hashReservationCancelToken(token)
-  const reservation = await db.prepare(`
+  const reservation = await queryFirst(
+    db,
+    `
     SELECT name, date, time, guests, status
     FROM reservation_submissions
     WHERE id = ?
@@ -24,7 +27,9 @@ export default defineEventHandler(async (event) => {
       AND cancellation_token_used_at IS NULL
       AND cancellation_token_expires_at > ?
     LIMIT 1
-  `).bind(reservationId, siteId, tokenHash, new Date().toISOString()).first()
+  `,
+    [reservationId, siteId, tokenHash, new Date().toISOString()],
+  )
 
   if (!reservation) {
     return jsonResponse({ error: 'Reservation not found' }, { status: 404 })

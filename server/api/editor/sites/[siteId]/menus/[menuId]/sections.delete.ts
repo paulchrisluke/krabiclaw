@@ -1,3 +1,4 @@
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { deleteMenuSection } from '~/server/utils/menu-management'
@@ -38,24 +39,24 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const site = await db.prepare(`
+    const site = await queryFirst<SiteRow>(db, `
       SELECT s.id, s.organization_id
       FROM sites s
       JOIN member om ON s.organization_id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first() as SiteRow | null
+    `, [siteId, session.user.id])
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
-    const menu = await db.prepare(`
+    const menu = await queryFirst<MenuRow>(db, `
       SELECT id
       FROM menus
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
-    `).bind(menuId, site.organization_id, siteId).first() as MenuRow | null
+    `, [menuId, site.organization_id, siteId])
 
     if (!menu) {
       return jsonResponse({ error: 'Menu not found' }, { status: 404 })

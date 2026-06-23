@@ -1,3 +1,4 @@
+import { execute, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyReservationCreated } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
@@ -19,7 +20,7 @@ export default defineEventHandler(async (event) => {
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   let body: ApiRecord
@@ -47,22 +48,28 @@ export default defineEventHandler(async (event) => {
   if (!VALID_GUESTS.includes(guests))
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
-  const site = await db.prepare(
-    'SELECT id, organization_id, brand_name, public_url, subdomain, primary_location_id FROM sites WHERE id = ? AND status = ? LIMIT 1'
-  ).bind(siteId, 'active').first<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null; subdomain?: string | null; primary_location_id: string | null }>()
+  const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null; subdomain?: string | null; primary_location_id: string | null }>(
+    db,
+    'SELECT id, organization_id, brand_name, public_url, subdomain, primary_location_id FROM sites WHERE id = ? AND status = ? LIMIT 1',
+    [siteId, 'active'],
+  )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   let resolvedLocationId = locationId
   if (resolvedLocationId) {
-    const location = await db
-      .prepare('SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1')
-      .bind(resolvedLocationId, siteId)
-      .first<{ id: string }>()
+    const location = await queryFirst<{ id: string }>(
+      db,
+      'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1',
+      [resolvedLocationId, siteId],
+    )
     if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
   } else {
     resolvedLocationId = site.primary_location_id
-      ?? (await db.prepare('SELECT id FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1')
-        .bind(siteId).first<{ id: string }>())?.id
+      ?? (await queryFirst<{ id: string }>(
+        db,
+        'SELECT id FROM business_locations WHERE site_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1',
+        [siteId],
+      ))?.id
       ?? null
   }
   if (!resolvedLocationId) return jsonResponse({ error: 'This site has no location to reserve at.' }, { status: 400 })
@@ -76,13 +83,13 @@ export default defineEventHandler(async (event) => {
   const cancellation = createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
 
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO reservation_submissions (
       id, organization_id, site_id, name, email, phone, date, time, guests, requests, ip_hash,
       cancellation_token_hash, cancellation_token_expires_at, location_id
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+  `, [
     id,
     site.organization_id,
     siteId,
@@ -97,7 +104,7 @@ export default defineEventHandler(async (event) => {
     cancellationTokenHash,
     cancellation.expiresAt,
     resolvedLocationId,
-  ).run()
+  ])
 
   // Build absolute cancel URL for the confirmation email
   const siteBaseUrl = site.public_url?.replace(/\/$/, '') || (site.subdomain ? `https://${site.subdomain}.krabiclaw.com` : null)

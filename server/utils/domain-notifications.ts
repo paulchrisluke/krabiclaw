@@ -1,4 +1,5 @@
 import { useRender } from 'vue-email'
+import { execute, queryFirst } from '~/server/db'
 import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
 import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import DomainUpdate from '~/server/emails/templates/DomainUpdate'
@@ -64,11 +65,11 @@ async function sendEmail(
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const storedRecipient = shouldSendRealEmail(env) ? opts.to : hashEmail(opts.to)
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO notifications
     (id, organization_id, site_id, channel, template, recipient, title, payload, status, created_at)
     VALUES (?, ?, ?, 'email', 'domain_update', ?, ?, ?, 'pending', ?)
-  `).bind(
+  `, [
     id,
     opts.organizationId,
     opts.siteId,
@@ -76,14 +77,14 @@ async function sendEmail(
     opts.title,
     JSON.stringify({ audience: opts.audience, domain: opts.domain, status: opts.status, message: opts.message, dashboard_url: opts.dashboardUrl }),
     now
-  ).run()
+  ])
 
   if (!shouldSendRealEmail(env)) {
-    await db.prepare(`UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL WHERE id = ?`).bind(
+    await execute(db, `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL WHERE id = ?`, [
       logOnlyEmailProviderId('domain'),
       now,
       id,
-    ).run()
+    ])
     console.info('email_delivery_log_only', {
       notificationId: id,
       organizationId: opts.organizationId,
@@ -133,7 +134,7 @@ async function sendEmail(
       organizationId: opts.organizationId,
       error: message,
     })
-    await db.prepare(`UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`).bind(message, now, id).run()
+    await execute(db, `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`, [message, now, id])
     return
   } finally {
     clearTimeout(timeout)
@@ -141,7 +142,7 @@ async function sendEmail(
 
   if (!response.ok) {
     const error = await response.text()
-    await db.prepare(`UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`).bind(error, now, id).run()
+    await execute(db, `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`, [error, now, id])
     return
   }
 
@@ -160,7 +161,7 @@ async function sendEmail(
     })
     data = null
   }
-  await db.prepare(`UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`).bind(data?.id ?? null, now, id).run()
+  await execute(db, `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`, [data?.id ?? null, now, id])
 }
 
 export async function notifyDomainLifecycle(
@@ -169,11 +170,11 @@ export async function notifyDomainLifecycle(
   opts: DomainNotificationInput
 ) {
   const now = new Date().toISOString()
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO notifications
     (id, organization_id, site_id, channel, template, title, payload, status, sent_at, created_at)
     VALUES (?, ?, ?, 'dashboard', 'domain_update', ?, ?, 'sent', ?, ?)
-  `).bind(
+  `, [
     crypto.randomUUID(),
     opts.organizationId,
     opts.siteId,
@@ -181,10 +182,10 @@ export async function notifyDomainLifecycle(
     JSON.stringify({ domain: opts.domain, status: opts.status, message: opts.message, dashboard_url: opts.dashboardUrl }),
     now,
     now
-  ).run()
+  ])
 
   if (env.RESEND_API_KEY || !shouldSendRealEmail(env)) {
-    const owner = await db.prepare(ownerEmailQuery()).bind(opts.organizationId).first() as { email?: string } | null
+    const owner = await queryFirst<{ email?: string }>(db, ownerEmailQuery(), [opts.organizationId])
     if (owner?.email) await sendEmail(env, db, { ...opts, to: owner.email, audience: 'owner' })
     const supportSendPromises = supportEmails(env).map((email) => sendEmail(env, db, { ...opts, to: email, audience: 'support' }))
     await Promise.all(supportSendPromises)

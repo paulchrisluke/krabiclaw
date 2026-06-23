@@ -1,4 +1,5 @@
 // Get tenant-scoped Google Business data from audited schema
+import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 
 type JsonPrimitive = string | number | boolean | null
@@ -69,18 +70,18 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
 
-  if (!env.DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
+  if (!db) throw createError({ statusCode: 503, message: 'Database unavailable' })
 
   try {
     // Get primary location for this site
-    const location = await db.prepare(`
+    const location = await queryFirst<LocationRow>(db, `
       SELECT * FROM business_locations 
       WHERE site_id = ? AND status = 'active'
       ORDER BY is_primary DESC, created_at ASC
       LIMIT 1
-    `).bind(siteId).first() as LocationRow | null
+    `, [siteId])
     
     if (!location) {
       return jsonResponse({
@@ -90,14 +91,13 @@ export default defineEventHandler(async (event) => {
     }
 
     // Get reviews for this site/location
-    const reviews = await db.prepare(`
+    const reviewRows = await queryAll<ReviewRow>(db, `
       SELECT author_name AS author, rating, content, created_at AS date
       FROM reviews
       WHERE site_id = ? AND (location_id = ? OR location_id IS NULL) AND status = 'approved'
       ORDER BY created_at DESC
       LIMIT 10
-    `).bind(siteId, location.id).all()
-    const reviewRows = (reviews.results ?? []) as unknown as ReviewRow[]
+    `, [siteId, location.id])
 
     // Map business info from business_locations columns
     const business = {
@@ -119,7 +119,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Get published posts for this site (used for homepage highlights + /posts feed)
-    const postsResult = await db.prepare(`
+    const postRows = await queryAll<PostRow & { kind: string | null }>(db, `
       SELECT p.id, p.title, p.body, p.published_at,
              ma.public_url, ma.kind
       FROM posts p
@@ -127,8 +127,7 @@ export default defineEventHandler(async (event) => {
       WHERE p.site_id = ? AND p.status = 'published'
       ORDER BY p.published_at DESC
       LIMIT 6
-    `).bind(siteId).all()
-    const postRows = (postsResult.results ?? []) as unknown as (PostRow & { kind: string | null })[]
+    `, [siteId])
 
     // Shape posts to match the GMB post format the frontend expects
     const posts = postRows.map(p => ({

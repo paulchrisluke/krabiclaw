@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { parseLocationPayload } from './location-helpers'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
@@ -27,11 +28,11 @@ export default defineEventHandler(async (event) => {
   const organizationId = organization.id as string
   const siteId = site.id as string
 
-  const location = await db.prepare(`
+  const location = await queryFirst(db, `
     SELECT * FROM business_locations
     WHERE id = ? AND organization_id = ? AND site_id = ?
     LIMIT 1
-  `).bind(locationId, organizationId, siteId).first()
+  `, [locationId, organizationId, siteId])
 
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
 

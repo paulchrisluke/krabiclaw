@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { queryAll } from '~/server/db'
 
 interface FulfillmentRow {
   id: string
@@ -26,7 +27,7 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const showAll = query.all === '1'
 
-  const rows = await db.prepare(`
+  const purchases = await queryAll<FulfillmentRow>(db, `
     SELECT
       sap.id,
       sap.organization_id,
@@ -41,7 +42,7 @@ export default defineEventHandler(async (event) => {
     ${showAll ? '' : 'WHERE sap.fulfilled_at IS NULL'}
     ORDER BY sap.created_at DESC
     LIMIT 100
-  `).all<FulfillmentRow>()
+  `)
 
-  return jsonResponse({ purchases: rows.results ?? [] })
+  return jsonResponse({ purchases })
 })

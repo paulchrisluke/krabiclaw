@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import { getHeader } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { queryAll, queryFirst, type DbClient } from '~/server/db'
 
 export interface DashboardOrganizationRow {
   id: string
@@ -63,14 +64,14 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     ? sessionRecord.activeOrganizationId
     : null
 
-  const organization = await db.prepare(`
+  const organization = await queryFirst<DashboardOrganizationRow>(db, `
     SELECT o.id, o.name, o.slug, o.logo, m.role
     FROM organization o
     JOIN member m ON o.id = m.organizationId
     WHERE m.userId = ?
     ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC
     LIMIT 1
-  `).bind(session.user.id, activeOrganizationId ?? '').first<DashboardOrganizationRow>()
+  `, [session.user.id, activeOrganizationId ?? ''])
 
   if (!organization) {
     throw createError({ statusCode: 404, message: 'No organization found' })
@@ -83,36 +84,36 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   const siteSlug = getHeader(event, 'x-dashboard-site-slug')
 
   const site = siteSlug
-    ? await db.prepare(`
+    ? await queryFirst<DashboardSiteRow>(db, `
         SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
                status, onboarding_status, plan, primary_location_id, default_currency, source_locale
         FROM sites
         WHERE organization_id = ? AND subdomain = ?
         LIMIT 1
-      `).bind(organization.id, siteSlug).first<DashboardSiteRow>()
-    : await db.prepare(`
+      `, [organization.id, siteSlug])
+    : await queryFirst<DashboardSiteRow>(db, `
         SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
                status, onboarding_status, plan, primary_location_id, default_currency, source_locale
         FROM sites
         WHERE organization_id = ?
         ORDER BY created_at ASC
         LIMIT 1
-      `).bind(organization.id).first<DashboardSiteRow>()
+      `, [organization.id])
 
   if (!site && options.requireSite !== false) {
     throw createError({ statusCode: 404, message: 'Site not found' })
   }
 
   const siteConfig = site
-    ? await db.prepare(`
+    ? await queryAll<{ key: string; value: string | null }>(db, `
         SELECT key, value
         FROM site_config
         WHERE organization_id = ? AND site_id = ?
           AND key IN ('hero_image_url', 'location_hero_image_url')
-      `).bind(organization.id, site.id).all<{ key: string; value: string | null }>()
-    : { results: [] as { key: string; value: string | null }[] }
+      `, [organization.id, site.id])
+    : []
 
-  const configByKey = Object.fromEntries((siteConfig.results ?? []).map((row) => [row.key, row.value]))
+  const configByKey = Object.fromEntries(siteConfig.map((row) => [row.key, row.value]))
 
   return {
     env,
@@ -135,14 +136,13 @@ export interface DashboardSiteSummaryRow {
   plan: string | null
 }
 
-export async function listOrganizationSites(db: D1Database, organizationId: string) {
-  const sites = await db.prepare(`
+export async function listOrganizationSites(db: DbClient, organizationId: string) {
+  return await queryAll<DashboardSiteSummaryRow>(db, `
     SELECT id, brand_name, subdomain, plan
     FROM sites
     WHERE organization_id = ?
     ORDER BY created_at ASC
-  `).bind(organizationId).all<DashboardSiteSummaryRow>()
-  return sites.results ?? []
+  `, [organizationId])
 }
 
 export async function getDashboardSite(event: H3Event) {
@@ -156,33 +156,33 @@ export async function getDashboardSite(event: H3Event) {
   }
 }
 
-export async function listDashboardLocations(db: D1Database, organizationId: string, siteId: string) {
-  const locations = await db.prepare(`
+export async function listDashboardLocations(db: DbClient, organizationId: string, siteId: string) {
+  const locations = await queryAll<DashboardLocationRow>(db, `
     SELECT id, slug, title, is_primary, status
     FROM business_locations
     WHERE organization_id = ? AND site_id = ? AND status = 'active'
     ORDER BY is_primary DESC, title ASC
-  `).bind(organizationId, siteId).all<DashboardLocationRow>()
+  `, [organizationId, siteId])
 
-  return (locations.results ?? []).map((location) => ({
+  return locations.map((location) => ({
     ...location,
     is_primary: Boolean(location.is_primary)
   }))
 }
 
 export async function resolveSelectedDashboardLocation(
-  db: D1Database,
+  db: DbClient,
   userId: string,
   organizationId: string,
   siteId: string
 ) {
   const locations = await listDashboardLocations(db, organizationId, siteId)
-  const preference = await db.prepare(`
+  const preference = await queryFirst<DashboardPreferenceRow>(db, `
     SELECT selected_location_id
     FROM dashboard_preferences
     WHERE user_id = ? AND organization_id = ?
     LIMIT 1
-  `).bind(userId, organizationId).first<DashboardPreferenceRow>()
+  `, [userId, organizationId])
 
   const selectedLocation = locations.find((location) => location.id === preference?.selected_location_id)
     ?? locations.find((location) => location.is_primary)

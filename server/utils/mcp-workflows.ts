@@ -21,6 +21,7 @@ import type { SiteContent } from "~/server/utils/content-management";
 import type { CloudflareEnv } from "~/server/utils/auth";
 import { signOAuthState } from "~/server/utils/encryption";
 import { updateLocation } from "~/server/utils/location-management";
+import { execute, queryAll, queryFirst } from "~/server/db";
 
 export async function listSitesForUser(
   db: D1Database,
@@ -28,49 +29,32 @@ export async function listSitesForUser(
   isPlatformAdmin: boolean,
 ) {
   if (isPlatformAdmin) {
-    const rows = await db
-      .prepare(
-        `
+    return await queryAll<Record<string, unknown>>(db, `
       SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
              s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
       FROM sites s
       ORDER BY s.created_at DESC
-    `,
-      )
-      .all();
-    return rows.results ?? [];
+    `);
   }
 
-  const orgRows = await db
-    .prepare(
-      `
+  const orgRows = await queryAll<{ id: string }>(db, `
     SELECT o.id
     FROM organization o
     JOIN member m ON o.id = m.organizationId
     WHERE m.userId = ?
-  `,
-    )
-    .bind(userId)
-    .all<{ id: string }>();
+  `, [userId]);
 
-  const orgIds = (orgRows.results ?? []).map((row) => row.id).filter(Boolean);
+  const orgIds = orgRows.map((row) => row.id).filter(Boolean);
   if (!orgIds.length) return [];
 
   const placeholders = orgIds.map(() => "?").join(", ");
-  const rows = await db
-    .prepare(
-      `
+  return await queryAll<Record<string, unknown>>(db, `
     SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
            s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
     FROM sites s
     WHERE s.organization_id IN (${placeholders})
     ORDER BY s.created_at DESC
-  `,
-    )
-    .bind(...orgIds)
-    .all();
-
-  return rows.results ?? [];
+  `, orgIds);
 }
 
 export async function getSiteForMcp(
@@ -80,31 +64,21 @@ export async function getSiteForMcp(
   isPlatformAdmin = false,
 ) {
   const site = isPlatformAdmin
-    ? await db
-        .prepare(
-          `
+    ? await queryFirst<Record<string, unknown>>(db, `
       SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
              s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
       FROM sites s
       WHERE s.id = ?
       LIMIT 1
-    `,
-        )
-        .bind(siteId)
-        .first()
-    : await db
-        .prepare(
-          `
+    `, [siteId])
+    : await queryFirst<Record<string, unknown>>(db, `
       SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
              s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
       FROM sites s
       JOIN member m ON s.organization_id = m.organizationId
       WHERE s.id = ? AND m.userId = ?
       LIMIT 1
-    `,
-        )
-        .bind(siteId, userId)
-        .first();
+    `, [siteId, userId]);
 
   if (!site) throw new Error("Site not found or access denied");
   return site;
@@ -244,18 +218,13 @@ export async function getLocationForMcp(
   siteId: string,
   locationId: string,
 ) {
-  const row = await db
-    .prepare(
-      `
+  const row = await queryFirst<Record<string, unknown>>(db, `
     SELECT bl.*, img.public_url AS hero_public_url, img.kind AS hero_kind
     FROM business_locations bl
     LEFT JOIN media_assets img ON bl.hero_image_asset_id = img.id AND img.status = 'active'
     WHERE bl.id = ? AND bl.organization_id = ? AND bl.site_id = ?
     LIMIT 1
-  `,
-    )
-    .bind(locationId, organizationId, siteId)
-    .first();
+  `, [locationId, organizationId, siteId]);
 
   if (!row) throw new Error("Location not found");
   return {
@@ -274,8 +243,11 @@ export async function getNotificationsSettings(
 ) {
   const [whatsappPhone, channelsRow] = await Promise.all([
     getOrgWhatsAppPhone(db, organizationId, siteId),
-    db.prepare(`SELECT value FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'owner_notification_channels' LIMIT 1`)
-      .bind(organizationId, siteId).first<{ value: string }>(),
+    queryFirst<{ value: string }>(
+      db,
+      `SELECT value FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'owner_notification_channels' LIMIT 1`,
+      [organizationId, siteId],
+    ),
   ])
   let channels: string[] = ['whatsapp']
   if (channelsRow?.value) {
@@ -305,8 +277,11 @@ export async function updateNotificationsSettings(
     const validChannels = channels.filter(c => c === 'whatsapp' || c === 'email')
     const value = JSON.stringify(validChannels.length ? validChannels : ['whatsapp'])
     ops.push(
-      db.prepare(`INSERT INTO site_config (organization_id, site_id, key, value) VALUES (?, ?, 'owner_notification_channels', ?) ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value`)
-        .bind(organizationId, siteId, value).run()
+      execute(
+        db,
+        `INSERT INTO site_config (organization_id, site_id, key, value) VALUES (?, ?, 'owner_notification_channels', ?) ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value`,
+        [organizationId, siteId, value],
+      )
     )
   }
   await Promise.all(ops)
@@ -314,19 +289,12 @@ export async function updateNotificationsSettings(
 }
 
 export async function listContactSubmissions(db: D1Database, siteId: string) {
-  const rows = await db
-    .prepare(
-      `
+  return await queryAll<Record<string, unknown>>(db, `
     SELECT * FROM contact_submissions
     WHERE site_id = ?
     ORDER BY created_at DESC
     LIMIT 200
-  `,
-    )
-    .bind(siteId)
-    .all();
-
-  return rows.results ?? [];
+  `, [siteId]);
 }
 
 export async function updateContactSubmissionStatus(
@@ -339,16 +307,11 @@ export async function updateContactSubmissionStatus(
     throw new Error("Invalid contact submission status");
   }
 
-  const result = await db
-    .prepare(
-      `
+  const result = await execute(db, `
     UPDATE contact_submissions
     SET status = ?
     WHERE id = ? AND site_id = ?
-  `,
-    )
-    .bind(status, submissionId, siteId)
-    .run();
+  `, [status, submissionId, siteId]);
 
   if (!result.meta.changes) throw new Error("Submission not found");
   return {
@@ -362,19 +325,12 @@ export async function listReservationSubmissions(
   db: D1Database,
   siteId: string,
 ) {
-  const rows = await db
-    .prepare(
-      `
+  return await queryAll<Record<string, unknown>>(db, `
     SELECT * FROM reservation_submissions
     WHERE site_id = ?
     ORDER BY created_at DESC
     LIMIT 200
-  `,
-    )
-    .bind(siteId)
-    .all();
-
-  return rows.results ?? [];
+  `, [siteId]);
 }
 
 export async function updateReservationSubmissionStatus(
@@ -387,16 +343,11 @@ export async function updateReservationSubmissionStatus(
     throw new Error("Invalid reservation submission status");
   }
 
-  const result = await db
-    .prepare(
-      `
+  const result = await execute(db, `
     UPDATE reservation_submissions
     SET status = ?
     WHERE id = ? AND site_id = ?
-  `,
-    )
-    .bind(status, submissionId, siteId)
-    .run();
+  `, [status, submissionId, siteId]);
 
   if (!result.meta.changes) throw new Error("Reservation not found");
   return {
@@ -453,16 +404,11 @@ export async function updateLocationQa(
   if (sets.length === 1) throw new Error("No update fields provided");
 
   params.push(qaId, locationId, siteId, organizationId);
-  const result = await db
-    .prepare(
-      `
+  const result = await execute(db, `
     UPDATE location_qa
     SET ${sets.join(", ")}
     WHERE id = ? AND location_id = ? AND site_id = ? AND organization_id = ?
-  `,
-    )
-    .bind(...params)
-    .run();
+  `, params);
 
   if (!result.meta.changes) throw new Error("Q&A not found");
   return { updated: true, qa_id: qaId };
@@ -480,13 +426,12 @@ export async function reorderLocationQa(
   }
 
   const placeholders = updates.map(() => "?").join(", ");
-  const validationResult = await db
-    .prepare(
-      `SELECT COUNT(*) AS valid_count FROM location_qa
+  const validationResult = await queryFirst<{ valid_count: number }>(
+    db,
+    `SELECT COUNT(*) AS valid_count FROM location_qa
        WHERE id IN (${placeholders}) AND location_id = ? AND site_id = ? AND organization_id = ?`,
-    )
-    .bind(...updates.map((u) => u.id), locationId, siteId, organizationId)
-    .first<{ valid_count: number }>();
+    [...updates.map((u) => u.id), locationId, siteId, organizationId],
+  );
 
   const validCount = validationResult?.valid_count ?? 0;
   if (validCount !== updates.length) {
@@ -499,23 +444,18 @@ export async function reorderLocationQa(
   let updated = 0;
 
   for (const update of updates) {
-    const result = await db
-      .prepare(
-        `
+    const result = await execute(db, `
       UPDATE location_qa
       SET sort_order = ?, updated_at = ?
       WHERE id = ? AND location_id = ? AND site_id = ? AND organization_id = ?
-    `,
-      )
-      .bind(
-        update.sort_order,
-        now,
-        update.id,
-        locationId,
-        siteId,
-        organizationId,
-      )
-      .run();
+    `, [
+      update.sort_order,
+      now,
+      update.id,
+      locationId,
+      siteId,
+      organizationId,
+    ]);
     updated += Number(result.meta.changes ?? 0);
   }
 
@@ -533,20 +473,15 @@ export async function listLocationReviews(
   siteId: string,
   locationId: string,
 ) {
-  const rows = await db
-    .prepare(
-      `
+  const rows = await queryAll<Record<string, unknown>>(db, `
     SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply,
            owner_reply_at, photo_urls, source, status, created_at, updated_at
     FROM reviews
     WHERE site_id = ? AND location_id = ?
     ORDER BY created_at DESC
-  `,
-    )
-    .bind(siteId, locationId)
-    .all();
+  `, [siteId, locationId]);
 
-  return (rows.results ?? []).map((review) => ({
+  return rows.map((review) => ({
     ...review,
     photo_urls: safeJsonArray(review.photo_urls),
   }));
@@ -556,9 +491,7 @@ export async function listWorkRequestsForOrganization(
   db: D1Database,
   organizationId: string,
 ) {
-  const rows = await db
-    .prepare(
-      `
+  return await queryAll<Record<string, unknown>>(db, `
     SELECT id, type, title, description, status, priority, source, notes, created_at, updated_at, completed_at
     FROM work_requests
     WHERE organization_id = ?
@@ -567,12 +500,7 @@ export async function listWorkRequestsForOrganization(
       CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
       created_at DESC
     LIMIT 100
-  `,
-    )
-    .bind(organizationId)
-    .all();
-
-  return rows.results ?? [];
+  `, [organizationId]);
 }
 
 function buildContentId(
@@ -592,33 +520,23 @@ async function resolvePublicPath(
   locationId?: string,
 ) {
   if (page === "location" && locationId) {
-    const location = await db
-      .prepare(
-        `
+    const location = await queryFirst<{ slug: string }>(db, `
       SELECT slug
       FROM business_locations
       WHERE id = ? AND site_id = ?
       LIMIT 1
-    `,
-      )
-      .bind(locationId, siteId)
-      .first<{ slug: string }>();
+    `, [locationId, siteId]);
 
     return location?.slug ? `/locations/${location.slug}` : "/locations";
   }
 
   if (page === "menu" && locationId) {
-    const location = await db
-      .prepare(
-        `
+    const location = await queryFirst<{ slug: string }>(db, `
       SELECT slug
       FROM business_locations
       WHERE id = ? AND site_id = ?
       LIMIT 1
-    `,
-      )
-      .bind(locationId, siteId)
-      .first<{ slug: string }>();
+    `, [locationId, siteId]);
 
     return location?.slug ? `/locations/${location.slug}/menu` : "/menu";
   }
@@ -707,9 +625,14 @@ export async function getEditorContent(
   );
 
   if (page === "location" && locationId) {
-    const locHero = await db
-      .prepare(
-        `
+    const locHero = await queryFirst<{
+      hero_image_asset_id: string | null;
+      hero_video_asset_id: string | null;
+      hero_public_url: string | null;
+      hero_kind: string | null;
+      hero_video_public_url: string | null;
+      hero_video_kind: string | null;
+    }>(db, `
       SELECT bl.hero_image_asset_id, bl.hero_video_asset_id,
              img.public_url AS hero_public_url, img.kind AS hero_kind,
              vid.public_url AS hero_video_public_url, vid.kind AS hero_video_kind
@@ -718,17 +641,7 @@ export async function getEditorContent(
       LEFT JOIN media_assets vid ON bl.hero_video_asset_id = vid.id AND vid.status = 'active'
       WHERE bl.id = ? AND bl.site_id = ?
       LIMIT 1
-    `,
-      )
-      .bind(locationId, siteId)
-      .first<{
-        hero_image_asset_id: string | null;
-        hero_video_asset_id: string | null;
-        hero_public_url: string | null;
-        hero_kind: string | null;
-        hero_video_public_url: string | null;
-        hero_video_kind: string | null;
-      }>();
+    `, [locationId, siteId]);
 
     if (locHero) {
       const heroIdx = mergedContent.findIndex(
@@ -839,19 +752,12 @@ export async function hydrateSeededLocationForOnboarding(
   userId: string,
   updates: Record<string, unknown>,
 ) {
-  const rows = await db
-    .prepare(
-      `
+  const locations = await queryAll<{ id: string; slug: string }>(db, `
     SELECT id, slug
     FROM business_locations
     WHERE organization_id = ? AND site_id = ? AND status = 'active'
     ORDER BY is_primary DESC, created_at ASC
-  `,
-    )
-    .bind(organizationId, siteId)
-    .all<{ id: string; slug: string }>();
-
-  const locations = rows.results ?? [];
+  `, [organizationId, siteId]);
   if (locations.length !== 1) {
     throw new Error(
       "Location limit reached and no single seeded location was available to hydrate.",

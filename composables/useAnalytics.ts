@@ -3,7 +3,7 @@
 
 declare global {
   interface Window {
-    gtag?: (command: string, eventName: string, params?: Record<string, any>) => void
+    gtag?: (_command: string, _eventName: string, _params?: Record<string, unknown>) => void
   }
 }
 

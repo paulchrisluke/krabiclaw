@@ -1,4 +1,5 @@
 import { useRender } from 'vue-email'
+import { execute, queryFirst, type DbClient } from '~/server/db'
 import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import ReservationOwnerNew from '~/server/emails/templates/ReservationOwnerNew'
@@ -131,21 +132,21 @@ function ownerEmailQuery() {
   `
 }
 
-async function getOwnerEmail(db: D1Database, organizationId: string): Promise<string | null> {
-  const row = await db.prepare(ownerEmailQuery()).bind(organizationId).first<{ email?: string }>()
+async function getOwnerEmail(db: DbClient, organizationId: string): Promise<string | null> {
+  const row = await queryFirst<{ email?: string }>(db, ownerEmailQuery(), [organizationId])
   return row?.email ?? null
 }
 
 async function getOwnerNotificationChannels(
-  db: D1Database,
+  db: DbClient,
   opts: SiteContext,
   hasWhatsAppPhone: boolean
 ): Promise<NotificationChannel[]> {
-  const row = await db.prepare(`
+  const row = await queryFirst<{ value?: string }>(db, `
     SELECT value FROM site_config
     WHERE organization_id = ? AND site_id = ? AND key = 'owner_notification_channels'
     LIMIT 1
-  `).bind(opts.organizationId, opts.siteId).first<{ value?: string }>()
+  `, [opts.organizationId, opts.siteId])
 
   if (!row?.value) return hasWhatsAppPhone ? ['whatsapp'] : ['email']
 
@@ -159,7 +160,7 @@ async function getOwnerNotificationChannels(
 }
 
 async function insertDashboardNotification(
-  db: D1Database,
+  db: DbClient,
   opts: SiteContext & {
     template: string
     title: string
@@ -169,11 +170,11 @@ async function insertDashboardNotification(
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   try {
-    await db.prepare(`
+    await execute(db, `
       INSERT INTO notifications
       (id, organization_id, site_id, channel, template, title, payload, status, sent_at, created_at)
       VALUES (?, ?, ?, 'dashboard', ?, ?, ?, 'sent', ?, ?)
-    `).bind(
+    `, [
       id,
       opts.organizationId,
       opts.siteId,
@@ -182,7 +183,7 @@ async function insertDashboardNotification(
       JSON.stringify(opts.payload),
       now,
       now
-    ).run()
+    ])
   } catch (error) {
     console.error('dashboard_notification_failed', {
       organizationId: opts.organizationId,
@@ -196,7 +197,7 @@ async function insertDashboardNotification(
 
 async function sendEmailNotification(
   env: NotificationEnv,
-  db: D1Database,
+  db: DbClient,
   opts: SiteContext & {
     to: string
     template: string
@@ -213,11 +214,11 @@ async function sendEmailNotification(
     email_html: opts.email.html,
     email_text: opts.email.text,
   }
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO notifications
     (id, organization_id, site_id, channel, template, recipient, title, payload, status, created_at)
     VALUES (?, ?, ?, 'email', ?, ?, ?, ?, 'pending', ?)
-  `).bind(
+  `, [
     id,
     opts.organizationId,
     opts.siteId,
@@ -226,12 +227,14 @@ async function sendEmailNotification(
     opts.title,
     JSON.stringify(payloadWithPreview),
     now
-  ).run()
+  ])
 
   if (!shouldSendRealEmail(env)) {
-    await db.prepare(`UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL WHERE id = ?`)
-      .bind(logOnlyEmailProviderId('notification'), new Date().toISOString(), id)
-      .run()
+    await execute(
+      db,
+      `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL WHERE id = ?`,
+      [logOnlyEmailProviderId('notification'), new Date().toISOString(), id],
+    )
     console.info('email_delivery_log_only', {
       notificationId: id,
       organizationId: opts.organizationId,
@@ -244,9 +247,11 @@ async function sendEmailNotification(
   }
 
   if (!env.RESEND_API_KEY) {
-    await db.prepare(`UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`)
-      .bind('RESEND_API_KEY not configured', new Date().toISOString(), id)
-      .run()
+    await execute(
+      db,
+      `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
+      ['RESEND_API_KEY not configured', new Date().toISOString(), id],
+    )
     return
   }
 
@@ -275,9 +280,11 @@ async function sendEmailNotification(
   } catch (error) {
     clearTimeout(timeout)
     const message = error instanceof Error ? error.message : 'Email request failed'
-    await db.prepare(`UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`)
-      .bind(message, new Date().toISOString(), id)
-      .run()
+    await execute(
+      db,
+      `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
+      [message, new Date().toISOString(), id],
+    )
     return
   }
 
@@ -285,35 +292,39 @@ async function sendEmailNotification(
 
   if (!response.ok) {
     const error = await response.text()
-    await db.prepare(`UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`)
-      .bind(error, new Date().toISOString(), id)
-      .run()
+    await execute(
+      db,
+      `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
+      [error, new Date().toISOString(), id],
+    )
     return
   }
 
   const data = await response.json().catch(() => ({})) as { id?: string }
-  await db.prepare(`UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`)
-    .bind(data.id ?? null, new Date().toISOString(), id)
-    .run()
+  await execute(
+    db,
+    `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`,
+    [data.id ?? null, new Date().toISOString(), id],
+  )
 }
 
-async function getLocationNotificationPhone(db: D1Database, locationId: string): Promise<string | null> {
-  const row = await db.prepare(`
+async function getLocationNotificationPhone(db: DbClient, locationId: string): Promise<string | null> {
+  const row = await queryFirst<{ notification_phone: string | null }>(db, `
     SELECT notification_phone FROM business_locations WHERE id = ? LIMIT 1
-  `).bind(locationId).first<{ notification_phone: string | null }>()
+  `, [locationId])
   return row?.notification_phone ?? null
 }
 
-async function getLocationNotificationEmail(db: D1Database, locationId: string): Promise<string | null> {
-  const row = await db.prepare(`
+async function getLocationNotificationEmail(db: DbClient, locationId: string): Promise<string | null> {
+  const row = await queryFirst<{ email: string | null }>(db, `
     SELECT email FROM business_locations WHERE id = ? LIMIT 1
-  `).bind(locationId).first<{ email: string | null }>()
+  `, [locationId])
   return row?.email?.trim() || null
 }
 
 async function notifyOwner(
   env: NotificationEnv,
-  db: D1Database,
+  db: DbClient,
   opts: SiteContext & {
     locationId?: string | null
     template: string
@@ -361,7 +372,7 @@ async function notifyOwner(
 
 export async function notifyReservationCreated(
   env: NotificationEnv,
-  db: D1Database,
+  db: DbClient,
   opts: ReservationNotificationInput
 ) {
   const restaurant = siteName(opts)
@@ -420,7 +431,7 @@ export async function notifyReservationCreated(
 
 export async function notifyReservationCancelled(
   env: NotificationEnv,
-  db: D1Database,
+  db: DbClient,
   opts: ReservationNotificationInput
 ) {
   const confirmed = Boolean(opts.wasConfirmed)
@@ -485,7 +496,7 @@ export async function notifyReservationCancelled(
 
 export async function notifyContactSubmitted(
   env: NotificationEnv,
-  db: D1Database,
+  db: DbClient,
   opts: ContactNotificationInput
 ) {
   const restaurant = siteName(opts)
@@ -538,7 +549,7 @@ export async function notifyContactSubmitted(
 
 export async function notifyExperienceBookingCreated(
   env: NotificationEnv,
-  db: D1Database,
+  db: DbClient,
   opts: ExperienceBookingNotificationInput
 ) {
   const studio = siteName(opts, 'the business')

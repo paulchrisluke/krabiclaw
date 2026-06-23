@@ -1,3 +1,4 @@
+import { queryAll, type DbClient } from '~/server/db'
 import { getConfiguredSourceLocale, normalizeLocale } from '~/server/utils/site-i18n'
 
 export type SiteLocaleStatus = 'draft' | 'published' | 'disabled'
@@ -42,24 +43,24 @@ function assertStatus(value: unknown): SiteLocaleStatus {
   throw new Error('Invalid locale status.')
 }
 
-export async function getSourceLocale(db: D1Database, organizationId: string, siteId: string): Promise<string> {
+export async function getSourceLocale(db: DbClient, organizationId: string, siteId: string): Promise<string> {
   return getConfiguredSourceLocale(db, organizationId, siteId)
 }
 
 export async function listSiteLocales(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
 ): Promise<{ source_locale: string; locales: SiteLocale[] }> {
   const sourceLocale = await getSourceLocale(db, organizationId, siteId)
-  const { results } = await db.prepare(`
+  const results = await queryAll<SiteLocaleRow>(db, `
     SELECT id, organization_id, site_id, locale, label, is_source, status, fallback_enabled, created_at, updated_at
     FROM site_locales
     WHERE organization_id = ? AND site_id = ?
     ORDER BY is_source DESC, locale ASC
-  `).bind(organizationId, siteId).all<SiteLocaleRow>()
+  `, [organizationId, siteId])
 
-  const locales = (results ?? []).map(mapLocale)
+  const locales = results.map(mapLocale)
   if (!locales.some(locale => locale.locale === sourceLocale)) {
     locales.unshift({
       id: `locale::${organizationId}::${siteId}::${sourceLocale}`,

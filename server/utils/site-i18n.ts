@@ -1,3 +1,4 @@
+import { queryFirst, type DbClient } from '~/server/db'
 import { getConfig } from '~/server/utils/site-config'
 
 export interface SiteLocaleState {
@@ -22,7 +23,7 @@ export function normalizeLocale(value: unknown): string | null {
 }
 
 export async function getConfiguredSourceLocale(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   siteSourceLocale?: string | null,
@@ -32,7 +33,7 @@ export async function getConfiguredSourceLocale(
 }
 
 export async function resolveSiteLocale(
-  db: D1Database,
+  db: DbClient,
   site: { id: string; organization_id: string; source_locale?: string | null },
   requestedLocale: unknown,
 ): Promise<SiteLocaleState> {
@@ -49,15 +50,15 @@ export async function resolveSiteLocale(
     }
   }
 
-  const localeRow = await db.prepare(`
+  const localeRow = await queryFirst<{
+    status: string
+    fallback_enabled: number | boolean | null
+  }>(db, `
     SELECT status, fallback_enabled
     FROM site_locales
     WHERE organization_id = ? AND site_id = ? AND locale = ?
     LIMIT 1
-  `).bind(site.organization_id, site.id, requested).first<{
-    status: string
-    fallback_enabled: number | boolean | null
-  }>()
+  `, [site.organization_id, site.id, requested])
 
   const isPublished = localeRow?.status === 'published'
   return {

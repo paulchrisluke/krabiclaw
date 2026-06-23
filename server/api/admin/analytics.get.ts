@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { queryAll, queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -17,17 +18,18 @@ export default defineEventHandler(async (event) => {
 
   try {
     const [totalUsers, totalOrganizations, totalSites, totalPosts, totalMenus, totalLocations] = await Promise.all([
-      db.prepare(`SELECT COUNT(*) as count FROM user`).first(),
-      db.prepare(`SELECT COUNT(*) as count FROM organization`).first(),
-      db.prepare(`SELECT COUNT(*) as count FROM sites`).first(),
-      db.prepare(`SELECT COUNT(*) as count FROM posts`).first(),
-      db.prepare(`SELECT COUNT(*) as count FROM menus`).first(),
-      db.prepare(`SELECT COUNT(*) as count FROM business_locations`).first()
+      queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM user`),
+      queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM organization`),
+      queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM sites`),
+      queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM posts`),
+      queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM menus`),
+      queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM business_locations`),
     ])
 
-    const recentSites = await db.prepare(
-      `SELECT id, brand_name, subdomain, created_at FROM sites ORDER BY created_at DESC LIMIT 10`
-    ).all()
+    const recentSites = await queryAll<{ id: string; brand_name: string | null; subdomain: string; created_at: string }>(
+      db,
+      `SELECT id, brand_name, subdomain, created_at FROM sites ORDER BY created_at DESC LIMIT 10`,
+    )
 
     return jsonResponse({
       metrics: {
@@ -38,7 +40,7 @@ export default defineEventHandler(async (event) => {
         menus: totalMenus?.count ?? 0,
         locations: totalLocations?.count ?? 0
       },
-      recentSites: recentSites.results ?? []
+      recentSites: recentSites ?? []
     })
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err))

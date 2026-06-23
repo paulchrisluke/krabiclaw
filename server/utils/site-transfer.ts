@@ -4,6 +4,7 @@ import {
   type DomainEnv,
   rootDomainForPair,
 } from '~/server/utils/domains'
+import { execute, queryAll, queryFirst } from '~/server/db'
 import { notifySiteTransferReminder } from '~/server/utils/site-transfer-notifications'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
 
@@ -118,16 +119,16 @@ export function parseTransferDomainSnapshot(raw: string | null | undefined): Tra
 }
 
 export async function buildTransferDomainSnapshot(db: D1Database, siteId: string): Promise<TransferDomainSnapshot[]> {
-  const rows = await db.prepare(`
+  const rows = await queryAll<{ domain: string }>(db, `
     SELECT domain
     FROM site_domains
     WHERE site_id = ? AND type = 'custom' AND status != 'deleted'
     ORDER BY created_at ASC
-  `).bind(siteId).all<{ domain: string }>()
+  `, [siteId])
 
   const byRoot = new Map<string, { hasRoot: boolean; hasWww: boolean }>()
 
-  for (const row of rows.results || []) {
+  for (const row of rows || []) {
     const domain = String(row.domain || '').trim().toLowerCase()
     if (!domain) continue
     const root = rootDomainForPair(domain)
@@ -150,17 +151,17 @@ export async function deleteSiteCustomDomains(
   actorType: 'owner' | 'admin' | 'system',
   actorId?: string | null,
 ): Promise<{ deletedCount: number; failedDomainIds: string[] }> {
-  const domains = await db.prepare(`
+  const domains = await queryAll<{ id: string }>(db, `
     SELECT id
     FROM site_domains
     WHERE site_id = ? AND type = 'custom' AND status != 'deleted'
     ORDER BY created_at ASC
-  `).bind(siteId).all<{ id: string }>()
+  `, [siteId])
 
   let deletedCount = 0
   const failedDomainIds: string[] = []
 
-  for (const domain of domains.results || []) {
+  for (const domain of domains || []) {
     try {
       await deleteCustomDomain(env, db, domain.id, actorType, actorId)
       deletedCount += 1
@@ -298,13 +299,13 @@ export async function cancelPendingSiteTransfer(
   db: D1Database,
   transferId: string,
 ): Promise<{ cancelled: boolean; customDomainsDeleted: number }> {
-  const transfer = await db.prepare(`
+  const transfer = await queryFirst<TransferCleanupRow>(db, `
     SELECT id, site_id, from_organization_id, status, requires_payment,
            custom_domains_snapshot, custom_domains_removed_at
     FROM site_transfer_requests
     WHERE id = ?
     LIMIT 1
-  `).bind(transferId).first<TransferCleanupRow>()
+  `, [transferId])
 
   if (!transfer || transfer.status !== 'pending') {
     return { cancelled: false, customDomainsDeleted: 0 }
@@ -329,13 +330,13 @@ export async function cancelPendingSiteTransfer(
     }
   }
 
-  await db.prepare(`
+  await execute(db, `
     UPDATE site_transfer_requests
     SET status = 'cancelled',
         custom_domains_snapshot = ?,
         custom_domains_removed_at = NULL
     WHERE id = ?
-  `).bind(snapshotRaw ?? null, transferId).run()
+  `, [snapshotRaw ?? null, transferId])
 
   return { cancelled: true, customDomainsDeleted }
 }
@@ -345,14 +346,14 @@ export async function completePaidSiteTransfer(
   db: D1Database,
   transferId: string,
 ): Promise<{ completed: boolean; restoredDomains: number }> {
-  const transfer = await db.prepare(`
+  const transfer = await queryFirst<TransferCompletionRow>(db, `
     SELECT id, site_id, from_organization_id, status,
            claiming_user_id, claiming_organization_id,
            custom_domains_snapshot, custom_domains_removed_at, payment_completed_at
     FROM site_transfer_requests
     WHERE id = ?
     LIMIT 1
-  `).bind(transferId).first<TransferCompletionRow>()
+  `, [transferId])
 
   if (!transfer) {
     return { completed: false, restoredDomains: 0 }
@@ -388,12 +389,12 @@ export async function completePaidSiteTransfer(
     )
   }
 
-  await db.prepare(`
+  await execute(db, `
     UPDATE site_transfer_requests
     SET payment_completed_at = ?,
         custom_domains_removed_at = NULL
     WHERE id = ?
-  `).bind(new Date().toISOString(), transfer.id).run()
+  `, [new Date().toISOString(), transfer.id])
 
   return { completed: true, restoredDomains }
 }
@@ -414,7 +415,7 @@ export async function processSiteTransferReminders(
 ): Promise<{ reminded: number; paused_domains: number; checked: number }> {
   const now = opts.now ?? new Date()
   const nowIso = now.toISOString()
-  const transfers = await db.prepare(`
+  const transfers = await queryAll<TransferReminderRow>(db, `
     SELECT r.id, r.site_id, r.from_organization_id, r.to_email, r.token, r.created_at,
            r.invited_plan, r.invited_domain, r.reminder_count, r.requires_payment,
            r.custom_domains_snapshot, r.custom_domains_removed_at,
@@ -423,13 +424,13 @@ export async function processSiteTransferReminders(
     JOIN sites s ON s.id = r.site_id
     WHERE r.status = 'pending'
     ORDER BY r.created_at ASC
-  `).all<TransferReminderRow>()
+  `)
 
   let checked = 0
   let reminded = 0
   let pausedDomains = 0
 
-  for (const transfer of transfers.results || []) {
+  for (const transfer of transfers || []) {
     checked += 1
     const createdAt = new Date(transfer.created_at)
     const daysPending = Math.max(0, Math.floor((now.getTime() - createdAt.getTime()) / DAY_MS))
@@ -443,19 +444,19 @@ export async function processSiteTransferReminders(
       const snapshotRaw = transfer.custom_domains_snapshot
         || serializeTransferDomainSnapshot(await buildTransferDomainSnapshot(db, transfer.site_id))
 
-      await db.prepare(`
+      await execute(db, `
         UPDATE site_transfer_requests
         SET custom_domains_snapshot = ?
         WHERE id = ?
-      `).bind(snapshotRaw, transfer.id).run()
+      `, [snapshotRaw, transfer.id])
 
       const deleted = await deleteSiteCustomDomains(env, db, transfer.site_id, 'system')
       if (deleted.failedDomainIds.length === 0) {
-        await db.prepare(`
+        await execute(db, `
           UPDATE site_transfer_requests
           SET custom_domains_removed_at = ?
           WHERE id = ?
-        `).bind(nowIso, transfer.id).run()
+        `, [nowIso, transfer.id])
       } else {
         console.error('site_transfer_domain_pause_incomplete', {
           transferId: transfer.id,
@@ -482,11 +483,11 @@ export async function processSiteTransferReminders(
         && (Boolean(transfer.custom_domains_removed_at) || daysPending >= DOMAIN_PAUSE_AFTER_DAYS),
     })
 
-    await db.prepare(`
+    await execute(db, `
       UPDATE site_transfer_requests
       SET last_reminder_at = ?, reminder_count = COALESCE(reminder_count, 0) + 1
       WHERE id = ?
-    `).bind(nowIso, transfer.id).run()
+    `, [nowIso, transfer.id])
     reminded += 1
   }
 

@@ -1,3 +1,4 @@
+import { execute, queryFirst, type DbClient } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyReservationCancelled } from '~/server/utils/notifications'
 import { hashReservationCancelToken, readBearerToken } from '~/server/utils/reservation-cancel-token'
@@ -17,15 +18,15 @@ async function getClientIp(event: ApiValue): Promise<string> {
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-async function incrementRateLimit(db: D1Database, key: string, limit: number): Promise<boolean> {
+async function incrementRateLimit(db: DbClient, key: string, limit: number): Promise<boolean> {
   const now = new Date().toISOString()
   const expiresAt = new Date(Date.now() + 3600000).toISOString()
-  const result = await db.prepare(`
+  const result = await execute(db, `
     INSERT INTO rate_limits (key, count, updated_at, expires_at)
     VALUES (?, 1, ?, ?)
     ON CONFLICT(key) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at, expires_at = excluded.expires_at
     WHERE count < ?
-  `).bind(key, now, expiresAt, limit).run()
+  `, [key, now, expiresAt, limit])
 
   return Boolean(result?.success && result?.meta?.changes)
 }
@@ -40,7 +41,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const clientIp = await getClientIp(event)
@@ -58,17 +59,7 @@ export default defineEventHandler(async (event) => {
 
   const tokenHash = await hashReservationCancelToken(token)
   const now = new Date().toISOString()
-  const cancellable = await db.prepare(`
-    SELECT organization_id, site_id, name, email, phone, date, time, guests, status
-    FROM reservation_submissions
-    WHERE id = ?
-      AND site_id = ?
-      AND cancellation_token_hash = ?
-      AND cancellation_token_used_at IS NULL
-      AND cancellation_token_expires_at > ?
-      AND status IN ('new', 'confirmed')
-    LIMIT 1
-  `).bind(reservationId, siteId, tokenHash, now).first<{
+  const cancellable = await queryFirst<{
     organization_id: string
     site_id: string
     name: string
@@ -78,13 +69,38 @@ export default defineEventHandler(async (event) => {
     time: string
     guests: string
     status: 'new' | 'confirmed'
-  }>()
+  }>(
+    db,
+    `
+    SELECT organization_id, site_id, name, email, phone, date, time, guests, status
+    FROM reservation_submissions
+    WHERE id = ?
+      AND site_id = ?
+      AND cancellation_token_hash = ?
+      AND cancellation_token_used_at IS NULL
+      AND cancellation_token_expires_at > ?
+      AND status IN ('new', 'confirmed')
+    LIMIT 1
+  `,
+    [reservationId, siteId, tokenHash, now],
+  )
 
   if (!cancellable) {
     return jsonResponse({ error: 'Reservation not found or already cancelled' }, { status: 404 })
   }
 
-  const reservation = await db.prepare(`
+  const reservation = await queryFirst<{
+    organization_id: string
+    site_id: string
+    name: string
+    email: string
+    phone: string
+    date: string
+    time: string
+    guests: string
+  }>(
+    db,
+    `
     UPDATE reservation_submissions
     SET status = 'cancelled', cancellation_token_used_at = ?
     WHERE id = ?
@@ -94,24 +110,19 @@ export default defineEventHandler(async (event) => {
       AND cancellation_token_expires_at > ?
       AND status IN ('new', 'confirmed')
     RETURNING organization_id, site_id, name, email, phone, date, time, guests
-  `).bind(now, reservationId, siteId, tokenHash, now).first<{
-    organization_id: string
-    site_id: string
-    name: string
-    email: string
-    phone: string
-    date: string
-    time: string
-    guests: string
-  }>()
+  `,
+    [now, reservationId, siteId, tokenHash, now],
+  )
 
   if (!reservation) {
     return jsonResponse({ error: 'Reservation not found or already cancelled' }, { status: 404 })
   }
 
-  const site = await db.prepare(`
-    SELECT brand_name FROM sites WHERE id = ? LIMIT 1
-  `).bind(siteId).first<{ brand_name?: string | null }>()
+  const site = await queryFirst<{ brand_name?: string | null }>(
+    db,
+    'SELECT brand_name FROM sites WHERE id = ? LIMIT 1',
+    [siteId],
+  )
 
   try {
     await notifyReservationCancelled(env, db, {

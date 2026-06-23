@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 
 export interface SiteConfig {
   ga4_property_id?: string
@@ -23,14 +23,16 @@ export interface SiteConfig {
 }
 
 export const getConfig = async (
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string
 ): Promise<SiteConfig> => {
-  const { results } = await db.prepare(
+  const results = await queryAll<{ key: string; value: string }>(
+    db,
     `SELECT key, value FROM site_config
-     WHERE organization_id = ? AND site_id = ?`
-  ).bind(organizationId, siteId).all<{ key: string; value: string }>()
+     WHERE organization_id = ? AND site_id = ?`,
+    [organizationId, siteId],
+  )
   return Object.fromEntries((results ?? []).map(r => [r.key, r.value]))
 }
 
@@ -39,16 +41,17 @@ export const getConfig = async (
  * should be interpreted in: the location's own timezone, else the site's default_timezone, else UTC.
  */
 export const resolveLocationTimezone = async (
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   locationId: string | null,
 ): Promise<string> => {
   if (locationId) {
-    const loc = await db
-      .prepare(`SELECT timezone FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`)
-      .bind(locationId, siteId)
-      .first<{ timezone: string | null }>()
+    const loc = await queryFirst<{ timezone: string | null }>(
+      db,
+      `SELECT timezone FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`,
+      [locationId, siteId],
+    )
     if (loc?.timezone) return loc.timezone
   }
   const config = await getConfig(db, organizationId, siteId)
@@ -72,28 +75,32 @@ export const isDateBeforeTimezoneToday = (dateStr: string, timezone: string): bo
 }
 
 export const setConfig = async (
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   key: keyof SiteConfig,
   value: string
 ) => {
-  await db.prepare(
+  await execute(
+    db,
     `INSERT INTO site_config (organization_id, site_id, key, value)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value,
-     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
-  ).bind(organizationId, siteId, key, value).run()
+     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+    [organizationId, siteId, key, value],
+  )
 }
 
 export const deleteConfig = async (
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   key: keyof SiteConfig
 ) => {
-  await db.prepare(
+  await execute(
+    db,
     `DELETE FROM site_config
-     WHERE organization_id = ? AND site_id = ? AND key = ?`
-  ).bind(organizationId, siteId, key).run()
+     WHERE organization_id = ? AND site_id = ? AND key = ?`,
+    [organizationId, siteId, key],
+  )
 }

@@ -2,6 +2,7 @@ import { createError, getHeader, getHeaders, type H3Event } from 'h3'
 import { createLocalJWKSet, jwtVerify } from 'jose'
 import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { queryAll, queryFirst } from '~/server/db'
 
 export type McpToolRole = 'owner' | 'admin' | 'editor'
 
@@ -129,10 +130,11 @@ async function verifyBearerToken(
   const identity = verification.identity
   ensureForbiddenScopesAbsent(verification.scopes, options.forbiddenScopes)
 
-  const user = await db
-    .prepare('SELECT role, email FROM user WHERE id = ? LIMIT 1')
-    .bind(identity.userId)
-    .first<{ role?: string; email?: string | null }>()
+  const user = await queryFirst<{ role?: string; email?: string | null }>(
+    db,
+    'SELECT role, email FROM user WHERE id = ? LIMIT 1',
+    [identity.userId],
+  )
 
   if (!user) {
     logMcpAuth(event, 'warn', 'credential_rejected', {
@@ -205,9 +207,10 @@ async function verifyJwtAccessToken(
   audiences: string[],
   requiredScopes: string[],
 ): Promise<TokenLookupResult & { scopes: string[] }> {
-  const { results: keys } = await db
-    .prepare('SELECT id, publicKey, alg FROM jwks ORDER BY createdAt DESC')
-    .all<{ id: string; publicKey: string; alg: string | null }>()
+  const keys = await queryAll<{ id: string; publicKey: string; alg: string | null }>(
+    db,
+    'SELECT id, publicKey, alg FROM jwks ORDER BY createdAt DESC',
+  )
 
   if (!keys?.length) return { userId: null, reason: 'jwks_empty', scopes: [] }
 
@@ -243,18 +246,18 @@ async function verifyOpaqueAccessToken(
   requiredScopes: string[],
 ): Promise<TokenLookupResult & { scopes: string[] }> {
   const hashedToken = await sha256Base64Url(token)
-  const accessToken = await db.prepare(`
+  const accessToken = await queryFirst<{
+    userId: string | null
+    expiresAt: string | null
+    scopes: string | null
+    client_disabled: number | null
+  }>(db, `
     SELECT oat.userId, oat.expiresAt, oat.scopes, oc.disabled AS client_disabled
     FROM oauthAccessToken oat
     LEFT JOIN oauthClient oc ON oc.clientId = oat.clientId
     WHERE oat.token = ?
     LIMIT 1
-  `).bind(hashedToken).first<{
-    userId: string | null
-    expiresAt: string | null
-    scopes: string | null
-    client_disabled: number | null
-  }>()
+  `, [hashedToken])
 
   if (!accessToken?.userId || !accessToken.expiresAt) return { userId: null, reason: 'token_not_found', scopes: [] }
   if (accessToken.client_disabled) return { userId: null, reason: 'client_disabled', scopes: [] }
@@ -330,13 +333,17 @@ export async function requireMcpSite(
   const user = await requireMcpUser(event)
 
   if (user.isPlatformAdmin) {
-    const site = await user.db.prepare(`
+    const site = await queryFirst<{ organization_id: string; organization_slug: string | null }>(
+      user.db,
+      `
       SELECT s.organization_id, o.slug as organization_slug
       FROM sites s
       LEFT JOIN organization o ON s.organization_id = o.id
       WHERE s.id = ?
       LIMIT 1
-    `).bind(siteId).first<{ organization_id: string; organization_slug: string | null }>()
+    `,
+      [siteId],
+    )
 
     if (!site?.organization_id) {
       throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
@@ -351,14 +358,18 @@ export async function requireMcpSite(
     }
   }
 
-  const site = await user.db.prepare(`
+  const site = await queryFirst<{ organization_id: string; role: string; organization_slug: string | null }>(
+    user.db,
+    `
     SELECT s.organization_id, m.role, o.slug as organization_slug
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
     LEFT JOIN organization o ON s.organization_id = o.id
     WHERE s.id = ? AND m.userId = ?
     LIMIT 1
-  `).bind(siteId, user.userId).first<{ organization_id: string; role: string; organization_slug: string | null }>()
+  `,
+    [siteId, user.userId],
+  )
 
   if (!site?.organization_id || !site.role) {
     throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
@@ -403,12 +414,12 @@ export async function getActiveEntitlements(db: D1Database, organizationId: stri
   const placeholders = keys.map(() => '?').join(', ')
   const siteFilter = siteId ? 'AND se.site_id = ?' : ''
   const bindings = siteId ? [organizationId, ...keys, siteId] : [organizationId, ...keys]
-  const { results } = await db.prepare(`
+  const results = await queryAll<{ key: string }>(db, `
     SELECT se.key FROM site_entitlements se
     JOIN sites s ON s.id = se.site_id
     WHERE s.organization_id = ? AND se.key IN (${placeholders}) AND se.value = 'true' ${siteFilter}
-  `).bind(...bindings).all<{ key: string }>()
-  return new Set((results ?? []).map(r => r.key))
+  `, bindings)
+  return new Set(results.map(r => r.key))
 }
 
 export function roleSatisfies(actual: McpToolRole, minimum: McpToolRole) {

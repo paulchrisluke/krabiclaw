@@ -1,3 +1,7 @@
+import { createError, getHeader, type H3Event } from 'h3'
+import { createDb, type AppDb } from '~/server/db'
+import type { CloudflareEnv } from './auth'
+
 export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), {
     ...init,
@@ -10,9 +14,8 @@ export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) =>
 export const cleanString = (value: ApiValue, maxLength: number) =>
   typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 
-export const cloudflareEnv = (event: H3Event): CloudflareEnv => ({
-  ...process.env,
-  ...(() => {
+export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
+  const runtimeEnv = (() => {
     const env = event.context.cloudflare?.env as Record<string, unknown> | undefined
     const requiredBindings = ['DB', 'MEDIA_BUCKET', 'SITE_CACHE', 'AI'] as const
     const missing = requiredBindings.filter((key) => !env?.[key])
@@ -37,6 +40,15 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => ({
 
     return env ?? {}
   })()
-} as CloudflareEnv)
-import { createError, getHeader, type H3Event } from 'h3'
-import type { CloudflareEnv } from './auth'
+
+  const d1 = runtimeEnv.DB as D1Database | undefined
+  const db = d1 ? createDb(d1) : undefined
+
+  return {
+    ...process.env,
+    ...runtimeEnv,
+    db,
+  } as CloudflareEnv
+}
+
+export type { AppDb }

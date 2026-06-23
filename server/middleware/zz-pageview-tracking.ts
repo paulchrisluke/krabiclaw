@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
   if (!isTrackablePath(url.pathname)) return
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return
 
   try {
@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
     const rawUa = getHeader(event, 'user-agent') || null
     const userAgent = rawUa ? rawUa.slice(0, 1024) : null
 
-    await insertPageviewEvent(db, {
+    const insertPromise = insertPageviewEvent(db, {
       siteId,
       pagePath: url.pathname,
       referrer,
@@ -52,6 +52,13 @@ export default defineEventHandler(async (event) => {
       region: geo.region || null,
       city: geo.city || null
     })
+
+    const waitUntil = event.context.cloudflare?.context?.waitUntil
+    if (waitUntil) {
+      waitUntil(insertPromise)
+    } else {
+      await insertPromise
+    }
   } catch (error) {
     // Analytics must never break the public site.
     const err = error instanceof Error ? error : new Error(String(error))

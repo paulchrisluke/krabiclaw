@@ -2,6 +2,7 @@
 // All messages use pre-approved templates (WhatsApp requires this for business-initiated messages).
 // Phone numbers stored and sent in E.164 format (+66946230215).
 
+import { execute, queryFirst, type DbClient } from '~/server/db'
 import { logOnlyWhatsAppMessageId, shouldSendRealWhatsApp } from './whatsapp-delivery'
 
 function maskPhone(phone: string): string {
@@ -220,7 +221,7 @@ export interface SendWhatsAppResult {
  */
 export async function sendWhatsAppNotification(
   env: WhatsAppEnv,
-  db: D1Database,
+  db: DbClient,
   opts: {
     organizationId: string
     siteId?: string | null
@@ -238,31 +239,35 @@ export async function sendWhatsAppNotification(
   const vars = normalizeTemplateVars(opts.vars ?? {})
 
   // Insert pending row first so we always have a record even if the send fails
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO notifications (id, organization_id, site_id, channel, template, payload, status, created_at)
     VALUES (?, ?, ?, 'whatsapp', ?, ?, 'pending', ?)
-  `).bind(
+  `, [
     notificationId,
     opts.organizationId,
     opts.siteId ?? null,
     opts.template,
     JSON.stringify({ to: normalizedPhone, ...vars }),
     now
-  ).run()
+  ])
 
   if (!shouldSendRealWhatsApp(env)) {
     const messageId = logOnlyWhatsAppMessageId('notification')
-    await db.prepare(
-      `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`
-    ).bind(messageId, now, notificationId).run()
+    await execute(
+      db,
+      `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`,
+      [messageId, now, notificationId],
+    )
     console.log('whatsapp_delivery_log_only', { notificationId, template: opts.template, to: maskPhone(normalizedPhone) })
     return { success: true, messageId }
   }
 
   if (!phoneNumberId || !accessToken) {
-    await db.prepare(
-      `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`
-    ).bind('WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN not configured', now, notificationId).run()
+    await execute(
+      db,
+      `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
+      ['WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN not configured', now, notificationId],
+    )
     return { success: false, error: 'WhatsApp env vars not configured' }
   }
 
@@ -291,22 +296,28 @@ export async function sendWhatsAppNotification(
 
     if (!response.ok || data.error) {
       const errMsg = data.error?.message ?? `HTTP ${response.status}`
-      await db.prepare(
-        `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`
-      ).bind(errMsg, now, notificationId).run()
+      await execute(
+        db,
+        `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
+        [errMsg, now, notificationId],
+      )
       result = { success: false, error: errMsg }
     } else {
       const messageId = data.messages?.[0]?.id
-      await db.prepare(
-        `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`
-      ).bind(messageId, now, notificationId).run()
+      await execute(
+        db,
+        `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`,
+        [messageId, now, notificationId],
+      )
       result = { success: true, messageId }
     }
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : 'Network error'
-    await db.prepare(
-      `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`
-    ).bind(errMsg, now, notificationId).run()
+    await execute(
+      db,
+      `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
+      [errMsg, now, notificationId],
+    )
     result = { success: false, error: errMsg }
   }
 
@@ -318,15 +329,15 @@ export async function sendWhatsAppNotification(
  * Returns null if not set — callers should skip sending rather than throw.
  */
 export async function getOrgWhatsAppPhone(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string
 ): Promise<string | null> {
-  const row = await db.prepare(`
+  const row = await queryFirst<{ value: string }>(db, `
     SELECT value FROM site_config
     WHERE organization_id = ? AND site_id = ? AND key = 'whatsapp_phone'
     LIMIT 1
-  `).bind(organizationId, siteId).first<{ value: string }>()
+  `, [organizationId, siteId])
   return row?.value ?? null
 }
 
@@ -501,16 +512,16 @@ export async function fetchWhatsAppMedia(
  * Normalizes to E.164 before saving.
  */
 export async function setOrgWhatsAppPhone(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   phone: string
 ): Promise<void> {
   const normalized = normalizePhone(phone)
   const now = new Date().toISOString()
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO site_config (organization_id, site_id, key, value, updated_at)
     VALUES (?, ?, 'whatsapp_phone', ?, ?)
     ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-  `).bind(organizationId, siteId, normalized, now).run()
+  `, [organizationId, siteId, normalized, now])
 }

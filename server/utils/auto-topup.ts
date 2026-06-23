@@ -2,6 +2,7 @@ import type Stripe from 'stripe'
 import { getStripe } from '~/server/utils/billing'
 import type { BillingEnv } from '~/server/utils/billing'
 import { BUNDLE_AMOUNTS } from '~/shared/creditBundles'
+import { execute, queryFirst, type DbClient } from '~/server/db'
 
 // Minimum gap between auto top-ups for the same org to prevent concurrent charges.
 const AUTO_TOPUP_COOLDOWN_MS = 5 * 60 * 1000 // 5 minutes
@@ -22,7 +23,7 @@ interface CreditsRow {
  * is enabled, charge the saved card and credit the account. Never throws — errors logged only.
  */
 export async function triggerAutoTopupIfNeeded(
-  db: D1Database,
+  db: DbClient,
   env: BillingEnv,
   organizationId: string,
   newBalance: number
@@ -30,10 +31,11 @@ export async function triggerAutoTopupIfNeeded(
   if (!env.STRIPE_SECRET_KEY) return
 
   try {
-    const billing = await db.prepare(
+    const billing = await queryFirst<AutoTopupRow>(db,
       `SELECT auto_topup_enabled, auto_topup_bundle, auto_topup_threshold, stripe_customer_id
-       FROM organization_billing WHERE organization_id = ? LIMIT 1`
-    ).bind(organizationId).first<AutoTopupRow>()
+       FROM organization_billing WHERE organization_id = ? LIMIT 1`,
+      [organizationId],
+    )
 
     const threshold = billing?.auto_topup_threshold ?? 100
     if (newBalance >= threshold) return
@@ -45,9 +47,9 @@ export async function triggerAutoTopupIfNeeded(
     if (!amount) return
 
     // Cooldown check — prevents concurrent/duplicate charges using last_topped_up_at.
-    const credits = await db.prepare(
-      'SELECT last_topped_up_at FROM ai_credits WHERE organization_id = ? LIMIT 1'
-    ).bind(organizationId).first<CreditsRow>()
+    const credits = await queryFirst<CreditsRow>(
+      db, 'SELECT last_topped_up_at FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId],
+    )
 
     if (credits?.last_topped_up_at) {
       const lastCharged = new Date(credits.last_topped_up_at).getTime()
@@ -80,14 +82,15 @@ export async function triggerAutoTopupIfNeeded(
     if (intent.status !== 'succeeded') return
 
     const now = new Date().toISOString()
-    await db.prepare(
+    await execute(db,
       `INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)
        VALUES (?, ?, 0, ?, ?)
        ON CONFLICT(organization_id) DO UPDATE SET
          balance = balance + excluded.balance,
          last_topped_up_at = excluded.last_topped_up_at,
-         updated_at = excluded.updated_at`
-    ).bind(organizationId, bundle, now, now).run()
+         updated_at = excluded.updated_at`,
+      [organizationId, bundle, now, now],
+    )
   } catch (err) {
     console.error('auto_topup_failed', { organizationId, newBalance, error: err })
   }

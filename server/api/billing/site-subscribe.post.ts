@@ -7,6 +7,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, getPriceIdForPlan, requireBillingAccess, applySiteSubscription } from '~/server/utils/billing'
+import { queryFirst } from '~/server/db'
 import type Stripe from 'stripe'
 
 const ALLOWED_PLANS = ['growth', 'managed', 'seo_accelerator']
@@ -31,8 +32,9 @@ export default defineEventHandler(async (event) => {
   }
   if (!txId) return jsonResponse({ error: 'txId is required' }, { status: 400 })
 
-  const site = await db.prepare(`SELECT id, organization_id FROM sites WHERE id = ? LIMIT 1`)
-    .bind(siteId).first<{ id: string; organization_id: string }>()
+  const site = await queryFirst<{ id: string; organization_id: string }>(
+    db, `SELECT id, organization_id FROM sites WHERE id = ? LIMIT 1`, [siteId],
+  )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const orgId = site.organization_id
 
@@ -42,16 +44,16 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Only owners can manage billing' }, { status: 403 })
   }
 
-  const existingSiteBilling = await db.prepare(`
+  const existingSiteBilling = await queryFirst<{ stripe_subscription_id: string | null }>(db, `
     SELECT stripe_subscription_id FROM site_billing WHERE site_id = ? AND status = 'active' LIMIT 1
-  `).bind(siteId).first<{ stripe_subscription_id: string | null }>()
+  `, [siteId])
   if (existingSiteBilling?.stripe_subscription_id) {
     return jsonResponse({ error: 'This site already has an active subscription' }, { status: 409 })
   }
 
-  const orgBilling = await db.prepare(`
+  const orgBilling = await queryFirst<{ stripe_customer_id: string | null }>(db, `
     SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1
-  `).bind(orgId).first<{ stripe_customer_id: string | null }>()
+  `, [orgId])
   if (!orgBilling?.stripe_customer_id) {
     return jsonResponse({ error: 'No saved payment method found', requiresCheckout: true }, { status: 402 })
   }

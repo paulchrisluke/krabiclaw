@@ -108,7 +108,7 @@ async function resolveCreationOrganization(
   }
 
   // Multi-site: if the user already owns an org with active sites, add the new site there.
-  // The unique-per-org constraint was removed in migration 0017.
+  // The unique-per-org constraint was removed pre-squash (was migration 0017); now part of the 0001_initial.sql baseline.
   const existingOwnerOrg = orgs.find(row => row.member_role === 'owner' && row.site_id && row.onboarding_status === 'active')
   if (existingOwnerOrg) {
     return { organizationId: existingOwnerOrg.organization_id }

@@ -8,21 +8,28 @@ import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { deleteImage, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
 import { generateImageViaGateway, IMAGE_MODEL } from '~/server/utils/ai-gateway'
+import { executeBatch, type DbClient } from '~/server/db'
 
 const PLATFORM_MEDIA_ORG_ID = 'platform'
 const PLATFORM_MEDIA_SITE_ID = 'platform'
 
-async function ensurePlatformMediaScope(db: D1Database): Promise<void> {
+async function ensurePlatformMediaScope(db: DbClient): Promise<void> {
   const now = new Date().toISOString()
-  await db.batch([
-    db.prepare(`
-      INSERT OR IGNORE INTO organization (id, name, slug, createdAt)
-      VALUES (?, ?, ?, ?)
-    `).bind(PLATFORM_MEDIA_ORG_ID, 'KrabiClaw Platform', PLATFORM_MEDIA_ORG_ID, now),
-    db.prepare(`
-      INSERT OR IGNORE INTO sites (id, organization_id, theme_id, theme, slug, status, onboarding_status, created_at, updated_at)
-      VALUES (?, ?, 'saya-theme-v1', 'saya', ?, 'active', 'active', ?, ?)
-    `).bind(PLATFORM_MEDIA_SITE_ID, PLATFORM_MEDIA_ORG_ID, PLATFORM_MEDIA_SITE_ID, now, now),
+  await executeBatch(db, [
+    {
+      query: `
+        INSERT OR IGNORE INTO organization (id, name, slug, createdAt)
+        VALUES (?, ?, ?, ?)
+      `,
+      params: [PLATFORM_MEDIA_ORG_ID, 'KrabiClaw Platform', PLATFORM_MEDIA_ORG_ID, now],
+    },
+    {
+      query: `
+        INSERT OR IGNORE INTO sites (id, organization_id, theme_id, theme, slug, status, onboarding_status, created_at, updated_at)
+        VALUES (?, ?, 'saya-theme-v1', 'saya', ?, 'active', 'active', ?, ?)
+      `,
+      params: [PLATFORM_MEDIA_SITE_ID, PLATFORM_MEDIA_ORG_ID, PLATFORM_MEDIA_SITE_ID, now, now],
+    },
   ])
 }
 

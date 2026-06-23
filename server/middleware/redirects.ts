@@ -1,5 +1,7 @@
 // SEO 301 redirects for legacy legal URLs
 import { defineEventHandler, getRequestURL, sendRedirect } from 'h3'
+import { queryAll } from '~/server/db'
+import { cloudflareEnv } from '~/server/utils/api-response'
 
 const redirects: Record<string, string> = {
   '/privacy-policy': '/privacy',
@@ -19,15 +21,15 @@ export default defineEventHandler(async (event) => {
   // Server-side 301 redirect for single-location sites
   if (normalizedPathname === '/' && event.context.tenantType === 'tenant' && event.context.siteId) {
     const env = cloudflareEnv(event)
-    const db = env.DB
+    const db = env.db
     if (db) {
       try {
-        const locations = await db.prepare(`
+        const locations = await queryAll<{ slug: string }>(db, `
           SELECT slug FROM business_locations
           WHERE site_id = ? AND status = 'active'
-        `).bind(event.context.siteId).all<{ slug: string }>()
-        if (locations.results && locations.results.length === 1) {
-          const singleLoc = locations.results[0]
+        `, [event.context.siteId])
+        if (locations.length === 1) {
+          const singleLoc = locations[0]
           if (singleLoc && singleLoc.slug) {
             return sendRedirect(event, `/locations/${singleLoc.slug}`, 301)
           }

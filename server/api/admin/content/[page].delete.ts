@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { execute } from '~/server/db'
 
 const ALLOWED_PAGES = ['about', 'contact', 'help']
 
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const result = await db.prepare(`DELETE FROM platform_content WHERE page = ?`).bind(page).run()
+    const result = await execute(db, `DELETE FROM platform_content WHERE page = ?`, [page])
     if (!result?.meta?.changes) {
       return jsonResponse({ error: 'Content not found', page, deleted: false }, { status: 404 })
     }

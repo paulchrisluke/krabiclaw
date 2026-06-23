@@ -4,6 +4,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe } from '~/server/utils/billing'
+import { execute, queryFirst } from '~/server/db'
 
 const BUNDLE_PRICE_MAP: Record<number, keyof NodeJS.ProcessEnv> = {
   500: 'STRIPE_PRICE_CREDITS_500',
@@ -31,24 +32,25 @@ export default defineEventHandler(async (event) => {
     if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
       return jsonResponse({ error: 'amount must be a positive integer' }, { status: 400 })
     }
-    const member = await db.prepare(
-      'SELECT organizationId FROM member WHERE userId = ? LIMIT 1'
-    ).bind(session.user.id).first()
+    const member = await queryFirst<{ organizationId: string }>(
+      db, 'SELECT organizationId FROM member WHERE userId = ? LIMIT 1', [session.user.id],
+    )
     if (!member) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
-    const orgId = member.organizationId as string
+    const orgId = member.organizationId
     const now = new Date().toISOString()
-    await db.prepare(
+    await execute(db,
       `INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)
        VALUES (?, ?, 0, ?, ?)
        ON CONFLICT(organization_id) DO UPDATE SET
          balance = balance + excluded.balance,
          last_topped_up_at = excluded.last_topped_up_at,
-         updated_at = excluded.updated_at`
-    ).bind(orgId, amount, now, now).run()
-    const updated = await db.prepare(
-      'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1'
-    ).bind(orgId).first()
+         updated_at = excluded.updated_at`,
+      [orgId, amount, now, now],
+    )
+    const updated = await queryFirst<{ balance: number }>(
+      db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [orgId],
+    )
     return jsonResponse({ success: true, balance: updated?.balance ?? amount })
   }
 
@@ -64,17 +66,17 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Credit bundle not configured' }, { status: 503 })
   }
 
-  const member = await db.prepare(
-    'SELECT m.organizationId, o.slug FROM member m JOIN organization o ON o.id = m.organizationId WHERE m.userId = ? LIMIT 1'
-  ).bind(session.user.id).first() as { organizationId: string; slug: string | null } | null
+  const member = await queryFirst<{ organizationId: string; slug: string | null }>(
+    db, 'SELECT m.organizationId, o.slug FROM member m JOIN organization o ON o.id = m.organizationId WHERE m.userId = ? LIMIT 1', [session.user.id],
+  )
   if (!member) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
   const orgId = member.organizationId
   const orgSlug = member.slug
 
-  const billing = await db.prepare(
-    'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1'
-  ).bind(orgId).first() as { stripe_customer_id: string | null } | null
+  const billing = await queryFirst<{ stripe_customer_id: string | null }>(
+    db, 'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1', [orgId],
+  )
 
   const stripe = getStripe(env)
   const origin = getRequestURL(event).origin

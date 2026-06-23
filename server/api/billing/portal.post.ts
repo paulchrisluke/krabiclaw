@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, requireBillingAccess } from '../../utils/billing'
+import { queryFirst } from '~/server/db'
 
 interface PortalRequest {
   organizationId: string
@@ -48,11 +49,11 @@ export default defineEventHandler(async (event) => {
     await requireBillingAccess(env, db, organizationId, session.user.id)
     
     // Get organization with Stripe customer
-    const organization = await db.prepare(`
+    const organization = await queryFirst<{ slug: string | null; stripe_customer_id: string | null }>(db, `
       SELECT o.name, o.slug, b.stripe_customer_id FROM organization o
       LEFT JOIN organization_billing b ON o.id = b.organization_id
       WHERE o.id = ?
-    `).bind(organizationId).first<{ slug: string | null; stripe_customer_id: string | null }>()
+    `, [organizationId])
     
     if (!organization) {
       return jsonResponse({ 

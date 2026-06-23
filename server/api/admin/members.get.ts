@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { queryAll } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -12,15 +13,19 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
-  const [teamResult, invitationsResult] = await Promise.all([
-    db.prepare(`
+  const [team, pendingInvitations] = await Promise.all([
+    queryAll<{ id: string; name: string | null; email: string; image: string | null; role: string; createdAt: string }>(db, `
       SELECT id, name, email, image, role, createdAt
       FROM user
       WHERE role = 'admin'
       ORDER BY createdAt ASC
-    `).all<{ id: string; name: string | null; email: string; image: string | null; role: string; createdAt: string }>(),
+    `),
 
-    db.prepare(`
+    queryAll<{
+      id: string; email: string; role: string | null; status: string
+      expiresAt: string; createdAt: string
+      orgName: string | null; orgSlug: string | null; inviterName: string | null
+    }>(db, `
       SELECT i.id, i.email, i.role, i.status, i.expiresAt, i.createdAt,
              o.name as orgName, o.slug as orgSlug,
              u.name as inviterName
@@ -30,15 +35,11 @@ export default defineEventHandler(async (event) => {
       WHERE i.status = 'pending'
       ORDER BY i.createdAt DESC
       LIMIT 50
-    `).all<{
-      id: string; email: string; role: string | null; status: string
-      expiresAt: string; createdAt: string
-      orgName: string | null; orgSlug: string | null; inviterName: string | null
-    }>(),
+    `),
   ])
 
   return jsonResponse({
-    team: teamResult.results ?? [],
-    pendingInvitations: invitationsResult.results ?? [],
+    team,
+    pendingInvitations,
   })
 })

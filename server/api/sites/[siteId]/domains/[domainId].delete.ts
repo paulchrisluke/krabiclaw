@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { queryFirst } from '~/server/db'
 import { deleteCustomDomain } from '~/server/utils/domains'
 import { notifyDomainLifecycle } from '~/server/utils/domain-notifications'
 
@@ -17,22 +18,22 @@ export default defineEventHandler(async (event) => {
 
 
   // Fetch member role for audit/authorization
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string; organization_id: string; member_role: 'owner' | 'admin' }>(db, `
     SELECT s.id, s.organization_id, m.role as member_role
     FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin')
     LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; member_role: 'owner' | 'admin' }>()
+  `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const domain = await db.prepare(`
+  const domain = await queryFirst<{ id: string; domain: string }>(db, `
     SELECT *
     FROM site_domains
     WHERE id = ? AND site_id = ? AND type = 'custom'
     LIMIT 1
-  `).bind(domainId, siteId).first<{ id: string; domain: string }>()
+  `, [domainId, siteId])
   if (!domain) return jsonResponse({ error: 'Domain not found' }, { status: 404 })
 
   try {

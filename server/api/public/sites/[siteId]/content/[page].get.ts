@@ -1,4 +1,5 @@
 // Get published content for public tenant rendering (no auth required)
+import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublishedPageContentForLocale } from '~/server/utils/content-management'
 import { verifyPreviewToken } from '~/server/utils/preview-token'
@@ -51,13 +52,13 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Get site info (public access)
-    const site = await db.prepare(`
+    const site = await queryFirst<{ id: string; organization_id: string; status: string; onboarding_status: string }>(db, `
       SELECT id, organization_id, status, onboarding_status
-      FROM sites 
+      FROM sites
       WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
       LIMIT 1
-    `).bind(siteId).first<{ id: string; organization_id: string; status: string; onboarding_status: string }>()
-    
+    `, [siteId])
+
     if (!site) {
       return jsonResponse({ 
         error: 'Site not found or not active' 
@@ -67,12 +68,12 @@ export default defineEventHandler(async (event) => {
     // Find location by slug if provided
     let locationId: string | undefined
     if (locationSlug) {
-      const location = await db.prepare(`
-        SELECT id FROM business_locations 
+      const location = await queryFirst<{ id: string }>(db, `
+        SELECT id FROM business_locations
         WHERE site_id = ? AND slug = ? AND status = 'active'
         LIMIT 1
-      `).bind(siteId, locationSlug).first<{ id: string }>()
-      
+      `, [siteId, locationSlug])
+
       if (location) {
         locationId = location.id
       }
@@ -107,7 +108,7 @@ export default defineEventHandler(async (event) => {
           transQuery += ` AND location_id IS NULL`
         }
 
-        const { results: transDrafts } = await db.prepare(transQuery).bind(...params).all<{
+        const transDrafts = await queryAll<{
           field: string
           content: string | null
           value: string | null
@@ -115,7 +116,7 @@ export default defineEventHandler(async (event) => {
           hero_title: string | null
           hero_subtitle: string | null
           updated_at: string
-        }>()
+        }>(db, transQuery, params)
 
         if (transDrafts) {
           for (const draft of transDrafts) {

@@ -1,5 +1,7 @@
 // Cloudflare for SaaS custom domain management.
 
+import { execute, queryAll, queryFirst } from '~/server/db'
+
 export interface DomainEnv {
   CF_ZONE_ID?: string
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
@@ -163,23 +165,23 @@ export function validateCustomDomain(env: DomainEnv, domain: string): { valid: b
 }
 
 export async function hasCustomDomainsEntitlement(db: D1Database, siteId: string): Promise<boolean> {
-  const entitlement = await db.prepare(`
+  const entitlement = await queryFirst<{ value?: string }>(db, `
     SELECT value FROM site_entitlements
     WHERE site_id = ? AND key = 'custom_domains'
     LIMIT 1
-  `).bind(siteId).first()
+  `, [siteId])
   return String(entitlement?.value || '').toLowerCase() === 'true'
 }
 
 export async function getSiteDomains(db: D1Database, siteId: string): Promise<DomainRecord[]> {
-  const domains = await db.prepare(`
+  const domains = await queryAll<DomainRecord>(db, `
     SELECT *
     FROM site_domains
     WHERE site_id = ? AND status != 'deleted'
     ORDER BY type ASC, role ASC, created_at ASC
-  `).bind(siteId).all()
+  `, [siteId])
 
-  return (domains.results || []) as unknown as DomainRecord[]
+  return domains || []
 }
 
 export async function ensureDomainAvailable(db: D1Database, domains: string[], excludeSiteId?: string): Promise<void> {
@@ -187,12 +189,12 @@ export async function ensureDomainAvailable(db: D1Database, domains: string[], e
   const params = excludeSiteId ? [...domains, excludeSiteId] : domains
   const exclusion = excludeSiteId ? 'AND site_id != ?' : ''
 
-  const existing = await db.prepare(`
+  const existing = await queryFirst<{ domain?: string }>(db, `
     SELECT domain
     FROM site_domains
     WHERE domain IN (${placeholders}) AND status != 'deleted' ${exclusion}
     LIMIT 1
-  `).bind(...params).first()
+  `, params)
 
   if (existing?.domain) throw new Error(`${existing.domain} is already in use`)
 }
@@ -251,19 +253,19 @@ export async function createSystemSubdomain(
   // This is the equivalent of clicking "Set up a custom domain" in the dashboard.
   await addPagesCustomDomain(env, domain)
 
-  await db.prepare(`
+  await execute(db, `
     INSERT OR REPLACE INTO site_domains
     (id, organization_id, site_id, domain, type, role, status, dns_status, dns_target, activated_at, created_at, updated_at)
     VALUES (?, ?, ?, ?, 'subdomain', 'canonical', 'active', 'valid', ?, ?, ?, ?)
-  `).bind(id, organizationId, siteId, domain, platformHostname(env), now, now, now).run()
+  `, [id, organizationId, siteId, domain, platformHostname(env), now, now, now])
 
-  await db.prepare(`
+  await execute(db, `
     UPDATE sites
     SET public_url = ?, updated_at = ?
     WHERE id = ? AND organization_id = ?
-  `).bind(`https://${domain}`, now, siteId, organizationId).run()
+  `, [`https://${domain}`, now, siteId, organizationId])
 
-  return (await db.prepare(`SELECT * FROM site_domains WHERE id = ?`).bind(id).first()) as DomainRecord
+  return (await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [id])) as DomainRecord
 }
 
 function requireCloudflareConfig(env: DomainEnv) {
@@ -362,11 +364,11 @@ async function logDomainEvent(
     metadata?: ApiValue
   }
 ) {
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO site_domain_events
     (id, organization_id, site_id, domain_id, event_type, actor_type, actor_id, message, before_state, after_state, metadata, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+  `, [
     crypto.randomUUID(),
     opts.organizationId,
     opts.siteId,
@@ -379,16 +381,16 @@ async function logDomainEvent(
     opts.afterState ? JSON.stringify(opts.afterState) : null,
     opts.metadata ? JSON.stringify(opts.metadata) : null,
     new Date().toISOString()
-  ).run()
+  ])
 }
 
 async function queueReconciliation(db: D1Database, domainId: string, runAfter?: string) {
   const now = new Date().toISOString()
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO domain_reconciliation_jobs (id, domain_id, status, run_after, attempts, created_at, updated_at)
     VALUES (?, ?, 'queued', ?, 0, ?, ?)
     ON CONFLICT(domain_id) DO UPDATE SET status = 'queued', run_after = excluded.run_after, updated_at = excluded.updated_at
-  `).bind(`domain-job-${domainId}`, domainId, runAfter ?? now, now, now).run()
+  `, [`domain-job-${domainId}`, domainId, runAfter ?? now, now, now])
 }
 
 async function persistCloudflareState(
@@ -398,7 +400,7 @@ async function persistCloudflareState(
   hostname: CloudflareCustomHostname,
   options: { incrementRetry?: boolean; actorType?: 'owner' | 'admin' | 'system' | 'cloudflare'; actorId?: string | null } = {}
 ): Promise<DomainRecord> {
-  const before = await db.prepare(`SELECT * FROM site_domains WHERE id = ?`).bind(domainId).first() as DomainRecord | null
+  const before = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [domainId])
   if (!before) throw new Error('Domain not found')
 
   const sslValidation = firstSslValidation(hostname)
@@ -411,7 +413,7 @@ async function persistCloudflareState(
   const errors = hostname.verification_errors?.join('; ') || null
 
   if (status === 'active' && before.role === 'canonical') {
-    await db.prepare(`
+    await execute(db, `
       UPDATE site_domains
       SET role = 'secondary', updated_at = ?
       WHERE site_id = ?
@@ -422,10 +424,10 @@ async function persistCloudflareState(
           FROM site_domains expected
           WHERE expected.id = ? AND expected.role = 'canonical'
         )
-    `).bind(now, before.site_id, domainId, domainId).run()
+    `, [now, before.site_id, domainId, domainId])
   }
 
-  await db.prepare(`
+  await execute(db, `
     UPDATE site_domains
     SET cloudflare_hostname_id = ?,
         cloudflare_hostname_status = ?,
@@ -447,7 +449,7 @@ async function persistCloudflareState(
         metadata = ?,
         updated_at = ?
     WHERE id = ?
-  `).bind(
+  `, [
     hostname.id,
     hostname.status ?? null,
     hostname.ssl?.status ?? null,
@@ -471,9 +473,9 @@ async function persistCloudflareState(
     }),
     now,
     domainId
-  ).run()
+  ])
 
-  const after = await db.prepare(`SELECT * FROM site_domains WHERE id = ?`).bind(domainId).first() as DomainRecord
+  const after = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [domainId]) as DomainRecord
 
   if (!before || before.status !== after.status || before.cloudflare_ssl_status !== after.cloudflare_ssl_status) {
     await logDomainEvent(db, {
@@ -532,11 +534,11 @@ export async function createCustomDomainPair(
     await db.exec('BEGIN IMMEDIATE TRANSACTION')
     try {
       for (const entry of entries) {
-        await db.prepare(`
+        await execute(db, `
           INSERT INTO site_domains
           (id, organization_id, site_id, domain, type, role, status, dns_target, dns_status, created_at, updated_at)
           VALUES (?, ?, ?, ?, 'custom', ?, 'pending', ?, 'pending', ?, ?)
-        `).bind(entry.id, opts.organizationId, opts.siteId, entry.domain, entry.role, env.CF_SAAS_CNAME_TARGET, now, now).run()
+        `, [entry.id, opts.organizationId, opts.siteId, entry.domain, entry.role, env.CF_SAAS_CNAME_TARGET, now, now])
 
         await logDomainEvent(db, {
           organizationId: opts.organizationId,
@@ -605,7 +607,7 @@ export async function syncDomainWithCloudflare(
   try {
     signal?.throwIfAborted()
 
-    const domain = await db.prepare(`SELECT * FROM site_domains WHERE id = ? AND type = 'custom'`).bind(domainId).first() as DomainRecord | null
+    const domain = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ? AND type = 'custom'`, [domainId])
     if (!domain) throw new Error('Domain not found')
 
     if (!domain.cloudflare_hostname_id) {
@@ -635,7 +637,7 @@ export async function deleteCustomDomain(
   actorType: 'owner' | 'admin' | 'system',
   actorId?: string | null
 ): Promise<void> {
-  const domain = await db.prepare(`SELECT * FROM site_domains WHERE id = ? AND type = 'custom'`).bind(domainId).first() as DomainRecord | null
+  const domain = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ? AND type = 'custom'`, [domainId])
   if (!domain) throw new Error('Domain not found')
 
   let cloudflareDeleteError: string | null = null
@@ -654,14 +656,14 @@ export async function deleteCustomDomain(
   }
 
   const now = new Date().toISOString()
-  await db.prepare(`
+  await execute(db, `
     UPDATE site_domains
     SET status = 'deleted', role = 'secondary',
         error_message = COALESCE(?, error_message),
         updated_at = ?
     WHERE id = ?
-  `).bind(cloudflareDeleteError ? `Cloudflare delete failed: ${cloudflareDeleteError}` : null, now, domainId).run()
-  await db.prepare(`DELETE FROM domain_reconciliation_jobs WHERE domain_id = ?`).bind(domainId).run()
+  `, [cloudflareDeleteError ? `Cloudflare delete failed: ${cloudflareDeleteError}` : null, now, domainId])
+  await execute(db, `DELETE FROM domain_reconciliation_jobs WHERE domain_id = ?`, [domainId])
   if (cloudflareDeleteError) {
     await logDomainEvent(db, {
       organizationId: domain.organization_id,
@@ -694,12 +696,12 @@ export async function deleteOrganizationCustomDomains(
   db: D1Database,
   organizationId: string
 ): Promise<void> {
-  const domains = await db.prepare(`
+  const domains = await queryAll<{ id: string }>(db, `
     SELECT id FROM site_domains
     WHERE organization_id = ? AND type = 'custom' AND status != 'deleted'
-  `).bind(organizationId).all()
-  for (const domain of domains.results || []) {
-    await deleteCustomDomain(env, db, domain.id as string, 'system')
+  `, [organizationId])
+  for (const domain of domains || []) {
+    await deleteCustomDomain(env, db, domain.id, 'system')
   }
 }
 
@@ -711,19 +713,19 @@ export async function setCanonicalDomain(
   actorType: 'owner' | 'admin' | 'system',
   actorId?: string | null
 ): Promise<DomainRecord> {
-  const domain = await db.prepare(`
+  const domain = await queryFirst<DomainRecord>(db, `
     SELECT *
     FROM site_domains
     WHERE id = ? AND site_id = ? AND status = 'active'
     LIMIT 1
-  `).bind(domainId, siteId).first() as DomainRecord | null
+  `, [domainId, siteId])
   if (!domain) throw new Error('Only active domains can be canonical')
 
   const now = new Date().toISOString()
   await db.exec('BEGIN IMMEDIATE TRANSACTION')
   try {
-    await db.prepare(`UPDATE site_domains SET role = 'secondary', updated_at = ? WHERE site_id = ? AND role = 'canonical'`).bind(now, siteId).run()
-    await db.prepare(`UPDATE site_domains SET role = 'canonical', updated_at = ? WHERE id = ?`).bind(now, domainId).run()
+    await execute(db, `UPDATE site_domains SET role = 'secondary', updated_at = ? WHERE site_id = ? AND role = 'canonical'`, [now, siteId])
+    await execute(db, `UPDATE site_domains SET role = 'canonical', updated_at = ? WHERE id = ?`, [now, domainId])
     await updateSitePrimaryUrl(db, domain.site_id, domain.organization_id, domain.domain)
     await logDomainEvent(db, {
       organizationId: domain.organization_id,
@@ -740,44 +742,44 @@ export async function setCanonicalDomain(
     throw error
   }
 
-  const row = await db.prepare(`SELECT * FROM site_domains WHERE id = ?`).bind(domainId).first() as DomainRecord | null
+  const row = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [domainId])
   if (!row) throw new Error(`Domain not found: ${domainId}`)
   return row
 }
 
 async function promoteCanonicalIfReady(db: D1Database, siteId: string): Promise<void> {
-  const activeCanonical = await db.prepare(`
+  const activeCanonical = await queryFirst<DomainRecord>(db, `
     SELECT *
     FROM site_domains
     WHERE site_id = ? AND role = 'canonical' AND status = 'active'
     LIMIT 1
-  `).bind(siteId).first() as DomainRecord | null
+  `, [siteId])
 
   if (activeCanonical) {
     await updateSitePrimaryUrl(db, activeCanonical.site_id, activeCanonical.organization_id, activeCanonical.domain)
     return
   }
 
-  const activeCustom = await db.prepare(`
+  const activeCustom = await queryFirst<DomainRecord>(db, `
     SELECT *
     FROM site_domains
     WHERE site_id = ? AND type = 'custom' AND status = 'active'
     ORDER BY domain LIKE 'www.%' DESC, created_at ASC
     LIMIT 1
-  `).bind(siteId).first() as DomainRecord | null
+  `, [siteId])
 
   if (activeCustom) {
     await setCanonicalDomain(db, siteId, activeCustom.id, 'system')
     return
   }
 
-  const activeSubdomain = await db.prepare(`
+  const activeSubdomain = await queryFirst<DomainRecord>(db, `
     SELECT *
     FROM site_domains
     WHERE site_id = ? AND type = 'subdomain' AND status = 'active'
     ORDER BY created_at ASC
     LIMIT 1
-  `).bind(siteId).first() as DomainRecord | null
+  `, [siteId])
 
   if (!activeSubdomain) return
 
@@ -786,15 +788,15 @@ async function promoteCanonicalIfReady(db: D1Database, siteId: string): Promise<
 
 async function updateSitePrimaryUrl(db: D1Database, siteId: string, organizationId: string, domain: string): Promise<void> {
   const now = new Date().toISOString()
-  await db.prepare(`
+  await execute(db, `
     UPDATE sites
     SET public_url = ?, custom_domain = ?, custom_domain_status = 'active', updated_at = ?
     WHERE id = ? AND organization_id = ?
-  `).bind(`https://${domain}`, domain, now, siteId, organizationId).run()
+  `, [`https://${domain}`, domain, now, siteId, organizationId])
 }
 
 export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit = 25): Promise<{ checked: number; failed: number }> {
-  const rows = await db.prepare(`
+  const rows = await queryAll<{ id: string }>(db, `
     SELECT sd.id
     FROM site_domains sd
     LEFT JOIN domain_reconciliation_jobs j ON j.domain_id = sd.id
@@ -803,45 +805,45 @@ export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit 
       AND (sd.next_check_at IS NULL OR sd.next_check_at <= ? OR j.run_after <= ?)
     ORDER BY COALESCE(j.run_after, sd.next_check_at, sd.created_at) ASC
     LIMIT ?
-  `).bind(new Date().toISOString(), new Date().toISOString(), limit).all()
+  `, [new Date().toISOString(), new Date().toISOString(), limit])
 
   let checked = 0
   let failed = 0
 
-  for (const row of rows.results || []) {
+  for (const row of rows || []) {
     checked += 1
-    const domainId = row.id as string
+    const domainId = row.id
     const now = new Date().toISOString()
-    await db.prepare(`
+    await execute(db, `
       UPDATE domain_reconciliation_jobs
       SET status = 'running', attempts = attempts + 1, updated_at = ?
       WHERE domain_id = ?
-    `).bind(now, domainId).run()
+    `, [now, domainId])
 
     try {
       const domain = await syncDomainWithCloudflare(env, db, domainId, 'system')
-      await db.prepare(`
+      await execute(db, `
         UPDATE domain_reconciliation_jobs
         SET status = ?, run_after = ?, last_error = NULL, updated_at = ?
         WHERE domain_id = ?
-      `).bind(domain.status === 'active' ? 'succeeded' : 'queued', domain.next_check_at || now, now, domainId).run()
+      `, [domain.status === 'active' ? 'succeeded' : 'queued', domain.next_check_at || now, now, domainId])
     } catch (error) {
       failed += 1
       const normalizedError = error instanceof Error ? error : new Error('Domain reconciliation failed')
       const message = normalizedError.message || 'Domain reconciliation failed'
-      const current = await db.prepare(`SELECT retry_count FROM site_domains WHERE id = ?`).bind(domainId).first() as { retry_count?: number } | null
+      const current = await queryFirst<{ retry_count?: number }>(db, `SELECT retry_count FROM site_domains WHERE id = ?`, [domainId])
       const retryCount = Math.min(MAX_RETRY_COUNT, Number(current?.retry_count || 0) + 1)
       const runAfter = nextCheckAt(retryCount)
-      await db.prepare(`
+      await execute(db, `
         UPDATE site_domains
         SET retry_count = ?, next_check_at = ?, error_message = ?, updated_at = ?
         WHERE id = ?
-      `).bind(retryCount, runAfter, message, now, domainId).run()
-      await db.prepare(`
+      `, [retryCount, runAfter, message, now, domainId])
+      await execute(db, `
         UPDATE domain_reconciliation_jobs
         SET status = 'failed', run_after = ?, last_error = ?, updated_at = ?
         WHERE domain_id = ?
-      `).bind(runAfter, message, now, domainId).run()
+      `, [runAfter, message, now, domainId])
     }
   }
 
@@ -891,13 +893,13 @@ export function domainInstructions(domain: DomainRecord) {
 }
 
 export async function getDomainEvents(db: D1Database, domainId: string) {
-  const events = await db.prepare(`
+  const events = await queryAll(db, `
     SELECT *
     FROM site_domain_events
     WHERE domain_id = ?
     ORDER BY created_at DESC
     LIMIT 100
-  `).bind(domainId).all()
+  `, [domainId])
 
-  return events.results || []
+  return events || []
 }

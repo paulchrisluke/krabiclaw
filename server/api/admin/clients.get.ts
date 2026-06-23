@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { queryAll } from '~/server/db'
 
 interface ClientRow {
   org_id: string
@@ -30,7 +31,7 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
-  const rows = await db.prepare(`
+  const clients = await queryAll<ClientRow>(db, `
     WITH single_site AS (
       SELECT *,
              ROW_NUMBER() OVER (PARTITION BY organization_id ORDER BY created_at DESC) as rn
@@ -72,7 +73,7 @@ export default defineEventHandler(async (event) => {
         ELSE 3
       END,
       o.createdAt DESC
-  `).all<ClientRow>()
+  `)
 
-  return jsonResponse({ clients: rows.results ?? [] })
+  return jsonResponse({ clients })
 })

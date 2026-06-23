@@ -1,10 +1,11 @@
 // GET /api/public/docs - List published platform docs
+import { queryAll } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { attachFeaturedImageFromBareJoin } from '~/server/utils/platform-content'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const sql = `
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event) => {
   `
 
   try {
-    const { results } = await db.prepare(sql).all()
+    const results = await queryAll<ApiRecord>(db, sql)
     return jsonResponse({ docs: (results ?? []).map(attachFeaturedImageFromBareJoin) })
   } catch (err) {
     console.error('Failed to fetch docs:', err)

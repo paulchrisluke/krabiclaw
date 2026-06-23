@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { executeBatch, queryFirst } from '~/server/db'
 
 function slugify(str: string) {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48)
@@ -29,7 +30,7 @@ export default defineEventHandler(async (event) => {
   let orgSlug = baseSlug
   let i = 1
   while (true) {
-    const conflict = await db.prepare('SELECT id FROM organization WHERE slug = ? LIMIT 1').bind(orgSlug).first()
+    const conflict = await queryFirst(db, 'SELECT id FROM organization WHERE slug = ? LIMIT 1', [orgSlug])
     if (!conflict) break
 
     if (i <= 10) {
@@ -46,13 +47,19 @@ export default defineEventHandler(async (event) => {
   const now = new Date().toISOString()
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  await db.batch([
-    db.prepare(`INSERT INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)`)
-      .bind(orgId, restaurantName, orgSlug, now),
-    db.prepare(`
-      INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
-      VALUES (?, ?, ?, 'owner', 'pending', ?, ?, ?)
-    `).bind(invitationId, orgId, email, expiresAt, session.user.id, now),
+  // Atomic: an invitation without its organization (or vice versa) is orphaned state.
+  await executeBatch(db, [
+    {
+      query: `INSERT INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)`,
+      params: [orgId, restaurantName, orgSlug, now],
+    },
+    {
+      query: `
+        INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
+        VALUES (?, ?, ?, 'owner', 'pending', ?, ?, ?)
+      `,
+      params: [invitationId, orgId, email, expiresAt, session.user.id, now],
+    },
   ])
 
   const origin = getRequestURL(event).origin

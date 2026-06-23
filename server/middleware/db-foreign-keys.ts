@@ -1,9 +1,10 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { execute } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
-  const db = cloudflareEnv(event).DB
+  const db = cloudflareEnv(event).db
 
   if (db) {
-    await db.prepare('PRAGMA foreign_keys = ON').run()
+    await execute(db, 'PRAGMA foreign_keys = ON')
   }
 })

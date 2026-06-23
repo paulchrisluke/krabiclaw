@@ -1,4 +1,5 @@
 import slugify from 'slugify'
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_BODY_MAX = 100000
@@ -337,7 +338,7 @@ async function normalizeHowToSteps(db: D1Database, steps: PlatformHowToStepInput
     if (!text) badRequest(`how_to_steps[${index}].text is required`)
     const imageAssetId = step.image_asset_id?.trim() || null
     if (imageAssetId) await ensureMediaAssetExists(db, imageAssetId, `how_to_steps[${index}].image_asset_id`)
-    let url = step.url?.trim() || null
+    const url = step.url?.trim() || null
     if (url) {
       try {
         const parsed = new URL(url)
@@ -513,12 +514,12 @@ async function normalizeFullComponents(
 }
 
 async function ensureMediaAssetExists(db: D1Database, assetId: string, field = 'featured_image_asset_id') {
-  const asset = await db.prepare('SELECT id FROM media_assets WHERE id = ? AND status = ? LIMIT 1').bind(assetId, 'active').first()
+  const asset = await queryFirst(db, 'SELECT id FROM media_assets WHERE id = ? AND status = ? LIMIT 1', [assetId, 'active'])
   if (!asset) badRequest(`${field} not found or not active`)
 }
 
 async function ensureDocParentExists(db: D1Database, docId: string) {
-  const doc = await db.prepare('SELECT id FROM platform_docs WHERE id = ? LIMIT 1').bind(docId).first()
+  const doc = await queryFirst(db, 'SELECT id FROM platform_docs WHERE id = ? LIMIT 1', [docId])
   if (!doc) badRequest('parent_doc_id not found')
 }
 
@@ -739,7 +740,7 @@ function validateDocCommon(input: Partial<PlatformDocCreateInput>) {
 }
 
 export async function listContentComponents(
-  db: D1Database,
+  db: DbClient,
   contentType: PlatformContentType,
   contentId: string,
   options: { activeOnly?: boolean } = {},
@@ -750,7 +751,7 @@ export async function listContentComponents(
   if (options.activeOnly) sql += " AND status = 'active'"
   sql += ' ORDER BY position ASC, created_at ASC'
 
-  const { results } = await db.prepare(sql).bind(contentType, contentId).all<PlatformContentComponentRow>()
+  const results = await queryAll<PlatformContentComponentRow>(db, sql, [contentType, contentId])
 
   return (results ?? []).map(parsePlatformComponent)
 }
@@ -761,13 +762,16 @@ export async function replaceContentComponents(
   contentId: string,
   components: PlatformComponentReplacement[],
 ) {
-  const statements = [
-    db.prepare('DELETE FROM platform_content_components WHERE content_type = ? AND content_id = ?')
-      .bind(contentType, contentId)
+  const queries: { query: string; params: unknown[] }[] = [
+    {
+      query: 'DELETE FROM platform_content_components WHERE content_type = ? AND content_id = ?',
+      params: [contentType, contentId],
+    },
   ]
 
   if (!components.length) {
-    await db.batch(statements)
+    // Atomic even for the single-statement case — matches the original db.batch([deleteStmt]) call.
+    await executeBatch(db, queries)
     return
   }
 
@@ -780,11 +784,10 @@ export async function replaceContentComponents(
   for (const [index, component] of sortedComponents.entries()) {
     assertValidComponentType(component.type)
     const status = assertValidComponentStatus(component.status ?? 'active', `${component.type} status`) ?? 'active'
-    statements.push(
-      db.prepare(
-        `INSERT INTO platform_content_components (id, content_type, content_id, type, position, label, status, render_enabled, schema_enabled, data_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(
+    queries.push({
+      query: `INSERT INTO platform_content_components (id, content_type, content_id, type, position, label, status, render_enabled, schema_enabled, data_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [
         crypto.randomUUID(),
         contentType,
         contentId,
@@ -797,14 +800,17 @@ export async function replaceContentComponents(
         JSON.stringify(component.data),
         now,
         now,
-      )
-    )
+      ],
+    })
   }
 
-  await db.batch(statements)
+  // Delete-then-insert must commit atomically (executeBatch -> D1Database.batch()),
+  // not sequential execute() calls — a partial failure here must not leave the
+  // old components deleted with no replacement rows written.
+  await executeBatch(db, queries)
 }
 
-export async function resolveContentComponentsMedia(db: D1Database, components: PlatformContentComponent[]) {
+export async function resolveContentComponentsMedia(db: DbClient, components: PlatformContentComponent[]) {
   const assetIds = Array.from(new Set(
     components.flatMap(component => component.type === 'how_to'
       ? (component.data as PlatformHowToComponentData).steps.map(step => step.image_asset_id).filter((value): value is string => Boolean(value))
@@ -814,11 +820,13 @@ export async function resolveContentComponentsMedia(db: D1Database, components: 
   if (!assetIds.length) return components
 
   const placeholders = assetIds.map(() => '?').join(', ')
-  const { results } = await db.prepare(
+  const results = await queryAll<PlatformMediaAssetRow>(
+    db,
     `SELECT id, public_url, kind, width, height
      FROM media_assets
-     WHERE status = 'active' AND id IN (${placeholders})`
-  ).bind(...assetIds).all<PlatformMediaAssetRow>()
+     WHERE status = 'active' AND id IN (${placeholders})`,
+    assetIds,
+  )
 
   const assetMap = new Map((results ?? []).map(asset => [asset.id, asset]))
 
@@ -844,7 +852,7 @@ export async function resolveContentComponentsMedia(db: D1Database, components: 
   })
 }
 
-export async function listPlatformBlogPosts(db: D1Database, status?: string | null) {
+export async function listPlatformBlogPosts(db: DbClient, status?: string | null) {
   let sql = `SELECT
       p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
       p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
@@ -855,12 +863,13 @@ export async function listPlatformBlogPosts(db: D1Database, status?: string | nu
   if (status === 'published') sql += ' WHERE p.published_at IS NOT NULL'
   else if (status === 'draft') sql += ' WHERE p.published_at IS NULL'
   sql += ' ORDER BY p.created_at DESC'
-  const { results } = await db.prepare(sql).all<ApiRecord>()
+  const results = await queryAll<ApiRecord>(db, sql)
   return (results ?? []).map(record => attachFeaturedImage(attachPublished(record, Boolean(record.published_at))))
 }
 
-export async function getPlatformBlogPost(db: D1Database, postId: string) {
-  const post = await db.prepare(
+export async function getPlatformBlogPost(db: DbClient, postId: string) {
+  const post = await queryFirst<ApiRecord | null>(
+    db,
     `SELECT
        p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
        p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
@@ -868,8 +877,9 @@ export async function getPlatformBlogPost(db: D1Database, postId: string) {
        p.published_at, p.created_at, p.updated_at
      FROM platform_blog_posts p
      LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
-     WHERE p.id = ?`
-  ).bind(postId).first<ApiRecord | null>()
+     WHERE p.id = ?`,
+    [postId],
+  )
   if (!post) notFound('Post not found')
   const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', postId))
   return attachComponents(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), components)
@@ -892,10 +902,9 @@ export async function createPlatformBlogPost(
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
-      await db.prepare(
-        `INSERT INTO platform_blog_posts (id, title, slug, body, excerpt, category, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(
+      await execute(db, `
+        INSERT INTO platform_blog_posts (id, title, slug, body, excerpt, category, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         id,
         input.title,
         slug,
@@ -911,12 +920,12 @@ export async function createPlatformBlogPost(
         publishedAt,
         now,
         now,
-      ).run()
+      ])
 
       try {
         await syncStructuredContent(db, 'blog_post', id, input)
       } catch (err) {
-        await db.prepare('DELETE FROM platform_blog_posts WHERE id = ?').bind(id).run()
+        await execute(db, 'DELETE FROM platform_blog_posts WHERE id = ?', [id])
         throw err
       }
       const post = await getPlatformBlogPost(db, id)
@@ -943,9 +952,7 @@ export async function updatePlatformBlogPost(
   if (input.title !== undefined) {
     if (!input.title?.trim()) badRequest('title cannot be blank')
     const slug = normalizeSlugFromTitle(input.title, 'post')
-    const existing = await db.prepare(
-      'SELECT id FROM platform_blog_posts WHERE slug = ? AND id != ? LIMIT 1'
-    ).bind(slug, postId).first()
+    const existing = await queryFirst(db, 'SELECT id FROM platform_blog_posts WHERE slug = ? AND id != ? LIMIT 1', [slug, postId])
     if (existing) badRequest('Slug already in use')
     updates.push('title = ?', 'slug = ?')
     params.push(input.title, slug)
@@ -1007,12 +1014,11 @@ export async function updatePlatformBlogPost(
   params.push(postId)
 
   try {
-    const post = await db.prepare(
-      `UPDATE platform_blog_posts
+    const post = await queryFirst<ApiRecord | null>(db, `
+      UPDATE platform_blog_posts
        SET ${updates.join(', ')}
        WHERE id = ?
-       RETURNING id`
-    ).bind(...params).first<ApiRecord | null>()
+       RETURNING id`, params)
     if (!post) notFound('Post not found')
 
     await syncStructuredContent(db, 'blog_post', postId, input)
@@ -1025,12 +1031,12 @@ export async function updatePlatformBlogPost(
 
 export async function deletePlatformBlogPost(db: D1Database, postId: string) {
   await replaceContentComponents(db, 'blog_post', postId, [])
-  const result = await db.prepare('DELETE FROM platform_blog_posts WHERE id = ?').bind(postId).run()
+  const result = await execute(db, 'DELETE FROM platform_blog_posts WHERE id = ?', [postId])
   if (!result.meta.changes || result.meta.changes === 0) notFound('Post not found')
   return { success: true }
 }
 
-export async function listPlatformDocs(db: D1Database, status?: string | null) {
+export async function listPlatformDocs(db: DbClient, status?: string | null) {
   let sql = `SELECT
       d.id, d.title, d.slug, d.excerpt, d.category, d.seo_description, d.seo_keywords, d.canonical_url, d.robots,
       d.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
@@ -1041,12 +1047,13 @@ export async function listPlatformDocs(db: D1Database, status?: string | null) {
   if (status === 'published') sql += " WHERE d.status = 'published'"
   else if (status === 'draft') sql += " WHERE d.status = 'draft'"
   sql += ' ORDER BY d.category, d.sort_order, d.created_at DESC'
-  const { results } = await db.prepare(sql).all<ApiRecord>()
+  const results = await queryAll<ApiRecord>(db, sql)
   return (results ?? []).map(record => attachFeaturedImage(attachPublished(record, record.status === 'published')))
 }
 
-export async function getPlatformDoc(db: D1Database, docId: string) {
-  const doc = await db.prepare(
+export async function getPlatformDoc(db: DbClient, docId: string) {
+  const doc = await queryFirst<ApiRecord | null>(
+    db,
     `SELECT
        d.id, d.title, d.slug, d.body, d.excerpt, d.category, d.seo_description, d.seo_keywords, d.canonical_url, d.robots,
        d.difficulty_level, d.sort_order, d.parent_doc_id,
@@ -1055,8 +1062,9 @@ export async function getPlatformDoc(db: D1Database, docId: string) {
        d.status, d.published_at, d.created_at, d.updated_at
      FROM platform_docs d
      LEFT JOIN media_assets ma ON ma.id = d.featured_image_asset_id AND ma.status = 'active'
-     WHERE d.id = ?`
-  ).bind(docId).first<ApiRecord | null>()
+     WHERE d.id = ?`,
+    [docId],
+  )
   if (!doc) notFound('Doc not found')
   const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'doc', docId))
   return attachComponents(attachFeaturedImage(attachPublished(doc, doc.status === 'published')), components)
@@ -1081,10 +1089,9 @@ export async function createPlatformDoc(
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
-      await db.prepare(
-        `INSERT INTO platform_docs (id, title, slug, body, excerpt, category, author_id, seo_description, seo_keywords, canonical_url, robots, difficulty_level, sort_order, parent_doc_id, featured_image_asset_id, status, published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(
+      await execute(db, `
+        INSERT INTO platform_docs (id, title, slug, body, excerpt, category, author_id, seo_description, seo_keywords, canonical_url, robots, difficulty_level, sort_order, parent_doc_id, featured_image_asset_id, status, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         id,
         input.title,
         slug,
@@ -1104,7 +1111,7 @@ export async function createPlatformDoc(
         publishedAt,
         now,
         now,
-      ).run()
+      ])
 
       await syncStructuredContent(db, 'doc', id, input)
       const doc = await getPlatformDoc(db, id)
@@ -1131,9 +1138,7 @@ export async function updatePlatformDoc(
   if (input.title !== undefined) {
     if (!input.title?.trim()) badRequest('title cannot be blank')
     const slug = normalizeSlugFromTitle(input.title, 'doc')
-    const existing = await db.prepare(
-      'SELECT id FROM platform_docs WHERE slug = ? AND id != ? LIMIT 1'
-    ).bind(slug, docId).first()
+    const existing = await queryFirst(db, 'SELECT id FROM platform_docs WHERE slug = ? AND id != ? LIMIT 1', [slug, docId])
     if (existing) badRequest('Slug already in use')
     updates.push('title = ?', 'slug = ?')
     params.push(input.title, slug)
@@ -1199,12 +1204,11 @@ export async function updatePlatformDoc(
   params.push(docId)
 
   try {
-    const doc = await db.prepare(
-      `UPDATE platform_docs
+    const doc = await queryFirst<ApiRecord | null>(db, `
+      UPDATE platform_docs
        SET ${updates.join(', ')}
        WHERE id = ?
-       RETURNING id`
-    ).bind(...params).first<ApiRecord | null>()
+       RETURNING id`, params)
     if (!doc) notFound('Doc not found')
 
     await syncStructuredContent(db, 'doc', docId, input)
@@ -1217,7 +1221,7 @@ export async function updatePlatformDoc(
 
 export async function deletePlatformDoc(db: D1Database, docId: string) {
   await replaceContentComponents(db, 'doc', docId, [])
-  const result = await db.prepare('DELETE FROM platform_docs WHERE id = ?').bind(docId).run()
+  const result = await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [docId])
   if (!result.meta.changes || result.meta.changes === 0) notFound('Doc not found')
   return { success: true }
 }
