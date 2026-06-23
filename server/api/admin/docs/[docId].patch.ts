@@ -33,7 +33,15 @@ export default defineEventHandler(async (event) => {
     parent_doc_id?: string
     featured_image_asset_id?: string
     faq_items?: Array<{ question: string; answer: string }>
+    faq_label?: string
+    faq_status?: 'active' | 'inactive'
+    faq_render_enabled?: boolean
+    faq_schema_enabled?: boolean
     how_to_steps?: Array<{ name: string; text: string; image_asset_id?: string; url?: string }>
+    how_to_label?: string
+    how_to_status?: 'active' | 'inactive'
+    how_to_render_enabled?: boolean
+    how_to_schema_enabled?: boolean
     publish?: boolean
     unpublish?: boolean
   }

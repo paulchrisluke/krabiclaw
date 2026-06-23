@@ -27,7 +27,15 @@ export default defineEventHandler(async (event) => {
     robots?: string
     featured_image_asset_id?: string
     faq_items?: Array<{ question: string; answer: string }>
+    faq_label?: string
+    faq_status?: 'active' | 'inactive'
+    faq_render_enabled?: boolean
+    faq_schema_enabled?: boolean
     how_to_steps?: Array<{ name: string; text: string; image_asset_id?: string; url?: string }>
+    how_to_label?: string
+    how_to_status?: 'active' | 'inactive'
+    how_to_render_enabled?: boolean
+    how_to_schema_enabled?: boolean
     publish?: boolean
   }
   try { body = await readBody(event) } catch {
@@ -46,7 +54,15 @@ export default defineEventHandler(async (event) => {
       robots: body.robots ?? null,
       featured_image_asset_id: body.featured_image_asset_id ?? null,
       faq_items: body.faq_items,
+      faq_label: body.faq_label,
+      faq_status: body.faq_status,
+      faq_render_enabled: body.faq_render_enabled,
+      faq_schema_enabled: body.faq_schema_enabled,
       how_to_steps: body.how_to_steps,
+      how_to_label: body.how_to_label,
+      how_to_status: body.how_to_status,
+      how_to_render_enabled: body.how_to_render_enabled,
+      how_to_schema_enabled: body.how_to_schema_enabled,
       publish: body.publish ?? false,
     })
     return jsonResponse(result)

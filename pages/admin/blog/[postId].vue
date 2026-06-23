@@ -93,6 +93,19 @@
             </div>
 
             <div v-if="form.faq_items.length" class="space-y-3">
+              <div class="grid gap-3 sm:grid-cols-2">
+                <UFormField label="Label" hint="Optional">
+                  <UInput v-model="form.faq_label" placeholder="e.g. Frequently Asked Questions" />
+                </UFormField>
+                <UFormField label="Status">
+                  <USelect v-model="form.faq_status" :items="componentStatusItems" value-key="value" label-key="label" />
+                </UFormField>
+              </div>
+              <div class="flex flex-wrap gap-4">
+                <USwitch v-model="form.faq_render_enabled" label="Show on page" />
+                <USwitch v-model="form.faq_schema_enabled" label="Emit structured data" />
+              </div>
+
               <UCard v-for="(item, index) in form.faq_items" :key="`faq-${index}`">
                 <div class="space-y-3">
                   <div class="grid gap-3 sm:grid-cols-2">
@@ -122,6 +135,19 @@
             </div>
 
             <div v-if="form.how_to_steps.length" class="space-y-3">
+              <div class="grid gap-3 sm:grid-cols-2">
+                <UFormField label="Label" hint="Optional">
+                  <UInput v-model="form.how_to_label" placeholder="e.g. How It Works" />
+                </UFormField>
+                <UFormField label="Status">
+                  <USelect v-model="form.how_to_status" :items="componentStatusItems" value-key="value" label-key="label" />
+                </UFormField>
+              </div>
+              <div class="flex flex-wrap gap-4">
+                <USwitch v-model="form.how_to_render_enabled" label="Show on page" />
+                <USwitch v-model="form.how_to_schema_enabled" label="Emit structured data" />
+              </div>
+
               <UCard v-for="(step, index) in form.how_to_steps" :key="`howto-${index}`">
                 <div class="space-y-3">
                   <div class="grid gap-3 sm:grid-cols-2">
@@ -182,6 +208,10 @@ import { createEmptyFaqItem, createEmptyHowToStep, useBlogForm } from '~/composa
 
 interface BlogComponent {
   type: 'faq' | 'how_to'
+  label?: string | null
+  status?: 'active' | 'inactive' | null
+  render_enabled?: boolean | null
+  schema_enabled?: boolean | null
   data?: {
     items?: Array<{ question?: string | null; answer?: string | null }>
     steps?: Array<{ name?: string | null; text?: string | null; image_asset_id?: string | null; url?: string | null }>
@@ -220,6 +250,10 @@ const robotsItems = [
   { label: 'noindex,follow', value: 'noindex,follow' },
   { label: 'index,nofollow', value: 'index,nofollow' },
   { label: 'noindex,nofollow', value: 'noindex,nofollow' },
+]
+const componentStatusItems = [
+  { label: 'Active', value: 'active' },
+  { label: 'Inactive', value: 'inactive' },
 ]
 const { form, canSave, canPublish, handleImageChange } = useBlogForm()
 
@@ -264,6 +298,10 @@ function hydrateStructuredContent(components: BlogComponent[] | undefined) {
     question: item.question ?? '',
     answer: item.answer ?? '',
   })) ?? []
+  form.faq_label = faq?.label ?? ''
+  form.faq_status = faq?.status ?? 'active'
+  form.faq_render_enabled = faq?.render_enabled ?? true
+  form.faq_schema_enabled = faq?.schema_enabled ?? true
 
   form.how_to_steps = howTo?.data?.steps?.map(step => ({
     name: step.name ?? '',
@@ -271,6 +309,10 @@ function hydrateStructuredContent(components: BlogComponent[] | undefined) {
     image_asset_id: step.image_asset_id ?? '',
     url: step.url ?? '',
   })) ?? []
+  form.how_to_label = howTo?.label ?? ''
+  form.how_to_status = howTo?.status ?? 'active'
+  form.how_to_render_enabled = howTo?.render_enabled ?? true
+  form.how_to_schema_enabled = howTo?.schema_enabled ?? true
 }
 
 function buildPayload() {
