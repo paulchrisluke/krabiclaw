@@ -22,7 +22,7 @@
 
             <!-- Headline -->
             <h1 class="text-[clamp(40px,5vw,66px)] font-extrabold leading-[1.02] tracking-tight text-balance m-0">
-              <span class="text-default">Your restaurant,</span><br>
+              <span class="text-default">Your local business,</span><br>
               <span style="background: linear-gradient(135deg, var(--kc-coral) 0%, #e0524c 40%, var(--kc-coral-400) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">managed through</span><br>
               <span class="text-default">ChatGPT.</span>
             </h1>

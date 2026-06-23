@@ -142,7 +142,7 @@ test.describe('platform public site', () => {
     expect(home?.status()).toBeLessThan(400)
     await page.waitForLoadState('load')
     await expect(page.getByRole('link', { name: /krabiclaw/i }).first()).toBeVisible()
-    await expect(page.getByRole('heading', { name: /your restaurant, managed through chatgpt/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /your local business, managed through chatgpt/i })).toBeVisible()
 
     const blog = await page.goto(`${baseURL}/blog`, { waitUntil: 'domcontentloaded' })
     expect(blog?.status()).toBeLessThan(400)
