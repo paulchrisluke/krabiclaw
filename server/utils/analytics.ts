@@ -20,6 +20,9 @@ export interface DailyAggregates {
   pageViews: number
   uniqueSessions: number
   avgSessionDuration: number
+  uniqueVisitors: number
+  pagesPerSession: number
+  returningVisitors: number
   topPages: Array<{
     path: string
     views: number
@@ -70,6 +73,36 @@ export async function aggregateAnalyticsForDate(
     const pageViewsTotal = eventRows.reduce((sum, row) => sum + toNumber(row.page_view_count || 1), 0)
     const uniqueSessions = new Set(eventRows.map((row) => String(row.session_id || ''))).size
 
+    // Unique/returning visitors, derived from visitor_id (independent of session grouping above).
+    const visitorRows = await db.prepare(`
+      SELECT DISTINCT visitor_id
+      FROM site_pageview_events
+      WHERE site_id = ?
+        AND created_at >= ?
+        AND created_at < ?
+        AND visitor_id IS NOT NULL
+    `).bind(siteId, start, end).all()
+
+    const visitorIds = asRows((visitorRows as ApiRecord).results).map((row) => String(row.visitor_id || ''))
+    const uniqueVisitors = visitorIds.length
+
+    let returningVisitors = 0
+    if (visitorIds.length > 0) {
+      const placeholders = visitorIds.map(() => '?').join(',')
+      const returningResult = await db.prepare(`
+        SELECT COUNT(DISTINCT visitor_id) as count
+        FROM site_pageview_events
+        WHERE site_id = ?
+          AND created_at < ?
+          AND visitor_id IN (${placeholders})
+      `).bind(siteId, start, ...visitorIds).first() as { count: number } | null
+      returningVisitors = toNumber(returningResult?.count)
+    }
+
+    const pagesPerSession = uniqueSessions > 0
+      ? Math.round((pageViewsTotal / uniqueSessions) * 100) / 100
+      : 0
+
     // Calculate avg session duration
     const sessionDurations = await db.prepare(`
       SELECT 
@@ -119,14 +152,18 @@ export async function aggregateAnalyticsForDate(
 
     await db.prepare(`
       INSERT INTO site_analytics_daily (
-        id, site_id, date, page_views, unique_sessions, 
-        avg_session_duration, top_pages, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, site_id, date, page_views, unique_sessions,
+        avg_session_duration, top_pages, unique_visitors,
+        pages_per_session, returning_visitors, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(site_id, date) DO UPDATE SET
         page_views = excluded.page_views,
         unique_sessions = excluded.unique_sessions,
         avg_session_duration = excluded.avg_session_duration,
         top_pages = excluded.top_pages,
+        unique_visitors = excluded.unique_visitors,
+        pages_per_session = excluded.pages_per_session,
+        returning_visitors = excluded.returning_visitors,
         updated_at = excluded.updated_at
     `).bind(
       id,
@@ -136,6 +173,9 @@ export async function aggregateAnalyticsForDate(
       uniqueSessions,
       avgSessionDuration,
       JSON.stringify(topPages),
+      uniqueVisitors,
+      pagesPerSession,
+      returningVisitors,
       now,
       now
     ).run()
