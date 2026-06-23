@@ -1,6 +1,7 @@
 import { tokensToCredits } from '~/server/utils/ai-credits'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { normalizeLocale } from '~/server/utils/site-i18n'
+import { execute, executeBatch, queryAll, type BatchQuery, type DbClient } from '~/server/db'
 
 export type TranslationEntityType = 'site_content' | 'menu' | 'menu_item' | 'business_location' | 'post'
 export type TranslationScope = 'site' | 'content' | 'menus' | 'locations' | 'posts'
@@ -88,88 +89,88 @@ function shouldIncludeScope(scope: TranslationScope, entityType: TranslationEnti
 }
 
 async function getTranslationStates(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   targetLocale: string,
 ): Promise<Map<string, TranslationStateRow>> {
   const rows: TranslationStateRow[] = []
   const queries = await Promise.all([
-    db.prepare(`
+    queryAll<TranslationStateRow>(db, `
       SELECT 'site_content' AS entity_type, COALESCE(location_id, 'site') || ':' || page AS entity_id,
              field, source_hash, status
       FROM site_content_translations
       WHERE organization_id = ? AND site_id = ? AND locale = ?
-    `).bind(organizationId, siteId, targetLocale).all<TranslationStateRow>(),
-    db.prepare(`
+    `, [organizationId, siteId, targetLocale]),
+    queryAll<TranslationStateRow>(db, `
       SELECT 'menu' AS entity_type, menu_id AS entity_id, 'menu' AS field, source_hash, status
       FROM menu_translations
       WHERE organization_id = ? AND site_id = ? AND locale = ?
-    `).bind(organizationId, siteId, targetLocale).all<TranslationStateRow>(),
-    db.prepare(`
+    `, [organizationId, siteId, targetLocale]),
+    queryAll<TranslationStateRow>(db, `
       SELECT 'menu_item' AS entity_type, menu_item_id AS entity_id, 'item' AS field, source_hash, status
       FROM menu_item_translations
       WHERE organization_id = ? AND site_id = ? AND locale = ?
-    `).bind(organizationId, siteId, targetLocale).all<TranslationStateRow>(),
-    db.prepare(`
+    `, [organizationId, siteId, targetLocale]),
+    queryAll<TranslationStateRow>(db, `
       SELECT 'business_location' AS entity_type, location_id AS entity_id, 'location' AS field, source_hash, status
       FROM business_location_translations
       WHERE organization_id = ? AND site_id = ? AND locale = ?
-    `).bind(organizationId, siteId, targetLocale).all<TranslationStateRow>(),
-    db.prepare(`
+    `, [organizationId, siteId, targetLocale]),
+    queryAll<TranslationStateRow>(db, `
       SELECT 'post' AS entity_type, post_id AS entity_id, 'post' AS field, source_hash, status
       FROM post_translations
       WHERE organization_id = ? AND site_id = ? AND locale = ?
-    `).bind(organizationId, siteId, targetLocale).all<TranslationStateRow>(),
+    `, [organizationId, siteId, targetLocale]),
   ])
 
-  for (const query of queries) rows.push(...(query.results ?? []))
+  for (const query of queries) rows.push(...query)
 
   return new Map(rows.map(row => [`${row.entity_type}:${row.entity_id}:${row.field}`, row]))
 }
 
 async function getSourceRecords(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
 ): Promise<TextRecord[]> {
   const [contentRows, menuRows, itemRows, locationRows, postRows] = await Promise.all([
-    db.prepare(`
+    queryAll<Record<string, string | null>>(db, `
       SELECT id, location_id, page, field, content, value, hero_title, hero_subtitle, type
       FROM site_content
       WHERE organization_id = ? AND site_id = ?
       ORDER BY page, field
-    `).bind(organizationId, siteId).all<Record<string, string | null>>(),
-    db.prepare(`
+    `, [organizationId, siteId]),
+    queryAll<Record<string, string | null>>(db, `
       SELECT id, location_id, name, description
       FROM menus
       WHERE organization_id = ? AND site_id = ? AND status = 'published'
       ORDER BY name
-    `).bind(organizationId, siteId).all<Record<string, string | null>>(),
-    db.prepare(`
+    `, [organizationId, siteId]),
+    queryAll<Record<string, string | null>>(db, `
       SELECT mi.id, m.location_id, mi.name, mi.section, mi.description, mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note
       FROM menu_items mi
       JOIN menus m ON m.id = mi.menu_id
       WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published'
       ORDER BY m.name, mi.sort_order, mi.name
-    `).bind(organizationId, siteId).all<Record<string, string | null>>(),
-    db.prepare(`
+    `, [organizationId, siteId]),
+    queryAll<Record<string, string | null>>(db, `
       SELECT id, title, address, city, description, short_description
       FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND status = 'active'
       ORDER BY is_primary DESC, title ASC
-    `).bind(organizationId, siteId).all<Record<string, string | null>>(),
-    db.prepare(`
+    `, [organizationId, siteId]),
+    queryAll<Record<string, string | null>>(db, `
       SELECT id, location_id, title, body, event_title, offer_terms
       FROM posts
       WHERE organization_id = ? AND site_id = ? AND status != 'archived'
       ORDER BY updated_at DESC
-    `).bind(organizationId, siteId).all<Record<string, string | null>>(),
+    `, [organizationId, siteId]),
   ])
 
   const records: TextRecord[] = []
 
-  for (const row of contentRows.results ?? []) {
+  for (const row of contentRows) {
     if (row.field === 'hero') {
       const sourceFields = compactFields({ hero_title: row.hero_title, hero_subtitle: row.hero_subtitle })
       const heroText = fieldsToText(sourceFields)
@@ -203,7 +204,7 @@ async function getSourceRecords(
     })
   }
 
-  for (const row of menuRows.results ?? []) {
+  for (const row of menuRows) {
     const sourceFields = compactFields({ name: row.name, description: row.description })
     const text = fieldsToText(sourceFields)
     if (!text) continue
@@ -219,7 +220,7 @@ async function getSourceRecords(
     })
   }
 
-  for (const row of itemRows.results ?? []) {
+  for (const row of itemRows) {
     const sourceFields = compactFields({
       section: row.section,
       name: row.name,
@@ -244,7 +245,7 @@ async function getSourceRecords(
     })
   }
 
-  for (const row of locationRows.results ?? []) {
+  for (const row of locationRows) {
     const sourceFields = compactFields({
       title: row.title,
       address: row.address,
@@ -266,7 +267,7 @@ async function getSourceRecords(
     })
   }
 
-  for (const row of postRows.results ?? []) {
+  for (const row of postRows) {
     const sourceFields = compactFields({
       title: row.title,
       body: row.body,
@@ -291,7 +292,7 @@ async function getSourceRecords(
 }
 
 export async function buildTranslationInventory(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   opts: {
@@ -376,7 +377,7 @@ export function estimateTranslationInventory(
 }
 
 export async function createTranslationJob(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   userId: string,
@@ -390,13 +391,13 @@ export async function createTranslationJob(
   const jobId = crypto.randomUUID()
   const now = new Date().toISOString()
 
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO translation_jobs
       (id, organization_id, site_id, source_locale, target_locale, scope, status,
        total_items, total_chars, estimated_input_tokens, estimated_output_tokens, estimated_credits,
        created_by, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+  `, [
     jobId,
     organizationId,
     siteId,
@@ -411,30 +412,36 @@ export async function createTranslationJob(
     userId,
     now,
     now,
-  ).run()
+  ])
 
   if (inventory.items.length) {
-    await db.batch(inventory.items.map(item => db.prepare(`
-      INSERT INTO translation_job_items
-        (id, job_id, organization_id, site_id, target_locale, entity_type, entity_id, location_id, page, field,
-         source_hash, source_chars, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)
-    `).bind(
-      crypto.randomUUID(),
-      jobId,
-      organizationId,
-      siteId,
-      inventory.target_locale,
-      item.entity_type,
-      item.entity_id,
-      item.location_id,
-      item.page,
-      item.field,
-      item.source_hash,
-      item.source_chars,
-      now,
-      now,
-    )))
+    // executeBatch runs all item inserts as a single atomic D1 batch — a
+    // partial failure here must not leave the job with a total_items count
+    // that doesn't match the actual number of persisted job items.
+    await executeBatch(db, inventory.items.map(item => ({
+      query: `
+        INSERT INTO translation_job_items
+          (id, job_id, organization_id, site_id, target_locale, entity_type, entity_id, location_id, page, field,
+           source_hash, source_chars, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)
+      `,
+      params: [
+        crypto.randomUUID(),
+        jobId,
+        organizationId,
+        siteId,
+        inventory.target_locale,
+        item.entity_type,
+        item.entity_id,
+        item.location_id,
+        item.page,
+        item.field,
+        item.source_hash,
+        item.source_chars,
+        now,
+        now,
+      ],
+    })))
   }
 
   return {
@@ -445,7 +452,7 @@ export async function createTranslationJob(
 }
 
 export async function publishTranslationDrafts(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   targetLocale: string,
@@ -462,59 +469,82 @@ export async function publishTranslationDrafts(
 
   let publishedCount = 0
   if (drafts.length) {
-    const batchResults = await db.batch(drafts.map((item) => {
+    // executeBatch runs all per-item publish updates as a single atomic D1
+    // batch — a partial failure here must not leave some drafts published
+    // and others still pending for the same publish action.
+    const queries: BatchQuery[] = drafts.map((item) => {
       if (item.entity_type === 'site_content') {
         if (!item.location_id) {
-          return db.prepare(`
-            UPDATE site_content_translations
-            SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-            WHERE organization_id = ? AND site_id = ? AND locale = ? AND page = ? AND field = ?
-              AND location_id IS NULL AND source_hash = ? AND status = 'draft'
-          `).bind(now, now, userId ?? null, organizationId, siteId, inventory.target_locale, item.page, item.field, item.source_hash)
+          return {
+            query: `
+              UPDATE site_content_translations
+              SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
+              WHERE organization_id = ? AND site_id = ? AND locale = ? AND page = ? AND field = ?
+                AND location_id IS NULL AND source_hash = ? AND status = 'draft'
+            `,
+            params: [now, now, userId ?? null, organizationId, siteId, inventory.target_locale, item.page, item.field, item.source_hash],
+          }
         }
 
-        return db.prepare(`
-          UPDATE site_content_translations
-          SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-          WHERE organization_id = ? AND site_id = ? AND location_id = ? AND locale = ? AND page = ? AND field = ?
-            AND source_hash = ? AND status = 'draft'
-        `).bind(now, now, userId ?? null, organizationId, siteId, item.location_id, inventory.target_locale, item.page, item.field, item.source_hash)
+        return {
+          query: `
+            UPDATE site_content_translations
+            SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
+            WHERE organization_id = ? AND site_id = ? AND location_id = ? AND locale = ? AND page = ? AND field = ?
+              AND source_hash = ? AND status = 'draft'
+          `,
+          params: [now, now, userId ?? null, organizationId, siteId, item.location_id, inventory.target_locale, item.page, item.field, item.source_hash],
+        }
       }
 
       if (item.entity_type === 'menu') {
-        return db.prepare(`
-          UPDATE menu_translations
-          SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-          WHERE organization_id = ? AND site_id = ? AND menu_id = ? AND locale = ?
-            AND source_hash = ? AND status = 'draft'
-        `).bind(now, now, userId ?? null, organizationId, siteId, item.entity_id, inventory.target_locale, item.source_hash)
+        return {
+          query: `
+            UPDATE menu_translations
+            SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
+            WHERE organization_id = ? AND site_id = ? AND menu_id = ? AND locale = ?
+              AND source_hash = ? AND status = 'draft'
+          `,
+          params: [now, now, userId ?? null, organizationId, siteId, item.entity_id, inventory.target_locale, item.source_hash],
+        }
       }
 
       if (item.entity_type === 'menu_item') {
-        return db.prepare(`
-          UPDATE menu_item_translations
-          SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-          WHERE organization_id = ? AND site_id = ? AND menu_item_id = ? AND locale = ?
-            AND source_hash = ? AND status = 'draft'
-        `).bind(now, now, userId ?? null, organizationId, siteId, item.entity_id, inventory.target_locale, item.source_hash)
+        return {
+          query: `
+            UPDATE menu_item_translations
+            SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
+            WHERE organization_id = ? AND site_id = ? AND menu_item_id = ? AND locale = ?
+              AND source_hash = ? AND status = 'draft'
+          `,
+          params: [now, now, userId ?? null, organizationId, siteId, item.entity_id, inventory.target_locale, item.source_hash],
+        }
       }
 
       if (item.entity_type === 'business_location') {
-        return db.prepare(`
-          UPDATE business_location_translations
-          SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-          WHERE organization_id = ? AND site_id = ? AND location_id = ? AND locale = ?
-            AND source_hash = ? AND status = 'draft'
-        `).bind(now, now, userId ?? null, organizationId, siteId, item.entity_id, inventory.target_locale, item.source_hash)
+        return {
+          query: `
+            UPDATE business_location_translations
+            SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
+            WHERE organization_id = ? AND site_id = ? AND location_id = ? AND locale = ?
+              AND source_hash = ? AND status = 'draft'
+          `,
+          params: [now, now, userId ?? null, organizationId, siteId, item.entity_id, inventory.target_locale, item.source_hash],
+        }
       }
 
-      return db.prepare(`
-        UPDATE post_translations
-        SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-        WHERE organization_id = ? AND site_id = ? AND post_id = ? AND locale = ?
-          AND source_hash = ? AND status = 'draft'
-      `).bind(now, now, userId ?? null, organizationId, siteId, item.entity_id, inventory.target_locale, item.source_hash)
-    }))
+      return {
+        query: `
+          UPDATE post_translations
+          SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
+          WHERE organization_id = ? AND site_id = ? AND post_id = ? AND locale = ?
+            AND source_hash = ? AND status = 'draft'
+        `,
+        params: [now, now, userId ?? null, organizationId, siteId, item.entity_id, inventory.target_locale, item.source_hash],
+      }
+    })
+
+    const batchResults = await executeBatch(db, queries)
     publishedCount = (batchResults || []).reduce((sum, res) => sum + (res.meta?.changes ?? 0), 0)
   }
 

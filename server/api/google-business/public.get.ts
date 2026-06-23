@@ -1,6 +1,7 @@
 import { cloudflareEnv } from '../../utils/api-response'
 import { getAuthSession } from '../../utils/auth'
 import { createError, defineEventHandler } from 'h3'
+import { queryFirst, queryAll } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -16,25 +17,25 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Authentication required' })
   }
 
-  const membership = await db.prepare(`
+  const membership = await queryFirst<{ id: string }>(db, `
     SELECT o.id
     FROM organization o
     JOIN member m ON o.id = m.organizationId
     WHERE m.userId = ?
     LIMIT 1
-  `).bind(session.user.id).first() as { id: string } | null
+  `, [session.user.id])
 
   if (!membership) {
     throw createError({ statusCode: 404, message: 'Organization not found' })
   }
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string }>(db, `
     SELECT id
     FROM sites
     WHERE organization_id = ? AND status = 'active'
     ORDER BY created_at DESC
     LIMIT 1
-  `).bind(membership.id).first() as { id: string } | null
+  `, [membership.id])
 
   if (!site) {
     return {
@@ -47,13 +48,13 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const location = await db.prepare(`
+  const location = await queryFirst(db, `
     SELECT *
     FROM business_locations
     WHERE organization_id = ? AND site_id = ? AND status = 'active'
     ORDER BY is_primary DESC, created_at ASC
     LIMIT 1
-  `).bind(membership.id, site.id).first() as ApiValue
+  `, [membership.id, site.id]) as ApiValue
 
   if (!location) {
     return {
@@ -66,13 +67,13 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const reviews = await db.prepare(`
+  const reviews = await queryAll(db, `
     SELECT id, author_name AS author, rating, content, status, source, created_at AS createdAt
     FROM reviews
     WHERE organization_id = ? AND site_id = ? AND (location_id = ? OR location_id IS NULL)
     ORDER BY created_at DESC
     LIMIT 50
-  `).bind(membership.id, site.id, location.id).all()
+  `, [membership.id, site.id, location.id])
 
   const business = {
     title: location.title,
@@ -91,7 +92,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     business,
-    reviews: reviews.results,
+    reviews,
     media: [],
     posts: [],
     errors: [],

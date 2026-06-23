@@ -1,3 +1,5 @@
+import { execute, type DbClient } from '~/server/db'
+
 export type SiteEventType =
   // Posts
   | 'post.created'
@@ -32,7 +34,7 @@ export type SiteEventType =
   | 'experience.booking_received'
 
 interface FireEventParams {
-  db: D1Database
+  db: DbClient
   organizationId: string
   siteId: string
   locationId?: string | null
@@ -49,11 +51,11 @@ export async function fireSiteEvent(params: FireEventParams): Promise<void> {
     eventType, entityType, entityId, metadata
   } = params
 
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO site_events
       (id, organization_id, site_id, location_id, actor_id, event_type, entity_type, entity_id, metadata)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+  `, [
     crypto.randomUUID(),
     organizationId,
     siteId,
@@ -63,5 +65,5 @@ export async function fireSiteEvent(params: FireEventParams): Promise<void> {
     entityType ?? null,
     entityId ?? null,
     metadata ? JSON.stringify(metadata) : null
-  ).run()
+  ])
 }

@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getGoogleBusinessConnection, syncGoogleLocations } from '../../../utils/google-business'
+import { execute, queryFirst } from '~/server/db'
 
 interface SyncLocationsRequest {
   locationIds: string[]
@@ -45,13 +46,13 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user has access to the site
-    const site = await db.prepare(`
+    const site = await queryFirst<{ id: string; organization_id: string }>(db, `
       SELECT s.id, s.organization_id FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
       LIMIT 1
-    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+    `, [siteId, session.user.id])
     
     if (!site) {
       return jsonResponse({ 
@@ -84,19 +85,19 @@ export default defineEventHandler(async (event) => {
     }
 
     // Set first location as primary if no primary exists
-    const existingPrimary = await db.prepare(`
-      SELECT id FROM business_locations 
+    const existingPrimary = await queryFirst(db, `
+      SELECT id FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND is_primary = true AND status = 'active'
       LIMIT 1
-    `).bind(site.organization_id, siteId).first()
+    `, [site.organization_id, siteId])
 
     if (!existingPrimary && selectedLocations.length > 0) {
       // Set first location as primary
-      await db.prepare(`
-        UPDATE business_locations 
-        SET is_primary = false 
+      await execute(db, `
+        UPDATE business_locations
+        SET is_primary = false
         WHERE organization_id = ? AND site_id = ?
-      `).bind(site.organization_id, siteId).run()
+      `, [site.organization_id, siteId])
     }
 
     // Sync locations + their GBP reviews
@@ -106,10 +107,10 @@ export default defineEventHandler(async (event) => {
     )
 
     // Get synced locations count
-    const syncedCount = await db.prepare(`
+    const syncedCount = await queryFirst(db, `
       SELECT COUNT(*) as count FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND status = 'active'
-    `).bind(site.organization_id, siteId).first()
+    `, [site.organization_id, siteId])
 
     return jsonResponse({
       success: true,

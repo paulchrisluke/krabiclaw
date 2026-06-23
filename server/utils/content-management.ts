@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 
 export interface SiteContent {
   id: string
@@ -39,28 +39,28 @@ interface SiteContentTranslationRow {
 }
 
 // Site Content
-export const getSiteContent = async (db: D1Database, organizationId: string, siteId: string, locationId?: string): Promise<SiteContent[]> => {
+export const getSiteContent = async (db: DbClient, organizationId: string, siteId: string, locationId?: string): Promise<SiteContent[]> => {
   let query = `
-    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component, updated_at 
-     FROM site_content 
+    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component, updated_at
+     FROM site_content
      WHERE organization_id = ? AND site_id = ?
   `
   const params = [organizationId, siteId]
-  
+
   if (locationId) {
     query += ` AND location_id = ?`
     params.push(locationId)
   } else {
     query += ` AND location_id IS NULL`
   }
-  
+
   query += ` ORDER BY page, field`
-  
-  const { results } = await db.prepare(query).bind(...params).all<SiteContent>()
+
+  const results = await queryAll<SiteContent>(db, query, params)
   return results ?? []
 }
 
-export const getPageContent = async (db: D1Database, organizationId: string, siteId: string, page: string, locationId?: string): Promise<SiteContent[]> => {
+export const getPageContent = async (db: DbClient, organizationId: string, siteId: string, page: string, locationId?: string): Promise<SiteContent[]> => {
   let query = `
     SELECT sc.id, sc.organization_id, sc.site_id, sc.location_id, sc.page, sc.field,
            sc.value, sc.type, sc.source, sc.content, sc.hero_title, sc.hero_subtitle,
@@ -84,12 +84,12 @@ export const getPageContent = async (db: D1Database, organizationId: string, sit
 
   query += ` ORDER BY sc.field`
 
-  const { results } = await db.prepare(query).bind(...params).all<SiteContent>()
+  const results = await queryAll<SiteContent>(db, query, params)
   return results ?? []
 }
 
 async function resolveMediaFieldUrls(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   rows: SiteContent[],
 ): Promise<SiteContent[]> {
@@ -109,16 +109,15 @@ async function resolveMediaFieldUrls(
   if (!mediaAssetIds.length) return rows
 
   const placeholders = mediaAssetIds.map(() => '?').join(', ')
-  const { results } = await db
-    .prepare(
-      `SELECT id, public_url
+  const results = await queryAll<{ id: string; public_url: string | null }>(
+    db,
+    `SELECT id, public_url
        FROM media_assets
        WHERE site_id = ?
          AND status = 'active'
          AND id IN (${placeholders})`,
-    )
-    .bind(siteId, ...mediaAssetIds)
-    .all<{ id: string; public_url: string | null }>()
+    [siteId, ...mediaAssetIds],
+  )
 
   const publicUrlByAssetId = new Map<string, string | null>(
     (results ?? []).map((asset) => [asset.id, asset.public_url]),
@@ -141,7 +140,7 @@ async function resolveMediaFieldUrls(
 }
 
 export const getPublishedPageContentForLocale = async (
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   page: string,
@@ -171,7 +170,7 @@ export const getPublishedPageContentForLocale = async (
     query += ` AND location_id IS NULL`
   }
 
-  const { results } = await db.prepare(query).bind(...params).all<SiteContentTranslationRow>()
+  const results = await queryAll<SiteContentTranslationRow>(db, query, params)
   const translations = results ?? []
   if (!translations.length) {
     const baseRows = opts.fallbackEnabled === false ? [] : sourceContent
@@ -225,27 +224,27 @@ export const getPublishedPageContentForLocale = async (
   )
 }
 
-export const getSiteContentField = async (db: D1Database, organizationId: string, siteId: string, locationId: string | null, page: string, field: string): Promise<SiteContent | null> => {
+export const getSiteContentField = async (db: DbClient, organizationId: string, siteId: string, locationId: string | null, page: string, field: string): Promise<SiteContent | null> => {
   let query = `
-    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component, updated_at 
-     FROM site_content 
+    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component, updated_at
+     FROM site_content
      WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ?
   `
   const params = [organizationId, siteId, page, field]
-  
+
   if (locationId) {
     query += ` AND location_id = ?`
     params.push(locationId)
   } else {
     query += ` AND location_id IS NULL`
   }
-  
-  const result = await db.prepare(query).bind(...params).first<SiteContent>()
+
+  const result = await queryFirst<SiteContent>(db, query, params)
   return result ?? null
 }
 
 export const deleteSiteContentField = async (
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   page: string,
@@ -262,10 +261,10 @@ export const deleteSiteContentField = async (
     query += ` AND location_id IS NULL`
   }
 
-  await db.prepare(query).bind(...params).run()
+  await execute(db, query, params)
 }
 
-export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, 'updated_at'>) => {
+export const upsertSiteContent = async (db: DbClient, content: Omit<SiteContent, 'updated_at'>) => {
   const hasHeroTitle = content.hero_title !== undefined
   const hasHeroSubtitle = content.hero_subtitle !== undefined
   const hasHeroImageAssetId = content.hero_image_asset_id !== undefined
@@ -287,9 +286,12 @@ export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, '
     content.hero_video_asset_id ?? null,
     content.component || null,
   ]
+  const flags = [hasHeroTitle ? 1 : 0, hasHeroSubtitle ? 1 : 0, hasHeroImageAssetId ? 1 : 0, hasHeroVideoAssetId ? 1 : 0]
 
   if (!content.location_id) {
-    return db.prepare(`
+    await execute(
+      db,
+      `
       INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(organization_id, site_id, page, field) WHERE location_id IS NULL DO UPDATE SET
@@ -303,10 +305,15 @@ export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, '
         source = excluded.source,
         component = excluded.component,
         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-    `).bind(...values, hasHeroTitle ? 1 : 0, hasHeroSubtitle ? 1 : 0, hasHeroImageAssetId ? 1 : 0, hasHeroVideoAssetId ? 1 : 0)
+    `,
+      [...values, ...flags],
+    )
+    return
   }
 
-  return db.prepare(`
+  await execute(
+    db,
+    `
     INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(organization_id, site_id, location_id, page, field) DO UPDATE SET
@@ -320,9 +327,7 @@ export const buildUpsertSiteStmt = (db: D1Database, content: Omit<SiteContent, '
       source = excluded.source,
       component = excluded.component,
       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).bind(...values, hasHeroTitle ? 1 : 0, hasHeroSubtitle ? 1 : 0, hasHeroImageAssetId ? 1 : 0, hasHeroVideoAssetId ? 1 : 0)
-}
-
-export const upsertSiteContent = async (db: D1Database, content: Omit<SiteContent, 'updated_at'>) => {
-  await buildUpsertSiteStmt(db, content).run()
+  `,
+    [...values, ...flags],
+  )
 }

@@ -6,6 +6,7 @@ import {
   getFacebookPages,
   storeFacebookPagesConnection,
 } from '../../../utils/facebook-pages'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -48,9 +49,9 @@ export default defineEventHandler(async (event) => {
     try {
       const db = env.DB
       if (!db) return `/dashboard?fb=${status}`
-      const organization = await db.prepare(`
+      const organization = await queryFirst<{ slug: string | null }>(db, `
         SELECT slug FROM organization WHERE id = ? LIMIT 1
-      `).bind(organizationId).first<{ slug: string | null }>()
+      `, [organizationId])
       return organization?.slug
         ? `/dashboard/${encodeURIComponent(organization.slug)}/~/settings/general?fb=${status}`
         : `/dashboard?fb=${status}`

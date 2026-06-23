@@ -1,3 +1,5 @@
+import { execute, queryAll, type DbClient } from '~/server/db'
+
 export interface CreateLocationQaInput {
   question: string
   answer?: string | null
@@ -7,22 +9,22 @@ export interface CreateLocationQaInput {
 }
 
 export async function listLocationQa(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   locationId: string,
 ) {
-  const { results } = await db.prepare(`
+  const results = await queryAll(db, `
     SELECT *
     FROM location_qa
     WHERE location_id = ? AND site_id = ?
     ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at
-  `).bind(locationId, siteId).all()
+  `, [locationId, siteId])
 
   return results ?? []
 }
 
 export async function createLocationQa(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   locationId: string,
@@ -36,13 +38,13 @@ export async function createLocationQa(
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
 
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO location_qa (
       id, organization_id, site_id, location_id, question, question_author,
       answer, is_owner_answer, source, sort_order, created_at, updated_at
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, ?)
-  `).bind(
+  `, [
     id,
     organizationId,
     siteId,
@@ -54,21 +56,21 @@ export async function createLocationQa(
     input.sort_order ?? 0,
     now,
     now,
-  ).run()
+  ])
 
   return { status: 201, data: { id, created: true } }
 }
 
 export async function deleteLocationQa(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   locationId: string,
   qaId: string,
 ) {
-  const result = await db.prepare(`
+  const result = await execute(db, `
     DELETE FROM location_qa
     WHERE id = ? AND location_id = ? AND site_id = ?
-  `).bind(qaId, locationId, siteId).run()
+  `, [qaId, locationId, siteId])
 
   if (!result.meta.changes) {
     return { status: 404, data: { error: 'Q&A not found' } }

@@ -4,6 +4,7 @@
 import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain } from '~/server/utils/domains'
 import { setSiteEntitlementsFromPlan } from '~/server/utils/billing'
+import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
@@ -34,9 +35,9 @@ export async function runSiteCreation(
   let siteId = ''
 
   try {
-    const existingSubdomain = await db.prepare(`
+    const existingSubdomain = await queryFirst<{ id: string }>(db, `
       SELECT id FROM sites WHERE subdomain = ? LIMIT 1
-    `).bind(normalizedSubdomain).first<{ id: string }>()
+    `, [normalizedSubdomain])
     if (existingSubdomain) {
       return { status: 409, data: { error: 'This subdomain is already taken' } }
     }
@@ -48,11 +49,11 @@ export async function runSiteCreation(
 
     siteId = crypto.randomUUID()
     try {
-      await db.prepare(`
+      await execute(db, `
         INSERT INTO sites
           (id, organization_id, theme_id, slug, subdomain, brand_name, status, plan, onboarding_status, created_at, updated_at)
         VALUES (?, ?, 'saya-theme-v1', ?, ?, ?, 'active', 'free', 'pending', ?, ?)
-      `).bind(siteId, organizationId, normalizedSubdomain, normalizedSubdomain, name, new Date().toISOString(), new Date().toISOString()).run()
+      `, [siteId, organizationId, normalizedSubdomain, normalizedSubdomain, name, new Date().toISOString(), new Date().toISOString()])
     } catch (siteError) {
       const msg = siteError instanceof Error ? siteError.message : ''
       if (msg.includes('UNIQUE constraint failed')) {
@@ -66,8 +67,8 @@ export async function runSiteCreation(
   } catch (error) {
     console.error('Site creation failed:', error instanceof Error ? error : new Error(String(error)))
     if (siteId) {
-      await db.prepare(`UPDATE sites SET onboarding_status = 'failed', updated_at = ? WHERE id = ?`)
-        .bind(new Date().toISOString(), siteId).run().catch(() => {})
+      await execute(db, `UPDATE sites SET onboarding_status = 'failed', updated_at = ? WHERE id = ?`,
+        [new Date().toISOString(), siteId]).catch(() => {})
     }
     return { status: 500, data: { error: 'Failed to create site. Please try again.' } }
   }
@@ -78,7 +79,7 @@ async function resolveCreationOrganization(
   userId: string,
   name: string
 ): Promise<{ organizationId: string; existingRetrySiteId?: string }> {
-  const rows = await db.prepare(`
+  const rows = await queryAll<UserOrganizationSiteRow>(db, `
     SELECT
       o.id AS organization_id,
       m.role AS member_role,
@@ -89,9 +90,9 @@ async function resolveCreationOrganization(
     LEFT JOIN sites s ON s.organization_id = o.id
       WHERE m.userId = ?
     ORDER BY o.createdAt ASC
-  `).bind(userId).all<UserOrganizationSiteRow>()
+  `, [userId])
 
-  const orgs = rows.results ?? []
+  const orgs = rows ?? []
   const retryOrg = orgs.find(row =>
     row.site_id && (row.onboarding_status === 'pending' || row.onboarding_status === 'failed')
   )
@@ -101,9 +102,8 @@ async function resolveCreationOrganization(
 
   const emptyOwnerOrg = orgs.find(row => !row.site_id && row.member_role === 'owner')
   if (emptyOwnerOrg) {
-    await db.prepare(`UPDATE organization SET name = ?, slug = ? WHERE id = ?`)
-      .bind(name, await uniqueOrganizationSlug(db, name), emptyOwnerOrg.organization_id)
-      .run()
+    await execute(db, `UPDATE organization SET name = ?, slug = ? WHERE id = ?`,
+      [name, await uniqueOrganizationSlug(db, name), emptyOwnerOrg.organization_id])
     return { organizationId: emptyOwnerOrg.organization_id }
   }
 
@@ -120,13 +120,16 @@ async function resolveCreationOrganization(
 async function createOrganizationForSite(db: D1Database, userId: string, name: string) {
   const now = new Date().toISOString()
   const organizationId = `org-${crypto.randomUUID()}`
-  await db.batch([
-    db.prepare(`
-      INSERT INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)
-    `).bind(organizationId, name, await uniqueOrganizationSlug(db, name), now),
-    db.prepare(`
-      INSERT INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'owner', ?)
-    `).bind(`member-${crypto.randomUUID()}`, organizationId, userId, now),
+  const slug = await uniqueOrganizationSlug(db, name)
+  await executeBatch(db, [
+    {
+      query: `INSERT INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)`,
+      params: [organizationId, name, slug, now],
+    },
+    {
+      query: `INSERT INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'owner', ?)`,
+      params: [`member-${crypto.randomUUID()}`, organizationId, userId, now],
+    },
   ])
   return { organizationId }
 }
@@ -135,9 +138,7 @@ async function uniqueOrganizationSlug(db: D1Database, name: string) {
   const base = slugifyName(name)
   for (let i = 0; i < 20; i++) {
     const slug = i === 0 ? base : `${base}-${i + 1}`
-    const existing = await db.prepare(`SELECT id FROM organization WHERE slug = ? LIMIT 1`)
-      .bind(slug)
-      .first<{ id: string }>()
+    const existing = await queryFirst<{ id: string }>(db, `SELECT id FROM organization WHERE slug = ? LIMIT 1`, [slug])
     if (!existing) return slug
   }
   return `${base}-${crypto.randomUUID().slice(0, 8)}`
@@ -160,9 +161,9 @@ async function performSeeding(
   try {
     await seedNewSite(db, { organizationId, siteId, name, vertical })
 
-    const resolvedSubdomain = subdomain || await db.prepare(
-      'SELECT subdomain FROM sites WHERE id = ?'
-    ).bind(siteId).first<SubdomainRow>().then(r => r?.subdomain)
+    const resolvedSubdomain = subdomain || await queryFirst<SubdomainRow>(
+      db, 'SELECT subdomain FROM sites WHERE id = ?', [siteId]
+    ).then(r => r?.subdomain)
 
     if (!resolvedSubdomain?.trim()) throw new Error(`Missing subdomain for site ${siteId}`)
 
@@ -173,16 +174,15 @@ async function performSeeding(
     // POST /api/billing/site-subscribe for how a site gets upgraded after creation).
     await setSiteEntitlementsFromPlan(db, siteId, organizationId, 'free')
 
-    await db.prepare(`UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`)
-      .bind(now, siteId).run()
+    await execute(db, `UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [now, siteId])
 
     // Surface whether another site in this org is already on a paid plan, so the
     // caller can offer to subscribe this new site too (see POST /api/billing/site-subscribe).
-    const existingPaidSite = await db.prepare(`
+    const existingPaidSite = await queryFirst<{ plan: string }>(db, `
       SELECT sb.plan FROM site_billing sb
       WHERE sb.organization_id = ? AND sb.site_id != ? AND sb.status = 'active' AND sb.plan != 'free'
       ORDER BY sb.updated_at DESC LIMIT 1
-    `).bind(organizationId, siteId).first<{ plan: string }>()
+    `, [organizationId, siteId])
 
     return {
       status: 200,
@@ -197,8 +197,7 @@ async function performSeeding(
 
   } catch (seedError) {
     console.error('Seeding failed:', seedError instanceof Error ? seedError : new Error(String(seedError)))
-    await db.prepare(`UPDATE sites SET onboarding_status = 'failed', updated_at = ? WHERE id = ?`)
-      .bind(now, siteId).run().catch(() => {})
+    await execute(db, `UPDATE sites SET onboarding_status = 'failed', updated_at = ? WHERE id = ?`, [now, siteId]).catch(() => {})
     throw new Error('Failed to complete required site setup')
   }
 }

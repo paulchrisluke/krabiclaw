@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createPost } from '~/server/utils/post-management'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -16,21 +17,23 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   if (!body?.body?.trim()) return jsonResponse({ error: 'Post body is required' }, { status: 400 })
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
     SELECT s.id, s.organization_id FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor') LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+  `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const imageAssetId = typeof body.image_asset_id === 'string' ? body.image_asset_id.trim() : ''
   if (imageAssetId) {
-    let asset: { id: string; organization_id: string } | null
+    let asset: { id: string; organization_id: string } | null | undefined
     try {
-      asset = await db.prepare(
-        `SELECT id, organization_id FROM media_assets WHERE id = ? LIMIT 1`
-      ).bind(imageAssetId).first<{ id: string; organization_id: string }>()
+      asset = await queryFirst<{ id: string; organization_id: string }>(
+        db,
+        `SELECT id, organization_id FROM media_assets WHERE id = ? LIMIT 1`,
+        [imageAssetId],
+      )
     } catch (error) {
       const normalizedError = error instanceof Error ? error : new Error('Unknown database error')
       console.error('post_create_asset_lookup_failed', {

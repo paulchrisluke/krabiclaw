@@ -2,6 +2,7 @@ import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getFacebookPagesConnection } from '../../../utils/facebook-pages'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -14,12 +15,12 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event) as { siteId?: string }
   const dashboard = query.siteId ? null : await getDashboardContext(event, { requireSite: false })
   const site = query.siteId
-    ? await db.prepare(`
+    ? await queryFirst<{ id: string; organization_id: string }>(db, `
         SELECT s.id, s.organization_id FROM sites s
         JOIN member om ON s.organization_id = om.organizationId
         WHERE s.id = ? AND om.userId = ?
         LIMIT 1
-      `).bind(query.siteId, session.user.id).first<{ id: string; organization_id: string }>()
+      `, [query.siteId, session.user.id])
     : dashboard?.site
 
   if (!site) return jsonResponse({ connected: false })

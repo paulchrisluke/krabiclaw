@@ -1,4 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
+import { execute, queryFirst } from '~/server/db'
 import { encryptSecret, decryptSecret, encryptionEnv } from './encryption'
 
 // Reuses the same Google Cloud OAuth client as Better Auth login (GOOGLE_CLIENT_ID/SECRET) —
@@ -159,7 +160,7 @@ export const storeGoogleAnalyticsConnection = async (
   const encryptedAccessToken = await encryptSecret(connection.encrypted_access_token, tokenEnv)
   const encryptedRefreshToken = await encryptSecret(connection.encrypted_refresh_token, tokenEnv)
 
-  await env.DB.prepare(`
+  await execute(env.DB, `
     INSERT INTO google_analytics_connections
     (id, organization_id, site_id, connected_by_user_id, provider_account_email,
      encrypted_access_token, encrypted_refresh_token, scopes, status, expires_at, created_at, updated_at)
@@ -173,7 +174,7 @@ export const storeGoogleAnalyticsConnection = async (
       status = excluded.status,
       expires_at = excluded.expires_at,
       updated_at = excluded.updated_at
-  `).bind(
+  `, [
     connectionId,
     connection.organization_id,
     connection.site_id,
@@ -186,7 +187,7 @@ export const storeGoogleAnalyticsConnection = async (
     connection.expires_at ?? null,
     now,
     now
-  ).run()
+  ])
 
   return connectionId
 }
@@ -201,11 +202,11 @@ export const getGoogleAnalyticsConnection = async (
     return null
   }
 
-  const connection = await env.DB.prepare(`
+  const connection = await queryFirst<GoogleAnalyticsConnection>(env.DB, `
     SELECT * FROM google_analytics_connections
     WHERE organization_id = ? AND site_id = ? AND status = 'active'
     LIMIT 1
-  `).bind(organizationId, siteId).first() as GoogleAnalyticsConnection | null
+  `, [organizationId, siteId])
 
   if (!connection) {
     return null

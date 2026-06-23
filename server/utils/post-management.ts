@@ -1,3 +1,5 @@
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+
 export interface Post {
   id: string
   organization_id: string
@@ -63,7 +65,7 @@ interface PublishedPostRow {
 }
 
 export async function listPosts(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   status?: string,
@@ -85,30 +87,34 @@ export async function listPosts(
     params.push(locationId)
   }
   query += ` ORDER BY p.updated_at DESC LIMIT 100`
-  const result = await db.prepare(query).bind(...params).all()
-  return (result.results ?? []) as unknown as Post[]
+  const results = await queryAll<Post>(db, query, params)
+  return results ?? []
 }
 
 export async function getPost(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   postId: string
 ): Promise<PostWithChannels | null> {
-  const post = await db.prepare(`
-    SELECT * FROM posts WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1
-  `).bind(postId, organizationId, siteId).first<Post>()
+  const post = await queryFirst<Post>(
+    db,
+    `SELECT * FROM posts WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+    [postId, organizationId, siteId],
+  )
   if (!post) return null
 
-  const jobs = await db.prepare(
-    `SELECT * FROM post_channel_jobs WHERE post_id = ? ORDER BY channel`
-  ).bind(postId).all()
+  const jobs = await queryAll<PostChannelJob>(
+    db,
+    `SELECT * FROM post_channel_jobs WHERE post_id = ? ORDER BY channel`,
+    [postId],
+  )
 
-  return { ...post, channels: (jobs.results ?? []) as unknown as PostChannelJob[] }
+  return { ...post, channels: jobs ?? [] }
 }
 
 export async function createPost(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   data: {
@@ -126,28 +132,32 @@ export async function createPost(
   const status = data.status ?? (data.scheduled_for ? 'scheduled' : 'published')
   const publishedAt = status === 'published' ? now : null
 
-  await db.prepare(`
+  await execute(
+    db,
+    `
     INSERT INTO posts (id, organization_id, site_id, location_id, post_type, title, body, image_asset_id,
       cta_type, cta_url, event_title, event_start, event_end, offer_coupon, offer_terms,
       status, scheduled_for, published_at, created_by, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    id, organizationId, siteId,
-    data.location_id ?? null, data.post_type ?? 'standard',
-    data.title ?? null, data.body, data.image_asset_id ?? null,
-    data.cta_type ?? null, data.cta_url ?? null,
-    data.event_title ?? null, data.event_start ?? null, data.event_end ?? null,
-    data.offer_coupon ?? null, data.offer_terms ?? null,
-    status, data.scheduled_for ?? null, publishedAt, createdBy, now, now
-  ).run()
+  `,
+    [
+      id, organizationId, siteId,
+      data.location_id ?? null, data.post_type ?? 'standard',
+      data.title ?? null, data.body, data.image_asset_id ?? null,
+      data.cta_type ?? null, data.cta_url ?? null,
+      data.event_title ?? null, data.event_start ?? null, data.event_end ?? null,
+      data.offer_coupon ?? null, data.offer_terms ?? null,
+      status, data.scheduled_for ?? null, publishedAt, createdBy, now, now,
+    ],
+  )
 
-  const createdPost = await db.prepare('SELECT * FROM posts WHERE id = ? LIMIT 1').bind(id).first() as Post | null
+  const createdPost = await queryFirst<Post>(db, 'SELECT * FROM posts WHERE id = ? LIMIT 1', [id])
   if (!createdPost) throw new Error('Post not found after creation')
   return createdPost
 }
 
 export async function updatePost(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   postId: string,
@@ -176,14 +186,17 @@ export async function updatePost(
   }
 
   params.push(postId, organizationId, siteId)
-  await db.prepare(`UPDATE posts SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`)
-    .bind(...params).run()
+  await execute(db, `UPDATE posts SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`, params)
 
-  return await db.prepare('SELECT * FROM posts WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1').bind(postId, organizationId, siteId).first()
+  return await queryFirst<Post>(
+    db,
+    'SELECT * FROM posts WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1',
+    [postId, organizationId, siteId],
+  )
 }
 
 export async function publishPost(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   postId: string,
@@ -195,47 +208,58 @@ export async function publishPost(
 
   const now = new Date().toISOString()
 
-  const updateResult = await db.prepare(`
+  const updateResult = await execute(
+    db,
+    `
     UPDATE posts SET status = 'published', published_at = ?, updated_at = ?
     WHERE id = ? AND organization_id = ? AND site_id = ?
-  `).bind(now, now, postId, organizationId, siteId).run()
+  `,
+    [now, now, postId, organizationId, siteId],
+  )
 
-  if ((updateResult.meta.changes ?? 0) === 0) return null
+  if (Number(updateResult.meta.changes ?? 0) === 0) return null
 
   // Create a channel job for each requested channel
-  const jobs = channels.map(channel =>
-    db.prepare(`
+  const jobQueries = channels.map((channel) => ({
+    query: `
       INSERT INTO post_channel_jobs (id, post_id, organization_id, channel, status, created_at)
       VALUES (?, ?, ?, ?, 'pending', ?)
       ON CONFLICT DO NOTHING
-    `).bind(crypto.randomUUID(), postId, organizationId, channel, now)
-  )
-  if (jobs.length > 0) await db.batch(jobs)
+    `,
+    params: [crypto.randomUUID(), postId, organizationId, channel, now],
+  }))
+  if (jobQueries.length > 0) await executeBatch(db, jobQueries)
 
   // 'site' channel publishes immediately — nothing async needed, post is live via public API
-  await db.prepare(`
+  await execute(
+    db,
+    `
     UPDATE post_channel_jobs SET status = 'published', published_at = ?
     WHERE post_id = ? AND channel = 'site'
-  `).bind(now, postId).run()
+  `,
+    [now, postId],
+  )
 
   return getPost(db, organizationId, siteId, postId)
 }
 
 export async function deletePost(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   postId: string
 ): Promise<boolean> {
-  const result = await db.prepare(
-    'DELETE FROM posts WHERE id = ? AND organization_id = ? AND site_id = ?'
-  ).bind(postId, organizationId, siteId).run()
-  return (result.meta.changes ?? 0) > 0
+  const result = await execute(
+    db,
+    'DELETE FROM posts WHERE id = ? AND organization_id = ? AND site_id = ?',
+    [postId, organizationId, siteId],
+  )
+  return Number(result.meta.changes ?? 0) > 0
 }
 
 /** Public: published posts for the site, formatted for SayaPosts component */
 export async function getPublishedPosts(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   limit = 20,
   locationId?: string
@@ -254,11 +278,9 @@ export async function getPublishedPosts(
   }
   query += ` ORDER BY p.published_at DESC LIMIT ?`
   params.push(limit)
-  const result = await db.prepare(query).bind(...params).all()
+  const rows = await queryAll<PublishedPostRow>(db, query, params)
 
-  const rows = (result.results ?? []) as unknown as PublishedPostRow[]
-
-  return rows.map((p) => ({
+  return (rows ?? []).map((p) => ({
     name: `posts/${p.id}`,
     title: p.title ?? '',
     summary: p.body,

@@ -4,6 +4,7 @@ import { getFacebookAuthUrl } from '../../../utils/facebook-pages'
 import { signOAuthState } from '../../../utils/encryption'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { hasSiteEntitlement } from '~/server/utils/billing'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -17,12 +18,12 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event).catch(() => ({})) as { siteId?: string }
   const dashboard = body?.siteId ? null : await getDashboardContext(event, { requireSite: false })
   const site = body?.siteId
-    ? await db.prepare(`
+    ? await queryFirst<{ id: string; organization_id: string }>(db, `
         SELECT s.id, s.organization_id FROM sites s
         JOIN member om ON s.organization_id = om.organizationId
         WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
         LIMIT 1
-      `).bind(body.siteId, session.user.id).first<{ id: string; organization_id: string }>()
+      `, [body.siteId, session.user.id])
     : dashboard?.site
 
   if (!site) return jsonResponse({ error: 'Create a site before connecting Facebook.' }, { status: 400 })
