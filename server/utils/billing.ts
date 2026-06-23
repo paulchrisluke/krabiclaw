@@ -236,11 +236,21 @@ export async function applySiteSubscription(
       updated_at = excluded.updated_at
   `, [`billing-${organizationId}`, organizationId, customerId, now])
 
+  // ON CONFLICT(site_id) DO UPDATE, not INSERT OR REPLACE — REPLACE deletes and
+  // recreates the row, wiping cash-billing fields (payment_method, local_rate,
+  // local_currency, last_reminder_sent_at) that aren't in this column list.
   await execute(db, `
-    INSERT OR REPLACE INTO site_billing
+    INSERT INTO site_billing
       (id, site_id, organization_id, stripe_subscription_id, stripe_subscription_item_id,
        plan, status, current_period_end, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
+    ON CONFLICT(site_id) DO UPDATE SET
+      stripe_subscription_id = excluded.stripe_subscription_id,
+      stripe_subscription_item_id = excluded.stripe_subscription_item_id,
+      plan = excluded.plan,
+      status = excluded.status,
+      current_period_end = excluded.current_period_end,
+      updated_at = excluded.updated_at
   `, [`sb-${siteId}`, siteId, organizationId, subscriptionId, subscriptionItemId, plan, periodEnd, now])
 
   await setSiteEntitlementsFromPlan(db, siteId, organizationId, plan)

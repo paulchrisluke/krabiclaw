@@ -81,6 +81,12 @@ export async function triggerAutoTopupIfNeeded(
 
     if (intent.status !== 'succeeded') return
 
+    // Two concurrent triggers (or a same-day retrigger) can share the date-scoped
+    // idempotency key above and both reach this point with a "succeeded" intent —
+    // Stripe only charges once, but without this check we'd credit the balance
+    // twice. Stripe echoes the replay via this response header.
+    if (intent.lastResponse?.headers?.['idempotency-replayed'] === 'true') return
+
     const now = new Date().toISOString()
     await execute(db,
       `INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)

@@ -21,8 +21,8 @@ export const account = sqliteTable("account", {
 	refreshTokenExpiresAt: text(),
 	scope: text(),
 	password: text(),
-	createdAt: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updatedAt: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updatedAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const ai_credits = sqliteTable("ai_credits", {
@@ -30,7 +30,7 @@ export const ai_credits = sqliteTable("ai_credits", {
 	balance: integer().default(0).notNull(),
 	lifetime_used: integer().default(0).notNull(),
 	last_topped_up_at: text(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const ai_usage_log = sqliteTable("ai_usage_log", {
@@ -43,7 +43,7 @@ export const ai_usage_log = sqliteTable("ai_usage_log", {
 	output_tokens: integer().default(0).notNull(),
 	credits_charged: integer().default(0).notNull(),
 	cf_gateway_log_id: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const business_location_translations = sqliteTable("business_location_translations", {
@@ -61,7 +61,7 @@ export const business_location_translations = sqliteTable("business_location_tra
 	source_hash: text(),
 	translated_at: text(),
 	reviewed_at: text(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
 });
 
@@ -106,8 +106,8 @@ export const business_locations = sqliteTable("business_locations", {
 	google_place_id: text(),
 	hero_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
 	hero_video_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	notification_phone: text(),
 	timezone: text(),
 });
@@ -120,7 +120,7 @@ export const canary_runs = sqliteTable("canary_runs", {
 	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
 	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
 	details_json: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const chowbot_channel_state = sqliteTable("chowbot_channel_state", {
@@ -131,7 +131,7 @@ export const chowbot_channel_state = sqliteTable("chowbot_channel_state", {
 	pending_media: text(),
 	pending_confirmation: text(),
 	last_inbound_id: text(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const chowbot_conversations = sqliteTable("chowbot_conversations", {
@@ -143,8 +143,8 @@ export const chowbot_conversations = sqliteTable("chowbot_conversations", {
 	active_channel: text().default("dashboard").notNull(),
 	status: text().default("active").notNull(),
 	selected_location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const chowbot_messages = sqliteTable("chowbot_messages", {
@@ -161,7 +161,7 @@ export const chowbot_messages = sqliteTable("chowbot_messages", {
 	tool_calls: text(),
 	status: text().default("sent").notNull(),
 	error: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const contact_submissions = sqliteTable("contact_submissions", {
@@ -173,7 +173,7 @@ export const contact_submissions = sqliteTable("contact_submissions", {
 	message: text().notNull(),
 	status: text().default("new").notNull(),
 	ip_hash: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const dashboard_preferences = sqliteTable("dashboard_preferences", {
@@ -181,8 +181,8 @@ export const dashboard_preferences = sqliteTable("dashboard_preferences", {
 	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	selected_location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 });
 
 export const domain_reconciliation_jobs = sqliteTable("domain_reconciliation_jobs", {
@@ -192,8 +192,8 @@ export const domain_reconciliation_jobs = sqliteTable("domain_reconciliation_job
 	run_after: text().notNull(),
 	attempts: integer().default(0).notNull(),
 	last_error: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 });
 
 export const experience_bookings = sqliteTable("experience_bookings", {
@@ -210,8 +210,8 @@ export const experience_bookings = sqliteTable("experience_bookings", {
 	status: text().default("pending").notNull(),
 	notes: text(),
 	ip_hash: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const experience_slot_overrides = sqliteTable("experience_slot_overrides", {
@@ -224,8 +224,8 @@ export const experience_slot_overrides = sqliteTable("experience_slot_overrides"
 	status: text().default("closed").notNull(),
 	capacity_override: integer(),
 	note: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text(),
 });
 
@@ -242,8 +242,8 @@ export const facebook_pages_connections = sqliteTable("facebook_pages_connection
 	user_token_expires_at: text(),
 	scopes: text(),
 	status: text().default("active").notNull(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const google_business_connections = sqliteTable("google_business_connections", {
@@ -258,8 +258,8 @@ export const google_business_connections = sqliteTable("google_business_connecti
 	scopes: text().notNull(),
 	expires_at: text(),
 	status: text().default("active").notNull(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const google_business_events = sqliteTable("google_business_events", {
@@ -271,8 +271,8 @@ export const google_business_events = sqliteTable("google_business_events", {
 	payload: text(),
 	status: text().default("pending").notNull(),
 	error: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const google_place_snapshots = sqliteTable("google_place_snapshots", {
@@ -282,7 +282,7 @@ export const google_place_snapshots = sqliteTable("google_place_snapshots", {
 	place_id: text().notNull(),
 	source_url: text(),
 	snapshot_json: text().notNull(),
-	fetched_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	fetched_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const invitation = sqliteTable("invitation", {
@@ -293,7 +293,7 @@ export const invitation = sqliteTable("invitation", {
 	status: text().default("pending").notNull(),
 	expiresAt: text().notNull(),
 	inviterId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
-	createdAt: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const jwks = sqliteTable("jwks", {
@@ -323,8 +323,8 @@ export const location_qa = sqliteTable("location_qa", {
 	source: text().default("manual").notNull(),
 	status: text().default("published").notNull(),
 	sort_order: integer().default(0).notNull(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const media_assets = sqliteTable("media_assets", {
@@ -350,8 +350,8 @@ export const media_assets = sqliteTable("media_assets", {
 	category: text(),
 	status: text().default("active").notNull(),
 	created_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const media_assets_old = sqliteTable("media_assets_old", {
@@ -377,8 +377,8 @@ export const media_assets_old = sqliteTable("media_assets_old", {
 	category: text(),
 	status: text().default("active").notNull(),
 	created_by_user_id: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const member = sqliteTable("member", {
@@ -386,7 +386,7 @@ export const member = sqliteTable("member", {
 	organizationId: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	userId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
 	role: text().default("member").notNull(),
-	createdAt: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const menu_item_translations = sqliteTable("menu_item_translations", {
@@ -407,7 +407,7 @@ export const menu_item_translations = sqliteTable("menu_item_translations", {
 	source_hash: text(),
 	translated_at: text(),
 	reviewed_at: text(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
 });
 
@@ -429,8 +429,8 @@ export const menu_items = sqliteTable("menu_items", {
 	dietary_notes: text(),
 	preparation: text(),
 	serving_note: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text(),
 	updated_by: text(),
 });
@@ -448,7 +448,7 @@ export const menu_translations = sqliteTable("menu_translations", {
 	source_hash: text(),
 	translated_at: text(),
 	reviewed_at: text(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
 });
 
@@ -461,8 +461,8 @@ export const menus = sqliteTable("menus", {
 	description: text(),
 	status: text().default("draft").notNull(),
 	section_order: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text(),
 	updated_by: text(),
 });
@@ -481,7 +481,7 @@ export const notifications = sqliteTable("notifications", {
 	error: text(),
 	read_at: text(),
 	sent_at: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const oauthAccessToken = sqliteTable("oauthAccessToken", {
@@ -561,7 +561,7 @@ export const organization = sqliteTable("organization", {
 	slug: text(),
 	logo: text(),
 	metadata: text(),
-	createdAt: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const organization_billing = sqliteTable("organization_billing", {
@@ -577,7 +577,7 @@ export const organization_billing = sqliteTable("organization_billing", {
 	auto_topup_enabled: integer().default(0).notNull(),
 	auto_topup_bundle: integer().default(500).notNull(),
 	auto_topup_threshold: integer().default(100).notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const organization_entitlements = sqliteTable("organization_entitlements", {
@@ -586,8 +586,8 @@ export const organization_entitlements = sqliteTable("organization_entitlements"
 	key: text().notNull(),
 	value: text(),
 	source: text().default("system").notNull(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const platform_analytics = sqliteTable("platform_analytics", {
@@ -607,8 +607,8 @@ export const platform_blog_posts = sqliteTable("platform_blog_posts", {
 	author_id: text().references(() => user.id, { onDelete: "set null" } ),
 	featured_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
 	published_at: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	seo_description: text(),
 	seo_keywords: text(),
 	canonical_url: text(),
@@ -622,7 +622,7 @@ export const platform_contact_submissions = sqliteTable("platform_contact_submis
 	message: text().notNull(),
 	status: text().default("new").notNull(),
 	ip_hash: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const platform_content = sqliteTable("platform_content", {
@@ -630,7 +630,7 @@ export const platform_content = sqliteTable("platform_content", {
 	page: text().notNull(),
 	content: text().notNull(),
 	updated_by: text().references(() => user.id, { onDelete: "set null" } ),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const platform_docs = sqliteTable("platform_docs", {
@@ -649,8 +649,8 @@ export const platform_docs = sqliteTable("platform_docs", {
 	difficulty_level: text(),
 	status: text().default("draft").notNull(),
 	published_at: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	canonical_url: text(),
 	robots: text(),
 });
@@ -664,7 +664,7 @@ export const post_channel_jobs = sqliteTable("post_channel_jobs", {
 	provider_post_id: text(),
 	error: text(),
 	published_at: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const post_translations = sqliteTable("post_translations", {
@@ -681,7 +681,7 @@ export const post_translations = sqliteTable("post_translations", {
 	source_hash: text(),
 	translated_at: text(),
 	reviewed_at: text(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
 });
 
@@ -706,14 +706,14 @@ export const posts = sqliteTable("posts", {
 	scheduled_for: text(),
 	published_at: text(),
 	created_by: text().notNull(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const rate_limits = sqliteTable("rate_limits", {
 	key: text().primaryKey(),
 	count: integer().default(0).notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	expires_at: text(),
 });
 
@@ -734,7 +734,7 @@ export const reservation_submissions = sqliteTable("reservation_submissions", {
 	cancellation_token_hash: text(),
 	cancellation_token_expires_at: text(),
 	cancellation_token_used_at: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const reviews = sqliteTable("reviews", {
@@ -757,8 +757,8 @@ export const reviews = sqliteTable("reviews", {
 	source: text().default("direct"),
 	ip_hash: text(),
 	user_agent: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 });
 
 export const service_addon_purchases = sqliteTable("service_addon_purchases", {
@@ -767,15 +767,15 @@ export const service_addon_purchases = sqliteTable("service_addon_purchases", {
 	addon_type: text().notNull(),
 	stripe_payment_intent_id: text(),
 	fulfilled_at: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const session = sqliteTable("session", {
 	id: text().primaryKey(),
 	expiresAt: text().notNull(),
 	token: text().notNull(),
-	createdAt: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updatedAt: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updatedAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	ipAddress: text(),
 	userAgent: text(),
 	activeOrganizationId: text(),
@@ -792,8 +792,8 @@ export const site_analytics_daily = sqliteTable("site_analytics_daily", {
 	unique_sessions: integer().default(0),
 	avg_session_duration: integer().default(0),
 	top_pages: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	unique_visitors: integer().default(0),
 	pages_per_session: real(),
 	returning_visitors: integer().default(0),
@@ -809,7 +809,7 @@ export const site_billing = sqliteTable("site_billing", {
 	status: text().default("free").notNull(),
 	current_period_end: text(),
 	cancel_at_period_end: numeric(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	stripe_customer_id: text(),
 	payment_method: text().default("stripe").notNull(),
 	local_rate: integer(),
@@ -822,7 +822,7 @@ export const site_config = sqliteTable("site_config", {
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	key: text().notNull(),
 	value: text(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const site_content = sqliteTable("site_content", {
@@ -840,7 +840,7 @@ export const site_content = sqliteTable("site_content", {
 	value: text(),
 	type: text().default("text").notNull(),
 	source: text().default("manual").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
 	component: text(),
 });
@@ -862,7 +862,7 @@ export const site_content_translations = sqliteTable("site_content_translations"
 	source_hash: text(),
 	translated_at: text(),
 	reviewed_at: text(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
 	component: text(),
 });
@@ -879,7 +879,7 @@ export const site_domain_events = sqliteTable("site_domain_events", {
 	before_state: text(),
 	after_state: text(),
 	metadata: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 });
 
 export const site_domains = sqliteTable("site_domains", {
@@ -907,8 +907,8 @@ export const site_domains = sqliteTable("site_domains", {
 	activated_at: text(),
 	error_message: text(),
 	metadata: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 });
 
 export const site_entitlements = sqliteTable("site_entitlements", {
@@ -918,8 +918,8 @@ export const site_entitlements = sqliteTable("site_entitlements", {
 	key: text().notNull(),
 	value: text(),
 	source: text().default("system").notNull(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const site_events = sqliteTable("site_events", {
@@ -932,7 +932,7 @@ export const site_events = sqliteTable("site_events", {
 	entity_type: text(),
 	entity_id: text(),
 	metadata: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const site_locales = sqliteTable("site_locales", {
@@ -944,8 +944,8 @@ export const site_locales = sqliteTable("site_locales", {
 	is_source: numeric().notNull(),
 	status: text().default("draft").notNull(),
 	fallback_enabled: numeric().default(sql`1`).notNull(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const site_pageview_events = sqliteTable("site_pageview_events", {
@@ -958,7 +958,7 @@ export const site_pageview_events = sqliteTable("site_pageview_events", {
 	ip_hash: text(),
 	session_id: text(),
 	duration_seconds: integer(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	visitor_id: text(),
 	country: text(),
 	region: text(),
@@ -983,7 +983,7 @@ export const site_transfer_requests = sqliteTable("site_transfer_requests", {
 	requires_payment: integer().default(0).notNull(),
 	stripe_checkout_session_id: text(),
 	payment_completed_at: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	completed_at: text(),
 	last_reminder_at: text(),
 	reminder_count: integer().default(0).notNull(),
@@ -1020,8 +1020,8 @@ export const sites = sqliteTable("sites", {
 	media_source: text(),
 	settings: text(),
 	last_published_at: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_by: text(),
 	og_image_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
 });
@@ -1033,7 +1033,7 @@ export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 	status: text().default("pending"),
 	payload: text(),
 	error: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const themes = sqliteTable("themes", {
@@ -1043,8 +1043,8 @@ export const themes = sqliteTable("themes", {
 	version: text().default("1.0.0"),
 	description: text(),
 	status: text().default("active"),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`"),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 });
 
 export const token_exchange_cache = sqliteTable("token_exchange_cache", {
@@ -1071,8 +1071,8 @@ export const translation_job_items = sqliteTable("translation_job_items", {
 	source_chars: integer().default(0).notNull(),
 	status: text().default("queued").notNull(),
 	error: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const translation_jobs = sqliteTable("translation_jobs", {
@@ -1097,8 +1097,8 @@ export const translation_jobs = sqliteTable("translation_jobs", {
 	created_by: text(),
 	started_at: text(),
 	finished_at: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const user = sqliteTable("user", {
@@ -1113,8 +1113,8 @@ export const user = sqliteTable("user", {
 	banned: integer().default(0),
 	banReason: text(),
 	banExpires: text(),
-	createdAt: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updatedAt: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updatedAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const verification = sqliteTable("verification", {
@@ -1122,8 +1122,8 @@ export const verification = sqliteTable("verification", {
 	identifier: text().notNull(),
 	value: text().notNull(),
 	expiresAt: text().notNull(),
-	createdAt: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updatedAt: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updatedAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const work_requests = sqliteTable("work_requests", {
@@ -1139,8 +1139,8 @@ export const work_requests = sqliteTable("work_requests", {
 	notes: text(),
 	assigned_to: text().references(() => user.id, { onDelete: "set null" } ),
 	completed_at: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const experiences = sqliteTable("experiences", {
@@ -1168,8 +1168,8 @@ export const experiences = sqliteTable("experiences", {
 	featured_sort_order: integer().default(0).notNull(),
 	seo_title: text(),
 	seo_description: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text(),
 	highlights: text(),
 	included_items: text(),
@@ -1183,8 +1183,8 @@ export const mcp_workspace_preferences = sqliteTable("mcp_workspace_preferences"
 	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
 	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
 	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const google_analytics_connections = sqliteTable("google_analytics_connections", {
@@ -1202,8 +1202,8 @@ export const google_analytics_connections = sqliteTable("google_analytics_connec
 	search_console_site_url: text(),
 	status: text().default("active").notNull(),
 	expires_at: text(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const platform_content_components = sqliteTable("platform_content_components", {
@@ -1213,8 +1213,8 @@ export const platform_content_components = sqliteTable("platform_content_compone
 	type: text().notNull(),
 	position: integer().default(0).notNull(),
 	data_json: text().notNull(),
-	created_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
-	updated_at: text().default("sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	label: text(),
 	status: text().default("active").notNull(),
 	render_enabled: integer().default(1).notNull(),

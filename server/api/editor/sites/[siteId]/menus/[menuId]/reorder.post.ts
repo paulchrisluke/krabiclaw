@@ -66,6 +66,12 @@ export default defineEventHandler(async (event) => {
 
     // Validate that all items belong to this menu
     const itemIds = body.items.map(item => item.id)
+    if (itemIds.length === 0) {
+      return jsonResponse({
+        error: 'Items array must not be empty'
+      }, { status: 400 })
+    }
+
     const existingItems = await queryAll(db, `
       SELECT id FROM menu_items
       WHERE id IN (${itemIds.map(() => '?').join(',')}) AND menu_id = ?

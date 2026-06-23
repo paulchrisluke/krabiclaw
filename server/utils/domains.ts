@@ -1,6 +1,7 @@
 // Cloudflare for SaaS custom domain management.
 
 import { execute, queryAll, queryFirst } from '~/server/db'
+import { hasSiteEntitlement } from '~/server/utils/billing'
 
 export interface DomainEnv {
   CF_ZONE_ID?: string
@@ -165,12 +166,7 @@ export function validateCustomDomain(env: DomainEnv, domain: string): { valid: b
 }
 
 export async function hasCustomDomainsEntitlement(db: D1Database, siteId: string): Promise<boolean> {
-  const entitlement = await queryFirst<{ value?: string }>(db, `
-    SELECT value FROM site_entitlements
-    WHERE site_id = ? AND key = 'custom_domains'
-    LIMIT 1
-  `, [siteId])
-  return String(entitlement?.value || '').toLowerCase() === 'true'
+  return hasSiteEntitlement(db, siteId, 'custom_domains')
 }
 
 export async function getSiteDomains(db: D1Database, siteId: string): Promise<DomainRecord[]> {
@@ -398,7 +394,7 @@ async function persistCloudflareState(
   db: D1Database,
   domainId: string,
   hostname: CloudflareCustomHostname,
-  options: { incrementRetry?: boolean; actorType?: 'owner' | 'admin' | 'system' | 'cloudflare'; actorId?: string | null } = {}
+  options: { incrementRetry?: boolean; actorType?: 'owner' | 'admin' | 'system' | 'cloudflare'; actorId?: string | null; skipPromotion?: boolean } = {}
 ): Promise<DomainRecord> {
   const before = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [domainId])
   if (!before) throw new Error('Domain not found')
@@ -491,6 +487,11 @@ async function persistCloudflareState(
     })
   }
 
+  // promoteCanonicalIfReady can call setCanonicalDomain, which opens its own
+  // BEGIN IMMEDIATE TRANSACTION — D1/SQLite doesn't support nested
+  // transactions, so callers already inside one (createCustomDomainPair)
+  // must defer this until after their own transaction commits.
+  if (options.skipPromotion) return after
   if (after.status === 'active') await promoteCanonicalIfReady(db, after.site_id)
   else await queueReconciliation(db, domainId, after.next_check_at || undefined)
 
@@ -554,13 +555,21 @@ export async function createCustomDomainPair(
       for (const entry of entries) {
         const hostname = cloudflareByDomainId.get(entry.id)
         if (!hostname) throw new Error(`Missing Cloudflare hostname for ${entry.domain}`)
-        records.push(await persistCloudflareState(env, db, entry.id, hostname, { actorType: 'cloudflare' }))
+        records.push(await persistCloudflareState(env, db, entry.id, hostname, { actorType: 'cloudflare', skipPromotion: true }))
       }
 
       await db.exec('COMMIT')
     } catch (error) {
       await db.exec('ROLLBACK')
       throw error
+    }
+
+    // Deferred from persistCloudflareState (skipPromotion: true) — must run
+    // after COMMIT since promoteCanonicalIfReady/setCanonicalDomain open their
+    // own transaction, which can't nest inside the one above.
+    for (const record of records) {
+      if (record.status === 'active') await promoteCanonicalIfReady(db, record.site_id)
+      else await queueReconciliation(db, record.id, record.next_check_at || undefined)
     }
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Cloudflare hostname creation failed')
@@ -656,15 +665,19 @@ export async function deleteCustomDomain(
   }
 
   const now = new Date().toISOString()
-  await execute(db, `
-    UPDATE site_domains
-    SET status = 'deleted', role = 'secondary',
-        error_message = COALESCE(?, error_message),
-        updated_at = ?
-    WHERE id = ?
-  `, [cloudflareDeleteError ? `Cloudflare delete failed: ${cloudflareDeleteError}` : null, now, domainId])
-  await execute(db, `DELETE FROM domain_reconciliation_jobs WHERE domain_id = ?`, [domainId])
+
+  // If the Cloudflare hostname is still live, the domain must NOT be marked
+  // deleted locally — ensureDomainAvailable only excludes status = 'deleted',
+  // so doing so would let another site claim a hostname Cloudflare still
+  // routes to this one. Keep it active and queue a reconciliation retry
+  // instead, so cleanup is retried until the Cloudflare side actually clears.
   if (cloudflareDeleteError) {
+    await execute(db, `
+      UPDATE site_domains
+      SET error_message = ?, updated_at = ?
+      WHERE id = ?
+    `, [`Cloudflare delete failed: ${cloudflareDeleteError}`, now, domainId])
+    await queueReconciliation(db, domainId)
     await logDomainEvent(db, {
       organizationId: domain.organization_id,
       siteId: domain.site_id,
@@ -677,7 +690,15 @@ export async function deleteCustomDomain(
         error: cloudflareDeleteError
       }
     })
+    throw new Error(`Failed to delete domain: ${cloudflareDeleteError}`)
   }
+
+  await execute(db, `
+    UPDATE site_domains
+    SET status = 'deleted', role = 'secondary', updated_at = ?
+    WHERE id = ?
+  `, [now, domainId])
+  await execute(db, `DELETE FROM domain_reconciliation_jobs WHERE domain_id = ?`, [domainId])
   await logDomainEvent(db, {
     organizationId: domain.organization_id,
     siteId: domain.site_id,
@@ -686,7 +707,6 @@ export async function deleteCustomDomain(
     actorType,
     actorId,
     message: `${domain.domain} deleted`,
-    metadata: cloudflareDeleteError ? { cloudflare_delete_error: cloudflareDeleteError } : undefined
   })
   await promoteCanonicalIfReady(db, domain.site_id)
 }
@@ -701,7 +721,18 @@ export async function deleteOrganizationCustomDomains(
     WHERE organization_id = ? AND type = 'custom' AND status != 'deleted'
   `, [organizationId])
   for (const domain of domains || []) {
-    await deleteCustomDomain(env, db, domain.id, 'system')
+    try {
+      await deleteCustomDomain(env, db, domain.id, 'system')
+    } catch (error) {
+      // Best-effort bulk cleanup — one domain's Cloudflare failure (now
+      // queued for reconciliation retry by deleteCustomDomain) must not stop
+      // the rest of the org's domains from being deleted.
+      console.error('deleteOrganizationCustomDomains: failed to delete domain', {
+        organizationId,
+        domainId: domain.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 }
 
@@ -726,7 +757,7 @@ export async function setCanonicalDomain(
   try {
     await execute(db, `UPDATE site_domains SET role = 'secondary', updated_at = ? WHERE site_id = ? AND role = 'canonical'`, [now, siteId])
     await execute(db, `UPDATE site_domains SET role = 'canonical', updated_at = ? WHERE id = ?`, [now, domainId])
-    await updateSitePrimaryUrl(db, domain.site_id, domain.organization_id, domain.domain)
+    await updateSitePrimaryUrl(db, domain)
     await logDomainEvent(db, {
       organizationId: domain.organization_id,
       siteId,
@@ -756,7 +787,7 @@ async function promoteCanonicalIfReady(db: D1Database, siteId: string): Promise<
   `, [siteId])
 
   if (activeCanonical) {
-    await updateSitePrimaryUrl(db, activeCanonical.site_id, activeCanonical.organization_id, activeCanonical.domain)
+    await updateSitePrimaryUrl(db, activeCanonical)
     return
   }
 
@@ -786,13 +817,24 @@ async function promoteCanonicalIfReady(db: D1Database, siteId: string): Promise<
   await setCanonicalDomain(db, siteId, activeSubdomain.id, 'system')
 }
 
-async function updateSitePrimaryUrl(db: D1Database, siteId: string, organizationId: string, domain: string): Promise<void> {
+async function updateSitePrimaryUrl(db: D1Database, domain: DomainRecord): Promise<void> {
   const now = new Date().toISOString()
-  await execute(db, `
-    UPDATE sites
-    SET public_url = ?, custom_domain = ?, custom_domain_status = 'active', updated_at = ?
-    WHERE id = ? AND organization_id = ?
-  `, [`https://${domain}`, domain, now, siteId, organizationId])
+  // custom_domain/custom_domain_status are a cache of the site's *custom*
+  // domain specifically (DNS instructions, domain settings UI) — a platform
+  // subdomain becoming canonical must not be mistaken for one.
+  if (domain.type === 'custom') {
+    await execute(db, `
+      UPDATE sites
+      SET public_url = ?, custom_domain = ?, custom_domain_status = 'active', updated_at = ?
+      WHERE id = ? AND organization_id = ?
+    `, [`https://${domain.domain}`, domain.domain, now, domain.site_id, domain.organization_id])
+  } else {
+    await execute(db, `
+      UPDATE sites
+      SET public_url = ?, updated_at = ?
+      WHERE id = ? AND organization_id = ?
+    `, [`https://${domain.domain}`, now, domain.site_id, domain.organization_id])
+  }
 }
 
 export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit = 25): Promise<{ checked: number; failed: number }> {

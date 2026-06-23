@@ -307,7 +307,7 @@ export async function sendWhatsAppNotification(
       await execute(
         db,
         `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`,
-        [messageId, now, notificationId],
+        [messageId ?? null, now, notificationId],
       )
       result = { success: true, messageId }
     }

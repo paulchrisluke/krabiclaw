@@ -1129,7 +1129,7 @@ export async function reorderMenuItems(
 ): Promise<void> {
   // Reorder must commit atomically: a partial failure here must not leave
   // items with inconsistent sort_order relative to each other.
-  await executeBatch(
+  const results = await executeBatch(
     db,
     items.map((item) => ({
       query: `
@@ -1140,4 +1140,15 @@ export async function reorderMenuItems(
       params: [item.sort_order, item.id, menuId],
     })),
   );
+
+  // The WHERE clause scopes each update to this menu, so a stale/foreign id
+  // can't corrupt another menu's rows — but it would otherwise fail silently
+  // (zero rows affected) instead of surfacing the bad id to the caller.
+  const unmatched = results.reduce(
+    (count, result, index) => (Number(result?.meta?.changes ?? 0) > 0 ? count : count + (items[index] ? 1 : 0)),
+    0,
+  );
+  if (unmatched > 0) {
+    throw new Error(`Failed to reorder ${unmatched} menu item(s): not found in menu ${menuId}`);
+  }
 }
