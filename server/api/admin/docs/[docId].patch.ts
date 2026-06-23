@@ -26,10 +26,14 @@ export default defineEventHandler(async (event) => {
     category?: string
     seo_description?: string
     seo_keywords?: string
+    canonical_url?: string
+    robots?: string
     difficulty_level?: string
     sort_order?: number
     parent_doc_id?: string
     featured_image_asset_id?: string
+    faq_items?: Array<{ question: string; answer: string }>
+    how_to_steps?: Array<{ name: string; text: string; image_asset_id?: string; url?: string }>
     publish?: boolean
     unpublish?: boolean
   }

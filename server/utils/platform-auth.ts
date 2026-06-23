@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHmac } from 'node:crypto'
 
 function requireAuthSecret(env: ApiRecord): string {
   const secret = String(env?.BETTER_AUTH_SECRET ?? '').trim()
@@ -17,33 +17,12 @@ export function hasBetterAuthAdminRole(role: string | null | undefined): boolean
   return parseRoleList(role).includes('admin')
 }
 
-export function isPlatformOwnerEmail(email: string | null | undefined, env: ApiRecord): boolean {
-  if (!email) return false
-
-  const platformOwnerEmails = String(env?.PLATFORM_OWNER_EMAILS ?? '')
-  const emails = platformOwnerEmails.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean)
-  if (emails.length === 0) return false
-
-  const hmacKey = requireAuthSecret(env)
-  const normalizedEmail = email.toLowerCase()
-  const normalizedEmailHash = createHmac('sha256', hmacKey).update(normalizedEmail).digest()
-  let matched = false
-
-  for (const candidate of emails) {
-    const candidateHash = createHmac('sha256', hmacKey).update(candidate).digest()
-    const isMatch = timingSafeEqual(normalizedEmailHash, candidateHash)
-    matched = isMatch || matched
-  }
-
-  return matched
-}
-
 export function isPlatformAdmin(
   user: { role?: string | null; email?: string | null | undefined } | null | undefined,
-  env: ApiRecord,
+  _env: ApiRecord,
 ): boolean {
   if (!user) return false
-  return hasBetterAuthAdminRole(user.role) || isPlatformOwnerEmail(user.email, env)
+  return hasBetterAuthAdminRole(user.role)
 }
 
 export function requirePlatformAdmin(
@@ -52,14 +31,6 @@ export function requirePlatformAdmin(
 ): void {
   if (!isPlatformAdmin(user, env)) {
     throw new Error('Platform admin access required')
-  }
-}
-
-// Backward-compatible aliases while older code is migrated.
-export const isPlatformOwner = isPlatformOwnerEmail
-export function requirePlatformOwner(email: string | null | undefined, env: ApiRecord): void {
-  if (!isPlatformOwnerEmail(email, env)) {
-    throw new Error('Platform owner access required')
   }
 }
 

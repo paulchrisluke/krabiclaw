@@ -23,44 +23,170 @@
       :description="loadError"
     />
 
-    <PostEditor
-      v-else
-      v-model:title="form.title"
-      v-model:excerpt="form.excerpt"
-      v-model:category="form.category"
-      v-model:body="form.body"
-      eyebrow="Platform blog"
-      :status-text="post?.published_at ? `Published ${formatDate(post.published_at)}` : 'Draft'"
-      :published-at="post?.published_at"
-      :categories="categories"
-      :show-excerpt="true"
-      :show-category="true"
-      :show-unpublish="Boolean(post?.published_at)"
-      :can-delete="true"
-      :saving="saving"
-      :publishing="saving"
-      :error-message="errorMessage"
-      :success-message="successMessage"
-      markdown
-      body-label="Body (Markdown)"
-      body-placeholder="Write your post in Markdown..."
-      :body-rows="18"
-      save-label="Save changes"
-      publish-label="Publish"
-      @save="update(false)"
-      @publish="update(true)"
-      @unpublish="unpublish"
-      @delete="remove"
-    />
+    <UCard v-else>
+      <div class="space-y-4">
+        <UFormField label="Title">
+          <UInput v-model="form.title" placeholder="How to improve restaurant SEO with KrabiClaw" size="lg" />
+        </UFormField>
+
+        <UFormField label="Category">
+          <USelect
+            v-model="form.category"
+            :items="categoryItems"
+            value-key="value"
+            label-key="label"
+            placeholder="Select a category"
+          />
+        </UFormField>
+
+        <UFormField label="Excerpt">
+          <UTextarea v-model="form.excerpt" :rows="3" placeholder="One or two sentences that summarize this post." />
+        </UFormField>
+
+        <UFormField label="SEO Description">
+          <UTextarea v-model="form.seo_description" :rows="2" placeholder="Meta description for search engines (150-160 characters recommended)" />
+        </UFormField>
+
+        <UFormField label="SEO Keywords">
+          <UInput v-model="form.seo_keywords" placeholder="restaurant seo, local seo, menu pages" />
+        </UFormField>
+
+        <UFormField label="Canonical URL" hint="Optional">
+          <UInput v-model="form.canonical_url" placeholder="Leave blank to use the generated page canonical" />
+        </UFormField>
+
+        <UFormField label="Robots">
+          <USelect
+            v-model="form.robots"
+            :items="robotsItems"
+            value-key="value"
+            label-key="label"
+            placeholder="Default (index,follow)"
+          />
+        </UFormField>
+
+        <UFormField label="Body (Markdown)">
+          <UTextarea
+            v-model="form.body"
+            :rows="18"
+            placeholder="Write your post in Markdown..."
+            class="font-mono text-sm"
+          />
+        </UFormField>
+
+        <UFormField label="Featured Image">
+          <PlatformMediaPicker v-model="form.featured_image_asset_id" @change="handleImageChange" />
+        </UFormField>
+
+        <div class="space-y-4 border-t border-default pt-4">
+          <div>
+            <h2 class="text-sm font-semibold text-default">Structured content</h2>
+            <p class="text-xs text-muted">Only add FAQ or How-To blocks when they are visibly part of the article.</p>
+          </div>
+
+          <div class="space-y-3">
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-sm font-medium text-default">FAQ</h3>
+              <UButton color="neutral" variant="soft" size="sm" icon="i-heroicons-plus" @click="addFaqItem">
+                Add question
+              </UButton>
+            </div>
+
+            <div v-if="form.faq_items.length" class="space-y-3">
+              <UCard v-for="(item, index) in form.faq_items" :key="`faq-${index}`">
+                <div class="space-y-3">
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <UFormField label="Question">
+                      <UInput v-model="item.question" placeholder="What should I optimize first?" />
+                    </UFormField>
+                    <UFormField label="Answer">
+                      <UTextarea v-model="item.answer" :rows="3" placeholder="Write a concise answer the reader will actually see." />
+                    </UFormField>
+                  </div>
+                  <div class="flex gap-2">
+                    <UButton color="neutral" variant="ghost" size="sm" :disabled="index === 0" @click="moveItem(form.faq_items, index, -1)">Up</UButton>
+                    <UButton color="neutral" variant="ghost" size="sm" :disabled="index === form.faq_items.length - 1" @click="moveItem(form.faq_items, index, 1)">Down</UButton>
+                    <UButton color="error" variant="ghost" size="sm" @click="removeFaqItem(index)">Remove</UButton>
+                  </div>
+                </div>
+              </UCard>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-sm font-medium text-default">How-To</h3>
+              <UButton color="neutral" variant="soft" size="sm" icon="i-heroicons-plus" @click="addHowToStep">
+                Add step
+              </UButton>
+            </div>
+
+            <div v-if="form.how_to_steps.length" class="space-y-3">
+              <UCard v-for="(step, index) in form.how_to_steps" :key="`howto-${index}`">
+                <div class="space-y-3">
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <UFormField :label="`Step ${index + 1} title`">
+                      <UInput v-model="step.name" placeholder="Audit your menu page titles" />
+                    </UFormField>
+                    <UFormField label="Optional URL">
+                      <UInput v-model="step.url" placeholder="https://krabiclaw.com/docs/example" />
+                    </UFormField>
+                  </div>
+
+                  <UFormField label="Step text">
+                    <UTextarea v-model="step.text" :rows="3" placeholder="Describe exactly what the reader should do." />
+                  </UFormField>
+
+                  <UFormField label="Step image">
+                    <PlatformMediaPicker v-model="step.image_asset_id" />
+                  </UFormField>
+
+                  <div class="flex gap-2">
+                    <UButton color="neutral" variant="ghost" size="sm" :disabled="index === 0" @click="moveItem(form.how_to_steps, index, -1)">Up</UButton>
+                    <UButton color="neutral" variant="ghost" size="sm" :disabled="index === form.how_to_steps.length - 1" @click="moveItem(form.how_to_steps, index, 1)">Down</UButton>
+                    <UButton color="error" variant="ghost" size="sm" @click="removeHowToStep(index)">Remove</UButton>
+                  </div>
+                </div>
+              </UCard>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="errorMessage || successMessage" class="space-y-2">
+          <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-heroicons-exclamation-triangle" :description="errorMessage" />
+          <UAlert v-if="successMessage" color="success" variant="soft" icon="i-heroicons-check-circle" :description="successMessage" />
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 border-t border-default pt-4">
+          <UButton color="neutral" variant="soft" :loading="saving" :disabled="!canSave" @click="update(false)">
+            Save changes
+          </UButton>
+          <UButton :loading="saving" :disabled="!canPublish" @click="update(true)">
+            Publish
+          </UButton>
+          <UButton v-if="post?.published_at" color="neutral" variant="ghost" :loading="saving" @click="unpublish">
+            Unpublish
+          </UButton>
+          <UButton color="error" variant="ghost" :loading="saving" @click="remove">
+            Delete
+          </UButton>
+        </div>
+      </div>
+    </UCard>
   </div>
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
+import { getErrorMessage } from '~/utils/errors'
+import { createEmptyFaqItem, createEmptyHowToStep, useBlogForm } from '~/composables/useBlogForm'
 
-const route = useRoute()
-const postId = route.params.postId as string
-const categories = ['Marketing', 'Technology', 'Design', 'Business', 'SEO', 'Social Media']
+interface BlogComponent {
+  type: 'faq' | 'how_to'
+  data?: {
+    items?: Array<{ question?: string | null; answer?: string | null }>
+    steps?: Array<{ name?: string | null; text?: string | null; image_asset_id?: string | null; url?: string | null }>
+  } | null
+}
 
 interface BlogPost {
   id: string
@@ -68,29 +194,36 @@ interface BlogPost {
   slug?: string | null
   excerpt?: string | null
   category?: string | null
+  seo_description?: string | null
+  seo_keywords?: string | null
+  canonical_url?: string | null
+  robots?: string | null
+  featured_image_asset_id?: string | null
   body: string
   published_at?: string | null
+  components?: BlogComponent[]
 }
 
 interface BlogPostResponse {
   post?: BlogPost
 }
 
-function getErrorMessage(error: unknown, message: string): string {
-  if (error && typeof error === 'object') {
-    const data = (error as Record<string, unknown>).data
-    if (data && typeof data === 'object') {
-      const dataError = (data as Record<string, unknown>).error
-      if (typeof dataError === 'string' && dataError) return dataError
-    }
-    const errorMessage = (error as Record<string, unknown>).message
-    if (typeof errorMessage === 'string' && errorMessage) return errorMessage
-  }
-  return message
-}
+definePageMeta({ layout: 'dashboard' })
+
+const route = useRoute()
+const postId = route.params.postId as string
+const categories = ['Marketing', 'Technology', 'Design', 'Business', 'SEO', 'Social Media']
+const categoryItems = computed(() => categories.map((item) => ({ label: item, value: item })))
+const robotsItems = [
+  { label: 'Default (index,follow)', value: '' },
+  { label: 'index,follow', value: 'index,follow' },
+  { label: 'noindex,follow', value: 'noindex,follow' },
+  { label: 'index,nofollow', value: 'index,nofollow' },
+  { label: 'noindex,nofollow', value: 'noindex,nofollow' },
+]
+const { form, canSave, canPublish, handleImageChange } = useBlogForm()
 
 const post = ref<BlogPost | null>(null)
-const form = reactive({ title: '', excerpt: '', category: '', body: '' })
 const loadPending = ref(true)
 const loadError = ref('')
 const saving = ref(false)
@@ -98,6 +231,66 @@ const errorMessage = ref('')
 const successMessage = ref('')
 
 onMounted(loadPost)
+
+function addFaqItem() {
+  form.faq_items.push(createEmptyFaqItem())
+}
+
+function removeFaqItem(index: number) {
+  form.faq_items.splice(index, 1)
+}
+
+function addHowToStep() {
+  form.how_to_steps.push(createEmptyHowToStep())
+}
+
+function removeHowToStep(index: number) {
+  form.how_to_steps.splice(index, 1)
+}
+
+function moveItem<T>(items: T[], index: number, delta: number) {
+  const nextIndex = index + delta
+  if (nextIndex < 0 || nextIndex >= items.length) return
+  const [item] = items.splice(index, 1)
+  if (item === undefined) return
+  items.splice(nextIndex, 0, item)
+}
+
+function hydrateStructuredContent(components: BlogComponent[] | undefined) {
+  const faq = components?.find(component => component.type === 'faq')
+  const howTo = components?.find(component => component.type === 'how_to')
+
+  form.faq_items = faq?.data?.items?.map(item => ({
+    question: item.question ?? '',
+    answer: item.answer ?? '',
+  })) ?? []
+
+  form.how_to_steps = howTo?.data?.steps?.map(step => ({
+    name: step.name ?? '',
+    text: step.text ?? '',
+    image_asset_id: step.image_asset_id ?? '',
+    url: step.url ?? '',
+  })) ?? []
+}
+
+function buildPayload() {
+  return {
+    ...form,
+    canonical_url: form.canonical_url.trim() || null,
+    robots: form.robots.trim() || null,
+    faq_items: form.faq_items
+      .map(item => ({ question: item.question.trim(), answer: item.answer.trim() }))
+      .filter(item => item.question || item.answer),
+    how_to_steps: form.how_to_steps
+      .map(step => ({
+        name: step.name.trim(),
+        text: step.text.trim(),
+        image_asset_id: step.image_asset_id.trim() || undefined,
+        url: step.url.trim() || undefined,
+      }))
+      .filter(step => step.name || step.text || step.image_asset_id || step.url),
+  }
+}
 
 async function loadPost() {
   loadPending.value = true
@@ -109,7 +302,13 @@ async function loadPost() {
     form.title = res.post.title
     form.excerpt = res.post.excerpt ?? ''
     form.category = res.post.category ?? ''
+    form.seo_description = res.post.seo_description ?? ''
+    form.seo_keywords = res.post.seo_keywords ?? ''
+    form.canonical_url = res.post.canonical_url ?? ''
+    form.robots = res.post.robots ?? ''
+    form.featured_image_asset_id = res.post.featured_image_asset_id ?? ''
     form.body = res.post.body
+    hydrateStructuredContent(res.post.components)
   } catch (err) {
     loadError.value = getErrorMessage(err, 'Failed to load post.')
   } finally {
@@ -128,10 +327,11 @@ async function update(publish = false) {
   try {
     const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId}`, {
       method: 'PATCH',
-      body: { ...form, ...(publish ? { publish: true } : {}) }
+      body: { ...buildPayload(), ...(publish ? { publish: true } : {}) },
     })
     if (!updated.post) throw new Error('Post not found after save')
     post.value = updated.post
+    hydrateStructuredContent(updated.post.components)
     successMessage.value = publish ? 'Published.' : 'Saved.'
   } catch (err) {
     errorMessage.value = getErrorMessage(err, 'Failed to save.')
@@ -145,9 +345,13 @@ async function unpublish() {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId}`, { method: 'PATCH', body: { unpublish: true } })
+    const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId}`, {
+      method: 'PATCH',
+      body: { ...buildPayload(), unpublish: true },
+    })
     if (!updated.post) throw new Error('Post not found after unpublish')
     post.value = updated.post
+    hydrateStructuredContent(updated.post.components)
     successMessage.value = 'Post unpublished.'
   } catch (err) {
     errorMessage.value = getErrorMessage(err, 'Failed to unpublish.')
@@ -168,10 +372,6 @@ async function remove() {
   } finally {
     saving.value = false
   }
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 useSeoMeta({ title: 'Edit Post | Admin' })

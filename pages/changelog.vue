@@ -42,13 +42,6 @@
 <script setup>
 definePageMeta({ layout: 'platform' })
 
-import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
-
-useBreadcrumbSchema([
-  { name: 'Home', url: 'https://krabiclaw.com' },
-  { name: 'Changelog', url: 'https://krabiclaw.com/changelog' }
-])
-
 const changelog = ref({ commits: {}, total: 0, lastUpdated: '' })
 const loading = ref(true)
 const error = ref('')
@@ -82,13 +75,14 @@ function getBadgeClass(type) {
   return classes[type] || classes.other
 }
 
-const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
-
-useSeoMeta({
-  title: 'Changelog | KrabiClaw',
+usePlatformPageSeo({
+  path: '/changelog',
+  title: 'Changelog',
   description: 'Latest updates and improvements to KrabiClaw business website builder.',
-  ogImage: `${siteUrl}/og-image.png`,
-  ogUrl: `${siteUrl}/changelog`
+  pageType: 'CollectionPage',
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: 'Changelog', url: '/changelog' },
+  ],
 })
 </script>

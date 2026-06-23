@@ -270,19 +270,14 @@
 <script setup>
 definePageMeta({ layout: false })
 
-import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
-
 const { isPlatform, siteId, site } = useTenantSite()
 const { locale } = useI18n()
 const vertCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 const { t } = useI18n()
-const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
 const route = useRoute()
 const requestURL = useRequestURL()
 const toast = useToast()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const sharedOgImage = useSharedOgImage()
 const tenantOgImage = useTenantOgImage()
 
 const businessName = computed(() => site?.brand_name || 'Our Business')
@@ -385,35 +380,27 @@ const handlePlatformContact = async () => {
 
 // ── SEO ──────────────────────────────────────────────────
 if (isPlatform) {
-  useOrganizationSchema()
-  useBreadcrumbSchema([
-    { name: 'Home', url: `${siteUrl}/` },
-    { name: 'Contact', url: `${siteUrl}/contact` }
-  ])
+  usePlatformPageSeo({
+    path: '/contact',
+    title: 'Contact',
+    description: 'Contact the KrabiClaw team for support, questions, or partnership inquiries.',
+    pageType: 'ContactPage',
+    breadcrumbs: [
+      { name: 'Home', url: '/' },
+      { name: 'Contact', url: '/contact' },
+    ],
+  })
+} else {
+  useSeoMeta({
+    title: computed(() => `Contact | ${businessName.value}`),
+    description: 'Get in touch with our business.',
+    ogTitle: computed(() => `Contact | ${businessName.value}`),
+    ogDescription: 'Get in touch with our business.',
+    ogSiteName: computed(() => businessName.value),
+    twitterTitle: computed(() => `Contact | ${businessName.value}`),
+    twitterDescription: 'Get in touch with our business.',
+    ogImage: tenantOgImage,
+    ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
+  })
 }
-
-useSeoMeta(isPlatform
-  ? {
-      title: 'Contact | KrabiClaw',
-      description: 'Contact the KrabiClaw team for support, questions, or partnership inquiries.',
-      ogTitle: 'Contact | KrabiClaw',
-      ogDescription: 'Contact the KrabiClaw team for support, questions, or partnership inquiries.',
-      ogSiteName: 'KrabiClaw',
-      twitterTitle: 'Contact | KrabiClaw',
-      twitterDescription: 'Contact the KrabiClaw team for support, questions, or partnership inquiries.',
-      ogImage: sharedOgImage,
-      ogUrl: `${siteUrl}/contact`
-    }
-  : {
-      title: computed(() => `Contact | ${businessName.value}`),
-      description: 'Get in touch with our business.',
-      ogTitle: computed(() => `Contact | ${businessName.value}`),
-      ogDescription: 'Get in touch with our business.',
-      ogSiteName: computed(() => businessName.value),
-      twitterTitle: computed(() => `Contact | ${businessName.value}`),
-      twitterDescription: 'Get in touch with our business.',
-      ogImage: tenantOgImage,
-      ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
-    }
-)
 </script>

@@ -24,10 +24,10 @@
           <!-- Featured Post -->
           <NuxtLink :to="`/blog/${posts[0].slug}`" class="block mb-12">
             <div class="bg-elevated rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
-                  <div v-if="resolveMedia(posts[0]).url" class="h-64 overflow-hidden">
+                  <div v-if="resolveMedia(posts[0].featured_image).url" class="h-64 overflow-hidden">
                     <video
-                      v-if="resolveMedia(posts[0]).isVideo"
-                      :src="resolveMedia(posts[0]).url ?? undefined"
+                      v-if="resolveMedia(posts[0].featured_image).isVideo"
+                      :src="resolveMedia(posts[0].featured_image).url ?? undefined"
                   autoplay
                   muted
                   loop
@@ -36,7 +36,7 @@
                 />
                     <img
                       v-else
-                      :src="resolveMedia(posts[0]).url ?? undefined"
+                      :src="resolveMedia(posts[0].featured_image).url ?? undefined"
                   :alt="posts[0].title"
                   class="h-full w-full object-cover"
                 />
@@ -71,10 +71,10 @@
                 class="block"
               >
                 <div class="bg-elevated rounded-xl shadow-sm border border-default overflow-hidden hover:shadow-md transition-shadow h-full">
-                  <div v-if="resolveMedia(post).url" class="h-48 overflow-hidden">
+                  <div v-if="resolveMedia(post.featured_image).url" class="h-48 overflow-hidden">
                     <video
-                      v-if="resolveMedia(post).isVideo"
-	                      :src="resolveMedia(post).url ?? undefined"
+                      v-if="resolveMedia(post.featured_image).isVideo"
+	                      :src="resolveMedia(post.featured_image).url ?? undefined"
                       autoplay
                       muted
                       loop
@@ -83,7 +83,7 @@
                     />
                     <img
                       v-else
-	                      :src="resolveMedia(post).url ?? undefined"
+	                      :src="resolveMedia(post.featured_image).url ?? undefined"
                       :alt="post.title"
                       class="h-full w-full object-cover"
                     />
@@ -223,7 +223,7 @@ useBreadcrumbSchema([
 ])
 
 useSeoMeta({
-  title: 'Blog | KrabiClaw',
+  title: 'Blog',
   description: 'Marketing tips, industry insights, and strategies to help your business succeed online.',
   ogSiteName: 'KrabiClaw',
   ogImage: useSharedOgImage(),

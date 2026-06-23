@@ -83,6 +83,10 @@ export default defineNuxtConfig({
     defaultLocale: 'en',
   },
 
+  schemaOrg: {
+    defaults: false,
+  },
+
   // i18n Configuration
   i18n: {
     langDir: 'locales',  // relative to i18n/ (module default is restructureDir: 'i18n')

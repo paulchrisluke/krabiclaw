@@ -53,26 +53,19 @@
 <script setup>
 definePageMeta({ layout: 'platform' })
 
-import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
-
-const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
-
-useBreadcrumbSchema([
-  { name: 'Home', url: `${siteUrl}/` },
-  { name: 'Documentation', url: `${siteUrl}/docs` }
-])
-
 const { data, pending, error: docsError } = await useFetch('/api/public/docs', {
   default: () => ({ docs: [] })
 })
 
 const docs = computed(() => data.value?.docs || [])
 
-useSeoMeta({
-  title: 'Documentation | KrabiClaw',
+usePlatformPageSeo({
+  path: '/docs',
+  title: 'Documentation',
   description: 'Documentation for KrabiClaw website builder for local businesses. Learn how to use all features.',
-  ogImage: `${siteUrl}/og-image.png`,
-  ogUrl: `${siteUrl}/docs`
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: 'Documentation', url: '/docs' },
+  ],
 })
 </script>

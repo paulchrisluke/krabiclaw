@@ -2,7 +2,6 @@
 // Throws 404 in production (import.meta.dev is false at build time)
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
-import { isPlatformOwner } from '~/server/utils/platform-auth'
 import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 
 async function hmacSign(value: string, secret: string): Promise<string> {
@@ -112,17 +111,14 @@ export default defineEventHandler(async (event) => {
       row.has_site === 1 &&
       row.is_owner === 1 &&
       row.has_org === 1 &&
-      String(row.role || '').toLowerCase() !== 'admin' &&
-      !isPlatformOwner(row.email, env)
+      String(row.role || '').toLowerCase() !== 'admin'
     ) || rows.find((row) =>
       row.is_owner === 1 &&
       row.has_org === 1 &&
-      String(row.role || '').toLowerCase() !== 'admin' &&
-      !isPlatformOwner(row.email, env)
+      String(row.role || '').toLowerCase() !== 'admin'
     ) || rows.find((row) =>
       row.has_org === 1 &&
-      String(row.role || '').toLowerCase() !== 'admin' &&
-      !isPlatformOwner(row.email, env)
+      String(row.role || '').toLowerCase() !== 'admin'
     ) || null
     if (!user) {
       throw createError({ statusCode: 500, statusMessage: 'No suitable dev user (prefer owner with site, fallback owner with org, fallback member with org)' })

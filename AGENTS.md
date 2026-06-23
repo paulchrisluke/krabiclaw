@@ -364,7 +364,7 @@ Flow:
 
 - Access requires both:
   - `user.role = 'admin'` in DB
-  - Server-side `isPlatformOwner()` check against `PLATFORM_OWNER_EMAILS` env var
+  - Server-side `isPlatformAdmin()` check aligned to the Better Auth global admin role
 
 - Admin navigation is defined in `adminNavigation` computed in `layouts/dashboard.vue`.
 

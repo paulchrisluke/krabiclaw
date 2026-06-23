@@ -42,30 +42,13 @@ definePageMeta({
   layout: 'platform'
 })
 
-const config = useRuntimeConfig()
-const requestURL = useRequestURL()
-const configuredSiteUrl = config.public.siteUrl
-const siteOrigin = (() => {
-  if (!configuredSiteUrl) return requestURL.origin
-
-  try {
-    return new URL(configuredSiteUrl).origin
-  } catch {
-    return requestURL.origin
-  }
-})()
-
-useSeoMeta({
-  title: 'Terms and Conditions | KrabiClaw',
+usePlatformPageSeo({
+  path: '/terms',
+  title: 'Terms and Conditions',
   description: 'Terms and Conditions for KrabiClaw website builder platform. Read our terms of service for using our SaaS platform.',
-  ogTitle: 'Terms and Conditions | KrabiClaw',
-  ogDescription: 'Our terms of service for the website builder platform.',
-  ogImage: `${siteOrigin}/og-image.png`,
-  ogUrl: `${siteOrigin}/terms`,
-  ogType: 'website',
-  twitterCard: 'summary',
-  twitterTitle: 'Terms and Conditions - KrabiClaw',
-  twitterDescription: 'Terms of service for our website builder platform.',
-  twitterImage: `${siteOrigin}/og-image.png`
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: 'Terms and Conditions', url: '/terms' },
+  ],
 })
 </script>

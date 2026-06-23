@@ -48,6 +48,7 @@
     "seed:kikuzuki:preview": "node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview",
     "seed:kikuzuki:staging": "node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --staging",
     "seed:kikuzuki:remote": "node scripts/seed-remote-guard.mjs scripts/generate-kikuzuki-seed.ts",
+    "platform-admin:promote": "node scripts/promote-platform-admin.mjs",
     "client:replay": "node scripts/client-replay.mjs",
     "client:import": "node scripts/client-import.mjs",
     "client:onboard": "node scripts/client-onboard.mjs",

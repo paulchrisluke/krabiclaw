@@ -176,34 +176,14 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'platform' })
 
-import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
-
-const config = useRuntimeConfig()
-const platformHostname = computed(() => {
-  const freeSiteDomain = config.public.freeSiteDomain
-  if (!freeSiteDomain) return 'krabiclaw.com'
-  try {
-    const url = new URL(freeSiteDomain.startsWith('http') ? freeSiteDomain : `https://${freeSiteDomain}`)
-    return url.hostname
-  } catch {
-    return freeSiteDomain.replace(/^https?:\/\//, '').split('/')[0] || 'krabiclaw.com'
-  }
-})
-
-useBreadcrumbSchema([
-  { name: 'Home', url: `https://${platformHostname.value}/` },
-  { name: 'Features', url: `https://${platformHostname.value}/features` },
-])
-
-const sharedOgImage = useSharedOgImage()
-const currentPageUrl = useSeoUrl('/features')
-
-useSeoMeta({
-  title: 'Platform Features | KrabiClaw',
+usePlatformPageSeo({
+  path: '/features',
+  title: 'Platform Features',
   description: 'KrabiClaw features: edit your restaurant or experience site through ChatGPT, take bookings, sync with Google Business, translate to multiple languages, and track real-time analytics.',
-  ogImage: sharedOgImage,
-  ogUrl: currentPageUrl,
-  ogType: 'website',
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: 'Features', url: '/features' },
+  ],
 })
 
 const detailedFeatures = [

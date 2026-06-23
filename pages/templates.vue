@@ -301,19 +301,36 @@ const specs = [
   { label: 'Mobile', value: 'Fully responsive' },
   { label: 'Languages', value: 'EN / TH' }
 ]
-const sharedOgImage = useSharedOgImage()
-const currentPageUrl = useSeoUrl('/templates')
 
-useBreadcrumbSchema([
-  { name: 'Home', url: `https://${platformHostname}/` },
-  { name: 'Templates', url: `https://${platformHostname}/templates` }
-])
+const siteUrl = config.public.siteUrl || (import.meta.dev ? 'http://localhost:3000' : 'https://krabiclaw.com')
 
-useSeoMeta({
-  title: 'Saya Theme | KrabiClaw',
+usePlatformPageSeo({
+  path: '/templates',
+  title: 'Saya Theme',
   description: 'The Saya theme — editorial design, Google Business integration, AI content management. Free on all plans.',
-  ogImage: sharedOgImage,
-  ogUrl: currentPageUrl,
-  ogType: 'website'
+  pageType: 'CollectionPage',
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: 'Templates', url: '/templates' },
+  ],
+  schemaNodes: [
+    {
+      '@type': 'ItemList',
+      '@id': `${siteUrl}/templates#themes`,
+      name: 'KrabiClaw Themes',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          item: {
+            '@type': 'Product',
+            name: 'Saya',
+            description: 'The flagship KrabiClaw theme. Editorial typography, location-centric navigation, and deep Google Business integration.',
+            offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+          },
+        },
+      ],
+    },
+  ],
 })
 </script>

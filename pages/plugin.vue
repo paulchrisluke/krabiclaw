@@ -230,8 +230,18 @@ async function copyUrl() {
   }
 }
 
-useSeoMeta({
+usePlatformPageSeo({
+  path: '/plugin',
   title: 'Get the KrabiClaw App for ChatGPT',
   description: 'Add KrabiClaw to ChatGPT and manage your restaurant or experience website entirely through conversation.',
+  pageType: 'SoftwareApplication',
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: 'KrabiClaw for ChatGPT', url: '/plugin' },
+  ],
+  softwareApplication: {
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web, ChatGPT',
+  },
 })
 </script>

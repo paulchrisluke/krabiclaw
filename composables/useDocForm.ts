@@ -1,3 +1,5 @@
+import { createEmptyFaqItem, createEmptyHowToStep } from '~/composables/useBlogForm'
+
 export function useDocForm() {
   const form = reactive({
     title: '',
@@ -6,8 +8,12 @@ export function useDocForm() {
     difficulty_level: '',
     seo_description: '',
     seo_keywords: '',
+    canonical_url: '',
+    robots: '',
     body: '',
-    featured_image_asset_id: ''
+    featured_image_asset_id: '',
+    faq_items: [createEmptyFaqItem()],
+    how_to_steps: [createEmptyHowToStep(), createEmptyHowToStep()]
   })
 
   const canSave = computed(() => Boolean(form.title.trim() || form.body.trim()))

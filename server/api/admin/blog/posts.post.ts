@@ -16,7 +16,20 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
   }
 
-  let body: { title?: string; body?: string; excerpt?: string; category?: string; publish?: boolean }
+  let body: {
+    title?: string
+    body?: string
+    excerpt?: string
+    category?: string
+    seo_description?: string
+    seo_keywords?: string
+    canonical_url?: string
+    robots?: string
+    featured_image_asset_id?: string
+    faq_items?: Array<{ question: string; answer: string }>
+    how_to_steps?: Array<{ name: string; text: string; image_asset_id?: string; url?: string }>
+    publish?: boolean
+  }
   try { body = await readBody(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
@@ -27,6 +40,13 @@ export default defineEventHandler(async (event) => {
       body: body.body ?? '',
       excerpt: body.excerpt ?? null,
       category: body.category ?? null,
+      seo_description: body.seo_description ?? null,
+      seo_keywords: body.seo_keywords ?? null,
+      canonical_url: body.canonical_url ?? null,
+      robots: body.robots ?? null,
+      featured_image_asset_id: body.featured_image_asset_id ?? null,
+      faq_items: body.faq_items,
+      how_to_steps: body.how_to_steps,
       publish: body.publish ?? false,
     })
     return jsonResponse(result)
