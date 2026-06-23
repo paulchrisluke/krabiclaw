@@ -26,7 +26,7 @@ export interface MediaAsset {
   duration: number | null
   alt_text: string | null
   category: 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo' | null
-  status: 'pending' | 'active' | 'deleted' | 'failed'
+  status: 'pending' | 'active' | 'deleted' | 'failed' | 'delete_pending'
   created_by_user_id: string | null
   created_at: string
   updated_at: string
@@ -139,22 +139,29 @@ export async function updateMediaAssetMetadata(
   return Number(result?.meta?.changes ?? 0) > 0
 }
 
-/** Soft-delete in DB and hard-delete from Cloudflare storage. */
+/**
+ * Soft-delete in DB and hard-delete from Cloudflare storage.
+ *
+ * The row is marked 'delete_pending' (not 'deleted') until the Cloudflare
+ * Images/R2 delete actually succeeds, so a failed external delete leaves the
+ * asset in a retryable state instead of orphaning the file with no record
+ * pointing back to it.
+ */
 export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: string, siteId: string): Promise<void> {
   const now = new Date().toISOString()
-  const deletedAsset = await queryFirst<{
+  const pendingAsset = await queryFirst<{
     id: string
     provider: MediaAsset['provider']
     cloudflare_image_id: string | null
     r2_key: string | null
   }>(db, `
     UPDATE media_assets
-    SET status = 'deleted', updated_at = ?
-    WHERE id = ? AND site_id = ? AND status != 'deleted'
+    SET status = 'delete_pending', updated_at = ?
+    WHERE id = ? AND site_id = ? AND status NOT IN ('deleted', 'delete_pending')
     RETURNING id, provider, cloudflare_image_id, r2_key
   `, [now, id, siteId]) ?? null
 
-  if (!deletedAsset) return
+  if (!pendingAsset) return
 
   const withRetry = async (
     operation: () => Promise<void>,
@@ -181,19 +188,26 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     throw lastError ?? new Error('media_asset_external_delete_failed')
   }
 
-  if (deletedAsset.provider === 'cloudflare_images' && deletedAsset.cloudflare_image_id) {
-    const cloudflareImageId = deletedAsset.cloudflare_image_id
+  // If either delete throws, status stays 'delete_pending' for a retry job to pick back up.
+  if (pendingAsset.provider === 'cloudflare_images' && pendingAsset.cloudflare_image_id) {
+    const cloudflareImageId = pendingAsset.cloudflare_image_id
     await withRetry(() => deleteImage(env, cloudflareImageId), {
-      assetId: deletedAsset.id,
-      provider: deletedAsset.provider,
+      assetId: pendingAsset.id,
+      provider: pendingAsset.provider,
       cloudflareImageId,
     })
-  } else if (deletedAsset.provider === 'cloudflare_r2' && deletedAsset.r2_key) {
-    const r2Key = deletedAsset.r2_key
+  } else if (pendingAsset.provider === 'cloudflare_r2' && pendingAsset.r2_key) {
+    const r2Key = pendingAsset.r2_key
     await withRetry(() => deleteFromR2(env, r2Key), {
-      assetId: deletedAsset.id,
-      provider: deletedAsset.provider,
+      assetId: pendingAsset.id,
+      provider: pendingAsset.provider,
       r2Key,
     })
   }
+
+  await execute(db, `
+    UPDATE media_assets
+    SET status = 'deleted', updated_at = ?
+    WHERE id = ? AND site_id = ? AND status = 'delete_pending'
+  `, [new Date().toISOString(), pendingAsset.id, siteId])
 }

@@ -1,5 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { syncPlaceToLocation } from '~/server/utils/google-places'
+import { queryAll } from '~/server/db'
 
 // NOTE: Google Business Profile API access was never provisioned.
 // All Google data for every location comes from the Places API (New, v1)
@@ -58,7 +59,7 @@ export default defineTask({
     }
 
     // Sync locations for orgs with google_business entitlement that have a Place ID
-    const { results } = await db.prepare(`
+    const locations = await queryAll<PlaceLocationRow>(db, `
       SELECT bl.id, bl.organization_id, bl.site_id, bl.title, bl.google_place_id
       FROM business_locations bl
       INNER JOIN site_entitlements oe
@@ -68,9 +69,7 @@ export default defineTask({
       WHERE bl.google_place_id IS NOT NULL
         AND bl.status = 'active'
       ORDER BY bl.organization_id, bl.site_id
-    `).all()
-
-    const locations = (results ?? []) as unknown as PlaceLocationRow[]
+    `)
 
     if (locations.length === 0) {
       return { result: emptyResult }

@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { execute, queryFirst } from '~/server/db'
 
 type MemberRole = 'owner' | 'admin' | 'editor' | 'member'
 
@@ -38,13 +39,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const organizationId = body.organizationId
-  const ownerMembership = await db.prepare(`
+  const ownerMembership = await queryFirst<{ organizationId: string }>(db, `
     SELECT organizationId
     FROM member
     WHERE userId = ? AND role = 'owner' AND (? IS NULL OR organizationId = ?)
     ORDER BY createdAt ASC
     LIMIT 1
-  `).bind(session.user.id, organizationId ?? null, organizationId ?? null).first<{ organizationId: string }>()
+  `, [session.user.id, organizationId ?? null, organizationId ?? null])
 
   if (!ownerMembership?.organizationId) {
     return jsonResponse({ error: 'Owner organization not found' }, { status: 404 })
@@ -56,15 +57,15 @@ export default defineEventHandler(async (event) => {
   const email = body.email?.trim().toLowerCase() || `e2e-${role}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.test`
   const name = body.name?.trim() || `E2E ${role}`
 
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
     VALUES (?, ?, ?, 1, 'user', ?, ?)
-  `).bind(userId, name, email, now, now).run()
+  `, [userId, name, email, now, now])
 
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO member (id, organizationId, userId, role, createdAt)
     VALUES (?, ?, ?, ?, ?)
-  `).bind(`member-${idSuffix}`, ownerMembership.organizationId, userId, role, now).run()
+  `, [`member-${idSuffix}`, ownerMembership.organizationId, userId, role, now])
 
   return jsonResponse({
     success: true,

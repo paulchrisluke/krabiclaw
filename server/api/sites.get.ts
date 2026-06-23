@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '../utils/api-response'
 import { getAuthSession } from '../utils/auth'
 import { DEMO_ORG_ID } from '../utils/demo'
 import { defineEventHandler } from 'h3'
+import { queryAll } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -27,19 +28,19 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Get user's organization
-    const organization = await db.prepare(`
+    const organization = await queryAll(db, `
       SELECT o.id FROM organization o
       JOIN member m ON o.id = m.organizationId
       WHERE m.userId = ?
-    `).bind(userId).all()
+    `, [userId])
 
-    if (!organization.results || organization.results.length === 0) {
+    if (!organization || organization.length === 0) {
       return jsonResponse({
         sites: []
       })
     }
 
-    const allOrgIds = organization.results.map((org: ApiValue) => org.id)
+    const allOrgIds = organization.map((org: ApiValue) => org.id)
     // Non-admins must never see or access the demo site
     const orgIds = isPlatformAdmin ? allOrgIds : allOrgIds.filter((id: ApiValue) => id !== DEMO_ORG_ID)
 
@@ -49,16 +50,16 @@ export default defineEventHandler(async (event) => {
 
     // Build WHERE clause for multiple organization IDs
     const placeholders = orgIds.map(() => '?').join(',')
-    const sites = await db.prepare(`
+    const sites = await queryAll(db, `
       SELECT id, organization_id, theme_id, brand_name, slug, subdomain,
              custom_domain, status, plan, created_at, updated_at,
              onboarding_status
       FROM sites
       WHERE organization_id IN (${placeholders})
       ORDER BY created_at DESC
-    `).bind(...orgIds).all()
+    `, orgIds)
 
-    const results = (sites.results || []).map((site: ApiValue) => ({
+    const results = (sites || []).map((site: ApiValue) => ({
       ...site as object,
       is_demo: (site as { organization_id: string }).organization_id === DEMO_ORG_ID,
     }))
