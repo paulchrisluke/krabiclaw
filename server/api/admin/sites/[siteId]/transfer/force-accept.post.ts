@@ -59,10 +59,10 @@ export default defineEventHandler(async (event) => {
   // Guard check: if transfer requires payment, ensure recipient has active billing subscription
   if (transfer.requires_payment === 1) {
     const billingCheck = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM organization_billing
-      WHERE organization_id = ? AND status = 'active'
+      SELECT id FROM site_billing
+      WHERE site_id = ? AND status = 'active'
       LIMIT 1
-    `, [recipient.org_id])
+    `, [transfer.site_id])
 
     if (!billingCheck) {
       return jsonResponse({

@@ -5,6 +5,7 @@ import { isDemoOrg } from '~/server/utils/demo'
 import type { TranslationEntityType } from '~/server/utils/translation-inventory'
 import { saveTranslationReviewItem } from '~/server/utils/translation-review'
 import { parseScope } from '~/server/utils/translation-helpers'
+import { queryFirst } from '~/server/db'
 
 function parseEntityType(value: unknown): TranslationEntityType | null {
   return value === 'site_content' || value === 'menu' || value === 'menu_item' || value === 'business_location' || value === 'post'
@@ -37,12 +38,12 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
     SELECT s.id, s.organization_id FROM sites s
     JOIN member om ON s.organization_id = om.organizationId
     WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
     LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+  `, [siteId, session.user.id])
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 

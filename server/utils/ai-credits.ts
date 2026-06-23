@@ -1,5 +1,6 @@
 import { triggerAutoTopupIfNeeded } from '~/server/utils/auto-topup'
 import type { BillingEnv } from '~/server/utils/billing'
+import { execute, queryFirst, type DbClient } from '~/server/db'
 
 // Credit system: 1 credit = 1,000 tokens (input + output combined).
 // Free orgs get FREE_SIGNUP_CREDITS on first check. Paid orgs get higher limits.
@@ -16,30 +17,30 @@ export function tokensToCredits(inputTokens: number, outputTokens: number): numb
 
 /** Returns current balance, creating the row with signup credits if new org */
 export async function getOrCreateCredits(
-  db: D1Database,
+  db: DbClient,
   organizationId: string
 ): Promise<{ balance: number; lifetime_used: number }> {
-  const existing = await db
-    .prepare('SELECT balance, lifetime_used FROM ai_credits WHERE organization_id = ? LIMIT 1')
-    .bind(organizationId)
-    .first<{ balance: number; lifetime_used: number }>()
+  const existing = await queryFirst<{ balance: number; lifetime_used: number }>(
+    db,
+    'SELECT balance, lifetime_used FROM ai_credits WHERE organization_id = ? LIMIT 1',
+    [organizationId],
+  )
 
   if (existing) return existing
 
   const now = new Date().toISOString()
-  await db
-    .prepare(
-      `INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)
-       VALUES (?, ?, 0, ?, ?)`
-    )
-    .bind(organizationId, FREE_SIGNUP_CREDITS, now, now)
-    .run()
+  await execute(
+    db,
+    `INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)
+       VALUES (?, ?, 0, ?, ?)`,
+    [organizationId, FREE_SIGNUP_CREDITS, now, now],
+  )
 
   return { balance: FREE_SIGNUP_CREDITS, lifetime_used: 0 }
 }
 
 /** Returns true if org has enough credits, false if exhausted */
-export async function hasCredits(db: D1Database, organizationId: string): Promise<boolean> {
+export async function hasCredits(db: DbClient, organizationId: string): Promise<boolean> {
   const row = await getOrCreateCredits(db, organizationId)
   return row.balance > 0
 }
@@ -52,7 +53,7 @@ export async function hasCredits(db: D1Database, organizationId: string): Promis
  * Pass billingEnv to enable automatic top-up when balance drops below threshold.
  */
 export async function chargeCredits(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   opts: {
     siteId?: string
@@ -71,39 +72,34 @@ export async function chargeCredits(
   // Ensure a row exists so atomic decrement doesn't treat missing rows as insufficient credits.
   await getOrCreateCredits(db, organizationId)
 
-  const updateResult = await db
-    .prepare(
-      `UPDATE ai_credits
+  const updateResult = await execute(
+    db,
+    `UPDATE ai_credits
        SET balance = balance - ?,
            lifetime_used = lifetime_used + ?,
            updated_at = ?
-       WHERE organization_id = ? AND balance >= ?`
-    )
-    .bind(creditsCharged, creditsCharged, now, organizationId, creditsCharged)
-    .run()
+       WHERE organization_id = ? AND balance >= ?`,
+    [creditsCharged, creditsCharged, now, organizationId, creditsCharged],
+  )
 
   if (!updateResult) {
     throw new Error('AI credit deduction failed.')
   }
 
-  if (updateResult.meta.changes === 0) {
-    const row = await db
-      .prepare('SELECT 1 AS found FROM ai_credits WHERE organization_id = ? LIMIT 1')
-      .bind(organizationId)
-      .first<{ found: number }>()
+  if (Number(updateResult.meta.changes ?? 0) === 0) {
+    const row = await queryFirst<{ found: number }>(db, 'SELECT 1 AS found FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
     if (!row) {
       throw new Error('AI credits row missing for organization.')
     }
     throw new Error('Insufficient AI credits remaining.')
   }
 
-  const insertResult = await db
-    .prepare(
-      `INSERT INTO ai_usage_log
+  const insertResult = await execute(
+    db,
+    `INSERT INTO ai_usage_log
          (id, organization_id, site_id, action, model, input_tokens, output_tokens, credits_charged, cf_gateway_log_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .bind(
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
       logId,
       organizationId,
       opts.siteId ?? null,
@@ -113,18 +109,15 @@ export async function chargeCredits(
       opts.outputTokens,
       creditsCharged,
       opts.cfGatewayLogId ?? null,
-      now
-    )
-    .run()
+      now,
+    ],
+  )
 
-  if (!insertResult || insertResult.meta.changes === 0) {
+  if (!insertResult || Number(insertResult.meta.changes ?? 0) === 0) {
     throw new Error('AI usage log insert failed.')
   }
 
-  const updated = await db
-    .prepare('SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1')
-    .bind(organizationId)
-    .first<{ balance: number }>()
+  const updated = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
 
   const newBalance = updated?.balance ?? 0
 

@@ -16,13 +16,13 @@ export const account = sqliteTable("account", {
 	accessToken: text(),
 	refreshToken: text(),
 	idToken: text(),
-	expiresAt: text(),
-	accessTokenExpiresAt: text(),
-	refreshTokenExpiresAt: text(),
+	expiresAt: integer({ mode: "timestamp" }),
+	accessTokenExpiresAt: integer({ mode: "timestamp" }),
+	refreshTokenExpiresAt: integer({ mode: "timestamp" }),
 	scope: text(),
 	password: text(),
-	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updatedAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
+	updatedAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });
 
 export const ai_credits = sqliteTable("ai_credits", {
@@ -291,9 +291,9 @@ export const invitation = sqliteTable("invitation", {
 	email: text().notNull(),
 	role: text(),
 	status: text().default("pending").notNull(),
-	expiresAt: text().notNull(),
+	expiresAt: integer({ mode: "timestamp" }).notNull(),
 	inviterId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
-	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });
 
 export const jwks = sqliteTable("jwks", {
@@ -302,8 +302,8 @@ export const jwks = sqliteTable("jwks", {
 	privateKey: text().notNull(),
 	alg: text(),
 	crv: text(),
-	createdAt: text().notNull(),
-	expiresAt: text(),
+	createdAt: integer({ mode: "timestamp" }).notNull(),
+	expiresAt: integer({ mode: "timestamp" }),
 });
 
 export const location_qa = sqliteTable("location_qa", {
@@ -352,6 +352,7 @@ export const media_assets = sqliteTable("media_assets", {
 	created_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	delete_pending_at: text(),
 });
 
 export const media_assets_old = sqliteTable("media_assets_old", {
@@ -386,7 +387,7 @@ export const member = sqliteTable("member", {
 	organizationId: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	userId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
 	role: text().default("member").notNull(),
-	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });
 
 export const menu_item_translations = sqliteTable("menu_item_translations", {
@@ -490,8 +491,8 @@ export const oauthAccessToken = sqliteTable("oauthAccessToken", {
 	userId: text(),
 	token: text().notNull(),
 	scopes: text().default("").notNull(),
-	expiresAt: text().notNull(),
-	createdAt: text().notNull(),
+	expiresAt: integer({ mode: "timestamp" }).notNull(),
+	createdAt: integer({ mode: "timestamp" }).notNull(),
 	sessionId: text(),
 	referenceId: text(),
 	refreshId: text(),
@@ -510,8 +511,8 @@ export const oauthClient = sqliteTable("oauthClient", {
 	userId: text(),
 	metadata: text(),
 	disabled: integer().default(0).notNull(),
-	createdAt: text().notNull(),
-	updatedAt: text().notNull(),
+	createdAt: integer({ mode: "timestamp" }).notNull(),
+	updatedAt: integer({ mode: "timestamp" }).notNull(),
 	enableEndSession: integer(),
 	subjectType: text(),
 	uri: text(),
@@ -535,8 +536,8 @@ export const oauthConsent = sqliteTable("oauthConsent", {
 	clientId: text().notNull(),
 	userId: text().notNull(),
 	scopes: text().default("").notNull(),
-	createdAt: text().notNull(),
-	updatedAt: text().notNull(),
+	createdAt: integer({ mode: "timestamp" }).notNull(),
+	updatedAt: integer({ mode: "timestamp" }).notNull(),
 	referenceId: text(),
 });
 
@@ -547,12 +548,12 @@ export const oauthRefreshToken = sqliteTable("oauthRefreshToken", {
 	token: text().notNull(),
 	scopes: text().default("").notNull(),
 	accessTokenId: text(),
-	expiresAt: text().notNull(),
-	createdAt: text().notNull(),
+	expiresAt: integer({ mode: "timestamp" }).notNull(),
+	createdAt: integer({ mode: "timestamp" }).notNull(),
 	sessionId: text(),
 	referenceId: text(),
-	revoked: text(),
-	authTime: text(),
+	revoked: integer({ mode: "timestamp" }),
+	authTime: integer({ mode: "timestamp" }),
 });
 
 export const organization = sqliteTable("organization", {
@@ -561,7 +562,7 @@ export const organization = sqliteTable("organization", {
 	slug: text(),
 	logo: text(),
 	metadata: text(),
-	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });
 
 export const organization_billing = sqliteTable("organization_billing", {
@@ -772,10 +773,10 @@ export const service_addon_purchases = sqliteTable("service_addon_purchases", {
 
 export const session = sqliteTable("session", {
 	id: text().primaryKey(),
-	expiresAt: text().notNull(),
+	expiresAt: integer({ mode: "timestamp" }).notNull(),
 	token: text().notNull(),
-	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updatedAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
+	updatedAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 	ipAddress: text(),
 	userAgent: text(),
 	activeOrganizationId: text(),
@@ -1112,18 +1113,18 @@ export const user = sqliteTable("user", {
 	role: text().default("user"),
 	banned: integer().default(0),
 	banReason: text(),
-	banExpires: text(),
-	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updatedAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	banExpires: integer({ mode: "timestamp" }),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
+	updatedAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });
 
 export const verification = sqliteTable("verification", {
 	id: text().primaryKey(),
 	identifier: text().notNull(),
 	value: text().notNull(),
-	expiresAt: text().notNull(),
-	createdAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updatedAt: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	expiresAt: integer({ mode: "timestamp" }).notNull(),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
+	updatedAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });
 
 export const work_requests = sqliteTable("work_requests", {

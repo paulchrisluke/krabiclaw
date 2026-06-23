@@ -9,7 +9,8 @@ function resolveLocalD1File() {
     return join(process.cwd(), '.wrangler/local-d1.sqlite')
   }
 
-  const file = readdirSync(localD1Dir).find((entry) => entry.endsWith('.sqlite'))
+  const files = readdirSync(localD1Dir).filter((entry) => entry.endsWith('.sqlite')).sort()
+  const file = files[0]
   return file ? join(localD1Dir, file) : join(process.cwd(), '.wrangler/local-d1.sqlite')
 }
 

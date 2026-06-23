@@ -4,7 +4,7 @@ import {
   type DomainEnv,
   rootDomainForPair,
 } from '~/server/utils/domains'
-import { execute, queryAll, queryFirst } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db'
 import { notifySiteTransferReminder } from '~/server/utils/site-transfer-notifications'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
 
@@ -215,32 +215,25 @@ export async function reassignSiteOwnership(
 ): Promise<void> {
   const now = new Date().toISOString()
 
-  const batch: D1PreparedStatement[] = SITE_SCOPED_TABLES.map((table) =>
-    db
-      .prepare(`UPDATE ${table} SET organization_id = ? WHERE site_id = ? AND organization_id = ?`)
-      .bind(toOrgId, siteId, fromOrgId),
-  )
+  const batch: BatchQuery[] = SITE_SCOPED_TABLES.map((table) => ({
+    query: `UPDATE ${table} SET organization_id = ? WHERE site_id = ? AND organization_id = ?`,
+    params: [toOrgId, siteId, fromOrgId],
+  }))
 
   // post_channel_jobs has organization_id but no site_id — update via post join
-  batch.push(
-    db
-      .prepare(
-        `UPDATE post_channel_jobs SET organization_id = ?
+  batch.push({
+    query: `UPDATE post_channel_jobs SET organization_id = ?
          WHERE organization_id = ? AND post_id IN (SELECT id FROM posts WHERE site_id = ?)`,
-      )
-      .bind(toOrgId, fromOrgId, siteId),
-  )
+    params: [toOrgId, fromOrgId, siteId],
+  })
 
   // sites itself — update last so the FK is still valid during the batch
-  batch.push(
-    db
-      .prepare(
-        `UPDATE sites SET organization_id = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
-      )
-      .bind(toOrgId, now, siteId, fromOrgId),
-  )
+  batch.push({
+    query: `UPDATE sites SET organization_id = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+    params: [toOrgId, now, siteId, fromOrgId],
+  })
 
-  await db.batch(batch)
+  await executeBatch(db, batch)
 }
 
 export async function executeSiteTransfer(
@@ -253,45 +246,35 @@ export async function executeSiteTransfer(
 ): Promise<void> {
   const now = new Date().toISOString()
 
-  const batch: D1PreparedStatement[] = []
+  const batch: BatchQuery[] = []
 
   batch.push(
-    ...SITE_SCOPED_TABLES.map((table) =>
-      db
-        .prepare(`UPDATE ${table} SET organization_id = ? WHERE site_id = ? AND organization_id = ?`)
-        .bind(toOrgId, siteId, fromOrgId),
-    ),
+    ...SITE_SCOPED_TABLES.map((table) => ({
+      query: `UPDATE ${table} SET organization_id = ? WHERE site_id = ? AND organization_id = ?`,
+      params: [toOrgId, siteId, fromOrgId],
+    })),
   )
 
-  batch.push(
-    db
-      .prepare(
-        `UPDATE post_channel_jobs SET organization_id = ?
+  batch.push({
+    query: `UPDATE post_channel_jobs SET organization_id = ?
          WHERE organization_id = ? AND post_id IN (SELECT id FROM posts WHERE site_id = ?)`,
-      )
-      .bind(toOrgId, fromOrgId, siteId),
-  )
+    params: [toOrgId, fromOrgId, siteId],
+  })
 
-  batch.push(
-    db
-      .prepare(
-        `UPDATE sites SET organization_id = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
-      )
-      .bind(toOrgId, now, siteId, fromOrgId),
-  )
+  batch.push({
+    query: `UPDATE sites SET organization_id = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+    params: [toOrgId, now, siteId, fromOrgId],
+  })
 
   // mark the transfer request complete
-  batch.push(
-    db
-      .prepare(
-        `UPDATE site_transfer_requests
+  batch.push({
+    query: `UPDATE site_transfer_requests
          SET status = 'accepted', accepted_by_user_id = ?, completed_at = ?
          WHERE id = ?`,
-      )
-      .bind(acceptedByUserId, now, transferId),
-  )
+    params: [acceptedByUserId, now, transferId],
+  })
 
-  await db.batch(batch)
+  await executeBatch(db, batch)
 }
 
 export async function cancelPendingSiteTransfer(

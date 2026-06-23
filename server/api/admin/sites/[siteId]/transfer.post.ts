@@ -1,7 +1,7 @@
 // POST /api/admin/sites/[siteId]/transfer — initiate a site transfer to a new owner
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { queryFirst } from '~/server/db'
+import { executeBatch, queryFirst, type BatchQuery } from '~/server/db'
 import { hashEmail, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
 import { rootDomainForPair } from '~/server/utils/domains'
@@ -110,35 +110,38 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const cancelStmt = db.prepare(
-    `UPDATE site_transfer_requests SET status = 'cancelled'
-     WHERE site_id = ? AND status = 'pending'`,
-  ).bind(siteId)
-
-  const insertStmt = db.prepare(
-    `INSERT INTO site_transfer_requests
-     (id, site_id, from_organization_id, to_email, token, status, initiated_by_user_id, message,
-      invited_plan, invited_coupon, invited_interval, invited_domain, requires_payment, created_at, custom_domains_snapshot)
-     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(
-    id,
-    siteId,
-    site.organization_id,
-    toEmail,
-    token,
-    userId,
-    body.message?.trim() ?? null,
-    invitedPlan,
-    invitedCoupon,
-    invitedInterval,
-    invitedDomain,
-    requiresPayment ? 1 : 0,
-    now.toISOString(),
-    customDomainsSnapshot,
-  )
+  const batch: BatchQuery[] = [
+    {
+      query: `UPDATE site_transfer_requests SET status = 'cancelled'
+       WHERE site_id = ? AND status = 'pending'`,
+      params: [siteId],
+    },
+    {
+      query: `INSERT INTO site_transfer_requests
+       (id, site_id, from_organization_id, to_email, token, status, initiated_by_user_id, message,
+        invited_plan, invited_coupon, invited_interval, invited_domain, requires_payment, created_at, custom_domains_snapshot)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [
+        id,
+        siteId,
+        site.organization_id,
+        toEmail,
+        token,
+        userId,
+        body.message?.trim() ?? null,
+        invitedPlan,
+        invitedCoupon,
+        invitedInterval,
+        invitedDomain,
+        requiresPayment ? 1 : 0,
+        now.toISOString(),
+        customDomainsSnapshot,
+      ],
+    },
+  ]
 
   try {
-    await db.batch([cancelStmt, insertStmt])
+    await executeBatch(db, batch)
   } catch (err) {
     const dbErr = err as Record<string, unknown>
     const msg = typeof dbErr.message === 'string' ? dbErr.message : ''

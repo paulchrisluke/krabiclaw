@@ -26,10 +26,11 @@ export interface MediaAsset {
   duration: number | null
   alt_text: string | null
   category: 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo' | null
-  status: 'pending' | 'active' | 'deleted' | 'failed' | 'delete_pending'
+  status: 'pending' | 'active' | 'deleted' | 'failed'
   created_by_user_id: string | null
   created_at: string
   updated_at: string
+  delete_pending_at: string | null
 }
 
 export type CreateInput = Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source'> &
@@ -142,10 +143,10 @@ export async function updateMediaAssetMetadata(
 /**
  * Soft-delete in DB and hard-delete from Cloudflare storage.
  *
- * The row is marked 'delete_pending' (not 'deleted') until the Cloudflare
- * Images/R2 delete actually succeeds, so a failed external delete leaves the
- * asset in a retryable state instead of orphaning the file with no record
- * pointing back to it.
+ * `delete_pending_at` is stamped before attempting the Cloudflare Images/R2
+ * delete and only cleared once that delete actually succeeds, so a failed
+ * external delete leaves the asset in a retryable state (status untouched)
+ * instead of being marked 'deleted' while the underlying file is still live.
  */
 export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: string, siteId: string): Promise<void> {
   const now = new Date().toISOString()
@@ -156,10 +157,10 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     r2_key: string | null
   }>(db, `
     UPDATE media_assets
-    SET status = 'delete_pending', updated_at = ?
-    WHERE id = ? AND site_id = ? AND status NOT IN ('deleted', 'delete_pending')
+    SET delete_pending_at = ?, updated_at = ?
+    WHERE id = ? AND site_id = ? AND status != 'deleted'
     RETURNING id, provider, cloudflare_image_id, r2_key
-  `, [now, id, siteId]) ?? null
+  `, [now, now, id, siteId]) ?? null
 
   if (!pendingAsset) return
 
@@ -188,7 +189,7 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     throw lastError ?? new Error('media_asset_external_delete_failed')
   }
 
-  // If either delete throws, status stays 'delete_pending' for a retry job to pick back up.
+  // If either delete throws, delete_pending_at stays set for a retry job to pick back up.
   if (pendingAsset.provider === 'cloudflare_images' && pendingAsset.cloudflare_image_id) {
     const cloudflareImageId = pendingAsset.cloudflare_image_id
     await withRetry(() => deleteImage(env, cloudflareImageId), {
@@ -207,7 +208,7 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
 
   await execute(db, `
     UPDATE media_assets
-    SET status = 'deleted', updated_at = ?
-    WHERE id = ? AND site_id = ? AND status = 'delete_pending'
+    SET status = 'deleted', delete_pending_at = NULL, updated_at = ?
+    WHERE id = ? AND site_id = ?
   `, [new Date().toISOString(), pendingAsset.id, siteId])
 }

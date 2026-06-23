@@ -285,7 +285,8 @@ export async function updateNotificationsSettings(
     )
   }
   await Promise.all(ops)
-  return { whatsapp_phone: normalizePhone(whatsappPhone.trim()), channels: channels ?? ['whatsapp'] }
+  const normalizedChannels = channels ? channels.filter(c => c === 'whatsapp' || c === 'email') : ['whatsapp']
+  return { whatsapp_phone: normalizePhone(whatsappPhone.trim()), channels: normalizedChannels.length ? normalizedChannels : ['whatsapp'] }
 }
 
 export async function listContactSubmissions(db: D1Database, siteId: string) {

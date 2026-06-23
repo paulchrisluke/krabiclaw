@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getConfig } from '~/server/utils/site-config'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -32,7 +33,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user belongs to organization that owns the site
-    const site = await db.prepare(`
+    const site = await queryFirst<ApiRecord>(db, `
       SELECT s.id, s.organization_id, s.subdomain, s.theme, s.status,
              s.primary_location_id, s.public_url, s.custom_domain_status, s.default_currency,
              s.brand_name, s.brand_description, s.logo_url, s.logo_asset_id, s.contact_email,
@@ -43,7 +44,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
+    `, [siteId, session.user.id])
     
     if (!site) {
       return jsonResponse({ 

@@ -5,7 +5,7 @@ import { queryAll } from '~/server/db'
 export default defineEventHandler(async (event) => {
   const { db, organization } = await getDashboardContext(event, { requireSite: false })
   const query = getQuery(event)
-  const limit = Math.min(Number(query.limit) || 20, 50)
+  const limit = Math.max(1, Math.min(Number(query.limit) || 20, 50))
   const locationId = query.locationId as string | undefined
 
   const events = await queryAll<{

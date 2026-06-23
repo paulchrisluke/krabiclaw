@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) => {
       db, 'SELECT id, email, role FROM user WHERE id = ? LIMIT 1', [userId]
     )
     if (!user) {
-      const now = new Date().toISOString()
+      const now = Math.floor(Date.now() / 1000)
       const email = `${userId}@example.test`
       try {
         await execute(db, `

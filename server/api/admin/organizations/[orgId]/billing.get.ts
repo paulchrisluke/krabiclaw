@@ -84,16 +84,10 @@ export default defineEventHandler(async (event) => {
     recipientReady = Boolean(recipientUser)
   }
 
-  const firstSiteBilling = (sitesBilling ?? [])[0]
-
   return jsonResponse({
     org_name: org.org_name,
     org_slug: org.org_slug,
     stripe_customer_id: org.stripe_customer_id,
-    stripe_subscription_id: firstSiteBilling?.stripe_subscription_id ?? null,
-    plan: firstSiteBilling?.plan ?? null,
-    status: firstSiteBilling?.status ?? null,
-    current_period_end: firstSiteBilling?.current_period_end ?? null,
     sites_billing: (sitesBilling ?? []).map(sb => ({
       site_id: sb.site_id,
       brand_name: sb.brand_name,

@@ -8,6 +8,7 @@ import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { deleteImage, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
 import { generateImageViaGateway, IMAGE_MODEL } from '~/server/utils/ai-gateway'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -20,11 +21,11 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT s.organization_id FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor') LIMIT 1
-  `).bind(siteId, session.user.id).first<{ organization_id: string }>()
+  `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const orgId: string = site.organization_id
@@ -42,9 +43,10 @@ export default defineEventHandler(async (event) => {
 
   // Validate locationId if provided
   if (locationId) {
-    const location = await db.prepare(
-      'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1'
-    ).bind(locationId, siteId).first()
+    const location = await queryFirst(db,
+      'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1',
+      [locationId, siteId]
+    )
     if (!location) {
       return jsonResponse({ error: 'Invalid location ID' }, { status: 400 })
     }

@@ -1113,7 +1113,13 @@ export async function createPlatformDoc(
         now,
       ])
 
-      await syncStructuredContent(db, 'doc', id, input)
+      try {
+        await syncStructuredContent(db, 'doc', id, input)
+      } catch (syncErr) {
+        await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [id])
+        throw syncErr
+      }
+
       const doc = await getPlatformDoc(db, id)
       return { success: true, id, slug, status, published_at: publishedAt, doc }
     } catch (err) {

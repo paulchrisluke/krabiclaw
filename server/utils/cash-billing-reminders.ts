@@ -67,7 +67,7 @@ async function sendEmail(
       VALUES (?, ?, ?, 'email', ?, ?, ?, ?, 'sent', ?, ?, ?)
     `, [
       id, opts.organizationId, opts.siteId, opts.template,
-      opts.recipient, opts.subject, JSON.stringify(opts.payload),
+      hashEmail(opts.recipient), opts.subject, JSON.stringify(opts.payload),
       logOnlyEmailProviderId('cash-billing'), now, now,
     ])
     console.info('email_delivery_log_only', {

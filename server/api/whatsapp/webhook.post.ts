@@ -14,6 +14,7 @@ import {
   upsertChannelState,
   type ChowBotConversation,
 } from '~/server/utils/chowbot-conversations'
+import { queryFirst } from '~/server/db'
 
 interface WhatsAppMessage {
   id: string
@@ -99,12 +100,12 @@ async function reply(
 
 async function resolveUser(db: D1Database, from: string): Promise<UserRow | null> {
   const normalized = normalizePhone(from)
-  return await db.prepare(`
+  return await queryFirst<UserRow>(db, `
     SELECT id, phoneNumber, phoneNumberVerified
     FROM user
     WHERE phoneNumber = ? AND phoneNumberVerified = 1
     LIMIT 1
-  `).bind(normalized).first<UserRow>()
+  `, [normalized])
 }
 
 function parsePendingMedia(raw: string | null | undefined): { assetId: string; siteId: string } | null {
@@ -134,9 +135,10 @@ async function runChowBotAndReply(
     pendingMedia: { assetId: string; siteId: string } | null
   }
 ) {
-  const site = await db.prepare(
-    `SELECT default_currency FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`
-  ).bind(opts.siteId, opts.organizationId).first<{ default_currency: string | null }>()
+  const site = await queryFirst<{ default_currency: string | null }>(db,
+    `SELECT default_currency FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`,
+    [opts.siteId, opts.organizationId]
+  )
   const messages = await getRecentAgentMessages(db, opts.conversation.id, opts.siteId, opts.userId)
   let assistantText = ''
   const result = await runChowBot({

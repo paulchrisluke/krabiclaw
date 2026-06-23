@@ -141,7 +141,12 @@ async function sendEmail(
   }
 
   if (!response.ok) {
-    const error = await response.text()
+    let error: string
+    try {
+      error = await response.text()
+    } catch {
+      error = `HTTP ${response.status}`
+    }
     await execute(db, `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`, [error, now, id])
     return
   }

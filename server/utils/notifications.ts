@@ -150,13 +150,19 @@ async function getOwnerNotificationChannels(
 
   if (!row?.value) return hasWhatsAppPhone ? ['whatsapp'] : ['email']
 
-  const rawChannels = JSON.parse(row.value) as string[]
+  let rawChannels: string[]
+  try {
+    rawChannels = JSON.parse(row.value) as string[]
+  } catch {
+    return hasWhatsAppPhone ? ['whatsapp'] : ['email']
+  }
 
   const channels = rawChannels
     .map(channel => channel.trim().toLowerCase())
     .filter((channel): channel is NotificationChannel => channel === 'email' || channel === 'whatsapp')
 
-  return [...new Set(channels)]
+  const uniqueChannels = [...new Set(channels)]
+  return uniqueChannels.length > 0 ? uniqueChannels : (hasWhatsAppPhone ? ['whatsapp'] : ['email'])
 }
 
 async function insertDashboardNotification(
@@ -308,17 +314,17 @@ async function sendEmailNotification(
   )
 }
 
-async function getLocationNotificationPhone(db: DbClient, locationId: string): Promise<string | null> {
+async function getLocationNotificationPhone(db: DbClient, locationId: string, organizationId: string, siteId: string): Promise<string | null> {
   const row = await queryFirst<{ notification_phone: string | null }>(db, `
-    SELECT notification_phone FROM business_locations WHERE id = ? LIMIT 1
-  `, [locationId])
+    SELECT notification_phone FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1
+  `, [locationId, organizationId, siteId])
   return row?.notification_phone ?? null
 }
 
-async function getLocationNotificationEmail(db: DbClient, locationId: string): Promise<string | null> {
+async function getLocationNotificationEmail(db: DbClient, locationId: string, organizationId: string, siteId: string): Promise<string | null> {
   const row = await queryFirst<{ email: string | null }>(db, `
-    SELECT email FROM business_locations WHERE id = ? LIMIT 1
-  `, [locationId])
+    SELECT email FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1
+  `, [locationId, organizationId, siteId])
   return row?.email?.trim() || null
 }
 
@@ -340,9 +346,9 @@ async function notifyOwner(
   await insertDashboardNotification(db, opts)
 
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
-  const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId) : null
+  const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null
   const ownerEmail = await getOwnerEmail(db, opts.organizationId)
-  const locationEmail = opts.locationId ? await getLocationNotificationEmail(db, opts.locationId) : null
+  const locationEmail = opts.locationId ? await getLocationNotificationEmail(db, opts.locationId, opts.organizationId, opts.siteId) : null
 
   // Collect unique phones — location manager + owner (site-level), deduped
   const phones = [...new Set([locationPhone, sitePhone].filter(Boolean))] as string[]

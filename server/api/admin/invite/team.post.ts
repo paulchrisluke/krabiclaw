@@ -39,7 +39,7 @@ export default defineEventHandler(async (event) => {
 
   // Create new user row directly — they'll link their Google/WhatsApp account on first sign-in
   const userId = crypto.randomUUID()
-  const now = new Date().toISOString()
+  const now = Math.floor(Date.now() / 1000)
   const displayName = name || email.split('@')[0]!
 
   // Create their auto-org (matches the databaseHook that runs on OAuth signup).

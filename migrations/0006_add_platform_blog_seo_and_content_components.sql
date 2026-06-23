@@ -3,10 +3,10 @@ ALTER TABLE platform_blog_posts ADD COLUMN seo_keywords TEXT;
 ALTER TABLE platform_blog_posts ADD COLUMN canonical_url TEXT;
 ALTER TABLE platform_blog_posts ADD COLUMN robots TEXT;
 
-ALTER TABLE platform_docs ADD COLUMN seo_description TEXT;
-ALTER TABLE platform_docs ADD COLUMN seo_keywords TEXT;
-ALTER TABLE platform_docs ADD COLUMN canonical_url TEXT;
-ALTER TABLE platform_docs ADD COLUMN robots TEXT;
+-- platform_docs already has seo_description/seo_keywords/canonical_url/robots
+-- baked into the 0001_initial.sql squashed baseline (squash drift: only this
+-- table picked them up, platform_blog_posts above did not), so adding them
+-- again here would fail with "duplicate column name" on a fresh database.
 
 CREATE TABLE platform_content_components (
   id TEXT PRIMARY KEY,

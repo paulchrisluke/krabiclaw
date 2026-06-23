@@ -44,8 +44,8 @@ export default defineEventHandler(async (event) => {
 
   const orgId = crypto.randomUUID()
   const invitationId = crypto.randomUUID()
-  const now = new Date().toISOString()
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  const now = Math.floor(Date.now() / 1000)
+  const expiresAt = now + 7 * 24 * 60 * 60
 
   // Atomic: an invitation without its organization (or vice versa) is orphaned state.
   await executeBatch(db, [

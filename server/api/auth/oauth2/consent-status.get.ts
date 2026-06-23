@@ -1,5 +1,6 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -11,9 +12,10 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) {
     return { hasConsented: false }
   }
-  const consent = await env.DB
-    .prepare('SELECT id FROM oauthConsent WHERE clientId = ? AND userId = ? LIMIT 1')
-    .bind(clientId, session.user.id)
-    .first<{ id: string }>()
+  const consent = await queryFirst<{ id: string }>(
+    env.DB,
+    'SELECT id FROM oauthConsent WHERE clientId = ? AND userId = ? LIMIT 1',
+    [clientId, session.user.id],
+  )
   return { hasConsented: !!consent }
 })

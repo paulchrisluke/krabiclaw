@@ -24,9 +24,18 @@ async function incrementRateLimit(db: DbClient, key: string, limit: number): Pro
   const result = await execute(db, `
     INSERT INTO rate_limits (key, count, updated_at, expires_at)
     VALUES (?, 1, ?, ?)
-    ON CONFLICT(key) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at, expires_at = excluded.expires_at
-    WHERE count < ?
-  `, [key, now, expiresAt, limit])
+    ON CONFLICT(key) DO UPDATE SET
+      count = CASE
+        WHEN expires_at <= ? THEN 1
+        WHEN count < ? THEN count + 1
+        ELSE count
+      END,
+      updated_at = excluded.updated_at,
+      expires_at = CASE
+        WHEN expires_at <= ? THEN ?
+        ELSE excluded.expires_at
+      END
+  `, [key, now, expiresAt, now, limit, now, expiresAt])
 
   return Boolean(result?.success && result?.meta?.changes)
 }

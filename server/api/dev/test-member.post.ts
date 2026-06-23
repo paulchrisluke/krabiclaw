@@ -51,7 +51,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Owner organization not found' }, { status: 404 })
   }
 
-  const now = new Date().toISOString()
+  const now = Math.floor(Date.now() / 1000)
   const idSuffix = crypto.randomUUID()
   const userId = `e2e-user-${idSuffix}`
   const email = body.email?.trim().toLowerCase() || `e2e-${role}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.test`

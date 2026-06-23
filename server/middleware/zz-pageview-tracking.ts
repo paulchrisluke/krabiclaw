@@ -55,7 +55,10 @@ export default defineEventHandler(async (event) => {
 
     const waitUntil = event.context.cloudflare?.context?.waitUntil
     if (waitUntil) {
-      waitUntil(insertPromise)
+      waitUntil(insertPromise.catch((error) => {
+        const err = error instanceof Error ? error : new Error(String(error))
+        console.error('SSR pageview tracking failed (async):', err.message)
+      }))
     } else {
       await insertPromise
     }

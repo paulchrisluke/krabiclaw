@@ -113,7 +113,7 @@ curl -i https://staging.krabiclaw.com/api/auth/get-session -b cookie.txt
 - [ ] `/dashboard/{orgSlug}` loads and redirects correctly for a single-site org.
 - [ ] `/dashboard/{orgSlug}/sites/{siteSlug}` loads site config (exercises
       `site-config.ts` → `getConfig`/`queryAll` rewrite).
-- [ ] `/dashboard/{orgSlug}/~/settings/domains` and `/billing` load without 500s.
+- [ ] `/dashboard/{orgSlug}/sites/{siteSlug}/settings/domains` and `/billing` load without 500s.
 
 ### Public tenant page bootstrap/content
 
@@ -141,33 +141,15 @@ curl -i https://staging.krabiclaw.com/api/auth/get-session -b cookie.txt
 
 Better Auth roles are stored on the `user` table and are unaffected by the schema, but
 re-confirm/re-apply immediately after each environment's cutover in case of any adapter
-read/write mismatch:
+read/write mismatch. Use the canonical promotion script:
 
 ```bash
 # Staging
-wrangler d1 execute DB --env staging --remote --command \
-  "UPDATE user SET role = 'admin' WHERE lower(email) = 'paulchrisluke@gmail.com';"
-wrangler d1 execute DB --env staging --remote --command \
-  "UPDATE user SET role = 'admin' WHERE lower(email) = 'bamboo.chow@gmail.com';"
-wrangler d1 execute DB --env staging --remote --command \
-  "UPDATE user SET role = 'admin' WHERE lower(email) = 'mrjoeelia@gmail.com';"
-
-# Production
-wrangler d1 execute DB --remote --command \
-  "UPDATE user SET role = 'admin' WHERE lower(email) = 'paulchrisluke@gmail.com';"
-wrangler d1 execute DB --remote --command \
-  "UPDATE user SET role = 'admin' WHERE lower(email) = 'bamboo.chow@gmail.com';"
-wrangler d1 execute DB --remote --command \
-  "UPDATE user SET role = 'admin' WHERE lower(email) = 'mrjoeelia@gmail.com';"
-```
-
-Or use the existing helper script (one email at a time):
-
-```bash
 node scripts/promote-platform-admin.mjs --email paulchrisluke@gmail.com --staging
 node scripts/promote-platform-admin.mjs --email bamboo.chow@gmail.com --staging
 node scripts/promote-platform-admin.mjs --email mrjoeelia@gmail.com --staging
 
+# Production
 node scripts/promote-platform-admin.mjs --email paulchrisluke@gmail.com --remote
 node scripts/promote-platform-admin.mjs --email bamboo.chow@gmail.com --remote
 node scripts/promote-platform-admin.mjs --email mrjoeelia@gmail.com --remote

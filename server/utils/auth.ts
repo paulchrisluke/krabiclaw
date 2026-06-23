@@ -67,7 +67,7 @@ export function createAuth(env: CloudflareEnv) {
       user: {
         create: {
           after: async (user) => {
-            const now = new Date().toISOString()
+            const now = new Date()
             const orgId = `org-${user.id}`
             try {
               await db.batch([
@@ -94,7 +94,7 @@ export function createAuth(env: CloudflareEnv) {
               id: user.id,
               name: user.name,
               email: user.email,
-              createdAt: now,
+              createdAt: now.toISOString(),
             }).catch((err) => console.error('admin_signup_notify_failed', err))
           }
         }
