@@ -222,6 +222,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const { trackMenuImported } = useAnalytics()
 
 type Step = 'idle' | 'extracting' | 'preview' | 'done'
 
@@ -355,6 +356,7 @@ async function saveItems() {
     savedCount.value = editedItems.value.length
     step.value = 'done'
     emit('imported', resultMenuId.value)
+    trackMenuImported(props.siteId, 'ai')
     toast.addToast(`${savedCount.value} item${savedCount.value === 1 ? '' : 's'} added to menu`, 'success')
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to save items. Please try again.'

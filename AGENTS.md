@@ -392,7 +392,7 @@ Flow:
   GET /api/post-login
   ```
 
-  - `isPlatformOwner` → `/admin`
+  - `isPlatformAdmin()` → `/admin`
   - Else → `/dashboard/[orgSlug]`
 
 - Dev login:

@@ -181,14 +181,14 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
     const hasPart: Array<{ '@id': string }> = []
 
     if (faq?.data?.items?.length) {
-      const faqId = `${pageUrl}#faq`
-      hasPart.push({ '@id': faqId })
-      graph.push({
-        '@type': 'FAQPage',
-        '@id': faqId,
-        mainEntity: faq.data.items
-          .filter(item => item.question?.trim() && item.answer?.trim())
-          .map(item => ({
+      const validFaqItems = faq.data.items.filter(item => item.question?.trim() && item.answer?.trim())
+      if (validFaqItems.length > 0) {
+        const faqId = `${pageUrl}#faq`
+        hasPart.push({ '@id': faqId })
+        graph.push({
+          '@type': 'FAQPage',
+          '@id': faqId,
+          mainEntity: validFaqItems.map(item => ({
             '@type': 'Question',
             name: item.question!.trim(),
             acceptedAnswer: {
@@ -196,20 +196,21 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
               text: markdownToPlainText(item.answer!),
             },
           })),
-      })
+        })
+      }
     }
 
     if (howTo?.data?.steps && howTo.data.steps.length >= 2) {
-      const howToId = `${pageUrl}#howto`
-      hasPart.push({ '@id': howToId })
-      graph.push({
-        '@type': 'HowTo',
-        '@id': howToId,
-        name: value.title,
-        description: value.description || undefined,
-        step: howTo.data.steps
-          .filter(step => step.name?.trim() && step.text?.trim())
-          .map((step, index) => ({
+      const validSteps = howTo.data.steps.filter(step => step.name?.trim() && step.text?.trim())
+      if (validSteps.length >= 2) {
+        const howToId = `${pageUrl}#howto`
+        hasPart.push({ '@id': howToId })
+        graph.push({
+          '@type': 'HowTo',
+          '@id': howToId,
+          name: value.title,
+          description: value.description || undefined,
+          step: validSteps.map((step, index) => ({
             '@type': 'HowToStep',
             position: index + 1,
             name: step.name!.trim(),
@@ -219,10 +220,11 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
               ? buildImageValue(normalizeAbsoluteUrl(step.image_public_url, origin), step.image_width, step.image_height)
               : undefined,
           })),
-        totalTime: howTo.data.estimated_time || undefined,
-        tool: (howTo.data.tool_items?.filter(Boolean) ?? []).map(name => ({ '@type': 'HowToTool', name })),
-        supply: (howTo.data.supply_items?.filter(Boolean) ?? []).map(name => ({ '@type': 'HowToSupply', name })),
-      })
+          totalTime: howTo.data.estimated_time || undefined,
+          tool: (howTo.data.tool_items?.filter(Boolean) ?? []).map(name => ({ '@type': 'HowToTool', name })),
+          supply: (howTo.data.supply_items?.filter(Boolean) ?? []).map(name => ({ '@type': 'HowToSupply', name })),
+        })
+      }
     }
 
     if (hasPart.length) {

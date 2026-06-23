@@ -301,6 +301,9 @@ function normalizeFaqItems(items: PlatformFaqItemInput[]) {
   if (items.length > FAQ_MAX_ITEMS) badRequest(`faq_items cannot exceed ${FAQ_MAX_ITEMS} items`)
 
   const normalized = items.map((item, index) => {
+    if (item === null || typeof item !== 'object') {
+      badRequest(`faq_items[${index}] must be an object`)
+    }
     const question = item.question?.trim()
     const answer = item.answer?.trim()
     if (!question) badRequest(`faq_items[${index}].question is required`)
@@ -325,17 +328,31 @@ async function normalizeHowToSteps(db: D1Database, steps: PlatformHowToStepInput
 
   const normalizedSteps: PlatformHowToComponentData['steps'] = []
   for (const [index, step] of steps.entries()) {
+    if (step === null || typeof step !== 'object') {
+      badRequest(`how_to_steps[${index}] must be an object`)
+    }
     const name = step.name?.trim()
     const text = step.text?.trim()
     if (!name) badRequest(`how_to_steps[${index}].name is required`)
     if (!text) badRequest(`how_to_steps[${index}].text is required`)
     const imageAssetId = step.image_asset_id?.trim() || null
     if (imageAssetId) await ensureMediaAssetExists(db, imageAssetId)
+    let url = step.url?.trim() || null
+    if (url) {
+      try {
+        const parsed = new URL(url)
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          badRequest(`how_to_steps[${index}].url must use http or https scheme`)
+        }
+      } catch {
+        badRequest(`how_to_steps[${index}].url is not a valid URL`)
+      }
+    }
     normalizedSteps.push({
       name,
       text,
       image_asset_id: imageAssetId,
-      url: step.url?.trim() || null,
+      url,
       position: typeof step.position === 'number' ? step.position : index,
     })
   }
@@ -496,8 +513,8 @@ async function normalizeFullComponents(
 }
 
 async function ensureMediaAssetExists(db: D1Database, assetId: string, field = 'featured_image_asset_id') {
-  const asset = await db.prepare('SELECT id FROM media_assets WHERE id = ? LIMIT 1').bind(assetId).first()
-  if (!asset) badRequest(`${field} not found`)
+  const asset = await db.prepare('SELECT id FROM media_assets WHERE id = ? AND status = ? LIMIT 1').bind(assetId, 'active').first()
+  if (!asset) badRequest(`${field} not found or not active`)
 }
 
 async function ensureDocParentExists(db: D1Database, docId: string) {
@@ -896,7 +913,12 @@ export async function createPlatformBlogPost(
         now,
       ).run()
 
-      await syncStructuredContent(db, 'blog_post', id, input)
+      try {
+        await syncStructuredContent(db, 'blog_post', id, input)
+      } catch (err) {
+        await db.prepare('DELETE FROM platform_blog_posts WHERE id = ?').bind(id).run()
+        throw err
+      }
       const post = await getPlatformBlogPost(db, id)
       return { success: true, id, slug, published_at: publishedAt, post }
     } catch (err) {

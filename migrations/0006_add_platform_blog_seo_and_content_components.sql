@@ -3,6 +3,8 @@ ALTER TABLE platform_blog_posts ADD COLUMN seo_keywords TEXT;
 ALTER TABLE platform_blog_posts ADD COLUMN canonical_url TEXT;
 ALTER TABLE platform_blog_posts ADD COLUMN robots TEXT;
 
+ALTER TABLE platform_docs ADD COLUMN seo_description TEXT;
+ALTER TABLE platform_docs ADD COLUMN seo_keywords TEXT;
 ALTER TABLE platform_docs ADD COLUMN canonical_url TEXT;
 ALTER TABLE platform_docs ADD COLUMN robots TEXT;
 

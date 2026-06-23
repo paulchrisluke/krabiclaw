@@ -133,6 +133,8 @@ const emit = defineEmits<{
   change: [asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null]
 }>()
 
+const { trackImageUploaded, trackVideoUploaded, trackMediaLibraryViewed } = useAnalytics()
+
 type Panel = 'library' | 'generate'
 
 interface PickerMediaAsset {
@@ -210,6 +212,7 @@ function open() {
   pendingAsset.value = null
   panel.value = 'library'
   isOpen.value = true
+  trackMediaLibraryViewed(props.siteId)
 }
 
 function onSelect(asset: PickerMediaAsset) {
@@ -222,11 +225,17 @@ function onSelect(asset: PickerMediaAsset) {
 }
 
 function onUploaded(asset: PickerMediaAsset) {
+  const kind = asset.kind ?? (asset.publicUrl?.toLowerCase().endsWith('.mp4') ? 'video' : 'image')
   pendingAsset.value = {
     id: asset.id,
     publicUrl: asset.publicUrl ?? asset.public_url ?? '',
     thumbnailUrl: asset.thumbnailUrl ?? asset.thumbnail_url ?? '',
-    kind: asset.kind ?? (asset.publicUrl?.toLowerCase().endsWith('.mp4') ? 'video' : 'image'),
+    kind,
+  }
+  if (kind === 'image') {
+    trackImageUploaded(props.siteId, 0, 'cloudflare_images')
+  } else {
+    trackVideoUploaded(props.siteId, 0, 'cloudflare_r2')
   }
 }
 

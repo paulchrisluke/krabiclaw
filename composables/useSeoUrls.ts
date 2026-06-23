@@ -14,7 +14,7 @@ export function resolveSeoUrl(value: string | null | undefined, origin: string) 
 export function useSeoUrl(value: MaybeRefOrGetter<string | null | undefined> = SHARED_OG_IMAGE_PATH) {
   const config = useRuntimeConfig()
   const requestURL = useRequestURL()
-  return computed(() => resolveSeoUrl(toValue(value), config.public.siteUrl || requestURL.origin))
+  return computed(() => resolveSeoUrl(toValue(value), requestURL.origin || config.public.siteUrl))
 }
 
 export function useSharedOgImage(value?: MaybeRefOrGetter<string | null | undefined>) {

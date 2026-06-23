@@ -184,6 +184,7 @@ usePlatformPageSeo({
     { name: 'Home', url: '/' },
     { name: 'Features', url: '/features' },
   ],
+  faqItems: faqItems.map(faq => ({ question: faq.q, answer: faq.a })),
 })
 
 const detailedFeatures = [

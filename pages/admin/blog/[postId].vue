@@ -389,7 +389,7 @@ async function unpublish() {
   try {
     const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId}`, {
       method: 'PATCH',
-      body: { ...buildPayload(), unpublish: true },
+      body: { unpublish: true },
     })
     if (!updated.post) throw new Error('Post not found after unpublish')
     post.value = updated.post

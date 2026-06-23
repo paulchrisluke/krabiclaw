@@ -362,6 +362,7 @@
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useChowBot } from '~/composables/useChowBot'
+import { useAnalytics } from '~/composables/useAnalytics'
 import type { ChowBotConv } from '~/composables/useChowBotHistory'
 import { useChowBotHistory } from '~/composables/useChowBotHistory'
 
@@ -374,6 +375,7 @@ interface AuthOrganization {
 
 const route = useRoute()
 const { data: sessionData, signOut } = useAuth()
+const { trackDashboardVisited } = useAnalytics()
 const toast = useToast()
 const stoppingImpersonation = ref(false)
 const dashboard = useDashboardSite()
@@ -672,6 +674,12 @@ onMounted(async () => {
     billingStatus.value = await $fetch<{ billing: { plan: string } }>('/api/billing/status')
   } catch (err) {
     console.error('Failed to load billing status:', err)
+  }
+  
+  // Track dashboard visit
+  const segment = route.path.split('/').filter(Boolean).at(2)
+  if (segment && activeSiteId.value) {
+    trackDashboardVisited(segment, activeSiteId.value)
   }
 })
 

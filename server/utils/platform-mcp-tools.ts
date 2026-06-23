@@ -312,22 +312,22 @@ const STRUCTURED_CONVENIENCE_INPUT = {
   components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
 }
 
-const PLATFORM_BLOG_TOOL_DESCRIPTION = [
-  'Create or update a KrabiClaw platform blog post with full SEO and structured-content parity.',
+const SHARED_TOOL_DESCRIPTION_LINES = [
   'Set seo_description explicitly for the intended search snippet. Use canonical_url only for deliberate canonical consolidation. Use robots only for non-default index behavior. Set featured_image_asset_id whenever a social preview image is available.',
   'Use faq_items only for real visible Q&A content. Use how_to_steps only for genuinely procedural content. Use how_to_estimated_time, how_to_tool_items, and how_to_supply_items to round out How-To data when the content visibly supports it.',
   'Use faq_render_enabled/how_to_render_enabled to control whether a component appears on the page. Use faq_schema_enabled/how_to_schema_enabled to control whether a component emits structured data. Use faq_status/how_to_status to disable a component without deleting it.',
   'For normal authoring, prefer the convenience fields. For full parity and explicit metadata control, use components[]. Do not send components[] together with convenience structured-content fields.',
   'On update: omitted structured-content fields preserve existing content; empty arrays delete the corresponding component; non-empty arrays replace component data; explicit metadata fields update metadata.',
+]
+
+const PLATFORM_BLOG_TOOL_DESCRIPTION = [
+  'Create or update a KrabiClaw platform blog post with full SEO and structured-content parity.',
+  ...SHARED_TOOL_DESCRIPTION_LINES,
 ].join(' ')
 
 const PLATFORM_DOC_TOOL_DESCRIPTION = [
   'Create or update a KrabiClaw platform documentation page with full SEO and structured-content parity.',
-  'Set seo_description explicitly for the intended search snippet. Use canonical_url only for deliberate canonical consolidation. Use robots only for non-default index behavior. Set featured_image_asset_id whenever a social preview image is available.',
-  'Use faq_items only for real visible Q&A content. Use how_to_steps only for genuinely procedural content. Use how_to_estimated_time, how_to_tool_items, and how_to_supply_items to round out How-To data when the content visibly supports it.',
-  'Use faq_render_enabled/how_to_render_enabled to control whether a component appears on the page. Use faq_schema_enabled/how_to_schema_enabled to control whether a component emits structured data. Use faq_status/how_to_status to disable a component without deleting it.',
-  'For normal authoring, prefer the convenience fields. For full parity and explicit metadata control, use components[]. Do not send components[] together with convenience structured-content fields.',
-  'On update: omitted structured-content fields preserve existing content; empty arrays delete the corresponding component; non-empty arrays replace component data; explicit metadata fields update metadata.',
+  ...SHARED_TOOL_DESCRIPTION_LINES,
 ].join(' ')
 
 const PLATFORM_SECURITY_SCHEMES: Array<{ type: 'oauth2'; scopes: string[] }> = [

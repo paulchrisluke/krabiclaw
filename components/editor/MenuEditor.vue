@@ -328,6 +328,7 @@ const props = defineProps<{
 }>()
 
 const toast = useToast()
+const { trackMenuItemCreated } = useAnalytics()
 
 const {
   currentMenu,

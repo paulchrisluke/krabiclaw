@@ -302,7 +302,8 @@ const specs = [
   { label: 'Languages', value: 'EN / TH' }
 ]
 
-const siteUrl = config.public.siteUrl || (import.meta.dev ? 'http://localhost:3000' : 'https://krabiclaw.com')
+const requestURL = useRequestURL()
+const siteUrl = requestURL.origin || config.public.siteUrl
 
 usePlatformPageSeo({
   path: '/templates',
