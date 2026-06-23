@@ -37,7 +37,6 @@ ChowBot and dashboard CMS are supported product surfaces. Keep MCP and ChowBot a
   3. Call `show_generated_images` with returned `assetId` and `publicUrl`
 
 Canonical generated-image contracts:
-
 - Native generation: `save_generated_image_file({ site_id, attachment_id, prompt })` — always use this after `image_generation`; passing base64 to `save_generated_image` is blocked by OpenAI safety checks
 - Raw base64 (non-native, rare): `save_generated_image({ site_id, image_data_base64, prompt })`
 
@@ -88,7 +87,7 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - Organizations map to a team or agency using Better Auth’s `organization` plugin.
 - **One org can have multiple sites** — the unique-per-org constraint was removed in migration `0017`.
 - Each site has its own plan and Stripe subscription (`site_billing` table).
-- The Stripe _customer_ stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
+- The Stripe *customer* stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
 - Multiple physical locations live under `business_locations`, not separate orgs. Locations are **unlimited on all plans**.
 - Dashboard route shape (site is always explicit — no implicit "first site in org"):
   - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
@@ -105,6 +104,17 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
   - `localhost` / `krabiclaw.com` = platform routes
   - `*.krabiclaw.com` or custom domains = tenant sites
   - On `*.workers.dev` preview Workers, `x-preview-tenant: <slug>` header carries tenant identity because the browser cannot spoof subdomains against a single-level wildcard cert.
+
+---
+
+## Analytics
+
+There are three independent analytics layers — do not conflate them or assume one supersedes another:
+
+1. **Platform GA4** (`G-NJ1BSP9BYG`, injected in `app.vue`) — KrabiClaw's own marketing-site property, fires only when `isPlatform` is true.
+2. **Per-tenant connected GA4** — a site owner links their own GA4 property via the OAuth flow in `server/utils/google-analytics.ts` / `server/api/sites/[siteId]/integrations/google-analytics/`. The resulting `ga4_measurement_id` lands in `site_config` (already exposed publicly via bootstrap's `config` object — no extra plumbing needed) and `app.vue` injects it as that tenant's own gtag tag. Sites with no connection get no tag from this layer.
+3. **Platform-wide rollup GA4** (`G-Z18L1Y4G7K`, configured in `nuxt.config.ts` via `scripts.registry.googleAnalytics`) — **intentionally unconditional**, fires on every route including every Saya tenant page. This is how KrabiClaw gets cross-customer traffic insight across all tenant sites. It is not a leftover/mistake — do not remove or gate it without explicit instruction.
+4. **Internal pipeline** (`site_pageview_events` → `aggregateAnalyticsForDate()` → `site_analytics_daily`) — powers each site's own dashboard "Analytics overview" tab. Tracked via `server/middleware/zz-pageview-tracking.ts` (SSR) and `plugins/pageview-tracking.client.ts` (SPA navigation + duration ping), using the `kc_visitor_id` (2yr)/`kc_session_id` (30min sliding) anonymous cookie pair defined in `server/utils/pageview-tracking.ts`. This is intentionally not a Better Auth session — anonymous visitors must never create rows in `user`/`session`.
 
 ---
 
@@ -129,7 +139,6 @@ Seeds use a two-tier insert strategy so that MCP edits survive a reseed:
 - **Content tables** (`site_content`, `menu_items`, `reviews`, `location_qa`, `posts`, `post_channel_jobs`, `*_translations`) → `INSERT OR IGNORE` — first seed wins; MCP changes are never overwritten by a reseed
 
 Production is never reseeded (only migrated), so this only affects local dev, preview, and staging. If you need to force-push updated content from a seed definition to an already-seeded environment, delete the affected rows first or use an MCP tool call directly.
-
 - Layout name for Saya theme pages: `layout: 'saya'`
 - `tenant` layout is dead
 
@@ -451,7 +460,7 @@ Saya components never render a blank section or a skeleton-only placeholder when
 - `components/saya/SayaEmptyExample.vue` renders one example card; `components/saya/SayaMcpHint.vue` renders the owner-only "Try: ..." affordance that pre-fills and opens ChowBot via `useChowBot().setDraftMessage()` + `.open()`.
 - The hint only renders in dashboard edit mode (`useEditMode().editMode`, i.e. `?edit=true`) — real site visitors only ever see the clean example, never the hint UI.
 - Filled examples are only for **core** sections (menu, experiences, locations) where an empty section usually means an unfinished site. **Supplementary/optional** sections (posts, reviews, Q&A) use the low-key icon+message empty state instead — a live, fully-operational business may legitimately never post updates or get reviews, so a fabricated "Example post title" shown to a real visitor would incorrectly imply the site is broken. Posts/Reviews/Q&A still get a hint when merchant-actionable (posts, Q&A; not reviews, which aren't merchant-authored).
-- `config/content-registry.ts` field `defaultValue` is the render-time fallback for scalar `site_content` fields (`usePageContent().getField()` falls back to it automatically when no value is in the DB and the caller passes no explicit default). **These must always be generic, vertical-neutral copy** — never tenant- or demo-identity-specific text (no business names, no "Saya Kitchen", no real addresses/phone numbers). The "Saya fallback copy on any tenant page" regression below is about leaking _demo-tenant identity_, not about having a generic instructional fallback — a generic fallback rendering on an empty tenant page is the intended behavior, not the regression.
+- `config/content-registry.ts` field `defaultValue` is the render-time fallback for scalar `site_content` fields (`usePageContent().getField()` falls back to it automatically when no value is in the DB and the caller passes no explicit default). **These must always be generic, vertical-neutral copy** — never tenant- or demo-identity-specific text (no business names, no "Saya Kitchen", no real addresses/phone numbers). The "Saya fallback copy on any tenant page" regression below is about leaking *demo-tenant identity*, not about having a generic instructional fallback — a generic fallback rendering on an empty tenant page is the intended behavior, not the regression.
 
 ---
 

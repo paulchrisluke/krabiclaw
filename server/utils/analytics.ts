@@ -88,14 +88,20 @@ export async function aggregateAnalyticsForDate(
 
     let returningVisitors = 0
     if (visitorIds.length > 0) {
-      const placeholders = visitorIds.map(() => '?').join(',')
       const returningResult = await db.prepare(`
         SELECT COUNT(DISTINCT visitor_id) as count
         FROM site_pageview_events
         WHERE site_id = ?
           AND created_at < ?
-          AND visitor_id IN (${placeholders})
-      `).bind(siteId, start, ...visitorIds).first() as { count: number } | null
+          AND visitor_id IN (
+            SELECT DISTINCT visitor_id
+            FROM site_pageview_events
+            WHERE site_id = ?
+              AND created_at >= ?
+              AND created_at < ?
+              AND visitor_id IS NOT NULL
+          )
+      `).bind(siteId, start, siteId, start, end).first() as { count: number } | null
       returningVisitors = toNumber(returningResult?.count)
     }
 

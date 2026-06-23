@@ -5,7 +5,7 @@
 // - visibilitychange/pagehide + sendBeacon is used only to report time-on-page
 //   for the page that's being left, never as a pageview trigger itself.
 // - All calls fail silently — analytics must never break the public site.
-export default defineNuxtPlugin((nuxtApp) => {
+export default defineNuxtPlugin(() => {
   const { isTenant, siteId } = useTenantSite()
   if (!isTenant || !siteId) return
 
@@ -31,8 +31,12 @@ export default defineNuxtPlugin((nuxtApp) => {
     const durationSeconds = Math.round((Date.now() - pageEnteredAt) / 1000)
     if (durationSeconds <= 0) return
 
+    // pagePath pins the update to the page being measured — the beacon and the
+    // next page's pageview fetch race each other, so this must not depend on
+    // "most recent row" ordering on the server.
     const payload = JSON.stringify({
       siteId,
+      pagePath: currentPath,
       eventType: 'duration',
       durationSeconds
     })
@@ -40,7 +44,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     if (typeof navigator.sendBeacon === 'function') {
       navigator.sendBeacon('/api/analytics/track', new Blob([payload], { type: 'application/json' }))
     } else {
-      sendTrack({ siteId, eventType: 'duration', durationSeconds })
+      sendTrack({ siteId, pagePath: currentPath, eventType: 'duration', durationSeconds })
     }
   }
 
