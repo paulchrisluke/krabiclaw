@@ -84,7 +84,9 @@ Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and ar
 
 10. Any schema change must be checked against current server queries (raw SQL and Drizzle alike) before finishing.
 
-`migrations/0001_initial.sql` is the **squashed baseline** — all migrations up through the old numbering (including what was previously migration `0017`) were folded into it. Numbering restarted from `0001` after the squash; the migrations directory currently only goes up to `0008`. Each migration file after `0001_initial.sql` is the source of truth for its own delta. Do not reference pre-squash migration numbers (e.g. "migration 0017") as if they still exist as separate files — that history is now baked into `0001_initial.sql`.
+`migrations/0001_initial.sql` is the **squashed baseline** — all migrations up through the old numbering (including what was previously migration `0017`) were folded into it. Numbering restarted from `0001` after the squash. Each migration file after `0001_initial.sql` is the source of truth for its own delta. Do not reference pre-squash migration numbers (e.g. "migration 0017") as if they still exist as separate files — that history is now baked into `0001_initial.sql`.
+
+**Squashing a migration history only updates the file on disk — it does not retroactively re-run against an environment that already applied an earlier version of that same filename.** `wrangler d1 migrations apply` tracks applied migrations by filename in the `d1_migrations` table, not by content/checksum. If `0001_initial.sql` is re-squashed to include newer tables/columns and a target environment already has an `0001_initial.sql` row recorded from a prior squash, `wrangler d1 migrations apply` will report "No migrations to apply!" and silently skip the new content. This has bitten production twice from the same squash: a whole missing table (`work_requests`/`platform_content_components`, fixed in `migrations/0002_...sql` via `CREATE TABLE IF NOT EXISTS`, safe since the table didn't exist yet) and missing columns on an *existing* table (`site_pageview_events.visitor_id/country/region/city`, fixed in `migrations/0003_...sql`). Missing columns are the harder case — D1's SQLite has no `ADD COLUMN IF NOT EXISTS`, so a plain `ALTER TABLE ADD COLUMN` would fail with "duplicate column" on any fresh environment that already has the column from the current `0001_initial.sql`. The fix is to pull the column(s) back out of `0001_initial.sql`'s `CREATE TABLE` and into their own numbered migration, so every environment — fresh or stale — picks them up exactly once. Before assuming any environment is schema-current, diff its actual `sqlite_master` tables *and* `PRAGMA table_info` per table against `server/db/schema.ts`, not just `wrangler d1 migrations list`.
 
 ---
 
@@ -561,8 +563,14 @@ Run the regression fixture before merging any PR that touches `scripts/` or `com
 
 ```bash
 # Requires a local dev server seeded with pottery house data
-yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-house-krabi
+yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-house
+
+# Against staging — the fixture auto-sends x-preview-tenant since staging's
+# wildcard TLS only covers one subdomain level; --slug must be passed too
+yarn fixture:pottery-house --url https://staging.krabiclaw.com --site-id site-pottery-house --slug pottery-house
 ```
+
+The client was originally intake'd as "pottery-house-krabi" but is live under the shorter `pottery-house` slug/site id — use the live identifiers above, not the original intake name.
 
 ---
 

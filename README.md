@@ -11,10 +11,11 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 | Command | What it does |
 |---|---|
 | `yarn dev` | Dev server (localhost:3000). Full D1 + Cloudflare emulation via `nitro-cloudflare-dev`. |
-| `yarn build` | Production build → `dist/` |
-| `yarn deploy` | Build, patch Nitro shim, deploy to Cloudflare Pages |
-| `yarn schema:local` | Apply `schema.sql` to local D1 |
-| `yarn schema:remote` | Apply `schema.sql` to production D1 |
+| `yarn build` | Production build → `.output/` |
+| `yarn deploy` | Build, patch Nitro shim, apply D1 migrations, deploy the Worker |
+| `yarn schema:local` | Apply pending `migrations/*.sql` to local D1 |
+| `yarn schema:remote` | Apply pending `migrations/*.sql` to production D1 |
+| `yarn drizzle:check` | Verify `server/db/schema.ts` hasn't drifted from the live D1 schema |
 | `yarn seed:local` | Seed demo data locally |
 | `yarn stripe:listen` | Forward Stripe webhooks to localhost (local dev only) |
 | `yarn canary:prod` | Production-safe authenticated browser canary (read-only checks). |
@@ -72,9 +73,9 @@ ulimit -n 65536
 yarn deploy
 ```
 
-Builds, patches the Nitro/Cloudflare process shim, and deploys. **Never run `wrangler pages deploy` directly** — the shim patch will be skipped.
+Builds, patches the Nitro/Cloudflare process shim, applies pending D1 migrations (`wrangler d1 migrations apply DB --remote`), then deploys the Cloudflare Worker (`wrangler deploy`). **Never run `wrangler deploy` directly** — the shim patch and migration step will be skipped. In CI, this same sequence runs automatically on every push to `main` (`prod-deploy` job in `.github/workflows/ci.yml`).
 
-Production secrets live in Cloudflare Pages → Settings → Environment variables.
+Production secrets live in the Cloudflare dashboard → Workers & Pages → krabiclaw → Settings → Variables.
 
 Set protected internal job secrets with Wrangler:
 
@@ -91,11 +92,11 @@ CI + E2E auth/billing parity, tier intent, and staging-vs-production smoke rules
 
 ## Schema
 
-`schema.sql` is the single source of truth. Edit it directly — no numbered migration files.
+Schema changes go through hand-authored, numbered files in `migrations/`, applied via `wrangler d1 migrations apply` — not `drizzle-kit generate`/`migrate`. `server/db/schema.ts` (Drizzle ORM) is hand-maintained to mirror `migrations/` and is used for typed query access plus drift checking (`yarn drizzle:check`), not for generating migrations. Full workflow and the squashed-baseline (`migrations/0001_initial.sql`) caveats are documented in `CLAUDE.md`'s "Database Schema Workflow" section.
 
 ```bash
-yarn schema:local    # local
-yarn schema:remote   # production
+yarn schema:local    # apply pending migrations locally
+yarn schema:remote   # apply pending migrations to production
 ```
 
 ---
