@@ -126,6 +126,19 @@ function serializeAddress(value: unknown) {
     if (!isPlainObject(value) && !Array.isArray(value)) return null;
     return JSON.stringify(value);
   }
+  // Callers sometimes pre-stringify an already-structured address (e.g. round-tripping
+  // a value read from this same column) before passing it in here. Detect that case and
+  // pass it through rather than re-wrapping the JSON text as a literal address line,
+  // which previously produced double-encoded JSON (e.g. {"addressLines":["{\"addressLines\":...}"]}).
+  const trimmed = value.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (isPlainObject(parsed) || Array.isArray(parsed)) return JSON.stringify(parsed);
+    } catch {
+      // Not valid JSON — fall through and treat as freeform address text.
+    }
+  }
   const addressLines = normalizeAddressLines(value);
   return addressLines.length ? JSON.stringify({ addressLines }) : null;
 }
