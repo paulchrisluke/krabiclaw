@@ -106,11 +106,11 @@ export async function aggregateAnalyticsForDate(
       ? Math.round((pageViewsTotal / uniqueSessions) * 100) / 100
       : 0
 
-    // Calculate avg session duration
-    const sessionDurationRows = await queryAll<{ session_id: string; avg_duration: number | null }>(db, `
+    // Calculate avg session duration (average of each session's total duration, not of per-event averages)
+    const sessionDurationRows = await queryAll<{ session_id: string; total_duration: number | null }>(db, `
       SELECT
         session_id,
-        AVG(duration_seconds) as avg_duration
+        SUM(duration_seconds) as total_duration
       FROM site_pageview_events
       WHERE site_id = ?
         AND created_at >= ?
@@ -119,10 +119,10 @@ export async function aggregateAnalyticsForDate(
     `, [siteId, start, end])
 
     const durationRows = sessionDurationRows
-      .filter((row) => row.avg_duration !== null && row.avg_duration !== undefined)
+      .filter((row) => row.total_duration !== null && row.total_duration !== undefined)
     const avgSessionDuration =
       durationRows.length > 0
-        ? Math.round(durationRows.reduce((sum, row) => sum + toNumber(row.avg_duration), 0) / durationRows.length)
+        ? Math.round(durationRows.reduce((sum, row) => sum + toNumber(row.total_duration), 0) / durationRows.length)
         : 0
 
     // Get top pages
@@ -247,10 +247,10 @@ export async function aggregatePlatformAnalyticsForDate(
       ? Math.round((pageViewsTotal / uniqueSessions) * 100) / 100
       : 0
 
-    const sessionDurationRows = await queryAll<{ session_id: string; avg_duration: number | null }>(db, `
+    const sessionDurationRows = await queryAll<{ session_id: string; total_duration: number | null }>(db, `
       SELECT
         session_id,
-        AVG(duration_seconds) as avg_duration
+        SUM(duration_seconds) as total_duration
       FROM platform_pageview_events
       WHERE created_at >= ?
         AND created_at < ?
@@ -258,10 +258,10 @@ export async function aggregatePlatformAnalyticsForDate(
     `, [start, end])
 
     const durationRows = sessionDurationRows
-      .filter((row) => row.avg_duration !== null && row.avg_duration !== undefined)
+      .filter((row) => row.total_duration !== null && row.total_duration !== undefined)
     const avgSessionDuration =
       durationRows.length > 0
-        ? Math.round(durationRows.reduce((sum, row) => sum + toNumber(row.avg_duration), 0) / durationRows.length)
+        ? Math.round(durationRows.reduce((sum, row) => sum + toNumber(row.total_duration), 0) / durationRows.length)
         : 0
 
     const topPageRows = await queryAll<{ page_path: string; views: number }>(db, `
@@ -338,8 +338,8 @@ export async function getPlatformAnalyticsSummary(
   topPages: Array<{ path: string; views: number; percentOfTotal: number }>
   dailyData: Array<{ date: string; pageViews: number; sessions: number }>
 }> {
-  const dailyStats = await queryAll<{ date: string; page_views: number; unique_sessions: number; top_pages: string | null }>(db, `
-    SELECT date, page_views, unique_sessions, top_pages
+  const dailyStats = await queryAll<{ date: string; page_views: number; unique_sessions: number }>(db, `
+    SELECT date, page_views, unique_sessions
     FROM platform_analytics_daily
     WHERE date BETWEEN ? AND ?
     ORDER BY date ASC
@@ -355,30 +355,28 @@ export async function getPlatformAnalyticsSummary(
     WHERE created_at >= ? AND created_at < ? AND visitor_id IS NOT NULL
   `, [start, end])
 
-  const topPageMap = new Map<string, number>()
-  for (const row of dailyStats) {
-    if (!row.top_pages) continue
-    try {
-      const parsed = JSON.parse(String(row.top_pages)) as Array<{ path?: string; views?: number }>
-      if (!Array.isArray(parsed)) continue
-      for (const page of parsed) {
-        const path = String(page.path || '/')
-        const views = toNumber(page.views)
-        if (views <= 0) continue
-        topPageMap.set(path, (topPageMap.get(path) || 0) + views)
-      }
-    } catch {
-      // Ignore malformed top_pages payloads.
-    }
-  }
+  // Re-derive top pages from raw events across the full range rather than merging
+  // each day's stored top-10 snapshot, which can miss pages that only rank
+  // across the combined period and can't be trimmed back down to a true top 10.
+  const topPageRows = await queryAll<{ page_path: string; views: number }>(db, `
+    SELECT
+      page_path,
+      COUNT(*) as views
+    FROM platform_pageview_events
+    WHERE created_at >= ? AND created_at < ?
+    GROUP BY page_path
+    ORDER BY views DESC
+    LIMIT 10
+  `, [start, end])
 
-  const topPages = Array.from(topPageMap.entries())
-    .map(([path, views]) => ({
-      path,
+  const topPages = topPageRows.map((row) => {
+    const views = toNumber(row.views)
+    return {
+      path: String(row.page_path || '/'),
       views,
       percentOfTotal: pageViews > 0 ? Math.round((views / pageViews) * 100) : 0
-    }))
-    .sort((a, b) => b.views - a.views)
+    }
+  })
 
   const dailyData = dailyStats.map((row) => ({
     date: String(row.date || ''),

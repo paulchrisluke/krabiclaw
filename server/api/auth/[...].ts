@@ -47,7 +47,13 @@ export default defineEventHandler(async (event) => {
     // Check for error responses
     if (response.status >= 400) {
       const responseText = await response.text()
-      console.error('Auth error response:', {
+      // 4xx here is routinely an expected OAuth flow outcome, not a fault of
+      // ours — e.g. ChatGPT calling /revoke on a token it already rotated out
+      // returns 400 "token not found", which used to get logged as `error`
+      // and drowned out real signal in Observability. Only 5xx (our server
+      // actually faulting) warrants error severity.
+      const log = response.status >= 500 ? console.error : console.warn
+      log('Auth error response:', {
         status: response.status,
         statusText: response.statusText,
         body: responseText

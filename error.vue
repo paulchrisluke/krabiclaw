@@ -16,7 +16,7 @@
             : "We hit an unexpected error. Please try again." }}
         </p>
 
-        <UButton to="/" size="lg" class="rounded-full">
+        <UButton size="lg" class="rounded-full" @click="clearError({ redirect: '/' })">
           Go back home
         </UButton>
 
