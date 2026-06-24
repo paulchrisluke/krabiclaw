@@ -876,7 +876,7 @@ CREATE TABLE site_pageview_events (
   ip_hash TEXT,
   session_id TEXT,
   duration_seconds INTEGER,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), visitor_id TEXT, country TEXT, region TEXT, city TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE SET NULL
 );
@@ -1268,8 +1268,6 @@ CREATE TABLE google_analytics_connections (
   FOREIGN KEY (connected_by_user_id) REFERENCES user(id) ON DELETE SET NULL,
   UNIQUE(organization_id, site_id)
 );
-CREATE INDEX idx_pageview_events_site_visitor
-  ON site_pageview_events(site_id, visitor_id);
 CREATE TABLE IF NOT EXISTS "user" (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
