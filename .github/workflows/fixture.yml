@@ -5,24 +5,28 @@ name: Pottery House Fixture
 # utils/vertical-copy.ts, or pages/
 #
 # Trigger manually after seeding and deploying:
-#   1. Seed: yarn client:import --slug pottery-house-krabi --apply [--remote]
+#   1. Seed: yarn client:import --slug pottery-house --apply [--remote]
 #   2. Deploy: yarn deploy (if remote)
 #   3. Trigger this workflow with the live URL
+#
+# Site was originally intake'd as "pottery-house-krabi" but is live under the
+# shorter "pottery-house" slug/site id — defaults below match what's actually
+# live, not the original intake name.
 
 on:
   workflow_dispatch:
     inputs:
       site_url:
-        description: "Site URL (e.g. https://pottery-house-krabi.krabiclaw.com or http://staging...)"
+        description: "Site URL (e.g. https://pottery-house.krabiclaw.com or http://staging...)"
         required: true
       site_id:
-        description: "Site ID (default: site-pottery-house-krabi)"
+        description: "Site ID (default: site-pottery-house)"
         required: false
-        default: site-pottery-house-krabi
+        default: site-pottery-house
       slug:
-        description: "Client slug (default: pottery-house-krabi)"
+        description: "Client slug / subdomain (default: pottery-house)"
         required: false
-        default: pottery-house-krabi
+        default: pottery-house
 
 jobs:
   fixture:

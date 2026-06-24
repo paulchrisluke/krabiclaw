@@ -141,8 +141,10 @@ curl -i https://staging.krabiclaw.com/api/auth/get-session -b cookie.txt
 - [ ] `/api/public/sites/[siteId]/config`, `/locales`, `/contact` (form submit),
       `/locations/[slug]/media`, `/qa`, `/reviews` all return 200 with expected shape —
       these were all touched in this diff.
-- [ ] Run `yarn fixture:pottery-house --url https://staging.krabiclaw.com --site-id site-pottery-house-krabi`
+- [ ] Run `yarn fixture:pottery-house --url https://staging.krabiclaw.com --site-id site-pottery-house --slug pottery-house`
       per CLAUDE.md's canonical regression fixture before considering staging green.
+      (`--site-id`/`--slug` default to the live values now — see CLAUDE.md note on the
+      original `pottery-house-krabi` intake name vs. the live `pottery-house` identifiers.)
 
 ### Analytics tracking still writes
 

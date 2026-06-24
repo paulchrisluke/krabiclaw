@@ -561,8 +561,14 @@ Run the regression fixture before merging any PR that touches `scripts/` or `com
 
 ```bash
 # Requires a local dev server seeded with pottery house data
-yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-house-krabi
+yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-house
+
+# Against staging — the fixture auto-sends x-preview-tenant since staging's
+# wildcard TLS only covers one subdomain level; --slug must be passed too
+yarn fixture:pottery-house --url https://staging.krabiclaw.com --site-id site-pottery-house --slug pottery-house
 ```
+
+The client was originally intake'd as "pottery-house-krabi" but is live under the shorter `pottery-house` slug/site id — use the live identifiers above, not the original intake name.
 
 ---
 

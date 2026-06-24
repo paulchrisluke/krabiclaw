@@ -384,7 +384,11 @@ jobs:
 #   pages/           (routing changes)
 #
 # Run locally against your dev instance:
-#   yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-house-krabi
+#   yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-house
+#
+# Against staging/preview (wildcard TLS only covers one subdomain level there,
+# so the fixture sends x-preview-tenant automatically — just pass --slug too):
+#   yarn fixture:pottery-house --url https://staging.krabiclaw.com --site-id site-pottery-house --slug pottery-house
 #
 # Or trigger the fixture.yml workflow against a preview deploy.
 # See .github/workflows/fixture.yml
