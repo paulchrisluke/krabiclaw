@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { queryFirst } from '~/server/db'
+import { aggregatePlatformAnalyticsForDate, getPlatformAnalyticsSummary } from '~/server/utils/analytics'
 import { getPlatformMcpTool } from '~/server/utils/platform-mcp-tools'
 import {
   createPlatformBlogPost,
@@ -44,6 +45,20 @@ function optionalArray(args: Record<string, unknown>, key: string) {
   return Array.isArray(value) ? value : undefined
 }
 
+function dateString(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
+function optionalDateParam(args: Record<string, unknown>, key: string): string | undefined {
+  const value = args[key]
+  if (value === undefined) return undefined
+  const parsed = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00.000Z`) : null
+  if (!parsed || Number.isNaN(parsed.getTime()) || dateString(parsed) !== value) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be a valid date in YYYY-MM-DD format.`)
+  }
+  return value
+}
+
 function structuredContentInput(args: Record<string, unknown>) {
   return {
     faq_items: optionalArray(args, 'faq_items') as Array<{ question: string; answer: string; position?: number }> | undefined,
@@ -82,12 +97,15 @@ export async function executePlatformMcpToolCall(
   }
 
   const user = await requireMcpUser(event, {
+    // See scopes comment in server/utils/auth.ts: DCR-registered MCP clients
+    // legitimately carry every custom scope by default, so forbiddenScopes
+    // isn't used here — audiences (aud claim) + requirePlatformAdmin (DB role)
+    // are the real boundary, matching server/api/mcp/platform.post.ts.
     audiences: [
       `${String(event.context.cloudflare?.env?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')}/api/mcp/platform`,
       'https://krabiclaw.com/api/mcp/platform',
     ],
     requiredScopes: ['platform_admin'],
-    forbiddenScopes: ['tenant'],
     requirePlatformAdmin: true,
   })
 
@@ -104,6 +122,36 @@ export async function executePlatformMcpToolCall(
           ...currentUser,
           isPlatformAdmin: user.isPlatformAdmin,
         },
+      }
+    }
+    case 'get_platform_analytics': {
+      const endDate = optionalDateParam(rawArguments, 'end_date') ?? dateString(new Date())
+      const startDate = optionalDateParam(rawArguments, 'start_date') ?? dateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
+      if (startDate > endDate) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, 'start_date must be before or equal to end_date.')
+      }
+
+      const today = dateString(new Date())
+      if (endDate >= today) {
+        await aggregatePlatformAnalyticsForDate(user.db, today)
+      }
+
+      const summary = await getPlatformAnalyticsSummary(user.db, startDate, endDate)
+      return {
+        page_views: summary.pageViews,
+        unique_sessions: summary.uniqueSessions,
+        unique_visitors: summary.uniqueVisitors,
+        top_pages: summary.topPages.map((page) => ({
+          path: page.path,
+          views: page.views,
+          percent_of_total: page.percentOfTotal,
+        })),
+        daily_data: summary.dailyData.map((day) => ({
+          date: day.date,
+          page_views: day.pageViews,
+          sessions: day.sessions,
+        })),
+        period: { start_date: startDate, end_date: endDate },
       }
     }
     case 'list_platform_blog_posts':

@@ -949,6 +949,35 @@ export const site_locales = sqliteTable("site_locales", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
+export const platform_pageview_events = sqliteTable("platform_pageview_events", {
+	id: text().primaryKey(),
+	page_path: text().notNull(),
+	referrer: text(),
+	user_agent: text(),
+	ip_hash: text(),
+	session_id: text(),
+	visitor_id: text(),
+	duration_seconds: integer(),
+	country: text(),
+	region: text(),
+	city: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+});
+
+export const platform_analytics_daily = sqliteTable("platform_analytics_daily", {
+	id: text().primaryKey(),
+	date: text().notNull().unique(),
+	page_views: integer().default(0),
+	unique_sessions: integer().default(0),
+	avg_session_duration: integer().default(0),
+	unique_visitors: integer().default(0),
+	pages_per_session: real(),
+	returning_visitors: integer().default(0),
+	top_pages: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+});
+
 export const site_pageview_events = sqliteTable("site_pageview_events", {
 	id: text().primaryKey(),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),

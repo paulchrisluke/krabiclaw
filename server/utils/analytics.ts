@@ -189,6 +189,213 @@ export async function aggregateAnalyticsForDate(
 }
 
 /**
+ * Aggregate platform pageview events (krabiclaw.com itself: home, blog, docs,
+ * marketing) for a specific date into platform_analytics_daily. Mirrors
+ * aggregateAnalyticsForDate but is not site-scoped.
+ */
+export async function aggregatePlatformAnalyticsForDate(
+  db: DbClient,
+  date: string
+): Promise<void> {
+  try {
+    const { start, end } = dateRangeBounds(date, date)
+
+    const eventRows = await queryAll<{ page_path: string; session_id: string; duration_seconds: number | null; page_view_count: number }>(db, `
+      SELECT
+        page_path,
+        session_id,
+        duration_seconds,
+        COUNT(*) as page_view_count
+      FROM platform_pageview_events
+      WHERE created_at >= ?
+        AND created_at < ?
+      GROUP BY session_id, page_path
+    `, [start, end])
+
+    const pageViewsTotal = eventRows.reduce((sum, row) => sum + toNumber(row.page_view_count || 1), 0)
+    const uniqueSessions = new Set(eventRows.map((row) => String(row.session_id || ''))).size
+
+    const visitorRows = await queryAll<{ visitor_id: string }>(db, `
+      SELECT DISTINCT visitor_id
+      FROM platform_pageview_events
+      WHERE created_at >= ?
+        AND created_at < ?
+        AND visitor_id IS NOT NULL
+    `, [start, end])
+
+    const visitorIds = visitorRows.map((row) => String(row.visitor_id || ''))
+    const uniqueVisitors = visitorIds.length
+
+    let returningVisitors = 0
+    if (visitorIds.length > 0) {
+      const returningResult = await queryFirst<{ count: number }>(db, `
+        SELECT COUNT(DISTINCT visitor_id) as count
+        FROM platform_pageview_events
+        WHERE created_at < ?
+          AND visitor_id IN (
+            SELECT DISTINCT visitor_id
+            FROM platform_pageview_events
+            WHERE created_at >= ?
+              AND created_at < ?
+              AND visitor_id IS NOT NULL
+          )
+      `, [start, start, end])
+      returningVisitors = toNumber(returningResult?.count)
+    }
+
+    const pagesPerSession = uniqueSessions > 0
+      ? Math.round((pageViewsTotal / uniqueSessions) * 100) / 100
+      : 0
+
+    const sessionDurationRows = await queryAll<{ session_id: string; avg_duration: number | null }>(db, `
+      SELECT
+        session_id,
+        AVG(duration_seconds) as avg_duration
+      FROM platform_pageview_events
+      WHERE created_at >= ?
+        AND created_at < ?
+      GROUP BY session_id
+    `, [start, end])
+
+    const durationRows = sessionDurationRows
+      .filter((row) => row.avg_duration !== null && row.avg_duration !== undefined)
+    const avgSessionDuration =
+      durationRows.length > 0
+        ? Math.round(durationRows.reduce((sum, row) => sum + toNumber(row.avg_duration), 0) / durationRows.length)
+        : 0
+
+    const topPageRows = await queryAll<{ page_path: string; views: number }>(db, `
+      SELECT
+        page_path,
+        COUNT(*) as views
+      FROM platform_pageview_events
+      WHERE created_at >= ?
+        AND created_at < ?
+      GROUP BY page_path
+      ORDER BY views DESC
+      LIMIT 10
+    `, [start, end])
+
+    const topPages = topPageRows.map((row) => {
+      const views = toNumber(row.views)
+      return {
+        path: String(row.page_path || '/'),
+        views,
+        percentOfTotal: pageViewsTotal > 0 ? Math.round((views / pageViewsTotal) * 100) : 0
+      }
+    })
+
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString()
+
+    await execute(db, `
+      INSERT INTO platform_analytics_daily (
+        id, date, page_views, unique_sessions,
+        avg_session_duration, top_pages, unique_visitors,
+        pages_per_session, returning_visitors, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(date) DO UPDATE SET
+        page_views = excluded.page_views,
+        unique_sessions = excluded.unique_sessions,
+        avg_session_duration = excluded.avg_session_duration,
+        top_pages = excluded.top_pages,
+        unique_visitors = excluded.unique_visitors,
+        pages_per_session = excluded.pages_per_session,
+        returning_visitors = excluded.returning_visitors,
+        updated_at = excluded.updated_at
+    `, [
+      id,
+      date,
+      pageViewsTotal,
+      uniqueSessions,
+      avgSessionDuration,
+      JSON.stringify(topPages),
+      uniqueVisitors,
+      pagesPerSession,
+      returningVisitors,
+      now,
+      now
+    ])
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error))
+    console.error(`Failed to aggregate platform analytics for ${date}:`, err.message)
+    throw err
+  }
+}
+
+/**
+ * Get platform analytics summary (top pages + daily trend) across a date
+ * range, for the platform admin dashboard/MCP tool to use in content planning.
+ */
+export async function getPlatformAnalyticsSummary(
+  db: DbClient,
+  startDate: string,
+  endDate: string
+): Promise<{
+  pageViews: number
+  uniqueSessions: number
+  uniqueVisitors: number
+  topPages: Array<{ path: string; views: number; percentOfTotal: number }>
+  dailyData: Array<{ date: string; pageViews: number; sessions: number }>
+}> {
+  const dailyStats = await queryAll<{ date: string; page_views: number; unique_sessions: number; top_pages: string | null }>(db, `
+    SELECT date, page_views, unique_sessions, top_pages
+    FROM platform_analytics_daily
+    WHERE date BETWEEN ? AND ?
+    ORDER BY date ASC
+  `, [startDate, endDate])
+
+  const pageViews = dailyStats.reduce((sum, row) => sum + toNumber(row.page_views), 0)
+  const uniqueSessions = dailyStats.reduce((sum, row) => sum + toNumber(row.unique_sessions), 0)
+
+  const { start, end } = dateRangeBounds(startDate, endDate)
+  const visitorStats = await queryFirst<{ count: number }>(db, `
+    SELECT COUNT(DISTINCT visitor_id) as count
+    FROM platform_pageview_events
+    WHERE created_at >= ? AND created_at < ? AND visitor_id IS NOT NULL
+  `, [start, end])
+
+  const topPageMap = new Map<string, number>()
+  for (const row of dailyStats) {
+    if (!row.top_pages) continue
+    try {
+      const parsed = JSON.parse(String(row.top_pages)) as Array<{ path?: string; views?: number }>
+      if (!Array.isArray(parsed)) continue
+      for (const page of parsed) {
+        const path = String(page.path || '/')
+        const views = toNumber(page.views)
+        if (views <= 0) continue
+        topPageMap.set(path, (topPageMap.get(path) || 0) + views)
+      }
+    } catch {
+      // Ignore malformed top_pages payloads.
+    }
+  }
+
+  const topPages = Array.from(topPageMap.entries())
+    .map(([path, views]) => ({
+      path,
+      views,
+      percentOfTotal: pageViews > 0 ? Math.round((views / pageViews) * 100) : 0
+    }))
+    .sort((a, b) => b.views - a.views)
+
+  const dailyData = dailyStats.map((row) => ({
+    date: String(row.date || ''),
+    pageViews: toNumber(row.page_views),
+    sessions: toNumber(row.unique_sessions)
+  }))
+
+  return {
+    pageViews,
+    uniqueSessions,
+    uniqueVisitors: toNumber(visitorStats?.count),
+    topPages,
+    dailyData
+  }
+}
+
+/**
  * Aggregate analytics for all sites for a given date
  * Useful for scheduled cron jobs
  */

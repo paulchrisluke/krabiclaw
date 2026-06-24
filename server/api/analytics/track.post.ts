@@ -11,11 +11,13 @@ import {
   getOrCreateVisitorId,
   hashIp,
   insertPageviewEvent,
+  insertPlatformPageviewEvent,
   isTrackablePath
 } from '~/server/utils/pageview-tracking'
 
 interface PageviewRequest {
-  siteId: string
+  siteId?: string
+  platform?: boolean
   pagePath: string
   referrer?: string
   userAgent?: string
@@ -67,14 +69,15 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'durationSeconds is required for duration pings' }, { status: 400 })
     }
 
+    const isPlatform = body.platform === true
     const siteId = typeof body.siteId === 'string' ? body.siteId.trim() : ''
     const pagePath = typeof body.pagePath === 'string' ? body.pagePath.trim() : ''
     const referrer = typeof body.referrer === 'string' ? body.referrer.trim() : undefined
     const userAgent = typeof body.userAgent === 'string' ? body.userAgent.trim() : undefined
 
-    if (!siteId || !pagePath) {
+    if ((!isPlatform && !siteId) || !pagePath) {
       return jsonResponse(
-        { error: 'Missing required fields: siteId, pagePath' },
+        { error: 'Missing required fields: siteId (or platform), pagePath' },
         { status: 400 }
       )
     }
@@ -95,21 +98,23 @@ export default defineEventHandler(async (event) => {
       )
     }
 
-    // Validate that the site exists
-    const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE id = ?`, [siteId])
+    if (!isPlatform) {
+      // Validate that the site exists
+      const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE id = ?`, [siteId])
 
-    if (!site) {
-      return jsonResponse(
-        { error: 'Site not found' },
-        { status: 404 }
-      )
+      if (!site) {
+        return jsonResponse(
+          { error: 'Site not found' },
+          { status: 404 }
+        )
+      }
     }
 
     const clientIp = getClientIp(event)
     const ipHash = await hashIp(clientIp)
     const now = new Date().toISOString()
     const windowEndsAt = new Date(Date.now() + RATE_LIMIT_WINDOW_SECONDS * 1000).toISOString()
-    const rateKey = `analytics-track:${siteId}:${ipHash}`
+    const rateKey = `analytics-track:${isPlatform ? 'platform' : siteId}:${ipHash}`
 
     // Atomic upsert/increment for IP-based rate limiting in a fixed window.
     await execute(db, `
@@ -151,34 +156,51 @@ export default defineEventHandler(async (event) => {
       // and the fetch for the next page's pageview are both in flight at once and
       // can resolve out of order, so matching on page_path avoids attaching the
       // duration to whichever row happens to land last.
+      const table = isPlatform ? 'platform_pageview_events' : 'site_pageview_events'
+      const siteFilter = isPlatform ? '' : 'AND site_id = ?'
+
       await execute(db, `
-        UPDATE site_pageview_events
+        UPDATE ${table}
         SET duration_seconds = ?
         WHERE id = (
-          SELECT id FROM site_pageview_events
-          WHERE site_id = ? AND session_id = ? AND page_path = ?
+          SELECT id FROM ${table}
+          WHERE session_id = ? AND page_path = ? ${siteFilter}
           ORDER BY created_at DESC
           LIMIT 1
         )
-      `, [durationSeconds, siteId, sessionId, pagePath])
+      `, isPlatform ? [durationSeconds, sessionId, pagePath] : [durationSeconds, sessionId, pagePath, siteId])
 
       return jsonResponse({ ok: true })
     }
 
     const geo = getCloudflareGeo(event)
 
-    await insertPageviewEvent(db, {
-      siteId,
-      pagePath,
-      referrer: referrer || null,
-      userAgent: userAgent || null,
-      ipHash,
-      sessionId,
-      visitorId,
-      country: geo.country || null,
-      region: geo.region || null,
-      city: geo.city || null
-    })
+    if (isPlatform) {
+      await insertPlatformPageviewEvent(db, {
+        pagePath,
+        referrer: referrer || null,
+        userAgent: userAgent || null,
+        ipHash,
+        sessionId,
+        visitorId,
+        country: geo.country || null,
+        region: geo.region || null,
+        city: geo.city || null
+      })
+    } else {
+      await insertPageviewEvent(db, {
+        siteId,
+        pagePath,
+        referrer: referrer || null,
+        userAgent: userAgent || null,
+        ipHash,
+        sessionId,
+        visitorId,
+        country: geo.country || null,
+        region: geo.region || null,
+        city: geo.city || null
+      })
+    }
 
     return jsonResponse({ ok: true })
   } catch (error) {

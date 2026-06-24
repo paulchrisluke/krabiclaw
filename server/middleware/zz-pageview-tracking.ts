@@ -1,6 +1,7 @@
-// Server-side pageview tracking for public tenant pages.
+// Server-side pageview tracking for public tenant pages and platform pages
+// (krabiclaw.com itself: home, blog, docs, marketing).
 // Named to sort after tenant-resolution.ts and tenant-routing.ts so it only
-// runs once event.context.siteId is resolved and any onboarding/canonical-domain
+// runs once event.context.siteId/tenantType is resolved and any onboarding/canonical-domain
 // redirect has already short-circuited the request (h3 skips later middleware
 // once a response is sent — see event.handled).
 import { defineEventHandler, getHeader, getRequestURL } from 'h3'
@@ -12,15 +13,19 @@ import {
   getOrCreateVisitorId,
   hashIp,
   insertPageviewEvent,
+  insertPlatformPageviewEvent,
   isTrackablePath
 } from '~/server/utils/pageview-tracking'
 
 export default defineEventHandler(async (event) => {
   if (event.method !== 'GET') return
-  if (event.context.tenantType !== 'tenant') return
+
+  const isTenant = event.context.tenantType === 'tenant'
+  const isPlatform = event.context.tenantType === 'platform'
+  if (!isTenant && !isPlatform) return
 
   const siteId = event.context.siteId
-  if (!siteId) return
+  if (isTenant && !siteId) return
 
   const url = getRequestURL(event)
   if (!isTrackablePath(url.pathname)) return
@@ -40,18 +45,30 @@ export default defineEventHandler(async (event) => {
     const rawUa = getHeader(event, 'user-agent') || null
     const userAgent = rawUa ? rawUa.slice(0, 1024) : null
 
-    const insertPromise = insertPageviewEvent(db, {
-      siteId,
-      pagePath: url.pathname,
-      referrer,
-      userAgent,
-      ipHash,
-      sessionId,
-      visitorId,
-      country: geo.country || null,
-      region: geo.region || null,
-      city: geo.city || null
-    })
+    const insertPromise = isTenant
+      ? insertPageviewEvent(db, {
+          siteId: siteId as string,
+          pagePath: url.pathname,
+          referrer,
+          userAgent,
+          ipHash,
+          sessionId,
+          visitorId,
+          country: geo.country || null,
+          region: geo.region || null,
+          city: geo.city || null
+        })
+      : insertPlatformPageviewEvent(db, {
+          pagePath: url.pathname,
+          referrer,
+          userAgent,
+          ipHash,
+          sessionId,
+          visitorId,
+          country: geo.country || null,
+          region: geo.region || null,
+          city: geo.city || null
+        })
 
     const cfContext = event.context.cloudflare?.context
     if (cfContext?.waitUntil) {

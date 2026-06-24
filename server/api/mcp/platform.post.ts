@@ -40,9 +40,12 @@ export default defineEventHandler(async (event) => {
   const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
   const authChallenge = oauthChallenge(baseUrl)
   const platformAdminAuthOptions = {
+    // aud claim, bound to the `resource` param ChatGPT sends at /authorize, is the
+    // real per-surface boundary — see scopes comment in server/utils/auth.ts for
+    // why DCR-registered clients carry every custom scope and forbiddenScopes
+    // isn't used here.
     audiences: [`${baseUrl}/api/mcp/platform`, 'https://krabiclaw.com/api/mcp/platform'],
     requiredScopes: ['platform_admin'],
-    forbiddenScopes: ['tenant'],
     requirePlatformAdmin: true,
   }
   let requestId: string | number | null | undefined

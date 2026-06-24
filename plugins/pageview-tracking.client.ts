@@ -1,4 +1,5 @@
-// Client-side pageview tracking for SPA route changes on public tenant (Saya) pages.
+// Client-side pageview tracking for SPA route changes on public tenant
+// (Saya) pages and platform pages (krabiclaw.com itself).
 //
 // - router.afterEach fires the pageview ping after navigation completes, so the
 //   route's own content/data fetches are never delayed by analytics.
@@ -6,8 +7,11 @@
 //   for the page that's being left, never as a pageview trigger itself.
 // - All calls fail silently — analytics must never break the public site.
 export default defineNuxtPlugin(() => {
-  const { isTenant, siteId } = useTenantSite()
-  if (!isTenant || !siteId) return
+  const { isTenant, isPlatform, siteId } = useTenantSite()
+  if (!isTenant && !isPlatform) return
+  if (isTenant && !siteId) return
+
+  const identity = isTenant ? { siteId } : { platform: true }
 
   const router = useRouter()
   let pageEnteredAt = Date.now()
@@ -35,7 +39,7 @@ export default defineNuxtPlugin(() => {
     // next page's pageview fetch race each other, so this must not depend on
     // "most recent row" ordering on the server.
     const payload = JSON.stringify({
-      siteId,
+      ...identity,
       pagePath: currentPath,
       eventType: 'duration',
       durationSeconds
@@ -44,7 +48,7 @@ export default defineNuxtPlugin(() => {
     if (typeof navigator.sendBeacon === 'function') {
       navigator.sendBeacon('/api/analytics/track', new Blob([payload], { type: 'application/json' }))
     } else {
-      sendTrack({ siteId, pagePath: currentPath, eventType: 'duration', durationSeconds })
+      sendTrack({ ...identity, pagePath: currentPath, eventType: 'duration', durationSeconds })
     }
   }
 
@@ -59,7 +63,7 @@ export default defineNuxtPlugin(() => {
     currentPath = to.fullPath
 
     sendTrack({
-      siteId,
+      ...identity,
       pagePath: currentPath,
       referrer: from.fullPath ? `${window.location.origin}${from.fullPath}` : document.referrer,
       userAgent: navigator.userAgent

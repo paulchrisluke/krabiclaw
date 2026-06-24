@@ -173,9 +173,13 @@
 </template>
 
 <script setup lang="ts">
-import { renderMarkdownToHtml } from '~/utils/markdown'
+import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
-import DOMPurify from 'isomorphic-dompurify'
+
+// isomorphic-dompurify's jsdom shim breaks during SSR on the Workers runtime
+// (no real DOM globals) — load it client-only, matching pages/experiences/[slug].vue.
+// The SSR path uses a Workers-safe regex sanitizer instead of a no-op passthrough.
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: sanitizeHtmlForSsr }
 
 const { resolveMedia } = useMedia()
 
@@ -319,7 +323,7 @@ const postMedia = computed(() => resolveMedia({
   kind: post.value?.featured_image?.kind,
 }))
 
-const canonicalUrl = useSeoUrl(() => post.value ? (post.value.canonical_url || `/blog/${post.value.slug}`) : '/blog')
+const canonicalUrl = usePlatformSeoUrl(() => post.value ? (post.value.canonical_url || `/blog/${post.value.slug}`) : '/blog')
 const ogImage = useSharedOgImage(() => postMedia.value.thumb)
 const seoTitle = computed(() => post.value?.title || 'Blog')
 const seoDescription = computed(() => post.value?.seo_description || truncateForSeo(post.value?.excerpt ?? 'Business tips and insights from KrabiClaw.', 160))
@@ -366,7 +370,7 @@ useContentPageSchema(computed(() => {
       { name: 'Blog', url: '/blog' },
       { name: post.value.title, url: `/blog/${post.value.slug}` },
     ],
-    components: post.value.components,
+    components: renderableComponents.value,
   }
 }))
 </script>

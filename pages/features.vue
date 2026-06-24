@@ -107,7 +107,7 @@
                 <UIcon name="i-heroicons-book-open" class="size-4" />
               </NuxtLink>
               <NuxtLink
-                to="/docs/restaurant-seo-analytics-setup-guide"
+                to="/docs"
                 class="inline-flex items-center gap-1 text-[14px] font-semibold text-white/90 hover:text-white hover:underline transition-colors no-underline"
               >
                 View Setup Documentation →
@@ -219,7 +219,7 @@ const detailedFeatures = [
     icon: 'i-heroicons-globe-alt',
     title: 'SEO & Custom Domains',
     description: 'Ensure local searchers find your site instantly. Our platform features edge performance and clean HTML optimized directly for search crawlers.',
-    docLink: '/docs/restaurant-seo-analytics-setup-guide',
+    docLink: '/docs',
     specs: [
       'Connect custom domains with automated SSL',
       'Google Analytics 4 (GA4) Measurement sync',
@@ -243,7 +243,7 @@ const detailedFeatures = [
     icon: 'i-heroicons-calendar-days',
     title: 'Bookings & Experience Reservations',
     description: 'Accept table bookings and ticketed experience reservations 24/7. Automate confirmations so your team focuses on guests, not admin.',
-    docLink: '/docs/launch-your-restaurant-website',
+    docLink: '/docs',
     specs: [
       'Table reservations and ticketed experience bookings',
       'Capacity and time-slot control per experience',
@@ -255,7 +255,7 @@ const detailedFeatures = [
     icon: 'i-heroicons-document-text',
     title: 'Menus, Experiences & Offerings',
     description: 'Restaurants publish multi-section menus. Experience businesses list ticketed activities with pricing, capacity, and scheduling — all on the same platform.',
-    docLink: '/docs/build-a-menu-customers-can-trust',
+    docLink: '/docs',
     specs: [
       'Multi-section menus with allergen & dietary filters',
       'Ticketed experiences with capacity and time slots',
@@ -267,7 +267,7 @@ const detailedFeatures = [
     icon: 'i-heroicons-shopping-bag',
     title: 'Delivery & Order Links',
     description: 'Connect your Grab, Uber Eats, and FoodPanda pages so guests can order from the platform they already use — without leaving your site.',
-    docLink: '/docs/launch-your-restaurant-website',
+    docLink: '/docs',
     specs: [
       'Grab, Uber Eats, and FoodPanda link integration',
       'Order links visible on menu and location pages',
@@ -279,7 +279,7 @@ const detailedFeatures = [
     icon: 'i-heroicons-chart-bar',
     title: 'Real-Time Insights',
     description: 'See exactly how your business is performing. Ask ChatGPT for a summary, or check the analytics tab directly.',
-    docLink: '/docs/connect-google-business-profile',
+    docLink: '/docs',
     specs: [
       'Visitor counts, top pages & busiest hours',
       'Google Review aggregation & reply tools',

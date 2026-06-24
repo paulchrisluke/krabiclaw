@@ -1,5 +1,5 @@
 // SEO 301 redirects for legacy legal URLs
-import { defineEventHandler, getRequestURL, sendRedirect } from 'h3'
+import { defineEventHandler, getMethod, getRequestHeader, getRequestURL, sendRedirect } from 'h3'
 import { queryAll } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 
@@ -11,6 +11,20 @@ const redirects: Record<string, string> = {
 export default defineEventHandler(async (event) => {
   const url = getRequestURL(event)
   const normalizedPathname = url.pathname === '/' ? '/' : url.pathname.replace(/\/$/, '')
+
+  // The MCP connector URL is meant for ChatGPT's "Connect" flow, but people
+  // tap it directly from emails/WhatsApp messages instead of copying it.
+  // Send browsers (GET requesting HTML) to the docs page explaining what this
+  // URL is for; leave POST and non-browser GET clients (MCP probes) alone so
+  // they still reach server/api/mcp.post.ts.
+  if (
+    normalizedPathname === '/api/mcp' &&
+    getMethod(event) === 'GET' &&
+    (getRequestHeader(event, 'accept') ?? '').includes('text/html')
+  ) {
+    return sendRedirect(event, '/docs/mcp-setup', 302)
+  }
+
   const target = redirects[normalizedPathname]
   if (target) {
     const targetWithParams = `${target}${url.search}${url.hash}`

@@ -176,14 +176,18 @@ export function createAuth(env: CloudflareEnv) {
         },
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
+        // ChatGPT's MCP connector does dynamic client registration (DCR) without an
+        // explicit `scope` in the body, then echoes back whatever this default
+        // produces verbatim as the `scope=` param on every later /authorize call —
+        // confirmed live: it never falls back to reading the registered client's
+        // scopes at /authorize time, so a narrower default here cannot be patched up
+        // later. DCR has no signal for which surface (tenant vs platform admin) is
+        // registering, since both share this one authorization server, so every
+        // dynamically-registered client gets every custom scope by default. The
+        // real per-surface authorization boundary is the `aud` claim (bound to the
+        // `resource` param, which ChatGPT does set correctly per surface) plus the
+        // DB role/membership check in mcp-auth.ts — not which scopes are present.
         scopes: ['openid', 'offline_access', 'tenant', 'platform_admin'],
-        // Without this, a client that registers (or authorizes) without an explicit
-        // `scope` param falls back to the FULL scopes list above, including
-        // 'tenant' — which then trips forbiddenScopes: ['tenant'] on the platform
-        // admin MCP surface (server/api/mcp/platform.post.ts) and 403s. Clients
-        // must explicitly request 'tenant' or 'platform_admin' per the scopes
-        // advertised in their surface's oauth-protected-resource metadata.
-        clientRegistrationDefaultScopes: ['openid', 'offline_access'],
         validAudiences: [
           ...(env.BETTER_AUTH_URL ? [`${env.BETTER_AUTH_URL}/api/mcp`] : []),
           ...(env.BETTER_AUTH_URL ? [`${env.BETTER_AUTH_URL}/api/mcp/platform`] : []),

@@ -522,7 +522,7 @@ CREATE TABLE platform_blog_posts (
   featured_image_asset_id TEXT,
   published_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), seo_description TEXT, seo_keywords TEXT, canonical_url TEXT, robots TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (author_id) REFERENCES user(id) ON DELETE SET NULL,
   FOREIGN KEY (featured_image_asset_id) REFERENCES "media_assets_old"(id) ON DELETE SET NULL
 );

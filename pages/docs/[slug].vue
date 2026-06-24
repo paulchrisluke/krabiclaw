@@ -100,11 +100,15 @@
 </template>
 
 <script setup lang="ts">
-import { renderMarkdownToHtml } from '~/utils/markdown'
+import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
-import DOMPurify from 'isomorphic-dompurify'
 
 definePageMeta({ layout: 'platform' })
+
+// isomorphic-dompurify's jsdom shim breaks during SSR on the Workers runtime
+// (no real DOM globals) — load it client-only, matching pages/experiences/[slug].vue.
+// The SSR path uses a Workers-safe regex sanitizer instead of a no-op passthrough.
+const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: sanitizeHtmlForSsr }
 
 const { resolveMedia } = useMedia()
 
@@ -202,7 +206,7 @@ const docMedia = computed(() => resolveMedia({
   public_url: doc.value?.featured_image?.public_url,
   kind: doc.value?.featured_image?.kind,
 }))
-const canonicalUrl = useSeoUrl(() => doc.value ? (doc.value.canonical_url || `/docs/${doc.value.slug}`) : '/docs')
+const canonicalUrl = usePlatformSeoUrl(() => doc.value ? (doc.value.canonical_url || `/docs/${doc.value.slug}`) : '/docs')
 const ogImage = useSharedOgImage(() => docMedia.value.thumb)
 const seoTitle = computed(() => doc.value?.title || 'Documentation')
 const seoDescription = computed(() => doc.value?.seo_description || doc.value?.excerpt || `Learn about ${doc.value?.title || 'this topic'} in KrabiClaw documentation.`)
@@ -246,7 +250,7 @@ useContentPageSchema(computed(() => {
       { name: 'Docs', url: '/docs' },
       { name: doc.value.title, url: `/docs/${doc.value.slug}` },
     ],
-    components: doc.value.components,
+    components: renderableComponents.value,
   }
 }))
 </script>

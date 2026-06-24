@@ -377,6 +377,63 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     },
   }),
   readTool({
+    name: 'get_platform_analytics',
+    description: 'Get krabiclaw.com platform traffic analytics (page views, sessions, visitors, top pages) for a date range. Covers all platform pages — home, blog, docs, and marketing pages — not just tenant sites. Use this to inform what blog posts or docs to write or update next.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        start_date: { type: 'string', description: 'YYYY-MM-DD, defaults to 30 days ago' },
+        end_date: { type: 'string', description: 'YYYY-MM-DD, defaults to today' },
+      },
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        page_views: { type: 'number' },
+        unique_sessions: { type: 'number' },
+        unique_visitors: { type: 'number' },
+        top_pages: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string' },
+              views: { type: 'number' },
+              percent_of_total: { type: 'number' },
+            },
+            required: ['path', 'views', 'percent_of_total'],
+            additionalProperties: false,
+          },
+        },
+        daily_data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              date: { type: 'string' },
+              page_views: { type: 'number' },
+              sessions: { type: 'number' },
+            },
+            required: ['date', 'page_views', 'sessions'],
+            additionalProperties: false,
+          },
+        },
+        period: {
+          type: 'object',
+          properties: {
+            start_date: { type: 'string' },
+            end_date: { type: 'string' },
+          },
+          required: ['start_date', 'end_date'],
+          additionalProperties: false,
+        },
+      },
+      required: ['page_views', 'unique_sessions', 'unique_visitors', 'top_pages', 'daily_data', 'period'],
+      additionalProperties: false,
+    },
+  }),
+  readTool({
     name: 'list_platform_blog_posts',
     description: 'List KrabiClaw platform blog posts. Optionally filter by published or draft status.',
     inputSchema: {

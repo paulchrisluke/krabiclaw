@@ -1,6 +1,6 @@
 -- Seed platform blog posts for KrabiClaw
--- Run against REVIEWS_DB (D1):
---   wrangler d1 execute krabiclaw-db --file=scripts/seed-platform-blog.sql --remote
+-- Run locally: yarn wrangler d1 execute DB --local --file=scripts/seed-platform-blog.sql
+-- Run remotely: yarn wrangler d1 execute DB --remote --file=scripts/seed-platform-blog.sql
 --
 -- author_id references the super-admin user. Replace <ADMIN_USER_ID> with the actual user ID
 -- from the `user` table after first login. Or set to a placeholder if you want to insert manually.
@@ -354,7 +354,7 @@ But to unlock the full potential of these features, you must claim ownership of 
 
 Think of Google Search Console (GSC) as a two-way radio between your restaurant and Google. It is a free tool that tells you exactly how the search engine sees your site.
 
-When you connect Search Console via our [Restaurant SEO & Analytics Setup Guide](/docs/restaurant-seo-analytics-setup-guide), you gain access to vital insights:
+When you connect Search Console via our [documentation](/docs), you gain access to vital insights:
 - **Search Queries**: What exact terms did people type before clicking on your restaurant? (e.g., "outdoor dining Krabi" vs "authentic pad thai near me").
 - **Indexing Status**: Are all your pages (like individual locations or special event pages) successfully indexed by Google?
 - **Sitemap Submission**: You can submit your sitemap directly, telling Google to index your new dishes immediately.
@@ -366,7 +366,7 @@ Without GSC, you are flying blind. With it, you know exactly what keywords to wr
 If Search Console tells you *how* people got to your website, Google Analytics 4 (GA4) tells you *what they did* once they arrived.
 
 By adding your Measurement ID, GA4 begins tracking behavior:
-- **Menu Visits**: Do diners spend 3 minutes looking at your menu page? If so, is your menu optimized to build trust? Refer to our guide on how to [Build a Menu Customers Can Trust](/docs/build-a-menu-customers-can-trust) to make sure your descriptions and allergen labels convert scanning into cravings.
+- **Menu Visits**: Do diners spend 3 minutes looking at your menu page? If so, is your menu optimized to build trust? Refer to our [menu documentation](/docs) to make sure your descriptions and allergen labels convert scanning into cravings.
 - **Reservation Conversion**: What percentage of visitors actually click "Book a Table"? If traffic is high but bookings are low, your reservation flow might have too much friction.
 - **Traffic Sources**: Are your customers coming from Instagram Reels, local blogs, or organic Google searches?
 
@@ -376,7 +376,7 @@ Knowing this data allows you to make smart, business-driven decisions. If Instag
 
 We designed KrabiClaw to keep things simple. You don''t need to hire an expensive agency or deal with complex code.
 
-1. **Verify Your Site**: Follow the simple steps in our [Launch Your Restaurant Website](/docs/launch-your-restaurant-website) checklist to verify your ownership in Google Search Console.
+1. **Verify Your Site**: Follow the simple steps in our [setup documentation](/docs) to verify your ownership in Google Search Console.
 2. **Input Your Tags**: Go to your KrabiClaw Dashboard, navigate to **Site Settings**, scroll to the **SEO & Analytics** card, and input your GA4 Measurement ID and GSC verification code.
 3. **Analyze & Grow**: Let the data collect for a week, then check your analytics. 
 

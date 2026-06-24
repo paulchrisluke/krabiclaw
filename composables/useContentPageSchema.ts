@@ -26,6 +26,8 @@ interface ContentHowToStep {
 
 interface ContentComponent {
   type: 'faq' | 'how_to'
+  status?: string | null
+  render_enabled?: boolean
   schema_enabled?: boolean
   data?: {
     items?: ContentFaqItem[]
@@ -97,7 +99,11 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
     const breadcrumbId = `${pageUrl}#breadcrumb`
     const imageUrl = value.imageUrl ? normalizeAbsoluteUrl(value.imageUrl, origin) : null
     const imageValue = imageUrl ? buildImageValue(imageUrl, value.imageWidth, value.imageHeight) : null
-    const components = (value.components ?? []).filter(component => component.schema_enabled !== false)
+    const components = (value.components ?? []).filter(component =>
+      component.schema_enabled !== false &&
+      component.render_enabled !== false &&
+      (component.status === undefined || component.status === null || component.status === 'active'),
+    )
     const faq = components.find(component => component.type === 'faq')
     const howTo = components.find(component => component.type === 'how_to')
 

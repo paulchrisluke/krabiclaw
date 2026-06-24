@@ -42,10 +42,56 @@
               Continue with Google
             </UButton>
 
+            <!-- WhatsApp OTP — Step 1 -->
+            <UButton
+              v-if="otpStep === 'phone'"
+              block
+              size="lg"
+              color="neutral"
+              variant="outline"
+              class="h-11.5"
+              icon="i-heroicons-chat-bubble-left-ellipsis"
+              :disabled="loading"
+              @click="otpStep = 'number'"
+            >
+              Continue with WhatsApp
+            </UButton>
+
+            <!-- WhatsApp OTP — Step 1b: phone entry -->
+            <div v-else-if="otpStep === 'number'" class="space-y-3">
+              <UFormField label="WhatsApp number">
+                <UInput v-model="phone" type="tel" placeholder="+1 555 000 0000" size="lg" class="w-full" :disabled="loading" @keydown.enter="handleSendOtp" />
+              </UFormField>
+              <div class="flex gap-2">
+                <UButton variant="outline" color="neutral" size="lg" @click="otpStep = 'phone'; phone = ''; error = null">
+                  ← Back
+                </UButton>
+                <UButton block size="lg" :loading="loading" :disabled="loading || !isPhoneValid" @click="handleSendOtp">
+                  Send code via WhatsApp
+                </UButton>
+              </div>
+            </div>
+
+            <!-- WhatsApp OTP — Step 2 -->
+            <div v-else-if="otpStep === 'code'" class="space-y-3">
+              <p class="text-sm text-muted">
+                A 6-digit code was sent to <strong class="text-default">{{ phone }}</strong> on WhatsApp.
+              </p>
+              <UFormField label="Verification code">
+                <UInput v-model="code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" size="lg" class="w-full font-mono tracking-widest text-center" :disabled="loading" @keydown.enter="handleVerifyOtp" />
+              </UFormField>
+              <UButton block size="lg" :loading="loading" :disabled="code.length < 6" @click="handleVerifyOtp">
+                Verify and sign in
+              </UButton>
+              <UButton variant="ghost" color="neutral" size="sm" block @click="otpStep = 'phone'; code = ''; error = null">
+                ← Use a different number
+              </UButton>
+            </div>
+
             <!-- Divider -->
             <div class="flex items-center gap-3 py-1">
               <div class="flex-1 h-px bg-default" />
-              <span class="text-[12px] text-dimmed uppercase tracking-[0.18em]">or continue with</span>
+              <span class="text-[12px] text-dimmed uppercase tracking-[0.18em]">or continue with email</span>
               <div class="flex-1 h-px bg-default" />
             </div>
 
@@ -66,7 +112,7 @@
               </div>
             </form>
 
-            <div class="rounded-xl border border-default/60 bg-elevated/60 p-3 space-y-2">
+            <div v-if="showResendVerification" class="rounded-xl border border-default/60 bg-elevated/60 p-3 space-y-2">
               <p class="text-sm text-muted">Need to verify your email before signing in?</p>
               <div class="flex flex-col gap-2 sm:flex-row">
                 <UInput v-model="verificationEmail" type="email" placeholder="Enter your account email" class="flex-1" :disabled="loading || resendingVerification" />
@@ -74,32 +120,6 @@
                   Resend verification
                 </UButton>
               </div>
-            </div>
-
-            <!-- WhatsApp OTP — Step 1 -->
-            <div v-if="otpStep === 'phone'" class="space-y-3">
-              <UFormField label="WhatsApp number">
-                <UInput v-model="phone" type="tel" placeholder="+1 555 000 0000" size="lg" color="success" class="w-full" :disabled="loading" @keydown.enter="handleSendOtp" />
-              </UFormField>
-              <UButton block size="lg" color="success" variant="solid" icon="i-heroicons-chat-bubble-left-ellipsis" :loading="loading" :disabled="loading || !isPhoneValid" @click="handleSendOtp">
-                Send code via WhatsApp
-              </UButton>
-            </div>
-
-            <!-- WhatsApp OTP — Step 2 -->
-            <div v-else-if="otpStep === 'code'" class="space-y-3">
-              <p class="text-sm text-muted">
-                A 6-digit code was sent to <strong class="text-default">{{ phone }}</strong> on WhatsApp.
-              </p>
-              <UFormField label="Verification code">
-                <UInput v-model="code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" size="lg" color="success" class="w-full font-mono tracking-widest text-center" :disabled="loading" @keydown.enter="handleVerifyOtp" />
-              </UFormField>
-              <UButton block size="lg" color="success" :loading="loading" :disabled="code.length < 6" @click="handleVerifyOtp">
-                Verify and sign in
-              </UButton>
-              <UButton variant="ghost" color="neutral" size="sm" block @click="otpStep = 'phone'; code = ''; error = null">
-                ← Use a different number
-              </UButton>
             </div>
           </div>
         </div>
@@ -123,6 +143,7 @@ const loading = ref(false)
 const error = ref(null)
 const notice = ref(null)
 const resendingVerification = ref(false)
+const showResendVerification = ref(false)
 const queryEmail = typeof route.query.email === 'string' ? route.query.email : ''
 const emailForm = ref({
   email: queryEmail,
@@ -169,7 +190,7 @@ const handleEmailSignIn = async () => {
   loading.value = true
   error.value = null
   notice.value = null
-  verificationEmail.value = email
+  showResendVerification.value = false
 
   try {
     const result = await authClient.signIn.email({
@@ -180,6 +201,10 @@ const handleEmailSignIn = async () => {
 
     if (result?.error) {
       error.value = result.error.message ?? 'Email sign in failed. Please try again.'
+      if (result.error.code === 'EMAIL_NOT_VERIFIED') {
+        verificationEmail.value = email
+        showResendVerification.value = true
+      }
       return
     }
 
@@ -225,10 +250,14 @@ const otpStep = ref('phone')
 const phone = ref('')
 const code = ref('')
 
+function normalizePhone(value) {
+  return value.trim().replace(/[\s\-\(\)]/g, '')
+}
+
 const isPhoneValid = computed(() => {
-  const value = phone.value.trim()
+  const value = normalizePhone(phone.value)
   if (!value) return false
-  return /^\+?[1-9]\d{1,14}$/.test(value.replace(/[\s\-\(\)]/g, ''))
+  return /^\+?[1-9]\d{1,14}$/.test(value)
 })
 
 const handleSendOtp = async () => {
@@ -239,7 +268,7 @@ const handleSendOtp = async () => {
   loading.value = true
   error.value = null
   try {
-    await authClient.phoneNumber.sendOtp({ phoneNumber: phone.value.trim() })
+    await authClient.phoneNumber.sendOtp({ phoneNumber: normalizePhone(phone.value) })
     otpStep.value = 'code'
   } catch (err) {
     error.value = err?.message ?? 'Failed to send code. Check your number and try again.'
@@ -254,7 +283,7 @@ const handleVerifyOtp = async () => {
   error.value = null
   try {
     await authClient.phoneNumber.verify({
-      phoneNumber: phone.value.trim(),
+      phoneNumber: normalizePhone(phone.value),
       code: code.value.trim(),
       callbackURL: '/api/post-login',
     })

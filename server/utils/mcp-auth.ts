@@ -55,9 +55,15 @@ export async function requireMcpUser(
   event: H3Event,
   options: RequireMcpUserOptions = {},
 ): Promise<McpUserContext> {
+  // No implicit cross-surface forbidding: DCR-registered MCP clients legitimately
+  // carry every custom scope by default (see scopes/clientRegistrationDefaultScopes
+  // comment in server/utils/auth.ts), so a token presenting an extra scope from
+  // another surface is expected, not suspicious. The real per-surface boundary is
+  // `audiences` (aud claim, bound to the resource param) plus requirePlatformAdmin
+  // or the DB site-membership check each route already performs.
   const normalizedOptions: RequireMcpUserOptions = {
     ...options,
-    forbiddenScopes: options.forbiddenScopes ?? (options.requiredScopes?.includes('platform_admin') ? [] : ['platform_admin']),
+    forbiddenScopes: options.forbiddenScopes ?? [],
   }
   const env = event.context.cloudflare?.env as CloudflareEnv | undefined
   const db = env?.DB
@@ -115,7 +121,13 @@ async function verifyBearerToken(
   const audiences = options.audiences?.length
     ? options.audiences
     : [`${baseUrl}/api/mcp`, 'https://krabiclaw.com/api/mcp']
-  const requiredScopes = options.requiredScopes?.length ? options.requiredScopes : ['tenant']
+  // Use ?? (not ?.length ? :) so a surface can explicitly opt out of any scope
+  // requirement by passing requiredScopes: [] — see platform.post.ts, where the
+  // real authorization boundary is requirePlatformAdmin (DB role), not the OAuth
+  // scope claim, because ChatGPT's MCP client never requests a custom scope
+  // explicitly (it only echoes back whatever scope the DCR /register response
+  // defaulted to, which has no way to know which connector is registering).
+  const requiredScopes = options.requiredScopes ?? ['tenant']
 
   const verification = await verifyJwtOrOpaqueToken(token, baseUrl, db, audiences, requiredScopes)
   if (!verification.identity) {

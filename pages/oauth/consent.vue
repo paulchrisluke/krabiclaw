@@ -13,13 +13,16 @@
       <!-- Signed-in account -->
       <div v-if="currentUser" class="mb-6">
         <p class="text-sm text-muted">
-          Logged in as <span class="text-default font-medium">{{ currentUser.name || currentUser.email }}</span>.
-          <NuxtLink
-            :href="`/oauth/login${$route.fullPath.slice($route.path.length)}`"
+          Logged in as <span class="text-default font-medium">{{ currentUser.name || currentUser.email }}</span>
+          <span v-if="currentUser.name" class="text-dimmed"> · {{ currentUser.email }}</span>.
+          <button
+            type="button"
             class="text-primary hover:underline ml-1"
+            :disabled="switchingAccount"
+            @click="switchAccount"
           >
-            (Not you?)
-          </NuxtLink>
+            {{ switchingAccount ? 'Signing out…' : '(Not you?)' }}
+          </button>
         </p>
       </div>
 
@@ -200,6 +203,24 @@ const permissionGroups = computed(() => {
 const accepting = ref(false)
 const denying = ref(false)
 const error = ref(null)
+const switchingAccount = ref(false)
+
+/**
+ * Sign out the current session and go straight to the sign-in form for a
+ * different account — skips the oauth/login "Continue as X" confirmation
+ * step entirely since we already know it's not this user.
+ */
+async function switchAccount() {
+  switchingAccount.value = true
+  try {
+    await authClient.signOut()
+  } catch (err) {
+    error.value = err?.message ?? 'Could not sign out. Please try again.'
+    switchingAccount.value = false
+    return
+  }
+  window.location.href = `/oauth/login${route.fullPath.slice(route.path.length)}`
+}
 
 async function accept() {
   accepting.value = true

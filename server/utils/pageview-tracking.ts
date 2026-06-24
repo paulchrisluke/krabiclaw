@@ -131,6 +131,47 @@ export async function insertPageviewEvent(db: AppDb, input: PageviewEventInput):
   )
 }
 
+export interface PlatformPageviewEventInput {
+  pagePath: string
+  referrer?: string | null
+  userAgent?: string | null
+  ipHash: string
+  sessionId: string
+  visitorId: string
+  durationSeconds?: number | null
+  country?: string | null
+  region?: string | null
+  city?: string | null
+}
+
+export async function insertPlatformPageviewEvent(db: AppDb, input: PlatformPageviewEventInput): Promise<void> {
+  const eventId = crypto.randomUUID()
+  const now = new Date().toISOString()
+
+  await execute(
+    db,
+    `INSERT INTO platform_pageview_events (
+      id, page_path, referrer, user_agent,
+      ip_hash, session_id, visitor_id, duration_seconds,
+      country, region, city, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      eventId,
+      input.pagePath,
+      input.referrer ?? null,
+      input.userAgent ?? null,
+      input.ipHash,
+      input.sessionId,
+      input.visitorId,
+      input.durationSeconds ?? null,
+      input.country ?? null,
+      input.region ?? null,
+      input.city ?? null,
+      now,
+    ],
+  )
+}
+
 // Paths that should never generate a pageview event, regardless of caller.
 export const PAGEVIEW_SKIP_PREFIXES = [
   '/api/', '/dashboard', '/admin', '/auth/',

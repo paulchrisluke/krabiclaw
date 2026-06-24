@@ -214,20 +214,13 @@ async function handleNewsletterSubmit() {
   }
 }
 
-const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
-
-useBreadcrumbSchema([
-  { name: 'Home', url: `${siteUrl}/` },
-  { name: 'Blog', url: `${siteUrl}/blog` }
-])
-
-useSeoMeta({
+usePlatformPageSeo({
+  path: '/blog',
   title: 'Blog',
   description: 'Marketing tips, industry insights, and strategies to help your business succeed online.',
-  ogSiteName: 'KrabiClaw',
-  ogImage: useSharedOgImage(),
-  ogUrl: `${siteUrl}/blog`,
-  ogType: 'website'
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: 'Blog', url: '/blog' },
+  ],
 })
 </script>

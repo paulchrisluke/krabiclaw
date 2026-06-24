@@ -27,3 +27,15 @@ export function htmlToPlainText(html: string) {
 export function markdownToPlainText(markdown: string) {
   return htmlToPlainText(renderMarkdownToHtml(markdown || ''))
 }
+
+// DOMPurify needs jsdom, which breaks on the Workers SSR runtime (no real DOM
+// globals). This is a regex-based stopgap for the SSR render pass only — it
+// strips the dangerous constructs (script/style/embeds, event handlers,
+// javascript: URLs) that marked's own output never produces from trusted
+// markdown anyway. The client re-renders through real DOMPurify on hydration.
+export function sanitizeHtmlForSsr(html: string) {
+  return html
+    .replace(/<(script|style|iframe|object|embed|link|meta)\b[\s\S]*?(<\/\1>|\/?>)/gi, '')
+    .replace(/\son\w+\s*=\s*(".*?"|'.*?'|[^\s>]+)/gi, '')
+    .replace(/(href|src)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, '$1=$2#$2')
+}
