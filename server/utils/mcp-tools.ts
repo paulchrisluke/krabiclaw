@@ -662,6 +662,7 @@ const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'update_site_settings',
   'create_location',
   'update_location',
+  'copy_location_batch',
   'create_menu',
   'update_menu',
   'create_menu_item',
