@@ -685,11 +685,15 @@ export async function deleteLocation(
   locationId: string,
   userId: string,
 ) {
+  const now = new Date().toISOString();
   // A location delete can cascade SET NULL into Google Business rows. If the
   // site already has a site-level connection, that null transition can collide
   // with the partial unique index on google_business_connections.
-  // Remove location-scoped connections up front so the hard delete stays
-  // deterministic and does not depend on SQLite's constraint ordering.
+  // Also clear saved workspace selections up front so every surface observes
+  // the same delete contract even if an environment is missing/on-disk foreign
+  // key metadata from an older local DB snapshot.
+  // Remove location-scoped connections and pointers up front so the hard delete
+  // stays deterministic and does not depend on SQLite's constraint ordering.
   const statements = [
     {
       query: `
@@ -698,6 +702,33 @@ export async function deleteLocation(
       WHERE organization_id = ? AND site_id = ? AND location_id = ?
     `,
       params: [organizationId, siteId, locationId],
+    },
+    {
+      query: `
+      UPDATE dashboard_preferences
+      SET selected_location_id = NULL,
+          updated_at = ?
+      WHERE organization_id = ? AND selected_location_id = ?
+    `,
+      params: [now, organizationId, locationId],
+    },
+    {
+      query: `
+      UPDATE mcp_workspace_preferences
+      SET location_id = NULL,
+          updated_at = ?
+      WHERE organization_id = ? AND site_id = ? AND location_id = ?
+    `,
+      params: [now, organizationId, siteId, locationId],
+    },
+    {
+      query: `
+      UPDATE chowbot_conversations
+      SET selected_location_id = NULL,
+          updated_at = ?
+      WHERE organization_id = ? AND site_id = ? AND selected_location_id = ?
+    `,
+      params: [now, organizationId, siteId, locationId],
     },
     {
       query: `
@@ -716,7 +747,7 @@ export async function deleteLocation(
   ];
 
   const batchResults = await executeBatch(db, statements);
-  const deleteResult = batchResults[2];
+  const deleteResult = batchResults[5];
 
   if (!deleteResult?.meta.changes) {
     return { status: 404, data: { error: "Location not found." } };
@@ -729,7 +760,7 @@ export async function deleteLocation(
     SET primary_location_id = NULL, updated_at = ?, updated_by = ?
     WHERE id = ? AND organization_id = ? AND primary_location_id = ?
   `,
-    [new Date().toISOString(), userId, siteId, organizationId, locationId],
+    [now, userId, siteId, organizationId, locationId],
   );
 
   void updateSubscriptionQuantity(env, db, organizationId).catch((error) => {
