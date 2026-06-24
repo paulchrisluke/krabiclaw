@@ -161,33 +161,40 @@ export async function copyLocationBatch(
   const entityOrder: CopyEntityType[] = ['media_assets', 'menus', 'menu_items', 'site_content', 'experiences', 'reviews', 'location_qa']
   const requestedConfigs = new Map(entities.map((config) => [config.type, config]))
 
-  for (const type of entityOrder) {
-    const entityConfig = requestedConfigs.get(type)
-    if (!entityConfig) continue
+  try {
+    for (const type of entityOrder) {
+      const entityConfig = requestedConfigs.get(type)
+      if (!entityConfig) continue
 
-    switch (entityConfig.type) {
-      case 'menus':
-        await copyMenus(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, entityConfig.include_translations)
-        break
-      case 'menu_items':
-        await copyMenuItems(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings, entityConfig.include_translations)
-        break
-      case 'media_assets':
-        await copyMediaAssets(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
-        break
-      case 'site_content':
-        await copySiteContent(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings, entityConfig.include_translations)
-        break
-      case 'reviews':
-        await copyReviews(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
-        break
-      case 'location_qa':
-        await copyLocationQa(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
-        break
-      case 'experiences':
-        await copyExperiences(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings)
-        break
+      switch (entityConfig.type) {
+        case 'menus':
+          await copyMenus(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, entityConfig.include_translations)
+          break
+        case 'menu_items':
+          await copyMenuItems(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings, entityConfig.include_translations)
+          break
+        case 'media_assets':
+          await copyMediaAssets(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
+          break
+        case 'site_content':
+          await copySiteContent(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings, entityConfig.include_translations)
+          break
+        case 'reviews':
+          await copyReviews(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
+          break
+        case 'location_qa':
+          await copyLocationQa(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
+          break
+        case 'experiences':
+          await copyExperiences(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings)
+          break
+      }
     }
+  } catch (error) {
+    return await cleanupOnFailure({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to build copy batch',
+    })
   }
 
   // Execute all copy operations as a single batch
