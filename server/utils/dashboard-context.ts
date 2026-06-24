@@ -46,6 +46,17 @@ interface DashboardContextOptions {
   requireSite?: boolean
 }
 
+async function resolveSingleOrgSite(db: DbClient, organizationId: string): Promise<DashboardSiteRow | null> {
+  const sites = await queryAll<DashboardSiteRow>(db, `
+    SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
+           status, onboarding_status, plan, primary_location_id, default_currency, source_locale
+    FROM sites
+    WHERE organization_id = ?
+    LIMIT 2
+  `, [organizationId])
+  return sites.length === 1 ? sites[0]! : null
+}
+
 export async function getDashboardContext(event: H3Event, options: DashboardContextOptions = {}) {
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -92,6 +103,10 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     throw createError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
   }
 
+  // With no slug, auto-select only when the org has exactly one site — the same
+  // single-site auto-redirect the `/dashboard/{orgSlug}` org-root route documents.
+  // With 2+ sites we still return null rather than guess, since guessing is the
+  // exact silent-wrong-site risk 3d7827b removed this fallback to prevent.
   const site = siteSlug
     ? await queryFirst<DashboardSiteRow>(db, `
         SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
@@ -100,7 +115,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         WHERE organization_id = ? AND subdomain = ?
         LIMIT 1
       `, [organization.id, siteSlug])
-    : null
+    : await resolveSingleOrgSite(db, organization.id)
 
   if (!site && options.requireSite !== false) {
     throw createError({ statusCode: 404, message: 'Site not found' })

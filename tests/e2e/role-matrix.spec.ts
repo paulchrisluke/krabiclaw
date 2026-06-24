@@ -53,7 +53,7 @@ test.describe('role permission matrix', () => {
 
     const checkoutStatus = async (expected: 'owner' | 'non_owner') => {
       const res = await request.post(`${baseURL}/api/billing/checkout`, {
-        data: { plan: 'growth', interval: 'month' },
+        data: { plan: 'growth', interval: 'month', siteId },
       })
       if (expected === 'owner') {
         expect(res.status()).not.toBe(403)
