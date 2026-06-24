@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   const { db, organization } = await getDashboardContext(event, { requireSite: false })
 
   const memberRows = await queryAll<{
-    id: string; role: string; createdAt: Date
+    id: string; role: string; createdAt: number
     userId: string; name: string; email: string; image: string | null
   }>(db, `
     SELECT m.id, m.role, m.createdAt,
@@ -18,12 +18,12 @@ export default defineEventHandler(async (event) => {
   `, [organization.id])
   const members = memberRows.map(m => ({
     ...m,
-    createdAt: m.createdAt.toISOString()
+    createdAt: new Date(m.createdAt * 1000).toISOString()
   }))
 
   const invitationRows = await queryAll<{
     id: string; email: string; role: string | null
-    status: string; expiresAt: Date; createdAt: Date
+    status: string; expiresAt: number; createdAt: number
     inviterName: string | null
   }>(db, `
     SELECT i.id, i.email, i.role, i.status, i.expiresAt, i.createdAt,
@@ -35,8 +35,8 @@ export default defineEventHandler(async (event) => {
   `, [organization.id])
   const invitations = invitationRows.map(i => ({
     ...i,
-    expiresAt: i.expiresAt.toISOString(),
-    createdAt: i.createdAt.toISOString()
+    expiresAt: new Date(i.expiresAt * 1000).toISOString(),
+    createdAt: new Date(i.createdAt * 1000).toISOString()
   }))
 
   return jsonResponse({

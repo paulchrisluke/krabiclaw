@@ -1,31 +1,3 @@
--- KrabiClaw canonical D1 schema. v3 (squashed baseline).
--- DO NOT modify this file once applied. Add schema changes as new migrations: wrangler d1 migrations create DB <description>
---
--- Squashed: migrations 0002-0027 collapsed into this single file since no
--- client data existed in production yet (Pottery House and Kikuzuki
--- onboarding had not started). This is the exact schema produced by
--- applying the prior incremental migrations in order, verified by a
--- byte-for-byte diff of sqlite_master against the fully-migrated database.
-
-PRAGMA foreign_keys = ON;
-
-CREATE TABLE account (
-  id TEXT PRIMARY KEY,
-  accountId TEXT NOT NULL,
-  providerId TEXT NOT NULL,
-  userId TEXT NOT NULL,
-  accessToken TEXT,
-  refreshToken TEXT,
-  idToken TEXT,
-  expiresAt TEXT,
-  accessTokenExpiresAt TEXT,
-  refreshTokenExpiresAt TEXT,
-  scope TEXT,
-  password TEXT,
-  createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE
-);
 CREATE TABLE ai_credits (
   organization_id TEXT PRIMARY KEY,
   balance INTEGER NOT NULL DEFAULT 0,
@@ -256,39 +228,6 @@ CREATE TABLE experience_slot_overrides (
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
 );
-CREATE TABLE "experiences" (
-  id TEXT PRIMARY KEY,
-  organization_id TEXT NOT NULL,
-  site_id TEXT NOT NULL,
-  location_id TEXT NOT NULL,
-  title TEXT NOT NULL,
-  slug TEXT NOT NULL,
-  tagline TEXT,
-  body TEXT,
-  image_asset_id TEXT,
-  video_asset_id TEXT,
-  images TEXT,
-  price TEXT,
-  price_amount NUMERIC,
-  duration_minutes INTEGER,
-  max_capacity INTEGER,
-  time_slots TEXT,
-  recurring_slots TEXT,
-  available_note TEXT,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'sold_out')),
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  featured BOOLEAN NOT NULL DEFAULT false,
-  featured_sort_order INTEGER NOT NULL DEFAULT 0,
-  seo_title TEXT,
-  seo_description TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  created_by TEXT,
-  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
-  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
-  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE,
-  FOREIGN KEY (image_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL
-);
 CREATE TABLE facebook_pages_connections (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -354,27 +293,6 @@ CREATE TABLE google_place_snapshots (
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE SET NULL
 );
-CREATE TABLE invitation (
-  id TEXT PRIMARY KEY,
-  organizationId TEXT NOT NULL,
-  email TEXT NOT NULL,
-  role TEXT,
-  status TEXT NOT NULL DEFAULT 'pending',
-  expiresAt TEXT NOT NULL,
-  inviterId TEXT NOT NULL,
-  createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  FOREIGN KEY (organizationId) REFERENCES organization(id) ON DELETE CASCADE,
-  FOREIGN KEY (inviterId) REFERENCES user(id) ON DELETE CASCADE
-);
-CREATE TABLE jwks (
-  id TEXT PRIMARY KEY,
-  publicKey TEXT NOT NULL,
-  privateKey TEXT NOT NULL,
-  alg TEXT,
-  crv TEXT,
-  createdAt TEXT NOT NULL,
-  expiresAt TEXT
-);
 CREATE TABLE location_qa (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -422,7 +340,7 @@ CREATE TABLE media_assets (
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('pending', 'active', 'deleted', 'failed')),
   created_by_user_id TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), delete_pending_at TEXT,
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE SET NULL,
@@ -453,15 +371,6 @@ CREATE TABLE media_assets_old (
   created_by_user_id TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
-CREATE TABLE member (
-  id TEXT PRIMARY KEY,
-  organizationId TEXT NOT NULL,
-  userId TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'member',
-  createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  FOREIGN KEY (organizationId) REFERENCES organization(id) ON DELETE CASCADE,
-  FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE
 );
 CREATE TABLE menu_item_translations (
   id TEXT PRIMARY KEY,
@@ -568,58 +477,6 @@ CREATE TABLE notifications (
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL
 );
-CREATE TABLE oauthAccessToken (
-  id TEXT PRIMARY KEY,
-  clientId TEXT NOT NULL,
-  userId TEXT,
-  token TEXT NOT NULL UNIQUE,
-  scopes TEXT NOT NULL DEFAULT '',
-  expiresAt TEXT NOT NULL,
-  createdAt TEXT NOT NULL
-, sessionId TEXT, referenceId TEXT, refreshId TEXT);
-CREATE TABLE oauthClient (
-  id TEXT PRIMARY KEY,
-  clientId TEXT NOT NULL UNIQUE,
-  clientSecret TEXT,
-  name TEXT NOT NULL,
-  redirectUris TEXT NOT NULL,
-  scopes TEXT NOT NULL DEFAULT '',
-  public INTEGER NOT NULL DEFAULT 0,
-  requirePkce INTEGER NOT NULL DEFAULT 1,
-  skipConsent INTEGER NOT NULL DEFAULT 0,
-  userId TEXT,
-  metadata TEXT,
-  disabled INTEGER NOT NULL DEFAULT 0,
-  createdAt TEXT NOT NULL,
-  updatedAt TEXT NOT NULL
-, enableEndSession INTEGER, subjectType TEXT, uri TEXT, icon TEXT, contacts TEXT, tos TEXT, policy TEXT, softwareId TEXT, softwareVersion TEXT, softwareStatement TEXT, postLogoutRedirectUris TEXT, tokenEndpointAuthMethod TEXT, grantTypes TEXT, responseTypes TEXT, type TEXT, referenceId TEXT);
-CREATE TABLE oauthConsent (
-  id TEXT PRIMARY KEY,
-  clientId TEXT NOT NULL,
-  userId TEXT NOT NULL,
-  scopes TEXT NOT NULL DEFAULT '',
-  createdAt TEXT NOT NULL,
-  updatedAt TEXT NOT NULL, referenceId TEXT,
-  UNIQUE(clientId, userId)
-);
-CREATE TABLE oauthRefreshToken (
-  id TEXT PRIMARY KEY,
-  clientId TEXT NOT NULL,
-  userId TEXT,
-  token TEXT NOT NULL UNIQUE,
-  scopes TEXT NOT NULL DEFAULT '',
-  accessTokenId TEXT,
-  expiresAt TEXT NOT NULL,
-  createdAt TEXT NOT NULL
-, sessionId TEXT, referenceId TEXT, revoked TEXT, authTime TEXT);
-CREATE TABLE organization (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  slug TEXT UNIQUE,
-  logo TEXT,
-  metadata TEXT,
-  createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
 CREATE TABLE organization_billing (
   id TEXT UNIQUE,
   organization_id TEXT PRIMARY KEY,
@@ -665,7 +522,7 @@ CREATE TABLE platform_blog_posts (
   featured_image_asset_id TEXT,
   published_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), seo_description TEXT, seo_keywords TEXT, canonical_url TEXT, robots TEXT,
   FOREIGN KEY (author_id) REFERENCES user(id) ON DELETE SET NULL,
   FOREIGN KEY (featured_image_asset_id) REFERENCES "media_assets_old"(id) ON DELETE SET NULL
 );
@@ -776,7 +633,7 @@ CREATE TABLE rate_limits (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   expires_at TEXT
 );
-CREATE TABLE "reservation_submissions" (
+CREATE TABLE IF NOT EXISTS "reservation_submissions" (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
   site_id TEXT NOT NULL,
@@ -833,20 +690,6 @@ CREATE TABLE service_addon_purchases (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE
 );
-CREATE TABLE session (
-  id TEXT PRIMARY KEY,
-  expiresAt TEXT NOT NULL,
-  token TEXT NOT NULL UNIQUE,
-  createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  ipAddress TEXT,
-  userAgent TEXT,
-  activeOrganizationId TEXT,
-  activeTeamId TEXT,
-  impersonatedBy TEXT,
-  userId TEXT NOT NULL,
-  FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE
-);
 CREATE TABLE site_analytics_daily (
   id TEXT PRIMARY KEY,
   site_id TEXT NOT NULL,
@@ -856,7 +699,7 @@ CREATE TABLE site_analytics_daily (
   avg_session_duration INTEGER DEFAULT 0,
   top_pages TEXT,
   created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), unique_visitors INTEGER DEFAULT 0, pages_per_session REAL DEFAULT 0, returning_visitors INTEGER DEFAULT 0,
   UNIQUE(site_id, date),
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
 );
@@ -1033,11 +876,11 @@ CREATE TABLE site_pageview_events (
   ip_hash TEXT,
   session_id TEXT,
   duration_seconds INTEGER,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), visitor_id TEXT, country TEXT, region TEXT, city TEXT,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE SET NULL
 );
-CREATE TABLE "site_transfer_requests" (
+CREATE TABLE IF NOT EXISTS "site_transfer_requests" (
   id TEXT PRIMARY KEY,
   site_id TEXT NOT NULL,
   from_organization_id TEXT NOT NULL,
@@ -1066,7 +909,7 @@ CREATE TABLE "site_transfer_requests" (
   FOREIGN KEY (accepted_by_user_id) REFERENCES user(id) ON DELETE SET NULL,
   FOREIGN KEY (claiming_user_id) REFERENCES user(id) ON DELETE SET NULL
 );
-CREATE TABLE "sites" (
+CREATE TABLE IF NOT EXISTS "sites" (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
   theme_id TEXT NOT NULL DEFAULT 'saya-theme-v1',
@@ -1176,29 +1019,6 @@ CREATE TABLE translation_jobs (
   FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
 );
-CREATE TABLE user (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
-  emailVerified INTEGER NOT NULL DEFAULT 0,
-  image TEXT,
-  phoneNumber TEXT UNIQUE,
-  phoneNumberVerified INTEGER NOT NULL DEFAULT 0,
-  role TEXT DEFAULT 'user',
-  banned INTEGER DEFAULT 0,
-  banReason TEXT,
-  banExpires TEXT,
-  createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
-CREATE TABLE verification (
-  id TEXT PRIMARY KEY,
-  identifier TEXT NOT NULL,
-  value TEXT NOT NULL,
-  expiresAt TEXT NOT NULL,
-  createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
 CREATE TABLE work_requests (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1221,7 +1041,6 @@ CREATE TABLE work_requests (
   FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL,
   FOREIGN KEY (assigned_to) REFERENCES user(id) ON DELETE SET NULL
 );
-
 CREATE INDEX idx_ai_usage_log_org ON ai_usage_log(organization_id, created_at DESC);
 CREATE INDEX idx_analytics_daily_site
   ON site_analytics_daily(site_id, date DESC);
@@ -1244,9 +1063,6 @@ CREATE INDEX idx_experience_slot_overrides_date
   ON experience_slot_overrides(experience_id, override_date);
 CREATE UNIQUE INDEX idx_experience_slot_overrides_unique
   ON experience_slot_overrides(experience_id, override_date, time_slot);
-CREATE INDEX idx_experiences_location ON experiences(location_id);
-CREATE INDEX idx_experiences_site ON experiences(site_id);
-CREATE UNIQUE INDEX idx_experiences_site_slug ON experiences(site_id, slug);
 CREATE UNIQUE INDEX idx_google_business_connections_site_level_unique
   ON google_business_connections(organization_id, site_id)
   WHERE location_id IS NULL;
@@ -1338,7 +1154,6 @@ CREATE INDEX idx_work_requests_org
   ON work_requests(organization_id, status, created_at DESC);
 CREATE INDEX idx_work_requests_status
   ON work_requests(status, priority, created_at DESC);
-
 CREATE TRIGGER sync_media_assets_old_delete
 AFTER DELETE ON media_assets
 BEGIN
@@ -1376,17 +1191,254 @@ BEGIN
     NEW.width, NEW.height, NEW.duration, NEW.alt_text, NEW.category, NEW.status, NEW.created_by_user_id, NEW.created_at, NEW.updated_at
   );
 END;
+CREATE TRIGGER trg_prune_rate_limits
+AFTER INSERT ON rate_limits
+WHEN abs(random()) % 100 < 5
+BEGIN
+  DELETE FROM rate_limits WHERE expires_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
+END;
+CREATE TABLE IF NOT EXISTS "experiences" (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  location_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  tagline TEXT,
+  body TEXT,
+  image_asset_id TEXT,
+  video_asset_id TEXT,
+  images TEXT,
+  price TEXT,
+  price_amount NUMERIC,
+  duration_minutes INTEGER,
+  max_capacity INTEGER,
+  time_slots TEXT,
+  recurring_slots TEXT,
+  available_note TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'sold_out')),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  featured BOOLEAN NOT NULL DEFAULT false,
+  featured_sort_order INTEGER NOT NULL DEFAULT 0,
+  seo_title TEXT,
+  seo_description TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  created_by TEXT, highlights TEXT, included_items TEXT, what_to_bring TEXT, meeting_point TEXT, cancellation_policy TEXT,
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE CASCADE,
+  FOREIGN KEY (image_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL,
+  FOREIGN KEY (video_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_experiences_location ON experiences(location_id);
+CREATE INDEX idx_experiences_site ON experiences(site_id);
+CREATE UNIQUE INDEX idx_experiences_site_slug ON experiences(site_id, slug);
+CREATE TABLE mcp_workspace_preferences (
+  user_id TEXT PRIMARY KEY,
+  organization_id TEXT,
+  site_id TEXT,
+  location_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE SET NULL,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL,
+  FOREIGN KEY (location_id) REFERENCES business_locations(id) ON DELETE SET NULL
+);
+CREATE TABLE google_analytics_connections (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  connected_by_user_id TEXT,
+  provider_account_email TEXT NOT NULL,
+  encrypted_access_token TEXT NOT NULL,
+  encrypted_refresh_token TEXT NOT NULL,
+  scopes TEXT NOT NULL,
+  ga4_property_id TEXT,
+  ga4_property_name TEXT,
+  ga4_measurement_id TEXT,
+  search_console_site_url TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled', 'error')),
+  expires_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+  FOREIGN KEY (connected_by_user_id) REFERENCES user(id) ON DELETE SET NULL,
+  UNIQUE(organization_id, site_id)
+);
+CREATE INDEX idx_pageview_events_site_visitor
+  ON site_pageview_events(site_id, visitor_id);
+CREATE TABLE IF NOT EXISTS "user" (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  emailVerified INTEGER NOT NULL DEFAULT 0,
+  image TEXT,
+  phoneNumber TEXT UNIQUE,
+  phoneNumberVerified INTEGER NOT NULL DEFAULT 0,
+  role TEXT DEFAULT 'user',
+  banned INTEGER DEFAULT 0,
+  banReason TEXT,
+  banExpires INTEGER,
+  createdAt INTEGER NOT NULL DEFAULT (unixepoch()),
+  updatedAt INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE TABLE IF NOT EXISTS "organization" (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE,
+  logo TEXT,
+  metadata TEXT,
+  createdAt INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE TABLE IF NOT EXISTS "account" (
+  id TEXT PRIMARY KEY,
+  accountId TEXT NOT NULL,
+  providerId TEXT NOT NULL,
+  userId TEXT NOT NULL,
+  accessToken TEXT,
+  refreshToken TEXT,
+  idToken TEXT,
+  expiresAt INTEGER,
+  accessTokenExpiresAt INTEGER,
+  refreshTokenExpiresAt INTEGER,
+  scope TEXT,
+  password TEXT,
+  createdAt INTEGER NOT NULL DEFAULT (unixepoch()),
+  updatedAt INTEGER NOT NULL DEFAULT (unixepoch()),
+  FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS "invitation" (
+  id TEXT PRIMARY KEY,
+  organizationId TEXT NOT NULL,
+  email TEXT NOT NULL,
+  role TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  expiresAt INTEGER NOT NULL,
+  inviterId TEXT NOT NULL,
+  createdAt INTEGER NOT NULL DEFAULT (unixepoch()),
+  FOREIGN KEY (organizationId) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (inviterId) REFERENCES user(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS "jwks" (
+  id TEXT PRIMARY KEY,
+  publicKey TEXT NOT NULL,
+  privateKey TEXT NOT NULL,
+  alg TEXT,
+  crv TEXT,
+  createdAt INTEGER NOT NULL,
+  expiresAt INTEGER
+);
+CREATE TABLE IF NOT EXISTS "member" (
+  id TEXT PRIMARY KEY,
+  organizationId TEXT NOT NULL,
+  userId TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
+  createdAt INTEGER NOT NULL DEFAULT (unixepoch()),
+  FOREIGN KEY (organizationId) REFERENCES organization(id) ON DELETE CASCADE,
+  FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS "session" (
+  id TEXT PRIMARY KEY,
+  expiresAt INTEGER NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  createdAt INTEGER NOT NULL DEFAULT (unixepoch()),
+  updatedAt INTEGER NOT NULL DEFAULT (unixepoch()),
+  ipAddress TEXT,
+  userAgent TEXT,
+  activeOrganizationId TEXT,
+  activeTeamId TEXT,
+  impersonatedBy TEXT,
+  userId TEXT NOT NULL,
+  FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS "verification" (
+  id TEXT PRIMARY KEY,
+  identifier TEXT NOT NULL,
+  value TEXT NOT NULL,
+  expiresAt INTEGER NOT NULL,
+  createdAt INTEGER NOT NULL DEFAULT (unixepoch()),
+  updatedAt INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE TABLE IF NOT EXISTS "oauthClient" (
+  id TEXT PRIMARY KEY,
+  clientId TEXT NOT NULL UNIQUE,
+  clientSecret TEXT,
+  name TEXT NOT NULL,
+  redirectUris TEXT NOT NULL,
+  scopes TEXT NOT NULL DEFAULT '',
+  public INTEGER NOT NULL DEFAULT 0,
+  requirePkce INTEGER NOT NULL DEFAULT 1,
+  skipConsent INTEGER NOT NULL DEFAULT 0,
+  userId TEXT,
+  metadata TEXT,
+  disabled INTEGER NOT NULL DEFAULT 0,
+  createdAt INTEGER NOT NULL,
+  updatedAt INTEGER NOT NULL,
+  enableEndSession INTEGER,
+  subjectType TEXT,
+  uri TEXT,
+  icon TEXT,
+  contacts TEXT,
+  tos TEXT,
+  policy TEXT,
+  softwareId TEXT,
+  softwareVersion TEXT,
+  softwareStatement TEXT,
+  postLogoutRedirectUris TEXT,
+  tokenEndpointAuthMethod TEXT,
+  grantTypes TEXT,
+  responseTypes TEXT,
+  type TEXT,
+  referenceId TEXT
+);
+CREATE TABLE IF NOT EXISTS "oauthAccessToken" (
+  id TEXT PRIMARY KEY,
+  clientId TEXT NOT NULL,
+  userId TEXT,
+  token TEXT NOT NULL UNIQUE,
+  scopes TEXT NOT NULL DEFAULT '',
+  expiresAt INTEGER NOT NULL,
+  createdAt INTEGER NOT NULL,
+  sessionId TEXT,
+  referenceId TEXT,
+  refreshId TEXT
+);
+CREATE TABLE IF NOT EXISTS "oauthConsent" (
+  id TEXT PRIMARY KEY,
+  clientId TEXT NOT NULL,
+  userId TEXT NOT NULL,
+  scopes TEXT NOT NULL DEFAULT '',
+  createdAt INTEGER NOT NULL,
+  updatedAt INTEGER NOT NULL,
+  referenceId TEXT,
+  UNIQUE(clientId, userId)
+);
+CREATE TABLE IF NOT EXISTS "oauthRefreshToken" (
+  id TEXT PRIMARY KEY,
+  clientId TEXT NOT NULL,
+  userId TEXT,
+  token TEXT NOT NULL UNIQUE,
+  scopes TEXT NOT NULL DEFAULT '',
+  accessTokenId TEXT,
+  expiresAt INTEGER NOT NULL,
+  createdAt INTEGER NOT NULL,
+  sessionId TEXT,
+  referenceId TEXT,
+  revoked INTEGER,
+  authTime INTEGER
+);
 CREATE TRIGGER trg_chowbot_channel_state_conversation_site_insert
 BEFORE INSERT ON chowbot_channel_state
 FOR EACH ROW
 WHEN NEW.active_conversation_id IS NOT NULL
-  AND NEW.selected_site_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1
-    FROM chowbot_conversations c
-    WHERE c.id = NEW.active_conversation_id
-      AND c.site_id = NEW.selected_site_id
-  )
+AND EXISTS (
+  SELECT 1 FROM chowbot_conversations
+  WHERE id = NEW.active_conversation_id
+  AND site_id != NEW.selected_site_id
+)
 BEGIN
   SELECT RAISE(ABORT, 'active conversation site must match selected site');
 END;
@@ -1394,13 +1446,11 @@ CREATE TRIGGER trg_chowbot_channel_state_conversation_site_update
 BEFORE UPDATE ON chowbot_channel_state
 FOR EACH ROW
 WHEN NEW.active_conversation_id IS NOT NULL
-  AND NEW.selected_site_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1
-    FROM chowbot_conversations c
-    WHERE c.id = NEW.active_conversation_id
-      AND c.site_id = NEW.selected_site_id
-  )
+AND EXISTS (
+  SELECT 1 FROM chowbot_conversations
+  WHERE id = NEW.active_conversation_id
+  AND site_id != NEW.selected_site_id
+)
 BEGIN
   SELECT RAISE(ABORT, 'active conversation site must match selected site');
 END;
@@ -1408,12 +1458,11 @@ CREATE TRIGGER trg_chowbot_channel_state_conversation_user_insert
 BEFORE INSERT ON chowbot_channel_state
 FOR EACH ROW
 WHEN NEW.active_conversation_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1
-    FROM chowbot_conversations c
-    WHERE c.id = NEW.active_conversation_id
-      AND c.user_id = NEW.user_id
-  )
+AND EXISTS (
+  SELECT 1 FROM chowbot_conversations
+  WHERE id = NEW.active_conversation_id
+  AND user_id != NEW.user_id
+)
 BEGIN
   SELECT RAISE(ABORT, 'active conversation must belong to the same user');
 END;
@@ -1421,12 +1470,11 @@ CREATE TRIGGER trg_chowbot_channel_state_conversation_user_update
 BEFORE UPDATE ON chowbot_channel_state
 FOR EACH ROW
 WHEN NEW.active_conversation_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1
-    FROM chowbot_conversations c
-    WHERE c.id = NEW.active_conversation_id
-      AND c.user_id = NEW.user_id
-  )
+AND EXISTS (
+  SELECT 1 FROM chowbot_conversations
+  WHERE id = NEW.active_conversation_id
+  AND user_id != NEW.user_id
+)
 BEGIN
   SELECT RAISE(ABORT, 'active conversation must belong to the same user');
 END;
@@ -1434,10 +1482,9 @@ CREATE TRIGGER trg_chowbot_messages_consistency_insert
 BEFORE INSERT ON chowbot_messages
 FOR EACH ROW
 WHEN EXISTS (
-  SELECT 1
-  FROM chowbot_conversations c
-  WHERE c.id = NEW.conversation_id
-    AND (c.organization_id != NEW.organization_id OR c.site_id != NEW.site_id)
+  SELECT 1 FROM chowbot_conversations
+  WHERE id = NEW.conversation_id
+  AND (organization_id != NEW.organization_id OR site_id != NEW.site_id)
 )
 BEGIN
   SELECT RAISE(ABORT, 'chowbot_messages conversation organization/site mismatch');
@@ -1446,17 +1493,26 @@ CREATE TRIGGER trg_chowbot_messages_consistency_update
 BEFORE UPDATE ON chowbot_messages
 FOR EACH ROW
 WHEN EXISTS (
-  SELECT 1
-  FROM chowbot_conversations c
-  WHERE c.id = NEW.conversation_id
-    AND (c.organization_id != NEW.organization_id OR c.site_id != NEW.site_id)
+  SELECT 1 FROM chowbot_conversations
+  WHERE id = NEW.conversation_id
+  AND (organization_id != NEW.organization_id OR site_id != NEW.site_id)
 )
 BEGIN
   SELECT RAISE(ABORT, 'chowbot_messages conversation organization/site mismatch');
 END;
-CREATE TRIGGER trg_prune_rate_limits
-AFTER INSERT ON rate_limits
-WHEN abs(random()) % 100 < 5
-BEGIN
-  DELETE FROM rate_limits WHERE expires_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
-END;
+CREATE TABLE platform_content_components (
+  id TEXT PRIMARY KEY,
+  content_type TEXT NOT NULL CHECK (content_type IN ('blog_post', 'doc')),
+  content_id TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('faq', 'how_to')),
+  position INTEGER NOT NULL DEFAULT 0,
+  label TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  render_enabled INTEGER NOT NULL DEFAULT 1,
+  schema_enabled INTEGER NOT NULL DEFAULT 1,
+  data_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX idx_platform_content_components_content
+  ON platform_content_components(content_type, content_id, position);

@@ -33,7 +33,7 @@ async function incrementRateLimit(db: DbClient, key: string, limit: number): Pro
       updated_at = excluded.updated_at,
       expires_at = CASE
         WHEN expires_at <= ? THEN ?
-        ELSE excluded.expires_at
+        ELSE expires_at
       END
   `, [key, now, expiresAt, now, limit, now, expiresAt])
 

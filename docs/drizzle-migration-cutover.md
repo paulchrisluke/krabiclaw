@@ -216,12 +216,7 @@ If the deploy fails before traffic is healthy:
   against `D1Database` directly, side-by-side with `server/db`-helper call sites elsewhere
   in the same file/PR. This is fine functionally (both can coexist) but means the codebase
   is mid-migration — don't assume "if `server/db` exists, raw D1 calls are gone."
-- **No drizzle migration file accompanies this PR** (`drizzle/` only has `meta/_journal.json`).
-  If `server/db/schema.ts` has drifted from `migrations/0001_initial.sql` + subsequent
-  numbered migrations at all, `drizzle-kit check` may not catch it since it's diffing
-  against the local D1 sqlite file, not the canonical `migrations/` source of truth — run
-  the `.schema` dump comparison in §2 against staging/prod explicitly, don't rely on
-  `drizzle:check` alone.
+- **Schema Squashed**: All D1 migration files `0002` through `0009` have been squashed down into `0001_initial.sql` as part of this cutover to provide a single source of truth that perfectly matches `server/db/schema.ts`.
 - **`cloudflareEnv()` now always constructs a Drizzle `db` instance** (`server/utils/api-response.ts`)
   even for requests that never touch it, adding a `createDb()` call (cached via `WeakMap`,
   so cheap, but worth confirming under load) to every request through `db-foreign-keys.ts`

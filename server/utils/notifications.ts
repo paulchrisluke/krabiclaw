@@ -153,6 +153,9 @@ async function getOwnerNotificationChannels(
   let rawChannels: string[]
   try {
     rawChannels = JSON.parse(row.value) as string[]
+    if (!Array.isArray(rawChannels)) {
+      return hasWhatsAppPhone ? ['whatsapp'] : ['email']
+    }
   } catch {
     return hasWhatsAppPhone ? ['whatsapp'] : ['email']
   }

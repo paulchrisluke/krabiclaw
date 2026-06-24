@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
   const [teamRows, pendingInvitationRows] = await Promise.all([
-    queryAll<{ id: string; name: string | null; email: string; image: string | null; role: string; createdAt: Date }>(db, `
+    queryAll<{ id: string; name: string | null; email: string; image: string | null; role: string; createdAt: number }>(db, `
       SELECT id, name, email, image, role, createdAt
       FROM user
       WHERE role = 'admin'
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
 
     queryAll<{
       id: string; email: string; role: string | null; status: string
-      expiresAt: Date; createdAt: Date
+      expiresAt: number; createdAt: number
       orgName: string | null; orgSlug: string | null; inviterName: string | null
     }>(db, `
       SELECT i.id, i.email, i.role, i.status, i.expiresAt, i.createdAt,
@@ -40,12 +40,12 @@ export default defineEventHandler(async (event) => {
 
   const team = teamRows.map(u => ({
     ...u,
-    createdAt: u.createdAt.toISOString()
+    createdAt: new Date(u.createdAt * 1000).toISOString()
   }))
   const pendingInvitations = pendingInvitationRows.map(i => ({
     ...i,
-    expiresAt: i.expiresAt.toISOString(),
-    createdAt: i.createdAt.toISOString()
+    expiresAt: new Date(i.expiresAt * 1000).toISOString(),
+    createdAt: new Date(i.createdAt * 1000).toISOString()
   }))
 
   return jsonResponse({
