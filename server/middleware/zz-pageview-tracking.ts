@@ -53,9 +53,9 @@ export default defineEventHandler(async (event) => {
       city: geo.city || null
     })
 
-    const waitUntil = event.context.cloudflare?.context?.waitUntil
-    if (waitUntil) {
-      waitUntil(insertPromise.catch((error) => {
+    const cfContext = event.context.cloudflare?.context
+    if (cfContext?.waitUntil) {
+      cfContext.waitUntil(insertPromise.catch((error) => {
         const err = error instanceof Error ? error : new Error(String(error))
         console.error('SSR pageview tracking failed (async):', err.message)
       }))

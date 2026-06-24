@@ -438,7 +438,7 @@ const siteSlugFromRoute = computed(() => {
 // The active site's slug — prefer the route segment (explicit), fall back to whatever
 // site dashboard-context.ts resolved (e.g. org root pages with no sites/ segment yet).
 const activeSiteSlug = computed(() => siteSlugFromRoute.value ?? site.value?.subdomain ?? null)
-const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBase.value}/sites/${activeSiteSlug.value}` : orgBase.value)
+const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBase.value}/sites/${activeSiteSlug.value}` : null)
 const projectBase = computed(() => siteBase.value && selectedLocation.value?.slug ? `${siteBase.value}/${selectedLocation.value.slug}` : siteBase.value)
 
 const locationSlugFromRoute = computed(() => {

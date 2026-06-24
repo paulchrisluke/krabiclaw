@@ -29,7 +29,28 @@ async function resetTransferFixture(request: APIRequestContext, baseURL: string)
   expect(res.status()).toBe(200)
 }
 
+async function createTransferFixtureSite(request: APIRequestContext, baseURL: string) {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const res = await request.post(`${baseURL}/api/sites`, {
+    data: {
+      name: `Transfer Fixture ${suffix}`,
+      subdomain: `transfer-fixture-${suffix}`,
+      vertical: 'experience',
+    },
+  })
+  expect(res.status()).toBe(200)
+  const body = await res.json() as { siteId?: string; organizationId?: string }
+  expect(body.siteId).toEqual(expect.any(String))
+  expect(body.organizationId).toEqual(expect.any(String))
+  return {
+    siteId: body.siteId as string,
+    organizationId: body.organizationId as string,
+  }
+}
+
 test.describe('site transfer handoff flow', () => {
+  test.describe.configure({ mode: 'serial' })
+
   test('paid handoff stays pending until checkout completes and reminders can be forced', async ({ request, baseURL }) => {
     test.skip(
       !testEnv('STRIPE_SECRET_KEY') || !testEnv('NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'),
@@ -57,11 +78,12 @@ test.describe('site transfer handoff flow', () => {
       maxRedirects: 0,
     })
     expect(adminLogin.status()).toBe(302)
+    const transferFixture = await createTransferFixtureSite(request, baseURL!)
 
-    const cancelExisting = await request.delete(`${baseURL}/api/admin/sites/${SITE_ID}/transfer`)
+    const cancelExisting = await request.delete(`${baseURL}/api/admin/sites/${transferFixture.siteId}/transfer`)
     expect([200, 404]).toContain(cancelExisting.status())
 
-    const create = await request.post(`${baseURL}/api/admin/sites/${SITE_ID}/transfer`, {
+    const create = await request.post(`${baseURL}/api/admin/sites/${transferFixture.siteId}/transfer`, {
       data: {
         email: recipientEmail,
         plan: 'growth',
@@ -80,7 +102,7 @@ test.describe('site transfer handoff flow', () => {
     expect(reminders.status()).toBe(200)
 
     const notifications = await request.get(
-      `${baseURL}/api/dev/notifications?site_id=${encodeURIComponent(SITE_ID)}&template=site_transfer_reminder&since=${encodeURIComponent(since)}`,
+      `${baseURL}/api/dev/notifications?site_id=${encodeURIComponent(transferFixture.siteId)}&template=site_transfer_reminder&since=${encodeURIComponent(since)}`,
       { headers: devLoginHeaders() },
     )
     expect(notifications.status()).toBe(200)
@@ -116,7 +138,7 @@ test.describe('site transfer handoff flow', () => {
     expect(pendingState.transfer.status).toBe('pending')
     expect(pendingState.transfer.payment_completed_at).toBeNull()
     expect(pendingState.transfer.claiming_organization_id).toBe(targetOrgId)
-    expect(pendingState.site.organization_id).toBe('org-pottery-house')
+    expect(pendingState.site.organization_id).toBe(transferFixture.organizationId)
 
     const eventId = `evt_transfer_${Date.now()}`
     const now = Math.floor(Date.now() / 1000)
@@ -139,7 +161,7 @@ test.describe('site transfer handoff flow', () => {
             organization_id: targetOrgId,
             plan: 'growth',
             transfer_request_id: created.id,
-            transfer_site_id: SITE_ID,
+            transfer_site_id: transferFixture.siteId,
             transfer_claiming_user_id: RECIPIENT_USER_ID,
             transfer_claiming_organization_id: targetOrgId,
           },
@@ -187,12 +209,13 @@ test.describe('site transfer handoff flow', () => {
       maxRedirects: 0,
     })
     expect(adminLogin.status()).toBe(302)
+    const transferFixture = await createTransferFixtureSite(request, baseURL!)
 
     // Cancel any leftover pending transfer first
-    await request.delete(`${baseURL}/api/admin/sites/${SITE_ID}/transfer`)
+    await request.delete(`${baseURL}/api/admin/sites/${transferFixture.siteId}/transfer`)
 
     // Initiate a paid transfer (requires_payment=true so domain snapshot is attempted)
-    const create = await request.post(`${baseURL}/api/admin/sites/${SITE_ID}/transfer`, {
+    const create = await request.post(`${baseURL}/api/admin/sites/${transferFixture.siteId}/transfer`, {
       data: {
         email: 'cancel-test@e2e.invalid',
         plan: 'growth',
@@ -218,10 +241,10 @@ test.describe('site transfer handoff flow', () => {
     expect(pendingState.transfer.status).toBe('pending')
     expect('custom_domains_snapshot' in pendingState.transfer).toBe(true)
     // Site ownership must not have changed yet
-    expect(pendingState.site.organization_id).toBe('org-pottery-house')
+    expect(pendingState.site.organization_id).toBe(transferFixture.organizationId)
 
     // Cancel the transfer
-    const cancelRes = await request.delete(`${baseURL}/api/admin/sites/${SITE_ID}/transfer`)
+    const cancelRes = await request.delete(`${baseURL}/api/admin/sites/${transferFixture.siteId}/transfer`)
     expect(cancelRes.status()).toBe(200)
     const cancelBody = await cancelRes.json() as { cancelled: boolean }
     expect(cancelBody.cancelled).toBe(true)
@@ -237,6 +260,6 @@ test.describe('site transfer handoff flow', () => {
       site: { organization_id: string }
     }
     expect(cancelledState.transfer.status).toBe('cancelled')
-    expect(cancelledState.site.organization_id).toBe('org-pottery-house')
+    expect(cancelledState.site.organization_id).toBe(transferFixture.organizationId)
   })
 })

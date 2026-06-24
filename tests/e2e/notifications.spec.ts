@@ -217,7 +217,10 @@ test.describe('notification records — demo experience booking', () => {
   test('demo experience booking creates dashboard + email notification records', async ({ request }) => {
     const since = new Date().toISOString()
     const guestEmail = `test-demo-booking-${Date.now()}@playwright.example`
-    const futureDate = new Date(Date.now() + 32 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
+    // Use a unique far-future date derived from the run timestamp to avoid capacity
+    // accumulation across repeated local runs against the persistent D1 fixture.
+    const uniqueDaysOffset = 180 + (Math.floor(Date.now() / 60_000) % 500)
+    const futureDate = new Date(Date.now() + uniqueDaysOffset * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
 
     const res = await request.post(
       `${tenantBaseURL}/api/public/sites/${demoSiteId}/experiences/${demoExperience.slug}/book`,
@@ -225,7 +228,7 @@ test.describe('notification records — demo experience booking', () => {
         data: {
           guest_name: 'Playwright Demo Booking Test',
           guest_email: guestEmail,
-          party_size: 2,
+          party_size: 1,
           booking_date: futureDate,
           time_slot: '14:00',
         },
@@ -281,7 +284,11 @@ test.describe('notification records — experience booking (pottery house)', () 
   test('experience booking creates dashboard + email notification records', async ({ request }) => {
     const since = new Date().toISOString()
     const guestEmail = `test-booking-${Date.now()}@playwright.example`
-    const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
+    // Use a unique far-future date derived from the run timestamp to avoid capacity
+    // accumulation: repeated same-day runs would otherwise fill maxCapacity (8) with
+    // stale pending bookings, causing 409 on subsequent runs.
+    const uniqueDaysOffset = 180 + (Math.floor(Date.now() / 60_000) % 500)
+    const futureDate = new Date(Date.now() + uniqueDaysOffset * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
 
     const res = await request.post(
       `${potteryHouseBaseURL}/api/public/sites/site-pottery-house/experiences/pottery-wheel-class/book`,
@@ -289,7 +296,7 @@ test.describe('notification records — experience booking (pottery house)', () 
         data: {
           guest_name: 'Playwright Booking Test',
           guest_email: guestEmail,
-          party_size: 2,
+          party_size: 1,
           booking_date: futureDate,
           time_slot: '10:00',
         },
