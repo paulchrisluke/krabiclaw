@@ -1,10 +1,31 @@
 # Drizzle Migration Cutover Runbook
 
-> **Status (2026-06-24):** the migration itself is complete and merged to `staging` (PR #96,
+> **Status (2026-06-24): staging rehearsal is complete; production has a confirmed schema
+> gap with a fix already staged.** The migration is fully merged to `staging` (PR #96,
 > tracked in issue #95). Zero raw `D1Database.prepare()`/`.batch()` calls remain outside
-> `server/db/index.ts`, and the last `as ApiRecord` casts were removed in `7f79f57`. This
-> runbook now applies to the **production cutover**, not an in-flight branch. For the current
-> staging/prod verification state and the exact next steps, treat
+> `server/db/index.ts`, the last `as ApiRecord` casts were removed in `7f79f57`, and
+> `site-kikuzuki`/`site-pottery-house` on staging now mirror prod's real billing/ownership
+> shape (`348ae3a`). The canonical regression fixture passes 37/37 against staging (`19247d5`
+> fixed the fixture itself, which was missing the `x-preview-tenant` header).
+>
+> **Critical finding while verifying production readiness:** production's `d1_migrations`
+> bookkeeping last applied `0005_add_google_analytics_connections.sql` (2026-06-22) and is
+> missing `work_requests` and `platform_content_components` entirely — both tables that
+> `main`'s *current, already-deployed* code depends on (Managed Service work queue, platform
+> blog/docs FAQ/How-To components). This is a **pre-existing production gap, not something
+> this PR introduces.** Root cause: repeated migration squashes collapsed history into a
+> `0001_initial.sql` whose *filename* production already has recorded as applied (from
+> 2026-05-28) — `wrangler d1 migrations apply` matches by filename, not content, so it
+> silently reports "No migrations to apply!" and never re-runs the newer squashed content.
+> Fixed with a new, uniquely-named, idempotent migration —
+> `migrations/0002_add_work_requests_and_platform_content_components.sql` (`CREATE TABLE IF
+> NOT EXISTS`, so it's a verified no-op on staging, which already has both tables under their
+> original pre-squash migration names, and additive-only on production). Tested against local
+> D1 and staging remote; **not yet applied to production.**
+>
+> This runbook now applies to the **production cutover**, which is gated on the `staging` →
+> `main` PR merging first (CI deploys to production on push to `main`, which will pick up
+> migration `0002` automatically). For exact next steps, treat
 > [`docs/handoffs/drizzle-prod-cutover-2026-06-24.md`](handoffs/drizzle-prod-cutover-2026-06-24.md)
 > as authoritative over the historical scope description below — it reflects what's actually
 > been verified, this file documents the mechanics of running the cutover itself.
@@ -15,35 +36,47 @@ Better Auth adapter with `drizzleAdapter` over `drizzle-orm/d1`, and migrates ev
 and `server/api/*`) from raw `D1Database.prepare()` calls to the `server/db` helpers
 (`createDb`, `queryFirst`, `queryAll`, `execute`, `executeBatch`).
 
-This is a same-database migration (no new D1 instance, no destructive schema migration to
-existing tables) — the risk is in the *data-access layer rewrite*, not the schema. The
-*production* cutover separately involves a destructive wipe-and-restore of app-content
-tables (full backup → wipe → reapply migrations → restore Better Auth tables only → reseed
-→ re-promote admins, detailed in issue #95's "Cutover steps" section and step 4 of the
-handoff doc) — that risk is real and distinct from the code-migration risk this doc was
-originally scoped around.
+This is a same-database migration for the Drizzle adapter swap itself (no new D1 instance,
+no destructive schema migration to existing tables) — the risk there is in the *data-access
+layer rewrite*, not the schema. Separately, and not because of anything in this PR, production
+is missing two tables that `main` already depends on (see finding above) — migration `0002`
+fixes that additively, no backup/wipe/restore needed for that specific gap. Issue #95's
+original "Cutover steps" section describes a more drastic full backup → wipe → reapply
+migrations → restore Better Auth tables only → reseed → re-promote admins sequence, written
+defensively before the migration work started ("you'll likely need to delete the whole DB and
+do a fresh migration" per the lead engineer's note). **Re-evaluate whether that's still
+necessary against current evidence before running any destructive step** — see the handoff
+doc for the current recommendation.
 
 ---
 
 ## 1. Preconditions
 
-Before starting staging verification or prod cutover today:
+Before starting prod cutover:
 
-- [ ] `staging` is rebased on latest `main` (the merge target for cutover).
-- [ ] `server/db/schema.ts` matches the live D1 schema for the target environment. Run
-      `yarn drizzle:check` against each target before deploying to it (see §2).
+- [x] `server/db/schema.ts` matches the live D1 schema on staging — `yarn drizzle:check`
+      passed (see §2 for the production-side command, which still needs to be run as part
+      of cutover).
 - [ ] No other engineer has an in-flight migration file pending apply on
       `krabiclaw-db-staging` or `krabiclaw-db` (production) — check
       `wrangler d1 migrations list DB --env staging --remote` and
       `wrangler d1 migrations list DB --remote`.
+      **Do not trust "No migrations to apply!" alone** — that's exactly what masked the
+      missing `work_requests`/`platform_content_components` tables on production (see status
+      banner above). Cross-check actual tables: `wrangler d1 execute DB --remote --command
+      "SELECT name FROM sqlite_master WHERE type='table'"` diffed against
+      `grep -oP 'sqliteTable\("\K[^"]+' server/db/schema.ts`.
 - [ ] `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` are
-      set for the target environment (billing webhook is in scope for this deploy and is
-      billing-sensitive for both live client sites — see §3 staging validation).
-- [ ] Staging seed data for `site-kikuzuki` and `site-pottery-house` mirrors prod's real
+      set for production (billing webhook is in scope for this deploy and is
+      billing-sensitive for both live client sites — see §3 staging validation, already passed).
+- [x] Staging seed data for `site-kikuzuki` and `site-pottery-house` mirrors prod's real
       billing/ownership shape (paid `growth` plan, dedicated owner org per site, not the
-      platform-admin/fixture org) — see
-      [`docs/handoffs/drizzle-prod-cutover-2026-06-24.md`](handoffs/drizzle-prod-cutover-2026-06-24.md).
-      This was the last gap closed before cutover (`8b3f733`, `348ae3a`).
+      platform-admin/fixture org). Closed in `8b3f733`/`348ae3a`, confirmed directly against
+      staging D1.
+- [x] Canonical regression fixture (`yarn fixture:pottery-house`) passes 37/37 against staging.
+- [ ] **The `staging` → `main` PR is open/merged.** Production deploy only happens on push to
+      `main` (`.github/workflows/ci.yml`'s `prod-deploy` job) — this is the actual trigger for
+      everything below, not a manual `yarn deploy` run from a laptop.
 - [ ] `yarn stripe:listen` is **not** required for staging/prod (local-only).
 - [ ] You have a terminal ready to run the admin re-promotion SQL immediately after cutover
       (§4) — the `user.role` column is unaffected by this migration, but confirm it
@@ -235,7 +268,7 @@ If the deploy fails before traffic is healthy:
   grep for `.prepare(`/`.batch(` outside `server/db/index.ts` now only matches comments and
   `server/utils/auth.ts`'s `db.batch()` (Drizzle's own atomic batch API on query-builder
   objects, correctly left as-is, not raw D1).
-- **Schema Squashed**: All D1 migration files `0002` through `0009` have been squashed down into `0001_initial.sql` as part of this cutover to provide a single source of truth that perfectly matches `server/db/schema.ts`.
+- **Schema Squashed**: All D1 migration files `0002` through `0009` have been squashed down into `0001_initial.sql` as part of this cutover to provide a single source of truth that perfectly matches `server/db/schema.ts`. **This squashing is exactly what caused the production gap described in the status banner** — filename-based migration tracking can't tell that a re-squashed file's content moved forward when the filename didn't change. If another squash happens in the future, re-run the table-diff check above against every environment before assuming `wrangler d1 migrations apply` will pick it up.
 - **`cloudflareEnv()` now always constructs a Drizzle `db` instance** (`server/utils/api-response.ts`)
   even for requests that never touch it, adding a `createDb()` call (cached via `WeakMap`,
   so cheap, but worth confirming under load) to every request through `db-foreign-keys.ts`
