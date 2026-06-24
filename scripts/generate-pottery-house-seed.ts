@@ -42,26 +42,18 @@ DELETE FROM sites WHERE id = 'site-pottery-house' OR subdomain = 'pottery-house'
 DELETE FROM organization WHERE id = 'org-pottery-house';
 DELETE FROM site_domains WHERE domain IN ('pottery-house.localhost', 'pottery-house.krabiclaw.com');
 
--- Organization (owned by your existing platform admin account)
+-- Organization (owned by the dedicated Pottery House owner account)
 INSERT INTO organization (id, name, slug, createdAt)
 VALUES ('org-pottery-house', 'Pottery House Krabi', 'pottery-house-krabi', CURRENT_TIMESTAMP);
 
--- Ensure the owner user exists in the user table to satisfy foreign key constraints.
--- For local D1, we insert the user-pottery-house user.
--- For remote production, the owner account is IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO. We ensure BOTH users exist.
+-- Ensure the dedicated owner user exists in the user table to satisfy foreign key constraints.
 INSERT OR IGNORE INTO user (id, name, email, emailVerified)
 VALUES
-  ('user-pottery-house', 'Pottery House Owner', 'thesdrew@gmail.com', 1),
-  ('IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO', 'Platform Admin', 'paulchrisluke@gmail.com', 1);
+  ('user-pottery-house', 'Pottery House Owner', 'thesdrew@gmail.com', 1);
 
 INSERT INTO member (id, organizationId, userId, role, createdAt)
 VALUES
-  ('member-pottery-house', 'org-pottery-house',
-   CASE WHEN EXISTS(SELECT 1 FROM user WHERE id = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO')
-        THEN 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
-        ELSE 'user-pottery-house'
-   END,
-   'owner', CURRENT_TIMESTAMP);
+  ('member-pottery-house', 'org-pottery-house', 'user-pottery-house', 'owner', CURRENT_TIMESTAMP);
 
 ${renderCompiledPotteryHouseCoreSeedBlock()}
 

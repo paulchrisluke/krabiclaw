@@ -20,7 +20,7 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
     theme: string
     brandDescription: string
     status: 'active' | 'inactive'
-    plan: 'free' | 'starter' | 'pro' | 'enterprise'
+    plan: 'free' | 'growth' | 'managed' | 'seo_accelerator'
     onboardingStatus: 'pending' | 'active' | 'failed'
     urlStructure: 'location_subdirectories' | 'flat'
     primaryLocationId: string

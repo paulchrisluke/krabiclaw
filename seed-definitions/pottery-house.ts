@@ -31,7 +31,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     brandDescription:
       'A creative pottery studio in Krabi, Thailand. Wheel throwing classes, handbuilding workshops, Cocktails & Clay nights, and a beachfront popup. Clay, calm, and a place to return to each week.',
     status: 'active',
-    plan: 'free',
+    plan: 'growth',
     onboardingStatus: 'active',
     urlStructure: 'location_subdirectories',
     primaryLocationId: 'loc-pottery-house',
@@ -784,7 +784,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       imageAssetId: 'media-ph-post1',
       status: 'published',
       publishedAt: '2026-05-01T10:00:00.000Z',
-      createdBy: 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO',
+      createdBy: 'user-pottery-house',
       channelJobs: [
         { id: 'pcj-ph-1', channel: 'site', status: 'published', publishedAt: '2026-05-01T10:00:00.000Z' },
       ],
@@ -798,7 +798,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       imageAssetId: 'media-ph-post2',
       status: 'published',
       publishedAt: '2026-05-15T10:00:00.000Z',
-      createdBy: 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO',
+      createdBy: 'user-pottery-house',
       channelJobs: [
         { id: 'pcj-ph-2', channel: 'site', status: 'published', publishedAt: '2026-05-15T10:00:00.000Z' },
       ],
@@ -812,7 +812,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       imageAssetId: 'media-ph-post3',
       status: 'published',
       publishedAt: '2026-05-20T09:00:00.000Z',
-      createdBy: 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO',
+      createdBy: 'user-pottery-house',
       channelJobs: [
         { id: 'pcj-ph-3', channel: 'site', status: 'published', publishedAt: '2026-05-20T09:00:00.000Z' },
       ],
