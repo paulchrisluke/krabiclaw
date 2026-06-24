@@ -732,7 +732,7 @@ if (isPlatform) {
 
   usePlatformPageSeo({
     path: '/',
-    title: 'Restaurant Websites Managed Through ChatGPT',
+    title: 'Local SEO Websites Managed Through ChatGPT',
     description: platformOgDescription,
     isHomepage: true,
     breadcrumbs: [

@@ -177,6 +177,13 @@ export function createAuth(env: CloudflareEnv) {
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
         scopes: ['openid', 'offline_access', 'tenant', 'platform_admin'],
+        // Without this, a client that registers (or authorizes) without an explicit
+        // `scope` param falls back to the FULL scopes list above, including
+        // 'tenant' — which then trips forbiddenScopes: ['tenant'] on the platform
+        // admin MCP surface (server/api/mcp/platform.post.ts) and 403s. Clients
+        // must explicitly request 'tenant' or 'platform_admin' per the scopes
+        // advertised in their surface's oauth-protected-resource metadata.
+        clientRegistrationDefaultScopes: ['openid', 'offline_access'],
         validAudiences: [
           ...(env.BETTER_AUTH_URL ? [`${env.BETTER_AUTH_URL}/api/mcp`] : []),
           ...(env.BETTER_AUTH_URL ? [`${env.BETTER_AUTH_URL}/api/mcp/platform`] : []),
