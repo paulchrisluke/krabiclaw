@@ -21,7 +21,7 @@ VALUES (
   'doc-012',
   'Connect KrabiClaw to ChatGPT (MCP Setup)',
   'mcp-setup',
-  '# Connect KrabiClaw to ChatGPT
+  '## Connect KrabiClaw to ChatGPT
 
 KrabiClaw runs an MCP (Model Context Protocol) server so you can manage your site, menus, and media directly from ChatGPT.
 

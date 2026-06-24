@@ -49,7 +49,7 @@
         </div>
 
         <!-- eslint-disable-next-line vue/no-v-html -->
-        <div ref="articleBodyRef" class="prose prose-lg max-w-none text-default dark:prose-invert" v-html="renderedBody"></div>
+        <div ref="articleBodyRef" class="prose prose-lg max-w-none text-default prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base dark:prose-invert" v-html="renderedBody"></div>
 
         <template v-for="(section, sectionIndex) in orderedSections" :key="`section-${sectionIndex}`">
           <section v-if="section.type === 'faq' && section.items.length" class="mt-14 space-y-4 border-t border-default pt-8">
@@ -103,6 +103,7 @@
 
 <script setup lang="ts">
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
+import { sanitizeUrl } from '~/utils/sanitize'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 
 definePageMeta({ layout: 'platform' })
@@ -182,7 +183,10 @@ const renderedBody = computed(() => doc.value?.body ? renderMarkdown(doc.value.b
 
 const articleBodyRef = ref<HTMLElement | null>(null)
 useCopyableCodeBlocks(articleBodyRef, renderedBody)
-const renderableComponents = computed(() => (doc.value?.components ?? []).filter(component => component.render_enabled !== false))
+const renderableComponents = computed(() => (doc.value?.components ?? []).filter(component =>
+  component.render_enabled !== false &&
+  (component.status === undefined || component.status === null || component.status === 'active')
+))
 
 // How-To reads better above FAQ (action first, questions last), so sections
 // are sorted by type rather than the raw `position` from the backend.
@@ -211,7 +215,7 @@ const orderedSections = computed(() => renderableComponents.value.map((component
       .filter(step => step.name && step.text)
       .map(step => ({
         name: step.name as string,
-        url: step.url || '',
+        url: sanitizeUrl(step.url),
         image_public_url: step.image_public_url || '',
         textHtml: renderMarkdown(step.text as string),
       })),

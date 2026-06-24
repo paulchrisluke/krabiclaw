@@ -355,26 +355,38 @@ export async function getPlatformAnalyticsSummary(
     WHERE created_at >= ? AND created_at < ? AND visitor_id IS NOT NULL
   `, [start, end])
 
-  // Re-derive top pages from raw events across the full range rather than merging
-  // each day's stored top-10 snapshot, which can miss pages that only rank
-  // across the combined period and can't be trimmed back down to a true top 10.
-  const topPageRows = await queryAll<{ page_path: string; views: number }>(db, `
-    SELECT
-      page_path,
-      COUNT(*) as views
-    FROM platform_pageview_events
-    WHERE created_at >= ? AND created_at < ?
-    GROUP BY page_path
-    ORDER BY views DESC
-    LIMIT 10
-  `, [start, end])
+  // Re-derive top pages (and their total) from raw events across the full range
+  // rather than merging each day's stored top-10 snapshot, which can miss pages
+  // that only rank across the combined period and can't be trimmed back down to
+  // a true top 10. The denominator for percentOfTotal must come from this same
+  // raw-events query, not the `pageViews` rollup total above — they can diverge
+  // (e.g. a day not yet aggregated) and produce a percentage over 100%.
+  const [topPageRows, rawEventsTotal] = await Promise.all([
+    queryAll<{ page_path: string; views: number }>(db, `
+      SELECT
+        page_path,
+        COUNT(*) as views
+      FROM platform_pageview_events
+      WHERE created_at >= ? AND created_at < ?
+      GROUP BY page_path
+      ORDER BY views DESC
+      LIMIT 10
+    `, [start, end]),
+    queryFirst<{ count: number }>(db, `
+      SELECT COUNT(*) as count
+      FROM platform_pageview_events
+      WHERE created_at >= ? AND created_at < ?
+    `, [start, end]),
+  ])
+
+  const rawEventsTotalCount = toNumber(rawEventsTotal?.count)
 
   const topPages = topPageRows.map((row) => {
     const views = toNumber(row.views)
     return {
       path: String(row.page_path || '/'),
       views,
-      percentOfTotal: pageViews > 0 ? Math.round((views / pageViews) * 100) : 0
+      percentOfTotal: rawEventsTotalCount > 0 ? Math.round((views / rawEventsTotalCount) * 100) : 0
     }
   })
 

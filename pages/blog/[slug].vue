@@ -89,6 +89,7 @@
           ref="articleBodyRef"
           class="prose prose-lg max-w-none
                  prose-headings:text-default prose-headings:font-bold
+                 prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base
                  prose-p:leading-relaxed prose-p:text-muted
                  prose-a:text-(--kc-teal) prose-a:no-underline hover:prose-a:underline
                  prose-strong:text-default
@@ -177,6 +178,7 @@
 
 <script setup lang="ts">
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
+import { sanitizeUrl } from '~/utils/sanitize'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 
 // isomorphic-dompurify's jsdom shim breaks during SSR on the Workers runtime
@@ -276,7 +278,10 @@ const renderedBody = computed(() => post.value?.body ? renderMarkdown(post.value
 const articleBodyRef = ref<HTMLElement | null>(null)
 useCopyableCodeBlocks(articleBodyRef, renderedBody)
 
-const renderableComponents = computed(() => (post.value?.components ?? []).filter(component => component.render_enabled !== false))
+const renderableComponents = computed(() => (post.value?.components ?? []).filter(component =>
+  component.render_enabled !== false &&
+  (component.status === undefined || component.status === null || component.status === 'active')
+))
 
 // How-To reads better above FAQ (action first, questions last), so sections
 // are sorted by type rather than the raw `position` from the backend.
@@ -305,7 +310,7 @@ const orderedSections = computed(() => renderableComponents.value.map((component
       .filter(step => step.name && step.text)
       .map(step => ({
         name: step.name as string,
-        url: step.url || '',
+        url: sanitizeUrl(step.url),
         image_public_url: step.image_public_url || '',
         textHtml: renderMarkdown(step.text as string),
       })),
