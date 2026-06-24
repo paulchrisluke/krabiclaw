@@ -46,18 +46,28 @@ function decodeEntitiesForProtocolCheck(value: string) {
 // markdown anyway. The client re-renders through real DOMPurify on hydration.
 export function sanitizeHtmlForSsr(html: string) {
   return html
-    .replace(/<(script|style|iframe|object|embed|link|meta)\b[\s\S]*?(<\/\1>|\/?>)/gi, '')
+    // Paired tags: remove the opening tag, body, and closing tag together.
+    // (A lazy `[\s\S]*?` followed by an alternation that could also match the
+    // opening tag's own `>` let the engine take the *shorter* alternative —
+    // i.e. match just `<script>` — leaving the body and `</script>` behind.
+    // Anchoring strictly on the matching closing tag avoids that.)
+    .replace(/<(script|style|iframe|object|embed)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
+    // Void/self-closing tags with no required closing tag (link, meta), plus
+    // any leftover unclosed instance of the paired tags above.
+    .replace(/<(script|style|iframe|object|embed|link|meta)\b[^>]*\/?>/gi, '')
     .replace(/\son\w+\s*=\s*("[\s\S]*?"|'[\s\S]*?'|[^\s>]+)/gi, '')
-    .replace(/(href|src)\s*=\s*(["'])([\s\S]*?)\2/gi, (match, attr, quote, value) => {
+    .replace(/(href|src)\s*=\s*(?:"([\s\S]*?)"|'([\s\S]*?)'|([^\s>]+))/gi, (match, attr, dq, sq, unquoted) => {
+      const quote = dq !== undefined ? '"' : sq !== undefined ? '\'' : ''
+      const value = dq ?? sq ?? unquoted ?? ''
       // Strip control/whitespace chars (the WHATWG URL parser ignores them
       // anywhere in a scheme too, e.g. `java\tscript:`), then decode entities,
-      // before checking the protocol — both are common obfuscation vectors.
+      // before checking the protocol -- both are common obfuscation vectors.
       const normalized = decodeEntitiesForProtocolCheck(value)
         // eslint-disable-next-line no-control-regex -- intentionally stripping control chars used to obfuscate protocols
         .replace(/[\u0000-\u001f\u007f\s]+/g, '')
         .toLowerCase()
       if (/^(javascript|data|vbscript|file):/i.test(normalized)) {
-        return `${attr}=${quote}#${quote}`
+        return quote ? `${attr}=${quote}#${quote}` : `${attr}=#`
       }
       return match
     })

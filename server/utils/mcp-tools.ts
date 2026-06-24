@@ -1341,6 +1341,35 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   siteTool({
+    name: 'copy_location_batch',
+    description: 'Copy menus, media, content, reviews, Q&A, and/or experiences from one location to another. Use this to duplicate a fully-built location as a starting point for a new one, instead of recreating content by hand. Provide target_location_id to copy into an existing location, or new_location_title to create a fresh one first. Items with external identifiers (Google review/question ids) are copied without that identifier since the copy is not the literal external record.',
+    domain: 'locations',
+    minimumRole: 'editor',
+    confirmRequired: true,
+    inputSchema: {
+      source_location_id: { type: 'string', description: 'Location to copy content from. Use list_locations to find ids.' },
+      target_location_id: { type: 'string', description: 'Existing location to copy content into. Omit if using new_location_title instead.' },
+      new_location_title: { type: 'string', description: 'Title for a brand-new location to create and copy content into. Omit if using target_location_id instead.' },
+      entities: {
+        type: 'array',
+        items: { type: 'string', enum: ['menus', 'menu_items', 'media_assets', 'site_content', 'reviews', 'location_qa', 'experiences'] },
+        description: 'Which kinds of content to copy. menu_items requires menus to also be listed, since copied items attach to newly copied menus.',
+      },
+      include_translations: { type: 'boolean', description: 'Copy existing translations for menus/menu items/site content along with the source-locale content. Defaults to true.' },
+    },
+    required: ['source_location_id', 'entities'],
+    outputSchema: {
+      type: 'object',
+      properties: {
+        manifest: {
+          type: 'object',
+          description: 'Per-entity counts of what was copied and the resulting location id/slug.',
+        },
+      },
+      required: ['manifest'],
+    },
+  }),
+  siteTool({
     name: 'set_location_hero_image',
     description: 'Assign a saved media asset as a location hero image. Call get_site_media_assets first to find an active image asset id, then pass it here with the target location_id. If this location already has a hero video, that video keeps display priority until you call clear_location_hero_video.',
     domain: 'locations',

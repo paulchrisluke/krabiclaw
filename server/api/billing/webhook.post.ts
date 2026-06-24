@@ -283,6 +283,16 @@ async function handleCheckoutCompleted(
 
   const resolvedSiteId = siteId
 
+  // Stripe session metadata is set at checkout-creation time, but re-verify the
+  // site/org pairing here rather than trusting it blindly — applySiteSubscription
+  // would otherwise attach billing to whatever site_id is in the metadata even if
+  // it belongs to a different organization.
+  const siteOwnership = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`, [resolvedSiteId, organizationId])
+  if (!siteOwnership) {
+    console.error('Site does not belong to organization in checkout metadata:', { sessionId: session.id, siteId: resolvedSiteId, organizationId })
+    return
+  }
+
   const customerId = session.customer as string
   const expanded = expandedSub(session)
   await applySiteSubscription(db, resolvedSiteId, organizationId, customerId, subscriptionId, expanded?.items?.data?.[0]?.id ?? null, plan, checkoutSubscriptionPeriodEnd(session))

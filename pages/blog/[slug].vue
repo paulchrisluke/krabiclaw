@@ -311,7 +311,7 @@ const orderedSections = computed(() => renderableComponents.value.map((component
       .map(step => ({
         name: step.name as string,
         url: sanitizeUrl(step.url),
-        image_public_url: step.image_public_url || '',
+        image_public_url: sanitizeUrl(step.image_public_url),
         textHtml: renderMarkdown(step.text as string),
       })),
   }

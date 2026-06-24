@@ -110,4 +110,4 @@ export async function executeBatch(db: DbClient, queries: BatchQuery[]) {
   return await client.batch(statements)
 }
 
-export { schema }
+export { rawClient, schema }

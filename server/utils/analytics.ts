@@ -340,12 +340,20 @@ export async function getPlatformAnalyticsSummary(
 }> {
   const { start, end } = dateRangeBounds(startDate, endDate)
 
+  // Derived from the same raw-event range as pageViews/uniqueSessions/topPages below,
+  // rather than the platform_analytics_daily rollup table — that table is only
+  // populated once a day via cron, so a day not yet aggregated would be missing
+  // from dailyData while still being counted in the live totals.
   const dailyStats = await queryAll<{ date: string; page_views: number; unique_sessions: number }>(db, `
-    SELECT date, page_views, unique_sessions
-    FROM platform_analytics_daily
-    WHERE date BETWEEN ? AND ?
+    SELECT
+      substr(created_at, 1, 10) as date,
+      COUNT(*) as page_views,
+      COUNT(DISTINCT session_id) as unique_sessions
+    FROM platform_pageview_events
+    WHERE created_at >= ? AND created_at < ?
+    GROUP BY date
     ORDER BY date ASC
-  `, [startDate, endDate])
+  `, [start, end])
 
   const [pageViewsResult, uniqueSessionsResult, visitorStats] = await Promise.all([
     queryFirst<{ count: number }>(db, `

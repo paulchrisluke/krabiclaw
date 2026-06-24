@@ -192,7 +192,7 @@ function slugify(title: string): string {
     || `experience-${Date.now()}`
 }
 
-async function uniqueSlug(db: DbClient, siteId: string, base: string, excludeId?: string): Promise<string> {
+export async function uniqueSlug(db: DbClient, siteId: string, base: string, excludeId?: string): Promise<string> {
   for (let i = 0; i < 8; i++) {
     const candidate = i === 0 ? base : `${base}-${Math.random().toString(36).slice(2, 6)}`
     const existing = await queryFirst<{ id: string }>(db, `SELECT id FROM experiences WHERE site_id = ? AND slug = ? LIMIT 1`, [siteId, candidate])

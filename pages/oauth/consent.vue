@@ -63,7 +63,7 @@
         block
         size="lg"
         :loading="accepting"
-        :disabled="denying"
+        :disabled="denying || switchingAccount"
         class="rounded-full"
         @click="accept"
       >
@@ -73,7 +73,7 @@
       <button
         id="oauth-consent-cancel"
         class="w-full text-sm text-muted hover:text-default transition-colors text-center mt-3 py-1"
-        :disabled="accepting"
+        :disabled="accepting || switchingAccount"
         @click="deny"
       >
         <span v-if="denying" class="opacity-60">Cancelling…</span>
@@ -223,6 +223,7 @@ async function switchAccount() {
 }
 
 async function accept() {
+  if (switchingAccount.value || denying.value) return
   accepting.value = true
   error.value = null
   try {
@@ -239,6 +240,7 @@ async function accept() {
 }
 
 async function deny() {
+  if (switchingAccount.value || accepting.value) return
   denying.value = true
   error.value = null
   try {

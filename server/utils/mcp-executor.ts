@@ -25,6 +25,7 @@ import {
   deleteLocation,
   updateLocation,
 } from "~/server/utils/location-management";
+import { copyLocationBatch, type CopyEntityType } from "~/server/utils/copy-paste";
 import {
   createMenu,
   createMenuItem,
@@ -1658,6 +1659,56 @@ export async function executeMcpToolCall(
       return {
         ...result.data,
         context: await mutationContextPayload(site, { locationId }),
+      };
+    }
+    case "copy_location_batch": {
+      const VALID_ENTITY_TYPES: CopyEntityType[] = [
+        "menus", "menu_items", "media_assets", "site_content", "reviews", "location_qa", "experiences",
+      ];
+      const sourceLocationId = requiredString(args, "source_location_id");
+      const targetLocationId = optionalString(args, "target_location_id");
+      const newLocationTitle = optionalString(args, "new_location_title");
+      if (!targetLocationId && !newLocationTitle) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "Provide either target_location_id (to copy into an existing location) or new_location_title (to create a new one).",
+        );
+      }
+      const entityTypes = requiredStringArray(args.entities, "entities");
+      for (const type of entityTypes) {
+        if (!VALID_ENTITY_TYPES.includes(type as CopyEntityType)) {
+          throw mcpProtocolError(
+            MCP_ERROR.invalidParams,
+            `Invalid entity type "${type}". Must be one of: ${VALID_ENTITY_TYPES.join(", ")}`,
+          );
+        }
+      }
+      const includeTranslations = args.include_translations !== false;
+
+      const result = await copyLocationBatch(
+        site.env as unknown as Record<string, string | undefined>,
+        site.db,
+        site.organizationId,
+        site.siteId,
+        site.userId,
+        {
+          source_location_id: sourceLocationId,
+          target_location_id: targetLocationId ?? undefined,
+          new_location: newLocationTitle ? { title: newLocationTitle } : undefined,
+          entities: entityTypes.map((type) => ({
+            type: type as CopyEntityType,
+            include_translations: includeTranslations,
+          })),
+        },
+      );
+
+      if (!result.success) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, result.error ?? "Failed to copy location data");
+      }
+
+      return {
+        manifest: result.manifest,
+        context: await mutationContextPayload(site, { locationId: result.manifest?.target_location_id ?? null }),
       };
     }
     case "set_location_hero_image": {
