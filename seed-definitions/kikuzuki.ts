@@ -581,8 +581,8 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     lifetimeUsed: 198,
   },
   organizationBilling: {
-    status: 'free',
-    plan: 'free',
+    status: 'active',
+    plan: 'growth',
   },
 }
 
