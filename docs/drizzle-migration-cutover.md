@@ -1,14 +1,27 @@
 # Drizzle Migration Cutover Runbook
 
-Scope: rollout of the `drizzle-migration-95` branch — replaces the Kysely/`@atinux/kysely-d1`
-Better Auth adapter with `drizzleAdapter` over `drizzle-orm/d1`, and migrates several
-`server/utils/*` and `server/middleware/*` data-access call sites (`tenant-resolution.ts`,
-`db-foreign-keys.ts`, `site-config.ts`, `media-asset-manager.ts`, `pageview-tracking.ts`,
-`site-i18n.ts`, `site-locales.ts`, `api-response.ts`) from raw `D1Database.prepare()` calls
-to the new `server/db` helpers (`createDb`, `queryFirst`, `queryAll`, `execute`).
+> **Status (2026-06-24):** the migration itself is complete and merged to `staging` (PR #96,
+> tracked in issue #95). Zero raw `D1Database.prepare()`/`.batch()` calls remain outside
+> `server/db/index.ts`, and the last `as ApiRecord` casts were removed in `7f79f57`. This
+> runbook now applies to the **production cutover**, not an in-flight branch. For the current
+> staging/prod verification state and the exact next steps, treat
+> [`docs/handoffs/drizzle-prod-cutover-2026-06-24.md`](handoffs/drizzle-prod-cutover-2026-06-24.md)
+> as authoritative over the historical scope description below — it reflects what's actually
+> been verified, this file documents the mechanics of running the cutover itself.
 
-This is a same-database migration (no new D1 instance, no destructive schema migration) —
-the risk is in the *data-access layer rewrite*, not the schema.
+Scope: rollout of the now-merged Drizzle migration — replaces the Kysely/`@atinux/kysely-d1`
+Better Auth adapter with `drizzleAdapter` over `drizzle-orm/d1`, and migrates every
+`server/*` data-access call site (251 files across `server/utils/*`, `server/middleware/*`,
+and `server/api/*`) from raw `D1Database.prepare()` calls to the `server/db` helpers
+(`createDb`, `queryFirst`, `queryAll`, `execute`, `executeBatch`).
+
+This is a same-database migration (no new D1 instance, no destructive schema migration to
+existing tables) — the risk is in the *data-access layer rewrite*, not the schema. The
+*production* cutover separately involves a destructive wipe-and-restore of app-content
+tables (full backup → wipe → reapply migrations → restore Better Auth tables only → reseed
+→ re-promote admins, detailed in issue #95's "Cutover steps" section and step 4 of the
+handoff doc) — that risk is real and distinct from the code-migration risk this doc was
+originally scoped around.
 
 ---
 
@@ -16,7 +29,7 @@ the risk is in the *data-access layer rewrite*, not the schema.
 
 Before starting staging verification or prod cutover today:
 
-- [ ] Branch `drizzle-migration-95` is rebased on latest `main`.
+- [ ] `staging` is rebased on latest `main` (the merge target for cutover).
 - [ ] `server/db/schema.ts` matches the live D1 schema for the target environment. Run
       `yarn drizzle:check` against each target before deploying to it (see §2).
 - [ ] No other engineer has an in-flight migration file pending apply on
@@ -24,8 +37,13 @@ Before starting staging verification or prod cutover today:
       `wrangler d1 migrations list DB --env staging --remote` and
       `wrangler d1 migrations list DB --remote`.
 - [ ] `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` are
-      set for the target environment (billing webhook changes are bundled in this diff —
-      see §6 risk areas).
+      set for the target environment (billing webhook is in scope for this deploy and is
+      billing-sensitive for both live client sites — see §3 staging validation).
+- [ ] Staging seed data for `site-kikuzuki` and `site-pottery-house` mirrors prod's real
+      billing/ownership shape (paid `growth` plan, dedicated owner org per site, not the
+      platform-admin/fixture org) — see
+      [`docs/handoffs/drizzle-prod-cutover-2026-06-24.md`](handoffs/drizzle-prod-cutover-2026-06-24.md).
+      This was the last gap closed before cutover (`8b3f733`, `348ae3a`).
 - [ ] `yarn stripe:listen` is **not** required for staging/prod (local-only).
 - [ ] You have a terminal ready to run the admin re-promotion SQL immediately after cutover
       (§4) — the `user.role` column is unaffected by this migration, but confirm it
@@ -207,15 +225,14 @@ If the deploy fails before traffic is healthy:
 - **Unrelated changes bundled into this branch**: `server/api/billing/webhook.post.ts`
   carries a non-trivial Stripe subscription period-end hydration fix
   (`hydrateSubscriptionForBilling`, `subscriptionPeriodEndIso`) that is unrelated to the
-  Drizzle migration and still talks to D1 directly via `db.prepare(...)` rather than the
-  new `server/db` helpers. This widens the blast radius of today's deploy — if billing
-  webhook validation fails post-cutover, don't assume it's Drizzle-related; check this
-  diff specifically.
-- **Mixed data-access patterns remain**: not all call sites were migrated — e.g. the
-  `site_billing` lookup added in `handleSubscriptionUpdated` uses raw `db.prepare(...).bind(...).first()`
-  against `D1Database` directly, side-by-side with `server/db`-helper call sites elsewhere
-  in the same file/PR. This is fine functionally (both can coexist) but means the codebase
-  is mid-migration — don't assume "if `server/db` exists, raw D1 calls are gone."
+  Drizzle migration. It has since been fully migrated onto the `server/db` helpers
+  (`queryFirst`/`execute`) along with everything else, but it's still worth treating as a
+  distinct change — if billing webhook validation fails post-cutover, check this logic
+  specifically rather than assuming it's Drizzle-related.
+- **Mixed data-access patterns**: resolved as of the final sweep (`a2d3a2e`) — a repo-wide
+  grep for `.prepare(`/`.batch(` outside `server/db/index.ts` now only matches comments and
+  `server/utils/auth.ts`'s `db.batch()` (Drizzle's own atomic batch API on query-builder
+  objects, correctly left as-is, not raw D1).
 - **Schema Squashed**: All D1 migration files `0002` through `0009` have been squashed down into `0001_initial.sql` as part of this cutover to provide a single source of truth that perfectly matches `server/db/schema.ts`.
 - **`cloudflareEnv()` now always constructs a Drizzle `db` instance** (`server/utils/api-response.ts`)
   even for requests that never touch it, adding a `createDb()` call (cached via `WeakMap`,
