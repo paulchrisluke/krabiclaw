@@ -69,8 +69,15 @@ test.describe('onboarding wizard UI', () => {
     // Adding a location stays on /new with a live preview of the new location.
     await expect(page).toHaveURL(/\/dashboard\/.+\/new$/)
 
-    const orgSlug = new URL(page.url()).pathname.split('/')[2]
-    const locationsRes = await page.request.get(`${baseURL}/api/dashboard/locations`)
+    const pathSegments = new URL(page.url()).pathname.split('/')
+    const orgSlug = pathSegments[2]
+    const siteSlug = pathSegments[4]
+    // page.request bypasses the browser's JS entirely, so the dashboard-site-header
+    // plugin never runs — the site must be named explicitly via the header it would
+    // otherwise attach, since /api/dashboard/locations requires an explicit site.
+    const locationsRes = await page.request.get(`${baseURL}/api/dashboard/locations`, {
+      headers: { 'x-dashboard-site-slug': siteSlug! },
+    })
     expect(locationsRes.status()).toBe(200)
     const { locations } = await locationsRes.json() as { locations: Array<{ title: string }> }
     expect(locations.length).toBeGreaterThanOrEqual(2)
