@@ -226,10 +226,9 @@ export const useBootstrap = () => {
     }
     const row = contentMap.value[field];
     if (!row) return defaultValue;
-    // Media fields store an asset id in hero_image_asset_id/hero_video_asset_id
-    // rather than a literal URL in content — getPageContent resolves those to
-    // hero_public_url/hero_video_public_url via JOIN for every row, not just hero.*.
-    const val = row.hero_public_url || row.hero_video_public_url || row.content;
+    const mediaValue =
+      row.hero_public_url || row.hero_video_public_url || row.content;
+    const val = row.type === "media" ? mediaValue : row.content;
     return val && val.trim() !== "" ? val : defaultValue;
   };
 

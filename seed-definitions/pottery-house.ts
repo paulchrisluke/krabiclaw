@@ -444,7 +444,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       page: 'home',
       field: 'cta.title',
       content: 'Book your first class.',
-      heroImageAssetId: 'media-ph-homepage-custom',
       type: 'text',
       source: 'manual',
     },
