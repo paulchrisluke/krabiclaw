@@ -80,20 +80,27 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   // The active site is resolved explicitly from the `siteSlug` route segment, sent on
   // every /api/dashboard/* request via the x-dashboard-site-slug header (see
   // plugins/dashboard-site-header.ts). All dashboard routes must include the site
-  // explicitly in the URL path for multi-site support.
+  // explicitly in the URL path for multi-site support. Callers that pass
+  // `requireSite: false` (onboarding, org-level routes, and this function's own
+  // discovery endpoint /api/dashboard/context) are explicitly designed to work
+  // before a site is known/selected, so a missing header there means "no site
+  // selected yet" rather than a client error — only callers that need a site
+  // get the hard 400.
   const siteSlug = getHeader(event, 'x-dashboard-site-slug')
 
-  if (!siteSlug) {
+  if (!siteSlug && options.requireSite !== false) {
     throw createError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
   }
 
-  const site = await queryFirst<DashboardSiteRow>(db, `
-    SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
-           status, onboarding_status, plan, primary_location_id, default_currency, source_locale
-    FROM sites
-    WHERE organization_id = ? AND subdomain = ?
-    LIMIT 1
-  `, [organization.id, siteSlug])
+  const site = siteSlug
+    ? await queryFirst<DashboardSiteRow>(db, `
+        SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
+               status, onboarding_status, plan, primary_location_id, default_currency, source_locale
+        FROM sites
+        WHERE organization_id = ? AND subdomain = ?
+        LIMIT 1
+      `, [organization.id, siteSlug])
+    : null
 
   if (!site && options.requireSite !== false) {
     throw createError({ statusCode: 404, message: 'Site not found' })
