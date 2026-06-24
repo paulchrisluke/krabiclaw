@@ -4,7 +4,10 @@ import { loginAs } from './helpers/auth'
 import { MCP_FREE_USER_ID, MCP_GROWTH_USER_ID, MCP_MANAGED_USER_ID } from './helpers/plan-fixtures'
 
 const MCP_VERSION = '2026-07-28'
-const POTTERY_HOUSE_USER_ID = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
+// 'user-demo' is the platform admin seeded by generate-demo-seed.ts (role='admin'),
+// so requireMcpSite's admin branch grants access to org-pottery-house without
+// needing a member row there.
+const POTTERY_HOUSE_USER_ID = 'user-demo'
 const POTTERY_HOUSE_SITE_ID = 'site-pottery-house'
 const POTTERY_HOUSE_LOCATION_ID = 'loc-pottery-beachfront'
 // Fixed fixture sites seeded by generate-demo-seed.ts with the matching plan already

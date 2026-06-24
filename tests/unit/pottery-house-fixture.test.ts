@@ -126,7 +126,7 @@ test("pottery house posts block includes posts and channel jobs", () => {
   assert.match(sql, /INSERT OR IGNORE INTO posts/);
   assert.match(sql, /INSERT OR IGNORE INTO post_channel_jobs/);
   assert.match(sql, /Doors open, wheels spinning\./);
-  assert.match(sql, /IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO/);
+  assert.match(sql, /user-pottery-house/);
 });
 
 test("pottery house content block includes home hero and about page content", () => {
