@@ -51,17 +51,13 @@ export default defineEventHandler(async (event) => {
   }
   const orgId = organizationId!
 
-  // Resolve site — either passed explicitly or auto-detected from org
-  let siteId = body.siteId
-  if (siteId) {
-    const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`, [siteId, orgId])
-    if (!site) return jsonResponse({ error: 'Site not found or does not belong to this organization' }, { status: 404 })
-  } else {
-    const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? LIMIT 1`, [orgId])
-    if (!site) return jsonResponse({ error: 'No site found for this organization' }, { status: 404 })
-    siteId = site.id
-  }
-  const resolvedSiteId = siteId!
+  // Resolve site — must be passed explicitly for multi-site orgs
+  const siteId = body.siteId
+  if (!siteId) return jsonResponse({ error: 'siteId is required' }, { status: 400 })
+
+  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`, [siteId, orgId])
+  if (!site) return jsonResponse({ error: 'Site not found or does not belong to this organization' }, { status: 404 })
+  const resolvedSiteId = siteId
 
   try {
     await requireBillingAccess(env, db, orgId, session.user.id)

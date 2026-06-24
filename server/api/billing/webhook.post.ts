@@ -202,28 +202,24 @@ function subscriptionPeriodEndIso(subscription: Stripe.Subscription): string | n
   return null
 }
 
-// Resolve site_id from subscription metadata; fall back to customer→org→site for old subscriptions
+// Resolve site_id from subscription metadata. All subscriptions must have site_id in metadata
+// for multi-site support. Legacy fallback removed - old subscriptions without site_id will fail.
 async function resolveSiteFromSubscription(
   db: D1Database,
   subscription: Stripe.Subscription,
 ): Promise<{ siteId: string; organizationId: string } | null> {
   const siteId = subscription.metadata?.site_id
-  if (siteId) {
-    const row = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM sites WHERE id = ? LIMIT 1`, [siteId])
-    if (row) return { siteId, organizationId: row.organization_id }
+  if (!siteId) {
+    console.error('Subscription missing site_id in metadata:', subscription.id)
+    return null
   }
 
-  // Legacy: look up via stripe_customer_id → org → first site
-  const customerId = subscription.customer as string
-  const billing = await queryFirst<{ organization_id: string; site_id: string }>(db, `
-    SELECT ob.organization_id, s.id AS site_id
-    FROM organization_billing ob
-    JOIN sites s ON s.organization_id = ob.organization_id
-    WHERE ob.stripe_customer_id = ?
-    LIMIT 1
-  `, [customerId])
-  if (!billing) return null
-  return { siteId: billing.site_id, organizationId: billing.organization_id }
+  const row = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM sites WHERE id = ? LIMIT 1`, [siteId])
+  if (!row) {
+    console.error('Site not found for subscription site_id:', { subscriptionId: subscription.id, siteId })
+    return null
+  }
+  return { siteId, organizationId: row.organization_id }
 }
 
 // ── Event handlers ────────────────────────────────────────────────────────────
@@ -263,7 +259,7 @@ async function handleCheckoutCompleted(
     const plan = session.metadata?.plan
     const transferId = session.metadata?.transfer_request_id
     if (!organizationId || !plan || !transferId) { console.error('Invalid site transfer metadata:', session.id); return }
-    const resolvedSiteId = siteId ?? session.metadata?.transfer_site_id ?? (await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? LIMIT 1`, [organizationId]))?.id
+    const resolvedSiteId = siteId ?? session.metadata?.transfer_site_id
     if (!resolvedSiteId) { console.error('No site found for site_transfer checkout:', session.id); return }
     const customerId = session.customer as string
     const subscriptionId = checkoutSubscriptionId(session)
@@ -280,13 +276,12 @@ async function handleCheckoutCompleted(
   // Standard plan subscription
   const plan = session.metadata?.plan
   const subscriptionId = checkoutSubscriptionId(session)
-  if (!organizationId || !plan || !subscriptionId) {
+  if (!organizationId || !siteId || !plan || !subscriptionId) {
     console.error('Missing metadata in checkout session:', session.id)
     return
   }
 
-  const resolvedSiteId = siteId ?? (await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? LIMIT 1`, [organizationId]))?.id
-  if (!resolvedSiteId) { console.error('No site found for checkout:', session.id); return }
+  const resolvedSiteId = siteId
 
   const customerId = session.customer as string
   const expanded = expandedSub(session)

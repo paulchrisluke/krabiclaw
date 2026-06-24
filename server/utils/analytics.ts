@@ -338,6 +338,8 @@ export async function getPlatformAnalyticsSummary(
   topPages: Array<{ path: string; views: number; percentOfTotal: number }>
   dailyData: Array<{ date: string; pageViews: number; sessions: number }>
 }> {
+  const { start, end } = dateRangeBounds(startDate, endDate)
+
   const dailyStats = await queryAll<{ date: string; page_views: number; unique_sessions: number }>(db, `
     SELECT date, page_views, unique_sessions
     FROM platform_analytics_daily
@@ -345,15 +347,26 @@ export async function getPlatformAnalyticsSummary(
     ORDER BY date ASC
   `, [startDate, endDate])
 
-  const pageViews = dailyStats.reduce((sum, row) => sum + toNumber(row.page_views), 0)
-  const uniqueSessions = dailyStats.reduce((sum, row) => sum + toNumber(row.unique_sessions), 0)
+  const [pageViewsResult, uniqueSessionsResult, visitorStats] = await Promise.all([
+    queryFirst<{ count: number }>(db, `
+      SELECT COUNT(*) as count
+      FROM platform_pageview_events
+      WHERE created_at >= ? AND created_at < ?
+    `, [start, end]),
+    queryFirst<{ count: number }>(db, `
+      SELECT COUNT(DISTINCT session_id) as count
+      FROM platform_pageview_events
+      WHERE created_at >= ? AND created_at < ?
+    `, [start, end]),
+    queryFirst<{ count: number }>(db, `
+      SELECT COUNT(DISTINCT visitor_id) as count
+      FROM platform_pageview_events
+      WHERE created_at >= ? AND created_at < ? AND visitor_id IS NOT NULL
+    `, [start, end]),
+  ])
 
-  const { start, end } = dateRangeBounds(startDate, endDate)
-  const visitorStats = await queryFirst<{ count: number }>(db, `
-    SELECT COUNT(DISTINCT visitor_id) as count
-    FROM platform_pageview_events
-    WHERE created_at >= ? AND created_at < ? AND visitor_id IS NOT NULL
-  `, [start, end])
+  const pageViews = toNumber(pageViewsResult?.count)
+  const uniqueSessions = toNumber(uniqueSessionsResult?.count)
 
   // Re-derive top pages (and their total) from raw events across the full range
   // rather than merging each day's stored top-10 snapshot, which can miss pages

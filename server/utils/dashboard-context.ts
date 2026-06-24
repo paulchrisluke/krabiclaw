@@ -79,26 +79,21 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
 
   // The active site is resolved explicitly from the `siteSlug` route segment, sent on
   // every /api/dashboard/* request via the x-dashboard-site-slug header (see
-  // plugins/dashboard-site-header.ts). Falling back to the org's first site is only
-  // for legacy callers that haven't been migrated to the explicit sites/ route yet.
+  // plugins/dashboard-site-header.ts). All dashboard routes must include the site
+  // explicitly in the URL path for multi-site support.
   const siteSlug = getHeader(event, 'x-dashboard-site-slug')
 
-  const site = siteSlug
-    ? await queryFirst<DashboardSiteRow>(db, `
-        SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
-               status, onboarding_status, plan, primary_location_id, default_currency, source_locale
-        FROM sites
-        WHERE organization_id = ? AND subdomain = ?
-        LIMIT 1
-      `, [organization.id, siteSlug])
-    : await queryFirst<DashboardSiteRow>(db, `
-        SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
-               status, onboarding_status, plan, primary_location_id, default_currency, source_locale
-        FROM sites
-        WHERE organization_id = ?
-        ORDER BY created_at ASC
-        LIMIT 1
-      `, [organization.id])
+  if (!siteSlug) {
+    throw createError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
+  }
+
+  const site = await queryFirst<DashboardSiteRow>(db, `
+    SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
+           status, onboarding_status, plan, primary_location_id, default_currency, source_locale
+    FROM sites
+    WHERE organization_id = ? AND subdomain = ?
+    LIMIT 1
+  `, [organization.id, siteSlug])
 
   if (!site && options.requireSite !== false) {
     throw createError({ statusCode: 404, message: 'Site not found' })
