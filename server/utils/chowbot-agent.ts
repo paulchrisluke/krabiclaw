@@ -86,7 +86,7 @@ import {
   CHOWBOT_CONFIRM_REQUIRED,
 } from "~/server/utils/chowbot-tools";
 import { SUPPORTED_CURRENCIES } from "~/shared/currencies";
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from "~/server/db";
+import { queryAll, queryFirst } from "~/server/db";
 
 const MAX_ITERATIONS = 10;
 const HERO_FIELDS = new Set([

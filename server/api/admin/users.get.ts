@@ -11,7 +11,7 @@ interface UserRow {
   email: string
   role: string
   banned: boolean | number | null
-  createdAt: string
+  createdAt: Date
 }
 
 export default defineEventHandler(async (event) => {
@@ -55,7 +55,8 @@ export default defineEventHandler(async (event) => {
 
   const normalized = users.map((user) => ({
     ...user,
-    banned: Boolean(user.banned)
+    banned: Boolean(user.banned),
+    createdAt: user.createdAt.toISOString()
   }))
 
   return jsonResponse({ users: normalized })

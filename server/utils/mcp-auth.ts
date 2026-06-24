@@ -248,7 +248,7 @@ async function verifyOpaqueAccessToken(
   const hashedToken = await sha256Base64Url(token)
   const accessToken = await queryFirst<{
     userId: string | null
-    expiresAt: string | null
+    expiresAt: number | null
     scopes: string | null
     client_disabled: number | null
   }>(db, `
@@ -262,9 +262,11 @@ async function verifyOpaqueAccessToken(
   if (!accessToken?.userId || !accessToken.expiresAt) return { userId: null, reason: 'token_not_found', scopes: [] }
   if (accessToken.client_disabled) return { userId: null, reason: 'client_disabled', scopes: [] }
 
-  const expiresAt = new Date(accessToken.expiresAt)
-  if (Number.isNaN(expiresAt.getTime())) return { userId: null, reason: 'expiry_invalid', scopes: [] }
-  if (expiresAt.getTime() <= Date.now()) return { userId: null, reason: 'token_expired', scopes: [] }
+  // oauthAccessToken.expiresAt is stored as unix seconds (drizzle integer
+  // timestamp mode) — multiply back to milliseconds before comparing.
+  const expiresAtMs = accessToken.expiresAt * 1000
+  if (Number.isNaN(expiresAtMs)) return { userId: null, reason: 'expiry_invalid', scopes: [] }
+  if (expiresAtMs <= Date.now()) return { userId: null, reason: 'token_expired', scopes: [] }
 
   const scopes = parseTokenScopes(accessToken.scopes)
   const missingScope = requiredScopes.find(scope => !scopes.includes(scope))

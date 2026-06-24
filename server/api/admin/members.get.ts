@@ -13,8 +13,8 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
-  const [team, pendingInvitations] = await Promise.all([
-    queryAll<{ id: string; name: string | null; email: string; image: string | null; role: string; createdAt: string }>(db, `
+  const [teamRows, pendingInvitationRows] = await Promise.all([
+    queryAll<{ id: string; name: string | null; email: string; image: string | null; role: string; createdAt: Date }>(db, `
       SELECT id, name, email, image, role, createdAt
       FROM user
       WHERE role = 'admin'
@@ -23,20 +23,30 @@ export default defineEventHandler(async (event) => {
 
     queryAll<{
       id: string; email: string; role: string | null; status: string
-      expiresAt: string; createdAt: string
+      expiresAt: Date; createdAt: Date
       orgName: string | null; orgSlug: string | null; inviterName: string | null
     }>(db, `
       SELECT i.id, i.email, i.role, i.status, i.expiresAt, i.createdAt,
              o.name as orgName, o.slug as orgSlug,
              u.name as inviterName
       FROM invitation i
-      LEFT JOIN organization o ON o.id = i.organizationId
-      LEFT JOIN user u ON u.id = i.inviterId
+      LEFT JOIN organization o ON i.organizationId = o.id
+      LEFT JOIN user u ON i.inviterId = u.id
       WHERE i.status = 'pending'
       ORDER BY i.createdAt DESC
       LIMIT 50
     `),
   ])
+
+  const team = teamRows.map(u => ({
+    ...u,
+    createdAt: u.createdAt.toISOString()
+  }))
+  const pendingInvitations = pendingInvitationRows.map(i => ({
+    ...i,
+    expiresAt: i.expiresAt.toISOString(),
+    createdAt: i.createdAt.toISOString()
+  }))
 
   return jsonResponse({
     team,

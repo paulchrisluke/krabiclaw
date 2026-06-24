@@ -1,4 +1,44 @@
--- Migration number: 0010 	 2026-06-24T00:00:00.000Z
+-- Migration number: 0006 	 2026-06-24T00:00:00.000Z
+-- Squashed migration combining:
+-- - Platform blog SEO and content components (modified from original 0006)
+-- - Media assets delete_pending status
+-- - Better Auth timestamp type conversion (TEXT → INTEGER)
+
+-- Part 1: Platform blog SEO and content components
+ALTER TABLE platform_blog_posts ADD COLUMN seo_description TEXT;
+ALTER TABLE platform_blog_posts ADD COLUMN seo_keywords TEXT;
+ALTER TABLE platform_blog_posts ADD COLUMN canonical_url TEXT;
+ALTER TABLE platform_blog_posts ADD COLUMN robots TEXT;
+
+-- platform_docs already has seo_description/seo_keywords/canonical_url/robots
+-- baked into the 0001_initial.sql squashed baseline (squash drift: only this
+-- table picked them up, platform_blog_posts above did not), so adding them
+-- again here would fail with "duplicate column name" on a fresh database.
+
+CREATE TABLE platform_content_components (
+  id TEXT PRIMARY KEY,
+  content_type TEXT NOT NULL CHECK (content_type IN ('blog_post', 'doc')),
+  content_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  label TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  render_enabled INTEGER NOT NULL DEFAULT 1,
+  schema_enabled INTEGER NOT NULL DEFAULT 1,
+  data_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX idx_platform_content_components_content
+  ON platform_content_components(content_type, content_id, position);
+
+-- Part 2: Media assets delete_pending status
+-- Adding a plain column avoids ever renaming or dropping media_assets, so it
+-- never touches the FK graph at all.
+ALTER TABLE media_assets ADD COLUMN delete_pending_at TEXT;
+
+-- Part 3: Better Auth timestamp type conversion (TEXT → INTEGER)
 -- Better Auth's drizzleAdapter (server/utils/auth.ts) hands native JS `Date`
 -- objects to every date field it manages (session.expiresAt, user.createdAt,
 -- etc. are all `z.date()` in Better Auth's and the oauth-provider plugin's
@@ -8,6 +48,14 @@
 -- columns in place of the old TEXT (ISO string) ones.
 
 PRAGMA foreign_keys = OFF;
+
+-- Drop triggers that reference Better Auth tables before rebuilding them
+DROP TRIGGER IF EXISTS trg_chowbot_channel_state_conversation_site_insert;
+DROP TRIGGER IF EXISTS trg_chowbot_channel_state_conversation_site_update;
+DROP TRIGGER IF EXISTS trg_chowbot_channel_state_conversation_user_insert;
+DROP TRIGGER IF EXISTS trg_chowbot_channel_state_conversation_user_update;
+DROP TRIGGER IF EXISTS trg_chowbot_messages_consistency_insert;
+DROP TRIGGER IF EXISTS trg_chowbot_messages_consistency_update;
 
 -- user
 CREATE TABLE "user_new" (
@@ -286,5 +334,82 @@ FROM "oauthRefreshToken";
 
 DROP TABLE "oauthRefreshToken";
 ALTER TABLE "oauthRefreshToken_new" RENAME TO "oauthRefreshToken";
+
+-- Recreate triggers that reference Better Auth tables
+CREATE TRIGGER trg_chowbot_channel_state_conversation_site_insert
+BEFORE INSERT ON chowbot_channel_state
+FOR EACH ROW
+WHEN NEW.active_conversation_id IS NOT NULL
+AND EXISTS (
+  SELECT 1 FROM chowbot_conversations
+  WHERE id = NEW.active_conversation_id
+  AND site_id != NEW.selected_site_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'active conversation site must match selected site');
+END;
+
+CREATE TRIGGER trg_chowbot_channel_state_conversation_site_update
+BEFORE UPDATE ON chowbot_channel_state
+FOR EACH ROW
+WHEN NEW.active_conversation_id IS NOT NULL
+AND EXISTS (
+  SELECT 1 FROM chowbot_conversations
+  WHERE id = NEW.active_conversation_id
+  AND site_id != NEW.selected_site_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'active conversation site must match selected site');
+END;
+
+CREATE TRIGGER trg_chowbot_channel_state_conversation_user_insert
+BEFORE INSERT ON chowbot_channel_state
+FOR EACH ROW
+WHEN NEW.active_conversation_id IS NOT NULL
+AND EXISTS (
+  SELECT 1 FROM chowbot_conversations
+  WHERE id = NEW.active_conversation_id
+  AND user_id != NEW.user_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'active conversation must belong to the same user');
+END;
+
+CREATE TRIGGER trg_chowbot_channel_state_conversation_user_update
+BEFORE UPDATE ON chowbot_channel_state
+FOR EACH ROW
+WHEN NEW.active_conversation_id IS NOT NULL
+AND EXISTS (
+  SELECT 1 FROM chowbot_conversations
+  WHERE id = NEW.active_conversation_id
+  AND user_id != NEW.user_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'active conversation must belong to the same user');
+END;
+
+CREATE TRIGGER trg_chowbot_messages_consistency_insert
+BEFORE INSERT ON chowbot_messages
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1 FROM chowbot_conversations
+  WHERE id = NEW.conversation_id
+  AND (organization_id != NEW.organization_id OR site_id != NEW.site_id)
+)
+BEGIN
+  SELECT RAISE(ABORT, 'chowbot_messages conversation organization/site mismatch');
+END;
+
+CREATE TRIGGER trg_chowbot_messages_consistency_update
+BEFORE UPDATE ON chowbot_messages
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1 FROM chowbot_conversations
+  WHERE id = NEW.conversation_id
+  AND (organization_id != NEW.organization_id OR site_id != NEW.site_id)
+)
+BEGIN
+  SELECT RAISE(ABORT, 'chowbot_messages conversation organization/site mismatch');
+END;
 
 PRAGMA foreign_keys = ON;
