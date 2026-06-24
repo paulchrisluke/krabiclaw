@@ -38,6 +38,28 @@ interface PeriodStats {
   returningVisitors: number
 }
 
+interface DailyAnalyticsRow {
+  date: string
+  page_views: number
+  unique_sessions: number
+  avg_session_duration: number
+  top_pages: string | null
+  unique_visitors: number
+  returning_visitors: number
+}
+
+interface PeriodTotalsRow {
+  page_views: number | null
+  unique_sessions: number | null
+}
+
+interface TopPageJson {
+  path?: string
+  pagePath?: string
+  views?: number
+  count?: number
+}
+
 function toNumber(value: unknown): number {
   return typeof value === 'number' ? value : Number(value || 0)
 }
@@ -125,7 +147,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Get aggregated daily analytics
-    const dailyStats = await queryAll<ApiRecord>(db, `
+    const dailyStats = await queryAll<DailyAnalyticsRow>(db, `
       SELECT
         date,
         page_views,
@@ -205,7 +227,7 @@ export default defineEventHandler(async (event) => {
     const prevStartDate = getDateString(new Date(startAt.getTime() - periodDurationMs - (24 * 60 * 60 * 1000)))
     const prevEndDate = getDateString(new Date(startAt.getTime() - (24 * 60 * 60 * 1000)))
 
-    const prevPeriodStats = await queryFirst<ApiRecord>(db, `
+    const prevPeriodStats = await queryFirst<PeriodTotalsRow>(db, `
       SELECT
         SUM(page_views) as page_views,
         SUM(unique_sessions) as unique_sessions
@@ -223,10 +245,9 @@ export default defineEventHandler(async (event) => {
       try {
         const parsed = JSON.parse(String(row.top_pages))
         if (!Array.isArray(parsed)) continue
-        for (const page of parsed) {
-          const pageRecord = page as ApiRecord
-          const path = normalizePath(pageRecord.path || pageRecord.pagePath)
-          const views = toNumber(pageRecord.views || pageRecord.count)
+        for (const page of parsed as TopPageJson[]) {
+          const path = normalizePath(page.path || page.pagePath)
+          const views = toNumber(page.views || page.count)
           if (views <= 0) continue
           topPageMap.set(path, (topPageMap.get(path) || 0) + views)
         }

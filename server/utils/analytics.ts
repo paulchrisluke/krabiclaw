@@ -5,10 +5,6 @@ function toNumber(value: unknown): number {
   return typeof value === 'number' ? value : Number(value || 0)
 }
 
-function asRows(value: unknown): ApiRecord[] {
-  return Array.isArray(value) ? (value as ApiRecord[]) : []
-}
-
 export interface AnalyticsEvent {
   id: string
   site_id: string
@@ -57,7 +53,7 @@ export async function aggregateAnalyticsForDate(
     const { start, end } = dateRangeBounds(date, date)
 
     // Get raw pageview events for this date
-    const events = await queryAll(db, `
+    const eventRows = await queryAll<{ page_path: string; session_id: string; duration_seconds: number | null; page_view_count: number }>(db, `
       SELECT
         page_path,
         session_id,
@@ -71,12 +67,11 @@ export async function aggregateAnalyticsForDate(
     `, [siteId, start, end])
 
     // Calculate aggregates
-    const eventRows = asRows(events)
     const pageViewsTotal = eventRows.reduce((sum, row) => sum + toNumber(row.page_view_count || 1), 0)
     const uniqueSessions = new Set(eventRows.map((row) => String(row.session_id || ''))).size
 
     // Unique/returning visitors, derived from visitor_id (independent of session grouping above).
-    const visitorRows = await queryAll(db, `
+    const visitorRows = await queryAll<{ visitor_id: string }>(db, `
       SELECT DISTINCT visitor_id
       FROM site_pageview_events
       WHERE site_id = ?
@@ -85,7 +80,7 @@ export async function aggregateAnalyticsForDate(
         AND visitor_id IS NOT NULL
     `, [siteId, start, end])
 
-    const visitorIds = asRows(visitorRows).map((row) => String(row.visitor_id || ''))
+    const visitorIds = visitorRows.map((row) => String(row.visitor_id || ''))
     const uniqueVisitors = visitorIds.length
 
     let returningVisitors = 0
@@ -112,7 +107,7 @@ export async function aggregateAnalyticsForDate(
       : 0
 
     // Calculate avg session duration
-    const sessionDurations = await queryAll(db, `
+    const sessionDurationRows = await queryAll<{ session_id: string; avg_duration: number | null }>(db, `
       SELECT
         session_id,
         AVG(duration_seconds) as avg_duration
@@ -123,7 +118,7 @@ export async function aggregateAnalyticsForDate(
       GROUP BY session_id
     `, [siteId, start, end])
 
-    const durationRows = asRows(sessionDurations)
+    const durationRows = sessionDurationRows
       .filter((row) => row.avg_duration !== null && row.avg_duration !== undefined)
     const avgSessionDuration =
       durationRows.length > 0
@@ -131,7 +126,7 @@ export async function aggregateAnalyticsForDate(
         : 0
 
     // Get top pages
-    const topPagesResult = await queryAll(db, `
+    const topPageRows = await queryAll<{ page_path: string; views: number }>(db, `
       SELECT
         page_path,
         COUNT(*) as views
@@ -144,7 +139,6 @@ export async function aggregateAnalyticsForDate(
       LIMIT 10
     `, [siteId, start, end])
 
-    const topPageRows = asRows(topPagesResult)
     const topPages = topPageRows.map((row) => {
       const views = toNumber(row.views)
       return {
@@ -202,14 +196,13 @@ export async function aggregateAnalyticsForAllSites(db: DbClient, date: string):
   try {
     const { start, end } = dateRangeBounds(date, date)
     // Get all unique sites that have events on this date
-    const sites = await queryAll(db, `
+    const siteRows = await queryAll<{ site_id: string }>(db, `
       SELECT DISTINCT site_id
       FROM site_pageview_events
       WHERE created_at >= ?
         AND created_at < ?
     `, [start, end])
 
-    const siteRows = asRows(sites)
     console.log(`Aggregating analytics for ${siteRows.length} sites on ${date}`)
 
     for (const row of siteRows) {
@@ -263,7 +256,7 @@ export async function getAnalyticsSummary(
   avgSessionDuration: number
 }> {
   try {
-    const dailyStats = await queryAll(db, `
+    const dailyStats = await queryAll<{ page_views: number; unique_sessions: number; avg_session_duration: number }>(db, `
       SELECT
         page_views,
         unique_sessions,
@@ -272,7 +265,7 @@ export async function getAnalyticsSummary(
       WHERE site_id = ? AND date BETWEEN ? AND ?
     `, [siteId, startDate, endDate])
 
-    const durationTotals = asRows(dailyStats).reduce(
+    const durationTotals = dailyStats.reduce(
       (acc, row) => {
         const sessions = toNumber(row.unique_sessions)
         const averageDuration = toNumber(row.avg_session_duration)

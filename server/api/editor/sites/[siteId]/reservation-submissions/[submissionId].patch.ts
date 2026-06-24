@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
   `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Access denied' }, { status: 403 })
 
-  const body = await readBody(event) as ApiRecord
+  const body = await readBody(event) as { status?: unknown }
   const status = cleanString(body.status, 20)
   if (!['new', 'confirmed', 'cancelled', 'completed'].includes(status)) {
     return jsonResponse({ error: 'Invalid status' }, { status: 400 })

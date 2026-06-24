@@ -30,7 +30,13 @@ export default defineEventHandler(async (event) => {
     subscription?: string
   }>(event)
   const decoded = decodePubSubData(body.message?.data)
-  const payload = typeof decoded === 'object' && decoded !== null ? decoded as ApiRecord : {}
+  const payload: {
+    notificationType?: unknown
+    locationName?: unknown
+    location_name?: unknown
+    reviewName?: unknown
+    review_name?: unknown
+  } = typeof decoded === 'object' && decoded !== null ? decoded : {}
   const eventType = String(payload.notificationType ?? body.message?.attributes?.notificationType ?? 'UNKNOWN')
   const locationName = String(payload.locationName ?? payload.location_name ?? body.message?.attributes?.locationName ?? '')
   const reviewName = String(payload.reviewName ?? payload.review_name ?? body.message?.attributes?.reviewName ?? '')

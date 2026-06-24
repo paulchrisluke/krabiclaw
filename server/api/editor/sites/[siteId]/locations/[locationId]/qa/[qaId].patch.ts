@@ -30,7 +30,14 @@ export default defineEventHandler(async (event) => {
   if (typeof rawBody !== 'object' || rawBody === null || Array.isArray(rawBody)) {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
-  const body = rawBody as ApiRecord
+  const body = rawBody as {
+    question?: unknown
+    answer?: unknown
+    question_author?: unknown
+    is_owner_answer?: unknown
+    status?: unknown
+    sort_order?: unknown
+  }
 
   try {
     const result = await updateLocationQa(db, site.organization_id, siteId, locationId, qaId, {
