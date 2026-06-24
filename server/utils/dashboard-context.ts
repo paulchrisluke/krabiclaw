@@ -90,7 +90,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
 
   // The active site is resolved explicitly from the `siteSlug` route segment, sent on
   // every /api/dashboard/* request via the x-dashboard-site-slug header (see
-  // plugins/dashboard-site-header.ts). All dashboard routes must include the site
+  // plugins/dashboard-site-header.client.ts). All dashboard routes must include the site
   // explicitly in the URL path for multi-site support. Callers that pass
   // `requireSite: false` (onboarding, org-level routes, and this function's own
   // discovery endpoint /api/dashboard/context) are explicitly designed to work

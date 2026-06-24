@@ -38,7 +38,10 @@ async function completeManualWizard(
   await page.getByLabel('Phone').fill('+66812345678')
   await page.getByLabel('Hours').fill('Monday: 9:00 AM - 6:00 PM\nTuesday: 9:00 AM - 6:00 PM')
   await page.getByRole('button', { name: /Create site|Add location/ }).click()
-  await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 15_000 })
+  // Site/location creation does several sequential D1 round trips (org lookup,
+  // location insert, review upserts) against a remote preview deploy, which can
+  // outrun a 15s wait even though the wizard's own bot-message delay is fixed at ~640ms.
+  await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 30_000 })
 }
 
 test.describe('onboarding wizard UI', () => {
