@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getOrCreateCredits } from '~/server/utils/ai-credits'
+import { queryAll, queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -11,15 +12,15 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const member = await db.prepare(
-    'SELECT organizationId FROM member WHERE userId = ? LIMIT 1'
-  ).bind(session.user.id).first()
+  const member = await queryFirst<{ organizationId: string }>(
+    db, 'SELECT organizationId FROM member WHERE userId = ? LIMIT 1', [session.user.id],
+  )
   if (!member) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
-  const orgId = member.organizationId as string
+  const orgId = member.organizationId
   const credits = await getOrCreateCredits(db, orgId)
 
-  const usageRows = await db.prepare(`
+  const usageRows = await queryAll(db, `
     SELECT u.action, u.model, u.input_tokens, u.output_tokens, u.credits_charged,
            u.created_at, s.brand_name as site_name
     FROM ai_usage_log u
@@ -27,20 +28,20 @@ export default defineEventHandler(async (event) => {
     WHERE u.organization_id = ?
     ORDER BY u.created_at DESC
     LIMIT 50
-  `).bind(orgId).all()
+  `, [orgId])
 
-  const byAction = await db.prepare(`
+  const byAction = await queryAll(db, `
     SELECT action, SUM(credits_charged) as total_credits, COUNT(*) as calls
     FROM ai_usage_log
     WHERE organization_id = ?
     GROUP BY action
     ORDER BY total_credits DESC
-  `).bind(orgId).all()
+  `, [orgId])
 
   return jsonResponse({
     balance: credits.balance,
     lifetime_used: credits.lifetime_used,
-    usage: usageRows.results ?? [],
-    by_action: byAction.results ?? [],
+    usage: usageRows ?? [],
+    by_action: byAction ?? [],
   })
 })

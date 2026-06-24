@@ -3,6 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getGoogleBusinessAuthUrl } from '~/server/utils/google-business'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { signOAuthState } from '~/server/utils/encryption'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -25,21 +26,21 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const site = await db.prepare(`
+    const site = await queryFirst<{ id: string; organization_id: string }>(db, `
       SELECT s.id, s.organization_id FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
       LIMIT 1
-    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+    `, [siteId, session.user.id])
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
-    const location = await db.prepare(`
+    const location = await queryFirst<{ id: string }>(db, `
       SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1
-    `).bind(locationId, siteId).first<{ id: string }>()
+    `, [locationId, siteId])
 
     if (!location) {
       return jsonResponse({ error: 'Location not found' }, { status: 404 })

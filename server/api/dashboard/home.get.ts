@@ -1,5 +1,6 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
+import { queryAll, queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const { db, organization, site } = await getDashboardContext(event, { requireSite: false })
@@ -8,8 +9,13 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ organization, site: null, locations: [], credits: null, events: [] })
   }
 
-  const [locationsResult, credits, eventsResult] = await Promise.all([
-    db.prepare(`
+  const [locations, credits, events] = await Promise.all([
+    queryAll<{
+      id: string; slug: string; title: string; city: string | null
+      rating: number | null; review_count: number | null
+      is_primary: number; status: string; updated_at: string
+      hero_url: string | null; thumbnail_url: string | null
+    }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.city, bl.rating, bl.review_count,
              bl.is_primary, bl.status, bl.updated_at,
              COALESCE(
@@ -28,21 +34,22 @@ export default defineEventHandler(async (event) => {
       LEFT JOIN sites s ON s.id = bl.site_id
       WHERE bl.organization_id = ? AND bl.site_id = ?
       ORDER BY bl.is_primary DESC, bl.title ASC
-    `).bind(organization.id, site.id).all<{
-      id: string; slug: string; title: string; city: string | null
-      rating: number | null; review_count: number | null
-      is_primary: number; status: string; updated_at: string
-      hero_url: string | null; thumbnail_url: string | null
-    }>(),
+    `, [organization.id, site.id]),
 
-    db.prepare(`
+    queryFirst<{
+      balance: number; lifetime_used: number; last_topped_up_at: string | null
+    }>(db, `
       SELECT balance, lifetime_used, last_topped_up_at
       FROM ai_credits WHERE organization_id = ?
-    `).bind(organization.id).first<{
-      balance: number; lifetime_used: number; last_topped_up_at: string | null
-    }>(),
+    `, [organization.id]),
 
-    db.prepare(`
+    queryAll<{
+      id: string; event_type: string; entity_type: string | null
+      entity_id: string | null; location_id: string | null
+      metadata: string | null; created_at: string
+      actor_name: string | null; actor_image: string | null
+      location_title: string | null
+    }>(db, `
       SELECT e.id, e.event_type, e.entity_type, e.entity_id,
              e.location_id, e.metadata, e.created_at,
              u.name as actor_name, u.image as actor_image,
@@ -53,24 +60,18 @@ export default defineEventHandler(async (event) => {
       WHERE e.organization_id = ? AND e.site_id = ?
       ORDER BY e.created_at DESC
       LIMIT 15
-    `).bind(organization.id, site.id).all<{
-      id: string; event_type: string; entity_type: string | null
-      entity_id: string | null; location_id: string | null
-      metadata: string | null; created_at: string
-      actor_name: string | null; actor_image: string | null
-      location_title: string | null
-    }>(),
+    `, [organization.id, site.id]),
   ])
 
   return jsonResponse({
     organization,
     site,
-    locations: (locationsResult.results ?? []).map(l => ({
+    locations: locations.map(l => ({
       ...l,
       is_primary: Boolean(l.is_primary),
     })),
     credits,
-    events: (eventsResult.results ?? []).map(e => ({
+    events: events.map(e => ({
       ...e,
       metadata: e.metadata ? JSON.parse(e.metadata) : null,
     })),

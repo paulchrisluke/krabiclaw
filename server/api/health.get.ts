@@ -1,5 +1,6 @@
 // GET /api/health - Platform system and database health check
 import { cloudflareEnv, jsonResponse } from '../utils/api-response'
+import { execute } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Ping D1 database to verify connection health
-    await db.prepare('SELECT 1').run()
+    await execute(db, 'SELECT 1')
     return jsonResponse({
       status: 'ok'
     })

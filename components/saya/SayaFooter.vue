@@ -282,9 +282,18 @@ const locations = computed(() =>
 
 function formatLocAddress(loc: PublicLocation) {
   if (!loc.address) return ''
-  if (typeof loc.address === 'string') return loc.address
-  const addr = typeof loc.address === 'object' && loc.address !== null ? loc.address : null
-  const line1 = Array.isArray(addr?.addressLines) ? addr?.addressLines?.[0] : ''
-  return [line1, addr?.locality, addr?.administrativeArea].filter(Boolean).join(', ')
+  let addr: PublicLocation['address'] = loc.address
+  if (typeof addr === 'string') {
+    try {
+      const parsed = JSON.parse(addr) as PublicLocation['address']
+      if (parsed && typeof parsed === 'object') addr = parsed
+      else return addr
+    } catch {
+      return addr
+    }
+  }
+  const normalizedAddr = typeof addr === 'object' && addr !== null ? addr : null
+  const line1 = Array.isArray(normalizedAddr?.addressLines) ? normalizedAddr?.addressLines?.[0] : ''
+  return [line1, normalizedAddr?.locality, normalizedAddr?.administrativeArea].filter(Boolean).join(', ')
 }
 </script>

@@ -42,26 +42,18 @@ DELETE FROM sites WHERE id = 'site-pottery-house' OR subdomain = 'pottery-house'
 DELETE FROM organization WHERE id = 'org-pottery-house';
 DELETE FROM site_domains WHERE domain IN ('pottery-house.localhost', 'pottery-house.krabiclaw.com');
 
--- Organization (owned by your existing platform admin account)
+-- Organization (owned by the dedicated Pottery House owner account)
 INSERT INTO organization (id, name, slug, createdAt)
 VALUES ('org-pottery-house', 'Pottery House Krabi', 'pottery-house-krabi', CURRENT_TIMESTAMP);
 
--- Ensure the owner user exists in the user table to satisfy foreign key constraints.
--- For local D1, we insert the user-pottery-house user.
--- For remote production, the owner account is IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO. We ensure BOTH users exist.
+-- Ensure the dedicated owner user exists in the user table to satisfy foreign key constraints.
 INSERT OR IGNORE INTO user (id, name, email, emailVerified)
 VALUES
-  ('user-pottery-house', 'Pottery House Owner', 'thesdrew@gmail.com', 1),
-  ('IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO', 'Platform Admin', 'paulchrisluke@gmail.com', 1);
+  ('user-pottery-house', 'Pottery House Owner', 'thesdrew@gmail.com', 1);
 
 INSERT INTO member (id, organizationId, userId, role, createdAt)
 VALUES
-  ('member-pottery-house', 'org-pottery-house',
-   CASE WHEN EXISTS(SELECT 1 FROM user WHERE id = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO')
-        THEN 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
-        ELSE 'user-pottery-house'
-   END,
-   'owner', CURRENT_TIMESTAMP);
+  ('member-pottery-house', 'org-pottery-house', 'user-pottery-house', 'owner', CURRENT_TIMESTAMP);
 
 ${renderCompiledPotteryHouseCoreSeedBlock()}
 
@@ -85,6 +77,22 @@ ${renderCompiledPotteryHouseBillingBlock()}
 if (isStdout) {
   process.stdout.write(sql)
   process.exit(0)
+}
+
+if (isRemote || isStaging || isPreview) {
+  const checkCmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --command "SELECT organization_id FROM sites WHERE id = 'site-pottery-house'" --json`.trim()
+  const checkOutput = execSync(checkCmd, { encoding: 'utf8' })
+  const currentOrgId = JSON.parse(checkOutput)?.[0]?.results?.[0]?.organization_id
+
+  if (currentOrgId && currentOrgId !== 'org-pottery-house') {
+    console.error(
+      `[seed:pottery-house] Refusing to reseed: site-pottery-house is owned by "${currentOrgId}", not the demo org "org-pottery-house".\n` +
+      'This tenant has already been transferred to a real client. Reseeding would delete their live site, ' +
+      'business_locations, site_content, media_assets, and custom domain rows, then recreate it back under the demo org.\n' +
+      'Aborting.'
+    )
+    process.exit(1)
+  }
 }
 
 const dir = mkdtempSync(join(tmpdir(), 'krabiclaw-seed-pottery-house-'))

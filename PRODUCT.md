@@ -2,21 +2,38 @@
 
 ## What It Is
 
-**Website builder for restaurants and hospitality businesses** — multi-tenant SaaS where owners get a subdomain site and build their web presence through conversation with ChatGPT (via MCP) or the dashboard CMS. SSR-rendered, SEO-optimised sites. The ChatGPT plugin is the primary creation surface.
+**Website builder for local businesses** — multi-tenant SaaS where owners get a subdomain site and build their web presence through conversation with ChatGPT (via MCP) or the dashboard CMS. SSR-rendered, SEO-optimised sites. The ChatGPT plugin is the primary creation surface. Currently supports the `restaurant` and `experience` verticals (see below); the model is designed to expand to other local-business verticals over time.
 
 ---
 
-## Primary Surface: ChatGPT MCP Plugin
+## MCP Surfaces
 
-KrabiClaw ships as a ChatGPT plugin backed by a full MCP server at `/api/mcp.post.ts`.
+KrabiClaw now ships two separate MCP apps.
+
+### Client MCP
+
+Customer-facing ChatGPT app for tenant site management.
 
 - OAuth2 authorization at `/api/auth/oauth2/` — ChatGPT handles auth before any tool call
+- MCP endpoint at `/api/mcp` (`server/api/mcp.post.ts`)
+- Scope: `tenant`
 - 90+ MCP tools covering: site setup, locations, menus, experiences, posts, media, translation, Google Business, Facebook, analytics, work requests
 - Widget system (HTML responses rendered inline in ChatGPT) — currently scoped to `request_photo_upload` only; `list_sites`, `import_from_maps`, `show_site_preview`, `show_generated_images`, and onboarding all return plain text (a custom widget was overkill for basic list/selection output)
 - Image generation via ChatGPT's native `image_generation` Responses API tool (`gpt-image-1` / `gpt-image-2`) — not DALL-E
 - Plugin landing page at `/plugin`
 
+### Platform Admin MCP
+
+Internal ChatGPT app for KrabiClaw operators only.
+
+- MCP endpoint at `/api/mcp/platform` (`server/api/mcp/platform.post.ts`)
+- Scope: `platform_admin`
+- Auth requires global Better Auth `user.role = 'admin'`
+- Tools limited to platform blog/docs operations for `krabiclaw.com/blog` and `krabiclaw.com/docs`
+
 The dashboard is still the home for billing, org settings, inbox triage, analytics, and the managed service work queue. MCP and dashboard operate on the same D1 backend with no forked business logic.
+
+See `docs/mcp-surface-split.md` for the canonical split rules.
 
 ---
 
@@ -103,7 +120,8 @@ Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locat
 | Google Business Profile API | ⏳ API approval pending — RPM quota locked at 0 |
 | Google Places API | ✅ Live — location autocomplete + `import_from_maps` MCP tool |
 | Cloudflare Stream | ✅ Built — video upload/playback |
-| ChatGPT MCP Plugin | ✅ Live — primary creation surface |
+| ChatGPT Client MCP | ✅ Live — primary customer creation surface |
+| ChatGPT Platform Admin MCP | ✅ Live — internal platform operations only |
 | ChatGPT image generation | ✅ Live — `gpt-image-1`/`gpt-image-2` via Responses API |
 
 ---
@@ -125,7 +143,7 @@ Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locat
 ## Dashboard Model
 
 - **Organization** is the restaurant brand workspace and billing/team boundary.
-- **One org can have multiple sites** (multi-site constraint removed in migration `0017`). Sites are explicit everywhere — there is no "first site in org" fallback in dashboard routing or billing.
+- **One org can have multiple sites** (multi-site constraint removed pre-squash, was migration `0017`; now part of the `0001_initial.sql` baseline). Sites are explicit everywhere — there is no "first site in org" fallback in dashboard routing or billing.
 - Each site has its own plan and Stripe subscription (`site_billing`). The Stripe *customer* stays at org level (`organization_billing.stripe_customer_id`) — one payment method covers every site in the org.
 - A new site always starts on `free`, even under a paid org. If the org already has another site on a paid plan and a saved card on file, the dashboard offers to auto-subscribe the new site immediately (`POST /api/billing/site-subscribe`, no Checkout redirect). Otherwise it's a normal Checkout upgrade later.
 - **Locations** are the persistent dashboard working context within a site, selected from the header on every dashboard page.

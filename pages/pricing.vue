@@ -82,25 +82,6 @@ definePageMeta({ layout: 'platform' })
 
 const openFaq = ref<string | null>(null)
 
-import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
-
-const config = useRuntimeConfig()
-const platformHostname = computed(() => {
-  const freeSiteDomain = config.public.freeSiteDomain
-  if (!freeSiteDomain) return 'krabiclaw.com'
-  try {
-    const url = new URL(freeSiteDomain.startsWith('http') ? freeSiteDomain : `https://${freeSiteDomain}`)
-    return url.hostname
-  } catch {
-    return freeSiteDomain.replace(/^https?:\/\//, '').split('/')[0] || 'krabiclaw.com'
-  }
-})
-
-useBreadcrumbSchema([
-  { name: 'Home', url: `https://${platformHostname.value}/` },
-  { name: 'Pricing', url: `https://${platformHostname.value}/pricing` },
-])
-
 const faqs = [
   {
     q: 'What does "Managed" actually mean?',
@@ -127,24 +108,23 @@ const faqs = [
     a: 'All major credit and debit cards (Visa, Mastercard, Amex) via Stripe.',
   },
 ]
-const sharedOgImage = useSharedOgImage()
-const currentPageUrl = useSeoUrl('/pricing')
 
-useSeoMeta({
-  title: 'Pricing | KrabiClaw',
+const seoConfig = useRuntimeConfig()
+const seoRequestURL = useRequestURL()
+const pricingPageUrl = resolveSeoUrl('/pricing', seoConfig.public.siteUrl || seoRequestURL.origin)
+
+usePlatformPageSeo({
+  path: '/pricing',
+  title: 'Pricing',
   description: 'Managed business websites from $49/month. Paul & Julia handle translations, marketing, and Google — or start free and do it yourself. No contracts.',
-  ogImage: sharedOgImage,
-  ogUrl: currentPageUrl,
-  ogType: 'website',
-})
-
-useSchemaOrg([
-  ({
-    '@context': 'https://schema.org',
-    '@type': 'WebPage',
-    name: 'KrabiClaw Pricing Plans',
-    mainEntity: {
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: 'Pricing', url: '/pricing' },
+  ],
+  schemaNodes: [
+    {
       '@type': 'OfferCatalog',
+      '@id': `${pricingPageUrl}#offers`,
       name: 'KrabiClaw Pricing Plans',
       itemListElement: [
         { '@type': 'Offer', name: 'Starter', price: '0', priceCurrency: 'USD', description: 'Free business website with offerings and basic SEO' },
@@ -171,6 +151,6 @@ useSchemaOrg([
         },
       ],
     },
-  }),
-])
+  ],
+})
 </script>

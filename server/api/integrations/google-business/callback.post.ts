@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
 import { exchangeGoogleBusinessCode, storeGoogleBusinessConnection } from '../../../utils/google-business'
 import { verifyOAuthState } from '../../../utils/encryption'
+import { queryFirst } from '~/server/db'
 
 interface CallbackRequest {
   code: string
@@ -52,22 +53,22 @@ export default defineEventHandler(async (event) => {
     }
 
     // Verify user still has access
-    const user = await db.prepare(`
+    const user = await queryFirst(db, `
       SELECT email FROM user WHERE id = ?
-    `).bind(userId).first()
-    
+    `, [userId])
+
     if (!user) {
-      return jsonResponse({ 
-        error: 'User not found' 
+      return jsonResponse({
+        error: 'User not found'
       }, { status: 404 })
     }
 
     // Verify user belongs to organization
-    const membership = await db.prepare(`
+    const membership = await queryFirst(db, `
       SELECT role FROM member
       WHERE organizationId = ? AND userId = ? AND role = 'owner'
       LIMIT 1
-    `).bind(organizationId, userId).first()
+    `, [organizationId, userId])
     
     if (!membership) {
       return jsonResponse({ 

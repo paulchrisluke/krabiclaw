@@ -20,8 +20,14 @@
  *   - Demo data (Ember & Slice) must not appear
  *
  * Usage:
- *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url http://localhost:3000 --site-id site-pottery-house-krabi
- *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://pottery-house-krabi.krabiclaw.com --site-id site-pottery-house-krabi
+ *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url http://localhost:3000 --site-id site-pottery-house
+ *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://pottery-house.krabiclaw.com --site-id site-pottery-house
+ *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://staging.krabiclaw.com --site-id site-pottery-house
+ *
+ * Site identifiers default to the actual live production values (site id
+ * `site-pottery-house`, subdomain `pottery-house`) — the client was originally
+ * intake'd as "pottery-house-krabi" but ended up provisioned under the shorter
+ * `pottery-house` slug, so that's what's live and what these defaults must match.
  *
  * Exit code 0 = all assertions passed. Non-zero = fixture regression detected.
  */
@@ -33,8 +39,8 @@ import { existsSync, readFileSync } from 'node:fs'
 const { values: args } = parseArgs({
   options: {
     url:       { type: 'string' },
-    'site-id': { type: 'string', default: 'site-pottery-house-krabi' },
-    slug:      { type: 'string', default: 'pottery-house-krabi' },
+    'site-id': { type: 'string', default: 'site-pottery-house' },
+    slug:      { type: 'string', default: 'pottery-house' },
   },
   allowPositionals: false,
 })
@@ -47,6 +53,22 @@ if (!args.url) {
 const BASE    = args.url.replace(/\/$/, '')
 const SITE_ID = args['site-id']
 const SLUG    = args.slug
+
+// Mirrors isPreviewContext in server/utils/tenant-hosts.ts: on workers.dev,
+// staging.*, and preview.* hosts, the wildcard TLS cert only covers one
+// subdomain level, so tenant subdomain routing (pottery-house.staging.krabiclaw.com)
+// can't be used — the middleware instead reads tenant identity from the
+// x-preview-tenant header. Without this, every tenant-scoped route/API on
+// staging silently falls through to the platform-route path and 404s.
+function isPreviewContext(hostname) {
+  if (hostname === 'workers.dev' || hostname.endsWith('.workers.dev')) return true
+  if (/^(?:staging|preview)\.[^.]+\.[^.]+$/.test(hostname)) return true
+  return false
+}
+
+const PREVIEW_HEADERS = isPreviewContext(new URL(BASE).hostname)
+  ? { 'x-preview-tenant': SLUG, 'cache-control': 'no-store' }
+  : {}
 
 let passed    = 0
 let failed    = 0
@@ -94,7 +116,12 @@ async function get(path, opts = {}) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 10_000)
   try {
-    const res = await fetch(url, { signal: controller.signal, redirect: 'follow', ...opts })
+    const res = await fetch(url, {
+      signal: controller.signal,
+      redirect: 'follow',
+      ...opts,
+      headers: { ...PREVIEW_HEADERS, ...opts.headers },
+    })
     clearTimeout(timer)
     return res
   } catch (err) {

@@ -5,6 +5,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { setConfig, type SiteConfig } from '~/server/utils/site-config'
 import { resolveColor } from '~/utils/color-utils'
 import { defineEventHandler, readBody } from 'h3'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -21,11 +22,13 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   // Resolve organization_id from site and verify user permissions
-  const site = await db.prepare(
+  const site = await queryFirst<{ organization_id: string }>(
+    db,
     `SELECT s.organization_id FROM sites s
      JOIN member m ON m.organizationId = s.organization_id
-     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') AND s.status = 'active' LIMIT 1`
-  ).bind(siteId, session.user.id).first<{ organization_id: string }>()
+     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') AND s.status = 'active' LIMIT 1`,
+    [siteId, session.user.id],
+  )
 
   if (!site) {
     return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })

@@ -3,6 +3,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, requireBillingAccess } from '~/server/utils/billing'
+import { queryFirst } from '~/server/db'
 import type Stripe from 'stripe'
 
 export default defineEventHandler(async (event) => {
@@ -13,9 +14,9 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const member = await db.prepare(
-    'SELECT organizationId FROM member WHERE userId = ? LIMIT 1'
-  ).bind(session.user.id).first<{ organizationId: string }>()
+  const member = await queryFirst<{ organizationId: string }>(
+    db, 'SELECT organizationId FROM member WHERE userId = ? LIMIT 1', [session.user.id],
+  )
   if (!member) return jsonResponse({ card: null })
 
   try {
@@ -24,9 +25,9 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ card: null })
   }
 
-  const billing = await db.prepare(
-    'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1'
-  ).bind(member.organizationId).first<{ stripe_customer_id: string | null }>()
+  const billing = await queryFirst<{ stripe_customer_id: string | null }>(
+    db, 'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1', [member.organizationId],
+  )
 
   if (!billing?.stripe_customer_id) return jsonResponse({ card: null })
 

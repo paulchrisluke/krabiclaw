@@ -5,6 +5,7 @@ import {
   syncInstagramPosts,
   syncFacebookPosts,
 } from '~/server/utils/facebook-pages'
+import { queryAll } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -47,12 +48,12 @@ export default defineEventHandler(async (event) => {
   }
 
   // Query all sites with active Facebook Pages connections
-  const connections = await db.prepare(`
+  const connections = await queryAll<{ organization_id: string; site_id: string }>(db, `
     SELECT organization_id, site_id FROM facebook_pages_connections
     WHERE status = 'active'
-  `).all<{ organization_id: string; site_id: string }>()
+  `)
 
-  if (!connections.results || connections.results.length === 0) {
+  if (!connections || connections.length === 0) {
     return jsonResponse({ success: true, message: 'No active Facebook connections found', results: [] })
   }
 
@@ -65,7 +66,7 @@ export default defineEventHandler(async (event) => {
     error?: string
   }> = []
 
-  for (const connection of connections.results) {
+  for (const connection of connections) {
     try {
       const fbConnection = await getFacebookPagesConnection(env, connection.organization_id, connection.site_id)
       if (!fbConnection || !fbConnection.encrypted_page_token || !fbConnection.facebook_page_id) {

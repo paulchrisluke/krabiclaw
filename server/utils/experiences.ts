@@ -1,4 +1,5 @@
 import { resolveLocationTimezone } from '~/server/utils/site-config'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 
 export const WEEKDAY_NAMES = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -145,7 +146,7 @@ const SELECT = `
 `
 
 export async function listExperiences(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   opts: { activeOnly?: boolean; locationId?: string } = {},
 ): Promise<Experience[]> {
@@ -161,31 +162,25 @@ export async function listExperiences(
   }
   sql += ` ORDER BY e.sort_order ASC, e.created_at ASC`
 
-  const { results } = await db.prepare(sql).bind(...params).all<ExperienceRow>()
+  const results = await queryAll<ExperienceRow>(db, sql, params)
   return (results ?? []).map(parseRow)
 }
 
 export async function getExperienceBySlug(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   slug: string,
 ): Promise<Experience | null> {
-  const row = await db
-    .prepare(SELECT + ` WHERE e.site_id = ? AND e.slug = ? LIMIT 1`)
-    .bind(siteId, slug)
-    .first<ExperienceRow>()
+  const row = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.slug = ? LIMIT 1`, [siteId, slug])
   return row ? parseRow(row) : null
 }
 
 export async function getExperienceById(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   id: string,
 ): Promise<Experience | null> {
-  const row = await db
-    .prepare(SELECT + ` WHERE e.site_id = ? AND e.id = ? LIMIT 1`)
-    .bind(siteId, id)
-    .first<ExperienceRow>()
+  const row = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.id = ? LIMIT 1`, [siteId, id])
   return row ? parseRow(row) : null
 }
 
@@ -197,13 +192,10 @@ function slugify(title: string): string {
     || `experience-${Date.now()}`
 }
 
-async function uniqueSlug(db: D1Database, siteId: string, base: string, excludeId?: string): Promise<string> {
+async function uniqueSlug(db: DbClient, siteId: string, base: string, excludeId?: string): Promise<string> {
   for (let i = 0; i < 8; i++) {
     const candidate = i === 0 ? base : `${base}-${Math.random().toString(36).slice(2, 6)}`
-    const existing = await db
-      .prepare(`SELECT id FROM experiences WHERE site_id = ? AND slug = ? LIMIT 1`)
-      .bind(siteId, candidate)
-      .first<{ id: string }>()
+    const existing = await queryFirst<{ id: string }>(db, `SELECT id FROM experiences WHERE site_id = ? AND slug = ? LIMIT 1`, [siteId, candidate])
     if (!existing || existing.id === excludeId) return candidate
   }
   return `${base}-${Date.now()}`
@@ -335,7 +327,7 @@ export function generateSlots(startTime: string, endTime: string, intervalMinute
  * the pinned location's timezone, else the site's default_timezone, else UTC.
  */
 export async function resolveExperienceTimezone(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   experience: Experience,
@@ -344,7 +336,7 @@ export async function resolveExperienceTimezone(
 }
 
 export async function createExperience(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   input: CreateExperienceInput,
@@ -367,16 +359,15 @@ export async function createExperience(
   const whatToBringJson = input.what_to_bring?.length ? JSON.stringify(input.what_to_bring) : null
   const status = input.status !== undefined ? assertExperienceStatus(input.status, 'status') : 'active'
 
-  const result = await db
-    .prepare(
-      `INSERT INTO experiences
+  const result = await execute(
+    db,
+    `INSERT INTO experiences
        (id, organization_id, site_id, location_id, title, slug, tagline, body,
         image_asset_id, video_asset_id, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots,
         available_note, highlights, included_items, what_to_bring, meeting_point, cancellation_policy, status, sort_order, featured, featured_sort_order,
         seo_title, seo_description, created_at, updated_at, created_by)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    )
-    .bind(
+    [
       id, organizationId, siteId,
       input.location_id,
       input.title,
@@ -405,8 +396,8 @@ export async function createExperience(
       input.seo_title ?? null,
       input.seo_description ?? null,
       now, now, userId,
-    )
-    .run()
+    ],
+  )
 
   if (!result || !result.success) {
     throw new Error('Failed to create experience in the database.')
@@ -422,7 +413,7 @@ export async function createExperience(
 export type UpdateExperienceInput = Partial<CreateExperienceInput> & { slug?: string }
 
 export async function updateExperience(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   id: string,
   input: UpdateExperienceInput,
@@ -492,23 +483,17 @@ export async function updateExperience(
   params.push(new Date().toISOString())
   params.push(siteId, id)
 
-  await db
-    .prepare(`UPDATE experiences SET ${sets.join(', ')} WHERE site_id = ? AND id = ?`)
-    .bind(...params)
-    .run()
+  await execute(db, `UPDATE experiences SET ${sets.join(', ')} WHERE site_id = ? AND id = ?`, params)
 
   return getExperienceById(db, siteId, id)
 }
 
 export async function deleteExperience(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   id: string,
 ): Promise<boolean> {
-  const result = await db
-    .prepare(`DELETE FROM experiences WHERE site_id = ? AND id = ?`)
-    .bind(siteId, id)
-    .run()
+  const result = await execute(db, `DELETE FROM experiences WHERE site_id = ? AND id = ?`, [siteId, id])
   return Boolean(result.meta.changes)
 }
 
@@ -532,26 +517,25 @@ export interface ExperienceBooking {
 }
 
 export async function createExperienceBooking(
-  db: D1Database,
+  db: DbClient,
   input: Omit<ExperienceBooking, 'id' | 'created_at' | 'updated_at'> & { ip_hash?: string },
 ): Promise<ExperienceBooking> {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  const result = await db
-    .prepare(
-      `INSERT INTO experience_bookings
+  const result = await execute(
+    db,
+    `INSERT INTO experience_bookings
        (id, experience_id, organization_id, site_id, guest_name, guest_email, guest_phone,
         party_size, booking_date, time_slot, status, notes, ip_hash, created_at, updated_at)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    )
-    .bind(
+    [
       id, input.experience_id, input.organization_id, input.site_id,
       input.guest_name, input.guest_email, input.guest_phone ?? null,
       input.party_size, input.booking_date, input.time_slot,
       input.status ?? 'pending', input.notes ?? null, input.ip_hash ?? null,
       now, now,
-    )
-    .run()
+    ],
+  )
 
   if (!result || !result.success) {
     throw new Error('Failed to insert experience booking into the database.')
@@ -561,37 +545,35 @@ export async function createExperienceBooking(
 }
 
 export async function listExperienceBookings(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   experienceId: string,
 ): Promise<ExperienceBooking[]> {
-  const { results } = await db
-    .prepare(
-      `SELECT id, experience_id, organization_id, site_id, guest_name, guest_email,
+  const results = await queryAll<ExperienceBooking>(
+    db,
+    `SELECT id, experience_id, organization_id, site_id, guest_name, guest_email,
               guest_phone, party_size, booking_date, time_slot, status, notes, created_at, updated_at
        FROM experience_bookings
        WHERE site_id = ? AND experience_id = ?
        ORDER BY booking_date ASC, time_slot ASC, created_at ASC`,
-    )
-    .bind(siteId, experienceId)
-    .all<ExperienceBooking>()
+    [siteId, experienceId],
+  )
   return results ?? []
 }
 
 export async function updateBookingStatus(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   experienceId: string,
   bookingId: string,
   status: 'pending' | 'confirmed' | 'cancelled',
 ): Promise<boolean> {
-  const result = await db
-    .prepare(
-      `UPDATE experience_bookings SET status = ?, updated_at = ?
+  const result = await execute(
+    db,
+    `UPDATE experience_bookings SET status = ?, updated_at = ?
        WHERE site_id = ? AND experience_id = ? AND id = ?`,
-    )
-    .bind(status, new Date().toISOString(), siteId, experienceId, bookingId)
-    .run()
+    [status, new Date().toISOString(), siteId, experienceId, bookingId],
+  )
   return Boolean(result.meta.changes)
 }
 
@@ -653,7 +635,7 @@ function assertDateStr(value: string, field: string): void {
 }
 
 export async function listSlotOverrides(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   experienceId: string,
   opts: { fromDate?: string; toDate?: string } = {},
@@ -674,12 +656,12 @@ export async function listSlotOverrides(
     params.push(opts.toDate)
   }
   sql += ` ORDER BY override_date ASC, time_slot ASC`
-  const { results } = await db.prepare(sql).bind(...params).all<SlotOverride>()
+  const results = await queryAll<SlotOverride>(db, sql, params)
   return results ?? []
 }
 
 export async function upsertSlotOverride(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   experienceId: string,
@@ -702,25 +684,23 @@ export async function upsertSlotOverride(
   assertFiniteNonNegative(input.capacity_override, 'capacity_override')
 
   // Verify that the experience belongs to the provided site
-  const experience = await db
-    .prepare(`SELECT id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1`)
-    .bind(experienceId, siteId)
-    .first<{ id: string }>()
+  const experience = await queryFirst<{ id: string }>(db, `SELECT id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1`, [experienceId, siteId])
   if (!experience) {
     throw createError({ statusCode: 404, statusMessage: 'Experience not found or does not belong to this site' })
   }
 
   const now = new Date().toISOString()
-  const existing = await db
-    .prepare(`SELECT id FROM experience_slot_overrides WHERE experience_id = ? AND override_date = ? AND time_slot = ? LIMIT 1`)
-    .bind(experienceId, input.override_date, input.time_slot)
-    .first<{ id: string }>()
+  const existing = await queryFirst<{ id: string }>(
+    db,
+    `SELECT id FROM experience_slot_overrides WHERE experience_id = ? AND override_date = ? AND time_slot = ? LIMIT 1`,
+    [experienceId, input.override_date, input.time_slot],
+  )
 
   const id = existing?.id ?? crypto.randomUUID()
 
-  await db
-    .prepare(
-      `INSERT INTO experience_slot_overrides
+  await execute(
+    db,
+    `INSERT INTO experience_slot_overrides
        (id, experience_id, organization_id, site_id, override_date, time_slot, status, capacity_override, note, created_at, updated_at, created_by)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(experience_id, override_date, time_slot) DO UPDATE SET
@@ -728,38 +708,33 @@ export async function upsertSlotOverride(
          capacity_override = excluded.capacity_override,
          note = excluded.note,
          updated_at = excluded.updated_at`,
-    )
-    .bind(
+    [
       id, experienceId, organizationId, siteId,
       input.override_date, input.time_slot, input.status,
       input.capacity_override ?? null, input.note ?? null,
       now, now, userId,
-    )
-    .run()
+    ],
+  )
 
-  const row = await db
-    .prepare(
-      `SELECT id, experience_id, organization_id, site_id, override_date, time_slot,
+  const row = await queryFirst<SlotOverride>(
+    db,
+    `SELECT id, experience_id, organization_id, site_id, override_date, time_slot,
               status, capacity_override, note, created_at, updated_at
        FROM experience_slot_overrides
        WHERE experience_id = ? AND override_date = ? AND time_slot = ?`,
-    )
-    .bind(experienceId, input.override_date, input.time_slot)
-    .first<SlotOverride>()
+    [experienceId, input.override_date, input.time_slot],
+  )
   if (!row) throw new Error('Failed to read back slot override after upsert.')
   return row
 }
 
 export async function deleteSlotOverride(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   experienceId: string,
   overrideId: string,
 ): Promise<boolean> {
-  const result = await db
-    .prepare(`DELETE FROM experience_slot_overrides WHERE site_id = ? AND experience_id = ? AND id = ?`)
-    .bind(siteId, experienceId, overrideId)
-    .run()
+  const result = await execute(db, `DELETE FROM experience_slot_overrides WHERE site_id = ? AND experience_id = ? AND id = ?`, [siteId, experienceId, overrideId])
   return Boolean(result.meta.changes)
 }
 
@@ -770,7 +745,7 @@ export async function deleteSlotOverride(
  * no capacity logic should be duplicated elsewhere.
  */
 export async function getSlotAvailability(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   experience: Experience,
   dateStr: string,
@@ -779,25 +754,23 @@ export async function getSlotAvailability(
   const effectiveSlots = resolveEffectiveTimeSlots(experience, dateStr)
   if (effectiveSlots.length === 0) return []
 
-  const { results: bookingRows } = await db
-    .prepare(
-      `SELECT time_slot, SUM(party_size) AS booked
+  const bookingRows = await queryAll<{ time_slot: string; booked: number }>(
+    db,
+    `SELECT time_slot, SUM(party_size) AS booked
        FROM experience_bookings
        WHERE site_id = ? AND experience_id = ? AND booking_date = ? AND status IN ('pending', 'confirmed')
        GROUP BY time_slot`,
-    )
-    .bind(siteId, experience.id, dateStr)
-    .all<{ time_slot: string; booked: number }>()
+    [siteId, experience.id, dateStr],
+  )
   const bookedMap = Object.fromEntries((bookingRows ?? []).map((r) => [r.time_slot, r.booked]))
 
-  const { results: overrideRows } = await db
-    .prepare(
-      `SELECT time_slot, status, capacity_override
+  const overrideRows = await queryAll<{ time_slot: string; status: 'closed' | 'open'; capacity_override: number | null }>(
+    db,
+    `SELECT time_slot, status, capacity_override
        FROM experience_slot_overrides
        WHERE site_id = ? AND experience_id = ? AND override_date = ?`,
-    )
-    .bind(siteId, experience.id, dateStr)
-    .all<{ time_slot: string; status: 'closed' | 'open'; capacity_override: number | null }>()
+    [siteId, experience.id, dateStr],
+  )
   const overrideMap = Object.fromEntries((overrideRows ?? []).map((r) => [r.time_slot, r]))
 
   return effectiveSlots.map((slot) => {

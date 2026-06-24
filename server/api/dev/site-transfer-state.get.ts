@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createError, getHeader } from 'h3'
+import { queryFirst, queryAll } from '~/server/db'
 
 const textEncoder = new TextEncoder()
 
@@ -43,32 +44,32 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'transfer_id or token is required' }, { status: 400 })
   }
 
-  const transfer = await db.prepare(`
+  const transfer = await queryFirst<{ site_id: string }>(db, `
     SELECT *
     FROM site_transfer_requests
     WHERE ${transferId ? 'id = ?' : 'token = ?'}
     LIMIT 1
-  `).bind(transferId || token).first()
+  `, [transferId || token])
 
   if (!transfer) return jsonResponse({ transfer: null, site: null, domains: [] })
 
-  const site = await db.prepare(`
+  const site = await queryFirst(db, `
     SELECT id, organization_id, public_url, custom_domain, custom_domain_status
     FROM sites
     WHERE id = ?
     LIMIT 1
-  `).bind(String(transfer.site_id)).first()
+  `, [String(transfer.site_id)])
 
-  const domains = await db.prepare(`
+  const domains = await queryAll(db, `
     SELECT id, organization_id, domain, type, role, status
     FROM site_domains
     WHERE site_id = ?
     ORDER BY type ASC, created_at ASC
-  `).bind(String(transfer.site_id)).all()
+  `, [String(transfer.site_id)])
 
   return jsonResponse({
     transfer,
     site,
-    domains: domains.results ?? [],
+    domains: domains ?? [],
   })
 })

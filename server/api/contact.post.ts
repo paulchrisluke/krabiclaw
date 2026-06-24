@@ -1,6 +1,7 @@
 // POST /api/contact - Platform contact form submission via Resend
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { hashEmail, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { execute } from '~/server/db'
 
 const NAME_MAX_LENGTH = 100
 const EMAIL_MAX_LENGTH = 254
@@ -43,12 +44,12 @@ function getClientIp(event: ApiValue): string {
 async function incrementRateLimit(db: D1Database, key: string, limit: number, expireMs: number): Promise<boolean> {
   const now = new Date().toISOString()
   const expiresAt = new Date(Date.now() + expireMs).toISOString()
-  const result = await db.prepare(`
+  const result = await execute(db, `
     INSERT INTO rate_limits (key, count, updated_at, expires_at)
     VALUES (?, 1, ?, ?)
     ON CONFLICT(key) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at, expires_at = excluded.expires_at
     WHERE count < ?
-  `).bind(key, now, expiresAt, limit).run()
+  `, [key, now, expiresAt, limit])
 
   return Boolean(result?.success && result?.meta?.changes)
 }
@@ -132,9 +133,11 @@ export default defineEventHandler(async (event) => {
     
     if (db) {
       try {
-        await db.prepare(
-          `INSERT INTO platform_contact_submissions (id, name, email, message, status, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
-        ).bind(id, name, email, message, 'new', ipHash, now).run()
+        await execute(
+          db,
+          `INSERT INTO platform_contact_submissions (id, name, email, message, status, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [id, name, email, message, 'new', ipHash, now]
+        )
       } catch (err) {
         console.error('Failed to store contact submission:', err)
         // Continue to send email even if DB fails

@@ -4,6 +4,8 @@ import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { createPlatformBlogPost } from '~/server/utils/platform-content'
 
+import type { PlatformBlogPostRequestBody } from '~/server/types/platform-content'
+
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -16,7 +18,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
   }
 
-  let body: { title?: string; body?: string; excerpt?: string; category?: string; publish?: boolean }
+  let body: PlatformBlogPostRequestBody
   try { body = await readBody(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
@@ -27,6 +29,21 @@ export default defineEventHandler(async (event) => {
       body: body.body ?? '',
       excerpt: body.excerpt ?? null,
       category: body.category ?? null,
+      seo_description: body.seo_description ?? null,
+      seo_keywords: body.seo_keywords ?? null,
+      canonical_url: body.canonical_url ?? null,
+      robots: body.robots ?? null,
+      featured_image_asset_id: body.featured_image_asset_id ?? null,
+      faq_items: body.faq_items,
+      faq_label: body.faq_label,
+      faq_status: body.faq_status,
+      faq_render_enabled: body.faq_render_enabled,
+      faq_schema_enabled: body.faq_schema_enabled,
+      how_to_steps: body.how_to_steps,
+      how_to_label: body.how_to_label,
+      how_to_status: body.how_to_status,
+      how_to_render_enabled: body.how_to_render_enabled,
+      how_to_schema_enabled: body.how_to_schema_enabled,
       publish: body.publish ?? false,
     })
     return jsonResponse(result)

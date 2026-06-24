@@ -1,5 +1,7 @@
+import { execute, type DbClient } from '~/server/db'
+
 export async function replyToReview(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   reviewId: string,
@@ -8,13 +10,13 @@ export async function replyToReview(
   const now = new Date().toISOString()
   const trimmedReply = typeof reply === "string" ? reply.trim() : null
   const ownerReplyAt = trimmedReply ? now : null
-  const result = await db.prepare(`
+  const result = await execute(db, `
     UPDATE reviews
     SET owner_reply = ?, owner_reply_at = ?, updated_at = ?
     WHERE id = ? AND site_id = ? AND organization_id = ?
-  `).bind(trimmedReply, ownerReplyAt, now, reviewId, siteId, organizationId).run()
+  `, [trimmedReply, ownerReplyAt, now, reviewId, siteId, organizationId])
 
-  if (!result.meta.changes) {
+  if (!Number(result.meta.changes ?? 0)) {
     return { status: 404, data: { error: 'Review not found.' } }
   }
 

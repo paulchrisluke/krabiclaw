@@ -1,5 +1,6 @@
 // GET /api/public/sites/[siteId]/locations/[slug]/photos
 // Public location gallery, shaped for the Saya photos page.
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { listMediaAssets } from '~/server/utils/media-asset-manager'
 
@@ -18,12 +19,14 @@ export default defineEventHandler(async (event) => {
   if (!siteId || !slug) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const location = await db.prepare(
-    `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`
-  ).bind(siteId, slug).first<{ id: string }>()
+  const location = await queryFirst<{ id: string }>(
+    db,
+    `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`,
+    [siteId, slug],
+  )
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
 
   const assets = await listMediaAssets(db, siteId, { locationId: location.id, kind: 'image', limit: 100 })

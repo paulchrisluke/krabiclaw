@@ -1,4 +1,5 @@
 import type { ChowBotToolCall, JsonSerializable } from '~/server/utils/chowbot-agent'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 
 export type ChowBotChannel = 'dashboard' | 'whatsapp'
 export type ChowBotRole = 'user' | 'assistant' | 'system' | 'tool'
@@ -79,66 +80,68 @@ function titleFromText(text: string): string {
 }
 
 export async function getSiteForMember(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   userId: string,
   roles: string[] = ['owner', 'admin', 'editor']
 ): Promise<ChowBotSiteAccess | null> {
   const placeholders = roles.map(() => '?').join(', ')
-  return await db.prepare(`
+  const result = await queryFirst<ChowBotSiteAccess>(db, `
     SELECT s.id, s.organization_id, s.brand_name, s.default_currency, m.role
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN (${placeholders}) AND s.status = 'active'
     LIMIT 1
-  `).bind(siteId, userId, ...roles).first<ChowBotSiteAccess>()
+  `, [siteId, userId, ...roles])
+  return result ?? null
 }
 
 export async function listSitesForMember(
-  db: D1Database,
+  db: DbClient,
   userId: string,
   roles: string[] = ['owner', 'admin', 'editor']
 ): Promise<ChowBotSiteAccess[]> {
   const placeholders = roles.map(() => '?').join(', ')
-  const { results } = await db.prepare(`
+  const results = await queryAll<ChowBotSiteAccess>(db, `
     SELECT s.id, s.organization_id, s.brand_name, s.default_currency, m.role
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
     WHERE m.userId = ? AND m.role IN (${placeholders}) AND s.status = 'active'
     ORDER BY s.updated_at DESC
-  `).bind(userId, ...roles).all<ChowBotSiteAccess>()
+  `, [userId, ...roles])
   return results ?? []
 }
 
 export async function listConversations(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   userId: string
 ): Promise<ChowBotConversation[]> {
-  const { results } = await db.prepare(`
+  const results = await queryAll<ChowBotConversation>(db, `
     SELECT * FROM chowbot_conversations
     WHERE site_id = ? AND user_id = ? AND status = 'active'
     ORDER BY updated_at DESC
     LIMIT 20
-  `).bind(siteId, userId).all<ChowBotConversation>()
+  `, [siteId, userId])
   return results ?? []
 }
 
 export async function getConversation(
-  db: D1Database,
+  db: DbClient,
   conversationId: string,
   siteId: string,
   userId: string
 ): Promise<ChowBotConversation | null> {
-  return await db.prepare(`
+  const result = await queryFirst<ChowBotConversation>(db, `
     SELECT * FROM chowbot_conversations
     WHERE id = ? AND site_id = ? AND user_id = ? AND status = 'active'
     LIMIT 1
-  `).bind(conversationId, siteId, userId).first<ChowBotConversation>()
+  `, [conversationId, siteId, userId])
+  return result ?? null
 }
 
 export async function createConversation(
-  db: D1Database,
+  db: DbClient,
   opts: {
     organizationId: string
     siteId: string
@@ -150,11 +153,11 @@ export async function createConversation(
 ): Promise<ChowBotConversation> {
   const id = crypto.randomUUID()
   const now = nowIso()
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO chowbot_conversations
       (id, organization_id, site_id, user_id, title, active_channel, status, selected_location_id, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+  `, [
     id,
     opts.organizationId,
     opts.siteId,
@@ -164,8 +167,8 @@ export async function createConversation(
     'active',
     opts.selectedLocationId ?? null,
     now,
-    now
-  ).run()
+    now,
+  ])
 
   const created = await getConversation(db, id, opts.siteId, opts.userId)
   if (!created) throw new Error('Failed to create conversation')
@@ -173,7 +176,7 @@ export async function createConversation(
 }
 
 export async function getOrCreateConversation(
-  db: D1Database,
+  db: DbClient,
   opts: {
     conversationId?: string | null
     organizationId: string
@@ -201,37 +204,37 @@ export async function getOrCreateConversation(
 }
 
 export async function touchConversation(
-  db: D1Database,
+  db: DbClient,
   conversationId: string,
   siteId: string,
   userId: string,
   channel: ChowBotChannel
 ): Promise<void> {
-  await db.prepare(`
+  await execute(db, `
     UPDATE chowbot_conversations
     SET active_channel = ?, updated_at = ?
     WHERE id = ? AND site_id = ? AND user_id = ?
-  `).bind(channel, nowIso(), conversationId, siteId, userId).run()
+  `, [channel, nowIso(), conversationId, siteId, userId])
 }
 
 export async function deleteConversation(
-  db: D1Database,
+  db: DbClient,
   conversationId: string,
   siteId: string,
   userId: string
 ): Promise<void> {
-  const result = await db.prepare(`
+  const result = await execute(db, `
     UPDATE chowbot_conversations
     SET status = 'deleted', updated_at = ?
     WHERE id = ? AND site_id = ? AND user_id = ?
-  `).bind(nowIso(), conversationId, siteId, userId).run()
+  `, [nowIso(), conversationId, siteId, userId])
 
-  if (!result.meta.changes || result.meta.changes === 0) {
+  if (!Number(result.meta.changes ?? 0)) {
     throw new ConversationNotFoundError()
   }
 }
 
-export async function createMessage(db: D1Database, input: CreateMessageInput, actorUserId: string): Promise<ChowBotMessage> {
+export async function createMessage(db: DbClient, input: CreateMessageInput, actorUserId: string): Promise<ChowBotMessage> {
   // Verify conversation exists and user has access
   const conversation = await getConversation(db, input.conversationId, input.siteId, actorUserId)
   if (!conversation) {
@@ -241,11 +244,11 @@ export async function createMessage(db: D1Database, input: CreateMessageInput, a
   const id = crypto.randomUUID()
   const now = nowIso()
 
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO chowbot_messages
       (id, conversation_id, organization_id, site_id, user_id, role, channel, content, media, meta_message_id, tool_calls, status, error, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+  `, [
     id,
     input.conversationId,
     conversation.organization_id,
@@ -259,43 +262,43 @@ export async function createMessage(db: D1Database, input: CreateMessageInput, a
     input.toolCalls ? JSON.stringify(input.toolCalls) : null,
     input.status ?? 'sent',
     input.error ?? null,
-    now
-  ).run()
+    now,
+  ])
 
   // Update conversation timestamp and active_channel to sync with latest message
-  await db.prepare(`
+  await execute(db, `
     UPDATE chowbot_conversations SET updated_at = ?, active_channel = ? WHERE id = ?
-  `).bind(now, input.channel, input.conversationId).run()
+  `, [now, input.channel, input.conversationId])
 
-  const created = await db.prepare(`
+  const created = await queryFirst<ChowBotMessage>(db, `
     SELECT * FROM chowbot_messages WHERE id = ?
-  `).bind(id).first<ChowBotMessage>()
+  `, [id])
 
   if (!created) throw new Error('Failed to create message')
   return created
 }
 
 export async function listMessages(
-  db: D1Database,
+  db: DbClient,
   conversationId: string,
   siteId: string,
   userId: string,
   limit = 100,
   offset = 0
 ): Promise<ChowBotMessage[]> {
-  const { results } = await db.prepare(`
+  const results = await queryAll<ChowBotMessage>(db, `
     SELECT m.*
     FROM chowbot_messages m
     JOIN chowbot_conversations c ON c.id = m.conversation_id
     WHERE m.conversation_id = ? AND m.site_id = ? AND c.user_id = ? AND c.status = 'active'
     ORDER BY m.created_at ASC
     LIMIT ? OFFSET ?
-  `).bind(conversationId, siteId, userId, limit, offset).all<ChowBotMessage>()
+  `, [conversationId, siteId, userId, limit, offset])
   return results ?? []
 }
 
 export async function getRecentAgentMessages(
-  db: D1Database,
+  db: DbClient,
   conversationId: string,
   siteId: string,
   userId: string,
@@ -309,7 +312,7 @@ export async function getRecentAgentMessages(
 }
 
 export async function getChannelState(
-  db: D1Database,
+  db: DbClient,
   userId: string,
   channel: ChowBotChannel
 ): Promise<{
@@ -322,13 +325,23 @@ export async function getChannelState(
   last_inbound_id: string | null
   updated_at: string
 } | null> {
-  return await db.prepare(`
+  const result = await queryFirst<{
+    user_id: string
+    channel: ChowBotChannel
+    selected_site_id: string | null
+    active_conversation_id: string | null
+    pending_media: string | null
+    pending_confirmation: string | null
+    last_inbound_id: string | null
+    updated_at: string
+  }>(db, `
     SELECT * FROM chowbot_channel_state WHERE user_id = ? AND channel = ? LIMIT 1
-  `).bind(userId, channel).first()
+  `, [userId, channel])
+  return result ?? null
 }
 
 export async function upsertChannelState(
-  db: D1Database,
+  db: DbClient,
   opts: {
     userId: string
     channel: ChowBotChannel
@@ -347,13 +360,13 @@ export async function upsertChannelState(
   if ('lastInboundId' in opts) updateFields.push('last_inbound_id = excluded.last_inbound_id')
   updateFields.push('updated_at = excluded.updated_at')
 
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO chowbot_channel_state
       (user_id, channel, selected_site_id, active_conversation_id, pending_media, pending_confirmation, last_inbound_id, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, channel) DO UPDATE SET
       ${updateFields.join(',\n      ')}
-  `).bind(
+  `, [
     opts.userId,
     opts.channel,
     opts.selectedSiteId ?? null,
@@ -361,13 +374,13 @@ export async function upsertChannelState(
     jsonOrNull(opts.pendingMedia),
     jsonOrNull(opts.pendingConfirmation),
     opts.lastInboundId ?? null,
-    nowIso()
-  ).run()
+    nowIso(),
+  ])
 }
 
-export async function metaMessageExists(db: D1Database, metaMessageId: string): Promise<boolean> {
-  const row = await db.prepare(`
+export async function metaMessageExists(db: DbClient, metaMessageId: string): Promise<boolean> {
+  const row = await queryFirst(db, `
     SELECT id FROM chowbot_messages WHERE meta_message_id = ? LIMIT 1
-  `).bind(metaMessageId).first()
+  `, [metaMessageId])
   return Boolean(row)
 }

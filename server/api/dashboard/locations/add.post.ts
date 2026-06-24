@@ -6,6 +6,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getPlaceDetailsByUrl, getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
 import { createLocation } from '~/server/utils/location-management'
+import { execute, queryFirst, type DbClient } from '~/server/db'
 
 type SetupEnv = Parameters<typeof createLocation>[0]
 
@@ -13,12 +14,12 @@ function slugify(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'location'
 }
 
-async function uniqueLocationSlug(db: D1Database, siteId: string, base: string): Promise<string> {
+async function uniqueLocationSlug(db: DbClient, siteId: string, base: string): Promise<string> {
   for (let i = 0; i < 20; i++) {
     const slug = i === 0 ? base : `${base}-${i + 1}`
-    const existing = await db.prepare(
-      'SELECT id FROM business_locations WHERE site_id = ? AND slug = ? LIMIT 1'
-    ).bind(siteId, slug).first<{ id: string }>()
+    const existing = await queryFirst<{ id: string }>(
+      db, 'SELECT id FROM business_locations WHERE site_id = ? AND slug = ? LIMIT 1', [siteId, slug],
+    )
     if (!existing) return slug
   }
   return `${base}-${crypto.randomUUID().slice(0, 8)}`
@@ -89,8 +90,7 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
     }
 
-    const orgRow = await db.prepare('SELECT slug FROM organization WHERE id = ? LIMIT 1')
-      .bind(organizationId).first<{ slug: string }>()
+    const orgRow = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id = ? LIMIT 1', [organizationId])
 
     if (!orgRow) {
       return jsonResponse({ error: 'Organization not found' }, { status: 404 })
@@ -192,26 +192,25 @@ export default defineEventHandler(async (event) => {
     for (const review of place.reviews ?? []) {
       if (!review.reviewId || !review.rating) continue
       try {
-        await db.prepare(`
+        await execute(db, `
           INSERT OR IGNORE INTO reviews
             (id, organization_id, site_id, location_id, google_review_id,
              author_name, reviewer_photo_url, rating, content,
              status, source, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_places', ?, ?)
-        `).bind(
+        `, [
           `${siteId}-${review.reviewId.replace(/\//g, '-')}`,
           organizationId, siteId, locationId,
           review.reviewId, review.authorName, review.authorPhotoUrl,
           review.rating, review.text,
           review.publishedAt ?? now, now,
-        ).run()
+        ])
       } catch { /* non-fatal */ }
     }
   }
 
   // Get org slug for navigation
-  const orgRow = await db.prepare('SELECT slug FROM organization WHERE id = ? LIMIT 1')
-    .bind(organizationId).first<{ slug: string }>()
+  const orgRow = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id = ? LIMIT 1', [organizationId])
 
   if (!orgRow) {
     return jsonResponse({ error: 'Organization not found' }, { status: 404 })

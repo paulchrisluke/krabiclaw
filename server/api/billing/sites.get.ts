@@ -3,6 +3,7 @@
 // status, so the org billing page can show per-site plans under one Stripe customer.
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { queryAll, queryFirst } from '~/server/db'
 
 interface SiteBillingRow {
   id: string
@@ -28,33 +29,32 @@ export default defineEventHandler(async (event) => {
   if (!organizationId) {
     const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string }
     const activeOrganizationId = typeof sessionRecord.activeOrganizationId === 'string' ? sessionRecord.activeOrganizationId : ''
-    const userOrg = await db.prepare(`
+    const userOrg = await queryFirst<{ id: string }>(db, `
       SELECT o.id FROM organization o
       JOIN member m ON o.id = m.organizationId
       WHERE m.userId = ?
       ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC
       LIMIT 1
-    `).bind(session.user.id, activeOrganizationId).first<{ id: string }>()
+    `, [session.user.id, activeOrganizationId])
     if (!userOrg) return jsonResponse({ error: 'No organization found' }, { status: 404 })
     organizationId = userOrg.id
   }
 
-  const membership = await db.prepare(`SELECT role FROM member WHERE organizationId = ? AND userId = ? LIMIT 1`)
-    .bind(organizationId, session.user.id).first()
+  const membership = await queryFirst(db, `SELECT role FROM member WHERE organizationId = ? AND userId = ? LIMIT 1`, [organizationId, session.user.id])
   if (!membership) return jsonResponse({ error: 'Access denied' }, { status: 403 })
 
-  const rows = await db.prepare(`
+  const rows = await queryAll<SiteBillingRow>(db, `
     SELECT s.id, s.brand_name, s.subdomain,
            COALESCE(sb.plan, 'free') AS plan, sb.status, sb.current_period_end, sb.cancel_at_period_end
     FROM sites s
     LEFT JOIN site_billing sb ON sb.site_id = s.id
     WHERE s.organization_id = ?
     ORDER BY s.created_at ASC
-  `).bind(organizationId).all<SiteBillingRow>()
+  `, [organizationId])
 
   return jsonResponse({
     success: true,
-    sites: (rows.results ?? []).map(row => ({
+    sites: (rows ?? []).map(row => ({
       siteId: row.id,
       brandName: row.brand_name,
       subdomain: row.subdomain,

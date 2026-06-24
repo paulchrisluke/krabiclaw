@@ -114,6 +114,8 @@ const emit = defineEmits<{
   back: []
 }>()
 
+const { trackMediaGenerated } = useAnalytics()
+
 type GeneratedAsset = { id: string; publicUrl: string; thumbnailUrl: string }
 type GeneratedHistoryItem = GeneratedAsset & { prompt?: string }
 const MAX_HISTORY = 50
@@ -216,6 +218,7 @@ async function generate() {
       history.value.splice(0, history.value.length - MAX_HISTORY)
     }
     activeIdx.value = history.value.length - 1
+    trackMediaGenerated(props.siteId, promptText)
     prompt.value = ''
   } catch (err) {
     if (controller.signal.aborted || isAbortError(err)) return

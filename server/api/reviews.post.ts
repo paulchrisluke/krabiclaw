@@ -1,5 +1,6 @@
 import { toWebRequest } from 'h3'
 import { cleanString, cloudflareEnv, jsonResponse } from '../utils/api-response'
+import { execute } from '~/server/db'
 
 type ReviewStatus = 'pending' | 'approved' | 'rejected'
 
@@ -63,10 +64,11 @@ export default defineEventHandler(async (event) => {
   const userAgent = cleanString(request.headers.get('User-Agent'), 300)
   const status: ReviewStatus = 'pending'
 
-  await env.DB.prepare(
+  await execute(env.DB,
     `INSERT INTO reviews (id, menu_item_slug, author_name, rating, title, content, status, ip_hash, user_agent)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, menuItemSlug, author, rating, title, content, status, ipHash, userAgent).run()
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, menuItemSlug, author, rating, title, content, status, ipHash, userAgent]
+  )
 
   return jsonResponse({
     review: { id, menuItemSlug, author, rating, title, content, status },

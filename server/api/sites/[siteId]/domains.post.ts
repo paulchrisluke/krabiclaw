@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { queryFirst } from '~/server/db'
 import {
   createCustomDomainPair,
   domainInstructions,
@@ -32,14 +33,14 @@ export default defineEventHandler(async (event) => {
 
 
   // Fetch site and member role for actor attribution
-  const siteResult = await db.prepare(`
+  const siteResult = await queryFirst<{ id: string; organization_id: string; member_role: 'owner' | 'admin' }>(db, `
     SELECT s.id, s.organization_id, m.role as member_role
     FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin')
     LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; member_role: 'owner' | 'admin' }>()
+  `, [siteId, session.user.id])
   if (!siteResult) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   // For backward compatibility with existing code

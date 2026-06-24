@@ -1,6 +1,7 @@
 // POST /api/site-transfer/[token]/accept — authenticated: accept and execute a site transfer
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { execute, queryFirst } from '~/server/db'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { executeSiteTransfer } from '~/server/utils/site-transfer'
 import { getStripe, getPriceIdForPlan } from '~/server/utils/billing'
@@ -36,25 +37,24 @@ export default defineEventHandler(async (event) => {
     acceptBody = (await readBody(event)) ?? {}
   } catch { /* empty body is fine */ }
 
-  const transfer = await db
-    .prepare(
-      `SELECT id, site_id, from_organization_id, to_email, status,
-              invited_plan, invited_coupon, invited_interval, requires_payment, stripe_checkout_session_id
-       FROM site_transfer_requests WHERE token = ? LIMIT 1`,
-    )
-    .bind(token)
-    .first<{
-      id: string
-      site_id: string
-      from_organization_id: string
-      to_email: string
-      status: string
-      invited_plan: string | null
-      invited_coupon: string | null
-      invited_interval: string | null
-      requires_payment: number
-      stripe_checkout_session_id: string | null
-    }>()
+  const transfer = await queryFirst<{
+    id: string
+    site_id: string
+    from_organization_id: string
+    to_email: string
+    status: string
+    invited_plan: string | null
+    invited_coupon: string | null
+    invited_interval: string | null
+    requires_payment: number
+    stripe_checkout_session_id: string | null
+  }>(
+    db,
+    `SELECT id, site_id, from_organization_id, to_email, status,
+            invited_plan, invited_coupon, invited_interval, requires_payment, stripe_checkout_session_id
+     FROM site_transfer_requests WHERE token = ? LIMIT 1`,
+    [token],
+  )
 
   if (!transfer) return jsonResponse({ error: 'Transfer not found' }, { status: 404 })
 
@@ -74,12 +74,11 @@ export default defineEventHandler(async (event) => {
   }
 
   // Find the accepting user's owner org (created automatically on signup)
-  const ownerMember = await db
-    .prepare(
-      `SELECT organizationId FROM member WHERE userId = ? AND role = 'owner' LIMIT 1`,
-    )
-    .bind(userId)
-    .first<{ organizationId: string }>()
+  const ownerMember = await queryFirst<{ organizationId: string }>(
+    db,
+    `SELECT organizationId FROM member WHERE userId = ? AND role = 'owner' LIMIT 1`,
+    [userId],
+  )
 
   if (!ownerMember) {
     return jsonResponse(
@@ -113,10 +112,11 @@ export default defineEventHandler(async (event) => {
       const stripe = getStripe(env)
 
       // Get or create Stripe customer for the new org
-      const orgRow = await db
-        .prepare(`SELECT o.name, o.slug, b.stripe_customer_id FROM organization o LEFT JOIN organization_billing b ON o.id = b.organization_id WHERE o.id = ? LIMIT 1`)
-        .bind(toOrgId)
-        .first<{ name: string; slug: string | null; stripe_customer_id: string | null }>()
+      const orgRow = await queryFirst<{ name: string; slug: string | null; stripe_customer_id: string | null }>(
+        db,
+        `SELECT o.name, o.slug, b.stripe_customer_id FROM organization o LEFT JOIN organization_billing b ON o.id = b.organization_id WHERE o.id = ? LIMIT 1`,
+        [toOrgId],
+      )
 
       let customerId = orgRow?.stripe_customer_id ?? null
       if (customerId) {
@@ -144,16 +144,13 @@ export default defineEventHandler(async (event) => {
         })
         customerId = customer.id
         const billingId = `billing-${toOrgId}`
-        await db
-          .prepare(`
+        await execute(db, `
             INSERT INTO organization_billing (id, organization_id, stripe_customer_id, updated_at)
             VALUES (?, ?, ?, ?)
             ON CONFLICT(organization_id) DO UPDATE SET
               stripe_customer_id = excluded.stripe_customer_id,
               updated_at = excluded.updated_at
-          `)
-          .bind(billingId, toOrgId, customerId, new Date().toISOString())
-          .run()
+          `, [billingId, toOrgId, customerId, new Date().toISOString()])
       }
 
       const origin = getRequestURL(event).origin
@@ -163,11 +160,11 @@ export default defineEventHandler(async (event) => {
         try {
           const existingSession = await stripe.checkout.sessions.retrieve(transfer.stripe_checkout_session_id)
           if (checkoutSessionIsReusable(existingSession, transfer.id)) {
-            await db.prepare(`
+            await execute(db, `
               UPDATE site_transfer_requests
               SET claiming_user_id = ?, claiming_organization_id = ?
               WHERE id = ?
-            `).bind(userId, toOrgId, transfer.id).run()
+            `, [userId, toOrgId, transfer.id])
 
             return jsonResponse({ success: true, site_id: transfer.site_id, checkout_url: existingSession.url })
           }
@@ -209,18 +206,19 @@ export default defineEventHandler(async (event) => {
       }
 
       const checkoutSession = await stripe.checkout.sessions.create(checkoutParams)
-      const persistResult = await db.prepare(`
+      const persistResult = await execute(db, `
         UPDATE site_transfer_requests
         SET claiming_user_id = ?, claiming_organization_id = ?, stripe_checkout_session_id = ?
         WHERE id = ?
           AND (stripe_checkout_session_id IS NULL OR stripe_checkout_session_id = ?)
-      `).bind(userId, toOrgId, checkoutSession.id, transfer.id, transfer.stripe_checkout_session_id).run()
+      `, [userId, toOrgId, checkoutSession.id, transfer.id, transfer.stripe_checkout_session_id])
 
       if ((persistResult.meta?.changes ?? 0) === 0) {
-        const latestTransfer = await db
-          .prepare(`SELECT stripe_checkout_session_id FROM site_transfer_requests WHERE id = ? LIMIT 1`)
-          .bind(transfer.id)
-          .first<{ stripe_checkout_session_id: string | null }>()
+        const latestTransfer = await queryFirst<{ stripe_checkout_session_id: string | null }>(
+          db,
+          `SELECT stripe_checkout_session_id FROM site_transfer_requests WHERE id = ? LIMIT 1`,
+          [transfer.id],
+        )
 
         if (latestTransfer?.stripe_checkout_session_id) {
           const latestSession = await stripe.checkout.sessions.retrieve(latestTransfer.stripe_checkout_session_id)

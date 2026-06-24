@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { reorderLocationQa } from '~/server/utils/mcp-workflows'
+import { queryFirst } from '~/server/db'
 
 interface ReorderUpdate {
   id: string
@@ -12,7 +13,7 @@ function parseUpdates(value: unknown): ReorderUpdate[] | null {
   if (!Array.isArray(value) || value.length !== 2) return null
   const updates = value.map((item) => {
     if (typeof item !== 'object' || item === null || Array.isArray(item)) return null
-    const record = item as ApiRecord
+    const record = item as { id?: unknown; sort_order?: unknown }
     if (typeof record.id !== 'string' || !record.id.trim()) return null
     const sortOrder = Number(record.sort_order)
     if (!Number.isInteger(sortOrder)) return null
@@ -34,13 +35,13 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT s.organization_id
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor')
     LIMIT 1
-  `).bind(siteId, session.user.id).first<{ organization_id: string }>()
+  `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Access denied' }, { status: 403 })
 
   const body = await readBody(event)
@@ -48,7 +49,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const updates = parseUpdates((body as ApiRecord).updates)
+  const updates = parseUpdates((body as { updates?: unknown }).updates)
   if (!updates || updates[0]!.id === updates[1]!.id) {
     return jsonResponse({ error: 'Two distinct Q&A reorder updates are required' }, { status: 400 })
   }

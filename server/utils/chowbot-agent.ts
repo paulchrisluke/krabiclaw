@@ -86,6 +86,7 @@ import {
   CHOWBOT_CONFIRM_REQUIRED,
 } from "~/server/utils/chowbot-tools";
 import { SUPPORTED_CURRENCIES } from "~/shared/currencies";
+import { queryAll, queryFirst } from "~/server/db";
 
 const MAX_ITERATIONS = 10;
 const HERO_FIELDS = new Set([
@@ -671,16 +672,15 @@ async function executeTool(
         ctx.locationId ??
         undefined;
       if (effectiveLocationId) {
-        const location = await db
-          .prepare(
-            `
+        const location = await queryFirst(
+          db,
+          `
           SELECT 1 FROM business_locations
           WHERE id = ? AND organization_id = ? AND site_id = ?
           LIMIT 1
         `,
-          )
-          .bind(effectiveLocationId, orgId, siteId)
-          .first();
+          [effectiveLocationId, orgId, siteId],
+        );
         if (!location) return { error: "Location not found or access denied" };
       }
       const menu = await createMenu(
@@ -1122,17 +1122,16 @@ async function executeTool(
     }
 
     case "list_locations": {
-      const rows = await db
-        .prepare(
-          `SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
+      const rows = await queryAll(
+        db,
+        `SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
                 rating, review_count, description, short_description, price_level,
                 instagram_url, facebook_url, tiktok_url, hero_image_asset_id, hero_video_asset_id,
                 status, is_primary
          FROM business_locations WHERE organization_id = ? AND site_id = ? ORDER BY is_primary DESC, title ASC`,
-        )
-        .bind(orgId, siteId)
-        .all();
-      return rows.results ?? [];
+        [orgId, siteId],
+      );
+      return rows ?? [];
     }
 
     case "create_location": {
@@ -1397,23 +1396,21 @@ async function executeTool(
     }
 
     case "list_location_reviews": {
-      const loc = await db
-        .prepare(
-          `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        )
-        .bind(input.location_id, orgId, siteId)
-        .first();
+      const loc = await queryFirst(
+        db,
+        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        [input.location_id, orgId, siteId],
+      );
       if (!loc) return { error: "Location not found." };
-      const { results } = await db
-        .prepare(
-          `SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply,
+      const results = await queryAll(
+        db,
+        `SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply,
                 owner_reply_at, photo_urls, source, status, created_at, updated_at
          FROM reviews
          WHERE site_id = ? AND location_id = ?
          ORDER BY created_at DESC`,
-        )
-        .bind(siteId, input.location_id)
-        .all();
+        [siteId, input.location_id],
+      );
       return results ?? [];
     }
 
@@ -1440,13 +1437,12 @@ async function executeTool(
         params.push(input.kind);
       }
       params.push(50);
-      const { results } = await db
-        .prepare(
-          `SELECT id, kind, provider, public_url, thumbnail_url, alt_text, mime_type, file_name, created_at
+      const results = await queryAll(
+        db,
+        `SELECT id, kind, provider, public_url, thumbnail_url, alt_text, mime_type, file_name, created_at
          FROM media_assets WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC LIMIT ?`,
-        )
-        .bind(...params)
-        .all();
+        params,
+      );
       return results ?? [];
     }
 
@@ -1551,23 +1547,21 @@ async function executeTool(
     }
 
     case "list_location_qa": {
-      const loc = await db
-        .prepare(
-          `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        )
-        .bind(input.location_id, orgId, siteId)
-        .first();
+      const loc = await queryFirst(
+        db,
+        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        [input.location_id, orgId, siteId],
+      );
       if (!loc) return { error: "Location not found." };
       return listLocationQa(db, siteId, input.location_id);
     }
 
     case "create_location_qa": {
-      const loc = await db
-        .prepare(
-          `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        )
-        .bind(input.location_id, orgId, siteId)
-        .first();
+      const loc = await queryFirst(
+        db,
+        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        [input.location_id, orgId, siteId],
+      );
       if (!loc) return { error: "Location not found." };
       const result = await createLocationQa(
         db,
@@ -1586,12 +1580,11 @@ async function executeTool(
     }
 
     case "delete_location_qa": {
-      const loc = await db
-        .prepare(
-          `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-        )
-        .bind(input.location_id, orgId, siteId)
-        .first();
+      const loc = await queryFirst(
+        db,
+        `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        [input.location_id, orgId, siteId],
+      );
       if (!loc) return { error: "Location not found." };
       const result = await deleteLocationQa(
         db,
@@ -1605,23 +1598,21 @@ async function executeTool(
     }
 
     case "get_contact_inquiries": {
-      const { results } = await db
-        .prepare(
-          `SELECT id, name, email, message, created_at FROM contact_submissions WHERE site_id = ? ORDER BY created_at DESC LIMIT 20`,
-        )
-        .bind(siteId)
-        .all();
+      const results = await queryAll(
+        db,
+        `SELECT id, name, email, message, created_at FROM contact_submissions WHERE site_id = ? ORDER BY created_at DESC LIMIT 20`,
+        [siteId],
+      );
       return results ?? [];
     }
 
     case "get_reservation_inquiries": {
-      const { results } = await db
-        .prepare(
-          `SELECT id, name, email, phone, party_size, requested_date, requested_time, status, created_at
+      const results = await queryAll(
+        db,
+        `SELECT id, name, email, phone, party_size, requested_date, requested_time, status, created_at
          FROM reservation_submissions WHERE site_id = ? ORDER BY created_at DESC LIMIT 20`,
-        )
-        .bind(siteId)
-        .all();
+        [siteId],
+      );
       return results ?? [];
     }
 
@@ -1784,39 +1775,34 @@ async function executeTool(
     case "get_site_stats": {
       const [postStats, menuCount, itemCount, locationCount, reviewCount] =
         await Promise.all([
-          db
-            .prepare(
-              `SELECT status, COUNT(*) as count FROM posts WHERE organization_id = ? AND site_id = ? GROUP BY status`,
-            )
-            .bind(orgId, siteId)
-            .all(),
-          db
-            .prepare(
-              `SELECT COUNT(*) as count FROM menus WHERE organization_id = ? AND site_id = ?`,
-            )
-            .bind(orgId, siteId)
-            .first(),
-          db
-            .prepare(
-              `SELECT COUNT(*) as count FROM menu_items mi JOIN menus m ON mi.menu_id = m.id WHERE m.organization_id = ? AND m.site_id = ?`,
-            )
-            .bind(orgId, siteId)
-            .first(),
-          db
-            .prepare(
-              `SELECT COUNT(*) as count FROM business_locations WHERE organization_id = ? AND site_id = ? AND status = 'active'`,
-            )
-            .bind(orgId, siteId)
-            .first(),
-          db
-            .prepare(
-              `SELECT COUNT(*) as count FROM reviews WHERE site_id = ? AND status = 'approved'`,
-            )
-            .bind(siteId)
-            .first(),
+          queryAll(
+            db,
+            `SELECT status, COUNT(*) as count FROM posts WHERE organization_id = ? AND site_id = ? GROUP BY status`,
+            [orgId, siteId],
+          ),
+          queryFirst<{ count: number }>(
+            db,
+            `SELECT COUNT(*) as count FROM menus WHERE organization_id = ? AND site_id = ?`,
+            [orgId, siteId],
+          ),
+          queryFirst<{ count: number }>(
+            db,
+            `SELECT COUNT(*) as count FROM menu_items mi JOIN menus m ON mi.menu_id = m.id WHERE m.organization_id = ? AND m.site_id = ?`,
+            [orgId, siteId],
+          ),
+          queryFirst<{ count: number }>(
+            db,
+            `SELECT COUNT(*) as count FROM business_locations WHERE organization_id = ? AND site_id = ? AND status = 'active'`,
+            [orgId, siteId],
+          ),
+          queryFirst<{ count: number }>(
+            db,
+            `SELECT COUNT(*) as count FROM reviews WHERE site_id = ? AND status = 'approved'`,
+            [siteId],
+          ),
         ]);
       const byStatus = (
-        (postStats.results ?? []) as unknown as StatusCountRow[]
+        (postStats ?? []) as unknown as StatusCountRow[]
       ).reduce<Record<string, number>>((acc, row) => {
         acc[row.status] = row.count;
         return acc;
@@ -2029,9 +2015,9 @@ async function executeTool(
     }
 
     case "list_translation_jobs": {
-      const { results } = await db
-        .prepare(
-          `
+      const results = await queryAll(
+        db,
+        `
         SELECT id, source_locale, target_locale, scope, status, total_items, total_chars,
                estimated_credits, actual_credits, processed_items, failed_items, created_at, updated_at
         FROM translation_jobs
@@ -2039,39 +2025,36 @@ async function executeTool(
         ORDER BY created_at DESC
         LIMIT 10
       `,
-        )
-        .bind(orgId, siteId)
-        .all();
+        [orgId, siteId],
+      );
       return results ?? [];
     }
 
     case "get_translation_job": {
       const jobId = toSqlText(input.job_id)?.trim();
       if (!jobId) return { error: "job_id is required." };
-      const job = await db
-        .prepare(
-          `
+      const job = await queryFirst(
+        db,
+        `
         SELECT *
         FROM translation_jobs
         WHERE id = ? AND organization_id = ? AND site_id = ?
         LIMIT 1
       `,
-        )
-        .bind(jobId, orgId, siteId)
-        .first();
+        [jobId, orgId, siteId],
+      );
       if (!job) return { error: "Translation job not found." };
-      const { results } = await db
-        .prepare(
-          `
+      const results = await queryAll(
+        db,
+        `
         SELECT entity_type, entity_id, location_id, page, field, source_chars, status, error
         FROM translation_job_items
         WHERE job_id = ? AND organization_id = ? AND site_id = ?
         ORDER BY entity_type, page, field
         LIMIT 100
       `,
-        )
-        .bind(jobId, orgId, siteId)
-        .all();
+        [jobId, orgId, siteId],
+      );
       return { job, items: results ?? [] };
     }
 
@@ -2119,24 +2102,23 @@ async function executeTool(
       const explicitLocationId = toSqlText(input.location_id);
       let locationId = explicitLocationId;
       if (explicitLocationId) {
-        const location = await db
-          .prepare(
-            `
+        const location = await queryFirst(
+          db,
+          `
             SELECT 1 FROM business_locations
             WHERE id = ? AND organization_id = ? AND site_id = ?
             LIMIT 1
           `,
-          )
-          .bind(explicitLocationId, orgId, siteId)
-          .first();
+          [explicitLocationId, orgId, siteId],
+        );
         if (!location) return { error: "Location not found or access denied" };
       } else {
         const verifiedCtxLocationId = ctx.locationId
-          ? (await db.prepare(`SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`).bind(ctx.locationId, orgId, siteId).first<{ id: string }>())?.id
+          ? (await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`, [ctx.locationId, orgId, siteId]))?.id
           : null;
         locationId = verifiedCtxLocationId
-          ?? (await db.prepare(`SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ?`).bind(siteId, orgId).first<{ primary_location_id: string | null }>())?.primary_location_id
-          ?? (await db.prepare(`SELECT id FROM business_locations WHERE site_id = ? AND organization_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`).bind(siteId, orgId).first<{ id: string }>())?.id
+          ?? (await queryFirst<{ primary_location_id: string | null }>(db, `SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ?`, [siteId, orgId]))?.primary_location_id
+          ?? (await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE site_id = ? AND organization_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`, [siteId, orgId]))?.id
           ?? null;
       }
       if (!locationId) return { error: "location_id is required" };
@@ -2546,10 +2528,11 @@ async function executeTool(
     case "get_location": {
       const locationId = toSqlText(input.location_id);
       if (!locationId) return { error: "location_id is required." };
-      const row = await db
-        .prepare(`SELECT * FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`)
-        .bind(locationId, orgId, siteId)
-        .first();
+      const row = await queryFirst(
+        db,
+        `SELECT * FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+        [locationId, orgId, siteId],
+      );
       if (!row) return { error: "Location not found." };
       return { location: row };
     }
@@ -2573,13 +2556,14 @@ async function executeTool(
     }
 
     case "get_site_settings": {
-      const row = await db
-        .prepare(`SELECT brand_name, brand_description, logo_url, logo_asset_id, default_currency,
+      const row = await queryFirst(
+        db,
+        `SELECT brand_name, brand_description, logo_url, logo_asset_id, default_currency,
                          contact_email, facebook_url, instagram_url, tiktok_url, footer_tagline,
                          press_email, partnerships_email, catering_email, careers_email
-                  FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`)
-        .bind(siteId, orgId)
-        .first();
+                  FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`,
+        [siteId, orgId],
+      );
       if (!row) return { error: "Site not found." };
       return { settings: row };
     }
@@ -2821,12 +2805,11 @@ export async function runChowBot(
   // Resolve current location name for richer context
   let locationName: string | null = null;
   if (locationId) {
-    const loc = await db
-      .prepare(
-        `SELECT title FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`,
-      )
-      .bind(locationId, siteId)
-      .first<{ title: string }>();
+    const loc = await queryFirst<{ title: string }>(
+      db,
+      `SELECT title FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`,
+      [locationId, siteId],
+    );
     locationName = loc?.title ?? null;
   }
 

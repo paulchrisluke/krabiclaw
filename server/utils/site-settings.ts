@@ -2,6 +2,7 @@ import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import { createSystemSubdomain } from '~/server/utils/domains'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
+import { execute, queryFirst } from '~/server/db'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
@@ -53,7 +54,7 @@ async function loadSettingsPayload(
   organizationId: string,
   siteId: string
 ) {
-  const updatedSite = await db.prepare(`
+  const updatedSite = await queryFirst<FullSiteRow>(db, `
     SELECT id, organization_id, subdomain, theme, status,
            primary_location_id, public_url, custom_domain_status, default_currency,
            brand_name, brand_description, logo_url, logo_asset_id, contact_email,
@@ -61,7 +62,7 @@ async function loadSettingsPayload(
     FROM sites
     WHERE id = ? AND organization_id = ?
     LIMIT 1
-  `).bind(siteId, organizationId).first<FullSiteRow>()
+  `, [siteId, organizationId])
 
   if (!updatedSite) {
     throw new Error('Site not found after update')
@@ -195,12 +196,12 @@ async function attemptSiteUpdate(
   }
   if (updates.logo_asset_id !== undefined) {
     if (updates.logo_asset_id !== null && updates.logo_asset_id !== '') {
-      const asset = await db.prepare(`
+      const asset = await queryFirst(db, `
         SELECT id
         FROM media_assets
         WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active' AND kind = 'image'
         LIMIT 1
-      `).bind(updates.logo_asset_id, organizationId, siteId).first()
+      `, [updates.logo_asset_id, organizationId, siteId])
 
       if (!asset) {
         return {
@@ -248,12 +249,12 @@ async function attemptSiteUpdate(
   }
   if (updates.primary_location_id !== undefined) {
     if (updates.primary_location_id !== null && updates.primary_location_id !== '') {
-      const location = await db.prepare(`
+      const location = await queryFirst(db, `
         SELECT id
         FROM business_locations
         WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active'
         LIMIT 1
-      `).bind(updates.primary_location_id, organizationId, siteId).first()
+      `, [updates.primary_location_id, organizationId, siteId])
 
       if (!location) {
         return {
@@ -306,11 +307,11 @@ async function attemptSiteUpdate(
   setParts.push('updated_at = ?', 'updated_by = ?')
   params.push(now, userId)
 
-  const result = await db.prepare(`
+  const result = await execute(db, `
     UPDATE sites
     SET ${setParts.join(', ')}
     WHERE id = ? AND organization_id = ?
-  `).bind(...params, siteId, organizationId).run()
+  `, [...params, siteId, organizationId])
 
   if (!result.success) {
     throw new Error('Failed to update site settings')
@@ -324,11 +325,11 @@ async function attemptSiteUpdate(
       await createSystemSubdomain(env, db, siteId, organizationId, subdomain)
     } catch (subdomainErr) {
       try {
-        await db.prepare(`
+        await execute(db, `
           UPDATE sites
           SET brand_name = ?, subdomain = ?, updated_at = ?, updated_by = ?
           WHERE id = ? AND organization_id = ?
-        `).bind(site.brand_name, site.subdomain, now, userId, siteId, organizationId).run()
+        `, [site.brand_name, site.subdomain, now, userId, siteId, organizationId])
         console.error('updateSiteSettingsFields: createSystemSubdomain failed, rolled back', {
           siteId,
           subdomain,
@@ -380,12 +381,12 @@ export async function updateSiteSettingsFields(
     }
   }
 
-  const site = await db.prepare(`
+  const site = await queryFirst<SiteSettingsRow>(db, `
     SELECT id, organization_id, subdomain, brand_name, settings
     FROM sites
     WHERE id = ? AND organization_id = ?
     LIMIT 1
-  `).bind(siteId, organizationId).first<SiteSettingsRow>()
+  `, [siteId, organizationId])
 
   if (!site) {
     return {
@@ -409,12 +410,12 @@ export async function updateSiteSettingsFields(
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
       const subdomain = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`
 
-      const existing = await db.prepare(`
+      const existing = await queryFirst(db, `
         SELECT id
         FROM sites
         WHERE subdomain = ? AND id != ?
         LIMIT 1
-      `).bind(subdomain, siteId).first()
+      `, [subdomain, siteId])
       if (existing) continue
 
       try {

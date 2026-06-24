@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const page = getRouterParam(event, 'page')
@@ -20,9 +21,7 @@ export default defineEventHandler(async (event) => {
 
   let row
   try {
-    row = await db.prepare(
-      `SELECT id, page, content, updated_by, updated_at FROM platform_content WHERE page = ? LIMIT 1`
-    ).bind(page).first()
+    row = await queryFirst(db, `SELECT id, page, content, updated_by, updated_at FROM platform_content WHERE page = ? LIMIT 1`, [page])
   } catch (err) {
     console.error('Failed to fetch content:', err)
     return jsonResponse({ error: 'Failed to fetch content' }, { status: 500 })

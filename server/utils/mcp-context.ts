@@ -1,3 +1,5 @@
+import { execute, queryAll, queryFirst } from '~/server/db'
+
 export interface McpWorkspacePreferenceRow {
   user_id: string
   organization_id: string | null
@@ -63,12 +65,12 @@ export async function getMcpWorkspacePreference(
   db: D1Database,
   userId: string,
 ) {
-  return await db.prepare(`
+  return await queryFirst<McpWorkspacePreferenceRow>(db, `
     SELECT user_id, organization_id, site_id, location_id, created_at, updated_at
     FROM mcp_workspace_preferences
     WHERE user_id = ?
     LIMIT 1
-  `).bind(userId).first<McpWorkspacePreferenceRow>()
+  `, [userId])
 }
 
 export async function listAccessibleSitesForMcp(
@@ -77,18 +79,17 @@ export async function listAccessibleSitesForMcp(
   isPlatformAdmin: boolean,
 ) {
   if (isPlatformAdmin) {
-    const { results } = await db.prepare(`
+    return await queryAll<McpSiteSummary>(db, `
       SELECT s.id, s.organization_id, o.name AS organization_name, o.slug AS organization_slug,
              s.brand_name, s.subdomain, s.public_url, s.status, s.onboarding_status,
              s.primary_location_id, 'owner' AS role
       FROM sites s
       LEFT JOIN organization o ON o.id = s.organization_id
       ORDER BY s.updated_at DESC, s.created_at DESC
-    `).all<McpSiteSummary>()
-    return results ?? []
+    `)
   }
 
-  const { results } = await db.prepare(`
+  return await queryAll<McpSiteSummary>(db, `
     SELECT s.id, s.organization_id, o.name AS organization_name, o.slug AS organization_slug,
            s.brand_name, s.subdomain, s.public_url, s.status, s.onboarding_status,
            s.primary_location_id, m.role
@@ -97,9 +98,7 @@ export async function listAccessibleSitesForMcp(
     JOIN member m ON m.organizationId = s.organization_id
     WHERE m.userId = ?
     ORDER BY s.updated_at DESC, s.created_at DESC
-  `).bind(userId).all<McpSiteSummary>()
-
-  return results ?? []
+  `, [userId])
 }
 
 export async function listLocationsForMcp(
@@ -107,21 +106,21 @@ export async function listLocationsForMcp(
   organizationId: string,
   siteId: string,
 ) {
-  const { results } = await db.prepare(`
-    SELECT id, slug, title, city, status, is_primary
-    FROM business_locations
-    WHERE organization_id = ? AND site_id = ?
-    ORDER BY is_primary DESC, title ASC
-  `).bind(organizationId, siteId).all<{
+  const results = await queryAll<{
     id: string
     slug: string
     title: string
     city: string | null
     status: string
     is_primary: number | boolean
-  }>()
+  }>(db, `
+    SELECT id, slug, title, city, status, is_primary
+    FROM business_locations
+    WHERE organization_id = ? AND site_id = ?
+    ORDER BY is_primary DESC, title ASC
+  `, [organizationId, siteId])
 
-  return (results ?? []).map((location) => ({
+  return results.map((location) => ({
     ...location,
     is_primary: Boolean(location.is_primary),
   }))
@@ -240,7 +239,7 @@ export async function upsertMcpWorkspacePreference(
   },
 ) {
   const now = new Date().toISOString()
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO mcp_workspace_preferences (
       user_id, organization_id, site_id, location_id, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?)
@@ -249,12 +248,12 @@ export async function upsertMcpWorkspacePreference(
       site_id = excluded.site_id,
       location_id = excluded.location_id,
       updated_at = excluded.updated_at
-  `).bind(
+  `, [
     input.userId,
     input.organizationId,
     input.siteId,
     input.locationId,
     now,
     now,
-  ).run()
+  ])
 }

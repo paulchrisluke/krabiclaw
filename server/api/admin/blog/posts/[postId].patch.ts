@@ -4,6 +4,8 @@ import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { updatePlatformBlogPost } from '~/server/utils/platform-content'
 
+import type { PlatformBlogPostRequestBody } from '~/server/types/platform-content'
+
 export default defineEventHandler(async (event) => {
   const postId = getRouterParam(event, 'postId')
   if (!postId) return jsonResponse({ error: 'Post ID required' }, { status: 400 })
@@ -19,7 +21,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
   }
 
-  let body: { title?: string; body?: string; excerpt?: string; category?: string; publish?: boolean; unpublish?: boolean }
+  let body: PlatformBlogPostRequestBody
   try { body = await readBody(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }

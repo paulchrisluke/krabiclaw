@@ -1,6 +1,7 @@
 // Get business locations for a site
 import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { queryAll, queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -31,22 +32,22 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user has access to the site
-    const site = await db.prepare(`
+    const site = await queryFirst<{ id: string; organization_id: string }>(db, `
       SELECT s.id, s.organization_id FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ?
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
-    
+    `, [siteId, session.user.id])
+
     if (!site) {
-      return jsonResponse({ 
-        error: 'Site not found or access denied' 
+      return jsonResponse({
+        error: 'Site not found or access denied'
       }, { status: 404 })
     }
 
     // Get business locations
-    const locations = await db.prepare(`
+    const locations = await queryAll<ApiValue>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone,
              bl.website_url, bl.maps_url, bl.latitude, bl.longitude,
              bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level,
@@ -59,10 +60,10 @@ export default defineEventHandler(async (event) => {
       LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
       WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
       ORDER BY bl.is_primary DESC, bl.title ASC
-    `).bind(site.organization_id, siteId).all()
-    
+    `, [site.organization_id, siteId])
+
     // Parse JSON fields
-    const parsedLocations = (locations.results || []).map((location: ApiValue) => ({
+    const parsedLocations = (locations || []).map((location: ApiValue) => ({
       ...location,
       address: location.address ? JSON.parse(location.address) : null,
       opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null

@@ -4,8 +4,11 @@ Tracks which tools exist across surfaces and where gaps are. Update this when ad
 
 **Surfaces:**
 - **ChowBot** — conversational assistant embedded in the dashboard and WhatsApp
-- **MCP** — ChatGPT connector (`server/api/mcp.post.ts`)
+- **Client MCP** — customer ChatGPT connector (`server/api/mcp.post.ts`)
+- **Platform Admin MCP** — internal ChatGPT connector (`server/api/mcp/platform.post.ts`)
 - **Dashboard** — CMS pages and direct UI flows
+
+Platform Admin MCP is intentionally excluded from the parity tables below because it is a separate internal-only surface for platform blog/docs operations, not a tenant-management surface. See `docs/mcp-surface-split.md`.
 
 ---
 

@@ -3,6 +3,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { replyToReview } from '~/server/utils/review-management'
+import { execute } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -33,9 +34,7 @@ export default defineEventHandler(async (event) => {
   }
   params.push(reviewId, siteId)
 
-  await db.prepare(
-    `UPDATE reviews SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`
-  ).bind(...params).run()
+  await execute(db, `UPDATE reviews SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`, params)
 
   return jsonResponse({ updated: true })
 })

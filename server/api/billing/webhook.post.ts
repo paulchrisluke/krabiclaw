@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
-import { verifyStripeWebhook, setSiteEntitlementsFromPlan, getPlanFromStripePrice, applySiteSubscription } from '../../utils/billing'
+import { verifyStripeWebhook, setSiteEntitlementsFromPlan, getPlanFromStripePrice, applySiteSubscription, getStripe } from '../../utils/billing'
 import { completePaidSiteTransfer, deleteSiteCustomDomains } from '../../utils/site-transfer'
+import { execute, queryFirst } from '~/server/db'
 import type Stripe from 'stripe'
 import { getHeader } from 'h3'
 
@@ -15,6 +16,22 @@ interface SubscriptionTimingFields {
   billing_cycle_anchor?: number
   cancel_at_period_end?: boolean
   current_period_end?: number
+}
+
+interface InvoiceLinePeriodFields {
+  start?: number
+  end?: number
+}
+
+interface ExpandedInvoiceLine {
+  period?: InvoiceLinePeriodFields | null
+}
+
+interface ExpandedInvoice {
+  period_end?: number
+  lines?: {
+    data?: ExpandedInvoiceLine[]
+  }
 }
 
 const textEncoder = new TextEncoder()
@@ -83,12 +100,14 @@ export default defineEventHandler(async (event) => {
       ? verification.event
       : JSON.parse(rawBody) as Stripe.Event
 
-    const existingEvent = await db.prepare(`SELECT id FROM stripe_webhook_events WHERE stripe_event_id = ? LIMIT 1`)
-      .bind(webhookEvent.id).first()
+    const existingEvent = await queryFirst(db, `SELECT id FROM stripe_webhook_events WHERE stripe_event_id = ? LIMIT 1`, [webhookEvent.id])
     if (existingEvent) return jsonResponse({ received: true, duplicate: true })
 
-    await db.prepare(`INSERT INTO stripe_webhook_events (id, stripe_event_id, event_type) VALUES (?, ?, ?)`)
-      .bind(`webhook-${webhookEvent.id}`, webhookEvent.id, webhookEvent.type).run()
+    // stripe_event_id has a UNIQUE constraint, so a concurrent duplicate insert
+    // throws here rather than silently double-processing; the outer try/catch
+    // turns that into a 500 and Stripe retries, which is safe but not pretty.
+    // Preserved as-is — not introducing a fix for this pre-existing race in this pass.
+    await execute(db, `INSERT INTO stripe_webhook_events (id, stripe_event_id, event_type) VALUES (?, ?, ?)`, [`webhook-${webhookEvent.id}`, webhookEvent.id, webhookEvent.type])
 
     switch (webhookEvent.type) {
       case 'checkout.session.completed':
@@ -137,6 +156,52 @@ function checkoutSubscriptionPeriodEnd(session: Stripe.Checkout.Session): string
     : null
 }
 
+async function hydrateSubscriptionForBilling(
+  env: Record<string, string | undefined>,
+  subscription: Stripe.Subscription,
+): Promise<Stripe.Subscription> {
+  const hasCurrentPeriodEnd = typeof (subscription as Stripe.Subscription & SubscriptionTimingFields).current_period_end === 'number'
+  const hasPriceId = Boolean(subscription.items.data[0]?.price?.id)
+  if (hasCurrentPeriodEnd && hasPriceId) return subscription
+  if (!subscription.id) return subscription
+
+  try {
+    return await getStripe(env).subscriptions.retrieve(subscription.id, {
+      expand: ['items.data.price.product', 'latest_invoice.lines'],
+    })
+  } catch (error) {
+    console.error('stripe_subscription_hydration_failed', {
+      subscriptionId: subscription.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return subscription
+  }
+}
+
+function subscriptionPeriodEndIso(subscription: Stripe.Subscription): string | null {
+  const sub = subscription as Stripe.Subscription & SubscriptionTimingFields & {
+    latest_invoice?: string | ExpandedInvoice | null
+  }
+
+  if (typeof sub.current_period_end === 'number') {
+    return new Date(sub.current_period_end * 1000).toISOString()
+  }
+
+  const latestInvoice = typeof sub.latest_invoice === 'object' && sub.latest_invoice !== null
+    ? sub.latest_invoice as ExpandedInvoice
+    : null
+  const linePeriodEnd = latestInvoice?.lines?.data?.[0]?.period?.end
+  if (typeof linePeriodEnd === 'number') {
+    return new Date(linePeriodEnd * 1000).toISOString()
+  }
+
+  if (typeof latestInvoice?.period_end === 'number') {
+    return new Date(latestInvoice.period_end * 1000).toISOString()
+  }
+
+  return null
+}
+
 // Resolve site_id from subscription metadata; fall back to customer→org→site for old subscriptions
 async function resolveSiteFromSubscription(
   db: D1Database,
@@ -144,20 +209,19 @@ async function resolveSiteFromSubscription(
 ): Promise<{ siteId: string; organizationId: string } | null> {
   const siteId = subscription.metadata?.site_id
   if (siteId) {
-    const row = await db.prepare(`SELECT organization_id FROM sites WHERE id = ? LIMIT 1`)
-      .bind(siteId).first<{ organization_id: string }>()
+    const row = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM sites WHERE id = ? LIMIT 1`, [siteId])
     if (row) return { siteId, organizationId: row.organization_id }
   }
 
   // Legacy: look up via stripe_customer_id → org → first site
   const customerId = subscription.customer as string
-  const billing = await db.prepare(`
+  const billing = await queryFirst<{ organization_id: string; site_id: string }>(db, `
     SELECT ob.organization_id, s.id AS site_id
     FROM organization_billing ob
     JOIN sites s ON s.organization_id = ob.organization_id
     WHERE ob.stripe_customer_id = ?
     LIMIT 1
-  `).bind(customerId).first<{ organization_id: string; site_id: string }>()
+  `, [customerId])
   if (!billing) return null
   return { siteId: billing.site_id, organizationId: billing.organization_id }
 }
@@ -199,7 +263,7 @@ async function handleCheckoutCompleted(
     const plan = session.metadata?.plan
     const transferId = session.metadata?.transfer_request_id
     if (!organizationId || !plan || !transferId) { console.error('Invalid site transfer metadata:', session.id); return }
-    const resolvedSiteId = siteId ?? session.metadata?.transfer_site_id ?? (await db.prepare(`SELECT id FROM sites WHERE organization_id = ? LIMIT 1`).bind(organizationId).first<{ id: string }>())?.id
+    const resolvedSiteId = siteId ?? session.metadata?.transfer_site_id ?? (await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? LIMIT 1`, [organizationId]))?.id
     if (!resolvedSiteId) { console.error('No site found for site_transfer checkout:', session.id); return }
     const customerId = session.customer as string
     const subscriptionId = checkoutSubscriptionId(session)
@@ -221,7 +285,7 @@ async function handleCheckoutCompleted(
     return
   }
 
-  const resolvedSiteId = siteId ?? (await db.prepare(`SELECT id FROM sites WHERE organization_id = ? LIMIT 1`).bind(organizationId).first<{ id: string }>())?.id
+  const resolvedSiteId = siteId ?? (await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? LIMIT 1`, [organizationId]))?.id
   if (!resolvedSiteId) { console.error('No site found for checkout:', session.id); return }
 
   const customerId = session.customer as string
@@ -235,30 +299,34 @@ async function handleSubscriptionUpdated(
   db: D1Database,
   subscription: Stripe.Subscription,
 ) {
-  const resolved = await resolveSiteFromSubscription(db, subscription)
+  const canonicalSubscription = await hydrateSubscriptionForBilling(env, subscription)
+  const resolved = await resolveSiteFromSubscription(db, canonicalSubscription)
   if (!resolved) { console.error('Site not found for subscription:', subscription.id); return }
 
   const { siteId, organizationId } = resolved
-  const sub = subscription as Stripe.Subscription & SubscriptionTimingFields
-  const currentPeriodEnd = sub.current_period_end
-    ? new Date(sub.current_period_end * 1000).toISOString()
-    : new Date().toISOString()
+  const sub = canonicalSubscription as Stripe.Subscription & SubscriptionTimingFields
+  const existingBilling = await queryFirst<{ current_period_end: string | null }>(db, `
+    SELECT current_period_end FROM site_billing WHERE site_id = ? LIMIT 1
+  `, [siteId])
+  const currentPeriodEnd = subscriptionPeriodEndIso(canonicalSubscription)
+    ?? existingBilling?.current_period_end
+    ?? null
 
-  await db.prepare(`
+  await execute(db, `
     UPDATE site_billing SET stripe_subscription_id = ?, status = ?,
       current_period_end = ?, cancel_at_period_end = ?, updated_at = ?
     WHERE site_id = ?
-  `).bind(subscription.id, subscription.status, currentPeriodEnd, sub.cancel_at_period_end === true, new Date().toISOString(), siteId).run()
+  `, [canonicalSubscription.id, canonicalSubscription.status, currentPeriodEnd, sub.cancel_at_period_end === true, new Date().toISOString(), siteId])
 
-  const plan = await getPlanFromSubscription(env, subscription)
+  const plan = await getPlanFromSubscription(env, canonicalSubscription)
   if (plan) {
     await setSiteEntitlementsFromPlan(db, siteId, organizationId, plan)
   } else {
-    console.warn('Unrecognized Stripe price; falling back to free', { siteId, subscriptionId: subscription.id })
+    console.warn('Unrecognized Stripe price; falling back to free', { siteId, subscriptionId: canonicalSubscription.id })
     await setSiteEntitlementsFromPlan(db, siteId, organizationId, 'free')
     await deleteSiteCustomDomains(env, db, siteId, 'system')
   }
-  console.log(`Subscription updated for site ${siteId}, status ${subscription.status}`)
+  console.log(`Subscription updated for site ${siteId}, status ${canonicalSubscription.status}`)
 }
 
 async function handleSubscriptionDeleted(
@@ -270,11 +338,11 @@ async function handleSubscriptionDeleted(
   if (!resolved) { console.error('Site not found for deleted subscription:', subscription.id); return }
 
   const { siteId, organizationId } = resolved
-  await db.prepare(`
+  await execute(db, `
     UPDATE site_billing SET stripe_subscription_id = NULL, status = 'canceled',
       current_period_end = NULL, cancel_at_period_end = false, updated_at = ?
     WHERE site_id = ?
-  `).bind(new Date().toISOString(), siteId).run()
+  `, [new Date().toISOString(), siteId])
 
   await setSiteEntitlementsFromPlan(db, siteId, organizationId, 'free')
   await deleteSiteCustomDomains(env, db, siteId, 'system')
@@ -283,34 +351,33 @@ async function handleSubscriptionDeleted(
 
 async function handlePaymentSucceeded(db: D1Database, invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string
-  const billing = await db.prepare(`SELECT organization_id FROM organization_billing WHERE stripe_customer_id = ? LIMIT 1`).bind(customerId).first<{ organization_id: string }>()
+  const billing = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM organization_billing WHERE stripe_customer_id = ? LIMIT 1`, [customerId])
   if (!billing) { console.error('Org not found for payment_succeeded, customer:', customerId); return }
   console.log(`Payment succeeded for org ${billing.organization_id}`)
 }
 
 async function handlePaymentFailed(db: D1Database, invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string
-  const billing = await db.prepare(`SELECT organization_id FROM organization_billing WHERE stripe_customer_id = ? LIMIT 1`).bind(customerId).first<{ organization_id: string }>()
+  const billing = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM organization_billing WHERE stripe_customer_id = ? LIMIT 1`, [customerId])
   if (!billing) { console.error('Org not found for payment_failed, customer:', customerId); return }
   console.log(`Payment failed for org ${billing.organization_id}`)
 }
 
 async function handleServiceAddon(db: D1Database, organizationId: string, addonType: string, paymentIntentId: string | null) {
   const now = new Date().toISOString()
-  await db.prepare(`INSERT OR IGNORE INTO service_addon_purchases (id, organization_id, addon_type, stripe_payment_intent_id, created_at) VALUES (?, ?, ?, ?, ?)`)
-    .bind(crypto.randomUUID(), organizationId, addonType, paymentIntentId, now).run()
+  await execute(db, `INSERT OR IGNORE INTO service_addon_purchases (id, organization_id, addon_type, stripe_payment_intent_id, created_at) VALUES (?, ?, ?, ?, ?)`, [crypto.randomUUID(), organizationId, addonType, paymentIntentId, now])
 }
 
 async function handleCreditTopup(db: D1Database, organizationId: string, credits: number) {
   const now = new Date().toISOString()
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)
     VALUES (?, ?, 0, ?, ?)
     ON CONFLICT(organization_id) DO UPDATE SET
       balance = balance + excluded.balance,
       last_topped_up_at = excluded.last_topped_up_at,
       updated_at = excluded.updated_at
-  `).bind(organizationId, credits, now, now).run()
+  `, [organizationId, credits, now, now])
 }
 
 async function getPlanFromSubscription(env: Record<string, string | undefined>, subscription: Stripe.Subscription): Promise<string | null> {

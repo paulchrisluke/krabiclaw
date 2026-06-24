@@ -372,6 +372,7 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const toast = useToast()
+const { trackSiteCreated, trackOnboardingCompleted } = useAnalytics()
 const connectingFacebook = ref(false)
 const facebookConnected = ref(false)
 const hasFacebookAccess = ref(false)
@@ -888,6 +889,12 @@ function seedDetailsFromManual(name: string) {
 async function finishCreation(orgSlug: string | null | undefined, siteSlug: string | null | undefined, locationSlug?: string | null) {
   emit('site-created', orgSlug ?? null, locationSlug ?? null)
   importedLocationSlug.value = locationSlug ?? null
+  
+  // Track site creation
+  if (importedSiteId.value && !props.isAddingLocation) {
+    trackSiteCreated(importedSiteId.value)
+  }
+  
   await refreshSocialStatus(importedSiteId.value)
   await sleep(300)
   const domainSlug = siteSlug ?? orgSlug
@@ -914,6 +921,9 @@ function retryImport() {
 
 async function markOnboardingComplete() {
   await $fetch('/api/dashboard/onboarding/complete', { method: 'POST' }).catch(() => {})
+  if (importedSiteId.value) {
+    trackOnboardingCompleted(importedSiteId.value)
+  }
 }
 
 // ─── Drag & drop (no-op for now, future: attach files) ───────────────────────

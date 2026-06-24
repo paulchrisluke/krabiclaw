@@ -1,3 +1,4 @@
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { listSiteLocales, type SiteLocale } from '~/server/utils/site-locales'
 
@@ -14,15 +15,15 @@ export default defineEventHandler(async (event) => {
   if (!siteId) return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
     SELECT id, organization_id
     FROM sites
     WHERE id = ? AND status = 'active'
     LIMIT 1
-  `).bind(siteId).first<{ id: string; organization_id: string }>()
+  `, [siteId])
 
   if (!site) return jsonResponse({ error: 'Site not found or inactive' }, { status: 404 })
 

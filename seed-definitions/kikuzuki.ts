@@ -130,7 +130,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     brandDescription:
       'Welcome to Kikuzuki, where we celebrate the vibrant flavors and rich traditions of Japanese cuisine.',
     status: 'active',
-    plan: 'free',
+    plan: 'growth',
     onboardingStatus: 'active',
     urlStructure: 'location_subdirectories',
     primaryLocationId: 'loc-kikuzuki',
@@ -581,8 +581,8 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     lifetimeUsed: 198,
   },
   organizationBilling: {
-    status: 'free',
-    plan: 'free',
+    status: 'active',
+    plan: 'growth',
   },
 }
 

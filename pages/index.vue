@@ -22,7 +22,7 @@
 
             <!-- Headline -->
             <h1 class="text-[clamp(40px,5vw,66px)] font-extrabold leading-[1.02] tracking-tight text-balance m-0">
-              <span class="text-default">Your restaurant,</span><br>
+              <span class="text-default">Your local business,</span><br>
               <span style="background: linear-gradient(135deg, var(--kc-coral) 0%, #e0524c 40%, var(--kc-coral-400) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">managed through</span><br>
               <span class="text-default">ChatGPT.</span>
             </h1>
@@ -601,7 +601,6 @@
 
 <script setup>
 import { useAuth } from '~/composables/useAuth'
-import { useOrganizationSchema } from '~/composables/useSchemaOrg'
 import { formatMoneyAmount } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 
@@ -726,26 +725,19 @@ const hero = computed(() => getHero({
 const { videoEl: heroVideoEl, showVideo: heroVideoShow } = useHeroVideo(() => hero.value?.video)
 
 const currentPageUrl = useSeoUrl('/')
-const sharedOgImage = useSharedOgImage()
 
 // SEO for KrabiClaw Platform
 if (isPlatform) {
-  useOrganizationSchema()
-  
-  const platformDescription = 'Sign up, add the KrabiClaw app in ChatGPT, and manage your restaurant website through conversation. Menus, content, photos — no CMS required.'
   const platformOgDescription = 'Beautiful restaurant websites edited through ChatGPT. Google Business sync, bookings, and real-time analytics included.'
 
-  useSeoMeta({
-    title: 'KrabiClaw | Restaurant Websites Managed Through ChatGPT',
-    description: truncateForSeo(platformDescription, 160),
-    ogTitle: 'KrabiClaw | Restaurant Websites Managed Through ChatGPT',
-    ogDescription: truncateForSeo(platformOgDescription, 160),
-    ogSiteName: 'KrabiClaw',
-    twitterTitle: 'KrabiClaw | Restaurant Websites Managed Through ChatGPT',
-    twitterDescription: truncateForSeo(platformOgDescription, 160),
-    ogImage: sharedOgImage,
-    ogUrl: currentPageUrl,
-    ogType: 'website'
+  usePlatformPageSeo({
+    path: '/',
+    title: 'Restaurant Websites Managed Through ChatGPT',
+    description: platformOgDescription,
+    isHomepage: true,
+    breadcrumbs: [
+      { name: 'Home', url: '/' },
+    ],
   })
 }
 

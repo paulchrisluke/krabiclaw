@@ -7,6 +7,7 @@ import {
   getLinkedInstagramAccount,
   publishToInstagram,
 } from '~/server/utils/facebook-pages'
+import { execute, queryAll, queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -24,12 +25,12 @@ export default defineEventHandler(async (event) => {
   const channels: Array<'site' | 'gmb' | 'instagram' | 'facebook'> =
     body?.channels ?? ['site']
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
     SELECT s.id, s.organization_id FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+  `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const post = await publishPost(db, site.organization_id, siteId, postId, channels)
@@ -50,11 +51,11 @@ export default defineEventHandler(async (event) => {
       const connErr = 'Facebook connection error'
       if (wantsFacebook) {
         socialErrors.facebook = connErr
-        await db.prepare(`UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'facebook'`).bind(connErr, postId).run()
+        await execute(db, `UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'facebook'`, [connErr, postId])
       }
       if (wantsInstagram) {
         socialErrors.instagram = connErr
-        await db.prepare(`UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind(connErr, postId).run()
+        await execute(db, `UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'instagram'`, [connErr, postId])
       }
     }
 
@@ -62,11 +63,11 @@ export default defineEventHandler(async (event) => {
       if (!connection?.facebook_page_id || !connection.encrypted_page_token) {
         if (wantsFacebook) {
           socialErrors.facebook = 'No Facebook Page connected'
-          await db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'facebook'`).bind('No Facebook Page connected', postId).run()
+          await execute(db, `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'facebook'`, ['No Facebook Page connected', postId])
         }
         if (wantsInstagram) {
           socialErrors.instagram = 'No Facebook connection (required for Instagram)'
-          await db.prepare(`UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`).bind('No Facebook connection (required for Instagram)', postId).run()
+          await execute(db, `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`, ['No Facebook connection (required for Instagram)', postId])
         }
       } else {
         const pageToken = connection.encrypted_page_token
@@ -75,9 +76,11 @@ export default defineEventHandler(async (event) => {
       // Resolve image URL for Instagram (needs a public HTTPS URL)
       let imageUrl: string | null = null
       if (post.image_asset_id) {
-        const asset = await db.prepare(
-          `SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`
-        ).bind(post.image_asset_id).first<{ public_url: string | null }>()
+        const asset = await queryFirst<{ public_url: string | null }>(
+          db,
+          `SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`,
+          [post.image_asset_id],
+        )
         imageUrl = asset?.public_url ?? null
       }
 
@@ -85,18 +88,18 @@ export default defineEventHandler(async (event) => {
       if (wantsFacebook) {
         try {
           const fbResult = await publishToPage(pageToken, pageId, { message: post.body })
-          await db.prepare(`
+          await execute(db, `
             UPDATE post_channel_jobs
             SET status = 'published', provider_post_id = ?, published_at = ?
             WHERE post_id = ? AND channel = 'facebook'
-          `).bind(fbResult.id, now, postId).run()
+          `, [fbResult.id, now, postId])
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Facebook publish failed'
           socialErrors.facebook = msg
-          await db.prepare(`
+          await execute(db, `
             UPDATE post_channel_jobs SET status = 'failed', error = ?
             WHERE post_id = ? AND channel = 'facebook'
-          `).bind(msg, postId).run()
+          `, [msg, postId])
         }
       }
 
@@ -105,38 +108,38 @@ export default defineEventHandler(async (event) => {
         if (!imageUrl) {
           const msg = 'Instagram requires an image — add a photo to this post'
           socialErrors.instagram = msg
-          await db.prepare(`
+          await execute(db, `
             UPDATE post_channel_jobs SET status = 'skipped', error = ?
             WHERE post_id = ? AND channel = 'instagram'
-          `).bind(msg, postId).run()
+          `, [msg, postId])
         } else {
           try {
             const igUserId = await getLinkedInstagramAccount(pageToken, pageId)
             if (!igUserId) {
               const msg = 'No Instagram Business account linked to this Facebook Page'
               socialErrors.instagram = msg
-              await db.prepare(`
+              await execute(db, `
                 UPDATE post_channel_jobs SET status = 'skipped', error = ?
                 WHERE post_id = ? AND channel = 'instagram'
-              `).bind(msg, postId).run()
+              `, [msg, postId])
             } else {
               const igResult = await publishToInstagram(pageToken, igUserId, {
                 caption: post.body,
                 imageUrl,
               })
-              await db.prepare(`
+              await execute(db, `
                 UPDATE post_channel_jobs
                 SET status = 'published', provider_post_id = ?, published_at = ?
                 WHERE post_id = ? AND channel = 'instagram'
-              `).bind(igResult.id, now, postId).run()
+              `, [igResult.id, now, postId])
             }
           } catch (err) {
             const msg = err instanceof Error ? err.message : 'Instagram publish failed'
             socialErrors.instagram = msg
-            await db.prepare(`
+            await execute(db, `
               UPDATE post_channel_jobs SET status = 'failed', error = ?
               WHERE post_id = ? AND channel = 'instagram'
-            `).bind(msg, postId).run()
+            `, [msg, postId])
           }
         }
       }
@@ -145,20 +148,22 @@ export default defineEventHandler(async (event) => {
   }
 
   // Re-fetch post so channel job statuses are current
-  const updatedPost = await db.prepare(`
+  const updatedPost = await queryFirst<Record<string, unknown>>(db, `
     SELECT p.*, ma.public_url, ma.kind
     FROM posts p
     LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
     WHERE p.id = ? AND p.organization_id = ? AND p.site_id = ?
-  `).bind(postId, site.organization_id, siteId).first()
+  `, [postId, site.organization_id, siteId])
 
-  const jobs = await db.prepare(
-    `SELECT * FROM post_channel_jobs WHERE post_id = ? ORDER BY channel`
-  ).bind(postId).all()
+  const jobs = await queryAll(
+    db,
+    `SELECT * FROM post_channel_jobs WHERE post_id = ? ORDER BY channel`,
+    [postId],
+  )
 
   return jsonResponse({
     success: true,
-    post: { ...updatedPost, channels: jobs.results },
+    post: { ...updatedPost, channels: jobs },
     ...(Object.keys(socialErrors).length > 0 ? { socialErrors } : {}),
   })
 })

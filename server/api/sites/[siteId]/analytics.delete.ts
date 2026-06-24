@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { defineEventHandler, getRouterParam, getQuery } from 'h3'
+import { execute, queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -26,13 +27,13 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user is owner/admin of the site's organization
-    const site = await db.prepare(`
+    const site = await queryFirst(db, `
       SELECT s.id, s.organization_id
       FROM sites s
       JOIN member m ON s.organization_id = m.organizationId
       WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin')
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
+    `, [siteId, session.user.id])
 
     if (!site) {
       return jsonResponse(
@@ -56,8 +57,8 @@ export default defineEventHandler(async (event) => {
       eventBinds.push(before)
     }
 
-    const eventResult = await db.prepare(eventQuery).bind(...eventBinds).run()
-    deletedEvents = eventResult.meta.changes || 0
+    const eventResult = await execute(db, eventQuery, eventBinds)
+    deletedEvents = eventResult.meta?.changes || 0
 
     // Delete daily aggregates (optionally filtered by date)
     let dailyQuery = `DELETE FROM site_analytics_daily WHERE site_id = ?`
@@ -69,8 +70,8 @@ export default defineEventHandler(async (event) => {
       dailyBinds.push(beforeDate || before) // Extract date part
     }
 
-    const dailyResult = await db.prepare(dailyQuery).bind(...dailyBinds).run()
-    deletedDaily = dailyResult.meta.changes || 0
+    const dailyResult = await execute(db, dailyQuery, dailyBinds)
+    deletedDaily = dailyResult.meta?.changes || 0
 
     return jsonResponse({
       ok: true,

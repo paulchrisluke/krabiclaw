@@ -1,4 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
+import { execute, executeBatch, queryFirst } from '~/server/db'
 import { encryptSecret, decryptSecret, encryptionEnv } from './encryption'
 import { uploadToR2, buildR2Key } from './cloudflare-r2'
 
@@ -253,7 +254,7 @@ export const storeFacebookPagesConnection = async (
     ? await encryptSecret(connection.encrypted_page_token, tokenEnv)
     : null
 
-  await env.DB.prepare(`
+  await execute(env.DB, `
     INSERT INTO facebook_pages_connections
     (id, organization_id, site_id, connected_by_user_id,
      facebook_user_id, facebook_page_id, facebook_page_name,
@@ -271,7 +272,7 @@ export const storeFacebookPagesConnection = async (
       scopes = excluded.scopes,
       status = excluded.status,
       updated_at = excluded.updated_at
-  `).bind(
+  `, [
     connectionId,
     connection.organization_id,
     connection.site_id,
@@ -286,7 +287,7 @@ export const storeFacebookPagesConnection = async (
     connection.status,
     now,
     now
-  ).run()
+  ])
 
   return connectionId
 }
@@ -298,11 +299,11 @@ export const getFacebookPagesConnection = async (
 ): Promise<FacebookPagesConnection | null> => {
   if (!env.DB) return null
 
-  const connection = await env.DB.prepare(`
+  const connection = await queryFirst<FacebookPagesConnection>(env.DB, `
     SELECT * FROM facebook_pages_connections
     WHERE organization_id = ? AND site_id = ? AND status = 'active'
     LIMIT 1
-  `).bind(organizationId, siteId).first() as FacebookPagesConnection | null
+  `, [organizationId, siteId])
 
   if (!connection) return null
 
@@ -406,11 +407,11 @@ export const syncPageInfoToLocation = async (
   }
 
   values.push(organizationId, siteId, locationId)
-  await env.DB.prepare(`
+  await execute(env.DB, `
     UPDATE business_locations
     SET ${updates.join(', ')}
     WHERE organization_id = ? AND site_id = ? AND id = ?
-  `).bind(...values).run()
+  `, values)
 }
 
 // Sync Instagram media to posts table
@@ -432,9 +433,10 @@ export const syncInstagramPosts = async (
   for (const item of media) {
     try {
       // Check if post already exists
-      const existing = await env.DB.prepare(
-        `SELECT id FROM posts WHERE google_post_id = ? AND site_id = ? LIMIT 1`
-      ).bind(`ig-${item.id}`, siteId).first()
+      const existing = await queryFirst(env.DB,
+        `SELECT id FROM posts WHERE google_post_id = ? AND site_id = ? LIMIT 1`,
+        [`ig-${item.id}`, siteId]
+      )
 
       if (existing) {
         skipped++
@@ -469,52 +471,58 @@ export const syncInstagramPosts = async (
       const now = new Date().toISOString()
 
       // Use D1 batch to make asset creation and post insert atomic
-      await env.DB.batch([
-        env.DB.prepare(`
+      await executeBatch(env.DB, [
+        {
+          query: `
           INSERT INTO media_assets (
             id, organization_id, site_id, location_id, kind, provider, source,
             r2_key, public_url, mime_type, file_name, file_size, status, created_at, updated_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          assetId,
-          organizationId,
-          siteId,
-          null,
-          'image',
-          'cloudflare_r2',
-          'external',
-          r2Key,
-          publicUrl,
-          'image/jpeg',
-          `instagram-${item.id}.jpg`,
-          imageBuffer.byteLength,
-          'active',
-          now,
-          now
-        ),
-        env.DB.prepare(`
+        `,
+          params: [
+            assetId,
+            organizationId,
+            siteId,
+            null,
+            'image',
+            'cloudflare_r2',
+            'external',
+            r2Key,
+            publicUrl,
+            'image/jpeg',
+            `instagram-${item.id}.jpg`,
+            imageBuffer.byteLength,
+            'active',
+            now,
+            now
+          ]
+        },
+        {
+          query: `
           INSERT INTO posts (
             id, organization_id, site_id, location_id, google_post_id, post_type,
             title, body, image_asset_id, cta_url, status, published_at,
             created_by, created_at, updated_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          postId,
-          organizationId,
-          siteId,
-          null,
-          `ig-${item.id}`,
-          'standard',
-          title,
-          body,
-          assetId,
-          item.permalink,
-          'published',
-          item.timestamp,
-          'instagram-sync',
-          now,
-          now
-        )
+        `,
+          params: [
+            postId,
+            organizationId,
+            siteId,
+            null,
+            `ig-${item.id}`,
+            'standard',
+            title,
+            body,
+            assetId,
+            item.permalink,
+            'published',
+            item.timestamp,
+            'instagram-sync',
+            now,
+            now
+          ]
+        }
       ])
 
       success++
@@ -546,9 +554,10 @@ export const syncFacebookPosts = async (
   for (const item of posts) {
     try {
       // Check if post already exists
-      const existing = await env.DB.prepare(
-        `SELECT id FROM posts WHERE google_post_id = ? AND site_id = ? LIMIT 1`
-      ).bind(`fb-${item.id}`, siteId).first()
+      const existing = await queryFirst(env.DB,
+        `SELECT id FROM posts WHERE google_post_id = ? AND site_id = ? LIMIT 1`,
+        [`fb-${item.id}`, siteId]
+      )
 
       if (existing) {
         skipped++
@@ -584,52 +593,58 @@ export const syncFacebookPosts = async (
       const now = new Date().toISOString()
 
       // Use D1 batch to make asset creation and post insert atomic
-      await env.DB.batch([
-        env.DB.prepare(`
+      await executeBatch(env.DB, [
+        {
+          query: `
           INSERT INTO media_assets (
             id, organization_id, site_id, location_id, kind, provider, source,
             r2_key, public_url, mime_type, file_name, file_size, status, created_at, updated_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          assetId,
-          organizationId,
-          siteId,
-          null,
-          'image',
-          'cloudflare_r2',
-          'external',
-          r2Key,
-          publicUrl,
-          'image/jpeg',
-          `facebook-${item.id}.jpg`,
-          imageBuffer.byteLength,
-          'active',
-          now,
-          now
-        ),
-        env.DB.prepare(`
+        `,
+          params: [
+            assetId,
+            organizationId,
+            siteId,
+            null,
+            'image',
+            'cloudflare_r2',
+            'external',
+            r2Key,
+            publicUrl,
+            'image/jpeg',
+            `facebook-${item.id}.jpg`,
+            imageBuffer.byteLength,
+            'active',
+            now,
+            now
+          ]
+        },
+        {
+          query: `
           INSERT INTO posts (
             id, organization_id, site_id, location_id, google_post_id, post_type,
             title, body, image_asset_id, cta_url, status, published_at,
             created_by, created_at, updated_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          postId,
-          organizationId,
-          siteId,
-          null,
-          `fb-${item.id}`,
-          'standard',
-          title,
-          body,
-          assetId,
-          item.permalink_url,
-          'published',
-          item.created_time,
-          'facebook-sync',
-          now,
-          now
-        )
+        `,
+          params: [
+            postId,
+            organizationId,
+            siteId,
+            null,
+            `fb-${item.id}`,
+            'standard',
+            title,
+            body,
+            assetId,
+            item.permalink_url,
+            'published',
+            item.created_time,
+            'facebook-sync',
+            now,
+            now
+          ]
+        }
       ])
 
       success++

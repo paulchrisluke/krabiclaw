@@ -6,7 +6,7 @@
           <p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">ChatGPT setup</p>
           <h1 class="text-2xl font-semibold text-highlighted">Connect KrabiClaw to ChatGPT</h1>
           <p class="max-w-2xl text-sm leading-relaxed text-muted">
-            Use ChatGPT for fast content edits, media requests, and copy updates. Billing, members, domains, and notification routing still live here in the dashboard.
+            Use the client-facing KrabiClaw app in ChatGPT for fast content edits, media requests, and copy updates. Billing, members, domains, and notification routing still live here in the dashboard.
           </p>
         </section>
 
@@ -45,6 +45,9 @@
               <div class="mt-4 flex flex-col gap-3">
                 <p class="text-xs text-muted leading-relaxed">
                   <strong>Beta Note:</strong> This developer setup is temporary. Once approved for the ChatGPT App Store, it will be a simple one-click install.
+                </p>
+                <p class="text-xs text-muted leading-relaxed">
+                  This is the <strong>client workspace app</strong>. Internal KrabiClaw platform-admin tools use a separate MCP app and should not be shared with clients.
                 </p>
                 <div class="flex items-center gap-2">
                   <UButton as="a" href="/web-app-manifest-192x192.png" download target="_blank" size="xs" color="neutral" variant="ghost" icon="i-heroicons-arrow-down-tray">
@@ -110,7 +113,7 @@ const steps = [
   {
     number: 2,
     title: 'Configure App Details',
-    body: 'Set title to "KrabiClaw", upload our app icon, paste the MCP URL below, choose OAuth authentication, and check the consent box.',
+    body: 'Set title to "KrabiClaw", upload our app icon, paste the client MCP URL below, choose OAuth authentication, and check the consent box.',
   },
   {
     number: 3,

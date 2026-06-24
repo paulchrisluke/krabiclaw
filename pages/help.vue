@@ -54,16 +54,6 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'platform' })
 
-import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
-
-const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
-
-useBreadcrumbSchema([
-  { name: 'Home', url: `${siteUrl}/` },
-  { name: 'Help Center', url: `${siteUrl}/help` }
-])
-
 const searchQuery = ref('')
 const open = ref<string | null>(null)
 
@@ -197,10 +187,21 @@ const filteredSections = computed(() => {
     .filter(section => section.faqs.length > 0)
 })
 
-useSeoMeta({
-  title: 'Help Center | KrabiClaw',
+// FAQPage JSON-LD mirrors the `sections` content above exactly — do not add
+// questions/answers here that aren't also visibly rendered on the page.
+const faqItems = sections.flatMap(section => section.faqs.map(faq => ({
+  question: faq.q,
+  answer: faq.a,
+})))
+
+usePlatformPageSeo({
+  path: '/help',
+  title: 'Help Center',
   description: 'Answers to common questions about KrabiClaw — the premium AI-powered website builder for local businesses.',
-  ogImage: useSharedOgImage(),
-  ogUrl: `${siteUrl}/help`
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: 'Help Center', url: '/help' },
+  ],
+  faqItems,
 })
 </script>

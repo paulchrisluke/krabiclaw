@@ -37,7 +37,6 @@ ChowBot and dashboard CMS are supported product surfaces. Keep MCP and ChowBot a
   3. Call `show_generated_images` with returned `assetId` and `publicUrl`
 
 Canonical generated-image contracts:
-
 - Native generation: `save_generated_image_file({ site_id, attachment_id, prompt })` — always use this after `image_generation`; passing base64 to `save_generated_image` is blocked by OpenAI safety checks
 - Raw base64 (non-native, rare): `save_generated_image({ site_id, image_data_base64, prompt })`
 
@@ -49,7 +48,7 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
 
 ## Database Schema Workflow
 
-Migrations are managed via **wrangler D1 migrations** and are applied automatically on every deploy.
+Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and are applied automatically on every deploy. Query access goes through **Drizzle ORM** (`server/db/schema.ts`, `server/db/index.ts`) — Drizzle is a query layer over the same D1 database, not a migration tool. `drizzle-kit` is only used for schema drift checking, never for generating or applying migrations.
 
 1. To change the schema, create a new migration:
 
@@ -59,13 +58,17 @@ Migrations are managed via **wrangler D1 migrations** and are applied automatica
 
 2. Edit the generated file in `migrations/`. Write only the delta: `ALTER TABLE`, `CREATE TABLE`, etc.
 
-3. Apply locally to test:
+3. Update `server/db/schema.ts` by hand to match the new SQL — Drizzle's schema is not generated from migrations.
+
+4. Apply locally to test:
 
    ```bash
    yarn schema:local
    ```
 
-4. Migrations run automatically on deploy. `yarn deploy` runs:
+5. Run `yarn drizzle:check` (`drizzle-kit check`) to verify `server/db/schema.ts` hasn't drifted from the live D1 schema.
+
+6. Migrations run automatically on deploy. `yarn deploy` runs:
 
    ```bash
    wrangler d1 migrations apply DB --remote
@@ -73,22 +76,24 @@ Migrations are managed via **wrangler D1 migrations** and are applied automatica
 
    before uploading the Worker.
 
-5. Never write ad-hoc SQL files in `scripts/` for schema changes. They will not be tracked and can cause production outages.
+7. Never write ad-hoc SQL files in `scripts/` for schema changes. They will not be tracked and can cause production outages.
 
-6. Better Auth tables must use exact camelCase column names. App tables use snake_case.
+8. Never use `drizzle-kit generate` or `drizzle-kit migrate` against this database — `migrations/*.sql` applied via wrangler is the only source of truth for schema changes.
 
-7. Any schema change must be checked against current server queries before finishing.
+9. Better Auth tables must use exact camelCase column names. App tables use snake_case.
 
-The current canonical schema is `migrations/0001_initial.sql`. Each subsequent migration file is the source of truth for its delta.
+10. Any schema change must be checked against current server queries (raw SQL and Drizzle alike) before finishing.
+
+`migrations/0001_initial.sql` is the **squashed baseline** — all migrations up through the old numbering (including what was previously migration `0017`) were folded into it. Numbering restarted from `0001` after the squash; the migrations directory currently only goes up to `0008`. Each migration file after `0001_initial.sql` is the source of truth for its own delta. Do not reference pre-squash migration numbers (e.g. "migration 0017") as if they still exist as separate files — that history is now baked into `0001_initial.sql`.
 
 ---
 
 ## Multi-Tenancy
 
 - Organizations map to a team or agency using Better Auth’s `organization` plugin.
-- **One org can have multiple sites** — the unique-per-org constraint was removed in migration `0017`.
+- **One org can have multiple sites** — the unique-per-org constraint was removed pre-squash (was migration `0017`); this is now part of the `0001_initial.sql` baseline.
 - Each site has its own plan and Stripe subscription (`site_billing` table).
-- The Stripe _customer_ stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
+- The Stripe *customer* stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
 - Multiple physical locations live under `business_locations`, not separate orgs. Locations are **unlimited on all plans**.
 - Dashboard route shape (site is always explicit — no implicit "first site in org"):
   - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
@@ -108,6 +113,17 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 ---
 
+## Analytics
+
+There are four independent analytics layers — do not conflate them or assume one supersedes another:
+
+1. **Platform GA4** (`G-NJ1BSP9BYG`, injected in `app.vue`) — KrabiClaw's own marketing-site property, fires only when `isPlatform` is true.
+2. **Per-tenant connected GA4** — a site owner links their own GA4 property via the OAuth flow in `server/utils/google-analytics.ts` / `server/api/sites/[siteId]/integrations/google-analytics/`. The resulting `ga4_measurement_id` lands in `site_config` (already exposed publicly via bootstrap's `config` object — no extra plumbing needed) and `app.vue` injects it as that tenant's own gtag tag. Sites with no connection get no tag from this layer.
+3. **Platform-wide rollup GA4** (`G-Z18L1Y4G7K`, configured in `nuxt.config.ts` via `scripts.registry.googleAnalytics`) — **intentionally unconditional**, fires on every route including every Saya tenant page. This is how KrabiClaw gets cross-customer traffic insight across all tenant sites. It is not a leftover/mistake — do not remove or gate it without explicit instruction.
+4. **Internal pipeline** (`site_pageview_events` → `aggregateAnalyticsForDate()` → `site_analytics_daily`) — powers each site's own dashboard "Analytics overview" tab. Tracked via `server/middleware/zz-pageview-tracking.ts` (SSR) and `plugins/pageview-tracking.client.ts` (SPA navigation + duration ping), using the `kc_visitor_id` (2yr)/`kc_session_id` (30min sliding) anonymous cookie pair defined in `server/utils/pageview-tracking.ts`. This is intentionally not a Better Auth session — anonymous visitors must never create rows in `user`/`session`.
+
+---
+
 ## File Conventions
 
 - `server/utils/auth.ts` — `createAuth(env)` — always takes full CF env
@@ -115,7 +131,8 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - `server/middleware/tenant-resolution.ts` — runs on every request
 - `lib/auth-client.ts` — client-side Better Auth instance
 - `composables/` — Nuxt auto-imported
-- `migrations/` — canonical D1 schema, numbered files; `0001_initial.sql` is the base
+- `migrations/` — canonical D1 schema, numbered files; `0001_initial.sql` is the squashed base (renumbered, supersedes all pre-squash migration numbers)
+- `server/db/schema.ts` — Drizzle ORM schema, hand-maintained to mirror `migrations/`; `server/db/index.ts` — `createDb()` and query helpers
 - `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo tenant
 - `seed-definitions/pottery-house.ts`, `seed-definitions/kikuzuki.ts` — client site seed definitions
 - `scripts/generate-demo-seed.ts` — ephemeral demo seed generator; applies from `/tmp`, never from a checked-in SQL file
@@ -129,7 +146,6 @@ Seeds use a two-tier insert strategy so that MCP edits survive a reseed:
 - **Content tables** (`site_content`, `menu_items`, `reviews`, `location_qa`, `posts`, `post_channel_jobs`, `*_translations`) → `INSERT OR IGNORE` — first seed wins; MCP changes are never overwritten by a reseed
 
 Production is never reseeded (only migrated), so this only affects local dev, preview, and staging. If you need to force-push updated content from a seed definition to an already-seeded environment, delete the affected rows first or use an MCP tool call directly.
-
 - Layout name for Saya theme pages: `layout: 'saya'`
 - `tenant` layout is dead
 
@@ -277,7 +293,7 @@ Flow:
 
 - Stripe is the source of truth for plan names, prices, and `marketing_features`.
 - `server/utils/billing.ts` → `getPlanEntitlements(plan)` defines what each plan unlocks in D1.
-- Entitlements are stored **per-site** in the `site_entitlements` table (migration `0017` replaced `organization_entitlements`).
+- Entitlements are stored **per-site** in the `site_entitlements` table (this superseded `organization_entitlements` pre-squash, was migration `0017`, now part of the `0001_initial.sql` baseline). The old `organization_entitlements` table still exists in the schema for legacy billing/credits data but is not used for plan entitlement checks.
 - Billing is **per-site** via `site_billing`. Checkout must pass `site_id` in Stripe session metadata.
 - Key entitlement keys:
   - `custom_domains`
@@ -364,7 +380,7 @@ Flow:
 
 - Access requires both:
   - `user.role = 'admin'` in DB
-  - Server-side `isPlatformOwner()` check against `PLATFORM_OWNER_EMAILS` env var
+  - Server-side `isPlatformAdmin()` check aligned to the Better Auth global admin role
 
 - Admin navigation is defined in `adminNavigation` computed in `layouts/dashboard.vue`.
 
@@ -392,7 +408,7 @@ Flow:
   GET /api/post-login
   ```
 
-  - `isPlatformOwner` → `/admin`
+  - `isPlatformAdmin()` → `/admin`
   - Else → `/dashboard/[orgSlug]`
 
 - Dev login:
@@ -451,7 +467,7 @@ Saya components never render a blank section or a skeleton-only placeholder when
 - `components/saya/SayaEmptyExample.vue` renders one example card; `components/saya/SayaMcpHint.vue` renders the owner-only "Try: ..." affordance that pre-fills and opens ChowBot via `useChowBot().setDraftMessage()` + `.open()`.
 - The hint only renders in dashboard edit mode (`useEditMode().editMode`, i.e. `?edit=true`) — real site visitors only ever see the clean example, never the hint UI.
 - Filled examples are only for **core** sections (menu, experiences, locations) where an empty section usually means an unfinished site. **Supplementary/optional** sections (posts, reviews, Q&A) use the low-key icon+message empty state instead — a live, fully-operational business may legitimately never post updates or get reviews, so a fabricated "Example post title" shown to a real visitor would incorrectly imply the site is broken. Posts/Reviews/Q&A still get a hint when merchant-actionable (posts, Q&A; not reviews, which aren't merchant-authored).
-- `config/content-registry.ts` field `defaultValue` is the render-time fallback for scalar `site_content` fields (`usePageContent().getField()` falls back to it automatically when no value is in the DB and the caller passes no explicit default). **These must always be generic, vertical-neutral copy** — never tenant- or demo-identity-specific text (no business names, no "Saya Kitchen", no real addresses/phone numbers). The "Saya fallback copy on any tenant page" regression below is about leaking _demo-tenant identity_, not about having a generic instructional fallback — a generic fallback rendering on an empty tenant page is the intended behavior, not the regression.
+- `config/content-registry.ts` field `defaultValue` is the render-time fallback for scalar `site_content` fields (`usePageContent().getField()` falls back to it automatically when no value is in the DB and the caller passes no explicit default). **These must always be generic, vertical-neutral copy** — never tenant- or demo-identity-specific text (no business names, no "Saya Kitchen", no real addresses/phone numbers). The "Saya fallback copy on any tenant page" regression below is about leaking *demo-tenant identity*, not about having a generic instructional fallback — a generic fallback rendering on an empty tenant page is the intended behavior, not the regression.
 
 ---
 

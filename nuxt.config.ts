@@ -18,6 +18,11 @@ export default defineNuxtConfig({
     '@nuxt/fonts',
   ],
 
+  // Platform-wide cross-tenant rollup GA4 property — intentionally unconditional,
+  // fires on every route (platform pages AND every Saya tenant page) so KrabiClaw
+  // gets aggregate traffic insight across all customer sites. Distinct from the
+  // per-property tags in app.vue (platform's own G-NJ1BSP9BYG, or a tenant's own
+  // connected GA4 property when they've linked one) — those are scoped, this is global.
   scripts: {
     registry: {
       googleAnalytics: {
@@ -81,6 +86,10 @@ export default defineNuxtConfig({
     name: 'KrabiClaw - AI Website Builder',
     description: 'Beautiful websites powered by AI. Build your business website in minutes with our SaaS platform.',
     defaultLocale: 'en',
+  },
+
+  schemaOrg: {
+    defaults: false,
   },
 
   // i18n Configuration

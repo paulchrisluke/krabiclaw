@@ -2,6 +2,7 @@
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateLocationQa } from '~/server/utils/mcp-workflows'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -16,20 +17,27 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT s.organization_id
     FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor')
     LIMIT 1
-  `).bind(siteId, session.user.id).first<{ organization_id: string }>()
+  `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Access denied' }, { status: 403 })
 
   const rawBody = await readBody(event)
   if (typeof rawBody !== 'object' || rawBody === null || Array.isArray(rawBody)) {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
-  const body = rawBody as ApiRecord
+  const body = rawBody as {
+    question?: unknown
+    answer?: unknown
+    question_author?: unknown
+    is_owner_answer?: unknown
+    status?: unknown
+    sort_order?: unknown
+  }
 
   try {
     const result = await updateLocationQa(db, site.organization_id, siteId, locationId, qaId, {

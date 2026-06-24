@@ -5,6 +5,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
 import { updateLocation } from '~/server/utils/location-management'
+import { queryFirst } from '~/server/db'
 
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
 
@@ -51,20 +52,19 @@ export default defineEventHandler(async (event) => {
   const organizationId = result.data.organizationId as string
   const siteId = result.data.siteId as string | undefined
   const siteSlug = result.data.subdomain as string | undefined
-  const orgRow = await db.prepare(`SELECT slug FROM organization WHERE id = ? LIMIT 1`)
-    .bind(organizationId).first<{ slug: string }>()
+  const orgRow = await queryFirst<{ slug: string }>(db, `SELECT slug FROM organization WHERE id = ? LIMIT 1`, [organizationId])
 
   if (!orgRow) {
     return jsonResponse({ error: 'Organization not found after site creation. Data integrity issue.' }, { status: 500 })
   }
 
   const locationRow = siteId
-    ? await db.prepare(`
+    ? await queryFirst<{ id: string; slug: string | null }>(db, `
       SELECT id, slug FROM business_locations
       WHERE site_id = ? AND organization_id = ? AND status = 'active'
       ORDER BY is_primary DESC, created_at ASC
       LIMIT 1
-    `).bind(siteId, organizationId).first<{ id: string; slug: string | null }>()
+    `, [siteId, organizationId])
     : null
 
   if (siteId) {

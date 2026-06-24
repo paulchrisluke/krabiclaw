@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
+import { queryFirst } from '~/server/db'
 import { getPlatformMcpTool } from '~/server/utils/platform-mcp-tools'
 import {
   createPlatformBlogPost,
@@ -38,6 +39,38 @@ function optionalNumber(args: Record<string, unknown>, key: string) {
   return typeof value === 'number' ? value : undefined
 }
 
+function optionalArray(args: Record<string, unknown>, key: string) {
+  const value = args[key]
+  return Array.isArray(value) ? value : undefined
+}
+
+function structuredContentInput(args: Record<string, unknown>) {
+  return {
+    faq_items: optionalArray(args, 'faq_items') as Array<{ question: string; answer: string; position?: number }> | undefined,
+    faq_label: optionalString(args, 'faq_label'),
+    faq_status: optionalString(args, 'faq_status') as 'active' | 'inactive' | undefined,
+    faq_render_enabled: optionalBoolean(args, 'faq_render_enabled'),
+    faq_schema_enabled: optionalBoolean(args, 'faq_schema_enabled'),
+    how_to_steps: optionalArray(args, 'how_to_steps') as Array<{ name: string; text: string; image_asset_id?: string; url?: string; position?: number }> | undefined,
+    how_to_estimated_time: optionalString(args, 'how_to_estimated_time'),
+    how_to_tool_items: optionalArray(args, 'how_to_tool_items') as string[] | undefined,
+    how_to_supply_items: optionalArray(args, 'how_to_supply_items') as string[] | undefined,
+    how_to_label: optionalString(args, 'how_to_label'),
+    how_to_status: optionalString(args, 'how_to_status') as 'active' | 'inactive' | undefined,
+    how_to_render_enabled: optionalBoolean(args, 'how_to_render_enabled'),
+    how_to_schema_enabled: optionalBoolean(args, 'how_to_schema_enabled'),
+    components: optionalArray(args, 'components') as Array<{
+      type: 'faq' | 'how_to'
+      position?: number
+      label?: string
+      status?: 'active' | 'inactive'
+      render_enabled?: boolean
+      schema_enabled?: boolean
+      data: unknown
+    }> | undefined,
+  }
+}
+
 export async function executePlatformMcpToolCall(
   event: H3Event,
   toolName: string,
@@ -60,9 +93,11 @@ export async function executePlatformMcpToolCall(
 
   switch (toolName) {
     case 'get_platform_context': {
-      const currentUser = await user.db.prepare(
-        'SELECT id, email, name, role FROM user WHERE id = ? LIMIT 1'
-      ).bind(user.userId).first<{ id: string; email: string | null; name: string | null; role: string | null }>()
+      const currentUser = await queryFirst<{ id: string; email: string | null; name: string | null; role: string | null }>(
+        user.db,
+        'SELECT id, email, name, role FROM user WHERE id = ? LIMIT 1',
+        [user.userId],
+      )
       if (!currentUser) throw mcpProtocolError(MCP_ERROR.internal, 'Current user not found.')
       return {
         currentUser: {
@@ -81,6 +116,12 @@ export async function executePlatformMcpToolCall(
         body: requiredString(rawArguments, 'body'),
         excerpt: optionalString(rawArguments, 'excerpt') ?? null,
         category: optionalString(rawArguments, 'category') ?? null,
+        seo_description: optionalString(rawArguments, 'seo_description') ?? null,
+        seo_keywords: optionalString(rawArguments, 'seo_keywords') ?? null,
+        canonical_url: optionalString(rawArguments, 'canonical_url') ?? null,
+        robots: optionalString(rawArguments, 'robots') ?? null,
+        featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id') ?? null,
+        ...structuredContentInput(rawArguments),
         publish: optionalBoolean(rawArguments, 'publish') ?? false,
       })
     case 'update_platform_blog_post':
@@ -89,6 +130,14 @@ export async function executePlatformMcpToolCall(
         body: optionalString(rawArguments, 'body'),
         excerpt: optionalString(rawArguments, 'excerpt'),
         category: optionalString(rawArguments, 'category'),
+        seo_description: optionalString(rawArguments, 'seo_description'),
+        seo_keywords: optionalString(rawArguments, 'seo_keywords'),
+        canonical_url: optionalString(rawArguments, 'canonical_url'),
+        robots: optionalString(rawArguments, 'robots'),
+        featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id'),
+        ...structuredContentInput(rawArguments),
+        publish: optionalBoolean(rawArguments, 'publish'),
+        unpublish: optionalBoolean(rawArguments, 'unpublish'),
       })
     case 'publish_platform_blog_post':
       return await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), { publish: true })
@@ -108,10 +157,13 @@ export async function executePlatformMcpToolCall(
         category: optionalString(rawArguments, 'category') ?? null,
         seo_description: optionalString(rawArguments, 'seo_description') ?? null,
         seo_keywords: optionalString(rawArguments, 'seo_keywords') ?? null,
+        canonical_url: optionalString(rawArguments, 'canonical_url') ?? null,
+        robots: optionalString(rawArguments, 'robots') ?? null,
         difficulty_level: optionalString(rawArguments, 'difficulty_level') ?? null,
         sort_order: optionalNumber(rawArguments, 'sort_order') ?? 0,
         parent_doc_id: optionalString(rawArguments, 'parent_doc_id') ?? null,
         featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id') ?? null,
+        ...structuredContentInput(rawArguments),
         publish: optionalBoolean(rawArguments, 'publish') ?? false,
       })
     case 'update_platform_doc':
@@ -122,10 +174,15 @@ export async function executePlatformMcpToolCall(
         category: optionalString(rawArguments, 'category'),
         seo_description: optionalString(rawArguments, 'seo_description'),
         seo_keywords: optionalString(rawArguments, 'seo_keywords'),
+        canonical_url: optionalString(rawArguments, 'canonical_url'),
+        robots: optionalString(rawArguments, 'robots'),
         difficulty_level: optionalString(rawArguments, 'difficulty_level'),
         sort_order: optionalNumber(rawArguments, 'sort_order'),
         parent_doc_id: optionalString(rawArguments, 'parent_doc_id'),
         featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id'),
+        ...structuredContentInput(rawArguments),
+        publish: optionalBoolean(rawArguments, 'publish'),
+        unpublish: optionalBoolean(rawArguments, 'unpublish'),
       })
     case 'publish_platform_doc':
       return await updatePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'), { publish: true })

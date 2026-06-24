@@ -2,6 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createExperience } from '~/server/utils/experiences'
 import { InvalidFieldError, stringArrayOrNull } from '~/server/utils/validation-helpers'
+import { queryFirst } from '~/server/db'
 
 const optionalInteger = (value: unknown) => {
   if (value === null || value === undefined || value === '') return null
@@ -20,14 +21,13 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await db
-    .prepare(
-      `SELECT s.id, s.organization_id, s.primary_location_id FROM sites s
+  const site = await queryFirst<{ id: string; organization_id: string; primary_location_id: string | null }>(
+    db,
+    `SELECT s.id, s.organization_id, s.primary_location_id FROM sites s
        JOIN member m ON m.organizationId = s.organization_id
        WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') LIMIT 1`,
-    )
-    .bind(siteId, session.user.id)
-    .first<{ id: string; organization_id: string; primary_location_id: string | null }>()
+    [siteId, session.user.id],
+  )
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
@@ -43,10 +43,7 @@ export default defineEventHandler(async (event) => {
   if (!locationId) {
     return jsonResponse({ error: 'location_id is required' }, { status: 400 })
   }
-  const location = await db
-    .prepare(`SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`)
-    .bind(locationId, siteId)
-    .first<{ id: string }>()
+  const location = await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId])
   if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
 
   // Validate featured and featured_sort_order when explicitly provided

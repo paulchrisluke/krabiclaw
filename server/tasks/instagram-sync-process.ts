@@ -6,6 +6,7 @@ import {
   syncInstagramPosts,
 } from '~/server/utils/facebook-pages'
 import { decryptSecret, encryptionEnv } from '~/server/utils/encryption'
+import { execute, queryAll } from '~/server/db'
 
 interface SyncTaskContext {
   cloudflare?: { env?: ApiRecord }
@@ -52,7 +53,7 @@ export default defineTask({
     if (!db) throw new Error('DB is required')
 
     // Only sync orgs with managed_service entitlement (Managed + SEO Accelerator plans)
-    const { results } = await db.prepare(`
+    const connections = await queryAll<ConnectionRow>(db, `
       SELECT fpc.id, fpc.organization_id, fpc.site_id,
              fpc.facebook_page_id, fpc.encrypted_user_token, fpc.encrypted_page_token
       FROM facebook_pages_connections fpc
@@ -63,9 +64,7 @@ export default defineTask({
       WHERE fpc.status = 'active'
         OR (fpc.status = 'error' AND fpc.updated_at < datetime('now', '-1 hour'))
       ORDER BY fpc.organization_id
-    `).all()
-
-    const connections = (results ?? []) as unknown as ConnectionRow[]
+    `)
 
     if (connections.length === 0) {
       return { result: { connections: 0, passed: 0, failed: 0, details: [] } }
@@ -112,9 +111,9 @@ export default defineTask({
         console.error(`[instagram-sync-process] failed for connection ${conn.id}:`, connResult.error)
 
         // Surface the error in the dashboard connection status; retry after 1h via updated_at
-        await db.prepare(`
+        await execute(db, `
           UPDATE facebook_pages_connections SET status = 'error', updated_at = ? WHERE id = ?
-        `).bind(new Date().toISOString(), conn.id).run()
+        `, [new Date().toISOString(), conn.id])
           .catch(updateErr => console.error(`[instagram-sync-process] failed to persist error status for connection ${conn.id}:`, updateErr))
       }
 

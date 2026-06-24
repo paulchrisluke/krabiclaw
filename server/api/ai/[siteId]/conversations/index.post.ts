@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createConversation, getSiteForMember } from '~/server/utils/chowbot-conversations'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -35,9 +36,10 @@ export default defineEventHandler(async (event) => {
 
     // Validate locationId if provided
     if (typeof body.locationId === 'string' && body.locationId) {
-      const location = await db.prepare(
-        'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1'
-      ).bind(body.locationId, siteId).first()
+      const location = await queryFirst(db,
+        'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1',
+        [body.locationId, siteId]
+      )
       if (!location) {
         return jsonResponse({ error: 'Invalid location ID' }, { status: 400 })
       }

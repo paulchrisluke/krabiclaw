@@ -3,6 +3,7 @@ import { getExperienceBySlug, createExperienceBooking, resolveEffectiveTimeSlots
 import { isDateBeforeTimezoneToday } from '~/server/utils/site-config'
 import { notifyExperienceBookingCreated } from '~/server/utils/notifications'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
+import { execute, queryFirst, type DbClient } from '~/server/db'
 
 const IP_HOURLY_LIMIT = 5
 const EMAIL_DAILY_LIMIT = 3
@@ -21,20 +22,18 @@ function getClientIp(event: ApiValue): string {
     || 'unknown'
 }
 
-async function incrementRateLimit(db: D1Database, key: string, limit: number, expireMs: number): Promise<boolean> {
+async function incrementRateLimit(db: DbClient, key: string, limit: number, expireMs: number): Promise<boolean> {
   const now = new Date().toISOString()
   const expiresAt = new Date(Date.now() + expireMs).toISOString()
-  const result = await db
-    .prepare(
-      `INSERT INTO rate_limits (key, count, updated_at, expires_at) VALUES (?, 1, ?, ?)
+  const result = await execute(db,
+    `INSERT INTO rate_limits (key, count, updated_at, expires_at) VALUES (?, 1, ?, ?)
        ON CONFLICT(key) DO UPDATE SET
          count = CASE WHEN rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END,
          expires_at = CASE WHEN rate_limits.expires_at <= ? THEN ? ELSE rate_limits.expires_at END,
          updated_at = ?
        WHERE (CASE WHEN rate_limits.expires_at <= ? THEN 1 ELSE rate_limits.count + 1 END) <= ?`,
-    )
-    .bind(key, now, expiresAt, now, now, expiresAt, now, now, limit)
-    .run()
+    [key, now, expiresAt, now, now, expiresAt, now, now, limit],
+  )
   return Boolean(result?.success && result?.meta?.changes)
 }
 
@@ -47,10 +46,7 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await db
-    .prepare(`SELECT id, organization_id, brand_name FROM sites WHERE id = ? AND status = 'active' LIMIT 1`)
-    .bind(siteId)
-    .first<{ id: string; organization_id: string; brand_name: string | null }>()
+  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null }>(db, `SELECT id, organization_id, brand_name FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const experience = await getExperienceBySlug(db, siteId, slug)

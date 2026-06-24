@@ -1,3 +1,4 @@
+import { execute, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyContactSubmitted } from '~/server/utils/notifications'
 
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   let body: ApiRecord
@@ -31,18 +32,20 @@ export default defineEventHandler(async (event) => {
   if (message.length < 10)
     return jsonResponse({ error: 'Message must be at least 10 characters.' }, { status: 400 })
 
-  const site = await db.prepare(
-    'SELECT id, organization_id, brand_name FROM sites WHERE id = ? AND status = ? LIMIT 1'
-  ).bind(siteId, 'active').first<{ id: string; organization_id: string; brand_name?: string | null }>()
+  const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null }>(
+    db,
+    'SELECT id, organization_id, brand_name FROM sites WHERE id = ? AND status = ? LIMIT 1',
+    [siteId, 'active'],
+  )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const id = crypto.randomUUID()
   const ipHash = await hashIp(getHeader(event, 'CF-Connecting-IP') ?? getHeader(event, 'x-forwarded-for') ?? '')
 
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO contact_submissions (id, organization_id, site_id, name, email, message, ip_hash)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, site.organization_id, siteId, name, email, message, ipHash).run()
+  `, [id, site.organization_id, siteId, name, email, message, ipHash])
 
   try {
     await notifyContactSubmitted(env, db, {

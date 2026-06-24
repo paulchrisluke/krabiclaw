@@ -77,6 +77,7 @@ import { authClient } from '~/lib/auth-client'
 import { validatePassword } from '~/utils/password-validation'
 
 const router = useRouter()
+const { trackSignUp } = useAnalytics()
 const loading = ref(false)
 const error = ref(null)
 const validationErrors = ref({
@@ -94,6 +95,7 @@ const handleGoogleSignIn = async () => {
   error.value = null
   try {
     await authClient.signIn.social({ provider: 'google', callbackURL: '/dashboard' })
+    trackSignUp('oauth_google')
   } catch (err) {
     console.error('Google sign-in error:', err)
     error.value = 'Google sign in failed. Please try again.'
@@ -137,6 +139,7 @@ const handleEmailSignup = async () => {
       return
     }
 
+    trackSignUp('email')
     await router.push('/login?signup=success')
   } catch (err) {
     console.error('Email sign-up error:', err)

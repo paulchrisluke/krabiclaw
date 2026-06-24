@@ -180,7 +180,6 @@
 <script setup>
 definePageMeta({ layout: false })
 
-import { useOrganizationSchema, useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 
@@ -208,43 +207,32 @@ function isVideoUrl(url) {
   }
 }
 
-const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
 const route = useRoute()
 const requestURL = useRequestURL()
-const sharedOgImage = useSharedOgImage()
 const tenantOgImage = useTenantOgImage()
 
 if (isPlatform) {
-  useOrganizationSchema()
-  useBreadcrumbSchema([
-    { name: 'Home', url: `${siteUrl}/` },
-    { name: 'About', url: `${siteUrl}/about` }
-  ])
+  usePlatformPageSeo({
+    path: '/about',
+    title: 'About',
+    description: 'KrabiClaw is a premium, AI-powered website builder designed for independent businesses globally.',
+    pageType: 'AboutPage',
+    breadcrumbs: [
+      { name: 'Home', url: '/' },
+      { name: 'About', url: '/about' },
+    ],
+  })
+} else {
+  useSeoMeta({
+    title: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
+    description: computed(() => getField('seo.description', 'Learn about our business and our story.')),
+    ogTitle: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
+    ogDescription: computed(() => getField('seo.description', 'Learn about our business and our story.')),
+    ogSiteName: computed(() => site?.brand_name || 'KrabiClaw'),
+    twitterTitle: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
+    twitterDescription: computed(() => getField('seo.description', 'Learn about our business and our story.')),
+    ogImage: tenantOgImage,
+    ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
+  })
 }
-
-useSeoMeta(isPlatform
-  ? {
-      title: 'About | KrabiClaw',
-      description: 'KrabiClaw is a premium, AI-powered website builder designed for independent businesses globally.',
-      ogTitle: 'About | KrabiClaw',
-      ogDescription: 'KrabiClaw is a premium, AI-powered website builder designed for independent businesses globally.',
-      ogSiteName: 'KrabiClaw',
-      twitterTitle: 'About | KrabiClaw',
-      twitterDescription: 'KrabiClaw is a premium, AI-powered website builder designed for independent businesses globally.',
-      ogImage: sharedOgImage,
-      ogUrl: `${siteUrl}/about`
-    }
-  : {
-      title: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
-      description: computed(() => getField('seo.description', 'Learn about our business and our story.')),
-      ogTitle: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
-      ogDescription: computed(() => getField('seo.description', 'Learn about our business and our story.')),
-      ogSiteName: computed(() => site?.brand_name || 'KrabiClaw'),
-      twitterTitle: computed(() => `About | ${site?.brand_name || 'KrabiClaw'}`),
-      twitterDescription: computed(() => getField('seo.description', 'Learn about our business and our story.')),
-      ogImage: tenantOgImage,
-      ogUrl: computed(() => new URL(route.path, requestURL.origin).toString())
-    }
-)
 </script>

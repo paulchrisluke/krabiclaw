@@ -9,6 +9,7 @@ import type {
   UpdateMenuItemRequest,
 } from "../types/menu";
 import { normalizePriceAmount } from "~/shared/money";
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from "~/server/db";
 
 const MAX_SUFFIX_ATTEMPTS = 50;
 
@@ -51,24 +52,23 @@ export class MenuSectionNotFoundError extends Error {
 }
 
 async function assertValidMenuLocation(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   locationId: string | null | undefined,
 ) {
   if (!locationId) return;
 
-  const location = await db
-    .prepare(
-      `
+  const location = await queryFirst<{ id: string }>(
+    db,
+    `
     SELECT id
     FROM business_locations
     WHERE id = ? AND organization_id = ? AND site_id = ?
     LIMIT 1
   `,
-    )
-    .bind(locationId, organizationId, siteId)
-    .first<{ id: string }>();
+    [locationId, organizationId, siteId],
+  );
 
   if (!location?.id) {
     throw createError({
@@ -169,7 +169,7 @@ function sortMenuItems(items: MenuItem[], sectionOrder: string[]): MenuItem[] {
 }
 
 async function applyPublishedMenuTranslations(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   menu: MenuWithItems,
@@ -177,29 +177,27 @@ async function applyPublishedMenuTranslations(
 ): Promise<MenuWithItems> {
   if (!locale) return menu;
 
-  const menuTranslation = await db
-    .prepare(
-      `
+  const menuTranslation = await queryFirst<PublishedMenuTranslation>(
+    db,
+    `
     SELECT name, description, section_order
     FROM menu_translations
     WHERE organization_id = ? AND site_id = ? AND menu_id = ? AND locale = ? AND status = 'published'
     LIMIT 1
   `,
-    )
-    .bind(organizationId, siteId, menu.id, locale)
-    .first<PublishedMenuTranslation>();
+    [organizationId, siteId, menu.id, locale],
+  );
 
-  const { results } = await db
-    .prepare(
-      `
+  const results = await queryAll<PublishedMenuItemTranslation>(
+    db,
+    `
     SELECT menu_item_id, section, name, description, allergens, ingredients, dietary_notes, preparation, serving_note
     FROM menu_item_translations
     WHERE organization_id = ? AND site_id = ? AND locale = ? AND status = 'published'
       AND menu_item_id IN (SELECT id FROM menu_items WHERE menu_id = ?)
   `,
-    )
-    .bind(organizationId, siteId, locale, menu.id)
-    .all<PublishedMenuItemTranslation>();
+    [organizationId, siteId, locale, menu.id],
+  );
 
   const itemTranslations = new Map(
     (results ?? []).map((row) => [row.menu_item_id, row]),
@@ -244,24 +242,26 @@ async function applyPublishedMenuTranslations(
 }
 
 async function getMenuSectionOrder(
-  db: D1Database,
+  db: DbClient,
   menuId: string,
 ): Promise<string[]> {
-  const row = await db
-    .prepare("SELECT section_order FROM menus WHERE id = ? LIMIT 1")
-    .bind(menuId)
-    .first<{ section_order: string | null }>();
+  const row = await queryFirst<{ section_order: string | null }>(
+    db,
+    "SELECT section_order FROM menus WHERE id = ? LIMIT 1",
+    [menuId],
+  );
   return normalizeSectionOrder(row?.section_order);
 }
 
 async function getMenuSectionOrderWithVersion(
-  db: D1Database,
+  db: DbClient,
   menuId: string,
 ): Promise<{ sectionOrder: string[]; updatedAt: string }> {
-  const row = await db
-    .prepare("SELECT section_order, updated_at FROM menus WHERE id = ? LIMIT 1")
-    .bind(menuId)
-    .first<{ section_order: string | null; updated_at: string }>();
+  const row = await queryFirst<{ section_order: string | null; updated_at: string }>(
+    db,
+    "SELECT section_order, updated_at FROM menus WHERE id = ? LIMIT 1",
+    [menuId],
+  );
   return {
     sectionOrder: normalizeSectionOrder(row?.section_order),
     updatedAt: row?.updated_at ?? "",
@@ -269,7 +269,7 @@ async function getMenuSectionOrderWithVersion(
 }
 
 async function saveMenuSectionOrder(
-  db: D1Database,
+  db: DbClient,
   menuId: string,
   sectionOrder: string[],
   updatedBy?: string,
@@ -294,16 +294,13 @@ async function saveMenuSectionOrder(
     params.push(expectedUpdatedAt);
   }
 
-  const result = await db
-    .prepare(query)
-    .bind(...params)
-    .run();
+  const result = await execute(db, query, params);
   if (!result.success) throw new Error("Failed to update menu section order");
-  return result.meta.changes > 0;
+  return Number(result.meta.changes ?? 0) > 0;
 }
 
 async function ensureMenuSectionInOrder(
-  db: D1Database,
+  db: DbClient,
   menuId: string,
   section: string,
   updatedBy?: string,
@@ -333,16 +330,17 @@ async function ensureMenuSectionInOrder(
 }
 
 async function uniqueSlug(
-  db: D1Database,
+  db: DbClient,
   menuId: string,
   base: string,
   excludeId?: string,
 ): Promise<string> {
   // Get site_id from menuId to ensure site-wide uniqueness for public URLs
-  const menu = (await db
-    .prepare(`SELECT site_id FROM menus WHERE id = ?`)
-    .bind(menuId)
-    .first()) as { site_id: string } | null;
+  const menu = await queryFirst<{ site_id: string }>(
+    db,
+    `SELECT site_id FROM menus WHERE id = ?`,
+    [menuId],
+  );
   const siteId = menu?.site_id;
 
   if (!siteId) throw new Error("Menu not found for slug generation");
@@ -357,10 +355,7 @@ async function uniqueSlug(
     const params = excludeId
       ? [siteId, candidate, excludeId]
       : [siteId, candidate];
-    const existing = await db
-      .prepare(query)
-      .bind(...params)
-      .first();
+    const existing = await queryFirst(db, query, params);
     if (!existing) return candidate;
     candidate = `${baseSlug}-${suffix}`;
     suffix++;
@@ -373,7 +368,7 @@ async function uniqueSlug(
 
 // Get menus for a site with optional location filter
 export async function getMenus(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   locationId?: string | null,
@@ -381,7 +376,7 @@ export async function getMenus(
   let query = `
     SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
            created_at, updated_at, created_by, updated_by
-    FROM menus 
+    FROM menus
     WHERE organization_id = ? AND site_id = ?
   `;
   const params: (string | null)[] = [organizationId, siteId];
@@ -394,43 +389,37 @@ export async function getMenus(
 
   query += ` ORDER BY location_id IS NULL, (status = 'published') DESC, name`;
 
-  const results = await db
-    .prepare(query)
-    .bind(...params)
-    .all();
-  return (results.results || []).map((row) =>
-    mapMenu(row as Record<string, unknown>),
-  );
+  const results = await queryAll<Record<string, unknown>>(db, query, params);
+  return (results || []).map((row) => mapMenu(row));
 }
 
 // Get menu with items
 export async function getMenuWithItems(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   menuId: string,
 ): Promise<MenuWithItems | null> {
   // Get menu
-  const menu = await db
-    .prepare(
-      `
+  const menu = await queryFirst<Record<string, unknown>>(
+    db,
+    `
     SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
            created_at, updated_at, created_by, updated_by
-    FROM menus 
+    FROM menus
     WHERE id = ? AND organization_id = ? AND site_id = ?
     LIMIT 1
   `,
-    )
-    .bind(menuId, organizationId, siteId)
-    .first<Record<string, unknown>>();
+    [menuId, organizationId, siteId],
+  );
 
   if (!menu) return null;
   const mappedMenu = mapMenu(menu);
 
   // Get menu items
-  const items = await db
-    .prepare(
-      `
+  const items = await queryAll<Record<string, unknown>>(
+    db,
+    `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
@@ -440,30 +429,29 @@ export async function getMenuWithItems(
     WHERE mi.menu_id = ?
     ORDER BY mi.sort_order, mi.name
   `,
-    )
-    .bind(menuId)
-    .all();
+    [menuId],
+  );
 
   return {
     ...mappedMenu,
     items: sortMenuItems(
-      (items.results || []).map(mapMenuItem),
+      (items || []).map(mapMenuItem),
       mappedMenu.section_order ?? [],
     ),
   };
 }
 
 async function loadPublishedMenuById(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   menuRow: Record<string, unknown>,
   locale?: string,
 ): Promise<MenuWithItems> {
   const mappedMenu = mapMenu(menuRow);
-  const items = await db
-    .prepare(
-      `
+  const items = await queryAll<Record<string, unknown>>(
+    db,
+    `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
@@ -473,14 +461,13 @@ async function loadPublishedMenuById(
     WHERE mi.menu_id = ?
     ORDER BY mi.sort_order, mi.name
   `,
-    )
-    .bind(menuRow.id)
-    .all();
+    [menuRow.id],
+  );
 
   const menuWithItems = {
     ...mappedMenu,
     items: sortMenuItems(
-      (items.results || []).map(mapMenuItem),
+      (items || []).map(mapMenuItem),
       mappedMenu.section_order ?? [],
     ),
   };
@@ -495,7 +482,7 @@ async function loadPublishedMenuById(
 
 // Get active menu for a scope (brand or location)
 export async function getActiveMenu(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   locationId?: string | null,
@@ -503,18 +490,17 @@ export async function getActiveMenu(
 ): Promise<MenuWithItems | null> {
   // First try to get location-specific menu
   if (locationId) {
-    const locationMenu = await db
-      .prepare(
-        `
+    const locationMenu = await queryFirst<Record<string, unknown>>(
+      db,
+      `
       SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
              created_at, updated_at, created_by, updated_by
       FROM menus
       WHERE organization_id = ? AND site_id = ? AND location_id = ? AND status = 'published'
       LIMIT 1
     `,
-      )
-      .bind(organizationId, siteId, locationId)
-      .first<Record<string, unknown>>();
+      [organizationId, siteId, locationId],
+    );
 
     if (locationMenu) {
       return loadPublishedMenuById(db, organizationId, siteId, locationMenu, locale);
@@ -522,18 +508,17 @@ export async function getActiveMenu(
   }
 
   // Fall back to brand/default menu (no location_id)
-  const brandMenu = await db
-    .prepare(
-      `
+  const brandMenu = await queryFirst<Record<string, unknown>>(
+    db,
+    `
     SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
            created_at, updated_at, created_by, updated_by
     FROM menus
     WHERE organization_id = ? AND site_id = ? AND location_id IS NULL AND status = 'published'
     LIMIT 1
   `,
-    )
-    .bind(organizationId, siteId)
-    .first<Record<string, unknown>>();
+    [organizationId, siteId],
+  );
 
   if (brandMenu) {
     return loadPublishedMenuById(db, organizationId, siteId, brandMenu, locale);
@@ -542,9 +527,9 @@ export async function getActiveMenu(
   // Sites with only location-scoped menus (no brand-level menu) still need a
   // default to show on non-location pages, so fall back to the primary
   // (or first) active location's published menu.
-  const fallbackLocationMenu = await db
-    .prepare(
-      `
+  const fallbackLocationMenu = await queryFirst<Record<string, unknown>>(
+    db,
+    `
     SELECT m.id, m.organization_id, m.site_id, m.location_id, m.name, m.description, m.status, m.section_order,
            m.created_at, m.updated_at, m.created_by, m.updated_by
     FROM menus m
@@ -553,9 +538,8 @@ export async function getActiveMenu(
     ORDER BY bl.is_primary DESC, bl.title ASC
     LIMIT 1
   `,
-    )
-    .bind(organizationId, siteId)
-    .first<Record<string, unknown>>();
+    [organizationId, siteId],
+  );
 
   if (!fallbackLocationMenu) return null;
   return loadPublishedMenuById(db, organizationId, siteId, fallbackLocationMenu, locale);
@@ -563,13 +547,13 @@ export async function getActiveMenu(
 
 // Get public menu item by slug
 export async function getPublicMenuItem(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   slug: string,
 ): Promise<MenuItem | null> {
-  const item = await db
-    .prepare(
-      `
+  const item = await queryFirst<Record<string, unknown>>(
+    db,
+    `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
@@ -580,16 +564,15 @@ export async function getPublicMenuItem(
     WHERE m.site_id = ? AND mi.slug = ? AND m.status = 'published'
     LIMIT 1
   `,
-    )
-    .bind(siteId, slug)
-    .first();
+    [siteId, slug],
+  );
 
   return item ? mapMenuItem(item) : null;
 }
 
 // Create menu
 export async function createMenu(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   menu: CreateMenuRequest,
@@ -601,14 +584,13 @@ export async function createMenu(
 
   await assertValidMenuLocation(db, organizationId, siteId, locationId);
 
-  const result = await db
-    .prepare(
-      `
+  const result = await execute(
+    db,
+    `
     INSERT INTO menus (id, organization_id, site_id, location_id, name, description, status, created_at, updated_at, created_by)
     VALUES (?, ?, ?, ?, ?, ?, 'published', ?, ?, ?)
   `,
-    )
-    .bind(
+    [
       id,
       organizationId,
       siteId,
@@ -618,8 +600,8 @@ export async function createMenu(
       now,
       now,
       createdBy,
-    )
-    .run();
+    ],
+  );
 
   if (!result.success) {
     throw new Error("Failed to create menu");
@@ -643,7 +625,7 @@ export async function createMenu(
 
 // Update menu
 export async function updateMenu(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   menuId: string,
@@ -679,33 +661,31 @@ export async function updateMenu(
 
   params.push(menuId, organizationId, siteId);
 
-  const result = await db
-    .prepare(
-      `
-    UPDATE menus 
+  const result = await execute(
+    db,
+    `
+    UPDATE menus
     SET ${setParts.join(", ")}
     WHERE id = ? AND organization_id = ? AND site_id = ?
   `,
-    )
-    .bind(...params)
-    .run();
+    params,
+  );
 
   if (!result.success) {
     throw new Error("Failed to update menu");
   }
 
-  const updatedMenu = await db
-    .prepare(
-      `
+  const updatedMenu = await queryFirst<Record<string, unknown>>(
+    db,
+    `
     SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
            created_at, updated_at, created_by, updated_by
-    FROM menus 
+    FROM menus
     WHERE id = ? AND organization_id = ? AND site_id = ?
     LIMIT 1
   `,
-    )
-    .bind(menuId, organizationId, siteId)
-    .first<Record<string, unknown>>();
+    [menuId, organizationId, siteId],
+  );
 
   if (!updatedMenu) {
     throw new Error("Menu not found after update");
@@ -716,20 +696,19 @@ export async function updateMenu(
 
 // Delete menu
 export async function deleteMenu(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   menuId: string,
 ): Promise<void> {
-  const result = await db
-    .prepare(
-      `
-    DELETE FROM menus 
+  const result = await execute(
+    db,
+    `
+    DELETE FROM menus
     WHERE id = ? AND organization_id = ? AND site_id = ?
   `,
-    )
-    .bind(menuId, organizationId, siteId)
-    .run();
+    [menuId, organizationId, siteId],
+  );
 
   if (!result.success) {
     throw new Error("Failed to delete menu");
@@ -738,32 +717,32 @@ export async function deleteMenu(
 
 // Create menu item
 export async function createMenuItem(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   menuId: string,
   item: CreateMenuItemRequest,
   createdBy: string,
 ): Promise<MenuItem> {
-  const menuOwner = await db
-    .prepare(`SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`)
-    .bind(menuId, organizationId, siteId)
-    .first<{ id: string }>();
+  const menuOwner = await queryFirst<{ id: string }>(
+    db,
+    `SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+    [menuId, organizationId, siteId],
+  );
   if (!menuOwner) throw createError({ statusCode: 404, statusMessage: "Menu not found" });
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const slug = await uniqueSlug(db, menuId, item.name);
 
-  const result = await db
-    .prepare(
-      `
+  const result = await execute(
+    db,
+    `
     INSERT INTO menu_items (id, menu_id, section, name, slug, description, price_amount, image_asset_id, available, featured, featured_sort_order, sort_order,
       allergens, ingredients, dietary_notes, preparation, serving_note, created_at, updated_at, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
-    )
-    .bind(
+    [
       id,
       menuId,
       item.section,
@@ -784,8 +763,8 @@ export async function createMenuItem(
       now,
       now,
       createdBy,
-    )
-    .run();
+    ],
+  );
 
   // Rely on DB unique index (menu_id, slug) for concurrent writes.
   // Callers can safely retry create on unique-constraint failures with backoff.
@@ -794,9 +773,9 @@ export async function createMenuItem(
     throw new Error("Failed to create menu item");
   }
 
-  const createdItem = await db
-    .prepare(
-      `
+  const createdItem = await queryFirst<Record<string, unknown>>(
+    db,
+    `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
@@ -806,9 +785,8 @@ export async function createMenuItem(
     WHERE mi.id = ?
     LIMIT 1
   `,
-    )
-    .bind(id)
-    .first();
+    [id],
+  );
 
   if (!createdItem) {
     throw new Error("Menu item not found after creation");
@@ -821,7 +799,7 @@ export async function createMenuItem(
 
 // Update menu item
 export async function updateMenuItem(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   menuItemId: string,
@@ -830,16 +808,17 @@ export async function updateMenuItem(
 ): Promise<MenuItem> {
   const now = new Date().toISOString();
 
-  const existing = await db
-    .prepare(`
+  const existing = await queryFirst<{ menu_id: string; section: string | null }>(
+    db,
+    `
       SELECT mi.menu_id, mi.section
       FROM menu_items mi
       JOIN menus m ON mi.menu_id = m.id
       WHERE mi.id = ? AND m.organization_id = ? AND m.site_id = ?
       LIMIT 1
-    `)
-    .bind(menuItemId, organizationId, siteId)
-    .first<{ menu_id: string; section: string | null }>();
+    `,
+    [menuItemId, organizationId, siteId],
+  );
 
   if (!existing) {
     throw new Error(`Menu item not found: ${menuItemId}`);
@@ -924,16 +903,15 @@ export async function updateMenuItem(
 
   params.push(menuItemId);
 
-  const result = await db
-    .prepare(
-      `
-    UPDATE menu_items 
+  const result = await execute(
+    db,
+    `
+    UPDATE menu_items
     SET ${setParts.join(", ")}
     WHERE id = ?
   `,
-    )
-    .bind(...params)
-    .run();
+    params,
+  );
 
   // Rely on DB unique index (menu_id, slug) for concurrent writes.
   // Callers can safely retry updates on unique-constraint failures with backoff.
@@ -942,9 +920,9 @@ export async function updateMenuItem(
     throw new Error("Failed to update menu item");
   }
 
-  const updatedItem = await db
-    .prepare(
-      `
+  const updatedItem = await queryFirst<Record<string, unknown>>(
+    db,
+    `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
@@ -954,9 +932,8 @@ export async function updateMenuItem(
     WHERE mi.id = ?
     LIMIT 1
   `,
-    )
-    .bind(menuItemId)
-    .first();
+    [menuItemId],
+  );
 
   if (!updatedItem) {
     throw new Error("Menu item not found after update");
@@ -970,12 +947,11 @@ export async function updateMenuItem(
 
       // Prune old section from section_order if it has become empty
       if (existing.section && existing.section !== updates.section) {
-        const remaining = await db
-          .prepare(
-            `SELECT COUNT(*) as count FROM menu_items WHERE menu_id = ? AND section = ?`,
-          )
-          .bind(menuId, existing.section)
-          .first<{ count: number }>();
+        const remaining = await queryFirst<{ count: number }>(
+          db,
+          `SELECT COUNT(*) as count FROM menu_items WHERE menu_id = ? AND section = ?`,
+          [menuId, existing.section],
+        );
 
         if (remaining && remaining.count === 0) {
           const sectionOrder = await getMenuSectionOrder(db, menuId);
@@ -995,41 +971,36 @@ export async function updateMenuItem(
 
 // Delete menu item
 export async function deleteMenuItem(
-  db: D1Database,
+  db: DbClient,
   menuItemId: string,
   organizationId: string,
   siteId: string,
   updatedBy?: string,
 ): Promise<boolean> {
-  const existing = await db
-    .prepare(
-      `SELECT mi.menu_id, mi.section
+  const existing = await queryFirst<{ menu_id: string; section: string | null }>(
+    db,
+    `SELECT mi.menu_id, mi.section
      FROM menu_items mi
      JOIN menus m ON mi.menu_id = m.id
      WHERE mi.id = ? AND m.organization_id = ? AND m.site_id = ?
      LIMIT 1`,
-    )
-    .bind(menuItemId, organizationId, siteId)
-    .first<{ menu_id: string; section: string | null }>();
+    [menuItemId, organizationId, siteId],
+  );
 
   if (!existing) return false;
 
-  const result = await db
-    .prepare(`DELETE FROM menu_items WHERE id = ?`)
-    .bind(menuItemId)
-    .run();
+  const result = await execute(db, `DELETE FROM menu_items WHERE id = ?`, [menuItemId]);
 
   if (!result.success) {
     throw new Error("Failed to delete menu item");
   }
 
   if (existing?.menu_id && existing.section) {
-    const remaining = await db
-      .prepare(
-        `SELECT COUNT(*) as count FROM menu_items WHERE menu_id = ? AND section = ?`,
-      )
-      .bind(existing.menu_id, existing.section)
-      .first<{ count: number }>();
+    const remaining = await queryFirst<{ count: number }>(
+      db,
+      `SELECT COUNT(*) as count FROM menu_items WHERE menu_id = ? AND section = ?`,
+      [existing.menu_id, existing.section],
+    );
 
     if (remaining && remaining.count === 0) {
       const sectionOrder = await getMenuSectionOrder(db, existing.menu_id);
@@ -1047,7 +1018,7 @@ export async function deleteMenuItem(
 
 // Rename a menu section by updating every item that belongs to it
 export async function renameMenuSection(
-  db: D1Database,
+  db: DbClient,
   menuId: string,
   oldSection: string,
   newSection: string,
@@ -1061,9 +1032,9 @@ export async function renameMenuSection(
     throw new MenuSectionConflictError();
   }
 
-  const result = await db
-    .prepare(
-      `
+  const result = await execute(
+    db,
+    `
     UPDATE menu_items
     SET section = ?, updated_at = ?, updated_by = ?
     WHERE menu_id = ? AND section = ?
@@ -1072,9 +1043,8 @@ export async function renameMenuSection(
         WHERE menu_id = ? AND section = ?
       )
   `,
-    )
-    .bind(newSection, now, updatedBy, menuId, oldSection, menuId, newSection)
-    .run();
+    [newSection, now, updatedBy, menuId, oldSection, menuId, newSection],
+  );
 
   if (!result.success) {
     throw new Error("Failed to rename menu section");
@@ -1089,31 +1059,29 @@ export async function renameMenuSection(
     return changes;
   }
 
-  const oldSectionExists = await db
-    .prepare(
-      `
+  const oldSectionExists = await queryFirst(
+    db,
+    `
     SELECT id FROM menu_items
     WHERE menu_id = ? AND section = ?
     LIMIT 1
   `,
-    )
-    .bind(menuId, oldSection)
-    .first();
+    [menuId, oldSection],
+  );
 
   if (!oldSectionExists) {
     throw new MenuSectionNotFoundError();
   }
 
-  const newSectionExists = await db
-    .prepare(
-      `
+  const newSectionExists = await queryFirst(
+    db,
+    `
     SELECT id FROM menu_items
     WHERE menu_id = ? AND section = ?
     LIMIT 1
   `,
-    )
-    .bind(menuId, newSection)
-    .first();
+    [menuId, newSection],
+  );
 
   if (newSectionExists) {
     throw new MenuSectionConflictError();
@@ -1124,20 +1092,19 @@ export async function renameMenuSection(
 
 // Delete every item in a menu section
 export async function deleteMenuSection(
-  db: D1Database,
+  db: DbClient,
   menuId: string,
   section: string,
 ): Promise<number> {
   const sectionOrder = await getMenuSectionOrder(db, menuId);
-  const result = await db
-    .prepare(
-      `
+  const result = await execute(
+    db,
+    `
     DELETE FROM menu_items
     WHERE menu_id = ? AND section = ?
   `,
-    )
-    .bind(menuId, section)
-    .run();
+    [menuId, section],
+  );
 
   if (!result.success) {
     throw new Error("Failed to delete menu section");
@@ -1151,26 +1118,37 @@ export async function deleteMenuSection(
     );
   }
 
-  return result.meta.changes;
+  return Number(result.meta.changes ?? 0);
 }
 
 // Reorder menu items
 export async function reorderMenuItems(
-  db: D1Database,
+  db: DbClient,
   menuId: string,
   items: Array<{ id: string; sort_order: number }>,
 ): Promise<void> {
-  await db.batch(
-    items.map((item) =>
-      db
-        .prepare(
-          `
-      UPDATE menu_items 
+  // Reorder must commit atomically: a partial failure here must not leave
+  // items with inconsistent sort_order relative to each other.
+  const results = await executeBatch(
+    db,
+    items.map((item) => ({
+      query: `
+      UPDATE menu_items
       SET sort_order = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND menu_id = ?
     `,
-        )
-        .bind(item.sort_order, item.id, menuId),
-    ),
+      params: [item.sort_order, item.id, menuId],
+    })),
   );
+
+  // The WHERE clause scopes each update to this menu, so a stale/foreign id
+  // can't corrupt another menu's rows — but it would otherwise fail silently
+  // (zero rows affected) instead of surfacing the bad id to the caller.
+  const unmatched = results.reduce(
+    (count, result, index) => (Number(result?.meta?.changes ?? 0) > 0 ? count : count + (items[index] ? 1 : 0)),
+    0,
+  );
+  if (unmatched > 0) {
+    throw new Error(`Failed to reorder ${unmatched} menu item(s): not found in menu ${menuId}`);
+  }
 }

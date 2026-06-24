@@ -4,6 +4,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, requireBillingAccess } from '~/server/utils/billing'
+import { execute, queryFirst, type DbClient } from '~/server/db'
 
 type AddonType = 'translation' | 'seasonal' | 'gbp_setup'
 
@@ -23,12 +24,12 @@ function slugifyOrgName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48)
 }
 
-async function ensureOrganizationSlug(db: D1Database, orgId: string, existingSlug: string | null) {
+async function ensureOrganizationSlug(db: DbClient, orgId: string, existingSlug: string | null) {
   if (existingSlug) return existingSlug
 
-  const organization = await db.prepare(`
-    SELECT name, slug FROM organization WHERE id = ? LIMIT 1
-  `).bind(orgId).first<{ name: string; slug: string | null }>()
+  const organization = await queryFirst<{ name: string; slug: string | null }>(
+    db, `SELECT name, slug FROM organization WHERE id = ? LIMIT 1`, [orgId],
+  )
 
   if (organization?.slug) return organization.slug
 
@@ -37,15 +38,11 @@ async function ensureOrganizationSlug(db: D1Database, orgId: string, existingSlu
 
   for (let index = 0; index < 12; index++) {
     const candidate = index === 0 ? baseSlug : `${baseSlug}-${index}`
-    const conflict = await db.prepare(`
-      SELECT id FROM organization WHERE slug = ? AND id != ? LIMIT 1
-    `).bind(candidate, orgId).first()
+    const conflict = await queryFirst(db, `SELECT id FROM organization WHERE slug = ? AND id != ? LIMIT 1`, [candidate, orgId])
     if (conflict) continue
 
     try {
-      await db.prepare(`
-        UPDATE organization SET slug = ? WHERE id = ? AND (slug IS NULL OR slug = '')
-      `).bind(candidate, orgId).run()
+      await execute(db, `UPDATE organization SET slug = ? WHERE id = ? AND (slug IS NULL OR slug = '')`, [candidate, orgId])
       return candidate
     } catch {
       // Slug was claimed between the check and update; try the next candidate.
@@ -54,9 +51,7 @@ async function ensureOrganizationSlug(db: D1Database, orgId: string, existingSlu
 
   const candidate = `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`
   try {
-    await db.prepare(`
-      UPDATE organization SET slug = ? WHERE id = ? AND (slug IS NULL OR slug = '')
-    `).bind(candidate, orgId).run()
+    await execute(db, `UPDATE organization SET slug = ? WHERE id = ? AND (slug IS NULL OR slug = '')`, [candidate, orgId])
     return candidate
   } catch {
     return null
@@ -94,14 +89,14 @@ export default defineEventHandler(async (event) => {
   const activeOrgId = typeof sessionRecord.activeOrganizationId === 'string'
     ? sessionRecord.activeOrganizationId : ''
 
-  const userOrg = await db.prepare(`
+  const userOrg = await queryFirst<{ organizationId: string; slug: string | null }>(db, `
     SELECT o.id AS organizationId, o.slug
     FROM organization o
     JOIN member m ON o.id = m.organizationId
     WHERE m.userId = ?
     ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC
     LIMIT 1
-  `).bind(session.user.id, activeOrgId).first<{ organizationId: string; slug: string | null }>()
+  `, [session.user.id, activeOrgId])
 
   if (!userOrg) return jsonResponse({ error: 'No organization found' }, { status: 404 })
 
@@ -123,9 +118,9 @@ export default defineEventHandler(async (event) => {
 
   await requireBillingAccess(env, db, orgId, session.user.id)
 
-  const billing = await db.prepare(
-    'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1'
-  ).bind(orgId).first<{ stripe_customer_id: string | null }>()
+  const billing = await queryFirst<{ stripe_customer_id: string | null }>(
+    db, 'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1', [orgId],
+  )
 
   const stripe = getStripe(env)
   const origin = getRequestURL(event).origin

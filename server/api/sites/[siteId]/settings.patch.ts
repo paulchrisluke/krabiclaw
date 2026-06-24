@@ -5,6 +5,7 @@ import { isDemoOrg } from '~/server/utils/demo'
 import { updateSiteSettingsFields } from '~/server/utils/site-settings'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { createError, getHeader, getRouterParam, readBody } from 'h3'
+import { queryFirst } from '~/server/db'
 
 function timingSafeEqualText(a: string, b: string): boolean {
   const left = new TextEncoder().encode(a)
@@ -65,13 +66,13 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user has admin/owner permissions for settings
-    const site = await db.prepare(`
+    const site = await queryFirst<{ id: string; organization_id: string }>(db, `
       SELECT s.id, s.organization_id FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
       LIMIT 1
-    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+    `, [siteId, session.user.id])
     
     if (!site) {
       return jsonResponse({

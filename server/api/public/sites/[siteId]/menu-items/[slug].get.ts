@@ -1,4 +1,5 @@
 // GET /api/public/sites/[siteId]/menu-items/[slug] - Get single public menu item
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublicMenuItem } from '~/server/utils/menu-management'
 
@@ -23,9 +24,11 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Validate site is active
-    const site = await db.prepare(
-      `SELECT status, default_currency FROM sites WHERE id = ? LIMIT 1`
-    ).bind(siteId).first<{ status: string; default_currency: string | null }>()
+    const site = await queryFirst<{ status: string; default_currency: string | null }>(
+      db,
+      `SELECT status, default_currency FROM sites WHERE id = ? LIMIT 1`,
+      [siteId],
+    )
     if (!site || site.status !== 'active') {
       return jsonResponse({ error: 'Menu item not found' }, { status: 404 })
     }

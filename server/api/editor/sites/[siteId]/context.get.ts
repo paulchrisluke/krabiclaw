@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createPreviewToken } from '~/server/utils/preview-token'
+import { queryAll, queryFirst } from '~/server/db'
 
 interface SiteRow {
   id: string
@@ -65,7 +66,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user belongs to organization that owns the site
-    const site = await db.prepare(`
+    const site = await queryFirst<SiteRow>(db, `
       SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status,
              o.name as organization_name
       FROM sites s
@@ -73,7 +74,7 @@ export default defineEventHandler(async (event) => {
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first() as SiteRow | null
+    `, [siteId, session.user.id])
     
     if (!site) {
       return jsonResponse({ 
@@ -82,25 +83,23 @@ export default defineEventHandler(async (event) => {
     }
 
     // Get active locations
-    const locations = await db.prepare(`
+    const locationRows = await queryAll<LocationRow>(db, `
       SELECT id, slug, title, is_primary, status
-      FROM business_locations 
+      FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND status = 'active'
       ORDER BY is_primary DESC, title ASC
-    `).bind(site.organization_id, siteId).all()
-    
+    `, [site.organization_id, siteId])
+
     // Parse locations
-    const locationRows = (locations.results || []) as unknown as LocationRow[]
     const parsedLocations: ParsedLocation[] = locationRows.map((location) => ({
       ...location,
       is_primary: Boolean(location.is_primary)
     }))
 
-    const entitlementsResult = await db.prepare(`
+    const entitlementRows = await queryAll<EntitlementRow>(db, `
       SELECT key, value FROM site_entitlements WHERE site_id = ?
-    `).bind(siteId).all()
+    `, [siteId])
 
-    const entitlementRows = (entitlementsResult.results || []) as unknown as EntitlementRow[]
     const entitlements = entitlementRows.reduce((acc: Record<string, string | boolean>, row) => {
       acc[row.key] = row.value === 'true' ? true : row.value === 'false' ? false : row.value
       return acc

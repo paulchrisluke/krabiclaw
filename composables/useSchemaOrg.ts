@@ -1,14 +1,21 @@
+import { computed, toValue, type MaybeRefOrGetter } from 'vue'
+
 // Composable for adding JSON-LD schema markup to pages
-export function useSchemaOrg(schema: ApiRecord) {
-  // Sanitize JSON to prevent script tag injection
-  const sanitizedJson = JSON.stringify(schema).replace(/</g, '\\u003c')
-  useHead({
-    script: [
+export function useSchemaOrg(schema: MaybeRefOrGetter<ApiRecord | null | undefined>) {
+  const script = computed(() => {
+    const value = toValue(schema)
+    if (!value) return []
+
+    return [
       {
         type: 'application/ld+json',
-        innerHTML: sanitizedJson
-      }
+        innerHTML: JSON.stringify(value).replace(/</g, '\\u003c'),
+      },
     ]
+  })
+
+  useHead({
+    script,
   })
 }
 

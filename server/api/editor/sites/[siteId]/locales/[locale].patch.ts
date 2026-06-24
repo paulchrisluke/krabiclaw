@@ -3,6 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { normalizeLocale } from '~/server/utils/site-i18n'
 import { upsertSiteLocale, type SiteLocaleInput } from '~/server/utils/site-locales'
 import { isDemoOrg } from '~/server/utils/demo'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -18,12 +19,12 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
     SELECT s.id, s.organization_id FROM sites s
     JOIN member om ON s.organization_id = om.organizationId
     WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin')
     LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+  `, [siteId, session.user.id])
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 

@@ -1,4 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
+import { execute, queryFirst } from '~/server/db'
 import { encryptSecret, decryptSecret, encryptionEnv } from './encryption'
 
 type JsonPrimitive = string | number | boolean | null
@@ -309,12 +310,12 @@ export const storeGoogleBusinessConnection = async (
   const encryptedAccessToken = await encryptSecret(connection.encrypted_access_token, tokenEnv)
   const encryptedRefreshToken = await encryptSecret(connection.encrypted_refresh_token, tokenEnv)
 
-  await env.DB.prepare(`
+  await execute(env.DB, `
     INSERT OR REPLACE INTO google_business_connections
     (id, organization_id, site_id, location_id, connected_by_user_id, provider_account_email,
      encrypted_access_token, encrypted_refresh_token, scopes, expires_at, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+  `, [
     connectionId,
     connection.organization_id,
     connection.site_id,
@@ -328,7 +329,7 @@ export const storeGoogleBusinessConnection = async (
     connection.status,
     now,
     now
-  ).run()
+  ])
 
   return connectionId
 }
@@ -347,17 +348,17 @@ export const getGoogleBusinessConnection = async (
   let connection: GoogleBusinessConnection | null
 
   if (locationId) {
-    connection = await env.DB.prepare(`
+    connection = (await queryFirst<GoogleBusinessConnection>(env.DB, `
       SELECT * FROM google_business_connections
       WHERE organization_id = ? AND site_id = ? AND location_id = ? AND status = 'active'
       LIMIT 1
-    `).bind(organizationId, siteId, locationId).first() as GoogleBusinessConnection | null
+    `, [organizationId, siteId, locationId])) ?? null
   } else {
-    connection = await env.DB.prepare(`
+    connection = (await queryFirst<GoogleBusinessConnection>(env.DB, `
       SELECT * FROM google_business_connections
       WHERE organization_id = ? AND site_id = ? AND location_id IS NULL AND status = 'active'
       LIMIT 1
-    `).bind(organizationId, siteId).first() as GoogleBusinessConnection | null
+    `, [organizationId, siteId])) ?? null
   }
 
   if (!connection) {
@@ -429,21 +430,21 @@ export const syncGoogleLocations = async (
     let localLocationId: string
 
     // Check if location already exists
-    const existing = await env.DB.prepare(`
+    const existing = await queryFirst<{ id: string }>(env.DB, `
       SELECT id FROM business_locations
       WHERE organization_id = ? AND site_id = ? AND google_location_id = ?
       LIMIT 1
-    `).bind(organizationId, siteId, googleLocationId).first<{ id: string }>()
+    `, [organizationId, siteId, googleLocationId])
 
     if (existing) {
       localLocationId = existing.id
-      await env.DB.prepare(`
+      await execute(env.DB, `
         UPDATE business_locations
         SET title = ?, address = ?, phone = ?, website_url = ?,
             latitude = ?, longitude = ?, rating = ?, review_count = ?,
             last_synced_at = ?, updated_at = ?
         WHERE organization_id = ? AND site_id = ? AND google_location_id = ?
-      `).bind(
+      `, [
         location.title,
         JSON.stringify(location.address),
         location.phoneNumbers?.primaryPhoneNumber || null,
@@ -457,16 +458,16 @@ export const syncGoogleLocations = async (
         organizationId,
         siteId,
         googleLocationId
-      ).run()
+      ])
     } else {
       localLocationId = `location-${organizationId}-${siteId}-${googleLocationId}`
-      await env.DB.prepare(`
+      await execute(env.DB, `
         INSERT INTO business_locations
         (id, organization_id, site_id, google_location_id,
          slug, title, address, phone, website_url, latitude, longitude,
          rating, review_count, is_primary, status, last_synced_at, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
+      `, [
         localLocationId,
         organizationId,
         siteId,
@@ -485,7 +486,7 @@ export const syncGoogleLocations = async (
         now,
         now,
         now
-      ).run()
+      ])
     }
 
     // Sync reviews from GBP if we have an access token
@@ -507,13 +508,13 @@ export const syncGoogleLocations = async (
           const comment = r.comment ? String(r.comment) : null
           const createTime = r.createTime ? String(r.createTime) : now
 
-          const result = await env.DB.prepare(`
+          const result = await execute(env.DB, `
             INSERT OR IGNORE INTO reviews
               (id, organization_id, site_id, location_id, google_review_id,
                author_name, reviewer_photo_url, rating, content,
                status, source, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_business', ?, ?)
-          `).bind(
+          `, [
             `gbiz-${reviewName.replace(/\//g, '-')}`,
             organizationId,
             siteId,
@@ -525,7 +526,7 @@ export const syncGoogleLocations = async (
             comment,
             createTime,
             now
-          ).run()
+          ])
           if (result.meta.changes > 0) reviewsUpserted++
         }
       } catch {

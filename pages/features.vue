@@ -176,34 +176,42 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'platform' })
 
-import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
-
-const config = useRuntimeConfig()
-const platformHostname = computed(() => {
-  const freeSiteDomain = config.public.freeSiteDomain
-  if (!freeSiteDomain) return 'krabiclaw.com'
-  try {
-    const url = new URL(freeSiteDomain.startsWith('http') ? freeSiteDomain : `https://${freeSiteDomain}`)
-    return url.hostname
-  } catch {
-    return freeSiteDomain.replace(/^https?:\/\//, '').split('/')[0] || 'krabiclaw.com'
+const faqItems = [
+  {
+    q: 'How do I edit my site through ChatGPT?',
+    a: 'Sign up for a KrabiClaw account, then add the KrabiClaw MCP app in ChatGPT (Settings → Connectors → paste https://krabiclaw.com/api/mcp). Once connected, just tell ChatGPT what to change — menus, content, photos, posts.'
+  },
+  {
+    q: 'Does this work for experience businesses, not just restaurants?',
+    a: 'Yes. KrabiClaw supports both verticals. Restaurants get multi-section menus with dietary filters. Experience businesses get ticketed activities with capacity control, time slots, and booking management.'
+  },
+  {
+    q: 'Can I map a custom domain?',
+    a: 'Absolutely. Every KrabiClaw site connects to a custom domain (like yourbusiness.com). We handle SSL and global edge routing automatically.'
+  },
+  {
+    q: 'Are there any hidden booking fees?',
+    a: 'None. KrabiClaw is flat-rate. Whether you take 10 or 10,000 bookings or experience reservations, you pay the same monthly price — no per-cover or per-ticket commissions.'
+  },
+  {
+    q: 'How does Google Business Profile sync work?',
+    a: 'Connect your Google Business account and KrabiClaw pulls in your verified hours, photos, reviews, and details automatically. On Managed plans, we keep your Google Business profile up to date for you.'
+  },
+  {
+    q: 'Is there a contract or setup fee?',
+    a: 'No contracts, no setup fees. Start free, upgrade to Growth ($49/mo) or Managed ($149/mo) month-to-month. Cancel anytime.'
   }
-})
+]
 
-useBreadcrumbSchema([
-  { name: 'Home', url: `https://${platformHostname.value}/` },
-  { name: 'Features', url: `https://${platformHostname.value}/features` },
-])
-
-const sharedOgImage = useSharedOgImage()
-const currentPageUrl = useSeoUrl('/features')
-
-useSeoMeta({
-  title: 'Platform Features | KrabiClaw',
+usePlatformPageSeo({
+  path: '/features',
+  title: 'Platform Features',
   description: 'KrabiClaw features: edit your restaurant or experience site through ChatGPT, take bookings, sync with Google Business, translate to multiple languages, and track real-time analytics.',
-  ogImage: sharedOgImage,
-  ogUrl: currentPageUrl,
-  ogType: 'website',
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: 'Features', url: '/features' },
+  ],
+  faqItems: faqItems.map(faq => ({ question: faq.q, answer: faq.a })),
 })
 
 const detailedFeatures = [
@@ -281,30 +289,5 @@ const detailedFeatures = [
   }
 ]
 
-const faqItems = [
-  {
-    q: 'How do I edit my site through ChatGPT?',
-    a: 'Sign up for a KrabiClaw account, then add the KrabiClaw MCP app in ChatGPT (Settings → Connectors → paste https://krabiclaw.com/api/mcp). Once connected, just tell ChatGPT what to change — menus, content, photos, posts.'
-  },
-  {
-    q: 'Does this work for experience businesses, not just restaurants?',
-    a: 'Yes. KrabiClaw supports both verticals. Restaurants get multi-section menus with dietary filters. Experience businesses get ticketed activities with capacity control, time slots, and booking management.'
-  },
-  {
-    q: 'Can I map a custom domain?',
-    a: 'Absolutely. Every KrabiClaw site connects to a custom domain (like yourbusiness.com). We handle SSL and global edge routing automatically.'
-  },
-  {
-    q: 'Are there any hidden booking fees?',
-    a: 'None. KrabiClaw is flat-rate. Whether you take 10 or 10,000 bookings or experience reservations, you pay the same monthly price — no per-cover or per-ticket commissions.'
-  },
-  {
-    q: 'How does Google Business Profile sync work?',
-    a: 'Connect your Google Business account and KrabiClaw pulls in your verified hours, photos, reviews, and details automatically. On Managed plans, we keep your Google Business profile up to date for you.'
-  },
-  {
-    q: 'Is there a contract or setup fee?',
-    a: 'No contracts, no setup fees. Start free, upgrade to Growth ($49/mo) or Managed ($149/mo) month-to-month. Cancel anytime.'
-  }
-]
+
 </script>

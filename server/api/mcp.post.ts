@@ -20,6 +20,7 @@ import { MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { isWidgetEnabledForTool } from "~/server/utils/mcp-widget-config";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
+import { queryAll } from "~/server/db";
 
 const WIDGET_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 
@@ -483,15 +484,14 @@ Common workflows: update menus and items, create and publish posts, triage conta
           const db = (env as any).DB as D1Database | undefined;
           if (kv && db) {
             // Look up all active hostnames for this site (subdomain + custom domains)
-            const purgeAsync = db
-              .prepare(
-                `SELECT domain FROM site_domains
+            const purgeAsync = queryAll<{ domain: string }>(
+              db,
+              `SELECT domain FROM site_domains
                  WHERE site_id = ? AND status = 'active'
                  LIMIT 20`,
-              )
-              .bind(siteId)
-              .all<{ domain: string }>()
-              .then(({ results }) => {
+              [siteId],
+            )
+              .then((results) => {
                 const hostnames = (results ?? []).map((r) => r.domain)
                 if (hostnames.length > 0) {
                   return purgeSiteKvCache(kv, hostnames)

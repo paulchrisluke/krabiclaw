@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getExperienceBySlug, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
+import { queryFirst } from '~/server/db'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const MAX_DAYS = 14
@@ -20,10 +21,7 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await db
-    .prepare(`SELECT id, organization_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`)
-    .bind(siteId)
-    .first<{ id: string; organization_id: string }>()
+  const site = await queryFirst<{ id: string; organization_id: string }>(db, `SELECT id, organization_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const experience = await getExperienceBySlug(db, siteId, slug)

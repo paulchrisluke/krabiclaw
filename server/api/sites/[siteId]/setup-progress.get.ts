@@ -2,6 +2,7 @@
 // Returns the ordered 10-step setup journey for the site overview card.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { queryFirst } from '~/server/db'
 
 export interface SetupStep {
   id: string
@@ -43,15 +44,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify membership and fetch site basics
-    const site = await db.prepare(`
-      SELECT s.id, s.organization_id, s.brand_name, s.brand_description,
-             s.logo_url, s.contact_email, s.subdomain, s.public_url,
-             s.status, s.last_published_at
-      FROM sites s
-      JOIN member om ON s.organization_id = om.organizationId
-      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
-      LIMIT 1
-    `).bind(siteId, session.user.id).first<{
+    const site = await queryFirst<{
       id: string
       organization_id: string
       brand_name: string | null
@@ -62,7 +55,15 @@ export default defineEventHandler(async (event) => {
       public_url: string | null
       status: string
       last_published_at: string | null
-    }>()
+    }>(db, `
+      SELECT s.id, s.organization_id, s.brand_name, s.brand_description,
+             s.logo_url, s.contact_email, s.subdomain, s.public_url,
+             s.status, s.last_published_at
+      FROM sites s
+      JOIN member om ON s.organization_id = om.organizationId
+      WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
+      LIMIT 1
+    `, [siteId, session.user.id])
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -71,13 +72,7 @@ export default defineEventHandler(async (event) => {
     const orgId = site.organization_id
 
     // Fetch primary location
-    const primaryLocation = await db.prepare(`
-      SELECT id, title, address, city, phone, opening_hours, slug
-      FROM business_locations
-      WHERE organization_id = ? AND site_id = ? AND status = 'active'
-      ORDER BY is_primary DESC, created_at ASC
-      LIMIT 1
-    `).bind(orgId, siteId).first<{
+    const primaryLocation = await queryFirst<{
       id: string
       title: string | null
       address: string | null
@@ -85,33 +80,39 @@ export default defineEventHandler(async (event) => {
       phone: string | null
       opening_hours: string | null
       slug: string
-    }>()
+    }>(db, `
+      SELECT id, title, address, city, phone, opening_hours, slug
+      FROM business_locations
+      WHERE organization_id = ? AND site_id = ? AND status = 'active'
+      ORDER BY is_primary DESC, created_at ASC
+      LIMIT 1
+    `, [orgId, siteId])
 
     // Count published menu items across all menus for this site
-    const menuItemsResult = await db.prepare(`
+    const menuItemsResult = await queryFirst<{ count: number }>(db, `
       SELECT COUNT(mi.id) as count
       FROM menu_items mi
       JOIN menus m ON mi.menu_id = m.id
       WHERE m.site_id = ? AND m.organization_id = ? AND m.status = 'published' AND mi.available = 1
-    `).bind(siteId, orgId).first<{ count: number }>()
+    `, [siteId, orgId])
     const menuItemCount = menuItemsResult?.count ?? 0
 
     // Count location photos from media_assets
     const photoCountResult = primaryLocation
-      ? await db.prepare(`
+      ? await queryFirst<{ count: number }>(db, `
           SELECT COUNT(*) as count FROM media_assets
           WHERE site_id = ? AND location_id = ? AND kind = 'image' AND status = 'active'
-        `).bind(siteId, primaryLocation.id).first<{ count: number }>()
+        `, [siteId, primaryLocation.id])
       : { count: 0 }
     const photoCount = photoCountResult?.count ?? 0
 
     // Check About page content
-    const aboutContent = await db.prepare(`
+    const aboutContent = await queryFirst<{ id: string }>(db, `
       SELECT id FROM site_content
       WHERE site_id = ? AND organization_id = ? AND page = 'about' AND field = 'body'
         AND content IS NOT NULL AND content != ''
       LIMIT 1
-    `).bind(siteId, orgId).first<{ id: string }>()
+    `, [siteId, orgId])
 
     // ─── Build the 10 steps ───────────────────────────────────────────────────
 

@@ -1,6 +1,7 @@
 // POST /api/editor/sites/[siteId]/media/request-upload
 // For images: returns a Cloudflare Images one-time uploadUrl + a pending assetId.
 // Client uploads directly to uploadUrl (multipart form), then calls /confirm.
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { deleteImage, hasCloudflareImagesConfig, requestImageUpload } from '~/server/utils/cloudflare-images'
@@ -26,19 +27,21 @@ export default defineEventHandler(async (event) => {
     const session = await getAuthSession(event, env)
     if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-    const site = await db.prepare(
-      `SELECT id, organization_id FROM sites WHERE id = ? LIMIT 1`
-    ).bind(siteId).first<SiteRow>()
+    const site = await queryFirst<SiteRow>(
+      db,
+      `SELECT id, organization_id FROM sites WHERE id = ? LIMIT 1`,
+      [siteId],
+    )
     if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
-    const membership = await db.prepare(`
+    const membership = await queryFirst(db, `
       SELECT m.userId
       FROM member m
       WHERE m.organizationId = ?
         AND m.userId = ?
         AND m.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(site.organization_id, session.user.id).first()
+    `, [site.organization_id, session.user.id])
     if (!membership) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
     if (!hasCloudflareImagesConfig(env)) {
@@ -65,12 +68,12 @@ export default defineEventHandler(async (event) => {
       if (!/^[A-Za-z0-9_-]+$/.test(trimmedLocationId)) {
         return jsonResponse({ error: 'Invalid locationId' }, { status: 400 })
       }
-      const location = await db.prepare(`
+      const location = await queryFirst(db, `
         SELECT id
         FROM business_locations
         WHERE id = ? AND site_id = ? AND organization_id = ?
         LIMIT 1
-      `).bind(trimmedLocationId, siteId, site.organization_id).first()
+      `, [trimmedLocationId, siteId, site.organization_id])
       if (!location) return jsonResponse({ error: 'Invalid locationId' }, { status: 400 })
       locationId = trimmedLocationId
     }

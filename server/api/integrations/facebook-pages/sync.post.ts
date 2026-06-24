@@ -10,6 +10,7 @@ import {
 } from '../../../utils/facebook-pages'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { hasSiteEntitlement } from '~/server/utils/billing'
+import { queryFirst } from '~/server/db'
 
 // Syncs page info + recent posts from Facebook into the location record.
 // Optionally accepts pageId in the body to switch which page is connected.
@@ -30,12 +31,12 @@ export default defineEventHandler(async (event) => {
   const { locationId, pageId } = body
   const dashboard = body.siteId ? null : await getDashboardContext(event, { requireSite: false })
   const site = body.siteId
-    ? await db.prepare(`
+    ? await queryFirst<{ id: string; organization_id: string }>(db, `
         SELECT s.id, s.organization_id FROM sites s
         JOIN member om ON s.organization_id = om.organizationId
         WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
         LIMIT 1
-      `).bind(body.siteId, session.user.id).first<{ id: string; organization_id: string }>()
+      `, [body.siteId, session.user.id])
     : dashboard?.site
 
   if (!site) return jsonResponse({ error: 'Create a site before syncing Facebook.' }, { status: 400 })

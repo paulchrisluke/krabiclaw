@@ -57,24 +57,18 @@ DELETE FROM sites WHERE id = 'site-kikuzuki' OR subdomain = 'kikuzuki-krabi-thai
 DELETE FROM organization WHERE id = 'org-kikuzuki';
 DELETE FROM site_domains WHERE domain IN ('kikuzuki-krabi-thailand.localhost', 'kikuzuki-krabi-thailand.krabiclaw.com');
 
--- Organization (owned by the platform admin account)
+-- Organization (owned by the dedicated Kikuzuki owner account)
 INSERT INTO organization (id, name, slug, createdAt)
 VALUES ('org-kikuzuki', 'Kikuzuki Krabi Thailand', 'kikuzuki-krabi-thailand', CURRENT_TIMESTAMP);
 
--- Ensure the owner user exists to satisfy FK constraints.
+-- Ensure the dedicated owner user exists to satisfy FK constraints.
 INSERT OR IGNORE INTO user (id, name, email, emailVerified)
 VALUES
-  ('user-kikuzuki', 'Kikuzuki Owner', 'contact@kikuzuki.com', 1),
-  ('IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO', 'Platform Admin', 'paulchrisluke@gmail.com', 1);
+  ('user-kikuzuki', 'Kikuzuki Owner', 'contact@kikuzuki.com', 1);
 
 INSERT OR REPLACE INTO member (id, organizationId, userId, role, createdAt)
 VALUES
-  ('member-kikuzuki', 'org-kikuzuki',
-   CASE WHEN EXISTS(SELECT 1 FROM user WHERE id = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO')
-        THEN 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
-        ELSE 'user-kikuzuki'
-   END,
-   'owner', CURRENT_TIMESTAMP);
+  ('member-kikuzuki', 'org-kikuzuki', 'user-kikuzuki', 'owner', CURRENT_TIMESTAMP);
 
 ${renderKikuzukiCoreSeedBlock()}
 
@@ -94,6 +88,25 @@ ${renderKikuzukiBillingBlock()}
 if (isStdout) {
   process.stdout.write(sql)
   process.exit(0)
+}
+
+if (isRemote || isStaging || isPreview) {
+  const checkOutput = execFileSync('npx', [
+    ...wranglerArgs,
+    '--command', "SELECT organization_id FROM sites WHERE id = 'site-kikuzuki'",
+    '--json',
+  ], { encoding: 'utf8' })
+  const currentOrgId = JSON.parse(checkOutput)?.[0]?.results?.[0]?.organization_id
+
+  if (currentOrgId && currentOrgId !== 'org-kikuzuki') {
+    console.error(
+      `[seed:kikuzuki] Refusing to reseed: site-kikuzuki is owned by "${currentOrgId}", not the demo org "org-kikuzuki".\n` +
+      'This tenant has already been transferred to a real client. Reseeding would delete their live site, ' +
+      'business_locations, site_content, media_assets, and custom domain rows, then recreate it back under the demo org.\n' +
+      'Aborting.'
+    )
+    process.exit(1)
+  }
 }
 
 const dir = mkdtempSync(join(tmpdir(), 'krabiclaw-seed-kikuzuki-'))

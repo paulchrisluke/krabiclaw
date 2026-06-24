@@ -1,4 +1,5 @@
 // Get public business locations for a site
+import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { calculateMapEmbedUrl } from '~/server/utils/google-business'
 
@@ -60,7 +61,7 @@ export default defineEventHandler(async (event) => {
   }
   
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   
   if (!db) {
     return jsonResponse({ 
@@ -70,11 +71,11 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Get site and verify it's active
-    const site = await db.prepare(`
+    const site = await queryFirst<SiteRow>(db, `
       SELECT id, organization_id, status FROM sites 
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `).bind(siteId).first() as SiteRow | null
+    `, [siteId])
     
     if (!site) {
       return jsonResponse({ 
@@ -83,7 +84,12 @@ export default defineEventHandler(async (event) => {
     }
 
     // Get active business locations for this site
-    const locations = await db.prepare(`
+    const locationRows = await queryAll<LocationRow & {
+      hero_image_public_url: string | null
+      hero_image_kind: string | null
+      hero_video_public_url: string | null
+      hero_video_kind: string | null
+    }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
              bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
              bl.is_primary, bl.status, bl.last_synced_at, bl.google_location_id,
@@ -96,13 +102,7 @@ export default defineEventHandler(async (event) => {
       LEFT JOIN media_assets ma_vid ON bl.hero_video_asset_id = ma_vid.id AND ma_vid.status = 'active'
       WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
       ORDER BY bl.is_primary DESC, bl.title ASC
-    `).bind(site.organization_id, siteId).all()
-    const locationRows = (locations.results || []) as unknown as (LocationRow & { 
-      hero_image_public_url: string | null; 
-      hero_image_kind: string | null;
-      hero_video_public_url: string | null;
-      hero_video_kind: string | null;
-    })[]
+    `, [site.organization_id, siteId])
     
 
     // Parse JSON fields and return public-safe data

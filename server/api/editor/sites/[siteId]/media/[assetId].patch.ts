@@ -1,5 +1,6 @@
 // PATCH /api/editor/sites/[siteId]/media/[assetId]
 // Update mutable metadata: alt_text only. URLs are managed by Cloudflare.
+import { queryFirst, type DbClient } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateMediaAssetMetadata, type MediaAsset } from '~/server/utils/media-asset-manager'
@@ -12,15 +13,15 @@ interface MediaAssetSiteRow {
 
 const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other'])
 
-async function verifySiteAccess(db: D1Database, userId: string, siteId: string): Promise<boolean> {
-  const site = await db.prepare(`
+async function verifySiteAccess(db: DbClient, userId: string, siteId: string): Promise<boolean> {
+  const site = await queryFirst(db, `
     SELECT s.id
     FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor')
     LIMIT 1
-  `).bind(siteId, userId).first()
+  `, [siteId, userId])
 
   return Boolean(site)
 }
@@ -41,9 +42,11 @@ export default defineEventHandler(async (event) => {
   if (!hasAccess) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
   try {
-    const asset = await db.prepare(
-      `SELECT id, site_id, organization_id FROM media_assets WHERE id = ? LIMIT 1`
-    ).bind(assetId).first<MediaAssetSiteRow>()
+    const asset = await queryFirst<MediaAssetSiteRow>(
+      db,
+      `SELECT id, site_id, organization_id FROM media_assets WHERE id = ? LIMIT 1`,
+      [assetId],
+    )
     if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
     if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
@@ -65,11 +68,11 @@ export default defineEventHandler(async (event) => {
       }
       const locationId = typeof body.location_id === 'string' ? body.location_id.trim() : ''
       if (locationId) {
-        const location = await db.prepare(`
+        const location = await queryFirst(db, `
           SELECT id FROM business_locations
           WHERE id = ? AND site_id = ? AND organization_id = ?
           LIMIT 1
-        `).bind(locationId, siteId, asset.organization_id).first()
+        `, [locationId, siteId, asset.organization_id])
         if (!location) return jsonResponse({ error: 'Invalid location_id' }, { status: 400 })
       }
       updates.location_id = locationId || null

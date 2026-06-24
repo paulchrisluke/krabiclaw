@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db'
 
 const ACTIVE_STATUSES = ['active', 'trialing', 'past_due']
 
@@ -19,7 +20,7 @@ export default defineEventHandler(async (event) => {
   const userId = session.user.id
 
   // Find orgs where this user is the SOLE owner (subquery counts all owners per org)
-  const ownedOrgsResult = await db.prepare(`
+  const ownedOrgsResult = await queryAll<{ id: string }>(db, `
     SELECT m.organizationId as id
     FROM member m
     WHERE m.userId = ? AND m.role = 'owner'
@@ -27,27 +28,27 @@ export default defineEventHandler(async (event) => {
       SELECT COUNT(*) FROM member m2
       WHERE m2.organizationId = m.organizationId AND m2.role = 'owner'
     ) = 1
-  `).bind(userId).all() as { results?: Array<{ id: string }> } | null
+  `, [userId])
 
-  const soleOwnedOrgIds: string[] = (ownedOrgsResult?.results ?? []).map((r: ApiValue) => r.id)
+  const soleOwnedOrgIds: string[] = (ownedOrgsResult ?? []).map((r) => r.id)
 
   // Find all org memberships for cleanup
-  const allMemberships = await db.prepare(`
+  const allMemberships = await queryAll<{ organizationId: string }>(db, `
     SELECT DISTINCT organizationId FROM member WHERE userId = ?
-  `).bind(userId).all() as { results?: Array<{ organizationId: string }> } | null
+  `, [userId])
 
-  const allOrgIds: string[] = (allMemberships?.results ?? []).map((r: ApiValue) => r.organizationId)
+  const allOrgIds: string[] = (allMemberships ?? []).map((r) => r.organizationId)
 
   // Single query: block deletion if any org has an active subscription
   if (allOrgIds.length > 0) {
     const placeholders = allOrgIds.map(() => '?').join(',')
     const statusPlaceholders = ACTIVE_STATUSES.map(() => '?').join(',')
-    const activeSubscription = await db.prepare(`
+    const activeSubscription = await queryFirst(db, `
       SELECT organization_id FROM organization_billing
       WHERE organization_id IN (${placeholders})
       AND status IN (${statusPlaceholders})
       LIMIT 1
-    `).bind(...allOrgIds, ...ACTIVE_STATUSES).first()
+    `, [...allOrgIds, ...ACTIVE_STATUSES])
 
     if (activeSubscription) {
       return jsonResponse(
@@ -59,9 +60,9 @@ export default defineEventHandler(async (event) => {
 
   // For each sole-owned org, block if other members exist (would lose access)
   for (const orgId of soleOwnedOrgIds) {
-    const otherMembers = await db.prepare(`
+    const otherMembers = await queryFirst<{ count: number }>(db, `
       SELECT COUNT(*) as count FROM member WHERE organizationId = ? AND userId != ?
-    `).bind(orgId, userId).first() as { count: number } | null
+    `, [orgId, userId])
 
     if ((otherMembers?.count ?? 0) > 0) {
       return jsonResponse(
@@ -73,23 +74,23 @@ export default defineEventHandler(async (event) => {
 
   // Delete in correct order: member rows first, then orgs (avoids FK violations),
   // then the user row (cascades sessions/accounts)
-  const statements = []
+  const statements: BatchQuery[] = []
 
   // Remove user from all orgs (co-owned orgs: removes membership; sole-owned: clears before org delete)
   for (const orgId of allOrgIds) {
-    statements.push(db.prepare(`DELETE FROM member WHERE organizationId = ? AND userId = ?`).bind(orgId, userId))
+    statements.push({ query: `DELETE FROM member WHERE organizationId = ? AND userId = ?`, params: [orgId, userId] })
   }
 
   // Delete sole-owned orgs (safe now that member rows are removed above)
   for (const orgId of soleOwnedOrgIds) {
-    statements.push(db.prepare(`DELETE FROM organization WHERE id = ?`).bind(orgId))
+    statements.push({ query: `DELETE FROM organization WHERE id = ?`, params: [orgId] })
   }
 
   // Delete user — cascades to session, account rows
-  statements.push(db.prepare(`DELETE FROM user WHERE id = ?`).bind(userId))
+  statements.push({ query: `DELETE FROM user WHERE id = ?`, params: [userId] })
 
   if (statements.length > 0) {
-    await db.batch(statements)
+    await executeBatch(db, statements)
   }
 
   return jsonResponse({ success: true })

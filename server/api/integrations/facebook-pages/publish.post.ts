@@ -3,6 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getFacebookPagesConnection, publishToPage } from '../../../utils/facebook-pages'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { hasSiteEntitlement } from '~/server/utils/billing'
+import { queryFirst } from '~/server/db'
 
 // Publishes a post to the connected Facebook Page on behalf of a site.
 export default defineEventHandler(async (event) => {
@@ -26,15 +27,14 @@ export default defineEventHandler(async (event) => {
   const isPlatformAdmin = (session.user as { role?: string }).role === 'admin'
   const dashboard = body.siteId ? null : await getDashboardContext(event, { requireSite: false })
   const site = body.siteId && isPlatformAdmin
-    ? await db.prepare(`SELECT id, organization_id FROM sites WHERE id = ? LIMIT 1`)
-        .bind(body.siteId).first<{ id: string; organization_id: string }>()
+    ? await queryFirst<{ id: string; organization_id: string }>(db, `SELECT id, organization_id FROM sites WHERE id = ? LIMIT 1`, [body.siteId])
     : body.siteId
-      ? await db.prepare(`
+      ? await queryFirst<{ id: string; organization_id: string }>(db, `
           SELECT s.id, s.organization_id FROM sites s
           JOIN member om ON s.organization_id = om.organizationId
           WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner','admin')
           LIMIT 1
-        `).bind(body.siteId, session.user.id).first<{ id: string; organization_id: string }>()
+        `, [body.siteId, session.user.id])
       : dashboard?.site
 
   if (!site) return jsonResponse({ error: 'Create a site before publishing to Facebook.' }, { status: 400 })

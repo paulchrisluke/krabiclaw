@@ -311,6 +311,7 @@ definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const router = useRouter()
+const { trackPlanViewed, trackCheckoutStarted, trackPaymentMethodAdded } = useAnalytics()
 const loading = ref(true)
 const billing = ref<ApiRecord | null>(null)
 const credits = ref<ApiRecord | null>(null)
@@ -389,7 +390,10 @@ async function purchaseCredits(bundle: 500 | 2500 | 5000) {
     }
     return
   }
-  await purchaseCreditsFn(bundle, async () => { await loadCredits() })
+  await purchaseCreditsFn(bundle, async () => {
+    trackPaymentMethodAdded()
+    await loadCredits()
+  })
 }
 
 const creditBundles = [
@@ -451,6 +455,8 @@ const upgradeToPlan = async (plan: string) => {
   }
   errorMessage.value = ''
   upgrading.value = plan
+  trackPlanViewed(plan)
+  trackCheckoutStarted(plan)
   try {
     const response = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
       method: 'POST',

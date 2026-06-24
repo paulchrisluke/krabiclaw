@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { getAuthSession } from "~/server/utils/auth";
 import { isPlatformAdmin } from "~/server/utils/platform-auth";
+import { execute } from "~/server/db";
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event);
@@ -68,9 +69,7 @@ export default defineEventHandler(async (event) => {
   const completedAt =
     body.status === "done" ? now : body.status ? null : undefined;
 
-  const result = await db
-    .prepare(
-      `
+  const result = await execute(db, `
     UPDATE work_requests SET
       status = COALESCE(?, status),
       priority = COALESCE(?, priority),
@@ -83,22 +82,19 @@ export default defineEventHandler(async (event) => {
       END,
       updated_at = ?
     WHERE id = ?
-  `,
-    )
-    .bind(
-      body.status ?? null,
-      body.priority ?? null,
-      body.notes ?? null,
-      "assigned_to" in body ? 1 : 0,
-      body.assigned_to ?? null,
-      body.status ?? null,
-      completedAt ?? null,
-      body.status ?? null,
-      body.status ?? null,
-      now,
-      id,
-    )
-    .run();
+  `, [
+    body.status ?? null,
+    body.priority ?? null,
+    body.notes ?? null,
+    "assigned_to" in body ? 1 : 0,
+    body.assigned_to ?? null,
+    body.status ?? null,
+    completedAt ?? null,
+    body.status ?? null,
+    body.status ?? null,
+    now,
+    id,
+  ]);
 
   if (result.meta.changes === 0)
     return jsonResponse({ error: "Request not found" }, { status: 404 });

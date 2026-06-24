@@ -48,7 +48,7 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
 
 ## Database Schema Workflow
 
-Migrations are managed via **wrangler D1 migrations** and are applied automatically on every deploy.
+Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and are applied automatically on every deploy. Query access goes through **Drizzle ORM** (`server/db/schema.ts`, `server/db/index.ts`) — Drizzle is a query layer over the same D1 database, not a migration tool. `drizzle-kit` is only used for schema drift checking, never for generating or applying migrations.
 
 1. To change the schema, create a new migration:
 
@@ -58,13 +58,17 @@ Migrations are managed via **wrangler D1 migrations** and are applied automatica
 
 2. Edit the generated file in `migrations/`. Write only the delta: `ALTER TABLE`, `CREATE TABLE`, etc.
 
-3. Apply locally to test:
+3. Update `server/db/schema.ts` by hand to match the new SQL — Drizzle's schema is not generated from migrations.
+
+4. Apply locally to test:
 
    ```bash
    yarn schema:local
    ```
 
-4. Migrations run automatically on deploy. `yarn deploy` runs:
+5. Run `yarn drizzle:check` (`drizzle-kit check`) to verify `server/db/schema.ts` hasn't drifted from the live D1 schema.
+
+6. Migrations run automatically on deploy. `yarn deploy` runs:
 
    ```bash
    wrangler d1 migrations apply DB --remote
@@ -72,20 +76,24 @@ Migrations are managed via **wrangler D1 migrations** and are applied automatica
 
    before uploading the Worker.
 
-5. Never write ad-hoc SQL files in `scripts/` for schema changes. They will not be tracked and can cause production outages.
+7. Never write ad-hoc SQL files in `scripts/` for schema changes. They will not be tracked and can cause production outages.
 
-6. Better Auth tables must use exact camelCase column names. App tables use snake_case.
+8. Never use `drizzle-kit generate` or `drizzle-kit migrate` against this database — `migrations/*.sql` applied via wrangler is the only source of truth for schema changes.
 
-7. Any schema change must be checked against current server queries before finishing.
+9. Better Auth tables must use exact camelCase column names. App tables use snake_case.
 
-The current canonical schema is `migrations/0001_initial.sql`. Each subsequent migration file is the source of truth for its delta.
+10. Any schema change must be checked against current server queries (raw SQL and Drizzle alike) before finishing.
+
+`migrations/0001_initial.sql` is the **squashed baseline** — all migrations up through the old numbering (including what was previously migration `0017`) were folded into it. Numbering restarted from `0001` after the squash. Each migration file after `0001_initial.sql` is the source of truth for its own delta. Do not reference pre-squash migration numbers (e.g. "migration 0017") as if they still exist as separate files — that history is now baked into `0001_initial.sql`.
+
+**Squashing a migration history only updates the file on disk — it does not retroactively re-run against an environment that already applied an earlier version of that same filename.** `wrangler d1 migrations apply` tracks applied migrations by filename in the `d1_migrations` table, not by content/checksum. If `0001_initial.sql` is re-squashed to include newer tables and a target environment already has a `0001_initial.sql` row recorded from a prior squash, `wrangler d1 migrations apply` will report "No migrations to apply!" and silently skip the new content — this happened to production (last applied: `0005_add_google_analytics_connections.sql`, missing `work_requests` and `platform_content_components` as of 2026-06-24, fixed in `migrations/0002_add_work_requests_and_platform_content_components.sql` using `CREATE TABLE IF NOT EXISTS` so it's a safe no-op on environments that already have the tables under old migration names). Before assuming any environment is schema-current, diff its actual `sqlite_master` tables against `server/db/schema.ts`, not just `wrangler d1 migrations list`.
 
 ---
 
 ## Multi-Tenancy
 
 - Organizations map to a team or agency using Better Auth’s `organization` plugin.
-- **One org can have multiple sites** — the unique-per-org constraint was removed in migration `0017`.
+- **One org can have multiple sites** — the unique-per-org constraint was removed pre-squash (was migration `0017`); this is now part of the `0001_initial.sql` baseline.
 - Each site has its own plan and Stripe subscription (`site_billing` table).
 - The Stripe *customer* stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
 - Multiple physical locations live under `business_locations`, not separate orgs. Locations are **unlimited on all plans**.
@@ -107,6 +115,17 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 
 ---
 
+## Analytics
+
+There are four independent analytics layers — do not conflate them or assume one supersedes another:
+
+1. **Platform GA4** (`G-NJ1BSP9BYG`, injected in `app.vue`) — KrabiClaw's own marketing-site property, fires only when `isPlatform` is true.
+2. **Per-tenant connected GA4** — a site owner links their own GA4 property via the OAuth flow in `server/utils/google-analytics.ts` / `server/api/sites/[siteId]/integrations/google-analytics/`. The resulting `ga4_measurement_id` lands in `site_config` (already exposed publicly via bootstrap's `config` object — no extra plumbing needed) and `app.vue` injects it as that tenant's own gtag tag. Sites with no connection get no tag from this layer.
+3. **Platform-wide rollup GA4** (`G-Z18L1Y4G7K`, configured in `nuxt.config.ts` via `scripts.registry.googleAnalytics`) — **intentionally unconditional**, fires on every route including every Saya tenant page. This is how KrabiClaw gets cross-customer traffic insight across all tenant sites. It is not a leftover/mistake — do not remove or gate it without explicit instruction.
+4. **Internal pipeline** (`site_pageview_events` → `aggregateAnalyticsForDate()` → `site_analytics_daily`) — powers each site's own dashboard "Analytics overview" tab. Tracked via `server/middleware/zz-pageview-tracking.ts` (SSR) and `plugins/pageview-tracking.client.ts` (SPA navigation + duration ping), using the `kc_visitor_id` (2yr)/`kc_session_id` (30min sliding) anonymous cookie pair defined in `server/utils/pageview-tracking.ts`. This is intentionally not a Better Auth session — anonymous visitors must never create rows in `user`/`session`.
+
+---
+
 ## File Conventions
 
 - `server/utils/auth.ts` — `createAuth(env)` — always takes full CF env
@@ -114,7 +133,8 @@ The current canonical schema is `migrations/0001_initial.sql`. Each subsequent m
 - `server/middleware/tenant-resolution.ts` — runs on every request
 - `lib/auth-client.ts` — client-side Better Auth instance
 - `composables/` — Nuxt auto-imported
-- `migrations/` — canonical D1 schema, numbered files; `0001_initial.sql` is the base
+- `migrations/` — canonical D1 schema, numbered files; `0001_initial.sql` is the squashed base (renumbered, supersedes all pre-squash migration numbers)
+- `server/db/schema.ts` — Drizzle ORM schema, hand-maintained to mirror `migrations/`; `server/db/index.ts` — `createDb()` and query helpers
 - `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo tenant
 - `seed-definitions/pottery-house.ts`, `seed-definitions/kikuzuki.ts` — client site seed definitions
 - `scripts/generate-demo-seed.ts` — ephemeral demo seed generator; applies from `/tmp`, never from a checked-in SQL file
@@ -275,7 +295,7 @@ Flow:
 
 - Stripe is the source of truth for plan names, prices, and `marketing_features`.
 - `server/utils/billing.ts` → `getPlanEntitlements(plan)` defines what each plan unlocks in D1.
-- Entitlements are stored **per-site** in the `site_entitlements` table (migration `0017` replaced `organization_entitlements`).
+- Entitlements are stored **per-site** in the `site_entitlements` table (this superseded `organization_entitlements` pre-squash, was migration `0017`, now part of the `0001_initial.sql` baseline). The old `organization_entitlements` table still exists in the schema for legacy billing/credits data but is not used for plan entitlement checks.
 - Billing is **per-site** via `site_billing`. Checkout must pass `site_id` in Stripe session metadata.
 - Key entitlement keys:
   - `custom_domains`
@@ -362,7 +382,7 @@ Flow:
 
 - Access requires both:
   - `user.role = 'admin'` in DB
-  - Server-side `isPlatformOwner()` check against `PLATFORM_OWNER_EMAILS` env var
+  - Server-side `isPlatformAdmin()` check aligned to the Better Auth global admin role
 
 - Admin navigation is defined in `adminNavigation` computed in `layouts/dashboard.vue`.
 
@@ -390,7 +410,7 @@ Flow:
   GET /api/post-login
   ```
 
-  - `isPlatformOwner` → `/admin`
+  - `isPlatformAdmin()` → `/admin`
   - Else → `/dashboard/[orgSlug]`
 
 - Dev login:
@@ -543,8 +563,14 @@ Run the regression fixture before merging any PR that touches `scripts/` or `com
 
 ```bash
 # Requires a local dev server seeded with pottery house data
-yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-house-krabi
+yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-house
+
+# Against staging — the fixture auto-sends x-preview-tenant since staging's
+# wildcard TLS only covers one subdomain level; --slug must be passed too
+yarn fixture:pottery-house --url https://staging.krabiclaw.com --site-id site-pottery-house --slug pottery-house
 ```
+
+The client was originally intake'd as "pottery-house-krabi" but is live under the shorter `pottery-house` slug/site id — use the live identifiers above, not the original intake name.
 
 ---
 

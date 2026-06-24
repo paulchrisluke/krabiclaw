@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '../../utils/auth'
 import { defineEventHandler, getRouterParam } from 'h3'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -31,14 +32,14 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const site = await db.prepare(`
+    const site = await queryFirst<{ organization_id: string }>(db, `
       SELECT id, organization_id, theme_id, brand_name, slug, subdomain,
              custom_domain, status, plan, created_at, updated_at,
              onboarding_status
       FROM sites
       WHERE id = ?
       LIMIT 1
-    `).bind(siteId).first()
+    `, [siteId])
 
     if (!site) {
       return jsonResponse({
@@ -47,11 +48,11 @@ export default defineEventHandler(async (event) => {
     }
 
     // Verify user owns this site
-    const membership = await db.prepare(`
+    const membership = await queryFirst(db, `
       SELECT 1 FROM member m
       WHERE m.organizationId = ? AND m.userId = ?
       LIMIT 1
-    `).bind(site.organization_id, session.user.id).first()
+    `, [site.organization_id, session.user.id])
 
     if (!membership) {
       return jsonResponse({

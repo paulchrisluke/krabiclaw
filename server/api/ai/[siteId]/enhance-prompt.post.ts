@@ -5,6 +5,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { callAiGateway } from '~/server/utils/ai-gateway'
+import { queryFirst } from '~/server/db'
 
 const ENHANCE_MODEL = 'claude-haiku-4-5-20251001'
 
@@ -28,11 +29,11 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT s.organization_id FROM sites s
     JOIN member m ON s.organization_id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor') LIMIT 1
-  `).bind(siteId, session.user.id).first<{ organization_id: string }>()
+  `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const isDev = import.meta.dev

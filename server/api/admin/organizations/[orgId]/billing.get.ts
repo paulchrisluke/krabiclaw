@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { queryAll, queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const orgId = getRouterParam(event, 'orgId')
@@ -15,14 +16,7 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
-  const sitesBilling = await db.prepare(`
-    SELECT s.id AS site_id, s.brand_name, sb.stripe_subscription_id, sb.plan, sb.status,
-           sb.current_period_end, sb.cancel_at_period_end,
-           sb.payment_method, sb.local_rate, sb.local_currency
-    FROM sites s
-    LEFT JOIN site_billing sb ON sb.site_id = s.id
-    WHERE s.organization_id = ?
-  `).bind(orgId).all<{
+  const sitesBilling = await queryAll<{
     site_id: string
     brand_name: string | null
     stripe_subscription_id: string | null
@@ -33,33 +27,31 @@ export default defineEventHandler(async (event) => {
     payment_method: string | null
     local_rate: number | null
     local_currency: string | null
-  }>()
+  }>(db, `
+    SELECT s.id AS site_id, s.brand_name, sb.stripe_subscription_id, sb.plan, sb.status,
+           sb.current_period_end, sb.cancel_at_period_end,
+           sb.payment_method, sb.local_rate, sb.local_currency
+    FROM sites s
+    LEFT JOIN site_billing sb ON sb.site_id = s.id
+    WHERE s.organization_id = ?
+  `, [orgId])
 
-  const org = await db.prepare(`
+  const org = await queryFirst<{
+    org_name: string
+    org_slug: string | null
+    stripe_customer_id: string | null
+  }>(db, `
     SELECT o.name AS org_name, o.slug AS org_slug, ob.stripe_customer_id
     FROM organization o
     LEFT JOIN organization_billing ob ON ob.organization_id = o.id
     WHERE o.id = ?
     LIMIT 1
-  `).bind(orgId).first<{
-    org_name: string
-    org_slug: string | null
-    stripe_customer_id: string | null
-  }>()
+  `, [orgId])
 
   if (!org) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
 
   // Pending transfer for any site owned by this org
-  const transfer = await db.prepare(`
-    SELECT r.id, r.site_id, r.to_email, r.invited_plan, r.invited_interval,
-           r.invited_domain, r.requires_payment, r.created_at,
-           s.brand_name
-    FROM site_transfer_requests r
-    JOIN sites s ON s.id = r.site_id
-    WHERE r.from_organization_id = ? AND r.status = 'pending'
-    ORDER BY r.created_at DESC
-    LIMIT 1
-  `).bind(orgId).first<{
+  const transfer = await queryFirst<{
     id: string
     site_id: string
     to_email: string
@@ -69,31 +61,34 @@ export default defineEventHandler(async (event) => {
     requires_payment: number
     created_at: string
     brand_name: string | null
-  }>()
+  }>(db, `
+    SELECT r.id, r.site_id, r.to_email, r.invited_plan, r.invited_interval,
+           r.invited_domain, r.requires_payment, r.created_at,
+           s.brand_name
+    FROM site_transfer_requests r
+    JOIN sites s ON s.id = r.site_id
+    WHERE r.from_organization_id = ? AND r.status = 'pending'
+    ORDER BY r.created_at DESC
+    LIMIT 1
+  `, [orgId])
 
   // Check if the transfer recipient has already created an account
   let recipientReady = false
   if (transfer?.to_email) {
-    const recipientUser = await db.prepare(`
+    const recipientUser = await queryFirst<{ id: string }>(db, `
       SELECT u.id FROM user u
       JOIN member m ON m.userId = u.id
       WHERE lower(u.email) = ? AND m.role = 'owner'
       LIMIT 1
-    `).bind(transfer.to_email.toLowerCase()).first<{ id: string }>()
+    `, [transfer.to_email.toLowerCase()])
     recipientReady = Boolean(recipientUser)
   }
-
-  const firstSiteBilling = (sitesBilling.results ?? [])[0]
 
   return jsonResponse({
     org_name: org.org_name,
     org_slug: org.org_slug,
     stripe_customer_id: org.stripe_customer_id,
-    stripe_subscription_id: firstSiteBilling?.stripe_subscription_id ?? null,
-    plan: firstSiteBilling?.plan ?? null,
-    status: firstSiteBilling?.status ?? null,
-    current_period_end: firstSiteBilling?.current_period_end ?? null,
-    sites_billing: (sitesBilling.results ?? []).map(sb => ({
+    sites_billing: (sitesBilling ?? []).map(sb => ({
       site_id: sb.site_id,
       brand_name: sb.brand_name,
       stripe_subscription_id: sb.stripe_subscription_id,

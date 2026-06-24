@@ -1,4 +1,5 @@
 import { updateSubscriptionQuantity } from "~/server/utils/billing";
+import { execute, executeBatch, queryFirst } from "~/server/db";
 
 type SetupEnv = Record<string, string | undefined>;
 
@@ -169,17 +170,16 @@ async function validateMediaAsset(
   fieldName: string,
 ) {
   if (!assetId) return;
-  const asset = await db
-    .prepare(
-      `
+  const asset = await queryFirst(
+    db,
+    `
     SELECT id
     FROM media_assets
     WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active' AND kind = ?
     LIMIT 1
   `,
-    )
-    .bind(assetId, organizationId, siteId, kind)
-    .first();
+    [assetId, organizationId, siteId, kind],
+  );
 
   if (!asset) {
     throw new Error(`${fieldName} not found, unauthorized, or not a ${kind}`);
@@ -192,9 +192,9 @@ async function loadLocation(
   siteId: string,
   locationId: string,
 ) {
-  return db
-    .prepare(
-      `
+  return queryFirst<LocationRecord>(
+    db,
+    `
     SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
            rating, review_count, description, short_description, status, is_primary,
            address, opening_hours, hero_image_asset_id, hero_video_asset_id, price_level,
@@ -204,9 +204,8 @@ async function loadLocation(
     WHERE id = ? AND organization_id = ? AND site_id = ?
     LIMIT 1
   `,
-    )
-    .bind(locationId, organizationId, siteId)
-    .first<LocationRecord>();
+    [locationId, organizationId, siteId],
+  );
 }
 
 export async function createLocation(
@@ -279,16 +278,15 @@ export async function createLocation(
     };
   }
 
-  const activeCountRow = await db
-    .prepare(
-      `
+  const activeCountRow = await queryFirst<{ count: number | string }>(
+    db,
+    `
     SELECT COUNT(*) AS count
     FROM business_locations
     WHERE organization_id = ? AND site_id = ? AND status = 'active'
   `,
-    )
-    .bind(organizationId, siteId)
-    .first<{ count: number | string }>();
+    [organizationId, siteId],
+  );
 
   const activeCount = Number(activeCountRow?.count ?? 0);
   if (!Number.isFinite(activeCount)) {
@@ -307,25 +305,20 @@ export async function createLocation(
     const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
 
     try {
-      const statements: D1PreparedStatement[] = [];
+      const statements: { query: string; params: unknown[] }[] = [];
       if (isPrimary) {
-        statements.push(
-          db
-            .prepare(
-              `
+        statements.push({
+          query: `
             UPDATE business_locations
             SET is_primary = 0, updated_at = ?
             WHERE organization_id = ? AND site_id = ?
           `,
-            )
-            .bind(now, organizationId, siteId),
-        );
+          params: [now, organizationId, siteId],
+        });
       }
 
-      statements.push(
-        db
-          .prepare(
-            `
+      statements.push({
+        query: `
           INSERT INTO business_locations (
             id, organization_id, site_id, title, slug, city, neighborhood, phone, email, website_url, maps_url,
             google_place_id, description, short_description, address, opening_hours, rating, review_count,
@@ -334,58 +327,54 @@ export async function createLocation(
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
         `,
-          )
-          .bind(
-            id,
-            organizationId,
-            siteId,
-            title,
-            slug,
-            input.city ?? null,
-            input.neighborhood ?? null,
-            input.phone ?? null,
-            input.email ?? null,
-            input.website_url ?? null,
-            input.maps_url ?? null,
-            input.google_place_id ?? null,
-            input.description ?? null,
-            input.short_description ?? null,
-            serializeAddress(input.address),
-            serializeOpeningHours(input.opening_hours),
-            input.rating ?? null,
-            input.review_count ?? null,
-            input.price_level ?? null,
-            input.facebook_url ?? null,
-            input.instagram_url ?? null,
-            input.tiktok_url ?? null,
-            normalizeOrderingUrl(input.grab_url, "grab_url"),
-            normalizeOrderingUrl(input.uber_eats_url, "uber_eats_url"),
-            normalizeOrderingUrl(input.foodpanda_url, "foodpanda_url"),
-            input.hero_image_asset_id ?? null,
-            input.hero_video_asset_id ?? null,
-            input.notification_phone ?? null,
-            input.timezone ?? null,
-            isPrimary ? 1 : 0,
-            now,
-            now,
-          ),
-      );
+        params: [
+          id,
+          organizationId,
+          siteId,
+          title,
+          slug,
+          input.city ?? null,
+          input.neighborhood ?? null,
+          input.phone ?? null,
+          input.email ?? null,
+          input.website_url ?? null,
+          input.maps_url ?? null,
+          input.google_place_id ?? null,
+          input.description ?? null,
+          input.short_description ?? null,
+          serializeAddress(input.address),
+          serializeOpeningHours(input.opening_hours),
+          input.rating ?? null,
+          input.review_count ?? null,
+          input.price_level ?? null,
+          input.facebook_url ?? null,
+          input.instagram_url ?? null,
+          input.tiktok_url ?? null,
+          normalizeOrderingUrl(input.grab_url, "grab_url"),
+          normalizeOrderingUrl(input.uber_eats_url, "uber_eats_url"),
+          normalizeOrderingUrl(input.foodpanda_url, "foodpanda_url"),
+          input.hero_image_asset_id ?? null,
+          input.hero_video_asset_id ?? null,
+          input.notification_phone ?? null,
+          input.timezone ?? null,
+          isPrimary ? 1 : 0,
+          now,
+          now,
+        ],
+      });
 
       if (isPrimary) {
-        statements.push(
-          db
-            .prepare(
-              `
+        statements.push({
+          query: `
             UPDATE sites
             SET primary_location_id = ?, updated_at = ?, updated_by = ?
             WHERE id = ? AND organization_id = ?
           `,
-            )
-            .bind(id, now, userId, siteId, organizationId),
-        );
+          params: [id, now, userId, siteId, organizationId],
+        });
       }
 
-      await db.batch(statements);
+      await executeBatch(db, statements);
       const location = await loadLocation(db, organizationId, siteId, id);
       void updateSubscriptionQuantity(env, db, organizationId).catch(
         (error) => {
@@ -609,57 +598,45 @@ export async function updateLocation(
   }
 
   const runUpdate = async (boundParams: Array<string | number | null>) => {
-    const statements: D1PreparedStatement[] = [];
+    const statements: { query: string; params: unknown[] }[] = [];
     if (input.is_primary === true) {
-      statements.push(
-        db
-          .prepare(
-            `
+      statements.push({
+        query: `
           UPDATE business_locations
           SET is_primary = 0, updated_at = ?
           WHERE organization_id = ? AND site_id = ?
         `,
-          )
-          .bind(now, organizationId, siteId),
-      );
-      statements.push(
-        db
-          .prepare(
-            `
+        params: [now, organizationId, siteId],
+      });
+      statements.push({
+        query: `
           UPDATE sites
           SET primary_location_id = ?, updated_at = ?, updated_by = ?
           WHERE id = ? AND organization_id = ?
         `,
-          )
-          .bind(locationId, now, userId, siteId, organizationId),
-      );
+        params: [locationId, now, userId, siteId, organizationId],
+      });
     } else if (input.is_primary === false) {
-      statements.push(
-        db
-          .prepare(
-            `
+      statements.push({
+        query: `
           UPDATE sites
           SET primary_location_id = NULL, updated_at = ?, updated_by = ?
           WHERE id = ? AND organization_id = ? AND primary_location_id = ?
         `,
-          )
-          .bind(now, userId, siteId, organizationId, locationId),
-      );
+        params: [now, userId, siteId, organizationId, locationId],
+      });
     }
 
-    statements.push(
-      db
-        .prepare(
-          `
+    statements.push({
+      query: `
         UPDATE business_locations
         SET ${sets.join(", ")}
         WHERE id = ? AND organization_id = ? AND site_id = ?
       `,
-        )
-        .bind(...boundParams),
-    );
+      params: boundParams,
+    });
 
-    await db.batch(statements);
+    await executeBatch(db, statements);
   };
 
   if (slugBase && slugParamIndex !== null) {
@@ -708,56 +685,83 @@ export async function deleteLocation(
   locationId: string,
   userId: string,
 ) {
+  const now = new Date().toISOString();
   // A location delete can cascade SET NULL into Google Business rows. If the
   // site already has a site-level connection, that null transition can collide
   // with the partial unique index on google_business_connections.
-  // Remove location-scoped connections up front so the hard delete stays
-  // deterministic and does not depend on SQLite's constraint ordering.
+  // Also clear saved workspace selections up front so every surface observes
+  // the same delete contract even if an environment is missing/on-disk foreign
+  // key metadata from an older local DB snapshot.
+  // Remove location-scoped connections and pointers up front so the hard delete
+  // stays deterministic and does not depend on SQLite's constraint ordering.
   const statements = [
-    db
-      .prepare(
-        `
+    {
+      query: `
       UPDATE media_assets
       SET location_id = NULL
       WHERE organization_id = ? AND site_id = ? AND location_id = ?
     `,
-      )
-      .bind(organizationId, siteId, locationId),
-    db
-      .prepare(
-        `
+      params: [organizationId, siteId, locationId],
+    },
+    {
+      query: `
+      UPDATE dashboard_preferences
+      SET selected_location_id = NULL,
+          updated_at = ?
+      WHERE organization_id = ? AND selected_location_id = ?
+    `,
+      params: [now, organizationId, locationId],
+    },
+    {
+      query: `
+      UPDATE mcp_workspace_preferences
+      SET location_id = NULL,
+          updated_at = ?
+      WHERE organization_id = ? AND site_id = ? AND location_id = ?
+    `,
+      params: [now, organizationId, siteId, locationId],
+    },
+    {
+      query: `
+      UPDATE chowbot_conversations
+      SET selected_location_id = NULL,
+          updated_at = ?
+      WHERE organization_id = ? AND site_id = ? AND selected_location_id = ?
+    `,
+      params: [now, organizationId, siteId, locationId],
+    },
+    {
+      query: `
       DELETE FROM google_business_connections
       WHERE organization_id = ? AND site_id = ? AND location_id = ?
     `,
-      )
-      .bind(organizationId, siteId, locationId),
-    db
-      .prepare(
-        `
+      params: [organizationId, siteId, locationId],
+    },
+    {
+      query: `
       DELETE FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?
     `,
-      )
-      .bind(locationId, organizationId, siteId),
+      params: [locationId, organizationId, siteId],
+    },
   ];
 
-  const batchResults = await db.batch(statements);
-  const deleteResult = batchResults[2];
+  const batchResults = await executeBatch(db, statements);
+  const deleteResult = batchResults[5];
 
   if (!deleteResult?.meta.changes) {
     return { status: 404, data: { error: "Location not found." } };
   }
 
-  await db
-    .prepare(
-      `
+  await execute(
+    db,
+    `
     UPDATE sites
     SET primary_location_id = NULL, updated_at = ?, updated_by = ?
     WHERE id = ? AND organization_id = ? AND primary_location_id = ?
   `,
-    )
-    .bind(new Date().toISOString(), userId, siteId, organizationId, locationId)
-    .run();
+    [now, userId, siteId, organizationId, locationId],
+  );
 
   void updateSubscriptionQuantity(env, db, organizationId).catch((error) => {
     console.error(

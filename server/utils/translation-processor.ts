@@ -2,6 +2,7 @@ import { callAiGateway } from '~/server/utils/ai-gateway'
 import { chargeCredits, hasCredits } from '~/server/utils/ai-credits'
 import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
 import { buildTranslationInventory, type TranslationInventoryItem } from '~/server/utils/translation-inventory'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 
 const TRANSLATION_BATCH_SIZE = 12
 
@@ -51,16 +52,16 @@ function normalizeTranslatedFields(value: unknown): Record<string, string> {
   return fields
 }
 
-async function markItem(db: D1Database, id: string, status: 'running' | 'succeeded' | 'failed' | 'skipped', error?: string) {
-  await db.prepare(`
+async function markItem(db: DbClient, id: string, status: 'running' | 'succeeded' | 'failed' | 'skipped', error?: string) {
+  await execute(db, `
     UPDATE translation_job_items
     SET status = ?, error = ?, updated_at = ?
     WHERE id = ?
-  `).bind(status, error ?? null, new Date().toISOString(), id).run()
+  `, [status, error ?? null, new Date().toISOString(), id])
 }
 
 async function upsertSiteContentTranslation(
-  db: D1Database,
+  db: DbClient,
   job: TranslationJobRow,
   item: TranslationInventoryItem,
   fields: Record<string, string>,
@@ -73,7 +74,7 @@ async function upsertSiteContentTranslation(
   const id = `translation::${job.organization_id}::${job.site_id}::${item.location_id ?? 'site'}::${job.target_locale}::${item.page ?? 'page'}::${item.field}`
 
   if (!item.location_id) {
-    await db.prepare(`
+    await execute(db, `
       INSERT INTO site_content_translations
         (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, updated_at)
       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'text', 'draft', ?, ?, ?)
@@ -86,11 +87,11 @@ async function upsertSiteContentTranslation(
         source_hash = excluded.source_hash,
         translated_at = excluded.translated_at,
         updated_at = excluded.updated_at
-    `).bind(id, job.organization_id, job.site_id, job.target_locale, item.page, item.field, content, heroTitle, heroSubtitle, value, item.source_hash, now, now).run()
+    `, [id, job.organization_id, job.site_id, job.target_locale, item.page, item.field, content, heroTitle, heroSubtitle, value, item.source_hash, now, now])
     return
   }
 
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO site_content_translations
       (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'text', 'draft', ?, ?, ?)
@@ -103,11 +104,11 @@ async function upsertSiteContentTranslation(
       source_hash = excluded.source_hash,
       translated_at = excluded.translated_at,
       updated_at = excluded.updated_at
-  `).bind(id, job.organization_id, job.site_id, item.location_id, job.target_locale, item.page, item.field, content, heroTitle, heroSubtitle, value, item.source_hash, now, now).run()
+  `, [id, job.organization_id, job.site_id, item.location_id, job.target_locale, item.page, item.field, content, heroTitle, heroSubtitle, value, item.source_hash, now, now])
 }
 
 async function upsertEntityTranslation(
-  db: D1Database,
+  db: DbClient,
   job: TranslationJobRow,
   item: TranslationInventoryItem,
   fields: Record<string, string>,
@@ -119,23 +120,23 @@ async function upsertEntityTranslation(
   }
 
   if (item.entity_type === 'menu') {
-    await db.prepare(`
+    await execute(db, `
       INSERT INTO menu_translations
         (id, organization_id, site_id, menu_id, locale, name, description, status, source_hash, translated_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)
       ON CONFLICT(organization_id, site_id, menu_id, locale) DO UPDATE SET
         name = excluded.name, description = excluded.description, status = 'draft',
         source_hash = excluded.source_hash, translated_at = excluded.translated_at, updated_at = excluded.updated_at
-    `).bind(
+    `, [
       `translation::${job.organization_id}::${job.site_id}::menu::${item.entity_id}::${job.target_locale}`,
       job.organization_id, job.site_id, item.entity_id, job.target_locale,
       fields.name ?? null, fields.description ?? null, item.source_hash, now, now,
-    ).run()
+    ])
     return
   }
 
   if (item.entity_type === 'menu_item') {
-    await db.prepare(`
+    await execute(db, `
       INSERT INTO menu_item_translations
         (id, organization_id, site_id, menu_item_id, locale, section, name, description, allergens, ingredients, dietary_notes, preparation, serving_note, status, source_hash, translated_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)
@@ -144,18 +145,18 @@ async function upsertEntityTranslation(
         allergens = excluded.allergens, ingredients = excluded.ingredients, dietary_notes = excluded.dietary_notes,
         preparation = excluded.preparation, serving_note = excluded.serving_note, status = 'draft',
         source_hash = excluded.source_hash, translated_at = excluded.translated_at, updated_at = excluded.updated_at
-    `).bind(
+    `, [
       `translation::${job.organization_id}::${job.site_id}::menu_item::${item.entity_id}::${job.target_locale}`,
       job.organization_id, job.site_id, item.entity_id, job.target_locale,
       fields.section ?? null, fields.name ?? null, fields.description ?? null,
       fields.allergens ?? null, fields.ingredients ?? null, fields.dietary_notes ?? null,
       fields.preparation ?? null, fields.serving_note ?? null, item.source_hash, now, now,
-    ).run()
+    ])
     return
   }
 
   if (item.entity_type === 'business_location') {
-    await db.prepare(`
+    await execute(db, `
       INSERT INTO business_location_translations
         (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)
@@ -163,16 +164,16 @@ async function upsertEntityTranslation(
         title = excluded.title, address = excluded.address, city = excluded.city,
         description = excluded.description, short_description = excluded.short_description, status = 'draft',
         source_hash = excluded.source_hash, translated_at = excluded.translated_at, updated_at = excluded.updated_at
-    `).bind(
+    `, [
       `translation::${job.organization_id}::${job.site_id}::location::${item.entity_id}::${job.target_locale}`,
       job.organization_id, job.site_id, item.entity_id, job.target_locale,
       fields.title ?? null, fields.address ?? null, fields.city ?? null,
       fields.description ?? null, fields.short_description ?? null, item.source_hash, now, now,
-    ).run()
+    ])
     return
   }
 
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO post_translations
       (id, organization_id, site_id, post_id, locale, title, body, event_title, offer_terms, status, source_hash, translated_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)
@@ -180,16 +181,16 @@ async function upsertEntityTranslation(
       title = excluded.title, body = excluded.body, event_title = excluded.event_title,
       offer_terms = excluded.offer_terms, status = 'draft',
       source_hash = excluded.source_hash, translated_at = excluded.translated_at, updated_at = excluded.updated_at
-  `).bind(
+  `, [
     `translation::${job.organization_id}::${job.site_id}::post::${item.entity_id}::${job.target_locale}`,
     job.organization_id, job.site_id, item.entity_id, job.target_locale,
     fields.title ?? null, fields.body ?? null, fields.event_title ?? null,
     fields.offer_terms ?? null, item.source_hash, now, now,
-  ).run()
+  ])
 }
 
 export async function upsertTranslationDraft(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   targetLocale: string,
@@ -208,44 +209,45 @@ export async function upsertTranslationDraft(
 }
 
 export async function processTranslationJobBatch(
-  db: D1Database,
+  db: DbClient,
   env: ApiRecord,
   organizationId: string,
   siteId: string,
   jobId: string,
 ) {
-  const job = await db.prepare(`
+  const job = await queryFirst<TranslationJobRow>(db, `
     SELECT id, organization_id, site_id, source_locale, target_locale, scope, status
     FROM translation_jobs
     WHERE id = ? AND organization_id = ? AND site_id = ?
     LIMIT 1
-  `).bind(jobId, organizationId, siteId).first<TranslationJobRow>()
+  `, [jobId, organizationId, siteId])
 
   if (!job) throw new Error('Translation job not found.')
   if (job.status === 'succeeded' || job.status === 'canceled') return { job_id: jobId, status: job.status, processed: 0 }
 
-  const creditOk = await hasCredits(db, organizationId)
+  // ai-credits.ts is not yet migrated off raw D1Database; callers here always
+  // pass the raw D1 binding today, so this cast is safe at runtime.
+  const creditOk = await hasCredits(db as D1Database, organizationId)
   if (!creditOk) throw new Error('No AI credits remaining.')
 
-  const queued = await db.prepare(`
+  const rows = await queryAll<TranslationJobItemRow>(db, `
     SELECT id, entity_type, entity_id, field, source_hash
     FROM translation_job_items
     WHERE job_id = ? AND organization_id = ? AND site_id = ? AND status = 'queued'
     ORDER BY entity_type, page, field
     LIMIT ?
-  `).bind(jobId, organizationId, siteId, TRANSLATION_BATCH_SIZE).all<TranslationJobItemRow>()
+  `, [jobId, organizationId, siteId, TRANSLATION_BATCH_SIZE])
 
-  const rows = queued.results ?? []
   if (!rows.length) {
     const status = await updateJobProgress(db, jobId)
     return { job_id: jobId, status, processed: 0 }
   }
 
-  await db.prepare(`
+  await execute(db, `
     UPDATE translation_jobs
     SET status = 'running', started_at = COALESCE(started_at, ?), updated_at = ?
     WHERE id = ?
-  `).bind(new Date().toISOString(), new Date().toISOString(), jobId).run()
+  `, [new Date().toISOString(), new Date().toISOString(), jobId])
 
   await Promise.all(rows.map(row => markItem(db, row.id, 'running')))
 
@@ -290,7 +292,7 @@ export async function processTranslationJobBatch(
     metadata: { org_id: organizationId, site_id: siteId, action: 'translation_job' },
   })
 
-  const charge = await chargeCredits(db, organizationId, {
+  const charge = await chargeCredits(db as D1Database, organizationId, {
     siteId,
     action: 'translation_job',
     model: CHOWBOT_MODEL,
@@ -298,14 +300,14 @@ export async function processTranslationJobBatch(
     outputTokens: aiResponse.usage.output_tokens,
     cfGatewayLogId: aiResponse.cfLogId,
   })
-  await db.prepare(`
+  await execute(db, `
     UPDATE translation_jobs
     SET actual_input_tokens = actual_input_tokens + ?,
         actual_output_tokens = actual_output_tokens + ?,
         actual_credits = actual_credits + ?,
         updated_at = ?
     WHERE id = ? AND organization_id = ? AND site_id = ?
-  `).bind(
+  `, [
     aiResponse.usage.input_tokens,
     aiResponse.usage.output_tokens,
     charge.creditsCharged,
@@ -313,7 +315,7 @@ export async function processTranslationJobBatch(
     jobId,
     organizationId,
     siteId,
-  ).run()
+  ])
 
   const rawText = aiResponse.content.find(block => block.type === 'text')?.text ?? ''
   let parsed: { items?: AiTranslatedItem[] }
@@ -351,7 +353,7 @@ export async function processTranslationJobBatch(
 }
 
 export async function processQueuedTranslationJobs(
-  db: D1Database,
+  db: DbClient,
   env: ApiRecord,
   opts: {
     limit?: number
@@ -360,16 +362,16 @@ export async function processQueuedTranslationJobs(
 ) {
   const limit = Math.max(1, Math.min(opts.limit ?? 3, 10))
   const batchesPerJob = Math.max(1, Math.min(opts.batchesPerJob ?? 1, 5))
-  const jobs = await db.prepare(`
+  const jobs = await queryAll<{ id: string; organization_id: string; site_id: string }>(db, `
     SELECT id, organization_id, site_id
     FROM translation_jobs
     WHERE status IN ('queued', 'running')
     ORDER BY created_at ASC
     LIMIT ?
-  `).bind(limit).all<{ id: string; organization_id: string; site_id: string }>()
+  `, [limit])
 
   const results: Array<{ job_id: string; status: string; processed: number; failed?: number; skipped?: number; error?: string }> = []
-  for (const job of jobs.results ?? []) {
+  for (const job of jobs) {
     for (let index = 0; index < batchesPerJob; index += 1) {
       try {
         const result = await processTranslationJobBatch(db, env, job.organization_id, job.site_id, job.id)
@@ -378,11 +380,11 @@ export async function processQueuedTranslationJobs(
         if (result.processed === 0 && !result.skipped) break
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to process translation job.'
-        await db.prepare(`
+        await execute(db, `
           UPDATE translation_jobs
           SET status = 'failed', error = ?, finished_at = ?, updated_at = ?
           WHERE id = ? AND organization_id = ? AND site_id = ?
-        `).bind(message, new Date().toISOString(), new Date().toISOString(), job.id, job.organization_id, job.site_id).run()
+        `, [message, new Date().toISOString(), new Date().toISOString(), job.id, job.organization_id, job.site_id])
         results.push({ job_id: job.id, status: 'failed', processed: 0, error: message })
         break
       }
@@ -392,15 +394,15 @@ export async function processQueuedTranslationJobs(
   return { processed_jobs: results.length, results }
 }
 
-async function updateJobProgress(db: D1Database, jobId: string) {
-  const counts = await db.prepare(`
+async function updateJobProgress(db: DbClient, jobId: string) {
+  const counts = await queryFirst<{ processed_items: number | null; failed_items: number | null; remaining_items: number | null }>(db, `
     SELECT
       SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS processed_items,
       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_items,
       SUM(CASE WHEN status = 'queued' OR status = 'running' THEN 1 ELSE 0 END) AS remaining_items
     FROM translation_job_items
     WHERE job_id = ?
-  `).bind(jobId).first<{ processed_items: number | null; failed_items: number | null; remaining_items: number | null }>()
+  `, [jobId])
 
   const processed = counts?.processed_items ?? 0
   const failed = counts?.failed_items ?? 0
@@ -408,11 +410,11 @@ async function updateJobProgress(db: D1Database, jobId: string) {
   const status = remaining === 0 ? (failed > 0 ? 'failed' : 'succeeded') : 'running'
   const now = new Date().toISOString()
 
-  await db.prepare(`
+  await execute(db, `
     UPDATE translation_jobs
     SET processed_items = ?, failed_items = ?, status = ?, finished_at = CASE WHEN ? = 0 THEN ? ELSE finished_at END, updated_at = ?
     WHERE id = ?
-  `).bind(processed, failed, status, remaining, now, now, jobId).run()
+  `, [processed, failed, status, remaining, now, now, jobId])
 
   return status
 }

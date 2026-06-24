@@ -40,20 +40,13 @@ definePageMeta({
   layout: 'platform'
 })
 
-const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl
-
-useSeoMeta({
-  title: 'Privacy Policy | KrabiClaw',
+usePlatformPageSeo({
+  path: '/privacy',
+  title: 'Privacy Policy',
   description: 'Privacy Policy for KrabiClaw website builder platform. Learn how we collect, use, and protect your personal information.',
-  ogTitle: 'Privacy Policy | KrabiClaw',
-  ogDescription: 'Our commitment to protecting your privacy and personal data.',
-  ogImage: `${siteUrl}/og-image.png`,
-  ogUrl: `${siteUrl}/privacy`,
-  ogType: 'website',
-  twitterCard: 'summary',
-  twitterTitle: 'Privacy Policy - KrabiClaw',
-  twitterDescription: 'How we protect your privacy and personal information.',
-  twitterImage: `${siteUrl}/og-image.png`
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: 'Privacy Policy', url: '/privacy' },
+  ],
 })
 </script>

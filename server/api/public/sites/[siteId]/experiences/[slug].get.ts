@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getExperienceBySlug } from '~/server/utils/experiences'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -10,10 +11,7 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await db
-    .prepare(`SELECT id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`)
-    .bind(siteId)
-    .first<{ id: string }>()
+  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [siteId])
 
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 

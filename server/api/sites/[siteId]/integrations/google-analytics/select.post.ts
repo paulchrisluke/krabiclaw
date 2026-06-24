@@ -6,6 +6,7 @@ import {
   getGa4MeasurementId
 } from '~/server/utils/google-analytics'
 import { deleteConfig, setConfig } from '~/server/utils/site-config'
+import { execute, queryFirst } from '~/server/db'
 
 interface SelectBody {
   ga4_property_id?: string | null
@@ -35,13 +36,13 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   }
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
     SELECT s.id, s.organization_id FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin')
     LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+  `, [siteId, session.user.id])
 
   if (!site) {
     return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -63,12 +64,12 @@ export default defineEventHandler(async (event) => {
       measurementId = await getGa4MeasurementId(accessToken, ga4PropertyId)
     }
 
-    await db.prepare(`
+    await execute(db, `
       UPDATE google_analytics_connections
       SET ga4_property_id = ?, ga4_property_name = ?, ga4_measurement_id = ?,
           search_console_site_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
       WHERE id = ?
-    `).bind(ga4PropertyId, ga4PropertyName, measurementId, searchConsoleSiteUrl, connection.id).run()
+    `, [ga4PropertyId, ga4PropertyName, measurementId, searchConsoleSiteUrl, connection.id])
 
     if (ga4PropertyId) {
       await setConfig(db, site.organization_id, site.id, 'ga4_property_id', ga4PropertyId)
