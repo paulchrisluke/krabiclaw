@@ -6,10 +6,13 @@ import { getConfig } from '~/server/utils/site-config'
 import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
-  const { db, organization, site: dashboardSite } = await getDashboardContext(event, { requireSite: true })
+  const { db, organization, site: dashboardSite } = await getDashboardContext(event, { requireSite: false })
 
+  // No site resolved (no-site-yet or ambiguous multi-site org) is a normal
+  // state for this org-level page — return null settings rather than an
+  // error so callers like the org settings page can show defaults.
   if (!dashboardSite) {
-    return jsonResponse({ error: 'Site not found' }, { status: 404 })
+    return jsonResponse({ success: true, settings: null })
   }
 
   const site = await queryFirst<Record<string, unknown>>(db, `
@@ -23,7 +26,7 @@ export default defineEventHandler(async (event) => {
   `, [dashboardSite.id, organization.id])
 
   if (!site) {
-    return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+    return jsonResponse({ success: true, settings: null })
   }
 
   const siteSettings = (() => {

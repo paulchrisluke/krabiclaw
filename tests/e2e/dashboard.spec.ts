@@ -29,7 +29,8 @@ test.describe('dashboard functional smoke', () => {
   test('owner can open core dashboard pages for their org', async ({ page, baseURL }) => {
     const errors = collectPageErrors(page)
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'load' })
+    const userId = `e2e-dashboard-org-pages-${Date.now()}`
+    const login = await page.goto(devLoginUrl(baseURL!, userId), { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
 
