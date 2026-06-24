@@ -1,5 +1,6 @@
 import { deleteImage } from './cloudflare-images'
 import { deleteFromR2 } from './cloudflare-r2'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 
 type SqlBindValue = string | number | boolean | null
 type MediaProviderEnv = Parameters<typeof deleteImage>[0]
@@ -29,21 +30,22 @@ export interface MediaAsset {
   created_by_user_id: string | null
   created_at: string
   updated_at: string
+  delete_pending_at: string | null
 }
 
 export type CreateInput = Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source'> &
   Partial<Omit<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source' | 'created_at' | 'updated_at'>>
 
-export async function createMediaAsset(db: D1Database, data: CreateInput): Promise<void> {
+export async function createMediaAsset(db: DbClient, data: CreateInput): Promise<void> {
   const now = new Date().toISOString()
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO media_assets (
       id, organization_id, site_id, location_id, kind, provider, source,
       cloudflare_image_id, r2_key, google_media_name,
       public_url, thumbnail_url, mime_type, file_name, file_size,
       width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+  `, [
     data.id, data.organization_id, data.site_id, data.location_id ?? null,
     data.kind, data.provider, data.source,
     data.cloudflare_image_id ?? null, data.r2_key ?? null, data.google_media_name ?? null,
@@ -51,19 +53,20 @@ export async function createMediaAsset(db: D1Database, data: CreateInput): Promi
     data.mime_type ?? null, data.file_name ?? null, data.file_size ?? null,
     data.width ?? null, data.height ?? null, data.duration ?? null,
     data.alt_text ?? null, data.category ?? null, data.status ?? 'active',
-    data.created_by_user_id ?? null, now, now
-  ).run()
+    data.created_by_user_id ?? null, now, now,
+  ])
 }
 
-export async function getMediaAsset(db: D1Database, id: string, siteId: string): Promise<MediaAsset | null> {
-  const row = await db.prepare(
-    `SELECT * FROM media_assets WHERE id = ? AND site_id = ? LIMIT 1`
-  ).bind(id, siteId).first() as MediaAsset | null
-  return row
+export async function getMediaAsset(db: DbClient, id: string, siteId: string): Promise<MediaAsset | null> {
+  return await queryFirst<MediaAsset>(
+    db,
+    `SELECT * FROM media_assets WHERE id = ? AND site_id = ? LIMIT 1`,
+    [id, siteId],
+  ) ?? null
 }
 
 export async function listMediaAssets(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   opts: { kind?: string; locationId?: string; limit?: number; offset?: number } = {}
 ): Promise<MediaAsset[]> {
@@ -72,18 +75,20 @@ export async function listMediaAssets(
   if (opts.kind) { conditions.push(`kind = ?`); params.push(opts.kind) }
   if (opts.locationId) { conditions.push(`location_id = ?`); params.push(opts.locationId) }
   params.push(opts.limit ?? 50, opts.offset ?? 0)
-  const { results } = await db.prepare(
+  const results = await queryAll<MediaAsset>(
+    db,
     `SELECT id, organization_id, site_id, location_id, kind, provider, source,
             cloudflare_image_id, r2_key, google_media_name,
             public_url, thumbnail_url, mime_type, file_name, file_size,
             width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
      FROM media_assets WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC LIMIT ? OFFSET ?`
-  ).bind(...params).all()
-  return (results ?? []) as unknown as MediaAsset[]
+    , params,
+  )
+  return results
 }
 
 export async function activateMediaAsset(
-  db: D1Database,
+  db: DbClient,
   id: string,
   siteId: string,
   updates: { public_url?: string | null; thumbnail_url?: string | null; cloudflare_image_id?: string | null }
@@ -95,19 +100,21 @@ export async function activateMediaAsset(
   if (updates.thumbnail_url !== undefined) { sets.push('thumbnail_url = ?'); params.push(updates.thumbnail_url) }
   if (updates.cloudflare_image_id !== undefined) { sets.push('cloudflare_image_id = ?'); params.push(updates.cloudflare_image_id) }
   params.push(id, siteId)
-  const result = await db.prepare(`UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ? AND status = 'pending'`).bind(...params).run()
+  const result = await execute(db, `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ? AND status = 'pending'`, params)
   return Number(result?.meta?.changes ?? 0) > 0
 }
 
-export async function updateMediaAssetAlt(db: D1Database, id: string, siteId: string, altText: string): Promise<boolean> {
-  const result = await db.prepare(
-    `UPDATE media_assets SET alt_text = ?, updated_at = ? WHERE id = ? AND site_id = ?`
-  ).bind(altText, new Date().toISOString(), id, siteId).run()
+export async function updateMediaAssetAlt(db: DbClient, id: string, siteId: string, altText: string): Promise<boolean> {
+  const result = await execute(
+    db,
+    `UPDATE media_assets SET alt_text = ?, updated_at = ? WHERE id = ? AND site_id = ?`,
+    [altText, new Date().toISOString(), id, siteId],
+  )
   return Number(result?.meta?.changes ?? 0) > 0
 }
 
 export async function updateMediaAssetMetadata(
-  db: D1Database,
+  db: DbClient,
   id: string,
   siteId: string,
   updates: { alt_text?: string | null; location_id?: string | null; category?: MediaAsset['category'] }
@@ -129,28 +136,33 @@ export async function updateMediaAssetMetadata(
   if (sets.length === 1) return false
 
   params.push(id, siteId)
-  const result = await db.prepare(
-    `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`
-  ).bind(...params).run()
+  const result = await execute(db, `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`, params)
   return Number(result?.meta?.changes ?? 0) > 0
 }
 
-/** Soft-delete in DB and hard-delete from Cloudflare storage. */
-export async function deleteMediaAsset(db: D1Database, env: MediaProviderEnv, id: string, siteId: string): Promise<void> {
+/**
+ * Soft-delete in DB and hard-delete from Cloudflare storage.
+ *
+ * `delete_pending_at` is stamped before attempting the Cloudflare Images/R2
+ * delete and only cleared once that delete actually succeeds, so a failed
+ * external delete leaves the asset in a retryable state (status untouched)
+ * instead of being marked 'deleted' while the underlying file is still live.
+ */
+export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: string, siteId: string): Promise<void> {
   const now = new Date().toISOString()
-  const deletedAsset = await db.prepare(`
-    UPDATE media_assets
-    SET status = 'deleted', updated_at = ?
-    WHERE id = ? AND site_id = ? AND status != 'deleted'
-    RETURNING id, provider, cloudflare_image_id, r2_key
-  `).bind(now, id, siteId).first() as {
+  const pendingAsset = await queryFirst<{
     id: string
     provider: MediaAsset['provider']
     cloudflare_image_id: string | null
     r2_key: string | null
-  } | null
+  }>(db, `
+    UPDATE media_assets
+    SET delete_pending_at = ?, updated_at = ?
+    WHERE id = ? AND site_id = ? AND status != 'deleted'
+    RETURNING id, provider, cloudflare_image_id, r2_key
+  `, [now, now, id, siteId]) ?? null
 
-  if (!deletedAsset) return
+  if (!pendingAsset) return
 
   const withRetry = async (
     operation: () => Promise<void>,
@@ -177,19 +189,26 @@ export async function deleteMediaAsset(db: D1Database, env: MediaProviderEnv, id
     throw lastError ?? new Error('media_asset_external_delete_failed')
   }
 
-  if (deletedAsset.provider === 'cloudflare_images' && deletedAsset.cloudflare_image_id) {
-    const cloudflareImageId = deletedAsset.cloudflare_image_id
+  // If either delete throws, delete_pending_at stays set for a retry job to pick back up.
+  if (pendingAsset.provider === 'cloudflare_images' && pendingAsset.cloudflare_image_id) {
+    const cloudflareImageId = pendingAsset.cloudflare_image_id
     await withRetry(() => deleteImage(env, cloudflareImageId), {
-      assetId: deletedAsset.id,
-      provider: deletedAsset.provider,
+      assetId: pendingAsset.id,
+      provider: pendingAsset.provider,
       cloudflareImageId,
     })
-  } else if (deletedAsset.provider === 'cloudflare_r2' && deletedAsset.r2_key) {
-    const r2Key = deletedAsset.r2_key
+  } else if (pendingAsset.provider === 'cloudflare_r2' && pendingAsset.r2_key) {
+    const r2Key = pendingAsset.r2_key
     await withRetry(() => deleteFromR2(env, r2Key), {
-      assetId: deletedAsset.id,
-      provider: deletedAsset.provider,
+      assetId: pendingAsset.id,
+      provider: pendingAsset.provider,
       r2Key,
     })
   }
+
+  await execute(db, `
+    UPDATE media_assets
+    SET status = 'deleted', delete_pending_at = NULL, updated_at = ?
+    WHERE id = ? AND site_id = ?
+  `, [new Date().toISOString(), pendingAsset.id, siteId])
 }

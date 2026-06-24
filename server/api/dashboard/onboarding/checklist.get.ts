@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getAuthSession } from '~/server/utils/auth'
+import { queryFirst } from '~/server/db'
 
 const EMPTY_CHECKLIST = {
   success: true,
@@ -32,14 +33,14 @@ export default defineEventHandler(async (event) => {
     const session = await getAuthSession(event, env)
     if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-    const site = await db.prepare(`
+    const site = await queryFirst<{ id: string; brand_name: string | null }>(db, `
       SELECT s.id, s.brand_name
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member m ON o.id = m.organizationId
       WHERE s.id = ? AND m.userId = ?
       LIMIT 1
-    `).bind(querySiteId, session.user.id).first<{ id: string; brand_name: string | null }>()
+    `, [querySiteId, session.user.id])
 
     if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     siteId = site.id
@@ -52,48 +53,49 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const vertical = await db.prepare(`SELECT vertical, brand_name FROM sites WHERE id = ? LIMIT 1`)
-      .bind(siteId).first<{ vertical: string; brand_name: string | null }>()
+    const vertical = await queryFirst<{ vertical: string; brand_name: string | null }>(
+      db, `SELECT vertical, brand_name FROM sites WHERE id = ? LIMIT 1`, [siteId],
+    )
 
-    const location = await db.prepare(`
+    const location = await queryFirst<{ city: string | null; phone: string | null; review_count: number | null; rating: number | null }>(db, `
       SELECT city, phone, review_count, rating FROM business_locations
       WHERE site_id = ? AND status = 'active'
       ORDER BY is_primary DESC, created_at ASC LIMIT 1
-    `).bind(siteId).first<{ city: string | null; phone: string | null; review_count: number | null; rating: number | null }>()
+    `, [siteId])
 
-    const businessInfo = await db.prepare(`
+    const businessInfo = await queryFirst<{ c: number }>(db, `
       SELECT COUNT(*) as c FROM business_locations
       WHERE site_id = ? AND status = 'active' AND (
         (phone IS NOT NULL AND phone != '')
         OR (maps_url IS NOT NULL AND maps_url != '')
         OR (google_place_id IS NOT NULL AND google_place_id != '')
       )
-    `).bind(siteId).first<{ c: number }>()
+    `, [siteId])
 
-    const heroImage = await db.prepare(`
+    const heroImage = await queryFirst<{ c: number }>(db, `
       SELECT COUNT(*) as c FROM site_content
       WHERE site_id = ? AND page = 'home' AND field = 'hero' AND hero_image_asset_id IS NOT NULL
-    `).bind(siteId).first<{ c: number }>()
+    `, [siteId])
 
-    const menuItems = await db.prepare(`
+    const menuItems = await queryFirst<{ c: number }>(db, `
       SELECT COUNT(*) as c FROM menu_items mi
       JOIN menus m ON mi.menu_id = m.id
       WHERE m.site_id = ?
-    `).bind(siteId).first<{ c: number }>()
+    `, [siteId])
 
-    const experiences = await db.prepare(`
+    const experiences = await queryFirst<{ c: number }>(db, `
       SELECT COUNT(*) as c FROM experiences WHERE site_id = ?
-    `).bind(siteId).first<{ c: number }>()
+    `, [siteId])
 
-    const story = await db.prepare(`
+    const story = await queryFirst<{ c: number }>(db, `
       SELECT COUNT(*) as c FROM site_content
       WHERE site_id = ? AND page = 'about' AND field LIKE 'story%'
       AND content IS NOT NULL AND length(content) > 20
-    `).bind(siteId).first<{ c: number }>()
+    `, [siteId])
 
-    const post = await db.prepare(`
+    const post = await queryFirst<{ c: number }>(db, `
       SELECT COUNT(*) as c FROM posts WHERE site_id = ? AND status = 'published'
-    `).bind(siteId).first<{ c: number }>()
+    `, [siteId])
 
     return jsonResponse({
       success: true,

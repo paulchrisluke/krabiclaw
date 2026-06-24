@@ -6,6 +6,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, requireBillingAccess } from '~/server/utils/billing'
 import { BUNDLE_AMOUNTS, VALID_BUNDLES } from '~/shared/creditBundles'
+import { execute, queryFirst } from '~/server/db'
 import type Stripe from 'stripe'
 
 export default defineEventHandler(async (event) => {
@@ -16,9 +17,9 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const member = await db.prepare(
-    'SELECT organizationId FROM member WHERE userId = ? LIMIT 1'
-  ).bind(session.user.id).first<{ organizationId: string }>()
+  const member = await queryFirst<{ organizationId: string }>(
+    db, 'SELECT organizationId FROM member WHERE userId = ? LIMIT 1', [session.user.id],
+  )
   if (!member) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
   const orgId = member.organizationId
@@ -37,9 +38,9 @@ export default defineEventHandler(async (event) => {
   const amount = BUNDLE_AMOUNTS[bundle]
   if (!amount) return jsonResponse({ error: 'Invalid bundle. Choose 500, 2500, or 5000.' }, { status: 400 })
 
-  const billing = await db.prepare(
-    'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1'
-  ).bind(orgId).first<{ stripe_customer_id: string | null }>()
+  const billing = await queryFirst<{ stripe_customer_id: string | null }>(
+    db, 'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1', [orgId],
+  )
 
   if (!billing?.stripe_customer_id) {
     return jsonResponse({ error: 'No saved payment method found', requiresCheckout: true }, { status: 402 })
@@ -83,31 +84,33 @@ export default defineEventHandler(async (event) => {
 
   // Top up credits atomically
   const now = new Date().toISOString()
-  await db.prepare(
+  await execute(db,
     `INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)
      VALUES (?, ?, 0, ?, ?)
      ON CONFLICT(organization_id) DO UPDATE SET
        balance = balance + excluded.balance,
        last_topped_up_at = excluded.last_topped_up_at,
-       updated_at = excluded.updated_at`
-  ).bind(orgId, bundle, now, now).run()
+       updated_at = excluded.updated_at`,
+    [orgId, bundle, now, now],
+  )
 
   // Persist auto top-up preference if the user toggled it during purchase
   if (enableAutoTopup) {
     const validBundle = (VALID_BUNDLES as readonly number[]).includes(autoTopupBundle) ? autoTopupBundle : bundle
-    await db.prepare(
+    await execute(db,
       `INSERT INTO organization_billing (id, organization_id, auto_topup_enabled, auto_topup_bundle, updated_at)
        VALUES (?, ?, 1, ?, ?)
        ON CONFLICT(organization_id) DO UPDATE SET
          auto_topup_enabled = 1,
          auto_topup_bundle = excluded.auto_topup_bundle,
-         updated_at = excluded.updated_at`
-    ).bind(`ob-${orgId}`, orgId, validBundle, now).run()
+         updated_at = excluded.updated_at`,
+      [`ob-${orgId}`, orgId, validBundle, now],
+    )
   }
 
-  const updated = await db.prepare(
-    'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1'
-  ).bind(orgId).first<{ balance: number }>()
+  const updated = await queryFirst<{ balance: number }>(
+    db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [orgId],
+  )
 
   return jsonResponse({ success: true, credits: bundle, balance: updated?.balance ?? bundle })
 })

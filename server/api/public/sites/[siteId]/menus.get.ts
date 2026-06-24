@@ -1,4 +1,5 @@
 // GET public menu for site
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getActiveMenu } from '~/server/utils/menu-management'
 import { resolveSiteLocale } from '~/server/utils/site-i18n'
@@ -26,13 +27,13 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Get site and organization info
-    const site = await db.prepare(`
+    const site = await queryFirst<{ id: string; organization_id: string; brand_name: string; status: string; primary_location_id: string | null; default_currency: string | null }>(db, `
       SELECT id, organization_id, brand_name, status, primary_location_id, default_currency
-      FROM sites 
+      FROM sites
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `).bind(siteId).first<{ id: string; organization_id: string; brand_name: string; status: string; primary_location_id: string | null; default_currency: string | null }>()
-    
+    `, [siteId])
+
     if (!site) {
       return jsonResponse({ 
         error: 'Site not found or inactive' 
@@ -44,13 +45,13 @@ export default defineEventHandler(async (event) => {
       if (site.primary_location_id) {
         locationId = site.primary_location_id
       } else {
-        const primaryLocation = await db.prepare(`
+        const primaryLocation = await queryFirst<{ id: string }>(db, `
           SELECT id
           FROM business_locations
           WHERE site_id = ? AND status = 'active'
           ORDER BY is_primary DESC, created_at ASC
           LIMIT 1
-        `).bind(siteId).first<{ id: string }>()
+        `, [siteId])
         locationId = primaryLocation?.id
       }
     }

@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { defineEventHandler, getRouterParam, getQuery } from 'h3'
+import { queryAll, queryFirst } from '~/server/db'
 import { aggregateAnalyticsForDate } from '~/server/utils/analytics'
 
 interface AnalyticsSummary {
@@ -83,13 +84,13 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user belongs to organization that owns the site
-    const site = await db.prepare(`
+    const site = await queryFirst(db, `
       SELECT s.id, s.organization_id
       FROM sites s
       JOIN member m ON s.organization_id = m.organizationId
       WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first()
+    `, [siteId, session.user.id])
 
     if (!site) {
       return jsonResponse(
@@ -124,7 +125,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Get aggregated daily analytics
-    const dailyStats = await db.prepare(`
+    const dailyStats = await queryAll<ApiRecord>(db, `
       SELECT
         date,
         page_views,
@@ -136,10 +137,10 @@ export default defineEventHandler(async (event) => {
       FROM site_analytics_daily
       WHERE site_id = ? AND date BETWEEN ? AND ?
       ORDER BY date ASC
-    `).bind(siteId, startDate, endDate).all()
+    `, [siteId, startDate, endDate])
 
     // Calculate summary metrics (current period)
-    const currentPeriodStats = ((dailyStats.results || []) as ApiRecord[]).reduce<PeriodStats>(
+    const currentPeriodStats = (dailyStats || []).reduce<PeriodStats>(
       (acc, row) => {
         const rowPageViews = toNumber(row.page_views)
         const rowSessions = toNumber(row.unique_sessions)
@@ -161,13 +162,13 @@ export default defineEventHandler(async (event) => {
     endDateObj.setUTCDate(endDateObj.getUTCDate() + 1)
     const endIso = endDateObj.toISOString()
 
-    const visitorStats = await db.prepare(`
-      SELECT 
+    const visitorStats = await queryFirst<{ unique_visitors: number; returning_visitors: number }>(db, `
+      SELECT
         COUNT(DISTINCT visitor_id) as unique_visitors,
         (
           SELECT COUNT(DISTINCT visitor_id)
           FROM site_pageview_events
-          WHERE site_id = ? 
+          WHERE site_id = ?
             AND created_at < ?
             AND visitor_id IN (
               SELECT DISTINCT visitor_id
@@ -183,11 +184,11 @@ export default defineEventHandler(async (event) => {
         AND created_at >= ?
         AND created_at < ?
         AND visitor_id IS NOT NULL
-    `).bind(
-      siteId, startIso, 
-      siteId, startIso, endIso, 
+    `, [
+      siteId, startIso,
+      siteId, startIso, endIso,
       siteId, startIso, endIso
-    ).first() as { unique_visitors: number; returning_visitors: number } | null
+    ])
 
     currentPeriodStats.uniqueVisitors = toNumber(visitorStats?.unique_visitors)
     currentPeriodStats.returningVisitors = toNumber(visitorStats?.returning_visitors)
@@ -204,20 +205,20 @@ export default defineEventHandler(async (event) => {
     const prevStartDate = getDateString(new Date(startAt.getTime() - periodDurationMs - (24 * 60 * 60 * 1000)))
     const prevEndDate = getDateString(new Date(startAt.getTime() - (24 * 60 * 60 * 1000)))
 
-    const prevPeriodStats = await db.prepare(`
-      SELECT 
+    const prevPeriodStats = await queryFirst<ApiRecord>(db, `
+      SELECT
         SUM(page_views) as page_views,
         SUM(unique_sessions) as unique_sessions
       FROM site_analytics_daily
       WHERE site_id = ? AND date BETWEEN ? AND ?
-    `).bind(siteId, prevStartDate, prevEndDate).first()
+    `, [siteId, prevStartDate, prevEndDate])
 
-    const prevPageViews = toNumber((prevPeriodStats as ApiRecord | null)?.page_views)
+    const prevPageViews = toNumber(prevPeriodStats?.page_views)
     const changePercent = prevPageViews > 0 ? Math.round(((currentPeriodStats.pageViews - prevPageViews) / prevPageViews) * 100) : 0
 
     // Aggregate top pages across all daily rows.
     const topPageMap = new Map<string, number>()
-    for (const row of ((dailyStats.results || []) as ApiRecord[])) {
+    for (const row of (dailyStats || [])) {
       if (!row.top_pages) continue
       try {
         const parsed = JSON.parse(String(row.top_pages))
@@ -244,7 +245,7 @@ export default defineEventHandler(async (event) => {
       .sort((a, b) => b.views - a.views)
 
     // Format daily data for response
-    const dailyData: DailyData[] = ((dailyStats.results || []) as ApiRecord[]).map((row) => ({
+    const dailyData: DailyData[] = (dailyStats || []).map((row) => ({
       date: String(row.date || ''),
       pageViews: toNumber(row.page_views),
       sessions: toNumber(row.unique_sessions),
@@ -270,17 +271,17 @@ export default defineEventHandler(async (event) => {
       const startIso = `${startDate}T00:00:00.000Z`
       const endIso = `${endDate}T23:59:59.999Z`
 
-      const resCount = await db.prepare(`
-        SELECT COUNT(*) as count 
-        FROM reservation_submissions 
+      const resCount = await queryFirst<{ count: number }>(db, `
+        SELECT COUNT(*) as count
+        FROM reservation_submissions
         WHERE site_id = ? AND created_at >= ? AND created_at <= ?
-      `).bind(siteId, startIso, endIso).first<{ count: number }>()
+      `, [siteId, startIso, endIso])
 
-      const expCount = await db.prepare(`
-        SELECT COUNT(*) as count 
-        FROM experience_bookings 
+      const expCount = await queryFirst<{ count: number }>(db, `
+        SELECT COUNT(*) as count
+        FROM experience_bookings
         WHERE site_id = ? AND created_at >= ? AND created_at <= ?
-      `).bind(siteId, startIso, endIso).first<{ count: number }>()
+      `, [siteId, startIso, endIso])
 
       metrics.reservations = toNumber(resCount?.count)
       metrics.experienceBookings = toNumber(expCount?.count)

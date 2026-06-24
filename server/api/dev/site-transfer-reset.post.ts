@@ -1,6 +1,7 @@
 import { createError, getHeader } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { reassignSiteOwnership } from '~/server/utils/site-transfer'
+import { execute, queryFirst } from '~/server/db'
 
 const textEncoder = new TextEncoder()
 
@@ -47,12 +48,12 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'siteId and organizationId are required' }, { status: 400 })
   }
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
     SELECT id, organization_id
     FROM sites
     WHERE id = ?
     LIMIT 1
-  `).bind(siteId).first<{ id: string; organization_id: string }>()
+  `, [siteId])
 
   if (!site) {
     return jsonResponse({ error: 'Site not found' }, { status: 404 })
@@ -64,17 +65,17 @@ export default defineEventHandler(async (event) => {
     reassigned = true
   }
 
-  const deleteResult = await db.prepare(`
+  const deleteResult = await execute(db, `
     DELETE FROM site_transfer_requests
     WHERE site_id = ?
-  `).bind(siteId).run()
+  `, [siteId])
 
-  const updatedSite = await db.prepare(`
+  const updatedSite = await queryFirst<{ id: string; organization_id: string }>(db, `
     SELECT id, organization_id
     FROM sites
     WHERE id = ?
     LIMIT 1
-  `).bind(siteId).first<{ id: string; organization_id: string }>()
+  `, [siteId])
 
   return jsonResponse({
     ok: true,

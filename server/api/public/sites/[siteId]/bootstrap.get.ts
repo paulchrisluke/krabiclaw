@@ -4,7 +4,8 @@
 //   ?location=slug          scope content to a location
 //   ?menu=1                 include active menu items
 //   ?data=reviews|photos|qa include full page-specific dataset (type A/E/F)
-// All inline D1 queries run in a single db.batch() call alongside helper functions.
+// All inline D1 queries run in a single executeBatch() call alongside helper functions.
+import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-business";
 import { getPublishedPageContentForLocale, type SiteContent } from "~/server/utils/content-management";
@@ -100,36 +101,34 @@ export default defineEventHandler(async (event) => {
 
   // Parallelize site auth + location slug resolution — both only need siteId
   const [site, locationRow] = await Promise.all([
-    db
-      .prepare(
-        `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name,
-                s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
-                ma_og.public_url AS og_image_url
-           FROM sites s
-           LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
-           LEFT JOIN media_assets ma_og ON s.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
-          WHERE s.id = ? AND s.status = 'active'${isPreviewAuthorized ? "" : " AND s.onboarding_status = 'active'"}
-          LIMIT 1`,
-      )
-      .bind(siteId)
-      .first<{
-        id: string;
-        organization_id: string;
-        default_currency: string | null;
-        contact_email: string | null;
-        contact_phone: string | null;
-        brand_name: string | null;
-        brand_description: string | null;
-        logo_url: string | null;
-        og_image_url: string | null;
-      }>(),
+    queryFirst<{
+      id: string;
+      organization_id: string;
+      default_currency: string | null;
+      contact_email: string | null;
+      contact_phone: string | null;
+      brand_name: string | null;
+      brand_description: string | null;
+      logo_url: string | null;
+      og_image_url: string | null;
+    }>(
+      db,
+      `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name,
+              s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
+              ma_og.public_url AS og_image_url
+         FROM sites s
+         LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
+         LEFT JOIN media_assets ma_og ON s.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
+        WHERE s.id = ? AND s.status = 'active'${isPreviewAuthorized ? "" : " AND s.onboarding_status = 'active'"}
+        LIMIT 1`,
+      [siteId],
+    ),
     locationSlug
-      ? db
-          .prepare(
-            `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`,
-          )
-          .bind(siteId, locationSlug)
-          .first<{ id: string }>()
+      ? queryFirst<{ id: string }>(
+          db,
+          `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`,
+          [siteId, locationSlug],
+        )
       : Promise.resolve(null),
   ]);
 
@@ -151,7 +150,7 @@ export default defineEventHandler(async (event) => {
     !!locationSlug;
 
   // Build batch — one subrequest to D1 for all inline queries
-  const batchStmts: D1PreparedStatement[] = [];
+  const batchStmts: BatchQuery[] = [];
   let idxLoc = -1,
     idxConfig = -1,
     idxLocale = -1,
@@ -164,17 +163,16 @@ export default defineEventHandler(async (event) => {
     idxQa = -1,
     idxLocPosts = -1;
 
-  const push = (stmt: D1PreparedStatement) => {
+  const push = (query: string, params: unknown[]) => {
     const i = batchStmts.length;
-    batchStmts.push(stmt);
+    batchStmts.push({ query, params });
     return i;
   };
 
   // Always — locations with or without hero media JOINs
   idxLoc = push(
     needsLocationHeroMedia
-      ? db.prepare(`
-          SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
+      ? `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
                  bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
@@ -186,10 +184,8 @@ export default defineEventHandler(async (event) => {
           LEFT JOIN media_assets ma_img ON bl.hero_image_asset_id = ma_img.id AND ma_img.status = 'active'
           LEFT JOIN media_assets ma_vid ON bl.hero_video_asset_id = ma_vid.id AND ma_vid.status = 'active'
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
-          ORDER BY bl.is_primary DESC, bl.title ASC
-        `).bind(orgId, siteId)
-      : db.prepare(`
-          SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
+          ORDER BY bl.is_primary DESC, bl.title ASC`
+      : `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
                  bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
                  bl.is_primary, bl.status, bl.city, bl.neighborhood,
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
@@ -198,147 +194,109 @@ export default defineEventHandler(async (event) => {
                  NULL AS thumbnail_url
           FROM business_locations bl
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
-          ORDER BY bl.is_primary DESC, bl.title ASC
-        `).bind(orgId, siteId),
+          ORDER BY bl.is_primary DESC, bl.title ASC`,
+    [orgId, siteId],
   );
 
   idxConfig = push(
-    db
-      .prepare(
-        `SELECT key, value FROM site_config WHERE organization_id = ? AND site_id = ?`,
-      )
-      .bind(orgId, siteId),
+    `SELECT key, value FROM site_config WHERE organization_id = ? AND site_id = ?`,
+    [orgId, siteId],
   );
 
   idxLocale = push(
-    db
-      .prepare(
-        `SELECT locale, label, is_source, status
-         FROM site_locales
-         WHERE organization_id = ? AND site_id = ?
-           AND (is_source = 1 OR status = 'published')
-         ORDER BY is_source DESC, locale ASC`,
-      )
-      .bind(orgId, siteId),
+    `SELECT locale, label, is_source, status
+     FROM site_locales
+     WHERE organization_id = ? AND site_id = ?
+       AND (is_source = 1 OR status = 'published')
+     ORDER BY is_source DESC, locale ASC`,
+    [orgId, siteId],
   );
 
   idxExpCount = push(
-    db
-      .prepare(
-        `SELECT COUNT(*) AS cnt FROM experiences WHERE site_id = ? AND status = 'active'`,
-      )
-      .bind(siteId),
+    `SELECT COUNT(*) AS cnt FROM experiences WHERE site_id = ? AND status = 'active'`,
+    [siteId],
   );
 
   // Conditional
   if (needsGlobalReviews)
     idxReviews = push(
-      db
-        .prepare(
-          `SELECT author_name AS author, rating, content, created_at AS date
-           FROM reviews WHERE site_id = ? AND status = 'approved'
-           ORDER BY created_at DESC LIMIT 50`,
-        )
-        .bind(siteId),
+      `SELECT author_name AS author, rating, content, created_at AS date
+       FROM reviews WHERE site_id = ? AND status = 'approved'
+       ORDER BY created_at DESC LIMIT 50`,
+      [siteId],
     );
 
   if (needsGlobalPosts)
     idxPosts = push(
-      db
-        .prepare(
-          `SELECT p.id, p.title, p.body, p.published_at, ma.public_url, ma.kind
-           FROM posts p
-           LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
-           WHERE p.site_id = ? AND p.status = 'published'
-           ORDER BY p.published_at DESC LIMIT ${page === "posts" ? 50 : 6}`,
-        )
-        .bind(siteId),
+      `SELECT p.id, p.title, p.body, p.published_at, ma.public_url, ma.kind
+       FROM posts p
+       LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
+       WHERE p.site_id = ? AND p.status = 'published'
+       ORDER BY p.published_at DESC LIMIT ${page === "posts" ? 50 : 6}`,
+      [siteId],
     );
 
   if (locationId && dataType === "posts")
     idxLocPosts = push(
-      db
-        .prepare(
-          `SELECT p.id, p.title, p.body, p.published_at, p.created_at, ma.public_url, ma.kind
-           FROM posts p
-           LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
-           WHERE p.site_id = ? AND p.location_id = ? AND p.status = 'published'
-           ORDER BY p.published_at DESC LIMIT 50`,
-        )
-        .bind(siteId, locationId),
+      `SELECT p.id, p.title, p.body, p.published_at, p.created_at, ma.public_url, ma.kind
+       FROM posts p
+       LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
+       WHERE p.site_id = ? AND p.location_id = ? AND p.status = 'published'
+       ORDER BY p.published_at DESC LIMIT 50`,
+      [siteId, locationId],
     );
 
   if (locationId)
     idxLocReviews = push(
-      db
-        .prepare(
-          `SELECT id, author_name, rating, content, created_at
-           FROM reviews WHERE location_id = ? AND site_id = ? AND status = 'approved'
-           ORDER BY created_at DESC LIMIT 3`,
-        )
-        .bind(locationId, siteId),
+      `SELECT id, author_name, rating, content, created_at
+       FROM reviews WHERE location_id = ? AND site_id = ? AND status = 'approved'
+       ORDER BY created_at DESC LIMIT 3`,
+      [locationId, siteId],
     );
 
   if (locationId && dataType === "reviews")
     idxFullReviews = push(
-      db
-        .prepare(
-          `SELECT id, author_name, reviewer_photo_url, rating, title, content,
-                  owner_reply, owner_reply_at, photo_urls, source, created_at
-           FROM reviews WHERE location_id = ? AND site_id = ? AND status = 'approved'
-           ORDER BY created_at DESC LIMIT 50`,
-        )
-        .bind(locationId, siteId),
+      `SELECT id, author_name, reviewer_photo_url, rating, title, content,
+              owner_reply, owner_reply_at, photo_urls, source, created_at
+       FROM reviews WHERE location_id = ? AND site_id = ? AND status = 'approved'
+       ORDER BY created_at DESC LIMIT 50`,
+      [locationId, siteId],
     );
 
   if (dataType === "photos")
     idxPhotos = push(
       locationId
-        ? db
-            .prepare(
-              `SELECT id, public_url, thumbnail_url, alt_text, category, created_at, location_id
-               FROM media_assets
-               WHERE site_id = ? AND location_id = ? AND kind = 'image' AND status = 'active'
-               ORDER BY created_at DESC LIMIT 100`,
-            )
-            .bind(siteId, locationId)
-        : db
-            .prepare(
-              `SELECT id, public_url, thumbnail_url, alt_text, category, created_at, location_id
-               FROM media_assets
-               WHERE site_id = ? AND kind = 'image' AND status = 'active'
-               ORDER BY created_at DESC LIMIT 100`,
-            )
-            .bind(siteId),
+        ? `SELECT id, public_url, thumbnail_url, alt_text, category, created_at, location_id
+           FROM media_assets
+           WHERE site_id = ? AND location_id = ? AND kind = 'image' AND status = 'active'
+           ORDER BY created_at DESC LIMIT 100`
+        : `SELECT id, public_url, thumbnail_url, alt_text, category, created_at, location_id
+           FROM media_assets
+           WHERE site_id = ? AND kind = 'image' AND status = 'active'
+           ORDER BY created_at DESC LIMIT 100`,
+      locationId ? [siteId, locationId] : [siteId],
     );
 
   if (dataType === "qa")
     idxQa = push(
       locationId
-        ? db
-            .prepare(
-              `SELECT id, question, question_author, question_date,
-                      answer, answer_author, answer_date, is_owner_answer, upvote_count
-               FROM location_qa
-               WHERE location_id = ? AND site_id = ? AND status = 'published'
-               ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at`,
-            )
-            .bind(locationId, siteId)
-        : db
-            .prepare(
-              `SELECT id, question, question_author, question_date,
-                      answer, answer_author, answer_date, is_owner_answer, upvote_count
-               FROM location_qa
-               WHERE site_id = ? AND status = 'published'
-               ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at`,
-            )
-            .bind(siteId),
+        ? `SELECT id, question, question_author, question_date,
+                  answer, answer_author, answer_date, is_owner_answer, upvote_count
+           FROM location_qa
+           WHERE location_id = ? AND site_id = ? AND status = 'published'
+           ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at`
+        : `SELECT id, question, question_author, question_date,
+                  answer, answer_author, answer_date, is_owner_answer, upvote_count
+           FROM location_qa
+           WHERE site_id = ? AND status = 'published'
+           ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at`,
+      locationId ? [locationId, siteId] : [siteId],
     );
 
   // Fire batch + helper functions in one parallel round
   const [batchResults, contentRows, menuData, experiencesList, experienceDetail] =
     await Promise.all([
-      db.batch(batchStmts),
+      executeBatch(db, batchStmts),
       page
         ? getPublishedPageContentForLocale(db, orgId, siteId, page, { locale, locationId })
         : Promise.resolve([]),

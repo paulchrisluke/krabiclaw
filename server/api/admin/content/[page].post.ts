@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { execute } from '~/server/db'
 
 const ALLOWED_PAGES = ['about', 'contact', 'help']
 const MAX_CONTENT_LENGTH = 1_000_000
@@ -39,11 +40,11 @@ export default defineEventHandler(async (event) => {
   const id = crypto.randomUUID()
 
   try {
-    await db.prepare(
-      `INSERT INTO platform_content (id, page, content, updated_by, updated_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(page) DO UPDATE SET content = excluded.content, updated_by = excluded.updated_by, updated_at = excluded.updated_at`
-    ).bind(id, page, body.content, userId, now).run()
+    await execute(db, `
+      INSERT INTO platform_content (id, page, content, updated_by, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(page) DO UPDATE SET content = excluded.content, updated_by = excluded.updated_by, updated_at = excluded.updated_at
+    `, [id, page, body.content, userId, now])
   } catch (err) {
     console.error('Failed to save content:', err)
     return jsonResponse({ error: 'Failed to save content' }, { status: 500 })

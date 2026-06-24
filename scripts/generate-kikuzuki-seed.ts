@@ -96,6 +96,25 @@ if (isStdout) {
   process.exit(0)
 }
 
+if (isRemote || isStaging || isPreview) {
+  const checkOutput = execFileSync('npx', [
+    ...wranglerArgs,
+    '--command', "SELECT organization_id FROM sites WHERE id = 'site-kikuzuki'",
+    '--json',
+  ], { encoding: 'utf8' })
+  const currentOrgId = JSON.parse(checkOutput)?.[0]?.results?.[0]?.organization_id
+
+  if (currentOrgId && currentOrgId !== 'org-kikuzuki') {
+    console.error(
+      `[seed:kikuzuki] Refusing to reseed: site-kikuzuki is owned by "${currentOrgId}", not the demo org "org-kikuzuki".\n` +
+      'This tenant has already been transferred to a real client. Reseeding would delete their live site, ' +
+      'business_locations, site_content, media_assets, and custom domain rows, then recreate it back under the demo org.\n' +
+      'Aborting.'
+    )
+    process.exit(1)
+  }
+}
+
 const dir = mkdtempSync(join(tmpdir(), 'krabiclaw-seed-kikuzuki-'))
 const sqlPath = join(dir, 'kikuzuki.sql')
 

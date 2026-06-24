@@ -3,6 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { syncPlaceToLocation } from '../../../utils/google-places'
 import { getDashboardSite } from '~/server/utils/dashboard-context'
 import { hasSiteEntitlement } from '~/server/utils/billing'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -18,12 +19,12 @@ export default defineEventHandler(async (event) => {
 
   const { site } = body.siteId
     ? {
-        site: await db.prepare(`
+        site: await queryFirst<{ id: string; organization_id: string; plan: string }>(db, `
           SELECT s.id, s.organization_id, s.plan FROM sites s
           JOIN member om ON s.organization_id = om.organizationId
           WHERE s.id = ? AND om.userId = ? AND om.role = 'owner'
           LIMIT 1
-        `).bind(body.siteId, session.user.id).first<{ id: string; organization_id: string; plan: string }>()
+        `, [body.siteId, session.user.id])
       }
     : await getDashboardSite(event)
 
@@ -36,11 +37,11 @@ export default defineEventHandler(async (event) => {
   const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
   if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 500 })
 
-  const location = await db.prepare(`
+  const location = await queryFirst<{ id: string; google_place_id: string | null }>(db, `
     SELECT id, google_place_id FROM business_locations
     WHERE id = ? AND site_id = ? AND organization_id = ?
     LIMIT 1
-  `).bind(locationId, site.id, site.organization_id).first<{ id: string; google_place_id: string | null }>()
+  `, [locationId, site.id, site.organization_id])
 
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
   if (!location.google_place_id) {

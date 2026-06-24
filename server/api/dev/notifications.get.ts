@@ -1,6 +1,7 @@
 // Dev-only endpoint for E2E test notification verification
 // Returns notification records matching query params. 404 in production.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { queryAll } from '~/server/db'
 
 const _enc = new TextEncoder()
 function timingSafeEqualText(a: string, b: string): boolean {
@@ -58,6 +59,6 @@ export default defineEventHandler(async (event) => {
   sql += ' ORDER BY created_at DESC LIMIT ?'
   binds.push(String(limit))
 
-  const rows = await db.prepare(sql).bind(...binds).all()
-  return jsonResponse({ notifications: rows.results ?? [] })
+  const rows = await queryAll(db, sql, binds)
+  return jsonResponse({ notifications: rows ?? [] })
 })

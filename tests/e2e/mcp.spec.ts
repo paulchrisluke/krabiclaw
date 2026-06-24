@@ -80,6 +80,17 @@ async function ensureSite(request: APIRequestContext, baseURL: string) {
   return siteId as string
 }
 
+async function resetPotteryHouseTransferFixture(request: APIRequestContext, baseURL: string) {
+  const res = await request.post(`${baseURL}/api/dev/site-transfer-reset`, {
+    headers: devLoginHeaders(),
+    data: {
+      siteId: POTTERY_HOUSE_SITE_ID,
+      organizationId: 'org-pottery-house',
+    },
+  })
+  expect(res.status()).toBe(200)
+}
+
 async function getSiteOrg(request: APIRequestContext, baseURL: string, siteId: string) {
   const res = await request.get(`${baseURL}/api/sites/${siteId}`)
   if (res.status() !== 200) console.error(await res.text()); expect(res.status()).toBe(200)
@@ -826,6 +837,7 @@ test.describe('stateless MCP server', () => {
     })
     expect(workRequests.status()).toBe(200)
 
+    await resetPotteryHouseTransferFixture(request, baseURL!)
     await loginAs(request, baseURL!, POTTERY_HOUSE_USER_ID)
 
     const googleConnection = await mcpRequest(request, baseURL!, {

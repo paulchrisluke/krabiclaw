@@ -4,6 +4,7 @@ import { hasSiteEntitlement } from '~/server/utils/billing'
 import type { TranslationInventoryStatus } from '~/server/utils/translation-inventory'
 import { listTranslationReviewItems } from '~/server/utils/translation-review'
 import { parseScope } from '~/server/utils/translation-helpers'
+import { queryFirst } from '~/server/db'
 
 function parseStatus(value: unknown): TranslationInventoryStatus | 'all' {
   return value === 'missing' || value === 'draft' || value === 'published' || value === 'stale' || value === 'all'
@@ -26,12 +27,12 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
     SELECT s.id, s.organization_id FROM sites s
     JOIN member om ON s.organization_id = om.organizationId
     WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
     LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string }>()
+  `, [siteId, session.user.id])
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 

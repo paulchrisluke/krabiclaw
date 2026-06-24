@@ -1,4 +1,5 @@
 import Stripe from 'stripe'
+import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
 
 type EntitlementValue = string | number | boolean
 type EntitlementsMap = Record<string, EntitlementValue>
@@ -68,19 +69,19 @@ export async function getSiteBillingStatus(
 ): Promise<SiteBillingStatus> {
   const entitlements = await getSiteEntitlements(db, siteId)
 
-  const siteBilling = await db.prepare(`
+  const siteBilling = await queryFirst<SiteBillingRow>(db, `
     SELECT stripe_subscription_id, stripe_subscription_item_id, plan, status,
            current_period_end, cancel_at_period_end
     FROM site_billing WHERE site_id = ? LIMIT 1
-  `).bind(siteId).first<SiteBillingRow>()
+  `, [siteId])
 
   // Customer + auto-topup live at org level
-  const orgBilling = await db.prepare(`
+  const orgBilling = await queryFirst<OrgBillingRow>(db, `
     SELECT ob.stripe_customer_id, ob.auto_topup_enabled, ob.auto_topup_bundle, ob.auto_topup_threshold
     FROM site_billing sb
     JOIN organization_billing ob ON ob.organization_id = sb.organization_id
     WHERE sb.site_id = ? LIMIT 1
-  `).bind(siteId).first<OrgBillingRow>()
+  `, [siteId])
 
   return {
     plan: siteBilling?.plan ?? String(entitlements.plan ?? 'free'),
@@ -102,15 +103,14 @@ export async function getOrganizationBillingStatus(
   db: D1Database,
   organizationId: string,
 ): Promise<SiteBillingStatus> {
-  const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`)
-    .bind(organizationId).first<{ id: string }>()
+  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`, [organizationId])
   if (site) return getSiteBillingStatus(env, db, site.id)
 
   // No site yet — return bare org customer info
-  const orgBilling = await db.prepare(`
+  const orgBilling = await queryFirst<OrgBillingRow>(db, `
     SELECT stripe_customer_id, auto_topup_enabled, auto_topup_bundle, auto_topup_threshold
     FROM organization_billing WHERE organization_id = ? LIMIT 1
-  `).bind(organizationId).first<OrgBillingRow>()
+  `, [organizationId])
 
   return {
     plan: 'free',
@@ -125,14 +125,12 @@ export async function getOrganizationBillingStatus(
 // ── Per-site entitlements ─────────────────────────────────────────────────────
 
 export async function getSiteEntitlements(db: D1Database, siteId: string): Promise<EntitlementsMap> {
-  const rows = await db.prepare(`SELECT key, value FROM site_entitlements WHERE site_id = ?`)
-    .bind(siteId).all<EntitlementRow>()
-  return parseEntitlementRows(rows.results ?? [])
+  const rows = await queryAll<EntitlementRow>(db, `SELECT key, value FROM site_entitlements WHERE site_id = ?`, [siteId])
+  return parseEntitlementRows(rows ?? [])
 }
 
 export async function hasSiteEntitlement(db: D1Database, siteId: string, key: string): Promise<boolean> {
-  const row = await db.prepare(`SELECT value FROM site_entitlements WHERE site_id = ? AND key = ? LIMIT 1`)
-    .bind(siteId, key).first<EntitlementValueRow>()
+  const row = await queryFirst<EntitlementValueRow>(db, `SELECT value FROM site_entitlements WHERE site_id = ? AND key = ? LIMIT 1`, [siteId, key])
   if (!row) return false
   return row.value.toLowerCase() === 'true'
 }
@@ -145,8 +143,7 @@ export async function hasEntitlement(
   key: string,
 ): Promise<boolean> {
   void env
-  const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`)
-    .bind(organizationId).first<{ id: string }>()
+  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`, [organizationId])
   if (!site) return false
   return hasSiteEntitlement(db, site.id, key)
 }
@@ -159,25 +156,32 @@ export async function setSiteEntitlementsFromPlan(
 ): Promise<void> {
   const now = new Date().toISOString()
   const entitlements = getPlanEntitlements(plan)
-  const statements: D1PreparedStatement[] = []
+  const queries: { query: string; params: unknown[] }[] = []
   for (const [key, value] of Object.entries(entitlements)) {
-    statements.push(
-      db.prepare(`
+    queries.push({
+      query: `
         INSERT OR REPLACE INTO site_entitlements
           (id, site_id, organization_id, key, value, source, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, 'system', ?, ?)
-      `).bind(`sent-${siteId}-${key}`, siteId, organizationId, key, String(value), now, now)
-    )
+      `,
+      params: [`sent-${siteId}-${key}`, siteId, organizationId, key, String(value), now, now],
+    })
   }
   // sites.plan is a denormalized cache read directly by mcp-workflows, the
   // transfer onboarding wizard, and Google Business sync gating — it must
   // stay in sync with the site_billing.plan that triggered this entitlement
   // refresh, or those call sites keep showing whatever plan existed at
   // site-creation time.
-  statements.push(
-    db.prepare(`UPDATE sites SET plan = ?, updated_at = ? WHERE id = ? AND organization_id = ?`).bind(plan, now, siteId, organizationId)
-  )
-  await db.batch(statements)
+  //
+  // executeBatch runs these as a single atomic D1Database.batch() call — do
+  // not swap this for batchStatements()/sequential execute(), which provide
+  // no transactional guarantee and could leave entitlements and sites.plan
+  // out of sync if one write fails partway through.
+  queries.push({
+    query: `UPDATE sites SET plan = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+    params: [plan, now, siteId, organizationId],
+  })
+  await executeBatch(db, queries)
 }
 
 // ── Plan entitlements definition ──────────────────────────────────────────────
@@ -223,21 +227,31 @@ export async function applySiteSubscription(
   const now = new Date().toISOString()
 
   // Ensure org has a Stripe customer record
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO organization_billing (id, organization_id, stripe_customer_id, updated_at)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(organization_id) DO UPDATE SET
       id = excluded.id,
       stripe_customer_id = excluded.stripe_customer_id,
       updated_at = excluded.updated_at
-  `).bind(`billing-${organizationId}`, organizationId, customerId, now).run()
+  `, [`billing-${organizationId}`, organizationId, customerId, now])
 
-  await db.prepare(`
-    INSERT OR REPLACE INTO site_billing
+  // ON CONFLICT(site_id) DO UPDATE, not INSERT OR REPLACE — REPLACE deletes and
+  // recreates the row, wiping cash-billing fields (payment_method, local_rate,
+  // local_currency, last_reminder_sent_at) that aren't in this column list.
+  await execute(db, `
+    INSERT INTO site_billing
       (id, site_id, organization_id, stripe_subscription_id, stripe_subscription_item_id,
        plan, status, current_period_end, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
-  `).bind(`sb-${siteId}`, siteId, organizationId, subscriptionId, subscriptionItemId, plan, periodEnd, now).run()
+    ON CONFLICT(site_id) DO UPDATE SET
+      stripe_subscription_id = excluded.stripe_subscription_id,
+      stripe_subscription_item_id = excluded.stripe_subscription_item_id,
+      plan = excluded.plan,
+      status = excluded.status,
+      current_period_end = excluded.current_period_end,
+      updated_at = excluded.updated_at
+  `, [`sb-${siteId}`, siteId, organizationId, subscriptionId, subscriptionItemId, plan, periodEnd, now])
 
   await setSiteEntitlementsFromPlan(db, siteId, organizationId, plan)
 }
@@ -271,9 +285,9 @@ export async function requireBillingAccess(
   userId: string,
 ): Promise<void> {
   void env
-  const membership = await db.prepare(`
+  const membership = await queryFirst<MembershipRow>(db, `
     SELECT role FROM member WHERE organizationId = ? AND userId = ? LIMIT 1
-  `).bind(organizationId, userId).first() as MembershipRow | null
+  `, [organizationId, userId])
   if (!membership) throw new Error('Access denied: Not a member of this organization')
   if (membership.role !== 'owner') throw new Error('Access denied: Only owners can manage billing')
 }

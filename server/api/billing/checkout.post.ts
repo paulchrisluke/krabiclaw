@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, getPriceIdForPlan, requireBillingAccess } from '../../utils/billing'
+import { execute, queryFirst } from '~/server/db'
 
 interface CheckoutRequest {
   organizationId?: string
@@ -39,12 +40,12 @@ export default defineEventHandler(async (event) => {
   if (!organizationId) {
     const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string }
     const activeOrgId = typeof sessionRecord.activeOrganizationId === 'string' ? sessionRecord.activeOrganizationId : ''
-    const userOrg = await db.prepare(`
+    const userOrg = await queryFirst<{ organizationId: string }>(db, `
       SELECT o.id AS organizationId FROM organization o
       JOIN member m ON o.id = m.organizationId
       WHERE m.userId = ?
       ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC LIMIT 1
-    `).bind(session.user.id, activeOrgId).first<{ organizationId: string }>()
+    `, [session.user.id, activeOrgId])
     if (!userOrg) return jsonResponse({ error: 'No organization found' }, { status: 404 })
     organizationId = userOrg.organizationId
   }
@@ -53,10 +54,10 @@ export default defineEventHandler(async (event) => {
   // Resolve site — either passed explicitly or auto-detected from org
   let siteId = body.siteId
   if (siteId) {
-    const site = await db.prepare(`SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`).bind(siteId, orgId).first<{ id: string }>()
+    const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`, [siteId, orgId])
     if (!site) return jsonResponse({ error: 'Site not found or does not belong to this organization' }, { status: 404 })
   } else {
-    const site = await db.prepare(`SELECT id FROM sites WHERE organization_id = ? LIMIT 1`).bind(orgId).first<{ id: string }>()
+    const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? LIMIT 1`, [orgId])
     if (!site) return jsonResponse({ error: 'No site found for this organization' }, { status: 404 })
     siteId = site.id
   }
@@ -65,12 +66,12 @@ export default defineEventHandler(async (event) => {
   try {
     await requireBillingAccess(env, db, orgId, session.user.id)
 
-    const organization = await db.prepare(`
+    const organization = await queryFirst<{ name: string; slug: string | null; stripe_customer_id: string | null }>(db, `
       SELECT o.name, o.slug, ob.stripe_customer_id
       FROM organization o
       LEFT JOIN organization_billing ob ON o.id = ob.organization_id
       WHERE o.id = ? LIMIT 1
-    `).bind(orgId).first<{ name: string; slug: string | null; stripe_customer_id: string | null }>()
+    `, [orgId])
     if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
 
     let priceId: string
@@ -91,10 +92,10 @@ export default defineEventHandler(async (event) => {
         metadata: { organization_id: orgId },
       })
       customerId = customer.id
-      await db.prepare(`
+      await execute(db, `
         INSERT OR REPLACE INTO organization_billing (id, organization_id, stripe_customer_id, updated_at)
         VALUES (?, ?, ?, ?)
-      `).bind(`billing-${orgId}`, orgId, customerId, new Date().toISOString()).run()
+      `, [`billing-${orgId}`, orgId, customerId, new Date().toISOString()])
     }
 
     const targetSlug = organization.slug ? encodeURIComponent(organization.slug) : encodeURIComponent(orgId)

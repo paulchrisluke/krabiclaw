@@ -3,6 +3,7 @@
 // server/middleware/zz-pageview-tracking.ts; this endpoint covers SPA route
 // changes (router.afterEach) and the visibilitychange/sendBeacon duration ping.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { execute, queryFirst } from '~/server/db'
 import {
   getClientIp,
   getCloudflareGeo,
@@ -31,7 +32,7 @@ const RATE_LIMIT_WINDOW_SECONDS = 60
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
 
   if (!db) {
     return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -95,9 +96,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Validate that the site exists
-    const site = await db.prepare(
-      `SELECT id FROM sites WHERE id = ?`
-    ).bind(siteId).first()
+    const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE id = ?`, [siteId])
 
     if (!site) {
       return jsonResponse(
@@ -113,7 +112,7 @@ export default defineEventHandler(async (event) => {
     const rateKey = `analytics-track:${siteId}:${ipHash}`
 
     // Atomic upsert/increment for IP-based rate limiting in a fixed window.
-    await db.prepare(`
+    await execute(db, `
       INSERT INTO rate_limits (key, count, updated_at, expires_at)
       VALUES (?, 1, ?, ?)
       ON CONFLICT(key) DO UPDATE SET
@@ -126,11 +125,13 @@ export default defineEventHandler(async (event) => {
           WHEN COALESCE(rate_limits.expires_at, '') <= excluded.updated_at THEN excluded.expires_at
           ELSE rate_limits.expires_at
         END
-    `).bind(rateKey, now, windowEndsAt).run()
+    `, [rateKey, now, windowEndsAt])
 
-    const rateState = await db.prepare(
-      `SELECT count, expires_at FROM rate_limits WHERE key = ? LIMIT 1`
-    ).bind(rateKey).first<ApiRecord>()
+    const rateState = await queryFirst<ApiRecord>(
+      db,
+      `SELECT count, expires_at FROM rate_limits WHERE key = ? LIMIT 1`,
+      [rateKey],
+    )
 
     const currentCount = Number(rateState?.count || 0)
     const expiresAt = typeof rateState?.expires_at === 'string' ? rateState.expires_at : ''
@@ -150,7 +151,7 @@ export default defineEventHandler(async (event) => {
       // and the fetch for the next page's pageview are both in flight at once and
       // can resolve out of order, so matching on page_path avoids attaching the
       // duration to whichever row happens to land last.
-      await db.prepare(`
+      await execute(db, `
         UPDATE site_pageview_events
         SET duration_seconds = ?
         WHERE id = (
@@ -159,7 +160,7 @@ export default defineEventHandler(async (event) => {
           ORDER BY created_at DESC
           LIMIT 1
         )
-      `).bind(durationSeconds, siteId, sessionId, pagePath).run()
+      `, [durationSeconds, siteId, sessionId, pagePath])
 
       return jsonResponse({ ok: true })
     }

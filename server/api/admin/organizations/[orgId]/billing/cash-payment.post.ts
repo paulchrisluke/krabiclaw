@@ -4,6 +4,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { getStripe, getPriceIdForPlan, setSiteEntitlementsFromPlan } from '~/server/utils/billing'
+import { execute, queryFirst } from '~/server/db'
 
 const ALLOWED_PLANS = ['growth', 'managed', 'seo_accelerator']
 
@@ -34,7 +35,14 @@ export default defineEventHandler(async (event) => {
   const localRate = body.localRate ? Number(body.localRate) : null
   const localCurrency = body.localCurrency?.trim() ?? null
 
-  const org = await db.prepare(`
+  const org = await queryFirst<{
+    name: string
+    slug: string | null
+    owner_email: string | null
+    stripe_customer_id: string | null
+    stripe_subscription_id: string | null
+    status: string | null
+  }>(db, `
     SELECT o.name, o.slug, u.email AS owner_email, ob.stripe_customer_id, sb.stripe_subscription_id, sb.status
     FROM organization o
     LEFT JOIN member m ON m.organizationId = o.id AND m.role = 'owner'
@@ -43,14 +51,7 @@ export default defineEventHandler(async (event) => {
     LEFT JOIN site_billing sb ON sb.site_id = ? AND sb.organization_id = o.id
     WHERE o.id = ?
     LIMIT 1
-  `).bind(siteId, orgId).first<{
-    name: string
-    slug: string | null
-    owner_email: string | null
-    stripe_customer_id: string | null
-    stripe_subscription_id: string | null
-    status: string | null
-  }>()
+  `, [siteId, orgId])
 
   if (!org) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
 
@@ -59,11 +60,11 @@ export default defineEventHandler(async (event) => {
   }
 
   // Preflight site eligibility check - ensure siteId exists and is associated with this organization
-  const siteEligibility = await db.prepare(`
+  const siteEligibility = await queryFirst<{ id: string }>(db, `
     SELECT id FROM sites
     WHERE id = ? AND organization_id = ?
     LIMIT 1
-  `).bind(siteId, orgId).first<{ id: string }>()
+  `, [siteId, orgId])
 
   if (!siteEligibility) {
     return jsonResponse({ error: 'Site not found or not eligible for this organization.' }, { status: 404 })
@@ -90,21 +91,21 @@ export default defineEventHandler(async (event) => {
       metadata: { organization_id: orgId },
     })
     customerId = customer.id
-    await db.prepare(`
+    await execute(db, `
       INSERT INTO organization_billing (id, organization_id, stripe_customer_id, plan, status, updated_at)
       VALUES (?, ?, ?, ?, 'pending', ?)
       ON CONFLICT(organization_id) DO UPDATE SET
         stripe_customer_id = excluded.stripe_customer_id,
         updated_at = excluded.updated_at
-    `).bind(`billing-${orgId}`, orgId, customerId, plan, new Date().toISOString()).run()
-    await db.prepare(`
+    `, [`billing-${orgId}`, orgId, customerId, plan, new Date().toISOString()])
+    await execute(db, `
       INSERT INTO site_billing (id, site_id, organization_id, stripe_customer_id, plan, status, updated_at)
       VALUES (?, ?, ?, ?, ?, 'pending', ?)
       ON CONFLICT(site_id) DO UPDATE SET
         organization_id = excluded.organization_id,
         stripe_customer_id = excluded.stripe_customer_id,
         updated_at = excluded.updated_at
-    `).bind(`billing-${siteId}`, siteId, orgId, customerId, plan, new Date().toISOString()).run()
+    `, [`billing-${siteId}`, siteId, orgId, customerId, plan, new Date().toISOString()])
   }
 
   // Create subscription (send_invoice + auto_advance=false so Stripe never auto-emails the client)
@@ -149,7 +150,7 @@ export default defineEventHandler(async (event) => {
     ? new Date(paidInvoice.lines.data[0].period.end * 1000).toISOString()
     : null
 
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO site_billing
       (id, site_id, organization_id, stripe_customer_id, stripe_subscription_id, stripe_subscription_item_id,
        plan, status, current_period_end, payment_method, local_rate, local_currency, updated_at)
@@ -165,10 +166,10 @@ export default defineEventHandler(async (event) => {
       local_rate = excluded.local_rate,
       local_currency = excluded.local_currency,
       updated_at = excluded.updated_at
-  `).bind(
+  `, [
     `billing-${siteId}`, siteId, orgId, customerId, subscription.id, subItemId,
     plan, periodEnd, localRate, localCurrency, new Date().toISOString(),
-  ).run()
+  ])
 
   await setSiteEntitlementsFromPlan(db, siteId, orgId, plan)
 

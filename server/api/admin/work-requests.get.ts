@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { getAuthSession } from "~/server/utils/auth";
 import { isPlatformAdmin } from "~/server/utils/platform-auth";
+import { queryAll } from "~/server/db";
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event);
@@ -22,9 +23,7 @@ export default defineEventHandler(async (event) => {
   const statusFilter = query.status ? String(query.status) : null;
   const showDone = query.done === "1";
 
-  const rows = await db
-    .prepare(
-      `
+  const rows = await queryAll(db, `
     SELECT
       wr.id, wr.type, wr.title, wr.description, wr.status, wr.priority,
       wr.source, wr.notes, wr.assigned_to, wr.created_at, wr.updated_at, wr.completed_at,
@@ -40,10 +39,7 @@ export default defineEventHandler(async (event) => {
       CASE wr.status WHEN 'in_progress' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,
       wr.created_at DESC
     LIMIT 200
-  `,
-    )
-    .bind(statusFilter, statusFilter, showDone ? 1 : 0)
-    .all();
+  `, [statusFilter, statusFilter, showDone ? 1 : 0]);
 
-  return jsonResponse({ requests: rows.results ?? [] });
+  return jsonResponse({ requests: rows ?? [] });
 });

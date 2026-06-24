@@ -1,4 +1,5 @@
 // GET public site config
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getConfig } from '~/server/utils/site-config'
 
@@ -10,19 +11,19 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   
   if (!db) {
     return jsonResponse({ error: 'Database not available' }, { status: 500 })
   }
 
   try {
-    const site = await db.prepare(`
+    const site = await queryFirst<{ id: string; organization_id: string; default_currency: string | null }>(db, `
       SELECT id, organization_id, default_currency
       FROM sites
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `).bind(siteId).first() as { id: string; organization_id: string; default_currency: string | null } | null
+    `, [siteId]) ?? null
 
     if (!site) {
       return jsonResponse({ error: 'Site not found' }, { status: 404 })

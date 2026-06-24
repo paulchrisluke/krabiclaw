@@ -1,4 +1,5 @@
 // GET /api/public/sites/[siteId]/locations/[slug]/reviews
+import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 
 export default defineEventHandler(async (event) => {
@@ -7,23 +8,29 @@ export default defineEventHandler(async (event) => {
   if (!siteId || !slug) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const location = await db.prepare(
+  const location = await queryFirst<{ id: string; rating: number | null; review_count: number | null }>(
+    db,
     `SELECT id, rating, review_count FROM business_locations
      WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`
-  ).bind(siteId, slug).first()
+    ,
+    [siteId, slug],
+  )
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
 
-  const { results } = await db.prepare(
+  const results = await queryAll<ApiValue>(
+    db,
     `SELECT id, author_name, reviewer_photo_url, rating, title, content,
             owner_reply, owner_reply_at, photo_urls, source, created_at
      FROM reviews
      WHERE location_id = ? AND status = 'approved'
      ORDER BY created_at DESC
      LIMIT 50`
-  ).bind(location.id).all()
+    ,
+    [location.id],
+  )
 
   const reviews = (results ?? []).map((r: ApiValue) => ({
     ...r,

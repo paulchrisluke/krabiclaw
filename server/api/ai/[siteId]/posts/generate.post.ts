@@ -7,6 +7,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { callAiGateway, imageBlock, textBlock } from '~/server/utils/ai-gateway'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
+import { queryFirst } from '~/server/db'
 
 const SYSTEM = `You are a social media and restaurant marketing assistant. Given a prompt (and optionally a photo), write a short, engaging post for a restaurant website.
 
@@ -27,12 +28,12 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null }>(db, `
     SELECT s.id, s.organization_id, s.brand_name FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin','editor') LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; brand_name: string | null }>()
+  `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const orgId: string = site.organization_id

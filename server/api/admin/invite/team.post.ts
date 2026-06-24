@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { execute, executeBatch, queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -22,35 +23,44 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invalid email' }, { status: 400 })
   }
 
-  const existing = await db.prepare(
-    'SELECT id, email, role FROM user WHERE lower(email) = ? LIMIT 1'
-  ).bind(email).first<{ id: string; email: string; role: string }>()
+  const existing = await queryFirst<{ id: string; email: string; role: string }>(
+    db,
+    'SELECT id, email, role FROM user WHERE lower(email) = ? LIMIT 1',
+    [email],
+  )
 
   if (existing) {
     if (existing.role === 'admin') {
       return jsonResponse({ error: 'This user is already an admin' }, { status: 409 })
     }
-    await db.prepare('UPDATE user SET role = ? WHERE id = ?').bind('admin', existing.id).run()
+    await execute(db, 'UPDATE user SET role = ? WHERE id = ?', ['admin', existing.id])
     return jsonResponse({ success: true, action: 'promoted', email: existing.email })
   }
 
   // Create new user row directly — they'll link their Google/WhatsApp account on first sign-in
   const userId = crypto.randomUUID()
-  const now = new Date().toISOString()
+  const now = Math.floor(Date.now() / 1000)
   const displayName = name || email.split('@')[0]!
 
-  await db.prepare(`
-    INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
-    VALUES (?, ?, ?, 1, 'admin', ?, ?)
-  `).bind(userId, displayName, email, now, now).run()
-
-  // Create their auto-org (matches the databaseHook that runs on OAuth signup)
+  // Create their auto-org (matches the databaseHook that runs on OAuth signup).
+  // Atomic: a user created without their org/member bootstrap is orphaned state.
   const orgId = `org-${userId}`
-  await db.batch([
-    db.prepare(`INSERT OR IGNORE INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)`)
-      .bind(orgId, displayName, orgId, now),
-    db.prepare(`INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'owner', ?)`)
-      .bind(`member-${orgId}`, orgId, userId, now),
+  await executeBatch(db, [
+    {
+      query: `
+        INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
+        VALUES (?, ?, ?, 1, 'admin', ?, ?)
+      `,
+      params: [userId, displayName, email, now, now],
+    },
+    {
+      query: `INSERT OR IGNORE INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)`,
+      params: [orgId, displayName, orgId, now],
+    },
+    {
+      query: `INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'owner', ?)`,
+      params: [`member-${orgId}`, orgId, userId, now],
+    },
   ])
 
   return jsonResponse({ success: true, action: 'created', email })

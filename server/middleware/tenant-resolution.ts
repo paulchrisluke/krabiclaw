@@ -2,11 +2,11 @@
 // Determines if request is for platform or tenant site
 
 import { defineEventHandler, getRequestURL, getHeader } from 'h3'
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '../utils/api-response'
 import { deriveSubdomain, getFreeSiteDomain, hostnameOf, isPlatformHost, isPreviewContext } from '../utils/tenant-hosts'
 
 interface TenantResolutionEnv {
-  DB?: D1Database
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
@@ -37,9 +37,9 @@ export default defineEventHandler(async (event) => {
       // Look up by subdomain directly — freeSiteDomain differs between staging/preview/production,
       // so constructing `${slug}.${freeSiteDomain}` would produce 'pottery-house.staging.krabiclaw.com'
       // in staging but site_domains only stores 'pottery-house.krabiclaw.com'.
-      const db = (env as TenantResolutionEnv).DB
+      const db = env.db
       if (db) {
-        const site = await db.prepare(`
+        const site = await queryFirst<TenantSiteRow>(db, `
           SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
                  canonical.domain AS canonical_domain,
                  s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
           LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
           WHERE s.subdomain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
           LIMIT 1
-        `).bind(previewSlug).first() as TenantSiteRow | null
+        `, [previewSlug])
         if (site) {
           event.context.siteId = site.id
           event.context.organizationId = site.organization_id
@@ -80,16 +80,16 @@ export default defineEventHandler(async (event) => {
   const previewRouteMatch = url.pathname.match(/^\/preview\/site\/([^/?]+)/)
   if (previewRouteMatch && isPlatformHost(host, env)) {
     const previewSiteId = previewRouteMatch[1]!
-    const db = (env as TenantResolutionEnv).DB
+    const db = env.db
     if (db) {
-      const previewSite = await db.prepare(`
+      const previewSite = await queryFirst<Pick<TenantSiteRow, 'id' | 'organization_id' | 'theme_id' | 'onboarding_status' | 'brand_name' | 'logo_url' | 'vertical'>>(db, `
         SELECT s.id, s.organization_id, s.theme_id, s.onboarding_status, s.brand_name,
                COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
         FROM sites s
         LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
         WHERE s.id = ? AND s.status = 'active'
         LIMIT 1
-      `).bind(previewSiteId).first() as Pick<TenantSiteRow, 'id' | 'organization_id' | 'theme_id' | 'onboarding_status' | 'brand_name' | 'logo_url' | 'vertical'> | null
+      `, [previewSiteId])
       if (previewSite) {
         event.context.siteId = previewSite.id
         event.context.organizationId = previewSite.organization_id
@@ -168,8 +168,9 @@ function isPlatformRoute(pathname: string): boolean {
 }
 
 async function resolveTenantSite(host: string, event: Parameters<typeof cloudflareEnv>[0]): Promise<TenantSiteRow | null> {
-  const env = cloudflareEnv(event) as TenantResolutionEnv
-  const db = env.DB
+  const runtimeEnv = cloudflareEnv(event)
+  const env = runtimeEnv as TenantResolutionEnv
+  const db = runtimeEnv.db
   const hostname = hostnameOf(host)
 
   if (!db || !hostname) return null
@@ -177,7 +178,7 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
   // Local development support (e.g., demo.localhost)
   if (hostname.includes('.localhost')) {
     const subdomain = hostname.split('.')[0]
-    return await db.prepare(`
+    return await queryFirst<TenantSiteRow>(db, `
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
              s.subdomain || '.localhost' AS canonical_domain,
              s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
@@ -185,11 +186,11 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
       LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
       WHERE s.subdomain = ? AND s.status = 'active'
       LIMIT 1
-    `).bind(subdomain).first() as TenantSiteRow | null
+    `, [subdomain])
   }
 
   // Try custom domains first (from site_domains table)
-  const customDomainSite = await db.prepare(`
+  const customDomainSite = await queryFirst<TenantSiteRow>(db, `
     SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
            COALESCE(canonical.domain, sd.domain) AS canonical_domain,
            s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
@@ -201,7 +202,7 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
     WHERE sd.domain = ? AND sd.type = 'custom' AND sd.status = 'active'
       AND s.status = 'active' AND s.onboarding_status = 'active'
     LIMIT 1
-  `).bind(hostname).first() as TenantSiteRow | null
+  `, [hostname])
 
   if (customDomainSite) return customDomainSite
 
@@ -216,7 +217,7 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
     const subdomain = deriveSubdomain(hostname, platformDomain)
     if (!subdomain) return null
 
-    const subdomainSite = await db.prepare(`
+    const subdomainSite = await queryFirst<TenantSiteRow>(db, `
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
              COALESCE(canonical.domain, sd.domain) AS canonical_domain,
              s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
@@ -228,13 +229,13 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
       WHERE sd.domain = ? AND sd.type = 'subdomain' AND sd.status = 'active'
         AND s.status = 'active' AND s.onboarding_status = 'active'
       LIMIT 1
-    `).bind(`${subdomain}.${platformDomain}`).first() as TenantSiteRow | null
+    `, [`${subdomain}.${platformDomain}`])
 
     if (subdomainSite) return subdomainSite
 
     // Fallback for sites that predate site_domains population — resolve by sites.subdomain directly.
     // This keeps existing sites live until site_domains records are seeded.
-    return await db.prepare(`
+    return await queryFirst<TenantSiteRow>(db, `
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
              ? AS canonical_domain,
              s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url, s.vertical
@@ -242,7 +243,7 @@ async function resolveTenantSite(host: string, event: Parameters<typeof cloudfla
       LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
       WHERE s.subdomain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
       LIMIT 1
-    `).bind(hostname, subdomain).first() as TenantSiteRow | null
+    `, [hostname, subdomain])
   }
 
   return null

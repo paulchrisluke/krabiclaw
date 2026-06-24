@@ -7,6 +7,7 @@ import { getPlaceDetailsByUrl, getPlaceDetails, PlaceDetailsError } from '~/serv
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
 import { updateLocation } from '~/server/utils/location-management'
 import { setConfig } from '~/server/utils/site-config'
+import { execute, queryFirst } from '~/server/db'
 
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
 
@@ -101,12 +102,12 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'You already have a site. Onboarding is for new sites only.' }, { status: 400 })
   }
 
-  const locationRow = await db.prepare(`
+  const locationRow = await queryFirst<{ id: string; slug: string | null }>(db, `
     SELECT id, slug FROM business_locations
     WHERE site_id = ? AND organization_id = ? AND status = 'active'
     ORDER BY is_primary DESC, created_at ASC
     LIMIT 1
-  `).bind(siteId, organizationId).first<{ id: string; slug: string | null }>()
+  `, [siteId, organizationId])
 
   if (!locationRow?.id) {
     return jsonResponse({ error: 'No active location found for this site. Site creation may have failed.' }, { status: 500 })
@@ -158,13 +159,13 @@ export default defineEventHandler(async (event) => {
   for (const review of place.reviews) {
     if (!review.reviewId || !review.rating) continue
     try {
-      await db.prepare(`
+      await execute(db, `
         INSERT OR IGNORE INTO reviews
           (id, organization_id, site_id, location_id, google_review_id,
            author_name, reviewer_photo_url, rating, content,
            status, source, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_places', ?, ?)
-      `).bind(
+      `, [
         `${siteId}-${review.reviewId.replace(/\//g, '-')}`,
         organizationId, siteId, locationRow.id,
         review.reviewId,
@@ -173,14 +174,13 @@ export default defineEventHandler(async (event) => {
         review.rating,
         review.text,
         review.publishedAt ?? now, now,
-      ).run()
+      ])
     } catch (err) {
       console.error('Failed to upsert review:', err)
     }
   }
 
-  const orgRow = await db.prepare(`SELECT slug FROM organization WHERE id = ? LIMIT 1`)
-    .bind(organizationId).first<{ slug: string }>()
+  const orgRow = await queryFirst<{ slug: string }>(db, `SELECT slug FROM organization WHERE id = ? LIMIT 1`, [organizationId])
 
   return jsonResponse({
     success: true,

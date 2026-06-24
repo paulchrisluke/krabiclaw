@@ -4,6 +4,7 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 import { hasBetterAuthAdminRole } from '~/server/utils/platform-auth'
+import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
 
 async function hmacSign(value: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
@@ -51,38 +52,38 @@ export default defineEventHandler(async (event) => {
 
   let user: { id: string; email: string; role?: string | null } | null = null
   if (userId) {
-    user = await db.prepare('SELECT id, email, role FROM user WHERE id = ? LIMIT 1').bind(userId).first() as {
-      id: string
-      email: string
-      role?: string | null
-    } | null
+    user = await queryFirst<{ id: string; email: string; role?: string | null }>(
+      db, 'SELECT id, email, role FROM user WHERE id = ? LIMIT 1', [userId]
+    )
     if (!user) {
-      const now = new Date().toISOString()
+      const now = Math.floor(Date.now() / 1000)
       const email = `${userId}@example.test`
       try {
-        await db.prepare(`
+        await execute(db, `
           INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
           VALUES (?, ?, ?, 1, 'user', ?, ?)
-        `).bind(userId, userId, email, now, now).run()
+        `, [userId, userId, email, now, now])
         // Mirrors the databaseHooks.user.create.after hook in auth.ts — real
         // signups always get an owner organization, but this raw insert
         // bypasses Better Auth (and its hooks) entirely.
         const orgId = `org-${userId}`
-        await db.batch([
-          db.prepare('INSERT OR IGNORE INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)')
-            .bind(orgId, userId, orgId, now),
-          db.prepare('INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, ?, ?)')
-            .bind(`member-${orgId}`, orgId, userId, 'owner', now),
+        await executeBatch(db, [
+          {
+            query: 'INSERT OR IGNORE INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)',
+            params: [orgId, userId, orgId, now],
+          },
+          {
+            query: 'INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, ?, ?)',
+            params: [`member-${orgId}`, orgId, userId, 'owner', now],
+          },
         ])
         user = { id: userId, email, role: 'user' }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         if (/PRIMARY KEY|UNIQUE constraint failed/i.test(message)) {
-          user = await db.prepare('SELECT id, email, role FROM user WHERE id = ? LIMIT 1').bind(userId).first() as {
-            id: string
-            email: string
-            role?: string | null
-          } | null
+          user = await queryFirst<{ id: string; email: string; role?: string | null }>(
+            db, 'SELECT id, email, role FROM user WHERE id = ? LIMIT 1', [userId]
+          )
         } else {
           console.error(`Dev login user auto-create failed for ${userId}: ${message}`, error)
           throw createError({ statusCode: 500, statusMessage: 'Failed to create dev login user' })
@@ -93,7 +94,7 @@ export default defineEventHandler(async (event) => {
       }
     }
   } else {
-    const { results } = await db.prepare(`
+    const results = await queryAll<{ id: string; email: string; role?: string | null; has_org: number; is_owner: number; has_site: number }>(db, `
       SELECT u.id, u.email, u.role,
              EXISTS(SELECT 1 FROM member m WHERE m.userId = u.id) AS has_org,
              EXISTS(SELECT 1 FROM member m WHERE m.userId = u.id AND m.role = 'owner') AS is_owner,
@@ -106,7 +107,7 @@ export default defineEventHandler(async (event) => {
       FROM user u
       ORDER BY has_site DESC, is_owner DESC, has_org DESC, u.createdAt ASC
       LIMIT 50
-    `).all<{ id: string; email: string; role?: string | null; has_org: number; is_owner: number; has_site: number }>()
+    `)
     const rows = results || []
     
     user = rows.find((row) =>

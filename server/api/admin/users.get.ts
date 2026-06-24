@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { queryAll } from '~/server/db'
 
 type UserQueryParam = string | number
 
@@ -10,7 +11,7 @@ interface UserRow {
   email: string
   role: string
   banned: boolean | number | null
-  createdAt: string
+  createdAt: number
 }
 
 export default defineEventHandler(async (event) => {
@@ -35,15 +36,15 @@ export default defineEventHandler(async (event) => {
     params.push(`%${escapedSearch}%`)
   }
 
-  let users: D1Result<UserRow>
+  let users: UserRow[]
   try {
-    users = await db.prepare(`
+    users = await queryAll<UserRow>(db, `
       SELECT id, name, email, role, banned, createdAt
       FROM user
       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
       ORDER BY createdAt DESC
       LIMIT ? OFFSET ?
-    `).bind(...params, limit, offset).all<UserRow>()
+    `, [...params, limit, offset])
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Unknown database error')
     console.error('admin_users_fetch_failed', {
@@ -52,9 +53,10 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to fetch users' }, { status: 500 })
   }
 
-  const normalized = (users.results ?? []).map((user) => ({
+  const normalized = users.map((user) => ({
     ...user,
-    banned: Boolean(user.banned)
+    banned: Boolean(user.banned),
+    createdAt: new Date(user.createdAt * 1000).toISOString()
   }))
 
   return jsonResponse({ users: normalized })

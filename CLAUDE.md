@@ -48,7 +48,7 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
 
 ## Database Schema Workflow
 
-Migrations are managed via **wrangler D1 migrations** and are applied automatically on every deploy.
+Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and are applied automatically on every deploy. Query access goes through **Drizzle ORM** (`server/db/schema.ts`, `server/db/index.ts`) — Drizzle is a query layer over the same D1 database, not a migration tool. `drizzle-kit` is only used for schema drift checking, never for generating or applying migrations.
 
 1. To change the schema, create a new migration:
 
@@ -58,13 +58,17 @@ Migrations are managed via **wrangler D1 migrations** and are applied automatica
 
 2. Edit the generated file in `migrations/`. Write only the delta: `ALTER TABLE`, `CREATE TABLE`, etc.
 
-3. Apply locally to test:
+3. Update `server/db/schema.ts` by hand to match the new SQL — Drizzle's schema is not generated from migrations.
+
+4. Apply locally to test:
 
    ```bash
    yarn schema:local
    ```
 
-4. Migrations run automatically on deploy. `yarn deploy` runs:
+5. Run `yarn drizzle:check` (`drizzle-kit check`) to verify `server/db/schema.ts` hasn't drifted from the live D1 schema.
+
+6. Migrations run automatically on deploy. `yarn deploy` runs:
 
    ```bash
    wrangler d1 migrations apply DB --remote
@@ -72,20 +76,22 @@ Migrations are managed via **wrangler D1 migrations** and are applied automatica
 
    before uploading the Worker.
 
-5. Never write ad-hoc SQL files in `scripts/` for schema changes. They will not be tracked and can cause production outages.
+7. Never write ad-hoc SQL files in `scripts/` for schema changes. They will not be tracked and can cause production outages.
 
-6. Better Auth tables must use exact camelCase column names. App tables use snake_case.
+8. Never use `drizzle-kit generate` or `drizzle-kit migrate` against this database — `migrations/*.sql` applied via wrangler is the only source of truth for schema changes.
 
-7. Any schema change must be checked against current server queries before finishing.
+9. Better Auth tables must use exact camelCase column names. App tables use snake_case.
 
-The current canonical schema is `migrations/0001_initial.sql`. Each subsequent migration file is the source of truth for its delta.
+10. Any schema change must be checked against current server queries (raw SQL and Drizzle alike) before finishing.
+
+`migrations/0001_initial.sql` is the **squashed baseline** — all migrations up through the old numbering (including what was previously migration `0017`) were folded into it. Numbering restarted from `0001` after the squash; the migrations directory currently only goes up to `0008`. Each migration file after `0001_initial.sql` is the source of truth for its own delta. Do not reference pre-squash migration numbers (e.g. "migration 0017") as if they still exist as separate files — that history is now baked into `0001_initial.sql`.
 
 ---
 
 ## Multi-Tenancy
 
 - Organizations map to a team or agency using Better Auth’s `organization` plugin.
-- **One org can have multiple sites** — the unique-per-org constraint was removed in migration `0017`.
+- **One org can have multiple sites** — the unique-per-org constraint was removed pre-squash (was migration `0017`); this is now part of the `0001_initial.sql` baseline.
 - Each site has its own plan and Stripe subscription (`site_billing` table).
 - The Stripe *customer* stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
 - Multiple physical locations live under `business_locations`, not separate orgs. Locations are **unlimited on all plans**.
@@ -125,7 +131,8 @@ There are four independent analytics layers — do not conflate them or assume o
 - `server/middleware/tenant-resolution.ts` — runs on every request
 - `lib/auth-client.ts` — client-side Better Auth instance
 - `composables/` — Nuxt auto-imported
-- `migrations/` — canonical D1 schema, numbered files; `0001_initial.sql` is the base
+- `migrations/` — canonical D1 schema, numbered files; `0001_initial.sql` is the squashed base (renumbered, supersedes all pre-squash migration numbers)
+- `server/db/schema.ts` — Drizzle ORM schema, hand-maintained to mirror `migrations/`; `server/db/index.ts` — `createDb()` and query helpers
 - `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo tenant
 - `seed-definitions/pottery-house.ts`, `seed-definitions/kikuzuki.ts` — client site seed definitions
 - `scripts/generate-demo-seed.ts` — ephemeral demo seed generator; applies from `/tmp`, never from a checked-in SQL file
@@ -286,7 +293,7 @@ Flow:
 
 - Stripe is the source of truth for plan names, prices, and `marketing_features`.
 - `server/utils/billing.ts` → `getPlanEntitlements(plan)` defines what each plan unlocks in D1.
-- Entitlements are stored **per-site** in the `site_entitlements` table (migration `0017` replaced `organization_entitlements`).
+- Entitlements are stored **per-site** in the `site_entitlements` table (this superseded `organization_entitlements` pre-squash, was migration `0017`, now part of the `0001_initial.sql` baseline). The old `organization_entitlements` table still exists in the schema for legacy billing/credits data but is not used for plan entitlement checks.
 - Billing is **per-site** via `site_billing`. Checkout must pass `site_id` in Stripe session metadata.
 - Key entitlement keys:
   - `custom_domains`

@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
+import { queryFirst } from '~/server/db'
 import { getPlatformMcpTool } from '~/server/utils/platform-mcp-tools'
 import {
   createPlatformBlogPost,
@@ -92,9 +93,11 @@ export async function executePlatformMcpToolCall(
 
   switch (toolName) {
     case 'get_platform_context': {
-      const currentUser = await user.db.prepare(
-        'SELECT id, email, name, role FROM user WHERE id = ? LIMIT 1'
-      ).bind(user.userId).first<{ id: string; email: string | null; name: string | null; role: string | null }>()
+      const currentUser = await queryFirst<{ id: string; email: string | null; name: string | null; role: string | null }>(
+        user.db,
+        'SELECT id, email, name, role FROM user WHERE id = ? LIMIT 1',
+        [user.userId],
+      )
       if (!currentUser) throw mcpProtocolError(MCP_ERROR.internal, 'Current user not found.')
       return {
         currentUser: {

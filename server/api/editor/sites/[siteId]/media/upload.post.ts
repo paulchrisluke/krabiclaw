@@ -1,6 +1,7 @@
 // POST /api/editor/sites/[siteId]/media/upload
 // Video/file upload via multipart form. File is streamed to R2 via the MEDIA_BUCKET binding.
 // Max: 50 MB. Client receives an active media_asset immediately.
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { uploadToR2, buildR2Key, deleteFromR2 } from '~/server/utils/cloudflare-r2'
@@ -127,19 +128,21 @@ export default defineEventHandler(async (event) => {
     const session = await getAuthSession(event, env)
     if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-    const site = await db.prepare(
-      `SELECT organization_id FROM sites WHERE id = ? LIMIT 1`
-    ).bind(siteId).first<{ organization_id: string }>()
+    const site = await queryFirst<{ organization_id: string }>(
+      db,
+      `SELECT organization_id FROM sites WHERE id = ? LIMIT 1`,
+      [siteId],
+    )
     if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
-    const membership = await db.prepare(`
+    const membership = await queryFirst(db, `
       SELECT m.userId
       FROM member m
       WHERE m.organizationId = ?
         AND m.userId = ?
         AND m.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(site.organization_id, session.user.id).first()
+    `, [site.organization_id, session.user.id])
     if (!membership) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
     const formData = await readMultipartFormData(event)
@@ -181,12 +184,12 @@ export default defineEventHandler(async (event) => {
     if (locationIdPart?.data) {
       const candidate = Buffer.from(locationIdPart.data).toString().trim()
       if (candidate) {
-        const location = await db.prepare(`
+        const location = await queryFirst(db, `
           SELECT id
           FROM business_locations
           WHERE id = ? AND site_id = ? AND organization_id = ?
           LIMIT 1
-        `).bind(candidate, siteId, site.organization_id).first()
+        `, [candidate, siteId, site.organization_id])
         if (!location) {
           return jsonResponse({ error: 'Invalid locationId' }, { status: 400 })
         }

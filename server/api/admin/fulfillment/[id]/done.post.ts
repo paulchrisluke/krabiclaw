@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { execute } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -15,11 +16,11 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) return jsonResponse({ error: 'Purchase ID required' }, { status: 400 })
 
-  const result = await db.prepare(`
+  const result = await execute(db, `
     UPDATE service_addon_purchases
     SET fulfilled_at = ?
     WHERE id = ? AND fulfilled_at IS NULL
-  `).bind(new Date().toISOString(), id).run()
+  `, [new Date().toISOString(), id])
 
   if (result.meta.changes === 0) {
     return jsonResponse({ error: 'Purchase not found or already fulfilled' }, { status: 404 })

@@ -1,5 +1,6 @@
 import { buildTranslationInventory, type TranslationEntityType, type TranslationInventoryStatus, type TranslationScope } from '~/server/utils/translation-inventory'
 import { upsertTranslationDraft } from '~/server/utils/translation-processor'
+import { queryAll, type DbClient } from '~/server/db'
 
 export interface TranslationReviewItem {
   entity_type: TranslationEntityType
@@ -29,42 +30,42 @@ function stateKey(entityType: TranslationEntityType, entityId: string, field: st
 }
 
 async function getTranslatedFields(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   locale: string,
 ): Promise<Map<string, Record<string, string>>> {
   const [contentRows, menuRows, itemRows, locationRows, postRows] = await Promise.all([
-    db.prepare(`
+    queryAll<Record<string, string | null>>(db, `
       SELECT COALESCE(location_id, 'site') || ':' || COALESCE(page, '') AS entity_id, field, content, hero_title, hero_subtitle, value
       FROM site_content_translations
       WHERE organization_id = ? AND site_id = ? AND locale = ?
-    `).bind(organizationId, siteId, locale).all<Record<string, string | null>>(),
-    db.prepare(`
+    `, [organizationId, siteId, locale]),
+    queryAll<Record<string, string | null>>(db, `
       SELECT menu_id AS entity_id, name, description
       FROM menu_translations
       WHERE organization_id = ? AND site_id = ? AND locale = ?
-    `).bind(organizationId, siteId, locale).all<Record<string, string | null>>(),
-    db.prepare(`
+    `, [organizationId, siteId, locale]),
+    queryAll<Record<string, string | null>>(db, `
       SELECT menu_item_id AS entity_id, section, name, description, allergens, ingredients, dietary_notes, preparation, serving_note
       FROM menu_item_translations
       WHERE organization_id = ? AND site_id = ? AND locale = ?
-    `).bind(organizationId, siteId, locale).all<Record<string, string | null>>(),
-    db.prepare(`
+    `, [organizationId, siteId, locale]),
+    queryAll<Record<string, string | null>>(db, `
       SELECT location_id AS entity_id, title, address, city, description, short_description
       FROM business_location_translations
       WHERE organization_id = ? AND site_id = ? AND locale = ?
-    `).bind(organizationId, siteId, locale).all<Record<string, string | null>>(),
-    db.prepare(`
+    `, [organizationId, siteId, locale]),
+    queryAll<Record<string, string | null>>(db, `
       SELECT post_id AS entity_id, title, body, event_title, offer_terms
       FROM post_translations
       WHERE organization_id = ? AND site_id = ? AND locale = ?
-    `).bind(organizationId, siteId, locale).all<Record<string, string | null>>(),
+    `, [organizationId, siteId, locale]),
   ])
 
   const rows = new Map<string, Record<string, string>>()
 
-  for (const row of contentRows.results ?? []) {
+  for (const row of contentRows) {
     const field = row.field || 'content'
     const fields = field === 'hero'
       ? cleanFields({ hero_title: row.hero_title, hero_subtitle: row.hero_subtitle })
@@ -72,11 +73,11 @@ async function getTranslatedFields(
     rows.set(stateKey('site_content', row.entity_id || '', field), fields)
   }
 
-  for (const row of menuRows.results ?? []) {
+  for (const row of menuRows) {
     rows.set(stateKey('menu', row.entity_id || '', 'menu'), cleanFields({ name: row.name, description: row.description }))
   }
 
-  for (const row of itemRows.results ?? []) {
+  for (const row of itemRows) {
     rows.set(stateKey('menu_item', row.entity_id || '', 'item'), cleanFields({
       section: row.section,
       name: row.name,
@@ -89,7 +90,7 @@ async function getTranslatedFields(
     }))
   }
 
-  for (const row of locationRows.results ?? []) {
+  for (const row of locationRows) {
     rows.set(stateKey('business_location', row.entity_id || '', 'location'), cleanFields({
       title: row.title,
       address: row.address,
@@ -99,7 +100,7 @@ async function getTranslatedFields(
     }))
   }
 
-  for (const row of postRows.results ?? []) {
+  for (const row of postRows) {
     rows.set(stateKey('post', row.entity_id || '', 'post'), cleanFields({
       title: row.title,
       body: row.body,
@@ -112,7 +113,7 @@ async function getTranslatedFields(
 }
 
 export async function listTranslationReviewItems(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   opts: {
@@ -153,7 +154,7 @@ export async function listTranslationReviewItems(
 }
 
 export async function saveTranslationReviewItem(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   opts: {

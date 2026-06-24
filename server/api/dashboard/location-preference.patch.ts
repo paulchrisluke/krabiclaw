@@ -1,5 +1,6 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
+import { execute, queryFirst } from '~/server/db'
 
 interface LocationPreferenceBody {
   locationId: string
@@ -18,33 +19,33 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Site workspace has not been created yet' }, { status: 400 })
   }
 
-  const location = await db.prepare(`
+  const location = await queryFirst<{ id: string }>(db, `
     SELECT id
     FROM business_locations
     WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active'
     LIMIT 1
-  `).bind(locationId, organization.id, site.id).first<{ id: string }>()
+  `, [locationId, organization.id, site.id])
 
   if (!location) {
     return jsonResponse({ error: 'Location not found' }, { status: 404 })
   }
 
   const now = new Date().toISOString()
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO dashboard_preferences (
       id, user_id, organization_id, selected_location_id, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, organization_id) DO UPDATE SET
       selected_location_id = excluded.selected_location_id,
       updated_at = excluded.updated_at
-  `).bind(
+  `, [
     `dashboard-pref-${userId}-${organization.id}`,
     userId,
     organization.id,
     locationId,
     now,
     now
-  ).run()
+  ])
 
   return jsonResponse({ success: true, selectedLocationId: locationId })
 })

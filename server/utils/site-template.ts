@@ -3,6 +3,7 @@
 // All records use source='template' so ChowBot can identify and reference them.
 
 import type { SiteVertical } from "~/utils/vertical-copy";
+import { executeBatch, queryFirst, type BatchQuery, type DbClient } from "~/server/db";
 
 function uid(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -182,7 +183,7 @@ const VERTICAL_SITE_CONTENT: Partial<
 };
 
 export async function seedNewSite(
-  db: D1Database,
+  db: DbClient,
   params: {
     organizationId: string;
     siteId: string;
@@ -195,46 +196,37 @@ export async function seedNewSite(
   const { organizationId, siteId, name, vertical } = params;
 
   // Reuse existing location on resume (site may have failed mid-seed)
-  const existing = await db
-    .prepare(
-      "SELECT id FROM business_locations WHERE site_id = ? AND slug = ? LIMIT 1",
-    )
-    .bind(siteId, "main")
-    .first<{ id: string }>();
+  const existing = await queryFirst<{ id: string }>(
+    db,
+    "SELECT id FROM business_locations WHERE site_id = ? AND slug = ? LIMIT 1",
+    [siteId, "main"],
+  );
   const locationId = existing?.id ?? uid("loc");
   const heroMediaId = uid("media");
   const storyMediaId = uid("media");
 
-  const statements: D1PreparedStatement[] = [];
+  const statements: BatchQuery[] = [];
 
   // Canonical language setup for new Saya sites.
-  statements.push(
-    db
-      .prepare(
-        `
+  statements.push({
+    query: `
     INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
     VALUES (?, ?, 'source_locale', 'en')
   `,
-      )
-      .bind(organizationId, siteId),
-  );
-  statements.push(
-    db
-      .prepare(
-        `
+    params: [organizationId, siteId],
+  });
+  statements.push({
+    query: `
     INSERT OR REPLACE INTO site_locales
       (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
     VALUES (?, ?, ?, 'en', 'English', 1, 'published', 1)
   `,
-      )
-      .bind(`locale::${organizationId}::${siteId}::en`, organizationId, siteId),
-  );
+    params: [`locale::${organizationId}::${siteId}::en`, organizationId, siteId],
+  });
 
   // ── Location ──────────────────────────────────────────────────────────────
-  statements.push(
-    db
-      .prepare(
-        `
+  statements.push({
+    query: `
     INSERT OR IGNORE INTO business_locations
       (id, organization_id, site_id, slug, title, city, description, opening_hours,
        rating, review_count, is_primary, status)
@@ -243,149 +235,127 @@ export async function seedNewSite(
       '[{"openDay":"MONDAY","openTime":"09:00","closeTime":"18:00"},{"openDay":"TUESDAY","openTime":"09:00","closeTime":"18:00"},{"openDay":"WEDNESDAY","openTime":"09:00","closeTime":"18:00"},{"openDay":"THURSDAY","openTime":"09:00","closeTime":"18:00"},{"openDay":"FRIDAY","openTime":"09:00","closeTime":"18:00"},{"openDay":"SATURDAY","openTime":"10:00","closeTime":"17:00"}]',
       0, 0, 1, 'active')
   `,
-      )
-      .bind(locationId, organizationId, siteId, name),
-  );
+    params: [locationId, organizationId, siteId, name],
+  });
 
   // createLocation() in location-management.ts normally syncs this when a
   // location becomes primary — this raw seed insert bypasses that helper, so
   // it must be kept in sync here or sites.primary_location_id stays NULL.
-  statements.push(
-    db
-      .prepare(
-        `
+  statements.push({
+    query: `
     UPDATE sites
     SET primary_location_id = ?
     WHERE id = ? AND organization_id = ? AND primary_location_id IS NULL
   `,
-      )
-      .bind(locationId, siteId, organizationId),
-  );
+    params: [locationId, siteId, organizationId],
+  });
 
   // ── Hero image ────────────────────────────────────────────────────────────
-  statements.push(
-    db
-      .prepare(
-        `
+  statements.push({
+    query: `
     INSERT OR IGNORE INTO media_assets
       (id, organization_id, site_id, location_id, kind, provider, source,
        cloudflare_image_id, public_url, thumbnail_url, mime_type, file_name, alt_text, status)
     VALUES (?, ?, ?, ?, 'image', 'cloudflare_images', 'generated',
       ?, ?, ?, 'image/jpeg', 'hero.jpg', ?, 'active')
   `,
-      )
-      .bind(
-        heroMediaId,
-        organizationId,
-        siteId,
-        locationId,
-        TEMPLATE_HERO_IMAGE.cloudflareImageId,
-        TEMPLATE_HERO_IMAGE.publicUrl,
-        TEMPLATE_HERO_IMAGE.thumbnailUrl,
-        `${name} hero image`,
-      ),
-  );
+    params: [
+      heroMediaId,
+      organizationId,
+      siteId,
+      locationId,
+      TEMPLATE_HERO_IMAGE.cloudflareImageId,
+      TEMPLATE_HERO_IMAGE.publicUrl,
+      TEMPLATE_HERO_IMAGE.thumbnailUrl,
+      `${name} hero image`,
+    ],
+  });
 
-  statements.push(
-    db
-      .prepare(
-        `
+  statements.push({
+    query: `
     UPDATE business_locations
     SET hero_image_asset_id = ?
     WHERE id = ?
   `,
-      )
-      .bind(heroMediaId, locationId),
-  );
+    params: [heroMediaId, locationId],
+  });
 
   // ── Story image ───────────────────────────────────────────────────────────
-  statements.push(
-    db
-      .prepare(
-        `
+  statements.push({
+    query: `
     INSERT OR IGNORE INTO media_assets
       (id, organization_id, site_id, location_id, kind, provider, source,
        cloudflare_image_id, public_url, thumbnail_url, mime_type, file_name, alt_text, status)
     VALUES (?, ?, ?, ?, 'image', 'cloudflare_images', 'generated',
       ?, ?, ?, 'image/jpeg', 'story.jpg', ?, 'active')
   `,
-      )
-      .bind(
-        storyMediaId,
-        organizationId,
-        siteId,
-        locationId,
-        TEMPLATE_STORY_IMAGE.cloudflareImageId,
-        TEMPLATE_STORY_IMAGE.publicUrl,
-        TEMPLATE_STORY_IMAGE.thumbnailUrl,
-        `${name} story image`,
-      ),
-  );
+    params: [
+      storyMediaId,
+      organizationId,
+      siteId,
+      locationId,
+      TEMPLATE_STORY_IMAGE.cloudflareImageId,
+      TEMPLATE_STORY_IMAGE.publicUrl,
+      TEMPLATE_STORY_IMAGE.thumbnailUrl,
+      `${name} story image`,
+    ],
+  });
 
   // ── Sample menu (restaurant only) ─────────────────────────────────────────
   const menuItems = VERTICAL_MENU_SECTIONS[vertical];
   if (menuItems && menuItems.length > 0) {
     const menuId = uid("menu");
-    statements.push(
-      db
-        .prepare(
-          `
+    statements.push({
+      query: `
       INSERT OR IGNORE INTO menus (id, organization_id, site_id, location_id, name, status)
       VALUES (?, ?, ?, ?, 'Menu', 'published')
     `,
-        )
-        .bind(menuId, organizationId, siteId, locationId),
-    );
+      params: [menuId, organizationId, siteId, locationId],
+    });
 
     for (let i = 0; i < menuItems.length; i++) {
       const [section, itemName, slug, description, price] = menuItems[i]!;
-      statements.push(
-        db
-          .prepare(
-            `
+      statements.push({
+        query: `
         INSERT OR IGNORE INTO menu_items
           (id, menu_id, section, name, slug, description, price_amount, available, sort_order)
         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
       `,
-          )
-          .bind(
-            uid("mi"),
-            menuId,
-            section,
-            itemName,
-            slug,
-            description,
-            price,
-            i,
-          ),
-      );
+        params: [
+          uid("mi"),
+          menuId,
+          section,
+          itemName,
+          slug,
+          description,
+          price,
+          i,
+        ],
+      });
     }
   }
 
   // ── Sample Q&A ────────────────────────────────────────────────────────────
   const qa = VERTICAL_QA[vertical] ?? VERTICAL_QA.restaurant!;
   for (const [question, answer, order] of qa) {
-    statements.push(
-      db
-        .prepare(
-          `
+    statements.push({
+      query: `
       INSERT OR IGNORE INTO location_qa
         (id, organization_id, site_id, location_id, question, answer, answer_author,
          is_owner_answer, source, status, sort_order)
       VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'template', 'published', ?)
     `,
-        )
-        .bind(
-          uid("qa"),
-          organizationId,
-          siteId,
-          locationId,
-          question,
-          answer,
-          name,
-          order,
-        ),
-    );
+      params: [
+        uid("qa"),
+        organizationId,
+        siteId,
+        locationId,
+        question,
+        answer,
+        name,
+        order,
+      ],
+    });
   }
 
   // ── Sample post ───────────────────────────────────────────────────────────
@@ -394,10 +364,8 @@ export async function seedNewSite(
     vertical === "restaurant"
       ? "We just launched our new site — you can now browse our full menu, check our hours, and book a table online. More updates coming soon."
       : "We just launched our new site — you can now browse what we offer, check our hours, and get in touch. More updates coming soon.";
-  statements.push(
-    db
-      .prepare(
-        `
+  statements.push({
+    query: `
     INSERT OR IGNORE INTO posts
       (id, organization_id, site_id, location_id, post_type, title, body,
        status, published_at, created_by)
@@ -405,20 +373,16 @@ export async function seedNewSite(
       ?,
       'published', datetime('now'), 'system')
   `,
-      )
-      .bind(postId, organizationId, siteId, locationId, postBody),
-  );
+    params: [postId, organizationId, siteId, locationId, postBody],
+  });
 
-  statements.push(
-    db
-      .prepare(
-        `
+  statements.push({
+    query: `
     INSERT OR IGNORE INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
     VALUES (?, ?, ?, 'site', 'published', datetime('now'))
   `,
-      )
-      .bind(uid("pcj"), postId, organizationId),
-  );
+    params: [uid("pcj"), postId, organizationId],
+  });
 
   // ── Homepage CTA + about page content (vertical-specific) ─────────────────
   const siteContentFn =
@@ -427,26 +391,23 @@ export async function seedNewSite(
 
   for (const [page, field, content, type] of siteContent) {
     const contentType = type ?? "text";
-    statements.push(
-      db
-        .prepare(
-          `
+    statements.push({
+      query: `
       INSERT OR IGNORE INTO site_content
         (id, organization_id, site_id, location_id, page, field, content, type, source)
       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 'template')
     `,
-        )
-        .bind(
-          uid("sc"),
-          organizationId,
-          siteId,
-          page,
-          field,
-          content,
-          contentType,
-        ),
-    );
+      params: [
+        uid("sc"),
+        organizationId,
+        siteId,
+        page,
+        field,
+        content,
+        contentType,
+      ],
+    });
   }
 
-  await db.batch(statements);
+  await executeBatch(db, statements);
 }

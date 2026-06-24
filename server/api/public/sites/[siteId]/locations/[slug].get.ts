@@ -1,4 +1,5 @@
 // Get public business location by slug
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { calculateMapEmbedUrl } from '~/server/utils/google-business'
 
@@ -15,7 +16,7 @@ export default defineEventHandler(async (event) => {
   }
   
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   
   if (!db) {
     return jsonResponse({ 
@@ -25,11 +26,15 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Get site and verify it's active
-    const site = await db.prepare(`
+    const site = await queryFirst<{ id: string; organization_id: string; status: string; default_currency: string | null }>(
+      db,
+      `
       SELECT id, organization_id, status, default_currency FROM sites 
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `).bind(siteId).first<{ id: string; organization_id: string; status: string; default_currency: string | null }>()
+    `,
+      [siteId],
+    )
     
     if (!site) {
       return jsonResponse({ 
@@ -38,7 +43,9 @@ export default defineEventHandler(async (event) => {
     }
 
     // Get location by slug for this site (email excluded from public API)
-    const location = await db.prepare(`
+    const location = await queryFirst<ApiRecord>(
+      db,
+      `
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
              bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
              bl.is_primary, bl.status, bl.last_synced_at, bl.google_place_id, bl.city,
@@ -50,7 +57,9 @@ export default defineEventHandler(async (event) => {
       LEFT JOIN media_assets ma_vid ON bl.hero_video_asset_id = ma_vid.id AND ma_vid.status = 'active'
       WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.slug = ? AND bl.status = 'active'
       LIMIT 1
-    `).bind(site.organization_id, siteId, slug).first<ApiRecord>()
+    `,
+      [site.organization_id, siteId, slug],
+    )
 
     if (!location) {
       return jsonResponse({
@@ -59,13 +68,17 @@ export default defineEventHandler(async (event) => {
     }
 
     // Counts for sub-nav badges
-    const photoCount = await db.prepare(
-      `SELECT COUNT(*) as n FROM media_assets WHERE location_id = ? AND status = 'active'`
-    ).bind(location.id).first()
+    const photoCount = await queryFirst<{ n: number }>(
+      db,
+      `SELECT COUNT(*) as n FROM media_assets WHERE location_id = ? AND status = 'active'`,
+      [location.id],
+    )
 
-    const qaCount = await db.prepare(
-      `SELECT COUNT(*) as n FROM location_qa WHERE location_id = ? AND status = 'published'`
-    ).bind(location.id).first()
+    const qaCount = await queryFirst<{ n: number }>(
+      db,
+      `SELECT COUNT(*) as n FROM location_qa WHERE location_id = ? AND status = 'published'`,
+      [location.id],
+    )
 
     // Derive GMB action URLs from place ID when available
     const placeId = location.google_place_id
@@ -102,8 +115,8 @@ export default defineEventHandler(async (event) => {
       opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null,
       rating: location.rating,
       review_count: location.review_count,
-      photo_count: (photoCount as ApiValue)?.n ?? 0,
-      qa_count: (qaCount as ApiValue)?.n ?? 0,
+      photo_count: photoCount?.n ?? 0,
+      qa_count: qaCount?.n ?? 0,
       is_primary: location.is_primary,
       status: location.status,
       public_url,

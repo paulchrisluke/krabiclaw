@@ -1,4 +1,5 @@
 // POST create new menu
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createMenu } from '~/server/utils/menu-management'
@@ -34,27 +35,27 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user belongs to organization that owns the site
-    const site = await db.prepare(`
+    const site = await queryFirst<{ id: string; organization_id: string; name: string; status: string; onboarding_status: string | null }>(db, `
       SELECT s.id, s.organization_id, s.status, s.onboarding_status
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member om ON o.id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; name: string; status: string; onboarding_status: string | null }>()
-    
+    `, [siteId, session.user.id])
+
     if (!site) {
-      return jsonResponse({ 
-        error: 'Site not found or access denied' 
+      return jsonResponse({
+        error: 'Site not found or access denied'
       }, { status: 404 })
     }
 
     // Check if menu already exists for this scope
-    const existingMenu = await db.prepare(`
-      SELECT id FROM menus 
+    const existingMenu = await queryFirst(db, `
+      SELECT id FROM menus
       WHERE organization_id = ? AND site_id = ? AND location_id = ?
       LIMIT 1
-    `).bind(site.organization_id, siteId, body.locationId || null).first()
+    `, [site.organization_id, siteId, body.locationId || null])
 
     if (existingMenu) {
       return jsonResponse({ 

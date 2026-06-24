@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { queryAll } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -32,7 +33,7 @@ export default defineEventHandler(async (event) => {
   params.push(limit)
 
   try {
-    const { results } = await db.prepare(sql).bind(...params).all()
+    const results = await queryAll(db, sql, params)
     return jsonResponse({ media: results ?? [] })
   } catch (err) {
     console.error('Failed to fetch platform media:', err)

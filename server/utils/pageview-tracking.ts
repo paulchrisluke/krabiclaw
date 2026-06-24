@@ -6,6 +6,8 @@
 //   kc_session_id — short-lived visit ID, 30min sliding TTL, HttpOnly, SameSite=Lax
 import { getCookie, getHeader, setCookie } from 'h3'
 import type { H3Event } from 'h3'
+import type { AppDb } from '~/server/db'
+import { execute } from '~/server/db'
 
 export const VISITOR_COOKIE = 'kc_visitor_id'
 export const SESSION_COOKIE = 'kc_session_id'
@@ -99,32 +101,34 @@ export interface PageviewEventInput {
   city?: string | null
 }
 
-export async function insertPageviewEvent(db: D1Database, input: PageviewEventInput): Promise<void> {
+export async function insertPageviewEvent(db: AppDb, input: PageviewEventInput): Promise<void> {
   const eventId = crypto.randomUUID()
   const now = new Date().toISOString()
 
-  await db.prepare(`
-    INSERT INTO site_pageview_events (
+  await execute(
+    db,
+    `INSERT INTO site_pageview_events (
       id, site_id, location_id, page_path, referrer, user_agent,
       ip_hash, session_id, visitor_id, duration_seconds,
       country, region, city, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    eventId,
-    input.siteId,
-    input.locationId ?? null,
-    input.pagePath,
-    input.referrer ?? null,
-    input.userAgent ?? null,
-    input.ipHash,
-    input.sessionId,
-    input.visitorId,
-    input.durationSeconds ?? null,
-    input.country ?? null,
-    input.region ?? null,
-    input.city ?? null,
-    now
-  ).run()
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      eventId,
+      input.siteId,
+      input.locationId ?? null,
+      input.pagePath,
+      input.referrer ?? null,
+      input.userAgent ?? null,
+      input.ipHash,
+      input.sessionId,
+      input.visitorId,
+      input.durationSeconds ?? null,
+      input.country ?? null,
+      input.region ?? null,
+      input.city ?? null,
+      now,
+    ],
+  )
 }
 
 // Paths that should never generate a pageview event, regardless of caller.

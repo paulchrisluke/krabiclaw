@@ -1,6 +1,7 @@
 // Get a business location for a site
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { queryFirst } from '~/server/db'
 
 const parseJson = (value: ApiValue) => {
   if (!value || typeof value !== 'string') return null
@@ -71,19 +72,19 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const site = await db.prepare(`
+    const site = await queryFirst<SiteRow>(db, `
       SELECT s.id, s.organization_id
       FROM sites s
       JOIN member om ON s.organization_id = om.organizationId
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
-    `).bind(siteId, session.user.id).first() as SiteRow | null
+    `, [siteId, session.user.id])
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
-    const location = await db.prepare(`
+    const location = await queryFirst<LocationRow>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone,
              bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours,
              bl.categories, bl.description, bl.short_description, bl.email, bl.price_level,
@@ -96,7 +97,7 @@ export default defineEventHandler(async (event) => {
       LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
       WHERE bl.id = ? AND bl.organization_id = ? AND bl.site_id = ?
       LIMIT 1
-    `).bind(locationId, site.organization_id, siteId).first() as LocationRow | null
+    `, [locationId, site.organization_id, siteId])
 
     if (!location) {
       return jsonResponse({ error: 'Location not found' }, { status: 404 })

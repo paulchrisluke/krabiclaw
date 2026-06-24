@@ -1,5 +1,6 @@
 import { getHeader, getRequestURL, getHeaders } from 'h3'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
+import { execute, queryFirst } from '~/server/db'
 
 // This route takes precedence over server/api/auth/[...].ts for token exchange.
 // Purpose: make authorization_code exchanges idempotent so ChatGPT's two concurrent
@@ -48,24 +49,27 @@ export default defineEventHandler(async (event) => {
   const expiresAt = new Date(Date.now() + 90_000).toISOString()
 
   // Prune expired entries (best-effort, non-blocking on failure).
-  cfEnv.DB.prepare('DELETE FROM token_exchange_cache WHERE expires_at < ?')
-    .bind(now).run().catch(() => null)
+  execute(cfEnv.DB, 'DELETE FROM token_exchange_cache WHERE expires_at < ?', [now]).catch(() => null)
 
   // Atomic claim via INSERT OR IGNORE. First concurrent request wins (changes = 1).
-  const insertResult = await cfEnv.DB.prepare(
+  const insertResult = await execute(
+    cfEnv.DB,
     `INSERT OR IGNORE INTO token_exchange_cache (code, state, response_body, http_status, created_at, expires_at)
-     VALUES (?, 'pending', '', 0, ?, ?)`
-  ).bind(code, now, expiresAt).run()
+     VALUES (?, 'pending', '', 0, ?, ?)`,
+    [code, now, expiresAt],
+  )
 
-  const claimed = (insertResult.meta as { changes?: number }).changes === 1
+  const claimed = Number(insertResult.meta.changes ?? 0) === 1
 
   if (!claimed) {
     // A concurrent request already claimed this code. Poll for its result.
     for (let i = 0; i < 12; i++) {
       await new Promise(r => setTimeout(r, 250))
-      const cached = await cfEnv.DB.prepare(
-        `SELECT response_body, http_status FROM token_exchange_cache WHERE code = ? AND state = 'done'`
-      ).bind(code).first<{ response_body: string; http_status: number }>()
+      const cached = await queryFirst<{ response_body: string; http_status: number }>(
+        cfEnv.DB,
+        `SELECT response_body, http_status FROM token_exchange_cache WHERE code = ? AND state = 'done'`,
+        [code],
+      )
       if (cached) {
         logTokenExchange(cached.http_status >= 400 ? 'warn' : 'info', {
           ...requestFields,
@@ -97,9 +101,11 @@ export default defineEventHandler(async (event) => {
   })
 
   // Persist result so concurrent duplicates can use it.
-  await cfEnv.DB.prepare(
-    `UPDATE token_exchange_cache SET state = 'done', response_body = ?, http_status = ? WHERE code = ?`
-  ).bind(responseBody, res.status, code).run().catch(err =>
+  await execute(
+    cfEnv.DB,
+    `UPDATE token_exchange_cache SET state = 'done', response_body = ?, http_status = ? WHERE code = ?`,
+    [responseBody, res.status, code],
+  ).catch(err =>
     console.error('[Token] failed to store exchange result:', err)
   )
 

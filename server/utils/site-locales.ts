@@ -1,3 +1,4 @@
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { getConfiguredSourceLocale, normalizeLocale } from '~/server/utils/site-i18n'
 
 export type SiteLocaleStatus = 'draft' | 'published' | 'disabled'
@@ -42,24 +43,24 @@ function assertStatus(value: unknown): SiteLocaleStatus {
   throw new Error('Invalid locale status.')
 }
 
-export async function getSourceLocale(db: D1Database, organizationId: string, siteId: string): Promise<string> {
+export async function getSourceLocale(db: DbClient, organizationId: string, siteId: string): Promise<string> {
   return getConfiguredSourceLocale(db, organizationId, siteId)
 }
 
 export async function listSiteLocales(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
 ): Promise<{ source_locale: string; locales: SiteLocale[] }> {
   const sourceLocale = await getSourceLocale(db, organizationId, siteId)
-  const { results } = await db.prepare(`
+  const results = await queryAll<SiteLocaleRow>(db, `
     SELECT id, organization_id, site_id, locale, label, is_source, status, fallback_enabled, created_at, updated_at
     FROM site_locales
     WHERE organization_id = ? AND site_id = ?
     ORDER BY is_source DESC, locale ASC
-  `).bind(organizationId, siteId).all<SiteLocaleRow>()
+  `, [organizationId, siteId])
 
-  const locales = (results ?? []).map(mapLocale)
+  const locales = results.map(mapLocale)
   if (!locales.some(locale => locale.locale === sourceLocale)) {
     locales.unshift({
       id: `locale::${organizationId}::${siteId}::${sourceLocale}`,
@@ -79,7 +80,7 @@ export async function listSiteLocales(
 }
 
 export async function upsertSiteLocale(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   input: SiteLocaleInput,
@@ -93,28 +94,30 @@ export async function upsertSiteLocale(
   const now = new Date().toISOString()
   const id = `locale::${organizationId}::${siteId}::${locale}`
 
-  const batch = []
+  const batch: BatchQuery[] = []
 
   if (input.is_source) {
-    batch.push(
-      db.prepare(`
+    batch.push({
+      query: `
         INSERT INTO site_config (organization_id, site_id, key, value)
         VALUES (?, ?, 'source_locale', ?)
         ON CONFLICT(organization_id, site_id, key) DO UPDATE SET value = excluded.value,
         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-      `).bind(organizationId, siteId, locale)
-    )
-    batch.push(
-      db.prepare(`
+      `,
+      params: [organizationId, siteId, locale],
+    })
+    batch.push({
+      query: `
         UPDATE site_locales
         SET is_source = 0, updated_at = ?
         WHERE organization_id = ? AND site_id = ? AND locale != ?
-      `).bind(now, organizationId, siteId, locale)
-    )
+      `,
+      params: [now, organizationId, siteId, locale],
+    })
   }
 
-  batch.push(
-    db.prepare(`
+  batch.push({
+    query: `
       INSERT INTO site_locales
         (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -124,7 +127,8 @@ export async function upsertSiteLocale(
         status = excluded.status,
         fallback_enabled = excluded.fallback_enabled,
         updated_at = excluded.updated_at
-    `).bind(
+    `,
+    params: [
       id,
       organizationId,
       siteId,
@@ -135,24 +139,24 @@ export async function upsertSiteLocale(
       fallbackEnabled ? 1 : 0,
       now,
       now,
-    )
-  )
+    ],
+  })
 
-  await db.batch(batch)
+  await executeBatch(db, batch)
 
-  const row = await db.prepare(`
+  const row = await queryFirst<SiteLocaleRow>(db, `
     SELECT id, organization_id, site_id, locale, label, is_source, status, fallback_enabled, created_at, updated_at
     FROM site_locales
     WHERE organization_id = ? AND site_id = ? AND locale = ?
     LIMIT 1
-  `).bind(organizationId, siteId, locale).first<SiteLocaleRow>()
+  `, [organizationId, siteId, locale])
 
   if (!row) throw new Error('Locale was not saved.')
   return mapLocale(row)
 }
 
 export async function deleteSiteLocale(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   localeInput: string,
@@ -165,10 +169,10 @@ export async function deleteSiteLocale(
     throw new Error('Cannot delete the source language.')
   }
 
-  await db.prepare(`
+  await execute(db, `
     DELETE FROM site_locales
     WHERE organization_id = ? AND site_id = ? AND locale = ?
-  `).bind(organizationId, siteId, locale).run()
+  `, [organizationId, siteId, locale])
 
   return { deleted: true, source_locale: sourceLocale }
 }

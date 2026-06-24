@@ -92,7 +92,10 @@ test.describe('public tenant site', () => {
   })
 
   test('demo experience booking API creates a pending booking and returns booking_id', async ({ request }) => {
-    const futureDate = new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
+    // Use a unique far-future date derived from the run timestamp to avoid capacity
+    // accumulation across repeated local runs against the persistent D1 fixture.
+    const uniqueDaysOffset = 180 + (Math.floor(Date.now() / 60_000) % 500)
+    const futureDate = new Date(Date.now() + uniqueDaysOffset * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
 
     const response = await request.post(
       `${tenantBaseURL}/api/public/sites/${demoSiteId}/experiences/${demoExperienceSlug}/book`,
@@ -100,7 +103,7 @@ test.describe('public tenant site', () => {
         data: {
           guest_name: 'Playwright Demo Experience Guest',
           guest_email: `demo-exp-${Date.now()}@playwright.example`,
-          party_size: 2,
+          party_size: 1,
           booking_date: futureDate,
           time_slot: '14:00',
           notes: 'Playwright demo experience booking coverage',

@@ -87,7 +87,11 @@ test.describe('pottery house public site', () => {
 
   // Booking API: creates a pending booking for a real experience
   test('booking API creates a pending booking and returns booking_id', async ({ request }) => {
-    const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
+    // Use a unique far-future date derived from the run timestamp to avoid capacity
+    // accumulation: repeated same-day runs would otherwise fill maxCapacity (8) with
+    // stale pending bookings, causing 409 on subsequent runs.
+    const uniqueDaysOffset = 180 + (Math.floor(Date.now() / 60_000) % 500)
+    const futureDate = new Date(Date.now() + uniqueDaysOffset * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
     const firstSlot = wheelClass.timeSlots[0]!
 
     const response = await request.post(
@@ -96,7 +100,7 @@ test.describe('pottery house public site', () => {
         data: {
           guest_name: 'Playwright E2E Guest',
           guest_email: `test-${Date.now()}@playwright.example`,
-          party_size: 2,
+          party_size: 1,
           booking_date: futureDate,
           time_slot: firstSlot,
           notes: 'Playwright E2E test — safe to ignore',

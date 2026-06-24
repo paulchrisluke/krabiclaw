@@ -2,16 +2,17 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getMediaAsset, listMediaAssets } from '~/server/utils/media-asset-manager'
+import { queryFirst, type DbClient } from '~/server/db'
 
-async function verifySiteAccess(db: D1Database, userId: string, siteId: string): Promise<boolean> {
-  const site = await db.prepare(`
+async function verifySiteAccess(db: DbClient, userId: string, siteId: string): Promise<boolean> {
+  const site = await queryFirst(db, `
     SELECT s.id
     FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor')
     LIMIT 1
-  `).bind(siteId, userId).first()
+  `, [siteId, userId])
 
   return Boolean(site)
 }

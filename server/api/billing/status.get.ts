@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getOrganizationBillingStatus } from '../../utils/billing'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -31,13 +32,13 @@ export default defineEventHandler(async (event) => {
     const activeOrganizationId = typeof sessionRecord.activeOrganizationId === 'string'
       ? sessionRecord.activeOrganizationId
       : ''
-    const userOrg = await db.prepare(`
+    const userOrg = await queryFirst<{ id: string }>(db, `
       SELECT o.id FROM organization o
       JOIN member m ON o.id = m.organizationId
       WHERE m.userId = ?
       ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC
       LIMIT 1
-    `).bind(session.user.id, activeOrganizationId).first<{ id: string }>()
+    `, [session.user.id, activeOrganizationId])
     
     if (!userOrg) {
       return jsonResponse({ error: 'No organization found' }, { status: 404 })
@@ -48,11 +49,11 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user is member of organization
-    const membership = await db.prepare(`
+    const membership = await queryFirst<{ role: string }>(db, `
       SELECT role FROM member
       WHERE organizationId = ? AND userId = ?
       LIMIT 1
-    `).bind(organizationId, session.user.id).first()
+    `, [organizationId, session.user.id])
     
     if (!membership) {
       return jsonResponse({ 

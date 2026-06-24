@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { defineEventHandler, readBody } from 'h3'
+import { queryFirst } from '~/server/db'
 
 const reservedSubdomains = [
   'www', 'app', 'api', 'admin', 'dashboard', 'login', 'signup', 
@@ -80,11 +81,11 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Check if subdomain already exists
-    const existing = await db.prepare(`
-      SELECT id FROM sites 
-      WHERE subdomain = ? 
+    const existing = await queryFirst(db, `
+      SELECT id FROM sites
+      WHERE subdomain = ?
       LIMIT 1
-    `).bind(subdomain.toLowerCase()).first()
+    `, [subdomain.toLowerCase()])
     
     if (existing) {
       return jsonResponse({ 

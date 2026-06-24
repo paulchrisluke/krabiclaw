@@ -14,6 +14,7 @@ import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/wh
 import { createMenu, createMenuItem } from '~/server/utils/menu-management'
 import { callAiGateway, imageBlock, textBlock, documentBlock } from '~/server/utils/ai-gateway'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
+import { execute, queryFirst } from '~/server/db'
 
 const EXTRACT_SYSTEM = `You are a restaurant menu data extractor. The user will provide a photo or scan of a restaurant menu (including AI-generated food photography with text overlays). Extract ONLY text you can actually see — do not infer or hallucinate dishes.
 
@@ -59,14 +60,14 @@ export default defineEventHandler(async (event) => {
   }
 
   // Verify user owns this site
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string; organization_id: string; org_slug: string | null }>(db, `
     SELECT s.id, s.organization_id, o.slug as org_slug
     FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member om ON o.id = om.organizationId
     WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
     LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; org_slug: string | null }>()
+  `, [siteId, session.user.id])
 
   if (!site) {
     return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -216,9 +217,10 @@ export default defineEventHandler(async (event) => {
   // Resolve or create a menu to append to
   let menuId = formData.get('menuId') as string | null
   if (menuId) {
-    const existing = await db.prepare(
-      'SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1'
-    ).bind(menuId, orgId, siteId).first()
+    const existing = await queryFirst(db,
+      'SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1',
+      [menuId, orgId, siteId]
+    )
     if (!existing) menuId = null
   }
 
@@ -259,14 +261,14 @@ export default defineEventHandler(async (event) => {
     if (createdItemIds.length > 0) {
       const placeholders = createdItemIds.map(() => '?').join(', ')
       try {
-        await db.prepare(`DELETE FROM menu_items WHERE id IN (${placeholders})`).bind(...createdItemIds).run()
+        await execute(db, `DELETE FROM menu_items WHERE id IN (${placeholders})`, createdItemIds)
       } catch (rollbackErr) {
         console.error('[menu/extract] Rollback of menu_items failed — orphaned rows may remain:', rollbackErr)
       }
     }
     if (menuCreatedInThisRequest) {
       try {
-        await db.prepare('DELETE FROM menus WHERE id = ?').bind(menuId).run()
+        await execute(db, 'DELETE FROM menus WHERE id = ?', [menuId])
       } catch (rollbackErr) {
         console.error('[menu/extract] Rollback of menus failed — orphaned row may remain:', rollbackErr)
       }

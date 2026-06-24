@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getExperienceById, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
+import { queryFirst } from '~/server/db'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const MAX_DAYS = 31
@@ -24,14 +25,13 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await db
-    .prepare(
-      `SELECT s.id, s.organization_id FROM sites s
+  const site = await queryFirst<{ id: string; organization_id: string }>(
+    db,
+    `SELECT s.id, s.organization_id FROM sites s
        JOIN member m ON m.organizationId = s.organization_id
        WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner','admin') LIMIT 1`,
-    )
-    .bind(siteId, session.user.id)
-    .first<{ id: string; organization_id: string }>()
+    [siteId, session.user.id],
+  )
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const experience = await getExperienceById(db, siteId, experienceId)

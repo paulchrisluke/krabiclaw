@@ -42,6 +42,8 @@ async function completeManualWizard(
 }
 
 test.describe('onboarding wizard UI', () => {
+  test.describe.configure({ mode: 'serial' })
+
   test('a new user can build a site manually and add a second location manually', async ({ page, baseURL }) => {
     // Two full manual wizard completions (site + second location) routinely
     // exceed the default 30s test timeout against a remote preview deploy.
@@ -143,34 +145,48 @@ test.describe('onboarding wizard UI', () => {
     test.skip(!STRIPE_CONFIGURED, 'Stripe must be configured for the paid handoff flow test.')
     test.setTimeout(90_000)
 
-    const POTTERY_OWNER_USER_ID = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
-    const RECIPIENT_USER_ID = 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re'
-    const SITE_ID = 'site-pottery-house'
+    const suffix = Date.now()
+    const ownerUserId = `e2e-paid-transfer-owner-${suffix}`
+    const recipientUserId = `e2e-paid-transfer-recipient-${suffix}`
 
-    await request.post(`${baseURL}/api/dev/site-transfer-reset`, {
-      headers: devLoginHeaders(),
-      data: { siteId: SITE_ID, organizationId: 'org-pottery-house' },
-    })
+    // Owner creates a source site to hand off on a paid plan.
+    await loginFreshUser(page, baseURL!, ownerUserId)
+    await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
+    await completeManualWizard(page, `Paid Handoff Source ${suffix}`)
+    const ownerContext = await (await page.request.get(`${baseURL}/api/dashboard/context`)).json() as {
+      site?: { id?: string }
+    }
+    const sourceSiteId = ownerContext.site?.id
+    expect(sourceSiteId).toBeTruthy()
 
-    const recipientLoginRes = await page.request.get(devLoginUrl(baseURL!, RECIPIENT_USER_ID), { headers: devLoginHeaders(), maxRedirects: 0 })
+    // Recipient needs an existing owner org to accept into.
+    await loginFreshUser(page, baseURL!, recipientUserId)
+    await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
+    await completeManualWizard(page, `Paid Recipient Home Base ${suffix}`)
+
+    const recipientLoginRes = await page.request.get(devLoginUrl(baseURL!, recipientUserId), { headers: devLoginHeaders(), maxRedirects: 0 })
     expect(recipientLoginRes.status()).toBe(302)
     const recipientSessionRes = await page.request.get(`${baseURL}/api/auth/get-session`)
     const recipientSession = await recipientSessionRes.json() as { user?: { email?: string } }
     const recipientEmail = recipientSession.user?.email
+    expect(recipientEmail).toEqual(expect.any(String))
     const recipientContextBefore = await (await page.request.get(`${baseURL}/api/dashboard/context`)).json() as {
       organization?: { id?: string; slug?: string }
     }
     const targetOrgId = recipientContextBefore.organization?.id
     const orgSlug = recipientContextBefore.organization?.slug
+    expect(targetOrgId).toBeTruthy()
+    expect(orgSlug).toBeTruthy()
 
-    const ownerLoginRes = await page.request.get(devLoginUrl(baseURL!, POTTERY_OWNER_USER_ID), { headers: devLoginHeaders(), maxRedirects: 0 })
+    const ownerLoginRes = await page.request.get(devLoginUrl(baseURL!, ownerUserId), { headers: devLoginHeaders(), maxRedirects: 0 })
     expect(ownerLoginRes.status()).toBe(302)
-    const create = await page.request.post(`${baseURL}/api/admin/sites/${SITE_ID}/transfer`, {
+    const create = await page.request.post(`${baseURL}/api/admin/sites/${sourceSiteId}/transfer`, {
       data: { email: recipientEmail, plan: 'growth', message: 'Paid handoff for e2e.' },
     })
+    expect(create.status()).toBe(200)
     const created = await create.json() as { id: string; token: string }
 
-    const recipientLoginRes2 = await page.request.get(devLoginUrl(baseURL!, RECIPIENT_USER_ID), { headers: devLoginHeaders(), maxRedirects: 0 })
+    const recipientLoginRes2 = await page.request.get(devLoginUrl(baseURL!, recipientUserId), { headers: devLoginHeaders(), maxRedirects: 0 })
     expect(recipientLoginRes2.status()).toBe(302)
     const acceptRes = await page.request.post(`${baseURL}/api/site-transfer/${created.token}/accept`)
     expect(acceptRes.ok()).toBeTruthy()
@@ -194,8 +210,8 @@ test.describe('onboarding wizard UI', () => {
             organization_id: targetOrgId,
             plan: 'growth',
             transfer_request_id: created.id,
-            transfer_site_id: SITE_ID,
-            transfer_claiming_user_id: RECIPIENT_USER_ID,
+            transfer_site_id: sourceSiteId,
+            transfer_claiming_user_id: recipientUserId,
             transfer_claiming_organization_id: targetOrgId,
           },
           subscription: {
@@ -228,6 +244,8 @@ test.describe('onboarding wizard UI', () => {
     await page.goto(`${baseURL}/dashboard/${orgSlug}/~/onboarding`, { waitUntil: 'load' })
     await page.getByRole('button', { name: "Let's go" }).click()
     await page.getByRole('button', { name: 'Looks great, continue' }).click()
+    await expect(page.getByText('Your owner number gets every booking')).toBeVisible()
+    await page.getByPlaceholder('+447464115465').fill('+15555550101')
     await page.getByRole('button', { name: 'Save notification settings' }).click()
     await page.getByRole('button', { name: 'Skip for now' }).click()
 
@@ -239,7 +257,8 @@ test.describe('onboarding wizard UI', () => {
 
     await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible({ timeout: 10_000 })
     await page.getByRole('button', { name: 'Go to my dashboard' }).click()
-    // Org root auto-redirects to the single site's workspace once context loads.
-    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}/sites/[^/]+$`))
+    // This recipient already owns a home-base site, so accepting the transfer leaves
+    // their org with multiple sites and the org root remains on the picker.
+    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}$`))
   })
 })

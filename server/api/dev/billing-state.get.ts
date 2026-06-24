@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createError, getHeader } from 'h3'
+import { queryFirst, queryAll } from '~/server/db'
 
 const textEncoder = new TextEncoder()
 
@@ -43,7 +44,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'organization_id is required' }, { status: 400 })
   }
 
-  const billing = await db.prepare(`
+  const billing = await queryFirst(db, `
     SELECT ob.organization_id, ob.stripe_customer_id,
            sb.site_id, sb.stripe_subscription_id, sb.stripe_subscription_item_id,
            sb.status, sb.plan, sb.current_period_end, sb.cancel_at_period_end, sb.updated_at
@@ -52,15 +53,15 @@ export default defineEventHandler(async (event) => {
     LEFT JOIN site_billing sb ON sb.site_id = s.id
     WHERE ob.organization_id = ?
     ORDER BY s.created_at ASC LIMIT 1
-  `).bind(organizationId).first()
+  `, [organizationId])
 
-  const entitlements = await db.prepare(`
+  const entitlements = await queryAll(db, `
     SELECT se.key, se.value, se.source, se.created_at, se.updated_at
     FROM site_entitlements se
     JOIN sites s ON s.id = se.site_id
     WHERE s.organization_id = ?
     ORDER BY se.key ASC
-  `).bind(organizationId).all()
+  `, [organizationId])
 
   let sql = `
     SELECT id, stripe_event_id, event_type, status, payload, error, created_at
@@ -74,11 +75,11 @@ export default defineEventHandler(async (event) => {
   }
   sql += ' ORDER BY created_at DESC LIMIT 20'
 
-  const webhookEvents = await db.prepare(sql).bind(...binds).all()
+  const webhookEvents = await queryAll(db, sql, binds)
 
   return jsonResponse({
     billing: billing ?? null,
-    entitlements: entitlements.results ?? [],
-    webhook_events: webhookEvents.results ?? [],
+    entitlements: entitlements ?? [],
+    webhook_events: webhookEvents ?? [],
   })
 })

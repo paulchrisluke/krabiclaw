@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { getAuthSession } from "~/server/utils/auth";
 import { deleteMenuItem } from "~/server/utils/menu-management";
+import { queryFirst } from "~/server/db";
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, "siteId");
@@ -43,9 +44,9 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user belongs to organization that owns the site
-    const site = await db
-      .prepare(
-        `
+    const site = await queryFirst<{ id: string; organization_id: string; status: string; onboarding_status: string }>(
+      db,
+      `
       SELECT s.id, s.organization_id, s.status, s.onboarding_status
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
@@ -53,9 +54,8 @@ export default defineEventHandler(async (event) => {
       WHERE s.id = ? AND om.userId = ? AND om.role IN ('owner', 'admin', 'editor')
       LIMIT 1
     `,
-      )
-      .bind(siteId, session.user.id)
-      .first();
+      [siteId, session.user.id],
+    );
 
     if (!site) {
       return jsonResponse(
@@ -67,16 +67,15 @@ export default defineEventHandler(async (event) => {
     }
 
     // Check if menu exists and belongs to this site
-    const existingMenu = await db
-      .prepare(
-        `
-      SELECT id FROM menus 
+    const existingMenu = await queryFirst(
+      db,
+      `
+      SELECT id FROM menus
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
     `,
-      )
-      .bind(menuId, site.organization_id, siteId)
-      .first();
+      [menuId, site.organization_id, siteId],
+    );
 
     if (!existingMenu) {
       return jsonResponse(
@@ -88,16 +87,15 @@ export default defineEventHandler(async (event) => {
     }
 
     // Check if menu item exists and belongs to this menu
-    const existingItem = await db
-      .prepare(
-        `
-      SELECT id FROM menu_items 
+    const existingItem = await queryFirst(
+      db,
+      `
+      SELECT id FROM menu_items
       WHERE id = ? AND menu_id = ?
       LIMIT 1
     `,
-      )
-      .bind(itemId, menuId)
-      .first();
+      [itemId, menuId],
+    );
 
     if (!existingItem) {
       return jsonResponse(
@@ -108,7 +106,7 @@ export default defineEventHandler(async (event) => {
       );
     }
 
-    await deleteMenuItem(db, itemId, site.organization_id as string, siteId);
+    await deleteMenuItem(db, itemId, site.organization_id, siteId);
 
     return jsonResponse({
       success: true,

@@ -1,4 +1,5 @@
 import { useRender } from 'vue-email'
+import { execute } from '~/server/db'
 import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import SiteTransferReminder from '~/server/emails/templates/SiteTransferReminder'
 
@@ -42,11 +43,11 @@ async function logEmailNotification(
 ) {
   const now = new Date().toISOString()
   const id = crypto.randomUUID()
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO notifications
     (id, organization_id, site_id, channel, template, recipient, title, payload, status, error, sent_at, created_at)
     VALUES (?, ?, ?, 'email', 'site_transfer_reminder', ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+  `, [
     id,
     opts.organizationId,
     opts.siteId,
@@ -57,7 +58,7 @@ async function logEmailNotification(
     opts.error ?? null,
     opts.status === 'failed' || opts.status === 'sent' ? now : null,
     now,
-  ).run()
+  ])
   return id
 }
 
@@ -89,11 +90,11 @@ async function sendReminderEmail(
   })
 
   if (!shouldSendRealEmail(env)) {
-    await db.prepare(`
+    await execute(db, `
       UPDATE notifications
       SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL
       WHERE id = ?
-    `).bind(logOnlyEmailProviderId('site-transfer'), new Date().toISOString(), notificationId).run()
+    `, [logOnlyEmailProviderId('site-transfer'), new Date().toISOString(), notificationId])
     console.info('email_delivery_log_only', {
       notificationId,
       organizationId: opts.organizationId,
@@ -125,27 +126,27 @@ async function sendReminderEmail(
 
     if (!response.ok) {
       const error = await response.text().catch(() => 'Failed to send email')
-      await db.prepare(`
+      await execute(db, `
         UPDATE notifications
         SET status = 'failed', error = ?, sent_at = ?
         WHERE id = ?
-      `).bind(error, new Date().toISOString(), notificationId).run()
+      `, [error, new Date().toISOString(), notificationId])
       return
     }
 
     const data = await response.json().catch(() => null) as { id?: string } | null
-    await db.prepare(`
+    await execute(db, `
       UPDATE notifications
       SET status = 'sent', provider_message_id = ?, sent_at = ?
       WHERE id = ?
-    `).bind(data?.id ?? null, new Date().toISOString(), notificationId).run()
+    `, [data?.id ?? null, new Date().toISOString(), notificationId])
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to send email'
-    await db.prepare(`
+    await execute(db, `
       UPDATE notifications
       SET status = 'failed', error = ?, sent_at = ?
       WHERE id = ?
-    `).bind(message, new Date().toISOString(), notificationId).run()
+    `, [message, new Date().toISOString(), notificationId])
   }
 }
 
@@ -171,11 +172,11 @@ export async function notifySiteTransferReminder(
   }
 
   const now = new Date().toISOString()
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO notifications
     (id, organization_id, site_id, channel, template, title, payload, status, sent_at, created_at)
     VALUES (?, ?, ?, 'dashboard', 'site_transfer_reminder', ?, ?, 'sent', ?, ?)
-  `).bind(
+  `, [
     crypto.randomUUID(),
     opts.organizationId,
     opts.siteId,
@@ -183,7 +184,7 @@ export async function notifySiteTransferReminder(
     JSON.stringify(payload),
     now,
     now,
-  ).run()
+  ])
 
   const planLabel: Record<string, string> = {
     growth: 'Growth ($49/mo)',

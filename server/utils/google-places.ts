@@ -1,6 +1,7 @@
 // Google Places API (New, v1) — server-side only. Key stored as GOOGLE_PLACES_API_KEY CF secret.
 // Never import this in client-side code.
 import type { D1Database } from '@cloudflare/workers-types'
+import { execute } from '~/server/db'
 
 const PLACES_BASE = 'https://places.googleapis.com/v1/places'
 
@@ -221,7 +222,7 @@ export async function syncPlaceToLocation(
   const place = await getPlaceDetails(apiKey, placeId)
   const now = new Date().toISOString()
 
-  await db.prepare(`
+  await execute(db, `
     UPDATE business_locations SET
       phone = COALESCE(?, phone),
       website_url = COALESCE(?, website_url),
@@ -235,7 +236,7 @@ export async function syncPlaceToLocation(
       last_synced_at = ?,
       updated_at = ?
     WHERE id = ? AND organization_id = ? AND site_id = ?
-  `).bind(
+  `, [
     place.phone,
     place.websiteUrl,
     place.city,
@@ -250,19 +251,19 @@ export async function syncPlaceToLocation(
     locationId,
     organizationId,
     siteId
-  ).run()
+  ])
 
   // Upsert reviews — skip any already imported (deduped by google_review_id)
   let reviewsUpserted = 0
   for (const review of place.reviews) {
     if (!review.reviewId || !review.rating) continue
-    const result = await db.prepare(`
+    const result = await execute(db, `
       INSERT OR IGNORE INTO reviews
         (id, organization_id, site_id, location_id, google_review_id,
          author_name, reviewer_photo_url, rating, content,
          status, source, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_places', ?, ?)
-    `).bind(
+    `, [
       `gplaces-${review.reviewId.replace(/\//g, '-')}`,
       organizationId,
       siteId,
@@ -274,7 +275,7 @@ export async function syncPlaceToLocation(
       review.text,
       review.publishedAt ?? now,
       now
-    ).run()
+    ])
     if (result.meta.changes > 0) reviewsUpserted++
   }
 

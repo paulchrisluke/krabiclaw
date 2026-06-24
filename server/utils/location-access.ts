@@ -1,5 +1,6 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { queryFirst } from '~/server/db'
 import type { H3Event } from 'h3'
 
 interface SiteAccessRow {
@@ -33,24 +34,24 @@ export async function requireLocationAccess(
   }
 
   const placeholders = roles.map(() => '?').join(', ')
-  const site = await db.prepare(`
+  const site = await queryFirst<SiteAccessRow>(db, `
     SELECT s.id, s.organization_id
     FROM sites s
     JOIN member om ON s.organization_id = om.organizationId
     WHERE s.id = ? AND om.userId = ? AND om.role IN (${placeholders})
     LIMIT 1
-  `).bind(siteId, session.user.id, ...roles).first() as SiteAccessRow | null
+  `, [siteId, session.user.id, ...roles])
 
   if (!site) {
     throw createError({ statusCode: 404, message: 'Site not found or access denied' })
   }
 
-  const location = await db.prepare(`
+  const location = await queryFirst<LocationAccessRow>(db, `
     SELECT id
     FROM business_locations
     WHERE id = ? AND organization_id = ? AND site_id = ?
     LIMIT 1
-  `).bind(locationId, site.organization_id, siteId).first() as LocationAccessRow | null
+  `, [locationId, site.organization_id, siteId])
 
   if (!location) {
     throw createError({ statusCode: 404, message: 'Location not found' })
@@ -80,13 +81,13 @@ export async function requireSiteAccess(
   }
 
   const placeholders = roles.map(() => '?').join(', ')
-  const site = await db.prepare(`
+  const site = await queryFirst<SiteAccessRow>(db, `
     SELECT s.id, s.organization_id
     FROM sites s
     JOIN member om ON s.organization_id = om.organizationId
     WHERE s.id = ? AND om.userId = ? AND om.role IN (${placeholders})
     LIMIT 1
-  `).bind(siteId, session.user.id, ...roles).first() as SiteAccessRow | null
+  `, [siteId, session.user.id, ...roles])
 
   if (!site) {
     throw createError({ statusCode: 404, message: 'Site not found or access denied' })

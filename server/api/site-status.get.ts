@@ -1,5 +1,6 @@
 // Site status check for tenant setup pages
 import { cloudflareEnv, jsonResponse } from '../utils/api-response'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -22,11 +23,11 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify site is active
-    const site = await db.prepare(`
-      SELECT onboarding_status, status FROM sites 
+    const site = await queryFirst<{ onboarding_status: string; status: string }>(db, `
+      SELECT onboarding_status, status FROM sites
       WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
       LIMIT 1
-    `).bind(siteId).first()
+    `, [siteId])
 
     if (!site) {
       return jsonResponse({ 

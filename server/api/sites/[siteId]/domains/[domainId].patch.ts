@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { execute, queryFirst } from '~/server/db'
 import { setCanonicalDomain } from '~/server/utils/domains'
 
 interface DomainPatchBody {
@@ -47,14 +48,14 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await db.prepare(`
+  const site = await queryFirst<{ id: string; organization_id: string; member_role: 'owner' | 'admin' }>(db, `
     SELECT s.id, s.organization_id, m.role as member_role
     FROM sites s
     JOIN organization o ON s.organization_id = o.id
     JOIN member m ON o.id = m.organizationId
     WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin')
     LIMIT 1
-  `).bind(siteId, session.user.id).first<{ id: string; organization_id: string; member_role: 'owner' | 'admin' }>()
+  `, [siteId, session.user.id])
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   try {
@@ -70,25 +71,25 @@ export default defineEventHandler(async (event) => {
       let domain: SiteDomainRow | null = null
       let promotedDomain: SiteDomainRow | null = null
       try {
-        const existing = await db.prepare(`
+        const existing = await queryFirst<SiteDomainRow>(db, `
           SELECT *
           FROM site_domains
           WHERE id = ? AND site_id = ? AND type = 'custom'
           LIMIT 1
-        `).bind(domainId, siteId).first() as SiteDomainRow | null
+        `, [domainId, siteId])
         if (!existing) {
           await db.exec('ROLLBACK')
           return jsonResponse({ error: 'Domain not found' }, { status: 404 })
         }
 
-        await db.prepare(`
+        await execute(db, `
           UPDATE site_domains
           SET status = 'disabled', role = 'secondary', updated_at = ?
           WHERE id = ? AND site_id = ? AND type = 'custom'
-        `).bind(now, domainId, siteId).run()
+        `, [now, domainId, siteId])
 
         if (existing.role === 'canonical') {
-          promotedDomain = await db.prepare(`
+          promotedDomain = await queryFirst<SiteDomainRow>(db, `
             SELECT *
             FROM site_domains
             WHERE site_id = ?
@@ -97,33 +98,33 @@ export default defineEventHandler(async (event) => {
               AND id != ?
             ORDER BY created_at ASC
             LIMIT 1
-          `).bind(siteId, domainId).first() as SiteDomainRow | null
+          `, [siteId, domainId])
 
           if (promotedDomain) {
-            await db.prepare(`
+            await execute(db, `
               UPDATE site_domains
               SET role = 'canonical', updated_at = ?
               WHERE id = ?
-            `).bind(now, promotedDomain.id).run()
-            await db.prepare(`
+            `, [now, promotedDomain.id])
+            await execute(db, `
               UPDATE sites
               SET public_url = ?, custom_domain = ?, custom_domain_status = 'active', updated_at = ?
               WHERE id = ? AND organization_id = ?
-            `).bind(`https://${promotedDomain.domain}`, promotedDomain.domain, now, siteId, site.organization_id).run()
+            `, [`https://${promotedDomain.domain}`, promotedDomain.domain, now, siteId, site.organization_id])
           } else {
-            await db.prepare(`
+            await execute(db, `
               UPDATE sites
               SET public_url = NULL, custom_domain = NULL, custom_domain_status = 'none', updated_at = ?
               WHERE id = ? AND organization_id = ?
-            `).bind(now, siteId, site.organization_id).run()
+            `, [now, siteId, site.organization_id])
           }
         }
 
-        domain = await db.prepare(`
+        domain = await queryFirst<SiteDomainRow>(db, `
           SELECT * FROM site_domains
           WHERE id = ? AND site_id = ? AND type = 'custom'
           LIMIT 1
-        `).bind(domainId, siteId).first() as SiteDomainRow | null
+        `, [domainId, siteId])
         await db.exec('COMMIT')
       } catch (error) {
         await db.exec('ROLLBACK')

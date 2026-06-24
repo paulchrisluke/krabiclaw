@@ -1,6 +1,7 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { exchangeGoogleAnalyticsCode, storeGoogleAnalyticsConnection } from '~/server/utils/google-analytics'
 import { verifyOAuthState } from '~/server/utils/encryption'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -38,8 +39,7 @@ export default defineEventHandler(async (event) => {
 
     let organization: { slug: string | null } | null = null
     try {
-      organization = await db.prepare(`SELECT slug FROM organization WHERE id = ? LIMIT 1`)
-        .bind(organizationId).first<{ slug: string | null }>()
+      organization = (await queryFirst<{ slug: string | null }>(db, `SELECT slug FROM organization WHERE id = ? LIMIT 1`, [organizationId])) ?? null
     } catch (e) {
       console.error('Google Analytics redirect organization query failed:', e)
       return `/dashboard?ga=${status}`

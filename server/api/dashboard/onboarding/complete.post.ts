@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
+import { execute } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -14,11 +15,11 @@ export default defineEventHandler(async (event) => {
 
   try {
     const now = new Date().toISOString()
-    await db.prepare(`
+    await execute(db, `
       UPDATE sites
       SET onboarding_status = 'completed', updated_at = ?
       WHERE id = ? AND organization_id = ?
-    `).bind(now, dashboard.site.id, dashboard.site.organization_id).run()
+    `, [now, dashboard.site.id, dashboard.site.organization_id])
 
     return jsonResponse({ success: true })
   } catch (err) {

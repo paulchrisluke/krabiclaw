@@ -3,6 +3,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getConfig } from '~/server/utils/site-config'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const { db, organization, site: dashboardSite } = await getDashboardContext(event, { requireSite: true })
@@ -11,7 +12,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Site not found' }, { status: 404 })
   }
 
-  const site = await db.prepare(`
+  const site = await queryFirst<Record<string, unknown>>(db, `
     SELECT s.id, s.organization_id, s.subdomain, s.theme, s.status,
            s.primary_location_id, s.public_url, s.custom_domain_status, s.default_currency,
            s.brand_name, s.brand_description, s.logo_url, s.logo_asset_id, s.contact_email,
@@ -19,7 +20,7 @@ export default defineEventHandler(async (event) => {
     FROM sites s
     WHERE s.id = ? AND s.organization_id = ?
     LIMIT 1
-  `).bind(dashboardSite.id, organization.id).first()
+  `, [dashboardSite.id, organization.id])
 
   if (!site) {
     return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })

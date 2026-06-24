@@ -1,4 +1,5 @@
 // GET /api/public/docs/[slug] - Get single published doc
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { attachFeaturedImageFromBareJoin, listContentComponents, resolveContentComponentsMedia } from '~/server/utils/platform-content'
 
@@ -7,11 +8,12 @@ export default defineEventHandler(async (event) => {
   if (!slug) return jsonResponse({ error: 'Slug required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   try {
-    const doc = await db.prepare(
+    const doc = await queryFirst<ApiRecord>(
+      db,
       `SELECT
          p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.difficulty_level,
          p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
@@ -19,8 +21,9 @@ export default defineEventHandler(async (event) => {
          ma.public_url, ma.kind, ma.width, ma.height
        FROM platform_docs p
        LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
-       WHERE p.slug = ? AND p.status = 'published'`
-    ).bind(slug).first() as ApiRecord | null
+       WHERE p.slug = ? AND p.status = 'published'`,
+      [slug],
+    )
 
     if (!doc) {
       return jsonResponse({ error: 'Documentation not found' }, { status: 404 })

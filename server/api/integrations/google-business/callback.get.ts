@@ -1,6 +1,7 @@
 import { cloudflareEnv } from '../../../utils/api-response'
 import { exchangeGoogleBusinessCode, storeGoogleBusinessConnection } from '../../../utils/google-business'
 import { verifyOAuthState } from '../../../utils/encryption'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -38,9 +39,9 @@ export default defineEventHandler(async (event) => {
 
     let organization: { slug: string | null } | null = null
     try {
-      organization = await db.prepare(`
+      organization = (await queryFirst<{ slug: string | null }>(db, `
         SELECT slug FROM organization WHERE id = ? LIMIT 1
-      `).bind(organizationId).first<{ slug: string | null }>()
+      `, [organizationId])) ?? null
     } catch (e) {
       console.error('Google Business redirect organization query failed:', e)
       return `/dashboard?gb=${status}`
@@ -51,8 +52,7 @@ export default defineEventHandler(async (event) => {
 
     let site: { subdomain: string | null } | null = null
     try {
-      site = await db.prepare(`SELECT subdomain FROM sites WHERE id = ? LIMIT 1`)
-        .bind(siteId).first<{ subdomain: string | null }>()
+      site = (await queryFirst<{ subdomain: string | null }>(db, `SELECT subdomain FROM sites WHERE id = ? LIMIT 1`, [siteId])) ?? null
     } catch (e) {
       console.error('Google Business redirect site query failed:', e)
       return `/dashboard/${encodedOrgSlug}?gb=${status}`
@@ -62,11 +62,11 @@ export default defineEventHandler(async (event) => {
     if (!locationId) return `${siteBase}?gb=${status}`
 
     try {
-      const location = await db.prepare(`
+      const location = await queryFirst<{ slug: string }>(db, `
         SELECT slug FROM business_locations
         WHERE id = ? AND organization_id = ? AND site_id = ?
         LIMIT 1
-      `).bind(locationId, organizationId, siteId).first<{ slug: string }>()
+      `, [locationId, organizationId, siteId])
       return location?.slug
         ? `${siteBase}/${encodeURIComponent(location.slug)}?gb=${status}`
         : `${siteBase}?gb=${status}`

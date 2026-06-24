@@ -1,4 +1,5 @@
 import { createError, getRequestURL, type H3Event } from "h3";
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from "~/server/db";
 import { createPreviewToken } from "~/server/utils/preview-token";
 import { getFreeSiteDomain } from "~/server/utils/tenant-hosts";
 import { cloudflareEnv } from "~/server/utils/api-response";
@@ -783,17 +784,16 @@ async function resolveMenuLocationId(
   siteId: string,
   menuId: string,
 ) {
-  const row = await db
-    .prepare(
-      `
+  const row = await queryFirst<{ location_id: string | null }>(
+    db,
+    `
       SELECT location_id
       FROM menus
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
     `,
-    )
-    .bind(menuId, organizationId, siteId)
-    .first<{ location_id: string | null }>();
+    [menuId, organizationId, siteId],
+  );
   return row?.location_id ?? null;
 }
 
@@ -893,15 +893,12 @@ export async function executeMcpToolCall(
 
   if (toolName === "list_sites") {
     const user = await requireMcpUser(event);
-    const userRecord = await user.db
-      .prepare(`SELECT id, email, name, role FROM user WHERE id = ? LIMIT 1`)
-      .bind(user.userId)
-      .first<{
-        id: string;
-        email: string | null;
-        name: string | null;
-        role: string | null;
-      }>();
+    const userRecord = await queryFirst<{
+      id: string;
+      email: string | null;
+      name: string | null;
+      role: string | null;
+    }>(user.db, `SELECT id, email, name, role FROM user WHERE id = ? LIMIT 1`, [user.userId]);
     const allSites = await listSitesForUser(
       user.db,
       user.userId,
@@ -942,22 +939,21 @@ export async function executeMcpToolCall(
 
   if (toolName === "get_current_user") {
     const user = await requireMcpUser(event);
-    const currentUser = await user.db
-      .prepare(
-        `
+    const currentUser = await queryFirst<{
+      id: string;
+      email: string | null;
+      name: string | null;
+      role: string | null;
+    }>(
+      user.db,
+      `
         SELECT id, email, name, role
         FROM user
         WHERE id = ?
         LIMIT 1
       `,
-      )
-      .bind(user.userId)
-      .first<{
-        id: string;
-        email: string | null;
-        name: string | null;
-        role: string | null;
-      }>();
+      [user.userId],
+    );
 
     if (!currentUser) {
       throw createError({
@@ -1301,15 +1297,16 @@ export async function executeMcpToolCall(
     const rawTargetForName = optionalString(normalizedArguments, "target");
     if (rawTargetForName && rawSiteId) {
       const authorizedSite = await requireMcpSite(event, rawSiteId, "editor");
-      const siteRow = await authorizedSite.db
-        .prepare(`
+      const siteRow = await queryFirst<{ brand_name: string | null; subdomain: string | null }>(
+        authorizedSite.db,
+        `
           SELECT brand_name, subdomain
           FROM sites
           WHERE id = ? AND organization_id = ?
           LIMIT 1
-        `)
-        .bind(authorizedSite.siteId, authorizedSite.organizationId)
-        .first<{ brand_name: string | null; subdomain: string | null }>();
+        `,
+        [authorizedSite.siteId, authorizedSite.organizationId],
+      );
       const nameVal = siteRow?.brand_name?.trim();
       activeSiteName = (nameVal ? nameVal : siteRow?.subdomain) ?? null;
     }
@@ -1432,28 +1429,26 @@ export async function executeMcpToolCall(
         : subdomain
           ? `https://${subdomain}.${freeSiteDomain}`
           : previewUrl;
-      const locationRows = await site.db
-        .prepare(
-          `SELECT bl.slug, bl.title, ma.public_url AS hero_image_public_url
+      const locationRows = await queryAll<{
+        slug: string;
+        title: string;
+        hero_image_public_url: string | null;
+      }>(
+        site.db,
+        `SELECT bl.slug, bl.title, ma.public_url AS hero_image_public_url
          FROM business_locations bl
          LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
          WHERE bl.site_id = ?
          ORDER BY bl.is_primary DESC, bl.title ASC
          LIMIT 5`,
-        )
-        .bind(site.siteId)
-        .all<{
-          slug: string;
-          title: string;
-          hero_image_public_url: string | null;
-        }>();
-      const locationPages = (locationRows.results ?? []).map((loc) => ({
+        [site.siteId],
+      );
+      const locationPages = locationRows.map((loc) => ({
         label: loc.title,
         path: `/locations/${loc.slug}`,
       }));
       const pages = [{ label: "Home", path: "/" }, ...locationPages];
-      const ogImageUrl =
-        locationRows.results?.[0]?.hero_image_public_url ?? null;
+      const ogImageUrl = locationRows[0]?.hero_image_public_url ?? null;
       const siteName = String((siteRow as Record<string, unknown>).brand_name ?? subdomain ?? site.siteId);
       return renderWidget(
         "show_site_preview",
@@ -2185,36 +2180,31 @@ export async function executeMcpToolCall(
         ).catch(() => null);
         if (!connection?.facebook_page_id || !connection.encrypted_page_token) {
           const msg = "No Facebook Page connected";
-          const stmts = [];
+          const queries: BatchQuery[] = [];
           if (wantsFacebook)
-            stmts.push(
-              site.db
-                .prepare(
-                  `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'facebook'`,
-                )
-                .bind(msg, postId),
-            );
+            queries.push({
+              query: `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'facebook'`,
+              params: [msg, postId],
+            });
           if (wantsInstagram)
-            stmts.push(
-              site.db
-                .prepare(
-                  `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`,
-                )
-                .bind(msg, postId),
-            );
-          if (stmts.length) await site.db.batch(stmts);
+            queries.push({
+              query: `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`,
+              params: [msg, postId],
+            });
+          // Both channel-skip updates commit atomically via executeBatch, matching
+          // the original db.batch() semantics.
+          if (queries.length) await executeBatch(site.db, queries);
         } else {
           const pageToken = connection.encrypted_page_token;
           const pageId = connection.facebook_page_id;
 
           let imageUrl: string | null = null;
           if (post.image_asset_id) {
-            const asset = await site.db
-              .prepare(
-                `SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`,
-              )
-              .bind(post.image_asset_id)
-              .first<{ public_url: string | null }>();
+            const asset = await queryFirst<{ public_url: string | null }>(
+              site.db,
+              `SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`,
+              [post.image_asset_id],
+            );
             imageUrl = asset?.public_url ?? null;
           }
 
@@ -2223,35 +2213,29 @@ export async function executeMcpToolCall(
               const fbResult = await publishToPage(pageToken, pageId, {
                 message: post.body,
               });
-              await site.db
-                .prepare(
-                  `UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'facebook'`,
-                )
-                .bind(fbResult.id, now, postId)
-                .run();
+              await execute(
+                site.db,
+                `UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'facebook'`,
+                [fbResult.id, now, postId],
+              );
             } catch (err) {
               const msg =
                 err instanceof Error ? err.message : "Facebook publish failed";
-              await site.db
-                .prepare(
-                  `UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'facebook'`,
-                )
-                .bind(msg, postId)
-                .run();
+              await execute(
+                site.db,
+                `UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'facebook'`,
+                [msg, postId],
+              );
             }
           }
 
           if (wantsInstagram) {
             if (!imageUrl) {
-              await site.db
-                .prepare(
-                  `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`,
-                )
-                .bind(
-                  "Instagram requires an image — add a photo to this post",
-                  postId,
-                )
-                .run();
+              await execute(
+                site.db,
+                `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`,
+                ["Instagram requires an image — add a photo to this post", postId],
+              );
             } else {
               try {
                 const igUserId = await getLinkedInstagramAccount(
@@ -2259,39 +2243,33 @@ export async function executeMcpToolCall(
                   pageId,
                 );
                 if (!igUserId) {
-                  await site.db
-                    .prepare(
-                      `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`,
-                    )
-                    .bind(
-                      "No Instagram Business account linked to this Facebook Page",
-                      postId,
-                    )
-                    .run();
+                  await execute(
+                    site.db,
+                    `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`,
+                    ["No Instagram Business account linked to this Facebook Page", postId],
+                  );
                 } else {
                   const igResult = await publishToInstagram(
                     pageToken,
                     igUserId,
                     { caption: post.body, imageUrl },
                   );
-                  await site.db
-                    .prepare(
-                      `UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'instagram'`,
-                    )
-                    .bind(igResult.id, now, postId)
-                    .run();
+                  await execute(
+                    site.db,
+                    `UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'instagram'`,
+                    [igResult.id, now, postId],
+                  );
                 }
               } catch (err) {
                 const msg =
                   err instanceof Error
                     ? err.message
                     : "Instagram publish failed";
-                await site.db
-                  .prepare(
-                    `UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'instagram'`,
-                  )
-                  .bind(msg, postId)
-                  .run();
+                await execute(
+                  site.db,
+                  `UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'instagram'`,
+                  [msg, postId],
+                );
               }
             }
           }
@@ -3185,9 +3163,9 @@ export async function executeMcpToolCall(
       return { job, first_batch: result, context: await mutationContextPayload(site) };
     }
     case "list_translation_jobs": {
-      const rows = await site.db
-        .prepare(
-          `
+      const jobs = await queryAll(
+        site.db,
+        `
         SELECT id, source_locale, target_locale, scope, status, total_items, total_chars,
                estimated_input_tokens, estimated_output_tokens, estimated_credits,
                actual_input_tokens, actual_output_tokens, actual_credits,
@@ -3197,43 +3175,40 @@ export async function executeMcpToolCall(
         ORDER BY created_at DESC
         LIMIT 20
       `,
-        )
-        .bind(site.organizationId, site.siteId)
-        .all();
-      return { jobs: rows.results ?? [] };
+        [site.organizationId, site.siteId],
+      );
+      return { jobs };
     }
     case "get_translation_job": {
       const jobId = requiredString(args, "job_id");
-      const job = await site.db
-        .prepare(
-          `
+      const job = await queryFirst(
+        site.db,
+        `
         SELECT *
         FROM translation_jobs
         WHERE id = ? AND organization_id = ? AND site_id = ?
         LIMIT 1
       `,
-        )
-        .bind(jobId, site.organizationId, site.siteId)
-        .first();
+        [jobId, site.organizationId, site.siteId],
+      );
       if (!job) {
         throw mcpProtocolError(
           MCP_ERROR.invalidParams,
           `Translation job not found: ${jobId}`,
         );
       }
-      const items = await site.db
-        .prepare(
-          `
+      const items = await queryAll(
+        site.db,
+        `
         SELECT id, entity_type, entity_id, location_id, page, field, source_hash, source_chars, status, error, created_at, updated_at
         FROM translation_job_items
         WHERE job_id = ? AND organization_id = ? AND site_id = ?
         ORDER BY entity_type, page, field
         LIMIT 500
       `,
-        )
-        .bind(jobId, site.organizationId, site.siteId)
-        .all();
-      return { job, items: items.results ?? [] };
+        [jobId, site.organizationId, site.siteId],
+      );
+      return { job, items };
     }
     case "run_translation_job_batch":
       {
@@ -3646,18 +3621,16 @@ export async function executeMcpToolCall(
           statusMessage: "Dates must be YYYY-MM-DD format",
         });
       }
-      const dailyStats = await site.db
-        .prepare(
-          `
+      const rows = await queryAll<Record<string, unknown>>(
+        site.db,
+        `
         SELECT date, page_views, unique_sessions, COALESCE(avg_session_duration, 0) as avg_session_duration, top_pages
         FROM site_analytics_daily
         WHERE site_id = ? AND date BETWEEN ? AND ?
         ORDER BY date ASC
       `,
-        )
-        .bind(site.siteId, startDate, endDate)
-        .all();
-      const rows = (dailyStats.results || []) as Record<string, unknown>[];
+        [site.siteId, startDate, endDate],
+      );
       const toNum = (v: unknown) =>
         typeof v === "number" ? v : Number(v || 0);
       const summary = rows.reduce<{
@@ -4032,9 +4005,9 @@ async function loadSiteSettings(
   organizationId: string,
   siteId: string,
 ) {
-  const site = await db
-    .prepare(
-      `
+  const site = await queryFirst<Record<string, unknown>>(
+    db,
+    `
     SELECT s.id, s.organization_id, s.subdomain, s.theme, s.status,
            s.primary_location_id, s.public_url, s.custom_domain_status, s.default_currency,
            s.brand_name, s.brand_description, s.logo_url, s.logo_asset_id, s.contact_email,
@@ -4043,9 +4016,8 @@ async function loadSiteSettings(
     WHERE s.id = ? AND s.organization_id = ?
     LIMIT 1
   `,
-    )
-    .bind(siteId, organizationId)
-    .first<Record<string, unknown>>();
+    [siteId, organizationId],
+  );
 
   if (!site) throw new Error("Site not found");
 

@@ -2,6 +2,7 @@ import { getQuery } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { queryAll } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -27,7 +28,7 @@ export default defineEventHandler(async (event) => {
     where.push(`sd.status IN ('pending', 'verifying', 'failed', 'blocked')`)
   }
 
-  const domains = await db.prepare(`
+  const domains = await queryAll(db, `
     SELECT sd.*, s.brand_name AS site_name, o.name AS organization_name
     FROM site_domains sd
     JOIN sites s ON s.id = sd.site_id
@@ -35,9 +36,9 @@ export default defineEventHandler(async (event) => {
     WHERE ${where.join(' AND ')}
     ORDER BY sd.status = 'active' ASC, sd.updated_at DESC
     LIMIT 100
-  `).bind(...params).all()
+  `, params)
 
-  const events = await db.prepare(`
+  const events = await queryAll(db, `
     SELECT e.*, sd.domain
     FROM site_domain_events e
     JOIN site_domains sd ON sd.id = e.domain_id
@@ -46,7 +47,7 @@ export default defineEventHandler(async (event) => {
     WHERE ${where.join(' AND ')}
     ORDER BY e.created_at DESC
     LIMIT 100
-  `).bind(...params).all()
+  `, params)
 
-  return jsonResponse({ success: true, domains: domains.results || [], events: events.results || [] })
+  return jsonResponse({ success: true, domains: domains || [], events: events || [] })
 })

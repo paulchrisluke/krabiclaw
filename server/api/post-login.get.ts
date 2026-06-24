@@ -3,6 +3,7 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -22,14 +23,14 @@ export default defineEventHandler(async (event) => {
   if (!db) return sendRedirect(event, '/dashboard')
 
   try {
-    const row = await db.prepare(`
+    const row = await queryFirst<{ slug: string | null }>(db, `
       SELECT o.slug
       FROM organization o
       JOIN member m ON o.id = m.organizationId
       WHERE m.userId = ?
       ORDER BY o.createdAt ASC
       LIMIT 1
-    `).bind(session.user.id).first<{ slug: string | null }>()
+    `, [session.user.id])
 
     const slug = row?.slug
 

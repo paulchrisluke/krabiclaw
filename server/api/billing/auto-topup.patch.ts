@@ -3,6 +3,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { requireBillingAccess } from '~/server/utils/billing'
+import { execute, queryFirst } from '~/server/db'
 
 const VALID_BUNDLES = new Set([500, 2500, 5000])
 
@@ -14,9 +15,9 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const member = await db.prepare(
-    'SELECT organizationId FROM member WHERE userId = ? LIMIT 1'
-  ).bind(session.user.id).first<{ organizationId: string }>()
+  const member = await queryFirst<{ organizationId: string }>(
+    db, 'SELECT organizationId FROM member WHERE userId = ? LIMIT 1', [session.user.id],
+  )
   if (!member) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
   const orgId = member.organizationId
@@ -42,15 +43,16 @@ export default defineEventHandler(async (event) => {
   }
 
   const now = new Date().toISOString()
-  await db.prepare(
+  await execute(db,
     `INSERT INTO organization_billing (id, organization_id, auto_topup_enabled, auto_topup_bundle, auto_topup_threshold, updated_at)
      VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(organization_id) DO UPDATE SET
        auto_topup_enabled = excluded.auto_topup_enabled,
        auto_topup_bundle = excluded.auto_topup_bundle,
        auto_topup_threshold = excluded.auto_topup_threshold,
-       updated_at = excluded.updated_at`
-  ).bind(`ob-${orgId}`, orgId, enabled ? 1 : 0, bundle, threshold, now).run()
+       updated_at = excluded.updated_at`,
+    [`ob-${orgId}`, orgId, enabled ? 1 : 0, bundle, threshold, now],
+  )
 
   return jsonResponse({ success: true, enabled, bundle, threshold })
 })

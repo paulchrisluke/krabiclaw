@@ -1,4 +1,5 @@
 import { hasEntitlement, hasSiteEntitlement } from '~/server/utils/billing'
+import { execute } from '~/server/db'
 
 type SetupEnv = Parameters<typeof hasEntitlement>[0]
 
@@ -72,12 +73,12 @@ export async function createWorkRequest(
 
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  await db.prepare(`
+  await execute(db, `
     INSERT INTO work_requests (
       id, organization_id, site_id, type, title, description, priority, source, created_at, updated_at
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+  `, [
     id,
     organizationId,
     siteId,
@@ -88,7 +89,7 @@ export async function createWorkRequest(
     source,
     now,
     now,
-  ).run()
+  ])
 
   return { status: 201, data: { success: true, id } }
 }
