@@ -62,7 +62,6 @@ CREATE TABLE `business_location_translations` (
 	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `business_location_translations_organization_id_site_id_location_id_locale_unique` ON `business_location_translations` (`organization_id`,`site_id`,`location_id`,`locale`);--> statement-breakpoint
 CREATE TABLE `business_locations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -83,7 +82,7 @@ CREATE TABLE `business_locations` (
 	`categories` text,
 	`rating` real,
 	`review_count` integer,
-	`is_primary` numeric DEFAULT false,
+	`is_primary` numeric,
 	`status` text DEFAULT 'active',
 	`last_synced_at` text,
 	`description` text,
@@ -116,7 +115,6 @@ CREATE TABLE `business_locations` (
 	FOREIGN KEY (`hero_video_asset_id`) REFERENCES `media_assets_old`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `business_locations_organization_id_site_id_slug_unique` ON `business_locations` (`organization_id`,`site_id`,`slug`);--> statement-breakpoint
 CREATE TABLE `canary_runs` (
 	`id` text PRIMARY KEY NOT NULL,
 	`run_type` text NOT NULL,
@@ -182,7 +180,6 @@ CREATE TABLE `chowbot_messages` (
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `chowbot_messages_meta_message_id_unique` ON `chowbot_messages` (`meta_message_id`);--> statement-breakpoint
 CREATE TABLE `contact_submissions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -197,6 +194,12 @@ CREATE TABLE `contact_submissions` (
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE TABLE `d1_migrations` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`name` text,
+	`applied_at` numeric DEFAULT (CURRENT_TIMESTAMP) NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE `dashboard_preferences` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -209,7 +212,6 @@ CREATE TABLE `dashboard_preferences` (
 	FOREIGN KEY (`selected_location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `dashboard_preferences_user_id_organization_id_unique` ON `dashboard_preferences` (`user_id`,`organization_id`);--> statement-breakpoint
 CREATE TABLE `domain_reconciliation_jobs` (
 	`id` text PRIMARY KEY NOT NULL,
 	`domain_id` text NOT NULL,
@@ -222,7 +224,6 @@ CREATE TABLE `domain_reconciliation_jobs` (
 	FOREIGN KEY (`domain_id`) REFERENCES `site_domains`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `domain_reconciliation_jobs_domain_id_unique` ON `domain_reconciliation_jobs` (`domain_id`);--> statement-breakpoint
 CREATE TABLE `experience_bookings` (
 	`id` text PRIMARY KEY NOT NULL,
 	`experience_id` text NOT NULL,
@@ -283,7 +284,7 @@ CREATE TABLE `experiences` (
 	`available_note` text,
 	`status` text DEFAULT 'active' NOT NULL,
 	`sort_order` integer DEFAULT 0 NOT NULL,
-	`featured` numeric DEFAULT false NOT NULL,
+	`featured` numeric NOT NULL,
 	`featured_sort_order` integer DEFAULT 0 NOT NULL,
 	`seo_title` text,
 	`seo_description` text,
@@ -322,7 +323,6 @@ CREATE TABLE `facebook_pages_connections` (
 	FOREIGN KEY (`connected_by_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `facebook_pages_connections_organization_id_site_id_unique` ON `facebook_pages_connections` (`organization_id`,`site_id`);--> statement-breakpoint
 CREATE TABLE `google_analytics_connections` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -345,7 +345,6 @@ CREATE TABLE `google_analytics_connections` (
 	FOREIGN KEY (`connected_by_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `google_analytics_connections_organization_id_site_id_unique` ON `google_analytics_connections` (`organization_id`,`site_id`);--> statement-breakpoint
 CREATE TABLE `google_business_connections` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -366,7 +365,6 @@ CREATE TABLE `google_business_connections` (
 	FOREIGN KEY (`connected_by_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `google_business_connections_organization_id_site_id_location_id_unique` ON `google_business_connections` (`organization_id`,`site_id`,`location_id`);--> statement-breakpoint
 CREATE TABLE `google_business_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text,
@@ -548,7 +546,6 @@ CREATE TABLE `menu_item_translations` (
 	FOREIGN KEY (`menu_item_id`) REFERENCES `menu_items`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `menu_item_translations_organization_id_site_id_menu_item_id_locale_unique` ON `menu_item_translations` (`organization_id`,`site_id`,`menu_item_id`,`locale`);--> statement-breakpoint
 CREATE TABLE `menu_items` (
 	`id` text PRIMARY KEY NOT NULL,
 	`menu_id` text NOT NULL,
@@ -559,7 +556,7 @@ CREATE TABLE `menu_items` (
 	`price_amount` numeric,
 	`image_asset_id` text,
 	`available` numeric DEFAULT 1 NOT NULL,
-	`featured` numeric DEFAULT false NOT NULL,
+	`featured` numeric NOT NULL,
 	`featured_sort_order` integer DEFAULT 0 NOT NULL,
 	`sort_order` integer DEFAULT 0 NOT NULL,
 	`allergens` text,
@@ -595,7 +592,6 @@ CREATE TABLE `menu_translations` (
 	FOREIGN KEY (`menu_id`) REFERENCES `menus`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `menu_translations_organization_id_site_id_menu_id_locale_unique` ON `menu_translations` (`organization_id`,`site_id`,`menu_id`,`locale`);--> statement-breakpoint
 CREATE TABLE `menus` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -646,7 +642,6 @@ CREATE TABLE `oauthAccessToken` (
 	`refreshId` text
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `oauthAccessToken_token_unique` ON `oauthAccessToken` (`token`);--> statement-breakpoint
 CREATE TABLE `oauthClient` (
 	`id` text PRIMARY KEY NOT NULL,
 	`clientId` text NOT NULL,
@@ -680,7 +675,6 @@ CREATE TABLE `oauthClient` (
 	`referenceId` text
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `oauthClient_clientId_unique` ON `oauthClient` (`clientId`);--> statement-breakpoint
 CREATE TABLE `oauthConsent` (
 	`id` text PRIMARY KEY NOT NULL,
 	`clientId` text NOT NULL,
@@ -691,7 +685,6 @@ CREATE TABLE `oauthConsent` (
 	`referenceId` text
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `oauthConsent_clientId_userId_unique` ON `oauthConsent` (`clientId`,`userId`);--> statement-breakpoint
 CREATE TABLE `oauthRefreshToken` (
 	`id` text PRIMARY KEY NOT NULL,
 	`clientId` text NOT NULL,
@@ -707,7 +700,6 @@ CREATE TABLE `oauthRefreshToken` (
 	`authTime` integer
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `oauthRefreshToken_token_unique` ON `oauthRefreshToken` (`token`);--> statement-breakpoint
 CREATE TABLE `organization` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -717,7 +709,6 @@ CREATE TABLE `organization` (
 	`createdAt` integer DEFAULT (unixepoch()) NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `organization_slug_unique` ON `organization` (`slug`);--> statement-breakpoint
 CREATE TABLE `organization_billing` (
 	`id` text,
 	`organization_id` text PRIMARY KEY NOT NULL,
@@ -727,7 +718,7 @@ CREATE TABLE `organization_billing` (
 	`status` text DEFAULT 'free' NOT NULL,
 	`plan` text DEFAULT 'free' NOT NULL,
 	`current_period_end` text,
-	`cancel_at_period_end` numeric DEFAULT false,
+	`cancel_at_period_end` numeric,
 	`auto_topup_enabled` integer DEFAULT 0 NOT NULL,
 	`auto_topup_bundle` integer DEFAULT 500 NOT NULL,
 	`auto_topup_threshold` integer DEFAULT 100 NOT NULL,
@@ -735,9 +726,6 @@ CREATE TABLE `organization_billing` (
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `organization_billing_stripe_customer_id_unique` ON `organization_billing` (`stripe_customer_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `organization_billing_stripe_subscription_id_unique` ON `organization_billing` (`stripe_subscription_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `organization_billing_stripe_subscription_item_id_unique` ON `organization_billing` (`stripe_subscription_item_id`);--> statement-breakpoint
 CREATE TABLE `organization_entitlements` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -749,7 +737,6 @@ CREATE TABLE `organization_entitlements` (
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `organization_entitlements_organization_id_key_unique` ON `organization_entitlements` (`organization_id`,`key`);--> statement-breakpoint
 CREATE TABLE `platform_analytics` (
 	`id` text PRIMARY KEY NOT NULL,
 	`metric` text NOT NULL,
@@ -757,7 +744,6 @@ CREATE TABLE `platform_analytics` (
 	`date` text NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `platform_analytics_metric_date_unique` ON `platform_analytics` (`metric`,`date`);--> statement-breakpoint
 CREATE TABLE `platform_analytics_daily` (
 	`id` text PRIMARY KEY NOT NULL,
 	`date` text NOT NULL,
@@ -793,7 +779,6 @@ CREATE TABLE `platform_blog_posts` (
 	FOREIGN KEY (`featured_image_asset_id`) REFERENCES `media_assets_old`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `platform_blog_posts_slug_unique` ON `platform_blog_posts` (`slug`);--> statement-breakpoint
 CREATE TABLE `platform_contact_submissions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -813,7 +798,6 @@ CREATE TABLE `platform_content` (
 	FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `platform_content_page_unique` ON `platform_content` (`page`);--> statement-breakpoint
 CREATE TABLE `platform_content_components` (
 	`id` text PRIMARY KEY NOT NULL,
 	`content_type` text NOT NULL,
@@ -853,7 +837,6 @@ CREATE TABLE `platform_docs` (
 	FOREIGN KEY (`featured_image_asset_id`) REFERENCES `media_assets_old`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `platform_docs_slug_unique` ON `platform_docs` (`slug`);--> statement-breakpoint
 CREATE TABLE `platform_pageview_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`page_path` text NOT NULL,
@@ -904,7 +887,6 @@ CREATE TABLE `post_translations` (
 	FOREIGN KEY (`post_id`) REFERENCES `posts`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `post_translations_organization_id_site_id_post_id_locale_unique` ON `post_translations` (`organization_id`,`site_id`,`post_id`,`locale`);--> statement-breakpoint
 CREATE TABLE `posts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1016,7 +998,6 @@ CREATE TABLE `session` (
 	FOREIGN KEY (`userId`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `session_token_unique` ON `session` (`token`);--> statement-breakpoint
 CREATE TABLE `site_analytics_daily` (
 	`id` text PRIMARY KEY NOT NULL,
 	`site_id` text NOT NULL,
@@ -1033,7 +1014,6 @@ CREATE TABLE `site_analytics_daily` (
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `site_analytics_daily_site_id_date_unique` ON `site_analytics_daily` (`site_id`,`date`);--> statement-breakpoint
 CREATE TABLE `site_billing` (
 	`id` text PRIMARY KEY NOT NULL,
 	`site_id` text NOT NULL,
@@ -1043,7 +1023,7 @@ CREATE TABLE `site_billing` (
 	`plan` text DEFAULT 'free' NOT NULL,
 	`status` text DEFAULT 'free' NOT NULL,
 	`current_period_end` text,
-	`cancel_at_period_end` numeric DEFAULT false,
+	`cancel_at_period_end` numeric,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`stripe_customer_id` text,
 	`payment_method` text DEFAULT 'stripe' NOT NULL,
@@ -1054,16 +1034,12 @@ CREATE TABLE `site_billing` (
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `site_billing_site_id_unique` ON `site_billing` (`site_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `site_billing_stripe_subscription_id_unique` ON `site_billing` (`stripe_subscription_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `site_billing_stripe_subscription_item_id_unique` ON `site_billing` (`stripe_subscription_item_id`);--> statement-breakpoint
 CREATE TABLE `site_config` (
 	`organization_id` text NOT NULL,
 	`site_id` text NOT NULL,
 	`key` text NOT NULL,
 	`value` text,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	PRIMARY KEY(`organization_id`, `site_id`, `key`),
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade
 );
@@ -1093,7 +1069,6 @@ CREATE TABLE `site_content` (
 	FOREIGN KEY (`hero_video_asset_id`) REFERENCES `media_assets_old`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `site_content_organization_id_site_id_location_id_page_field_unique` ON `site_content` (`organization_id`,`site_id`,`location_id`,`page`,`field`);--> statement-breakpoint
 CREATE TABLE `site_content_translations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1119,7 +1094,6 @@ CREATE TABLE `site_content_translations` (
 	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `site_content_translations_organization_id_site_id_location_id_locale_page_field_unique` ON `site_content_translations` (`organization_id`,`site_id`,`location_id`,`locale`,`page`,`field`);--> statement-breakpoint
 CREATE TABLE `site_domain_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1169,8 +1143,6 @@ CREATE TABLE `site_domains` (
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `site_domains_domain_unique` ON `site_domains` (`domain`);--> statement-breakpoint
-CREATE UNIQUE INDEX `site_domains_cloudflare_hostname_id_unique` ON `site_domains` (`cloudflare_hostname_id`);--> statement-breakpoint
 CREATE TABLE `site_entitlements` (
 	`id` text PRIMARY KEY NOT NULL,
 	`site_id` text NOT NULL,
@@ -1184,7 +1156,6 @@ CREATE TABLE `site_entitlements` (
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `site_entitlements_site_id_key_unique` ON `site_entitlements` (`site_id`,`key`);--> statement-breakpoint
 CREATE TABLE `site_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1208,7 +1179,7 @@ CREATE TABLE `site_locales` (
 	`site_id` text NOT NULL,
 	`locale` text NOT NULL,
 	`label` text,
-	`is_source` numeric DEFAULT false NOT NULL,
+	`is_source` numeric NOT NULL,
 	`status` text DEFAULT 'draft' NOT NULL,
 	`fallback_enabled` numeric DEFAULT 1 NOT NULL,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
@@ -1217,7 +1188,6 @@ CREATE TABLE `site_locales` (
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `site_locales_organization_id_site_id_locale_unique` ON `site_locales` (`organization_id`,`site_id`,`locale`);--> statement-breakpoint
 CREATE TABLE `site_pageview_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`site_id` text NOT NULL,
@@ -1306,8 +1276,6 @@ CREATE TABLE `sites` (
 	FOREIGN KEY (`og_image_asset_id`) REFERENCES `media_assets`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `sites_slug_unique` ON `sites` (`slug`);--> statement-breakpoint
-CREATE UNIQUE INDEX `sites_subdomain_unique` ON `sites` (`subdomain`);--> statement-breakpoint
 CREATE TABLE `stripe_webhook_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`stripe_event_id` text,
@@ -1318,7 +1286,6 @@ CREATE TABLE `stripe_webhook_events` (
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `stripe_webhook_events_stripe_event_id_unique` ON `stripe_webhook_events` (`stripe_event_id`);--> statement-breakpoint
 CREATE TABLE `themes` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -1330,7 +1297,6 @@ CREATE TABLE `themes` (
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `themes_slug_unique` ON `themes` (`slug`);--> statement-breakpoint
 CREATE TABLE `token_exchange_cache` (
 	`code` text PRIMARY KEY NOT NULL,
 	`state` text DEFAULT 'pending' NOT NULL,
@@ -1406,8 +1372,6 @@ CREATE TABLE `user` (
 	`updatedAt` integer DEFAULT (unixepoch()) NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `user_email_unique` ON `user` (`email`);--> statement-breakpoint
-CREATE UNIQUE INDEX `user_phoneNumber_unique` ON `user` (`phoneNumber`);--> statement-breakpoint
 CREATE TABLE `verification` (
 	`id` text PRIMARY KEY NOT NULL,
 	`identifier` text NOT NULL,
@@ -1436,314 +1400,3 @@ CREATE TABLE `work_requests` (
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`assigned_to`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
 );
---> statement-breakpoint
-CREATE INDEX idx_ai_usage_log_org ON ai_usage_log(organization_id, created_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_analytics_daily_site
-  ON site_analytics_daily(site_id, date DESC);
---> statement-breakpoint
-CREATE INDEX idx_canary_runs_status_created
-  ON canary_runs(status, created_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_canary_runs_type_created
-  ON canary_runs(run_type, created_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_chowbot_conversations_site
-  ON chowbot_conversations(site_id, user_id, status, updated_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_chowbot_messages_conversation
-  ON chowbot_messages(conversation_id, created_at ASC);
---> statement-breakpoint
-CREATE INDEX idx_contact_submissions_site ON contact_submissions(site_id, created_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_domain_reconciliation_jobs_due
-  ON domain_reconciliation_jobs(status, run_after);
---> statement-breakpoint
-CREATE INDEX idx_experience_bookings_experience
-  ON experience_bookings(experience_id, booking_date, time_slot);
---> statement-breakpoint
-CREATE INDEX idx_experience_bookings_site
-  ON experience_bookings(site_id, status, created_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_experience_slot_overrides_date
-  ON experience_slot_overrides(experience_id, override_date);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_experience_slot_overrides_unique
-  ON experience_slot_overrides(experience_id, override_date, time_slot);
---> statement-breakpoint
-CREATE INDEX idx_experiences_location ON experiences(location_id);
---> statement-breakpoint
-CREATE INDEX idx_experiences_site ON experiences(site_id);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_experiences_site_slug ON experiences(site_id, slug);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_google_business_connections_site_level_unique
-  ON google_business_connections(organization_id, site_id)
-  WHERE location_id IS NULL;
---> statement-breakpoint
-CREATE INDEX idx_google_place_snapshots_place_id
-  ON google_place_snapshots(place_id);
---> statement-breakpoint
-CREATE INDEX idx_google_place_snapshots_site
-  ON google_place_snapshots(site_id);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_location_qa_google_id
-  ON location_qa(google_question_id) WHERE google_question_id IS NOT NULL;
---> statement-breakpoint
-CREATE INDEX idx_location_qa_location
-  ON location_qa(location_id, status, sort_order);
---> statement-breakpoint
-CREATE INDEX idx_media_assets_location
-  ON media_assets(location_id, status, created_at DESC)
-  WHERE location_id IS NOT NULL;
---> statement-breakpoint
-CREATE INDEX idx_media_assets_site
-  ON media_assets(site_id, status, created_at DESC);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_menu_items_menu_slug
-  ON menu_items(menu_id, slug) WHERE slug != '';
---> statement-breakpoint
-CREATE INDEX idx_notifications_org ON notifications(organization_id, created_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_pageview_events_session
-  ON site_pageview_events(site_id, session_id);
---> statement-breakpoint
-CREATE INDEX idx_pageview_events_site_date
-  ON site_pageview_events(site_id, created_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_pageview_events_site_visitor
-  ON site_pageview_events(site_id, visitor_id);
---> statement-breakpoint
-CREATE INDEX idx_platform_contact_submissions_status_created
-  ON platform_contact_submissions(status, created_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_platform_content_components_content
-  ON platform_content_components(content_type, content_id, position);
---> statement-breakpoint
-CREATE INDEX idx_platform_docs_category ON platform_docs(category, status, sort_order);
---> statement-breakpoint
-CREATE INDEX idx_platform_docs_parent ON platform_docs(parent_doc_id, status, sort_order);
---> statement-breakpoint
-CREATE INDEX idx_platform_pageview_events_created_at ON platform_pageview_events (created_at);
---> statement-breakpoint
-CREATE INDEX idx_platform_pageview_events_session_id ON platform_pageview_events (session_id);
---> statement-breakpoint
-CREATE INDEX idx_post_channel_jobs_post ON post_channel_jobs(post_id);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_posts_google_id
-  ON posts(google_post_id) WHERE google_post_id IS NOT NULL;
---> statement-breakpoint
-CREATE INDEX idx_posts_location
-  ON posts(location_id) WHERE location_id IS NOT NULL;
---> statement-breakpoint
-CREATE INDEX idx_posts_site ON posts(site_id, status, published_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_rate_limits_expires ON rate_limits(expires_at);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_reservation_submissions_cancel_token_hash
-  ON reservation_submissions(cancellation_token_hash)
-  WHERE cancellation_token_hash IS NOT NULL;
---> statement-breakpoint
-CREATE INDEX idx_reservation_submissions_location ON reservation_submissions(location_id);
---> statement-breakpoint
-CREATE INDEX idx_reservation_submissions_site ON reservation_submissions(site_id, date, created_at DESC);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_reviews_google_id
-  ON reviews(google_review_id) WHERE google_review_id IS NOT NULL;
---> statement-breakpoint
-CREATE INDEX idx_service_addon_purchases_org
-  ON service_addon_purchases(organization_id, created_at DESC);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_service_addon_purchases_stripe_payment_intent_id
-  ON service_addon_purchases(stripe_payment_intent_id)
-  WHERE stripe_payment_intent_id IS NOT NULL;
---> statement-breakpoint
-CREATE INDEX idx_site_billing_org ON site_billing(organization_id);
---> statement-breakpoint
-CREATE INDEX idx_site_billing_subscription ON site_billing(stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL;
---> statement-breakpoint
-CREATE INDEX idx_site_content_component ON site_content(component);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_site_content_site_level_unique
-  ON site_content(organization_id, site_id, page, field)
-  WHERE location_id IS NULL;
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_site_content_translations_site_level_unique
-  ON site_content_translations(organization_id, site_id, locale, page, field)
-  WHERE location_id IS NULL;
---> statement-breakpoint
-CREATE INDEX idx_site_domain_events_domain
-  ON site_domain_events(domain_id, created_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_site_domain_events_site
-  ON site_domain_events(site_id, created_at DESC);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_site_domains_one_canonical
-  ON site_domains(site_id)
-  WHERE role = 'canonical' AND status = 'active';
---> statement-breakpoint
-CREATE INDEX idx_site_domains_reconcile
-  ON site_domains(status, next_check_at);
---> statement-breakpoint
-CREATE INDEX idx_site_entitlements_org ON site_entitlements(organization_id);
---> statement-breakpoint
-CREATE INDEX idx_site_events_location
-  ON site_events(location_id, created_at DESC)
-  WHERE location_id IS NOT NULL;
---> statement-breakpoint
-CREATE INDEX idx_site_events_site
-  ON site_events(site_id, created_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_site_locales_site
-  ON site_locales(site_id, status, locale);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_site_transfer_pending
-  ON site_transfer_requests(site_id) WHERE status = 'pending';
---> statement-breakpoint
-CREATE INDEX idx_site_transfer_reminders
-  ON site_transfer_requests(status, requires_payment, created_at);
---> statement-breakpoint
-CREATE INDEX idx_site_transfer_site
-  ON site_transfer_requests(site_id, status);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_site_transfer_token
-  ON site_transfer_requests(token);
---> statement-breakpoint
-CREATE UNIQUE INDEX idx_sites_custom_domain_unique
-  ON sites(custom_domain)
-  WHERE custom_domain IS NOT NULL;
---> statement-breakpoint
-CREATE INDEX idx_translation_job_items_job
-  ON translation_job_items(job_id, status, entity_type);
---> statement-breakpoint
-CREATE INDEX idx_translation_jobs_site
-  ON translation_jobs(site_id, target_locale, status, created_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_work_requests_org
-  ON work_requests(organization_id, status, created_at DESC);
---> statement-breakpoint
-CREATE INDEX idx_work_requests_status
-  ON work_requests(status, priority, created_at DESC);
---> statement-breakpoint
-CREATE TRIGGER sync_media_assets_old_delete
-AFTER DELETE ON media_assets
-BEGIN
-  DELETE FROM media_assets_old WHERE id = OLD.id;
-END;
---> statement-breakpoint
-CREATE TRIGGER sync_media_assets_old_insert
-AFTER INSERT ON media_assets
-BEGIN
-  INSERT OR REPLACE INTO media_assets_old (
-    id, organization_id, site_id, location_id, kind, provider, source,
-    cloudflare_image_id, r2_key, google_media_name,
-    public_url, thumbnail_url, mime_type, file_name, file_size,
-    width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
-  )
-  VALUES (
-    NEW.id, NEW.organization_id, NEW.site_id, NEW.location_id, NEW.kind, NEW.provider, NEW.source,
-    NEW.cloudflare_image_id, NEW.r2_key, NEW.google_media_name,
-    NEW.public_url, NEW.thumbnail_url, NEW.mime_type, NEW.file_name, NEW.file_size,
-    NEW.width, NEW.height, NEW.duration, NEW.alt_text, NEW.category, NEW.status, NEW.created_by_user_id, NEW.created_at, NEW.updated_at
-  );
-END;
---> statement-breakpoint
-CREATE TRIGGER sync_media_assets_old_update
-AFTER UPDATE ON media_assets
-BEGIN
-  INSERT OR REPLACE INTO media_assets_old (
-    id, organization_id, site_id, location_id, kind, provider, source,
-    cloudflare_image_id, r2_key, google_media_name,
-    public_url, thumbnail_url, mime_type, file_name, file_size,
-    width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
-  )
-  VALUES (
-    NEW.id, NEW.organization_id, NEW.site_id, NEW.location_id, NEW.kind, NEW.provider, NEW.source,
-    NEW.cloudflare_image_id, NEW.r2_key, NEW.google_media_name,
-    NEW.public_url, NEW.thumbnail_url, NEW.mime_type, NEW.file_name, NEW.file_size,
-    NEW.width, NEW.height, NEW.duration, NEW.alt_text, NEW.category, NEW.status, NEW.created_by_user_id, NEW.created_at, NEW.updated_at
-  );
-END;
---> statement-breakpoint
-CREATE TRIGGER trg_chowbot_channel_state_conversation_site_insert
-BEFORE INSERT ON chowbot_channel_state
-FOR EACH ROW
-WHEN NEW.active_conversation_id IS NOT NULL
-AND EXISTS (
-  SELECT 1 FROM chowbot_conversations
-  WHERE id = NEW.active_conversation_id
-  AND site_id != NEW.selected_site_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'active conversation site must match selected site');
-END;
---> statement-breakpoint
-CREATE TRIGGER trg_chowbot_channel_state_conversation_site_update
-BEFORE UPDATE ON chowbot_channel_state
-FOR EACH ROW
-WHEN NEW.active_conversation_id IS NOT NULL
-AND EXISTS (
-  SELECT 1 FROM chowbot_conversations
-  WHERE id = NEW.active_conversation_id
-  AND site_id != NEW.selected_site_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'active conversation site must match selected site');
-END;
---> statement-breakpoint
-CREATE TRIGGER trg_chowbot_channel_state_conversation_user_insert
-BEFORE INSERT ON chowbot_channel_state
-FOR EACH ROW
-WHEN NEW.active_conversation_id IS NOT NULL
-AND EXISTS (
-  SELECT 1 FROM chowbot_conversations
-  WHERE id = NEW.active_conversation_id
-  AND user_id != NEW.user_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'active conversation must belong to the same user');
-END;
---> statement-breakpoint
-CREATE TRIGGER trg_chowbot_channel_state_conversation_user_update
-BEFORE UPDATE ON chowbot_channel_state
-FOR EACH ROW
-WHEN NEW.active_conversation_id IS NOT NULL
-AND EXISTS (
-  SELECT 1 FROM chowbot_conversations
-  WHERE id = NEW.active_conversation_id
-  AND user_id != NEW.user_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'active conversation must belong to the same user');
-END;
---> statement-breakpoint
-CREATE TRIGGER trg_chowbot_messages_consistency_insert
-BEFORE INSERT ON chowbot_messages
-FOR EACH ROW
-WHEN EXISTS (
-  SELECT 1 FROM chowbot_conversations
-  WHERE id = NEW.conversation_id
-  AND (organization_id != NEW.organization_id OR site_id != NEW.site_id)
-)
-BEGIN
-  SELECT RAISE(ABORT, 'chowbot_messages conversation organization/site mismatch');
-END;
---> statement-breakpoint
-CREATE TRIGGER trg_chowbot_messages_consistency_update
-BEFORE UPDATE ON chowbot_messages
-FOR EACH ROW
-WHEN EXISTS (
-  SELECT 1 FROM chowbot_conversations
-  WHERE id = NEW.conversation_id
-  AND (organization_id != NEW.organization_id OR site_id != NEW.site_id)
-)
-BEGIN
-  SELECT RAISE(ABORT, 'chowbot_messages conversation organization/site mismatch');
-END;
---> statement-breakpoint
-CREATE TRIGGER trg_prune_rate_limits
-AFTER INSERT ON rate_limits
-WHEN abs(random()) % 100 < 5
-BEGIN
-  DELETE FROM rate_limits WHERE expires_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
-END;

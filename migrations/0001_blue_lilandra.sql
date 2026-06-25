@@ -1,3 +1,0 @@
-CREATE UNIQUE INDEX IF NOT EXISTS `idx_google_business_connections_site_level_unique` ON `google_business_connections` (`organization_id`,`site_id`) WHERE location_id IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS `idx_site_content_site_level_unique` ON `site_content` (`organization_id`,`site_id`,`page`,`field`) WHERE location_id IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS `idx_site_content_translations_site_level_unique` ON `site_content_translations` (`organization_id`,`site_id`,`locale`,`page`,`field`) WHERE location_id IS NULL;

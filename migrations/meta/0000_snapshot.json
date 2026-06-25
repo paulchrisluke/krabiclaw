@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5778532b-3645-4dce-9544-2ff736c9025d",
+  "id": "5ea2fa15-1179-4ebc-b95d-1cbca81ad577",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -419,18 +419,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "business_location_translations_organization_id_site_id_location_id_locale_unique": {
-          "name": "business_location_translations_organization_id_site_id_location_id_locale_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "location_id",
-            "locale"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "business_location_translations_organization_id_organization_id_fk": {
           "name": "business_location_translations_organization_id_organization_id_fk",
@@ -617,8 +606,7 @@
           "type": "numeric",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
-          "default": "false"
+          "autoincrement": false
         },
         "status": {
           "name": "status",
@@ -792,17 +780,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "business_locations_organization_id_site_id_slug_unique": {
-          "name": "business_locations_organization_id_site_id_slug_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "slug"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "business_locations_organization_id_organization_id_fk": {
           "name": "business_locations_organization_id_organization_id_fk",
@@ -1331,15 +1309,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "chowbot_messages_meta_message_id_unique": {
-          "name": "chowbot_messages_meta_message_id_unique",
-          "columns": [
-            "meta_message_id"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "chowbot_messages_conversation_id_chowbot_conversations_id_fk": {
           "name": "chowbot_messages_conversation_id_chowbot_conversations_id_fk",
@@ -1500,6 +1470,38 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "d1_migrations": {
+      "name": "d1_migrations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "applied_at": {
+          "name": "applied_at",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP)"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "dashboard_preferences": {
       "name": "dashboard_preferences",
       "columns": {
@@ -1548,16 +1550,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "dashboard_preferences_user_id_organization_id_unique": {
-          "name": "dashboard_preferences_user_id_organization_id_unique",
-          "columns": [
-            "user_id",
-            "organization_id"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "dashboard_preferences_user_id_user_id_fk": {
           "name": "dashboard_preferences_user_id_user_id_fk",
@@ -1667,15 +1660,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "domain_reconciliation_jobs_domain_id_unique": {
-          "name": "domain_reconciliation_jobs_domain_id_unique",
-          "columns": [
-            "domain_id"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "domain_reconciliation_jobs_domain_id_site_domains_id_fk": {
           "name": "domain_reconciliation_jobs_domain_id_site_domains_id_fk",
@@ -2141,8 +2126,7 @@
           "type": "numeric",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "false"
+          "autoincrement": false
         },
         "featured_sort_order": {
           "name": "featured_sort_order",
@@ -2402,16 +2386,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "facebook_pages_connections_organization_id_site_id_unique": {
-          "name": "facebook_pages_connections_organization_id_site_id_unique",
-          "columns": [
-            "organization_id",
-            "site_id"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "facebook_pages_connections_organization_id_organization_id_fk": {
           "name": "facebook_pages_connections_organization_id_organization_id_fk",
@@ -2576,16 +2551,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "google_analytics_connections_organization_id_site_id_unique": {
-          "name": "google_analytics_connections_organization_id_site_id_unique",
-          "columns": [
-            "organization_id",
-            "site_id"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "google_analytics_connections_organization_id_organization_id_fk": {
           "name": "google_analytics_connections_organization_id_organization_id_fk",
@@ -2729,17 +2695,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "google_business_connections_organization_id_site_id_location_id_unique": {
-          "name": "google_business_connections_organization_id_site_id_location_id_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "location_id"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "google_business_connections_organization_id_organization_id_fk": {
           "name": "google_business_connections_organization_id_organization_id_fk",
@@ -4074,18 +4030,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "menu_item_translations_organization_id_site_id_menu_item_id_locale_unique": {
-          "name": "menu_item_translations_organization_id_site_id_menu_item_id_locale_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "menu_item_id",
-            "locale"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "menu_item_translations_organization_id_organization_id_fk": {
           "name": "menu_item_translations_organization_id_organization_id_fk",
@@ -4204,8 +4149,7 @@
           "type": "numeric",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "false"
+          "autoincrement": false
         },
         "featured_sort_order": {
           "name": "featured_sort_order",
@@ -4426,18 +4370,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "menu_translations_organization_id_site_id_menu_id_locale_unique": {
-          "name": "menu_translations_organization_id_site_id_menu_id_locale_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "menu_id",
-            "locale"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "menu_translations_organization_id_organization_id_fk": {
           "name": "menu_translations_organization_id_organization_id_fk",
@@ -4833,15 +4766,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "oauthAccessToken_token_unique": {
-          "name": "oauthAccessToken_token_unique",
-          "columns": [
-            "token"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -5066,15 +4991,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "oauthClient_clientId_unique": {
-          "name": "oauthClient_clientId_unique",
-          "columns": [
-            "clientId"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -5134,16 +5051,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "oauthConsent_clientId_userId_unique": {
-          "name": "oauthConsent_clientId_userId_unique",
-          "columns": [
-            "clientId",
-            "userId"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -5238,15 +5146,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "oauthRefreshToken_token_unique": {
-          "name": "oauthRefreshToken_token_unique",
-          "columns": [
-            "token"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -5299,15 +5199,7 @@
           "default": "(unixepoch())"
         }
       },
-      "indexes": {
-        "organization_slug_unique": {
-          "name": "organization_slug_unique",
-          "columns": [
-            "slug"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -5379,8 +5271,7 @@
           "type": "numeric",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
-          "default": "false"
+          "autoincrement": false
         },
         "auto_topup_enabled": {
           "name": "auto_topup_enabled",
@@ -5415,29 +5306,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "organization_billing_stripe_customer_id_unique": {
-          "name": "organization_billing_stripe_customer_id_unique",
-          "columns": [
-            "stripe_customer_id"
-          ],
-          "isUnique": true
-        },
-        "organization_billing_stripe_subscription_id_unique": {
-          "name": "organization_billing_stripe_subscription_id_unique",
-          "columns": [
-            "stripe_subscription_id"
-          ],
-          "isUnique": true
-        },
-        "organization_billing_stripe_subscription_item_id_unique": {
-          "name": "organization_billing_stripe_subscription_item_id_unique",
-          "columns": [
-            "stripe_subscription_item_id"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "organization_billing_organization_id_organization_id_fk": {
           "name": "organization_billing_organization_id_organization_id_fk",
@@ -5513,16 +5382,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "organization_entitlements_organization_id_key_unique": {
-          "name": "organization_entitlements_organization_id_key_unique",
-          "columns": [
-            "organization_id",
-            "key"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "organization_entitlements_organization_id_organization_id_fk": {
           "name": "organization_entitlements_organization_id_organization_id_fk",
@@ -5574,16 +5434,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "platform_analytics_metric_date_unique": {
-          "name": "platform_analytics_metric_date_unique",
-          "columns": [
-            "metric",
-            "date"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -5802,15 +5653,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "platform_blog_posts_slug_unique": {
-          "name": "platform_blog_posts_slug_unique",
-          "columns": [
-            "slug"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "platform_blog_posts_author_id_user_id_fk": {
           "name": "platform_blog_posts_author_id_user_id_fk",
@@ -5944,15 +5787,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "platform_content_page_unique": {
-          "name": "platform_content_page_unique",
-          "columns": [
-            "page"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "platform_content_updated_by_user_id_fk": {
           "name": "platform_content_updated_by_user_id_fk",
@@ -6213,15 +6048,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "platform_docs_slug_unique": {
-          "name": "platform_docs_slug_unique",
-          "columns": [
-            "slug"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "platform_docs_author_id_user_id_fk": {
           "name": "platform_docs_author_id_user_id_fk",
@@ -6562,18 +6389,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "post_translations_organization_id_site_id_post_id_locale_unique": {
-          "name": "post_translations_organization_id_site_id_post_id_locale_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "post_id",
-            "locale"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "post_translations_organization_id_organization_id_fk": {
           "name": "post_translations_organization_id_organization_id_fk",
@@ -7403,15 +7219,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "session_token_unique": {
-          "name": "session_token_unique",
-          "columns": [
-            "token"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "session_userId_user_id_fk": {
           "name": "session_userId_user_id_fk",
@@ -7526,16 +7334,7 @@
           "default": 0
         }
       },
-      "indexes": {
-        "site_analytics_daily_site_id_date_unique": {
-          "name": "site_analytics_daily_site_id_date_unique",
-          "columns": [
-            "site_id",
-            "date"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "site_analytics_daily_site_id_sites_id_fk": {
           "name": "site_analytics_daily_site_id_sites_id_fk",
@@ -7621,8 +7420,7 @@
           "type": "numeric",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
-          "default": "false"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
@@ -7669,29 +7467,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "site_billing_site_id_unique": {
-          "name": "site_billing_site_id_unique",
-          "columns": [
-            "site_id"
-          ],
-          "isUnique": true
-        },
-        "site_billing_stripe_subscription_id_unique": {
-          "name": "site_billing_stripe_subscription_id_unique",
-          "columns": [
-            "stripe_subscription_id"
-          ],
-          "isUnique": true
-        },
-        "site_billing_stripe_subscription_item_id_unique": {
-          "name": "site_billing_stripe_subscription_item_id_unique",
-          "columns": [
-            "stripe_subscription_item_id"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "site_billing_site_id_sites_id_fk": {
           "name": "site_billing_site_id_sites_id_fk",
@@ -7793,16 +7569,7 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "site_config_organization_id_site_id_key_pk": {
-          "columns": [
-            "organization_id",
-            "site_id",
-            "key"
-          ],
-          "name": "site_config_organization_id_site_id_key_pk"
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
@@ -7932,19 +7699,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "site_content_organization_id_site_id_location_id_page_field_unique": {
-          "name": "site_content_organization_id_site_id_location_id_page_field_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "location_id",
-            "page",
-            "field"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "site_content_organization_id_organization_id_fk": {
           "name": "site_content_organization_id_organization_id_fk",
@@ -8156,20 +7911,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "site_content_translations_organization_id_site_id_location_id_locale_page_field_unique": {
-          "name": "site_content_translations_organization_id_site_id_location_id_locale_page_field_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "location_id",
-            "locale",
-            "page",
-            "field"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "site_content_translations_organization_id_organization_id_fk": {
           "name": "site_content_translations_organization_id_organization_id_fk",
@@ -8543,22 +8285,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "site_domains_domain_unique": {
-          "name": "site_domains_domain_unique",
-          "columns": [
-            "domain"
-          ],
-          "isUnique": true
-        },
-        "site_domains_cloudflare_hostname_id_unique": {
-          "name": "site_domains_cloudflare_hostname_id_unique",
-          "columns": [
-            "cloudflare_hostname_id"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "site_domains_organization_id_organization_id_fk": {
           "name": "site_domains_organization_id_organization_id_fk",
@@ -8654,16 +8381,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "site_entitlements_site_id_key_unique": {
-          "name": "site_entitlements_site_id_key_unique",
-          "columns": [
-            "site_id",
-            "key"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "site_entitlements_site_id_sites_id_fk": {
           "name": "site_entitlements_site_id_sites_id_fk",
@@ -8873,8 +8591,7 @@
           "type": "numeric",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "false"
+          "autoincrement": false
         },
         "status": {
           "name": "status",
@@ -8909,17 +8626,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "site_locales_organization_id_site_id_locale_unique": {
-          "name": "site_locales_organization_id_site_id_locale_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "locale"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "site_locales_organization_id_organization_id_fk": {
           "name": "site_locales_organization_id_organization_id_fk",
@@ -9557,22 +9264,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "sites_slug_unique": {
-          "name": "sites_slug_unique",
-          "columns": [
-            "slug"
-          ],
-          "isUnique": true
-        },
-        "sites_subdomain_unique": {
-          "name": "sites_subdomain_unique",
-          "columns": [
-            "subdomain"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "sites_organization_id_organization_id_fk": {
           "name": "sites_organization_id_organization_id_fk",
@@ -9686,15 +9378,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "stripe_webhook_events_stripe_event_id_unique": {
-          "name": "stripe_webhook_events_stripe_event_id_unique",
-          "columns": [
-            "stripe_event_id"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -9764,15 +9448,7 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {
-        "themes_slug_unique": {
-          "name": "themes_slug_unique",
-          "columns": [
-            "slug"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -10312,22 +9988,7 @@
           "default": "(unixepoch())"
         }
       },
-      "indexes": {
-        "user_email_unique": {
-          "name": "user_email_unique",
-          "columns": [
-            "email"
-          ],
-          "isUnique": true
-        },
-        "user_phoneNumber_unique": {
-          "name": "user_phoneNumber_unique",
-          "columns": [
-            "phoneNumber"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
