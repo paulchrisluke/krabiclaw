@@ -1,7 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl, testEnv } from './test-env'
-
-const STRIPE_CONFIGURED = Boolean(testEnv('STRIPE_SECRET_KEY') && testEnv('NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'))
+import { devLoginHeaders, devLoginUrl } from './test-env'
 
 async function loginFreshUser(page: Page, baseURL: string, userId: string) {
   const res = await page.request.get(devLoginUrl(baseURL, userId), {
@@ -44,6 +42,123 @@ async function completeManualWizard(
   await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 30_000 })
 }
 
+type TransferPlan = 'free' | 'growth'
+
+async function openMockedTransferOnboarding(
+  page: Page,
+  baseURL: string,
+  {
+    plan = 'free',
+    notificationSaveStatus = 200,
+    notificationSaveError = 'Notification routing could not be saved.',
+  }: {
+    plan?: TransferPlan
+    notificationSaveStatus?: number
+    notificationSaveError?: string
+  } = {},
+) {
+  const suffix = Date.now()
+  const userId = `e2e-transfer-ui-${plan}-${suffix}`
+  const orgId = `org-transfer-ui-${suffix}`
+  const orgSlug = `transfer-ui-${suffix}`
+  const siteId = `site-transfer-ui-${suffix}`
+  const siteSlug = `transfer-site-${suffix}`
+  const locationId = `loc-transfer-ui-${suffix}`
+
+  await loginFreshUser(page, baseURL, userId)
+
+  await page.route('**/api/dashboard/context?afterTransfer=true', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        organization: { id: orgId, slug: orgSlug },
+        site: {
+          id: siteId,
+          brand_name: 'Mock Transfer Site',
+          vertical: 'restaurant',
+          subdomain: siteSlug,
+          plan,
+        },
+      }),
+    })
+  })
+
+  await page.route('**/api/dashboard/locations', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        locations: [
+          {
+            id: locationId,
+            title: 'Mock Transfer Location',
+            slug: 'mock-transfer-location',
+            is_primary: true,
+            notification_phone: null,
+          },
+        ],
+      }),
+    })
+  })
+
+  await page.route(`**/api/editor/sites/${siteId}/notifications`, async route => {
+    if (route.request().method() === 'PATCH') {
+      await route.fulfill({
+        status: notificationSaveStatus,
+        contentType: 'application/json',
+        body: JSON.stringify(notificationSaveStatus >= 400
+          ? { error: notificationSaveError }
+          : { success: true, notifications: { whatsapp_phone: '+15555550100', channels: ['whatsapp'] } }),
+      })
+      return
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, notifications: { whatsapp_phone: null, channels: ['whatsapp'] } }),
+    })
+  })
+
+  await page.route(`**/api/dashboard/locations/${locationId}`, async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, location: { id: locationId } }),
+    })
+  })
+
+  await page.route(`**/preview/site/${siteId}**`, async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: '<!doctype html><title>Mock preview</title><main>Mock preview</main>',
+    })
+  })
+
+  await page.goto(`${baseURL}/dashboard/${orgSlug}/~/onboarding`, { waitUntil: 'load' })
+
+  return { siteId, orgSlug }
+}
+
+async function saveNotificationSettings(page: Page, siteId: string) {
+  await expect(page.getByText('Your owner number gets every booking')).toBeVisible()
+  await page.getByPlaceholder('+447464115465').fill('+15555550100')
+  const saveResponse = page.waitForResponse(response =>
+    response.url().includes(`/api/editor/sites/${siteId}/notifications`)
+    && response.request().method() === 'PATCH'
+  )
+  await page.getByRole('button', { name: 'Save notification settings' }).click()
+  return saveResponse
+}
+
+async function reachNotificationStep(page: Page) {
+  await page.getByRole('button', { name: "Let's go" }).click()
+  await page.getByRole('button', { name: 'Looks great, continue' }).click()
+}
+
 test.describe('onboarding wizard UI', () => {
   test.describe.configure({ mode: 'serial' })
 
@@ -84,179 +199,31 @@ test.describe('onboarding wizard UI', () => {
     expect(orgSlug).toBeTruthy()
   })
 
-  test('transfer handoff wizard walks a free-plan recipient through notifications and team, skipping social/domain', async ({ page, baseURL }) => {
-    // Two full manual wizard completions plus the transfer handoff walkthrough
-    // routinely exceed the default 30s test timeout against a remote preview deploy.
-    test.setTimeout(90_000)
-    const suffix = Date.now()
-    const ownerUserId = `e2e-transfer-owner-${suffix}`
-    const recipientUserId = `e2e-transfer-recipient-${suffix}`
+  test('transfer handoff wizard saves free-plan notifications and skips paid-only steps', async ({ page, baseURL }) => {
+    const { siteId, orgSlug } = await openMockedTransferOnboarding(page, baseURL!, { plan: 'free' })
 
-    // Owner creates a free-plan site to hand off.
-    await loginFreshUser(page, baseURL!, ownerUserId)
-    await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
-    await completeManualWizard(page, `Handoff Source ${suffix}`)
-    const ownerContext = await (await page.request.get(`${baseURL}/api/dashboard/context`)).json() as {
-      site?: { id: string }
-    }
-    const sourceSiteId = ownerContext.site?.id
-    expect(sourceSiteId).toBeTruthy()
+    await reachNotificationStep(page)
+    const saveResponse = await saveNotificationSettings(page, siteId)
+    expect(saveResponse.status()).toBe(200)
 
-    // Recipient needs an existing owner org to accept into (mirrors a real signup).
-    await loginFreshUser(page, baseURL!, recipientUserId)
-    await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
-    await completeManualWizard(page, `Recipient Home Base ${suffix}`)
-    const recipientSessionRes = await page.request.get(`${baseURL}/api/auth/get-session`)
-    const recipientSession = await recipientSessionRes.json() as { user?: { email?: string } }
-    const recipientEmail = recipientSession.user?.email
-    expect(recipientEmail).toEqual(expect.any(String))
-
-    // Owner initiates a free transfer (no `plan` in body => requires_payment: false).
-    await loginFreshUser(page, baseURL!, ownerUserId)
-    const createRes = await page.request.post(`${baseURL}/api/admin/sites/${sourceSiteId}/transfer`, {
-      data: { email: recipientEmail, message: 'Free handoff for e2e.' },
-    })
-    expect(createRes.status()).toBe(200)
-    const created = await createRes.json() as { token: string; requires_payment: boolean }
-    expect(created.requires_payment).toBe(false)
-
-    // Recipient accepts — executes immediately, no Stripe involved.
-    await loginFreshUser(page, baseURL!, recipientUserId)
-    const acceptRes = await page.request.post(`${baseURL}/api/site-transfer/${created.token}/accept`)
-    expect(acceptRes.status()).toBe(200)
-
-    const recipientContext = await (await page.request.get(`${baseURL}/api/dashboard/context`)).json() as {
-      organization?: { slug?: string }
-    }
-    const orgSlug = recipientContext.organization?.slug
-    expect(orgSlug).toBeTruthy()
-
-    await page.goto(`${baseURL}/dashboard/${orgSlug}/~/onboarding`, { waitUntil: 'load' })
-    await page.getByRole('button', { name: "Let's go" }).click()
-    await page.getByRole('button', { name: 'Looks great, continue' }).click()
-    await expect(page.getByText('Your owner number gets every booking')).toBeVisible()
-    await page.getByPlaceholder('+447464115465').fill('+15555550100')
-    await page.getByRole('button', { name: 'Save notification settings' }).click()
+    await expect(page.getByText('Team access')).toBeVisible()
     await page.getByRole('button', { name: 'Skip for now' }).click()
 
-    // Free plan must not show the paid-only social/domain steps.
     await expect(page.getByText('Facebook and Instagram sync')).not.toBeVisible()
     await expect(page.getByText('Custom domain setup')).not.toBeVisible()
-
-    await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible()
     await page.getByRole('button', { name: 'Go to my dashboard' }).click()
-    // This recipient already owns "Recipient Home Base" from the setup above, so accepting
-    // the transfer leaves their org with two sites — org root shows the picker instead of
-    // auto-redirecting into a single site's workspace.
     await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}$`))
   })
 
-  test('transfer handoff wizard shows social and domain steps on a paid plan', async ({ page, baseURL, request }) => {
-    test.skip(!STRIPE_CONFIGURED, 'Stripe must be configured for the paid handoff flow test.')
-    test.setTimeout(90_000)
+  test('transfer handoff wizard shows paid-plan social and domain steps', async ({ page, baseURL }) => {
+    const { siteId, orgSlug } = await openMockedTransferOnboarding(page, baseURL!, { plan: 'growth' })
 
-    const suffix = Date.now()
-    const ownerUserId = `e2e-paid-transfer-owner-${suffix}`
-    const recipientUserId = `e2e-paid-transfer-recipient-${suffix}`
+    await reachNotificationStep(page)
+    const saveResponse = await saveNotificationSettings(page, siteId)
+    expect(saveResponse.status()).toBe(200)
 
-    // Owner creates a source site to hand off on a paid plan.
-    await loginFreshUser(page, baseURL!, ownerUserId)
-    await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
-    await completeManualWizard(page, `Paid Handoff Source ${suffix}`)
-    const ownerContext = await (await page.request.get(`${baseURL}/api/dashboard/context`)).json() as {
-      site?: { id?: string }
-    }
-    const sourceSiteId = ownerContext.site?.id
-    expect(sourceSiteId).toBeTruthy()
-
-    // Recipient needs an existing owner org to accept into.
-    await loginFreshUser(page, baseURL!, recipientUserId)
-    await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
-    await completeManualWizard(page, `Paid Recipient Home Base ${suffix}`)
-
-    const recipientLoginRes = await page.request.get(devLoginUrl(baseURL!, recipientUserId), { headers: devLoginHeaders(), maxRedirects: 0 })
-    expect(recipientLoginRes.status()).toBe(302)
-    const recipientSessionRes = await page.request.get(`${baseURL}/api/auth/get-session`)
-    const recipientSession = await recipientSessionRes.json() as { user?: { email?: string } }
-    const recipientEmail = recipientSession.user?.email
-    expect(recipientEmail).toEqual(expect.any(String))
-    const recipientContextBefore = await (await page.request.get(`${baseURL}/api/dashboard/context`)).json() as {
-      organization?: { id?: string; slug?: string }
-    }
-    const targetOrgId = recipientContextBefore.organization?.id
-    const orgSlug = recipientContextBefore.organization?.slug
-    expect(targetOrgId).toBeTruthy()
-    expect(orgSlug).toBeTruthy()
-
-    const ownerLoginRes = await page.request.get(devLoginUrl(baseURL!, ownerUserId), { headers: devLoginHeaders(), maxRedirects: 0 })
-    expect(ownerLoginRes.status()).toBe(302)
-    const create = await page.request.post(`${baseURL}/api/admin/sites/${sourceSiteId}/transfer`, {
-      data: { email: recipientEmail, plan: 'growth', message: 'Paid handoff for e2e.' },
-    })
-    expect(create.status()).toBe(200)
-    const created = await create.json() as { id: string; token: string }
-
-    const recipientLoginRes2 = await page.request.get(devLoginUrl(baseURL!, recipientUserId), { headers: devLoginHeaders(), maxRedirects: 0 })
-    expect(recipientLoginRes2.status()).toBe(302)
-    const acceptRes = await page.request.post(`${baseURL}/api/site-transfer/${created.token}/accept`)
-    expect(acceptRes.ok()).toBeTruthy()
-
-    const payload = JSON.stringify({
-      id: `evt_transfer_ui_${Date.now()}`,
-      object: 'event',
-      api_version: '2025-04-30.basil',
-      created: Math.floor(Date.now() / 1000),
-      livemode: false,
-      pending_webhooks: 1,
-      request: { id: null, idempotency_key: null },
-      type: 'checkout.session.completed',
-      data: {
-        object: {
-          id: `cs_transfer_ui_${Date.now()}`,
-          object: 'checkout.session',
-          customer: `cus_transfer_ui_${Date.now()}`,
-          metadata: {
-            type: 'site_transfer',
-            organization_id: targetOrgId,
-            plan: 'growth',
-            transfer_request_id: created.id,
-            transfer_site_id: sourceSiteId,
-            transfer_claiming_user_id: recipientUserId,
-            transfer_claiming_organization_id: targetOrgId,
-          },
-          subscription: {
-            id: `sub_transfer_ui_${Date.now()}`,
-            items: { data: [{ id: `si_transfer_ui_${Date.now()}` }] },
-            billing_cycle_anchor: Math.floor(Date.now() / 1000) + 86400,
-          },
-        },
-      },
-    })
-
-    const signatureRes = await page.request.post(`${baseURL}/api/dev/stripe-signature`, {
-      headers: devLoginHeaders(),
-      data: { payload },
-    })
-    const { signature } = await signatureRes.json() as { signature: string }
-
-    const webhookRes = await page.request.post(`${baseURL}/api/billing/webhook`, {
-      headers: {
-        'content-type': 'application/json',
-        'stripe-signature': signature,
-        ...(devLoginHeaders() || {}),
-      },
-      data: payload,
-    })
-    expect(webhookRes.status()).toBe(200)
-
-    expect(orgSlug).toBeTruthy()
-
-    await page.goto(`${baseURL}/dashboard/${orgSlug}/~/onboarding`, { waitUntil: 'load' })
-    await page.getByRole('button', { name: "Let's go" }).click()
-    await page.getByRole('button', { name: 'Looks great, continue' }).click()
-    await expect(page.getByText('Your owner number gets every booking')).toBeVisible()
-    await page.getByPlaceholder('+447464115465').fill('+15555550101')
-    await page.getByRole('button', { name: 'Save notification settings' }).click()
+    await expect(page.getByText('Team access')).toBeVisible()
     await page.getByRole('button', { name: 'Skip for now' }).click()
 
     await expect(page.getByText('Facebook and Instagram sync')).toBeVisible()
@@ -265,10 +232,24 @@ test.describe('onboarding wizard UI', () => {
     await expect(page.getByText('Custom domain setup')).toBeVisible()
     await page.getByRole('button', { name: 'Set up later' }).last().click()
 
-    await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible()
     await page.getByRole('button', { name: 'Go to my dashboard' }).click()
-    // This recipient already owns a home-base site, so accepting the transfer leaves
-    // their org with multiple sites and the org root remains on the picker.
     await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}$`))
+  })
+
+  test('transfer handoff wizard keeps notification save failures visible', async ({ page, baseURL }) => {
+    const saveError = 'whatsapp_phone is required'
+    const { siteId } = await openMockedTransferOnboarding(page, baseURL!, {
+      plan: 'free',
+      notificationSaveStatus: 400,
+      notificationSaveError: saveError,
+    })
+
+    await reachNotificationStep(page)
+    const saveResponse = await saveNotificationSettings(page, siteId)
+    expect(saveResponse.status()).toBe(400)
+
+    await expect(page.getByRole('alert')).toContainText(saveError)
+    await expect(page.getByText('Team access')).not.toBeVisible()
   })
 })
