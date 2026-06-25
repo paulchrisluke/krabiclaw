@@ -254,7 +254,7 @@ test.describe('onboarding wizard UI', () => {
     const saveResponse = await saveNotificationSettings(page, siteId)
     expect(saveResponse.status()).toBe(400)
 
-    await expect(page.getByRole('alert')).toContainText(saveError)
+    await expect(page.locator('div[role="alert"]').filter({ hasText: saveError })).toBeVisible()
     await expect(page.getByText('Team access')).not.toBeVisible()
   })
 })

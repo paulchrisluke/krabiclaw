@@ -91,7 +91,7 @@
                 </div>
 
                 <div
-                  v-if="notificationError"
+                  v-if="msg.notifCard && notificationError"
                   role="alert"
                   class="rounded-lg border border-error-200 bg-error-50 px-3 py-2 text-xs text-error-600 dark:border-error-800 dark:bg-error-950 dark:text-error-400"
                 >
