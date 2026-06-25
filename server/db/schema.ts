@@ -2,6 +2,12 @@ import { sql } from "drizzle-orm"
 import { sqliteTable, integer, text, numeric, real } from "drizzle-orm/sqlite-core"
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core"
 
+export const d1_migrations = sqliteTable("d1_migrations", {
+	id: integer().primaryKey({ autoIncrement: true }),
+	name: text(),
+	applied_at: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
+});
+
 export const account = sqliteTable("account", {
 	id: text().primaryKey(),
 	accountId: text().notNull(),
@@ -247,7 +253,7 @@ export const google_business_connections = sqliteTable("google_business_connecti
 	location_id: text().references((): AnySQLiteColumn => business_locations.id, { onDelete: "set null" } ),
 	connected_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	provider_account_email: text().notNull(),
-	encrypted_access_token: text(),
+	encrypted_access_token: text().notNull(),
 	encrypted_refresh_token: text().notNull(),
 	scopes: text().notNull(),
 	expires_at: text(),
@@ -263,7 +269,7 @@ export const google_business_events = sqliteTable("google_business_events", {
 	google_location_id: text(),
 	event_type: text(),
 	payload: text(),
-	status: text().default("pending"),
+	status: text().default("pending").notNull(),
 	error: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
