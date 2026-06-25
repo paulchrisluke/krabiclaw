@@ -16,7 +16,7 @@ function resolveLocalD1File() {
 
 export default defineConfig({
   schema: './server/db/schema.ts',
-  out: './migrations',
+  out: './drizzle',
   dialect: 'sqlite',
   dbCredentials: {
     url: process.env.DRIZZLE_DB_FILE ?? resolveLocalD1File(),
