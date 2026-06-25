@@ -34,6 +34,7 @@
     "schema:remote": "wrangler d1 migrations apply DB --remote",
     "schema:staging": "wrangler d1 migrations apply DB --env staging --remote",
     "drizzle:check": "drizzle-kit check",
+    "db:generate": "drizzle-kit generate",
     "seed:demo:generate": "node --experimental-strip-types scripts/generate-demo-seed.ts --stdout > /dev/null && node --experimental-strip-types scripts/generate-demo-bundle.ts",
     "seed:demo:preview": "node --experimental-strip-types scripts/generate-demo-seed.ts --preview",
     "seed:demo:staging": "node --experimental-strip-types scripts/generate-demo-seed.ts --staging",

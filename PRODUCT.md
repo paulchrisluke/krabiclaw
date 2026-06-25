@@ -143,7 +143,7 @@ Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locat
 ## Dashboard Model
 
 - **Organization** is the restaurant brand workspace and billing/team boundary.
-- **One org can have multiple sites** (multi-site constraint removed pre-squash, was migration `0017`; now part of the `0001_initial.sql` baseline). Sites are explicit everywhere — there is no "first site in org" fallback in dashboard routing or billing.
+- **One org can have multiple sites** — there is no unique-per-org constraint on sites. Sites are explicit everywhere — there is no "first site in org" fallback in dashboard routing or billing.
 - Each site has its own plan and Stripe subscription (`site_billing`). The Stripe *customer* stays at org level (`organization_billing.stripe_customer_id`) — one payment method covers every site in the org.
 - A new site always starts on `free`, even under a paid org. If the org already has another site on a paid plan and a saved card on file, the dashboard offers to auto-subscribe the new site immediately (`POST /api/billing/site-subscribe`, no Checkout redirect). Otherwise it's a normal Checkout upgrade later.
 - **Locations** are the persistent dashboard working context within a site, selected from the header on every dashboard page.

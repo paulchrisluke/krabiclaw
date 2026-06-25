@@ -49,17 +49,26 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
 
 ## Database Schema Workflow
 
-Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and are applied automatically on every deploy. Query access goes through **Drizzle ORM** (`server/db/schema.ts`, `server/db/index.ts`) — Drizzle is a query layer over the same D1 database, not a migration tool. `drizzle-kit` is only used for schema drift checking, never for generating or applying migrations.
+`server/db/schema.ts` (Drizzle ORM) is the **source of truth**. Migrations in `migrations/*.sql` are *generated* from it via `drizzle-kit generate` and applied via wrangler D1 migrations — they are not hand-authored deltas anymore.
 
-1. To change the schema, create a new migration:
+1. Edit `server/db/schema.ts` by hand to make the schema change (add a column, table, constraint, etc.).
+
+2. Generate the migration:
 
    ```bash
-   wrangler d1 migrations create DB <description>
+   yarn db:generate
    ```
 
-2. Edit the generated file in `migrations/`. Write only the delta: `ALTER TABLE`, `CREATE TABLE`, etc.
+   This runs `drizzle-kit generate`, diffs `schema.ts` against `migrations/meta/`, and writes a new `migrations/<timestamp_name>.sql` file plus an updated `migrations/meta/0000_snapshot.json`/`_journal.json`. Never hand-edit `migrations/meta/*` — it's drizzle-kit's own bookkeeping, regenerated every run.
 
-3. Update `server/db/schema.ts` by hand to match the new SQL — Drizzle's schema is not generated from migrations.
+3. **`drizzle-kit generate` only emits what's declared in `schema.ts` — nothing else.** It cannot generate:
+   - **Triggers** (`CREATE TRIGGER`) — drizzle-orm has no concept of them.
+   - **CHECK constraints** — not modeled in this codebase's `schema.ts`; enforce these at the API/Zod layer instead.
+   - **Indexes and unique constraints that aren't explicitly declared** — drizzle only emits an index/unique if the column or table builder says so. Model every constraint you need directly in `schema.ts`:
+     - Single column: `.unique()` on the column builder (e.g. `slug: text().unique()`).
+     - Composite unique: a third-arg callback on `sqliteTable(name, columns, (table) => [unique("name").on(table.a, table.b)])`.
+     - Composite primary key: same pattern with `primaryKey({ columns: [table.a, table.b] })` instead of single-column `.primaryKey()`.
+   - If you need a trigger, a `CHECK`, or a partial/`WHERE`-qualified unique index, **hand-append it to the generated `migrations/*.sql` file** after running `db:generate`, before applying/committing. Re-add it every time that migration file gets regenerated.
 
 4. Apply locally to test:
 
@@ -67,7 +76,7 @@ Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and ar
    yarn schema:local
    ```
 
-5. Run `yarn drizzle:check` (`drizzle-kit check`) to verify `server/db/schema.ts` hasn't drifted from the live D1 schema.
+5. Run `yarn drizzle:check` (`drizzle-kit check`) to verify `server/db/schema.ts` hasn't drifted from the live D1 schema. This only checks table/column shape — it will not catch a missing trigger or hand-appended index, since those aren't part of what drizzle tracks.
 
 6. Migrations run automatically on deploy. `yarn deploy` runs:
 
@@ -79,22 +88,24 @@ Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and ar
 
 7. Never write ad-hoc SQL files in `scripts/` for schema changes. They will not be tracked and can cause production outages.
 
-8. Never use `drizzle-kit generate` or `drizzle-kit migrate` against this database — `migrations/*.sql` applied via wrangler is the only source of truth for schema changes.
+8. Better Auth tables must use exact camelCase column names. App tables use snake_case.
 
-9. Better Auth tables must use exact camelCase column names. App tables use snake_case.
+9. Any schema change must be checked against current server queries (raw SQL and Drizzle alike) before finishing.
 
-10. Any schema change must be checked against current server queries (raw SQL and Drizzle alike) before finishing.
+10. Never define a `d1_migrations` table in `schema.ts`. Wrangler creates and owns that table itself to track applied migrations; if `schema.ts` also declares it, the generated migration tries to `CREATE TABLE d1_migrations` and collides with wrangler's own copy, failing every fresh `schema:local`/`schema:remote` run with "table `d1_migrations` already exists".
 
-`migrations/0001_initial.sql` is the **squashed baseline** — all migrations up through the old numbering (including what was previously migration `0017`) were folded into it. Numbering restarted from `0001` after the squash. Each migration file after `0001_initial.sql` is the source of truth for its own delta. Do not reference pre-squash migration numbers (e.g. "migration 0017") as if they still exist as separate files — that history is now baked into `0001_initial.sql`.
+11. After any `db:generate`, do a full local round-trip before trusting the migration: wipe `.wrangler/state/v3/d1`, run `yarn schema:local`, then run the relevant `yarn seed:*` command. A migration that "applies cleanly" can still silently drop a trigger or default that only a real seed run will surface (see incident below).
 
-**Squashing a migration history only updates the file on disk — it does not retroactively re-run against an environment that already applied an earlier version of that same filename.** `wrangler d1 migrations apply` tracks applied migrations by filename in the `d1_migrations` table, not by content/checksum. If `0001_initial.sql` is re-squashed to include newer tables/columns and a target environment already has an `0001_initial.sql` row recorded from a prior squash, `wrangler d1 migrations apply` will report "No migrations to apply!" and silently skip the new content. This has bitten production twice from the same squash: a whole missing table (`work_requests`/`platform_content_components`, fixed in `migrations/0002_...sql` via `CREATE TABLE IF NOT EXISTS`, safe since the table didn't exist yet) and missing columns on an _existing_ table (`site_pageview_events.visitor_id/country/region/city`, fixed in `migrations/0003_...sql`). Missing columns are the harder case — D1's SQLite has no `ADD COLUMN IF NOT EXISTS`, so a plain `ALTER TABLE ADD COLUMN` would fail with "duplicate column" on any fresh environment that already has the column from the current `0001_initial.sql`. The fix is to pull the column(s) back out of `0001_initial.sql`'s `CREATE TABLE` and into their own numbered migration, so every environment — fresh or stale — picks them up exactly once. Before assuming any environment is schema-current, diff its actual `sqlite_master` tables _and_ `PRAGMA table_info` per table against `server/db/schema.ts`, not just `wrangler d1 migrations list`.
+**Incident — 2026-06-25, the `drizzle-kit generate` migration squash silently dropped ~80 database objects.** A migration was squashed by running `drizzle-kit generate` straight from `schema.ts` and using that as the new baseline. Because `schema.ts` had never been annotated with `.unique()`/composite-unique/composite-PK, and triggers/CHECKs aren't representable in it at all, the generated migration was missing: every `sync_media_assets_old_*` trigger (which is what kept the legacy `media_assets_old` FK target populated), the `trg_chowbot_*` consistency triggers, ~60 unique/performance indexes (including uniqueness on `user.email`, `sites.slug`/`subdomain`, `organization.slug`, Stripe IDs, etc.), and the composite `PRIMARY KEY` on `site_config`. Separately, three boolean columns (`menu_items.featured`, `experiences.featured`, `site_locales.is_source`) had silently lost their `DEFAULT false` in `schema.ts` itself (unrelated to the generate step) — omitting them in a seed insert hit `NOT NULL` with no default, which `INSERT OR IGNORE` swallows without error, leaving rows missing and causing downstream FK failures that looked unrelated. None of this was caught by `drizzle:check`, because it only diffs table/column shape, not triggers or hand-rolled indexes. The fix was to model every constraint drizzle supports directly in `schema.ts` (see step 3) and hand-append everything else (triggers, partial indexes) to the generated migration. **Lesson: a migration that applies without error is not proof it's correct — always do a full wipe + reapply + reseed locally (step 11) before treating a regenerated migration as safe.**
+
+The current `migrations/0000_*.sql` is the squashed baseline going forward. If it ever needs to be re-squashed, remember: `wrangler d1 migrations apply` tracks applied migrations by **filename**, not content/checksum. Re-squashing an already-applied filename means any environment that already ran it will report "No migrations to apply!" and silently skip new content — new tables are safe via `CREATE TABLE IF NOT EXISTS`, but new/changed columns on an existing table are not (SQLite has no `ALTER TABLE ADD COLUMN IF NOT EXISTS`, so a stale environment errors with "duplicate column" while a fresh one needs it). Any such delta must ship as its own new, separately-named migration file, never folded back into an already-deployed `0000_*.sql`. Before assuming any environment is schema-current, diff its actual `sqlite_master` tables _and_ `PRAGMA table_info` per table against `server/db/schema.ts`, not just `wrangler d1 migrations list`.
 
 ---
 
 ## Multi-Tenancy
 
 - Organizations map to a team or agency using Better Auth’s `organization` plugin.
-- **One org can have multiple sites** — the unique-per-org constraint was removed pre-squash (was migration `0017`); this is now part of the `0001_initial.sql` baseline.
+- **One org can have multiple sites** — there is no unique-per-org constraint on sites.
 - Each site has its own plan and Stripe subscription (`site_billing` table).
 - The Stripe _customer_ stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
 - Multiple physical locations live under `business_locations`, not separate orgs. Locations are **unlimited on all plans**.
@@ -135,7 +146,7 @@ There used to be a fourth "platform-wide rollup GA4" (`G-Z18L1Y4G7K`, via `nuxt.
 - `server/middleware/tenant-resolution.ts` — runs on every request
 - `lib/auth-client.ts` — client-side Better Auth instance
 - `composables/` — Nuxt auto-imported
-- `migrations/` — canonical D1 schema, numbered files; `0001_initial.sql` is the squashed base (renumbered, supersedes all pre-squash migration numbers)
+- `migrations/` — D1 schema, generated from `server/db/schema.ts` via `yarn db:generate`; `migrations/meta/` is drizzle-kit's own bookkeeping, never hand-edited
 - `server/db/schema.ts` — Drizzle ORM schema, hand-maintained to mirror `migrations/`; `server/db/index.ts` — `createDb()` and query helpers
 - `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo tenant
 - `seed-definitions/pottery-house.ts`, `seed-definitions/kikuzuki.ts` — client site seed definitions
@@ -298,7 +309,7 @@ Flow:
 
 - Stripe is the source of truth for plan names, prices, and `marketing_features`.
 - `server/utils/billing.ts` → `getPlanEntitlements(plan)` defines what each plan unlocks in D1.
-- Entitlements are stored **per-site** in the `site_entitlements` table (this superseded `organization_entitlements` pre-squash, was migration `0017`, now part of the `0001_initial.sql` baseline). The old `organization_entitlements` table still exists in the schema for legacy billing/credits data but is not used for plan entitlement checks.
+- Entitlements are stored **per-site** in the `site_entitlements` table (this superseded `organization_entitlements`). The old `organization_entitlements` table still exists in the schema for legacy billing/credits data but is not used for plan entitlement checks.
 - Billing is **per-site** via `site_billing`. Checkout must pass `site_id` in Stripe session metadata.
 - Key entitlement keys:
   - `custom_domains`

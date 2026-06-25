@@ -1,3 +1,4 @@
+import Stripe from 'stripe'
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, getPriceIdForPlan, requireBillingAccess } from '../../utils/billing'
@@ -90,7 +91,15 @@ export default defineEventHandler(async (event) => {
         const existingCustomer = await stripe.customers.retrieve(customerId)
         if ('deleted' in existingCustomer && existingCustomer.deleted) customerId = null
       } catch (error) {
-        console.warn('checkout_customer_lookup_failed', { organizationId: orgId, customerId, error })
+        // Only a genuine "not found" means the stored ID is stale — anything else
+        // (rate limit, auth, network, Stripe 5xx) is transient and must not cause
+        // us to mint a duplicate customer or silently drop the stored ID.
+        const isNotFound = error instanceof Stripe.errors.StripeError && error.statusCode === 404
+        if (!isNotFound) {
+          console.error('checkout_customer_lookup_failed', { organizationId: orgId, customerId, error })
+          throw error
+        }
+        console.warn('checkout_customer_lookup_not_found', { organizationId: orgId, customerId })
         customerId = null
       }
     }
