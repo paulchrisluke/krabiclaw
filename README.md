@@ -93,7 +93,7 @@ CI + E2E auth/billing parity, tier intent, and staging-vs-production smoke rules
 
 ## Schema
 
-`server/db/schema.ts` (Drizzle ORM) is the source of truth. Schema changes start there, then `yarn db:generate` (`drizzle-kit generate`) produces the matching `migrations/*.sql` file, applied via `wrangler d1 migrations apply`. `drizzle-kit generate` can't emit triggers, CHECK constraints, or any index/unique constraint that isn't explicitly declared in `schema.ts` — those must be hand-appended to the generated migration file. Full workflow, the constraint caveats, and the 2026-06-25 incident where a squash silently dropped ~80 triggers/indexes are documented in `CLAUDE.md`'s "Database Schema Workflow" section.
+`server/db/schema.ts` (Drizzle ORM) is the source of truth for new schema changes. `migrations/0001_initial.sql`–`0007_*.sql` are historical and immutable (already applied everywhere) — from `0008` onward, schema changes start in `schema.ts`, then `yarn db:generate` (`drizzle-kit generate`) produces the matching additive `migrations/000N_*.sql` file, applied via `wrangler d1 migrations apply`. `drizzle-kit generate` can't emit triggers or CHECK constraints, and only emits indexes/uniques explicitly declared in `schema.ts` — those must be hand-appended to the generated migration file. Full workflow, the constraint caveats, and the 2026-06-25 incident (a squashed baseline broke staging CI and silently dropped ~80 triggers/indexes — since reverted) are documented in `CLAUDE.md`'s "Database Schema Workflow" section.
 
 ```bash
 yarn db:generate     # generate a migration from schema.ts after editing it

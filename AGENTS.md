@@ -49,7 +49,11 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
 
 ## Database Schema Workflow
 
-`server/db/schema.ts` (Drizzle ORM) is the **source of truth**. Migrations in `migrations/*.sql` are *generated* from it via `drizzle-kit generate` and applied via wrangler D1 migrations — they are not hand-authored deltas anymore.
+`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical, hand-authored, **already applied to every real environment (staging, production) and immutable** — never rename, edit, renumber, or re-squash them. From `0008` onward, migrations are *generated* from `schema.ts` via `drizzle-kit generate` and applied via wrangler D1 migrations.
+
+**Why the split:** `wrangler d1 migrations apply` tracks applied migrations by **filename**, not content/checksum. An environment that already ran `0001_initial.sql`...`0007_*.sql` has those exact filenames recorded — it has no idea a squashed `0000_something.sql` is "the same" schema. Renaming/squashing history that's already applied anywhere makes wrangler treat the new file as unapplied and try to re-run it, immediately failing with `table X already exists`. There is no clever flag around this; the only safe move is to never touch an already-applied filename and always add new migrations with higher numbers.
+
+`migrations/meta/0007_snapshot.json` + `migrations/meta/_journal.json` are drizzle-kit's own bookkeeping — a snapshot of what `schema.ts` looks like as of migration `0007`, established once so `drizzle-kit generate` has something to diff against. **There is no `0007_snapshot.sql` file and there shouldn't be one** — the snapshot exists purely so future generates produce a small incremental diff instead of a full from-scratch recreation. Never hand-edit `migrations/meta/*` except when deliberately re-establishing this baseline (see "Re-establishing the baseline" below).
 
 1. Edit `server/db/schema.ts` by hand to make the schema change (add a column, table, constraint, etc.).
 
@@ -59,7 +63,7 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
    yarn db:generate
    ```
 
-   This runs `drizzle-kit generate`, diffs `schema.ts` against `migrations/meta/`, and writes a new `migrations/<timestamp_name>.sql` file plus an updated `migrations/meta/0000_snapshot.json`/`_journal.json`. Never hand-edit `migrations/meta/*` — it's drizzle-kit's own bookkeeping, regenerated every run.
+   This runs `drizzle-kit generate`, diffs `schema.ts` against `migrations/meta/`, and writes a new `migrations/0008_<name>.sql` (then `0009`, `0010`, ...) plus an updated snapshot/journal in `migrations/meta/`. Because the journal's baseline entry is pinned at `idx: 7`, every new generate continues from `0008` — it will never collide with `0001`-`0007`.
 
 3. **`drizzle-kit generate` only emits what's declared in `schema.ts` — nothing else.** It cannot generate:
    - **Triggers** (`CREATE TRIGGER`) — drizzle-orm has no concept of them.
@@ -68,7 +72,8 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
      - Single column: `.unique()` on the column builder (e.g. `slug: text().unique()`).
      - Composite unique: a third-arg callback on `sqliteTable(name, columns, (table) => [unique("name").on(table.a, table.b)])`.
      - Composite primary key: same pattern with `primaryKey({ columns: [table.a, table.b] })` instead of single-column `.primaryKey()`.
-   - If you need a trigger, a `CHECK`, or a partial/`WHERE`-qualified unique index, **hand-append it to the generated `migrations/*.sql` file** after running `db:generate`, before applying/committing. Re-add it every time that migration file gets regenerated.
+     - Partial/`WHERE`-qualified unique index: `uniqueIndex("name").on(table.a, table.b).where(sql\`location_id IS NULL\`)`.
+   - If you need a trigger or a `CHECK`, **hand-append it to the generated `migrations/000N_*.sql` file** after running `db:generate`, before applying/committing.
 
 4. Apply locally to test:
 
@@ -76,7 +81,7 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
    yarn schema:local
    ```
 
-5. Run `yarn drizzle:check` (`drizzle-kit check`) to verify `server/db/schema.ts` hasn't drifted from the live D1 schema. This only checks table/column shape — it will not catch a missing trigger or hand-appended index, since those aren't part of what drizzle tracks.
+5. Run `yarn drizzle:check` (`drizzle-kit check`) to verify `server/db/schema.ts` hasn't drifted from the live D1 schema. This only checks table/column shape — it will not catch a missing trigger or hand-appended `CHECK`, since those aren't part of what drizzle tracks.
 
 6. Migrations run automatically on deploy. `yarn deploy` runs:
 
@@ -92,13 +97,20 @@ Dashboard CMS pages remain supported. When changing editing behavior, prefer sha
 
 9. Any schema change must be checked against current server queries (raw SQL and Drizzle alike) before finishing.
 
-10. Never define a `d1_migrations` table in `schema.ts`. Wrangler creates and owns that table itself to track applied migrations; if `schema.ts` also declares it, the generated migration tries to `CREATE TABLE d1_migrations` and collides with wrangler's own copy, failing every fresh `schema:local`/`schema:remote` run with "table `d1_migrations` already exists".
+10. Never define a `d1_migrations` table in `schema.ts`. Wrangler creates and owns that table itself to track applied migrations; if `schema.ts` also declares it, the generated migration tries to `CREATE TABLE d1_migrations` (or, worse, `DROP TABLE d1_migrations` if it's later removed from `schema.ts`) and collides with or destroys wrangler's own copy.
 
 11. After any `db:generate`, do a full local round-trip before trusting the migration: wipe `.wrangler/state/v3/d1`, run `yarn schema:local`, then run the relevant `yarn seed:*` command. A migration that "applies cleanly" can still silently drop a trigger or default that only a real seed run will surface (see incident below).
 
-**Incident — 2026-06-25, the `drizzle-kit generate` migration squash silently dropped ~80 database objects.** A migration was squashed by running `drizzle-kit generate` straight from `schema.ts` and using that as the new baseline. Because `schema.ts` had never been annotated with `.unique()`/composite-unique/composite-PK, and triggers/CHECKs aren't representable in it at all, the generated migration was missing: every `sync_media_assets_old_*` trigger (which is what kept the legacy `media_assets_old` FK target populated), the `trg_chowbot_*` consistency triggers, ~60 unique/performance indexes (including uniqueness on `user.email`, `sites.slug`/`subdomain`, `organization.slug`, Stripe IDs, etc.), and the composite `PRIMARY KEY` on `site_config`. Separately, three boolean columns (`menu_items.featured`, `experiences.featured`, `site_locales.is_source`) had silently lost their `DEFAULT false` in `schema.ts` itself (unrelated to the generate step) — omitting them in a seed insert hit `NOT NULL` with no default, which `INSERT OR IGNORE` swallows without error, leaving rows missing and causing downstream FK failures that looked unrelated. None of this was caught by `drizzle:check`, because it only diffs table/column shape, not triggers or hand-rolled indexes. The fix was to model every constraint drizzle supports directly in `schema.ts` (see step 3) and hand-append everything else (triggers, partial indexes) to the generated migration. **Lesson: a migration that applies without error is not proof it's correct — always do a full wipe + reapply + reseed locally (step 11) before treating a regenerated migration as safe.**
+### Re-establishing the baseline (rare — only if `migrations/meta/` is ever lost or corrupted)
 
-The current `migrations/0000_*.sql` is the squashed baseline going forward. If it ever needs to be re-squashed, remember: `wrangler d1 migrations apply` tracks applied migrations by **filename**, not content/checksum. Re-squashing an already-applied filename means any environment that already ran it will report "No migrations to apply!" and silently skip new content — new tables are safe via `CREATE TABLE IF NOT EXISTS`, but new/changed columns on an existing table are not (SQLite has no `ALTER TABLE ADD COLUMN IF NOT EXISTS`, so a stale environment errors with "duplicate column" while a fresh one needs it). Any such delta must ship as its own new, separately-named migration file, never folded back into an already-deployed `0000_*.sql`. Before assuming any environment is schema-current, diff its actual `sqlite_master` tables _and_ `PRAGMA table_info` per table against `server/db/schema.ts`, not just `wrangler d1 migrations list`.
+The baseline snapshot was created once by running `yarn db:generate` against an *empty* `migrations/meta/`, then **discarding the generated `.sql` file** (it would just recreate every existing table — never apply it) and keeping only the snapshot/journal, with the journal's single entry hand-edited to `idx: 7` / `tag: "0007_baseline"` (matching the count of real, already-applied files) so the *next* real generate continues at `0008` instead of colliding with `0001`-`0007`. Re-derive the same way if this ever needs to be redone, and bump the `idx` to match however many numbered migration files actually exist at the time.
+
+**Incident — 2026-06-25.** A migration was squashed by running `drizzle-kit generate` straight from `schema.ts` and committing the output as a new baseline (`migrations/0000_living_blockbuster.sql`), replacing `0001_initial.sql`-`0007_*.sql`. Two independent problems surfaced:
+
+1. **Wrangler's filename-tracking broke staging.** `krabiclaw-db-staging` already had `0001`-`0007` recorded as applied. The renamed `0000_living_blockbuster.sql` was an unfamiliar filename, so wrangler tried to apply it fresh and failed immediately with `table account already exists`. This broke the `E2E staging` CI job on every push. The fix was a straight revert of the squash on `staging` — the underlying database was never actually corrupted (D1 rolls back a failed migration file atomically and never records it), only the deploy step was broken.
+2. **`drizzle-kit generate` silently drops anything not declared in `schema.ts`.** Because `schema.ts` had never been annotated with `.unique()`/composite-unique/composite-PK, and triggers/`CHECK`s aren't representable in it at all, the generated squash was missing: every `sync_media_assets_old_*` trigger (which is what kept the legacy `media_assets_old` FK target populated), the `trg_chowbot_*` consistency triggers, ~60 unique/performance indexes (uniqueness on `user.email`, `sites.slug`/`subdomain`, `organization.slug`, Stripe IDs, etc.), and the composite `PRIMARY KEY` on `site_config`. Separately, three boolean columns (`menu_items.featured`, `experiences.featured`, `site_locales.is_source`) had silently lost their `DEFAULT false` in `schema.ts` itself — omitting them in a seed insert hit `NOT NULL` with no default, which `INSERT OR IGNORE` swallows without error, leaving rows missing and causing downstream FK failures that looked unrelated. None of this was caught by `drizzle:check`, which only diffs table/column shape.
+
+The fix that stuck: revert the squash, keep `0001`-`0007` exactly as they are, model every constraint drizzle supports directly in `schema.ts` (step 3), and establish the `meta/` baseline (above) so future changes generate additively as `0008+`. **Lesson: a migration that applies without error is not proof it's correct — always do a full wipe + reapply + reseed locally (step 11) before trusting a generated migration, and never rename or squash a migration filename that any real environment has already applied.**
 
 ---
 
@@ -146,7 +158,7 @@ There used to be a fourth "platform-wide rollup GA4" (`G-Z18L1Y4G7K`, via `nuxt.
 - `server/middleware/tenant-resolution.ts` — runs on every request
 - `lib/auth-client.ts` — client-side Better Auth instance
 - `composables/` — Nuxt auto-imported
-- `migrations/` — D1 schema, generated from `server/db/schema.ts` via `yarn db:generate`; `migrations/meta/` is drizzle-kit's own bookkeeping, never hand-edited
+- `migrations/` — D1 schema; `0001`-`0007` are historical and immutable, `0008+` are generated from `server/db/schema.ts` via `yarn db:generate`; `migrations/meta/` is drizzle-kit's own bookkeeping, never hand-edited except when re-establishing the baseline
 - `server/db/schema.ts` — Drizzle ORM schema, hand-maintained to mirror `migrations/`; `server/db/index.ts` — `createDb()` and query helpers
 - `seed-definitions/demo.ts` — typed source of truth for the hybrid platform demo tenant
 - `seed-definitions/pottery-house.ts`, `seed-definitions/kikuzuki.ts` — client site seed definitions
