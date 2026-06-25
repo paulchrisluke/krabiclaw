@@ -81,8 +81,19 @@ export default defineEventHandler(async (event) => {
 
     const stripe = getStripe(env)
 
-    // Ensure Stripe customer exists at org level (shared payment method across sites)
+    // Ensure Stripe customer exists at org level (shared payment method across sites).
+    // The stored ID can go stale (deleted in Stripe, or a synthetic ID from a test
+    // webhook) — validate before reuse rather than passing a dead ID to Checkout.
     let customerId = organization.stripe_customer_id
+    if (customerId) {
+      try {
+        const existingCustomer = await stripe.customers.retrieve(customerId)
+        if ('deleted' in existingCustomer && existingCustomer.deleted) customerId = null
+      } catch (error) {
+        console.warn('checkout_customer_lookup_failed', { organizationId: orgId, customerId, error })
+        customerId = null
+      }
+    }
     if (!customerId) {
       const customer = await stripe.customers.create({
         name: organization.name,

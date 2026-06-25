@@ -257,6 +257,10 @@ export default defineNuxtConfig({
     serverAssets: [{
       baseName: 'docs',
       dir: './docs'
+    }, {
+      baseName: 'platform',
+      dir: '..',
+      pattern: 'PRODUCT.md'
     }]
   }
 })

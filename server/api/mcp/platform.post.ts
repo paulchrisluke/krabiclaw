@@ -11,6 +11,8 @@ import {
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { executePlatformMcpToolCall } from '~/server/utils/platform-mcp-executor'
 import { PLATFORM_MCP_TOOLS } from '~/server/utils/platform-mcp-tools'
+import { PLATFORM_MCP_RESOURCES, readPlatformMcpResource } from '~/server/utils/platform-mcp-resources'
+import { PLATFORM_MCP_PROMPTS, renderPlatformMcpPrompt } from '~/server/utils/platform-mcp-prompts'
 
 function oauthChallenge(baseUrl: string, error = 'invalid_token', description = 'Connect the KrabiClaw platform admin app to continue.') {
   return `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource/platform-mcp", error="${error}", error_description="${description}"`
@@ -89,7 +91,15 @@ export default defineEventHandler(async (event) => {
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: { name: 'krabiclaw-platform-mcp', version: 'v1' },
-        instructions: 'KrabiClaw platform admin MCP. Use this app only for internal platform operations such as managing krabiclaw.com/blog and krabiclaw.com/docs. This app does not expose tenant site tools.',
+        instructions: [
+          'KrabiClaw platform admin MCP. This app does not expose tenant site tools — it is for internal operations on krabiclaw.com/blog and krabiclaw.com/docs only.',
+          'You are acting as a growth/SEO copilot for a human content writer, not an autonomous publisher. Your job is to help them prioritize, research, draft, edit, and publish platform blog posts and docs in service of growing krabiclaw.com traffic and sign-ups.',
+          'Early in a session, read the kc://docs/product-context resource (PRODUCT.md) for what KrabiClaw actually is, its surfaces, verticals, and business model — do not assume or invent product facts.',
+          'Derive voice and tone from existing published posts/docs (via list_platform_blog_posts, get_platform_blog_post, list_platform_docs, get_platform_doc) rather than inventing a style — KrabiClaw has no separate style guide; the published content is the style guide.',
+          'Ground prioritization in get_platform_analytics (traffic and new_signups), not guesses about what readers want.',
+          'Prefer the prompts audit_content_for_growth, draft_blog_post, and update_and_publish_post as starting points for those respective workflows.',
+          'New content should be drafted for the writer\'s approval before publishing. Once the writer has supplied or approved final content, execute the corresponding tool calls directly and in sequence — do not stop to describe a call instead of making it.',
+        ].join(' '),
       })
     }
 
@@ -106,7 +116,14 @@ export default defineEventHandler(async (event) => {
 
     if (request.method === 'resources/list') {
       await requireMcpUser(event, platformAdminAuthOptions)
-      return mcpSuccess(request.id, { resources: [] })
+      return mcpSuccess(request.id, { resources: PLATFORM_MCP_RESOURCES })
+    }
+
+    if (request.method === 'resources/read') {
+      await requireMcpUser(event, platformAdminAuthOptions)
+      const uri = typeof request.params?.uri === 'string' ? request.params.uri : ''
+      const content = await readPlatformMcpResource(uri)
+      return mcpSuccess(request.id, { contents: [content] })
     }
 
     if (request.method === 'resources/templates/list') {
@@ -116,7 +133,26 @@ export default defineEventHandler(async (event) => {
 
     if (request.method === 'prompts/list') {
       await requireMcpUser(event, platformAdminAuthOptions)
-      return mcpSuccess(request.id, { prompts: [] })
+      return mcpSuccess(request.id, { prompts: PLATFORM_MCP_PROMPTS })
+    }
+
+    if (request.method === 'prompts/get') {
+      await requireMcpUser(event, platformAdminAuthOptions)
+      const name = typeof request.params?.name === 'string' ? request.params.name : ''
+      const rawPromptArgs = request.params?.arguments
+      const promptArgs: Record<string, string> = {}
+      if (rawPromptArgs && typeof rawPromptArgs === 'object' && !Array.isArray(rawPromptArgs)) {
+        for (const [key, value] of Object.entries(rawPromptArgs as Record<string, unknown>)) {
+          if (typeof value === 'string') promptArgs[key] = value
+        }
+      }
+      const rendered = renderPlatformMcpPrompt(name, promptArgs)
+      return mcpSuccess(request.id, {
+        description: rendered.description,
+        messages: [
+          { role: 'user', content: { type: 'text', text: rendered.text } },
+        ],
+      })
     }
 
     if (request.method === 'server/discover') {

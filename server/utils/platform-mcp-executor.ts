@@ -141,6 +141,7 @@ export async function executePlatformMcpToolCall(
         page_views: summary.pageViews,
         unique_sessions: summary.uniqueSessions,
         unique_visitors: summary.uniqueVisitors,
+        new_signups: summary.newSignups,
         top_pages: summary.topPages.map((page) => ({
           path: page.path,
           views: page.views,
@@ -150,6 +151,7 @@ export async function executePlatformMcpToolCall(
           date: day.date,
           page_views: day.pageViews,
           sessions: day.sessions,
+          new_signups: day.newSignups,
         })),
         period: { start_date: startDate, end_date: endDate },
       }
