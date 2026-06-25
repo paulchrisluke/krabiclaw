@@ -477,7 +477,7 @@ const organizationListItemObject = {
 // ---
 
 const siteIdSchema = {
-  site_id: { type: 'string', description: 'Site ID.' },
+  site_id: { type: 'string', description: 'Site id, subdomain, or custom domain.' },
 }
 
 const generatedImagePickerOutputSchema = {
@@ -794,8 +794,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: 'object',
       properties: {
         organization_id: { type: 'string' },
-        site_id: { type: 'string' },
-        location_id: { type: 'string' },
+        site_id: { type: 'string', description: 'Site id, subdomain, or custom domain.' },
+        location_id: { type: 'string', description: 'Location id or slug.' },
       },
       anyOf: [
         { required: ['organization_id'] },
@@ -1281,7 +1281,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     domain: 'locations',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { location_id: { type: 'string' } },
+    inputSchema: { location_id: { type: 'string', description: 'Location id or slug.' } },
     required: ['location_id'],
     outputSchema: {
       type: 'object',
@@ -1322,7 +1322,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     minimumRole: 'editor',
     confirmRequired: false,
     inputSchema: {
-      location_id: { type: 'string' },
+      location_id: { type: 'string', description: 'Location id or slug.' },
       phone: { type: 'string', description: 'Public phone number shown to guests on the website and in booking/reservation confirmation emails.' },
       email: { type: 'string', description: 'Public email shown to guests on the website and in booking/reservation confirmation emails.' },
       notification_phone: { type: 'string', description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Falls back to the site-level whatsapp_phone if null. International format: +66812345678' },
@@ -1447,7 +1447,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     domain: 'locations',
     minimumRole: 'admin',
     confirmRequired: true,
-    inputSchema: { location_id: { type: 'string' } },
+    inputSchema: { location_id: { type: 'string', description: 'Location id or slug.' } },
     required: ['location_id'],
     outputSchema: {
       type: 'object',
@@ -2443,7 +2443,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { experience_id: { type: 'string' } },
+    inputSchema: { experience_id: { type: 'string', description: 'Experience id, or its slug from the public URL (/experiences/<slug>).' } },
     required: ['experience_id'],
     outputSchema: {
       type: 'object',
@@ -2471,7 +2471,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { experience_id: { type: 'string' }, ...experienceWriteSchema },
+    inputSchema: { experience_id: { type: 'string', description: 'Experience id or slug.' }, ...experienceWriteSchema },
     required: ['experience_id'],
     outputSchema: {
       type: 'object',
@@ -2486,7 +2486,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     minimumRole: 'editor',
     confirmRequired: false,
     inputSchema: {
-      experience_id: { type: 'string' },
+      experience_id: { type: 'string', description: 'Experience id or slug.' },
       asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
     },
     required: ['experience_id', 'asset_id'],
@@ -2503,7 +2503,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     minimumRole: 'editor',
     confirmRequired: false,
     inputSchema: {
-      experience_id: { type: 'string' },
+      experience_id: { type: 'string', description: 'Experience id or slug.' },
       asset_id: { type: 'string', description: 'Active video asset id from get_site_media_assets.' },
     },
     required: ['experience_id', 'asset_id'],
@@ -2520,7 +2520,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     minimumRole: 'editor',
     confirmRequired: false,
     inputSchema: {
-      experience_id: { type: 'string' },
+      experience_id: { type: 'string', description: 'Experience id or slug.' },
       images: experienceWriteSchema.images,
     },
     required: ['experience_id', 'images'],
@@ -2536,7 +2536,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: true,
-    inputSchema: { experience_id: { type: 'string' } },
+    inputSchema: { experience_id: { type: 'string', description: 'Experience id or slug.' } },
     required: ['experience_id'],
     outputSchema: {
       type: 'object',
@@ -2550,7 +2550,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { experience_id: { type: 'string' } },
+    inputSchema: { experience_id: { type: 'string', description: 'Experience id or slug.' } },
     required: ['experience_id'],
     outputSchema: {
       type: 'object',
@@ -2564,7 +2564,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     domain: 'experiences',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { experience_id: { type: 'string' }, booking_id: { type: 'string' }, status: { type: 'string' } },
+    inputSchema: { experience_id: { type: 'string', description: 'Experience id or slug.' }, booking_id: { type: 'string' }, status: { type: 'string' } },
     required: ['experience_id', 'booking_id', 'status'],
     outputSchema: {
       type: 'object',

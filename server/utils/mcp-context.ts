@@ -16,6 +16,7 @@ export interface McpSiteSummary {
   organization_slug: string | null
   brand_name: string | null
   subdomain: string | null
+  custom_domain: string | null
   public_url: string | null
   status: string
   onboarding_status: string
@@ -81,7 +82,7 @@ export async function listAccessibleSitesForMcp(
   if (isPlatformAdmin) {
     return await queryAll<McpSiteSummary>(db, `
       SELECT s.id, s.organization_id, o.name AS organization_name, o.slug AS organization_slug,
-             s.brand_name, s.subdomain, s.public_url, s.status, s.onboarding_status,
+             s.brand_name, s.subdomain, s.custom_domain, s.public_url, s.status, s.onboarding_status,
              s.primary_location_id, 'owner' AS role
       FROM sites s
       LEFT JOIN organization o ON o.id = s.organization_id
@@ -91,7 +92,7 @@ export async function listAccessibleSitesForMcp(
 
   return await queryAll<McpSiteSummary>(db, `
     SELECT s.id, s.organization_id, o.name AS organization_name, o.slug AS organization_slug,
-           s.brand_name, s.subdomain, s.public_url, s.status, s.onboarding_status,
+           s.brand_name, s.subdomain, s.custom_domain, s.public_url, s.status, s.onboarding_status,
            s.primary_location_id, m.role
     FROM sites s
     JOIN organization o ON o.id = s.organization_id
@@ -158,8 +159,17 @@ export async function resolveMcpWorkspace(
       : preferredOrganizationId
         ? sites.filter((entry) => entry.organization_id === preferredOrganizationId)
         : sites
+  // Exact technical identifiers (subdomain, custom domain) resolve directly here —
+  // they're unambiguous and the full candidate list is already in memory, so this
+  // costs nothing extra. Fuzzy name matching deliberately is not attempted: two
+  // sites/locations can share a word in their name, and guessing wrong is worse
+  // than requiring list_sites/list_locations first for that case.
   let site = requestedSiteId
-    ? scopedSites.find((entry) => entry.id === requestedSiteId) ?? null
+    ? scopedSites.find((entry) =>
+        entry.id === requestedSiteId ||
+        entry.subdomain === requestedSiteId ||
+        entry.custom_domain === requestedSiteId,
+      ) ?? null
     : null
 
   if (!requestedSiteId) {
@@ -195,7 +205,7 @@ export async function resolveMcpWorkspace(
   const requestedLocationId = normalizeId(options.locationId)
   const preferredLocationId = normalizeId(preference?.location_id)
   let location = requestedLocationId
-    ? locations.find((entry) => entry.id === requestedLocationId) ?? null
+    ? locations.find((entry) => entry.id === requestedLocationId || entry.slug === requestedLocationId) ?? null
     : null
 
   if (!requestedLocationId) {

@@ -178,10 +178,24 @@ export async function getExperienceBySlug(
 export async function getExperienceById(
   db: DbClient,
   siteId: string,
-  id: string,
+  idOrSlug: string,
 ): Promise<Experience | null> {
-  const row = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.id = ? LIMIT 1`, [siteId, id])
-  return row ? parseRow(row) : null
+  // Check id first so a slug that happens to collide with another row's id can
+  // never shadow the row actually addressed by that id.
+  const byId = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.id = ? LIMIT 1`, [siteId, idOrSlug])
+  if (byId) return parseRow(byId)
+  const bySlug = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.slug = ? LIMIT 1`, [siteId, idOrSlug])
+  return bySlug ? parseRow(bySlug) : null
+}
+
+// Used by callers (update/delete/bookings) that need the canonical row id before
+// running their own queries against other tables — getExperienceById/BySlug above
+// already accept either form directly for reads of the experience itself.
+async function resolveExperienceId(db: DbClient, siteId: string, idOrSlug: string): Promise<string | null> {
+  const byId = await queryFirst<{ id: string }>(db, `SELECT id FROM experiences WHERE site_id = ? AND id = ? LIMIT 1`, [siteId, idOrSlug])
+  if (byId) return byId.id
+  const bySlug = await queryFirst<{ id: string }>(db, `SELECT id FROM experiences WHERE site_id = ? AND slug = ? LIMIT 1`, [siteId, idOrSlug])
+  return bySlug?.id ?? null
 }
 
 function slugify(title: string): string {
@@ -415,9 +429,10 @@ export type UpdateExperienceInput = Partial<CreateExperienceInput> & { slug?: st
 export async function updateExperience(
   db: DbClient,
   siteId: string,
-  id: string,
+  idOrSlug: string,
   input: UpdateExperienceInput,
 ): Promise<Experience | null> {
+  const id = (await resolveExperienceId(db, siteId, idOrSlug)) ?? idOrSlug
   assertFiniteNonNegative(input.price_amount, 'price_amount')
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
   const sets: string[] = []
@@ -491,8 +506,9 @@ export async function updateExperience(
 export async function deleteExperience(
   db: DbClient,
   siteId: string,
-  id: string,
+  idOrSlug: string,
 ): Promise<boolean> {
+  const id = (await resolveExperienceId(db, siteId, idOrSlug)) ?? idOrSlug
   const result = await execute(db, `DELETE FROM experiences WHERE site_id = ? AND id = ?`, [siteId, id])
   return Boolean(result.meta.changes)
 }
@@ -547,8 +563,9 @@ export async function createExperienceBooking(
 export async function listExperienceBookings(
   db: DbClient,
   siteId: string,
-  experienceId: string,
+  experienceIdOrSlug: string,
 ): Promise<ExperienceBooking[]> {
+  const experienceId = (await resolveExperienceId(db, siteId, experienceIdOrSlug)) ?? experienceIdOrSlug
   const results = await queryAll<ExperienceBooking>(
     db,
     `SELECT id, experience_id, organization_id, site_id, guest_name, guest_email,
@@ -564,10 +581,11 @@ export async function listExperienceBookings(
 export async function updateBookingStatus(
   db: DbClient,
   siteId: string,
-  experienceId: string,
+  experienceIdOrSlug: string,
   bookingId: string,
   status: 'pending' | 'confirmed' | 'cancelled',
 ): Promise<boolean> {
+  const experienceId = (await resolveExperienceId(db, siteId, experienceIdOrSlug)) ?? experienceIdOrSlug
   const result = await execute(
     db,
     `UPDATE experience_bookings SET status = ?, updated_at = ?

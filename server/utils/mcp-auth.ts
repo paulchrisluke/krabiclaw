@@ -339,6 +339,9 @@ function ensureForbiddenScopesAbsent(scopes: string[], forbiddenScopes?: string[
   }
 }
 
+// siteId accepts the site's id, subdomain, or custom_domain — all three are exact,
+// unambiguous identifiers (unlike a free-text business name), so resolving them
+// directly here removes a list-then-match round trip for every site-scoped tool.
 export async function requireMcpSite(
   event: H3Event,
   siteId: string,
@@ -347,13 +350,36 @@ export async function requireMcpSite(
   const user = await requireMcpUser(event)
 
   if (user.isPlatformAdmin) {
-    const site = await queryFirst<{ organization_id: string; organization_slug: string | null }>(
+    // Check id first, then subdomain, then custom_domain — an OR across all
+    // three columns is ambiguous if a value collides across columns (e.g. a
+    // custom_domain on one site equal to another site's id).
+    const site = await queryFirst<{ id: string; organization_id: string; organization_slug: string | null }>(
       user.db,
       `
-      SELECT s.organization_id, o.slug as organization_slug
+      SELECT s.id, s.organization_id, o.slug as organization_slug
       FROM sites s
       LEFT JOIN organization o ON s.organization_id = o.id
       WHERE s.id = ?
+      LIMIT 1
+    `,
+      [siteId],
+    ) ?? await queryFirst<{ id: string; organization_id: string; organization_slug: string | null }>(
+      user.db,
+      `
+      SELECT s.id, s.organization_id, o.slug as organization_slug
+      FROM sites s
+      LEFT JOIN organization o ON s.organization_id = o.id
+      WHERE s.subdomain = ?
+      LIMIT 1
+    `,
+      [siteId],
+    ) ?? await queryFirst<{ id: string; organization_id: string; organization_slug: string | null }>(
+      user.db,
+      `
+      SELECT s.id, s.organization_id, o.slug as organization_slug
+      FROM sites s
+      LEFT JOIN organization o ON s.organization_id = o.id
+      WHERE s.custom_domain = ?
       LIMIT 1
     `,
       [siteId],
@@ -365,25 +391,33 @@ export async function requireMcpSite(
 
     return {
       ...user,
-      siteId,
+      siteId: site.id,
       organizationId: site.organization_id,
       organizationSlug: site.organization_slug || undefined,
       role: 'owner',
     }
   }
 
-  const site = await queryFirst<{ organization_id: string; role: string; organization_slug: string | null }>(
-    user.db,
-    `
-    SELECT s.organization_id, m.role, o.slug as organization_slug
-    FROM sites s
-    JOIN member m ON s.organization_id = m.organizationId
-    LEFT JOIN organization o ON s.organization_id = o.id
-    WHERE s.id = ? AND m.userId = ?
-    LIMIT 1
-  `,
-    [siteId, user.userId],
-  )
+  type MemberSiteRow = { id: string; organization_id: string; role: string; organization_slug: string | null }
+  const memberSiteByColumn = async (column: 'id' | 'subdomain' | 'custom_domain') =>
+    queryFirst<MemberSiteRow>(
+      user.db,
+      `
+      SELECT s.id, s.organization_id, m.role, o.slug as organization_slug
+      FROM sites s
+      JOIN member m ON s.organization_id = m.organizationId
+      LEFT JOIN organization o ON s.organization_id = o.id
+      WHERE s.${column} = ? AND m.userId = ?
+      LIMIT 1
+    `,
+      [siteId, user.userId],
+    )
+
+  // Check id first, then subdomain, then custom_domain — see note above on
+  // why an OR across all three columns is ambiguous.
+  const site = await memberSiteByColumn('id')
+    ?? await memberSiteByColumn('subdomain')
+    ?? await memberSiteByColumn('custom_domain')
 
   if (!site?.organization_id || !site.role) {
     throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
@@ -396,7 +430,7 @@ export async function requireMcpSite(
 
   return {
     ...user,
-    siteId,
+    siteId: site.id,
     organizationId: site.organization_id,
     organizationSlug: site.organization_slug || undefined,
     role,
@@ -409,7 +443,7 @@ export async function getVisibleSiteContext(
 ): Promise<{ role: McpToolRole; organizationId: string; siteId: string } | null> {
   try {
     const site = await requireMcpSite(event, siteId, 'editor')
-    return { role: site.role, organizationId: site.organizationId, siteId }
+    return { role: site.role, organizationId: site.organizationId, siteId: site.siteId }
   } catch (error) {
     const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
       ? Number((error as { statusCode: number }).statusCode)
