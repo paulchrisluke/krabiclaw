@@ -30,8 +30,11 @@ BETTER_AUTH_URL = "https://krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw"
+GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
 # Internal cron/API endpoints use CRON_SECRET:
 #   yarn wrangler secret put CRON_SECRET
+# GA4_API_SECRET (Measurement Protocol) is a secret, not a var:
+#   yarn wrangler secret put GA4_API_SECRET
 
 [[d1_databases]]
 binding = "DB"

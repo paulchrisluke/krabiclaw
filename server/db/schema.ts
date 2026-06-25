@@ -1,12 +1,6 @@
 import { sql } from "drizzle-orm"
-import { sqliteTable, integer, text, numeric, real } from "drizzle-orm/sqlite-core"
+import { sqliteTable, integer, text, numeric, real, unique, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core"
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core"
-
-export const d1_migrations = sqliteTable("d1_migrations", {
-	id: integer().primaryKey({ autoIncrement: true }),
-	name: text(),
-	applied_at: numeric().default(sql`(CURRENT_TIMESTAMP)`).notNull(),
-});
 
 export const account = sqliteTable("account", {
 	id: text().primaryKey(),
@@ -63,7 +57,9 @@ export const business_location_translations = sqliteTable("business_location_tra
 	reviewed_at: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
-});
+}, (table) => [
+	unique("business_location_translations_organization_id_site_id_location_id_locale_unique").on(table.organization_id, table.site_id, table.location_id, table.locale),
+]);
 
 export const business_locations = sqliteTable("business_locations", {
 	id: text().primaryKey(),
@@ -85,7 +81,7 @@ export const business_locations = sqliteTable("business_locations", {
 	categories: text(),
 	rating: real(),
 	review_count: integer(),
-	is_primary: numeric(),
+	is_primary: numeric().default(sql`false`),
 	status: text().default("active"),
 	last_synced_at: text(),
 	description: text(),
@@ -110,7 +106,9 @@ export const business_locations = sqliteTable("business_locations", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	notification_phone: text(),
 	timezone: text(),
-});
+}, (table) => [
+	unique("business_locations_organization_id_site_id_slug_unique").on(table.organization_id, table.site_id, table.slug),
+]);
 
 export const canary_runs = sqliteTable("canary_runs", {
 	id: text().primaryKey(),
@@ -157,7 +155,7 @@ export const chowbot_messages = sqliteTable("chowbot_messages", {
 	channel: text().notNull(),
 	content: text(),
 	media: text(),
-	meta_message_id: text(),
+	meta_message_id: text().unique(),
 	tool_calls: text(),
 	status: text().default("sent").notNull(),
 	error: text(),
@@ -183,11 +181,13 @@ export const dashboard_preferences = sqliteTable("dashboard_preferences", {
 	selected_location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
-});
+}, (table) => [
+	unique("dashboard_preferences_user_id_organization_id_unique").on(table.user_id, table.organization_id),
+]);
 
 export const domain_reconciliation_jobs = sqliteTable("domain_reconciliation_jobs", {
 	id: text().primaryKey(),
-	domain_id: text().notNull().references(() => site_domains.id, { onDelete: "cascade" } ),
+	domain_id: text().notNull().references(() => site_domains.id, { onDelete: "cascade" } ).unique(),
 	status: text().default("queued").notNull(),
 	run_after: text().notNull(),
 	attempts: integer().default(0).notNull(),
@@ -244,7 +244,9 @@ export const facebook_pages_connections = sqliteTable("facebook_pages_connection
 	status: text().default("active").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	unique("facebook_pages_connections_organization_id_site_id_unique").on(table.organization_id, table.site_id),
+]);
 
 export const google_business_connections = sqliteTable("google_business_connections", {
 	id: text().primaryKey(),
@@ -260,7 +262,10 @@ export const google_business_connections = sqliteTable("google_business_connecti
 	status: text().default("active").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	unique("google_business_connections_organization_id_site_id_location_id_unique").on(table.organization_id, table.site_id, table.location_id),
+	uniqueIndex("idx_google_business_connections_site_level_unique").on(table.organization_id, table.site_id).where(sql`location_id IS NULL`),
+]);
 
 export const google_business_events = sqliteTable("google_business_events", {
 	id: text().primaryKey(),
@@ -410,7 +415,9 @@ export const menu_item_translations = sqliteTable("menu_item_translations", {
 	reviewed_at: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
-});
+}, (table) => [
+	unique("menu_item_translations_organization_id_site_id_menu_item_id_locale_unique").on(table.organization_id, table.site_id, table.menu_item_id, table.locale),
+]);
 
 export const menu_items = sqliteTable("menu_items", {
 	id: text().primaryKey(),
@@ -422,7 +429,7 @@ export const menu_items = sqliteTable("menu_items", {
 	price_amount: numeric(),
 	image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
 	available: numeric().default(sql`1`).notNull(),
-	featured: numeric().notNull(),
+	featured: numeric().default(sql`false`).notNull(),
 	featured_sort_order: integer().default(0).notNull(),
 	sort_order: integer().default(0).notNull(),
 	allergens: text(),
@@ -451,7 +458,9 @@ export const menu_translations = sqliteTable("menu_translations", {
 	reviewed_at: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
-});
+}, (table) => [
+	unique("menu_translations_organization_id_site_id_menu_id_locale_unique").on(table.organization_id, table.site_id, table.menu_id, table.locale),
+]);
 
 export const menus = sqliteTable("menus", {
 	id: text().primaryKey(),
@@ -489,7 +498,7 @@ export const oauthAccessToken = sqliteTable("oauthAccessToken", {
 	id: text().primaryKey(),
 	clientId: text().notNull(),
 	userId: text(),
-	token: text().notNull(),
+	token: text().notNull().unique(),
 	scopes: text().default("").notNull(),
 	expiresAt: integer({ mode: "timestamp" }).notNull(),
 	createdAt: integer({ mode: "timestamp" }).notNull(),
@@ -500,7 +509,7 @@ export const oauthAccessToken = sqliteTable("oauthAccessToken", {
 
 export const oauthClient = sqliteTable("oauthClient", {
 	id: text().primaryKey(),
-	clientId: text().notNull(),
+	clientId: text().notNull().unique(),
 	clientSecret: text(),
 	name: text().notNull(),
 	redirectUris: text().notNull(),
@@ -539,13 +548,15 @@ export const oauthConsent = sqliteTable("oauthConsent", {
 	createdAt: integer({ mode: "timestamp" }).notNull(),
 	updatedAt: integer({ mode: "timestamp" }).notNull(),
 	referenceId: text(),
-});
+}, (table) => [
+	unique("oauthConsent_clientId_userId_unique").on(table.clientId, table.userId),
+]);
 
 export const oauthRefreshToken = sqliteTable("oauthRefreshToken", {
 	id: text().primaryKey(),
 	clientId: text().notNull(),
 	userId: text(),
-	token: text().notNull(),
+	token: text().notNull().unique(),
 	scopes: text().default("").notNull(),
 	accessTokenId: text(),
 	expiresAt: integer({ mode: "timestamp" }).notNull(),
@@ -559,7 +570,7 @@ export const oauthRefreshToken = sqliteTable("oauthRefreshToken", {
 export const organization = sqliteTable("organization", {
 	id: text().primaryKey(),
 	name: text().notNull(),
-	slug: text(),
+	slug: text().unique(),
 	logo: text(),
 	metadata: text(),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
@@ -568,13 +579,13 @@ export const organization = sqliteTable("organization", {
 export const organization_billing = sqliteTable("organization_billing", {
 	id: text(),
 	organization_id: text().primaryKey().references(() => organization.id, { onDelete: "cascade" } ),
-	stripe_customer_id: text(),
-	stripe_subscription_id: text(),
-	stripe_subscription_item_id: text(),
+	stripe_customer_id: text().unique(),
+	stripe_subscription_id: text().unique(),
+	stripe_subscription_item_id: text().unique(),
 	status: text().default("free").notNull(),
 	plan: text().default("free").notNull(),
 	current_period_end: text(),
-	cancel_at_period_end: numeric(),
+	cancel_at_period_end: numeric().default(sql`false`),
 	auto_topup_enabled: integer().default(0).notNull(),
 	auto_topup_bundle: integer().default(500).notNull(),
 	auto_topup_threshold: integer().default(100).notNull(),
@@ -589,19 +600,23 @@ export const organization_entitlements = sqliteTable("organization_entitlements"
 	source: text().default("system").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	unique("organization_entitlements_organization_id_key_unique").on(table.organization_id, table.key),
+]);
 
 export const platform_analytics = sqliteTable("platform_analytics", {
 	id: text().primaryKey(),
 	metric: text().notNull(),
 	value: integer().notNull(),
 	date: text().notNull(),
-});
+}, (table) => [
+	unique("platform_analytics_metric_date_unique").on(table.metric, table.date),
+]);
 
 export const platform_blog_posts = sqliteTable("platform_blog_posts", {
 	id: text().primaryKey(),
 	title: text().notNull(),
-	slug: text().notNull(),
+	slug: text().notNull().unique(),
 	body: text().notNull(),
 	excerpt: text(),
 	category: text(),
@@ -628,7 +643,7 @@ export const platform_contact_submissions = sqliteTable("platform_contact_submis
 
 export const platform_content = sqliteTable("platform_content", {
 	id: text().primaryKey(),
-	page: text().notNull(),
+	page: text().notNull().unique(),
 	content: text().notNull(),
 	updated_by: text().references(() => user.id, { onDelete: "set null" } ),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -637,7 +652,7 @@ export const platform_content = sqliteTable("platform_content", {
 export const platform_docs = sqliteTable("platform_docs", {
 	id: text().primaryKey(),
 	title: text().notNull(),
-	slug: text().notNull(),
+	slug: text().notNull().unique(),
 	body: text().notNull(),
 	excerpt: text(),
 	category: text(),
@@ -684,7 +699,9 @@ export const post_translations = sqliteTable("post_translations", {
 	reviewed_at: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
-});
+}, (table) => [
+	unique("post_translations_organization_id_site_id_post_id_locale_unique").on(table.organization_id, table.site_id, table.post_id, table.locale),
+]);
 
 export const posts = sqliteTable("posts", {
 	id: text().primaryKey(),
@@ -774,7 +791,7 @@ export const service_addon_purchases = sqliteTable("service_addon_purchases", {
 export const session = sqliteTable("session", {
 	id: text().primaryKey(),
 	expiresAt: integer({ mode: "timestamp" }).notNull(),
-	token: text().notNull(),
+	token: text().notNull().unique(),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 	updatedAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 	ipAddress: text(),
@@ -798,18 +815,20 @@ export const site_analytics_daily = sqliteTable("site_analytics_daily", {
 	unique_visitors: integer().default(0),
 	pages_per_session: real(),
 	returning_visitors: integer().default(0),
-});
+}, (table) => [
+	unique("site_analytics_daily_site_id_date_unique").on(table.site_id, table.date),
+]);
 
 export const site_billing = sqliteTable("site_billing", {
 	id: text().primaryKey(),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ).unique(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	stripe_subscription_id: text(),
-	stripe_subscription_item_id: text(),
+	stripe_subscription_id: text().unique(),
+	stripe_subscription_item_id: text().unique(),
 	plan: text().default("free").notNull(),
 	status: text().default("free").notNull(),
 	current_period_end: text(),
-	cancel_at_period_end: numeric(),
+	cancel_at_period_end: numeric().default(sql`false`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	stripe_customer_id: text(),
 	payment_method: text().default("stripe").notNull(),
@@ -824,7 +843,9 @@ export const site_config = sqliteTable("site_config", {
 	key: text().notNull(),
 	value: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	primaryKey({ columns: [table.organization_id, table.site_id, table.key] }),
+]);
 
 export const site_content = sqliteTable("site_content", {
 	id: text().primaryKey(),
@@ -844,7 +865,10 @@ export const site_content = sqliteTable("site_content", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
 	component: text(),
-});
+}, (table) => [
+	unique("site_content_organization_id_site_id_location_id_page_field_unique").on(table.organization_id, table.site_id, table.location_id, table.page, table.field),
+	uniqueIndex("idx_site_content_site_level_unique").on(table.organization_id, table.site_id, table.page, table.field).where(sql`location_id IS NULL`),
+]);
 
 export const site_content_translations = sqliteTable("site_content_translations", {
 	id: text().primaryKey(),
@@ -866,7 +890,10 @@ export const site_content_translations = sqliteTable("site_content_translations"
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
 	component: text(),
-});
+}, (table) => [
+	unique("site_content_translations_organization_id_site_id_location_id_locale_page_field_unique").on(table.organization_id, table.site_id, table.location_id, table.locale, table.page, table.field),
+	uniqueIndex("idx_site_content_translations_site_level_unique").on(table.organization_id, table.site_id, table.locale, table.page, table.field).where(sql`location_id IS NULL`),
+]);
 
 export const site_domain_events = sqliteTable("site_domain_events", {
 	id: text().primaryKey(),
@@ -887,11 +914,11 @@ export const site_domains = sqliteTable("site_domains", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	domain: text().notNull(),
+	domain: text().notNull().unique(),
 	type: text().notNull(),
 	role: text().default("secondary").notNull(),
 	status: text().default("pending").notNull(),
-	cloudflare_hostname_id: text(),
+	cloudflare_hostname_id: text().unique(),
 	cloudflare_hostname_status: text(),
 	cloudflare_ssl_status: text(),
 	ownership_validation_name: text(),
@@ -921,7 +948,9 @@ export const site_entitlements = sqliteTable("site_entitlements", {
 	source: text().default("system").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	unique("site_entitlements_site_id_key_unique").on(table.site_id, table.key),
+]);
 
 export const site_events = sqliteTable("site_events", {
 	id: text().primaryKey(),
@@ -942,12 +971,15 @@ export const site_locales = sqliteTable("site_locales", {
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	locale: text().notNull(),
 	label: text(),
-	is_source: numeric().notNull(),
+	is_source: numeric().default(sql`false`).notNull(),
 	status: text().default("draft").notNull(),
 	fallback_enabled: numeric().default(sql`1`).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	unique("site_locales_organization_id_site_id_locale_unique").on(table.organization_id, table.site_id, table.locale),
+	uniqueIndex("idx_site_locales_one_source_per_site").on(table.organization_id, table.site_id).where(sql`is_source = 1`),
+]);
 
 export const platform_pageview_events = sqliteTable("platform_pageview_events", {
 	id: text().primaryKey(),
@@ -1027,8 +1059,8 @@ export const sites = sqliteTable("sites", {
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	theme_id: text().default("saya-theme-v1").notNull().references(() => themes.id),
 	theme: text().default("saya").notNull(),
-	slug: text().notNull(),
-	subdomain: text(),
+	slug: text().notNull().unique(),
+	subdomain: text().unique(),
 	custom_domain: text(),
 	custom_domain_status: text().default("none"),
 	primary_location_id: text(),
@@ -1058,7 +1090,7 @@ export const sites = sqliteTable("sites", {
 
 export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 	id: text().primaryKey(),
-	stripe_event_id: text(),
+	stripe_event_id: text().notNull().unique(),
 	event_type: text(),
 	status: text().default("pending"),
 	payload: text(),
@@ -1069,7 +1101,7 @@ export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 export const themes = sqliteTable("themes", {
 	id: text().primaryKey(),
 	name: text().notNull(),
-	slug: text().notNull(),
+	slug: text().notNull().unique(),
 	version: text().default("1.0.0"),
 	description: text(),
 	status: text().default("active"),
@@ -1134,10 +1166,10 @@ export const translation_jobs = sqliteTable("translation_jobs", {
 export const user = sqliteTable("user", {
 	id: text().primaryKey(),
 	name: text().notNull(),
-	email: text().notNull(),
+	email: text().notNull().unique(),
 	emailVerified: integer().default(0).notNull(),
 	image: text(),
-	phoneNumber: text(),
+	phoneNumber: text().unique(),
 	phoneNumberVerified: integer().default(0).notNull(),
 	role: text().default("user"),
 	banned: integer().default(0),
@@ -1194,7 +1226,7 @@ export const experiences = sqliteTable("experiences", {
 	available_note: text(),
 	status: text().default("active").notNull(),
 	sort_order: integer().default(0).notNull(),
-	featured: numeric().notNull(),
+	featured: numeric().default(sql`false`).notNull(),
 	featured_sort_order: integer().default(0).notNull(),
 	seo_title: text(),
 	seo_description: text(),
@@ -1234,7 +1266,9 @@ export const google_analytics_connections = sqliteTable("google_analytics_connec
 	expires_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	unique("google_analytics_connections_organization_id_site_id_unique").on(table.organization_id, table.site_id),
+]);
 
 export const platform_content_components = sqliteTable("platform_content_components", {
 	id: text().primaryKey(),

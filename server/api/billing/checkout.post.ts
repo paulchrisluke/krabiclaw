@@ -1,3 +1,4 @@
+import Stripe from 'stripe'
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, getPriceIdForPlan, requireBillingAccess } from '../../utils/billing'
@@ -81,8 +82,27 @@ export default defineEventHandler(async (event) => {
 
     const stripe = getStripe(env)
 
-    // Ensure Stripe customer exists at org level (shared payment method across sites)
+    // Ensure Stripe customer exists at org level (shared payment method across sites).
+    // The stored ID can go stale (deleted in Stripe, or a synthetic ID from a test
+    // webhook) — validate before reuse rather than passing a dead ID to Checkout.
     let customerId = organization.stripe_customer_id
+    if (customerId) {
+      try {
+        const existingCustomer = await stripe.customers.retrieve(customerId)
+        if ('deleted' in existingCustomer && existingCustomer.deleted) customerId = null
+      } catch (error) {
+        // Only a genuine "not found" means the stored ID is stale — anything else
+        // (rate limit, auth, network, Stripe 5xx) is transient and must not cause
+        // us to mint a duplicate customer or silently drop the stored ID.
+        const isNotFound = error instanceof Stripe.errors.StripeError && error.statusCode === 404
+        if (!isNotFound) {
+          console.error('checkout_customer_lookup_failed', { organizationId: orgId, customerId, error })
+          throw error
+        }
+        console.warn('checkout_customer_lookup_not_found', { organizationId: orgId, customerId })
+        customerId = null
+      }
+    }
     if (!customerId) {
       const customer = await stripe.customers.create({
         name: organization.name,

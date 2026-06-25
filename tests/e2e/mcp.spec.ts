@@ -125,6 +125,24 @@ async function ensureLocation(request: APIRequestContext, baseURL: string, siteI
   return locationId as string
 }
 
+// Unlike ensureLocation, this never reuses an existing fixture location — tests that
+// later call delete_location must create their own scratch location, otherwise running
+// tests can race over the same shared fixture location and delete it out from under
+// each other.
+async function createScratchLocation(request: APIRequestContext, baseURL: string, siteId: string) {
+  const createLocation = await mcpRequest(request, baseURL, {
+    method: 'tools/call',
+    toolName: 'create_location',
+    args: { site_id: siteId, title: `MCP Scratch Location ${Date.now()}`, city: 'Krabi' },
+  })
+  expect(createLocation.status()).toBe(200)
+  const locationBody = await createLocation.json()
+  const locationData = mcpData<{ id?: string; location?: { id?: string } }>(locationBody)
+  const locationId = locationData.id ?? locationData.location?.id
+  expect(locationId).toEqual(expect.any(String))
+  return locationId as string
+}
+
 async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string) {
   const userId = `e2e-mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   await loginAs(request, baseURL, userId)
@@ -190,7 +208,7 @@ test.describe('stateless MCP server', () => {
     })
     expect(siteRead.status()).toBe(200)
 
-    const locationId = await ensureLocation(request, baseURL!, siteId)
+    const locationId = await createScratchLocation(request, baseURL!, siteId)
 
     const locationRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -548,7 +566,7 @@ test.describe('stateless MCP server', () => {
     test.setTimeout(180_000)
     await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
     const siteId = MCP_MANAGED_SITE_ID
-    const locationId = await ensureLocation(request, baseURL!, siteId)
+    const locationId = await createScratchLocation(request, baseURL!, siteId)
 
     const menu = await mcpRequest(request, baseURL!, {
       method: 'tools/call',

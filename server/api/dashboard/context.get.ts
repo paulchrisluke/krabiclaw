@@ -6,7 +6,14 @@ import {
 } from '~/server/utils/dashboard-context'
 
 export default defineEventHandler(async (event) => {
-  const { db, userId, organization, site } = await getDashboardContext(event, { requireSite: false })
+  // afterTransfer: opt-in for the post-transfer onboarding page, which has no
+  // siteSlug route segment to attach a header from and needs to resolve the
+  // specific site this user just received — see resolveRecentlyTransferredSite.
+  const afterTransfer = getQuery(event).afterTransfer === 'true'
+  const { db, userId, organization, site } = await getDashboardContext(event, {
+    requireSite: false,
+    allowTransferFallback: afterTransfer,
+  })
   const sites = await listOrganizationSites(db, organization.id)
 
   if (!site) {

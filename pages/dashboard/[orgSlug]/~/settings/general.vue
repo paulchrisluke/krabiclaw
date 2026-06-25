@@ -103,7 +103,7 @@
               color="primary"
               variant="outline"
               icon="i-heroicons-arrow-up-circle"
-              :to="`/dashboard/${route.params.orgSlug}/~/billing`"
+              :to="`/dashboard/${route.params.orgSlug}/~/settings/billing`"
             >
               Upgrade to Growth
             </UButton>
