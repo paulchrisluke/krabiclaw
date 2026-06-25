@@ -4,6 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { updateLocation } from '~/server/utils/location-management'
 import { parseLocationPayload } from './location-helpers'
+import { queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
@@ -16,17 +17,25 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const dashboard = await getDashboardContext(event, { requireSite: true })
-  if (!dashboard?.site) {
-    return jsonResponse({ error: 'No site found' }, { status: 400 })
-  }
-
-  const { organization, site } = dashboard
+  // Don't require the x-dashboard-site-slug header here: a location is fully
+  // self-scoping once we know the org (the id is already in the URL), and some
+  // callers — like the post-transfer onboarding wizard at the org-scoped
+  // /~/onboarding route — have no siteSlug route param to attach it from, and
+  // may legitimately belong to an org with multiple sites at the time of the call.
+  const dashboard = await getDashboardContext(event, { requireSite: false })
+  const { organization } = dashboard
   if (!organization?.id) {
     return jsonResponse({ error: 'Organization not found' }, { status: 400 })
   }
   const organizationId = organization.id as string
-  const siteId = site.id as string
+
+  const locationSite = await queryFirst<{ site_id: string }>(db, `
+    SELECT site_id FROM business_locations WHERE id = ? AND organization_id = ? LIMIT 1
+  `, [locationId, organizationId])
+  if (!locationSite) {
+    return jsonResponse({ error: 'Location not found' }, { status: 404 })
+  }
+  const siteId = locationSite.site_id
 
   const body = await readBody<Record<string, unknown>>(event)
   if (typeof body !== 'object' || body === null) {
