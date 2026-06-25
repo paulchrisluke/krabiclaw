@@ -318,6 +318,7 @@ const SHARED_TOOL_DESCRIPTION_LINES = [
   'Use faq_render_enabled/how_to_render_enabled to control whether a component appears on the page. Use faq_schema_enabled/how_to_schema_enabled to control whether a component emits structured data. Use faq_status/how_to_status to disable a component without deleting it.',
   'For normal authoring, prefer the convenience fields. For full parity and explicit metadata control, use components[]. Do not send components[] together with convenience structured-content fields.',
   'On update: omitted structured-content fields preserve existing content; empty arrays delete the corresponding component; non-empty arrays replace component data; explicit metadata fields update metadata.',
+  'Once the user has supplied or approved final body text and you have computed the SEO fields, call this tool directly with those values — do not respond with a description of the call you would make instead of making it. If the user also asked to publish, follow this call with the corresponding publish tool in the same turn rather than waiting for a second request.',
 ]
 
 const PLATFORM_BLOG_TOOL_DESCRIPTION = [
@@ -378,7 +379,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'get_platform_analytics',
-    description: 'Get krabiclaw.com platform traffic analytics (page views, sessions, visitors, top pages) for a date range. Covers all platform pages — home, blog, docs, and marketing pages — not just tenant sites. Use this to inform what blog posts or docs to write or update next.',
+    description: 'Get krabiclaw.com platform traffic and sign-up analytics (page views, sessions, visitors, top pages, new account sign-ups) for a date range. Covers all platform pages — home, blog, docs, and marketing pages — not just tenant sites. Use this to ground content strategy in what is actually driving traffic and sign-ups: which pages are working, which are stalling, and where a new or updated post/doc would help most.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -393,6 +394,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         page_views: { type: 'number' },
         unique_sessions: { type: 'number' },
         unique_visitors: { type: 'number' },
+        new_signups: { type: 'number', description: 'New platform accounts created in this date range.' },
         top_pages: {
           type: 'array',
           items: {
@@ -414,8 +416,9 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
               date: { type: 'string' },
               page_views: { type: 'number' },
               sessions: { type: 'number' },
+              new_signups: { type: 'number' },
             },
-            required: ['date', 'page_views', 'sessions'],
+            required: ['date', 'page_views', 'sessions', 'new_signups'],
             additionalProperties: false,
           },
         },
@@ -429,7 +432,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
           additionalProperties: false,
         },
       },
-      required: ['page_views', 'unique_sessions', 'unique_visitors', 'top_pages', 'daily_data', 'period'],
+      required: ['page_views', 'unique_sessions', 'unique_visitors', 'new_signups', 'top_pages', 'daily_data', 'period'],
       additionalProperties: false,
     },
   }),
@@ -516,7 +519,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   writeTool({
     name: 'publish_platform_blog_post',
-    description: 'Publish a platform blog post immediately.',
+    description: 'Publish a platform blog post immediately. If the user asked to update and publish in the same request, call update_platform_blog_post first, then call this tool right after with the same post_id — do not stop after the update to describe the publish step instead of executing it.',
     inputSchema: {
       type: 'object',
       properties: { post_id: { type: 'string' } },

@@ -129,7 +129,7 @@ onMounted(async () => {
       success: boolean
       organization?: { id: string; slug: string } | null
       site?: { id: string; brand_name: string; vertical?: 'restaurant' | 'experience' | null; subdomain: string; plan: string } | null
-    }>('/api/dashboard/context')
+    }>('/api/dashboard/context?afterTransfer=true')
 
     if (ctx.site) {
       siteId.value = ctx.site.id
@@ -141,8 +141,14 @@ onMounted(async () => {
 
     if (!siteId.value) return
 
+    // This route has no siteSlug segment, so the dashboard-site-header plugin never
+    // attaches a header — set it explicitly so /api/dashboard/locations resolves the
+    // same site /api/dashboard/context just found instead of hitting the generic
+    // multi-site-ambiguity 400.
     const [locsRes, notifRes] = await Promise.all([
-      $fetch<{ locations: LocationRow[] }>('/api/dashboard/locations'),
+      $fetch<{ locations: LocationRow[] }>('/api/dashboard/locations', {
+        headers: { 'x-dashboard-site-slug': subdomain.value },
+      }),
       $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>(
         `/api/editor/sites/${siteId.value}/notifications`
       ).catch(() => null),

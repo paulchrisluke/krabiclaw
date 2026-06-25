@@ -44,6 +44,10 @@ interface DashboardPreferenceRow {
 
 interface DashboardContextOptions {
   requireSite?: boolean
+  // Opt-in only — see resolveRecentlyTransferredSite. Defaults to off so generic
+  // multi-site callers (e.g. the org-root single-site auto-redirect) keep returning
+  // null on ambiguity rather than being silently steered toward a transferred site.
+  allowTransferFallback?: boolean
 }
 
 async function resolveSingleOrgSite(db: DbClient, organizationId: string): Promise<DashboardSiteRow | null> {
@@ -55,6 +59,23 @@ async function resolveSingleOrgSite(db: DbClient, organizationId: string): Promi
     LIMIT 2
   `, [organizationId])
   return sites.length === 1 ? sites[0]! : null
+}
+
+// Not a guess: the org-scoped /~/onboarding route has no siteSlug to attach a header
+// from, and a recipient who already owned a site before accepting a handoff legitimately
+// ends up with 2+ sites. The site this route means is unambiguous — whichever site this
+// exact user most recently accepted a transfer into — so resolve it precisely instead of
+// falling back to null the way genuine multi-site ambiguity does.
+async function resolveRecentlyTransferredSite(db: DbClient, organizationId: string, userId: string): Promise<DashboardSiteRow | null> {
+  return await queryFirst<DashboardSiteRow>(db, `
+    SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
+           s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale
+    FROM site_transfer_requests t
+    JOIN sites s ON s.id = t.site_id
+    WHERE t.claiming_organization_id = ? AND t.accepted_by_user_id = ? AND t.status = 'accepted'
+    ORDER BY t.completed_at DESC
+    LIMIT 1
+  `, [organizationId, userId])
 }
 
 export async function getDashboardContext(event: H3Event, options: DashboardContextOptions = {}) {
@@ -116,6 +137,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         LIMIT 1
       `, [organization.id, siteSlug])
     : await resolveSingleOrgSite(db, organization.id)
+      ?? (options.allowTransferFallback ? await resolveRecentlyTransferredSite(db, organization.id, session.user.id) : null)
 
   if (!site && options.requireSite !== false) {
     throw createError({ statusCode: 404, message: 'Site not found' })

@@ -13,6 +13,7 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 | `yarn dev` | Dev server (localhost:3000). Full D1 + Cloudflare emulation via `nitro-cloudflare-dev`. |
 | `yarn build` | Production build → `.output/` |
 | `yarn deploy` | Build, patch Nitro shim, apply D1 migrations, deploy the Worker |
+| `yarn db:generate` | Generate a new `migrations/*.sql` file from `server/db/schema.ts` |
 | `yarn schema:local` | Apply pending `migrations/*.sql` to local D1 |
 | `yarn schema:remote` | Apply pending `migrations/*.sql` to production D1 |
 | `yarn drizzle:check` | Verify `server/db/schema.ts` hasn't drifted from the live D1 schema |
@@ -92,9 +93,10 @@ CI + E2E auth/billing parity, tier intent, and staging-vs-production smoke rules
 
 ## Schema
 
-Schema changes go through hand-authored, numbered files in `migrations/`, applied via `wrangler d1 migrations apply` — not `drizzle-kit generate`/`migrate`. `server/db/schema.ts` (Drizzle ORM) is hand-maintained to mirror `migrations/` and is used for typed query access plus drift checking (`yarn drizzle:check`), not for generating migrations. Full workflow and the squashed-baseline (`migrations/0001_initial.sql`) caveats are documented in `CLAUDE.md`'s "Database Schema Workflow" section.
+`server/db/schema.ts` (Drizzle ORM) is the source of truth for new schema changes. `migrations/0001_initial.sql`–`0007_*.sql` are historical and immutable (already applied everywhere) — from `0008` onward, schema changes start in `schema.ts`, then `yarn db:generate` (`drizzle-kit generate`) produces the matching additive `migrations/000N_*.sql` file, applied via `wrangler d1 migrations apply`. `drizzle-kit generate` can't emit triggers or CHECK constraints, and only emits indexes/uniques explicitly declared in `schema.ts` — those must be hand-appended to the generated migration file. Full workflow, the constraint caveats, and the 2026-06-25 incident (a squashed baseline broke staging CI and silently dropped ~80 triggers/indexes — since reverted) are documented in `CLAUDE.md`'s "Database Schema Workflow" section.
 
 ```bash
+yarn db:generate     # generate a migration from schema.ts after editing it
 yarn schema:local    # apply pending migrations locally
 yarn schema:remote   # apply pending migrations to production
 ```

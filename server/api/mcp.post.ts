@@ -17,6 +17,7 @@ import {
   roleSatisfies,
 } from "~/server/utils/mcp-auth";
 import { MCP_TOOLS } from "~/server/utils/mcp-tools";
+import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { isWidgetEnabledForTool } from "~/server/utils/mcp-widget-config";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
@@ -328,7 +329,33 @@ Common workflows: update menus and items, create and publish posts, triage conta
 
     if (request.method === "prompts/list") {
       await requireMcpUser(event);
-      return mcpSuccess(request.id, { prompts: [] });
+      return mcpSuccess(request.id, { prompts: MCP_PROMPTS });
+    }
+
+    if (request.method === "prompts/get") {
+      await requireMcpUser(event);
+      const name =
+        typeof request.params?.name === "string" ? request.params.name : "";
+      const rawPromptArgs = request.params?.arguments;
+      const promptArgs: Record<string, string> = {};
+      if (
+        rawPromptArgs &&
+        typeof rawPromptArgs === "object" &&
+        !Array.isArray(rawPromptArgs)
+      ) {
+        for (const [key, value] of Object.entries(
+          rawPromptArgs as Record<string, unknown>,
+        )) {
+          if (typeof value === "string") promptArgs[key] = value;
+        }
+      }
+      const rendered = renderMcpPrompt(name, promptArgs);
+      return mcpSuccess(request.id, {
+        description: rendered.description,
+        messages: [
+          { role: "user", content: { type: "text", text: rendered.text } },
+        ],
+      });
     }
 
     if (request.method === "server/discover") {
