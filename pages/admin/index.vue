@@ -1293,6 +1293,8 @@ async function impersonateUser(userId: string) {
   impersonatingUserId.value = userId
   try {
     await $fetch('/api/admin/impersonation/start', { method: 'POST', body: { userId } })
+    const { refreshSession } = useAuth()
+    await refreshSession()
     try {
       const { sites } = await $fetch<{ sites: { id: string }[] }>('/api/sites')
       const firstSite = sites?.[0]

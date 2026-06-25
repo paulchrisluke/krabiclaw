@@ -59,7 +59,7 @@ DELETE FROM site_domains WHERE domain IN ('kikuzuki-krabi-thailand.localhost', '
 
 -- Organization (owned by the dedicated Kikuzuki owner account)
 INSERT INTO organization (id, name, slug, createdAt)
-VALUES ('org-kikuzuki', 'Kikuzuki Krabi Thailand', 'kikuzuki-krabi-thailand', CURRENT_TIMESTAMP);
+VALUES ('org-kikuzuki', 'Kikuzuki Krabi Thailand', 'kikuzuki-krabi-thailand', unixepoch());
 
 -- Ensure the dedicated owner user exists to satisfy FK constraints.
 INSERT OR IGNORE INTO user (id, name, email, emailVerified)
@@ -68,7 +68,7 @@ VALUES
 
 INSERT OR REPLACE INTO member (id, organizationId, userId, role, createdAt)
 VALUES
-  ('member-kikuzuki', 'org-kikuzuki', 'user-kikuzuki', 'owner', CURRENT_TIMESTAMP);
+  ('member-kikuzuki', 'org-kikuzuki', 'user-kikuzuki', 'owner', unixepoch());
 
 ${renderKikuzukiCoreSeedBlock()}
 
