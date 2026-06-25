@@ -90,6 +90,14 @@
                   </a>
                 </div>
 
+                <div
+                  v-if="msg.notifCard && notificationError"
+                  role="alert"
+                  class="rounded-lg border border-error-200 bg-error-50 px-3 py-2 text-xs text-error-600 dark:border-error-800 dark:bg-error-950 dark:text-error-400"
+                >
+                  {{ notificationError }}
+                </div>
+
                 <!-- Notification form card -->
                 <NotificationRoutingCard
                   v-if="msg.notifCard"
@@ -270,6 +278,7 @@ const inviteForm = reactive({ email: '', role: 'member' })
 const savingNotifs = ref(false)
 const inviting = ref(false)
 const inviteSuccess = ref(false)
+const notificationError = ref<string | null>(null)
 
 const showDomainStep = computed(() => ['growth', 'managed', 'seo_accelerator'].includes(props.plan))
 const showSocialStep = computed(() => ['growth', 'managed', 'seo_accelerator'].includes(props.plan))
@@ -290,6 +299,7 @@ function pushMessage(msg: Omit<BotMessage, 'id'>) {
 
 function advance(target: WizardStep) {
   step.value = target
+  notificationError.value = null
 
   if (target === 'preview') {
     pushMessage({
@@ -340,8 +350,22 @@ function advance(target: WizardStep) {
   }
 }
 
+function notificationSaveErrorMessage(error: unknown) {
+  if (typeof error === 'object' && error !== null) {
+    const data = 'data' in error ? (error as { data?: unknown }).data : null
+    if (typeof data === 'object' && data !== null && 'error' in data && typeof (data as { error?: unknown }).error === 'string') {
+      return (data as { error: string }).error
+    }
+    if ('message' in error && typeof (error as { message?: unknown }).message === 'string') {
+      return (error as { message: string }).message
+    }
+  }
+  return 'Failed to save notification settings. Please check the numbers and try again.'
+}
+
 async function saveNotifications() {
   savingNotifs.value = true
+  notificationError.value = null
   try {
     await Promise.all([
       $fetch(`/api/editor/sites/${props.siteId}/notifications`, {
@@ -358,7 +382,8 @@ async function saveNotifications() {
     advance('team')
   } catch (e) {
     console.error('save_notifications_failed', e)
-    toast.add({ title: 'Failed to save notification settings', color: 'error' })
+    notificationError.value = notificationSaveErrorMessage(e)
+    toast.add({ title: 'Failed to save notification settings', description: notificationError.value, color: 'error' })
   } finally {
     savingNotifs.value = false
   }
