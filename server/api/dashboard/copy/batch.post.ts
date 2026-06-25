@@ -14,7 +14,8 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'No site found. Complete onboarding first.' }, { status: 400 })
   }
 
-  const body = await readBody(event).catch(() => ({})) as Partial<CopyBatchInput>
+  const rawBody = await readBody(event).catch(() => null)
+  const body = (rawBody && typeof rawBody === 'object' ? rawBody : {}) as Partial<CopyBatchInput>
 
   if (!body.source_location_id || typeof body.source_location_id !== 'string') {
     return jsonResponse({ error: 'source_location_id is required' }, { status: 400 })

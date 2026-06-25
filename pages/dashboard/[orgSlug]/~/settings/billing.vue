@@ -460,7 +460,7 @@ const upgradeToPlan = async (plan: string) => {
   try {
     const response = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
       method: 'POST',
-      body: { plan, interval: annual.value ? 'year' : 'month', siteId: selectedSiteId.value }
+      body: { plan, interval: annual.value ? 'year' : 'month', siteId: selectedSiteId.value, gaClientId: getGaClientId() }
     })
     if (response?.checkoutUrl) {
       await navigateTo(response.checkoutUrl, { external: true })

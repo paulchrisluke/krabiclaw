@@ -68,6 +68,14 @@ export async function copyLocationBatch(
     return { success: false, error: 'Provide only one of target_location_id or new_location, not both' }
   }
 
+  // field_overrides apply to the target location outside the entity-copy batch below,
+  // so they're not atomic with it — for a new_location, cleanupOnFailure deletes the
+  // whole location on failure, but an existing target_location_id has no rollback path
+  // and would be left partially mutated. Block the combination rather than risk that.
+  if (target_location_id && field_overrides && Object.keys(field_overrides).length > 0) {
+    return { success: false, error: 'field_overrides can only be used with new_location, not an existing target_location_id' }
+  }
+
   // Validated before any location is created so a bad entities list can't strand
   // an orphaned location.
   const requestedTypes = new Set(entities.map((config) => config.type))
@@ -244,13 +252,15 @@ async function copyMenus(
     })
 
     if (includeTranslations) {
+      // SELECT can return multiple rows (one per locale) — generate a fresh id per row
+      // in SQL rather than binding a single crypto.randomUUID(), which would collide.
       statements.push({
         query: `
           INSERT INTO menu_translations (id, organization_id, site_id, menu_id, locale, name, description, section_order, status, source_hash, translated_at, reviewed_at, updated_at, updated_by)
-          SELECT ?, organization_id, site_id, ?, locale, name, description, section_order, status, source_hash, translated_at, reviewed_at, ?, updated_by
+          SELECT lower(hex(randomblob(16))), organization_id, site_id, ?, locale, name, description, section_order, status, source_hash, translated_at, reviewed_at, ?, updated_by
           FROM menu_translations WHERE menu_id = ?
         `,
-        params: [crypto.randomUUID(), newId, now, menu.id],
+        params: [newId, now, menu.id],
       })
     }
 
@@ -286,7 +296,7 @@ async function copyMenuItems(
     manifest.entities.menu_items.new_ids.push(newId)
 
     const newMenuId = idMappings[item.menu_id]
-    const newImageAssetId = item.image_asset_id ? idMappings[item.image_asset_id] : null
+    const newImageAssetId = item.image_asset_id ? (idMappings[item.image_asset_id] ?? null) : null
 
     statements.push({
       query: `
@@ -298,13 +308,15 @@ async function copyMenuItems(
     })
 
     if (includeTranslations) {
+      // SELECT can return multiple rows (one per locale) — generate a fresh id per row
+      // in SQL rather than binding a single crypto.randomUUID(), which would collide.
       statements.push({
         query: `
           INSERT INTO menu_item_translations (id, organization_id, site_id, menu_item_id, locale, section, name, description, allergens, ingredients, dietary_notes, preparation, serving_note, status, source_hash, translated_at, reviewed_at, updated_at, updated_by)
-          SELECT ?, organization_id, site_id, ?, locale, section, name, description, allergens, ingredients, dietary_notes, preparation, serving_note, status, source_hash, translated_at, reviewed_at, ?, updated_by
+          SELECT lower(hex(randomblob(16))), organization_id, site_id, ?, locale, section, name, description, allergens, ingredients, dietary_notes, preparation, serving_note, status, source_hash, translated_at, reviewed_at, ?, updated_by
           FROM menu_item_translations WHERE menu_item_id = ?
         `,
-        params: [crypto.randomUUID(), newId, now, item.id],
+        params: [newId, now, item.id],
       })
     }
 
@@ -369,8 +381,8 @@ async function copySiteContent(
     manifest.id_mappings[item.id] = newId
     manifest.entities.site_content.new_ids.push(newId)
 
-    const newHeroImageId = item.hero_image_asset_id ? idMappings[item.hero_image_asset_id] : null
-    const newHeroVideoId = item.hero_video_asset_id ? idMappings[item.hero_video_asset_id] : null
+    const newHeroImageId = item.hero_image_asset_id ? (idMappings[item.hero_image_asset_id] ?? null) : null
+    const newHeroVideoId = item.hero_video_asset_id ? (idMappings[item.hero_video_asset_id] ?? null) : null
 
     statements.push({
       query: `
@@ -491,8 +503,8 @@ async function copyExperiences(
     manifest.id_mappings[exp.id] = newId
     manifest.entities.experiences.new_ids.push(newId)
 
-    const newImageId = exp.image_asset_id ? idMappings[exp.image_asset_id] : null
-    const newVideoId = exp.video_asset_id ? idMappings[exp.video_asset_id] : null
+    const newImageId = exp.image_asset_id ? (idMappings[exp.image_asset_id] ?? null) : null
+    const newVideoId = exp.video_asset_id ? (idMappings[exp.video_asset_id] ?? null) : null
     // experiences.slug is unique per site_id, so a same-site copy must not reuse the source slug.
     const newSlug = await uniqueSlug(db, siteId, exp.slug)
 

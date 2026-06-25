@@ -104,7 +104,7 @@ Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and ar
   - `/dashboard/{orgSlug}/sites/new` — create another site under this org
   - `/dashboard/{orgSlug}/~/settings/*` — org settings (billing, members, general, domains, chatgpt — these stay org-scoped, not site-scoped)
   - `/dashboard/account/settings` — personal settings
-- The active site is resolved server-side in `server/utils/dashboard-context.ts` from the `x-dashboard-site-slug` header, which `plugins/dashboard-site-header.client.ts` auto-attaches to every `/api/dashboard/*` request based on the current route's `siteSlug` param. This plugin is client-only by design — it works by overriding `globalThis.$fetch` (bare `$fetch()` calls everywhere resolve to that global, not to a nuxtApp-provided one), which is only safe in the single-tenant-per-tab browser context, not on the server where `globalThis` is shared across concurrent requests in the same Worker isolate. Do not add new dashboard API calls that bypass this, and do not try to "fix" SSR by moving this override server-side — they'll silently fall back to the org's oldest site (client) or risk cross-tenant header leakage (server).
+- The active site is resolved server-side in `server/utils/dashboard-context.ts` from the `x-dashboard-site-slug` header, which `plugins/dashboard-site-header.client.ts` auto-attaches to every `/api/dashboard/*` request based on the current route's `siteSlug` param. This plugin is client-only by design — it works by overriding `globalThis.$fetch` (bare `$fetch()` calls everywhere resolve to that global, not to a nuxtApp-provided one), which is only safe in the single-tenant-per-tab browser context, not on the server where `globalThis` is shared across concurrent requests in the same Worker isolate. Do not add new dashboard API calls that bypass this, and do not try to "fix" SSR by moving this override server-side. When the header is missing, `getDashboardContext()` auto-selects the org's sole site if it has exactly one, and otherwise returns `null` (or throws `400` when the caller passed `requireSite: true`) — it does not fall back to the org's oldest site; guessing among multiple sites was an intentional removal to prevent the silent-wrong-site risk.
 - Second-site billing: a new site always starts on `free`. If the org already has another site on a paid plan and a saved card on file, the dashboard offers to auto-subscribe the new site via `POST /api/billing/site-subscribe` (confirm modal, no Checkout redirect). Otherwise it's a normal Checkout upgrade later. See `server/utils/site-creation.ts`.
 - **Site transfers move only the site** — `executeSiteTransfer()` reparents one site's scoped tables (`site_billing`, `site_entitlements`, `business_locations`, content, etc.) from the source org to the recipient's existing owner org. The org itself, its other sites, and org-level billing/credits never move.
 
@@ -117,12 +117,26 @@ Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and ar
 
 ## Analytics
 
-There are four independent analytics layers — do not conflate them or assume one supersedes another:
+There are three independent analytics layers — do not conflate them or assume one supersedes another:
 
-1. **Platform GA4** (`G-NJ1BSP9BYG`, injected in `app.vue`) — KrabiClaw's own marketing-site property, fires only when `isPlatform` is true.
+1. **Platform GA4** (`G-NJ1BSP9BYG`, injected in `app.vue`) — KrabiClaw's own marketing-site property, fires only when `isPlatform` is true. This is the only GA4 stream KrabiClaw owns.
 2. **Per-tenant connected GA4** — a site owner links their own GA4 property via the OAuth flow in `server/utils/google-analytics.ts` / `server/api/sites/[siteId]/integrations/google-analytics/`. The resulting `ga4_measurement_id` lands in `site_config` (already exposed publicly via bootstrap's `config` object — no extra plumbing needed) and `app.vue` injects it as that tenant's own gtag tag. Sites with no connection get no tag from this layer.
-3. **Platform-wide rollup GA4** (`G-Z18L1Y4G7K`, configured in `nuxt.config.ts` via `scripts.registry.googleAnalytics`) — **intentionally unconditional**, fires on every route including every Saya tenant page. This is how KrabiClaw gets cross-customer traffic insight across all tenant sites. It is not a leftover/mistake — do not remove or gate it without explicit instruction.
-4. **Internal pipeline** (`site_pageview_events` → `aggregateAnalyticsForDate()` → `site_analytics_daily`) — powers each site's own dashboard "Analytics overview" tab. Tracked via `server/middleware/zz-pageview-tracking.ts` (SSR) and `plugins/pageview-tracking.client.ts` (SPA navigation + duration ping), using the `kc_visitor_id` (2yr)/`kc_session_id` (30min sliding) anonymous cookie pair defined in `server/utils/pageview-tracking.ts`. This is intentionally not a Better Auth session — anonymous visitors must never create rows in `user`/`session`.
+3. **Internal pipeline** (`site_pageview_events` → `aggregateAnalyticsForDate()` → `site_analytics_daily`) — powers each site's own dashboard "Analytics overview" tab. Tracked via `server/middleware/zz-pageview-tracking.ts` (SSR) and `plugins/pageview-tracking.client.ts` (SPA navigation + duration ping), using the `kc_visitor_id` (2yr)/`kc_session_id` (30min sliding) anonymous cookie pair defined in `server/utils/pageview-tracking.ts`. This is intentionally not a Better Auth session — anonymous visitors must never create rows in `user`/`session`.
+
+There used to be a fourth "platform-wide rollup GA4" (`G-Z18L1Y4G7K`, via `nuxt.config.ts` `scripts.registry.googleAnalytics`) — removed 2026-06-25. It was never an owned property; the "intentional cross-tenant rollup" rationale was a retroactive guess, not a real decision. Do not re-add it.
+
+### Stripe → GA4 (billing lifecycle events)
+
+`server/utils/ga4-measurement-protocol.ts` sends server-side events into the platform GA4 property (`GA4_MEASUREMENT_ID`/`GA4_API_SECRET` env vars) from `server/api/billing/webhook.post.ts` — this is the only correct place to fire billing-truth GA4 events, not the browser, since only the webhook knows a payment actually succeeded/failed/renewed.
+
+- `subscription_created` — fires on `checkout.session.completed` for standard plan checkouts. This is the revenue-confirming event; `checkout_started` (browser-side, `useAnalytics.ts`) only signals intent.
+- `plan_upgraded` / `plan_downgraded` — fires on `customer.subscription.updated` when the resolved plan differs from the previously stored `site_billing.plan`, ranked via `PLAN_RANK` in the webhook handler.
+- `subscription_cancelled` — fires on `customer.subscription.deleted`.
+- `payment_failed` — fires on `invoice.payment_failed` (tracked, but not a GA4 key event — it's a churn signal, not a conversion).
+
+Identity stitching: `getGaClientId()` in `composables/useAnalytics.ts` reads the GA4 `_ga` cookie client-side and is passed as `gaClientId` into `POST /api/billing/checkout`, which stores it as `ga_client_id` in both the Checkout Session metadata and `subscription_data.metadata` so it survives into every later webhook event for that subscription. Without a `client_id`, GA4 Measurement Protocol events still land but can't join back to the browsing session that started checkout.
+
+Recommended GA4 key events: `sign_up`, `checkout_started`, `subscription_created`, `plan_upgraded`, `onboarding_completed`. Do not mark `subscription_cancelled` or `payment_failed` as key events — they're churn/diagnostic signals, not conversions.
 
 ---
 

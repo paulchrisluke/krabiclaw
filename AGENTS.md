@@ -37,6 +37,7 @@ ChowBot and dashboard CMS are supported product surfaces. Keep MCP and ChowBot a
   3. Call `show_generated_images` with returned `assetId` and `publicUrl`
 
 Canonical generated-image contracts:
+
 - Native generation: `save_generated_image_file({ site_id, attachment_id, prompt })` — always use this after `image_generation`; passing base64 to `save_generated_image` is blocked by OpenAI safety checks
 - Raw base64 (non-native, rare): `save_generated_image({ site_id, image_data_base64, prompt })`
 
@@ -86,7 +87,7 @@ Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and ar
 
 `migrations/0001_initial.sql` is the **squashed baseline** — all migrations up through the old numbering (including what was previously migration `0017`) were folded into it. Numbering restarted from `0001` after the squash. Each migration file after `0001_initial.sql` is the source of truth for its own delta. Do not reference pre-squash migration numbers (e.g. "migration 0017") as if they still exist as separate files — that history is now baked into `0001_initial.sql`.
 
-**Squashing a migration history only updates the file on disk — it does not retroactively re-run against an environment that already applied an earlier version of that same filename.** `wrangler d1 migrations apply` tracks applied migrations by filename in the `d1_migrations` table, not by content/checksum. If `0001_initial.sql` is re-squashed to include newer tables/columns and a target environment already has an `0001_initial.sql` row recorded from a prior squash, `wrangler d1 migrations apply` will report "No migrations to apply!" and silently skip the new content. This has bitten production twice from the same squash: a whole missing table (`work_requests`/`platform_content_components`, fixed in `migrations/0002_...sql` via `CREATE TABLE IF NOT EXISTS`, safe since the table didn't exist yet) and missing columns on an *existing* table (`site_pageview_events.visitor_id/country/region/city`, fixed in `migrations/0003_...sql`). Missing columns are the harder case — D1's SQLite has no `ADD COLUMN IF NOT EXISTS`, so a plain `ALTER TABLE ADD COLUMN` would fail with "duplicate column" on any fresh environment that already has the column from the current `0001_initial.sql`. The fix is to pull the column(s) back out of `0001_initial.sql`'s `CREATE TABLE` and into their own numbered migration, so every environment — fresh or stale — picks them up exactly once. Before assuming any environment is schema-current, diff its actual `sqlite_master` tables *and* `PRAGMA table_info` per table against `server/db/schema.ts`, not just `wrangler d1 migrations list`.
+**Squashing a migration history only updates the file on disk — it does not retroactively re-run against an environment that already applied an earlier version of that same filename.** `wrangler d1 migrations apply` tracks applied migrations by filename in the `d1_migrations` table, not by content/checksum. If `0001_initial.sql` is re-squashed to include newer tables/columns and a target environment already has an `0001_initial.sql` row recorded from a prior squash, `wrangler d1 migrations apply` will report "No migrations to apply!" and silently skip the new content. This has bitten production twice from the same squash: a whole missing table (`work_requests`/`platform_content_components`, fixed in `migrations/0002_...sql` via `CREATE TABLE IF NOT EXISTS`, safe since the table didn't exist yet) and missing columns on an _existing_ table (`site_pageview_events.visitor_id/country/region/city`, fixed in `migrations/0003_...sql`). Missing columns are the harder case — D1's SQLite has no `ADD COLUMN IF NOT EXISTS`, so a plain `ALTER TABLE ADD COLUMN` would fail with "duplicate column" on any fresh environment that already has the column from the current `0001_initial.sql`. The fix is to pull the column(s) back out of `0001_initial.sql`'s `CREATE TABLE` and into their own numbered migration, so every environment — fresh or stale — picks them up exactly once. Before assuming any environment is schema-current, diff its actual `sqlite_master` tables _and_ `PRAGMA table_info` per table against `server/db/schema.ts`, not just `wrangler d1 migrations list`.
 
 ---
 
@@ -95,7 +96,7 @@ Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and ar
 - Organizations map to a team or agency using Better Auth’s `organization` plugin.
 - **One org can have multiple sites** — the unique-per-org constraint was removed pre-squash (was migration `0017`); this is now part of the `0001_initial.sql` baseline.
 - Each site has its own plan and Stripe subscription (`site_billing` table).
-- The Stripe *customer* stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
+- The Stripe _customer_ stays at the org level (`organization_billing.stripe_customer_id`) — one payment method per team.
 - Multiple physical locations live under `business_locations`, not separate orgs. Locations are **unlimited on all plans**.
 - Dashboard route shape (site is always explicit — no implicit "first site in org"):
   - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
@@ -104,7 +105,7 @@ Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and ar
   - `/dashboard/{orgSlug}/sites/new` — create another site under this org
   - `/dashboard/{orgSlug}/~/settings/*` — org settings (billing, members, general, domains, chatgpt — these stay org-scoped, not site-scoped)
   - `/dashboard/account/settings` — personal settings
-- The active site is resolved server-side in `server/utils/dashboard-context.ts` from the `x-dashboard-site-slug` header, which `plugins/dashboard-site-header.ts` auto-attaches to every `/api/dashboard/*` request based on the current route's `siteSlug` param. Do not add new dashboard API calls that bypass this — they'll silently fall back to the org's oldest site.
+- The active site is resolved server-side in `server/utils/dashboard-context.ts` from the `x-dashboard-site-slug` header, which `plugins/dashboard-site-header.client.ts` auto-attaches to every `/api/dashboard/*` request based on the current route's `siteSlug` param. This plugin is client-only by design — it works by overriding `globalThis.$fetch` (bare `$fetch()` calls everywhere resolve to that global, not to a nuxtApp-provided one), which is only safe in the single-tenant-per-tab browser context, not on the server where `globalThis` is shared across concurrent requests in the same Worker isolate. Do not add new dashboard API calls that bypass this, and do not try to "fix" SSR by moving this override server-side. When the header is missing, `getDashboardContext()` auto-selects the org's sole site if it has exactly one, and otherwise returns `null` (or throws `400` when the caller passed `requireSite: true`) — it does not fall back to the org's oldest site; guessing among multiple sites was an intentional removal to prevent the silent-wrong-site risk.
 - Second-site billing: a new site always starts on `free`. If the org already has another site on a paid plan and a saved card on file, the dashboard offers to auto-subscribe the new site via `POST /api/billing/site-subscribe` (confirm modal, no Checkout redirect). Otherwise it's a normal Checkout upgrade later. See `server/utils/site-creation.ts`.
 - **Site transfers move only the site** — `executeSiteTransfer()` reparents one site's scoped tables (`site_billing`, `site_entitlements`, `business_locations`, content, etc.) from the source org to the recipient's existing owner org. The org itself, its other sites, and org-level billing/credits never move.
 
@@ -117,12 +118,13 @@ Migrations are managed via **wrangler D1 migrations** (hand-authored SQL) and ar
 
 ## Analytics
 
-There are four independent analytics layers — do not conflate them or assume one supersedes another:
+There are three independent analytics layers — do not conflate them or assume one supersedes another:
 
-1. **Platform GA4** (`G-NJ1BSP9BYG`, injected in `app.vue`) — KrabiClaw's own marketing-site property, fires only when `isPlatform` is true.
+1. **Platform GA4** (`G-NJ1BSP9BYG`, injected in `app.vue`) — KrabiClaw's own marketing-site property, fires only when `isPlatform` is true. This is the only GA4 stream KrabiClaw owns.
 2. **Per-tenant connected GA4** — a site owner links their own GA4 property via the OAuth flow in `server/utils/google-analytics.ts` / `server/api/sites/[siteId]/integrations/google-analytics/`. The resulting `ga4_measurement_id` lands in `site_config` (already exposed publicly via bootstrap's `config` object — no extra plumbing needed) and `app.vue` injects it as that tenant's own gtag tag. Sites with no connection get no tag from this layer.
-3. **Platform-wide rollup GA4** (`G-Z18L1Y4G7K`, configured in `nuxt.config.ts` via `scripts.registry.googleAnalytics`) — **intentionally unconditional**, fires on every route including every Saya tenant page. This is how KrabiClaw gets cross-customer traffic insight across all tenant sites. It is not a leftover/mistake — do not remove or gate it without explicit instruction.
-4. **Internal pipeline** (`site_pageview_events` → `aggregateAnalyticsForDate()` → `site_analytics_daily`) — powers each site's own dashboard "Analytics overview" tab. Tracked via `server/middleware/zz-pageview-tracking.ts` (SSR) and `plugins/pageview-tracking.client.ts` (SPA navigation + duration ping), using the `kc_visitor_id` (2yr)/`kc_session_id` (30min sliding) anonymous cookie pair defined in `server/utils/pageview-tracking.ts`. This is intentionally not a Better Auth session — anonymous visitors must never create rows in `user`/`session`.
+3. **Internal pipeline** (`site_pageview_events` → `aggregateAnalyticsForDate()` → `site_analytics_daily`) — powers each site's own dashboard "Analytics overview" tab. Tracked via `server/middleware/zz-pageview-tracking.ts` (SSR) and `plugins/pageview-tracking.client.ts` (SPA navigation + duration ping), using the `kc_visitor_id` (2yr)/`kc_session_id` (30min sliding) anonymous cookie pair defined in `server/utils/pageview-tracking.ts`. This is intentionally not a Better Auth session — anonymous visitors must never create rows in `user`/`session`.
+
+There used to be a fourth "platform-wide rollup GA4" (`G-Z18L1Y4G7K`, via `nuxt.config.ts` `scripts.registry.googleAnalytics`) — removed 2026-06-25. It was never an owned property; the "intentional cross-tenant rollup" rationale was a retroactive guess, not a real decision. Do not re-add it.
 
 ---
 
@@ -148,6 +150,7 @@ Seeds use a two-tier insert strategy so that MCP edits survive a reseed:
 - **Content tables** (`site_content`, `menu_items`, `reviews`, `location_qa`, `posts`, `post_channel_jobs`, `*_translations`) → `INSERT OR IGNORE` — first seed wins; MCP changes are never overwritten by a reseed
 
 Production is never reseeded (only migrated), so this only affects local dev, preview, and staging. If you need to force-push updated content from a seed definition to an already-seeded environment, delete the affected rows first or use an MCP tool call directly.
+
 - Layout name for Saya theme pages: `layout: 'saya'`
 - `tenant` layout is dead
 
@@ -469,7 +472,7 @@ Saya components never render a blank section or a skeleton-only placeholder when
 - `components/saya/SayaEmptyExample.vue` renders one example card; `components/saya/SayaMcpHint.vue` renders the owner-only "Try: ..." affordance that pre-fills and opens ChowBot via `useChowBot().setDraftMessage()` + `.open()`.
 - The hint only renders in dashboard edit mode (`useEditMode().editMode`, i.e. `?edit=true`) — real site visitors only ever see the clean example, never the hint UI.
 - Filled examples are only for **core** sections (menu, experiences, locations) where an empty section usually means an unfinished site. **Supplementary/optional** sections (posts, reviews, Q&A) use the low-key icon+message empty state instead — a live, fully-operational business may legitimately never post updates or get reviews, so a fabricated "Example post title" shown to a real visitor would incorrectly imply the site is broken. Posts/Reviews/Q&A still get a hint when merchant-actionable (posts, Q&A; not reviews, which aren't merchant-authored).
-- `config/content-registry.ts` field `defaultValue` is the render-time fallback for scalar `site_content` fields (`usePageContent().getField()` falls back to it automatically when no value is in the DB and the caller passes no explicit default). **These must always be generic, vertical-neutral copy** — never tenant- or demo-identity-specific text (no business names, no "Saya Kitchen", no real addresses/phone numbers). The "Saya fallback copy on any tenant page" regression below is about leaking *demo-tenant identity*, not about having a generic instructional fallback — a generic fallback rendering on an empty tenant page is the intended behavior, not the regression.
+- `config/content-registry.ts` field `defaultValue` is the render-time fallback for scalar `site_content` fields (`usePageContent().getField()` falls back to it automatically when no value is in the DB and the caller passes no explicit default). **These must always be generic, vertical-neutral copy** — never tenant- or demo-identity-specific text (no business names, no "Saya Kitchen", no real addresses/phone numbers). The "Saya fallback copy on any tenant page" regression below is about leaking _demo-tenant identity_, not about having a generic instructional fallback — a generic fallback rendering on an empty tenant page is the intended behavior, not the regression.
 
 ---
 

@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { verifyStripeWebhook, setSiteEntitlementsFromPlan, getPlanFromStripePrice, applySiteSubscription, getStripe } from '../../utils/billing'
 import { completePaidSiteTransfer, deleteSiteCustomDomains } from '../../utils/site-transfer'
+import { sendGa4Event } from '../../utils/ga4-measurement-protocol'
 import { execute, queryFirst } from '~/server/db'
 import type Stripe from 'stripe'
 import { getHeader } from 'h3'
@@ -121,10 +122,10 @@ export default defineEventHandler(async (event) => {
         await handleSubscriptionDeleted(env, db, webhookEvent.data.object as Stripe.Subscription)
         break
       case 'invoice.payment_succeeded':
-        await handlePaymentSucceeded(db, webhookEvent.data.object as Stripe.Invoice)
+        await handlePaymentSucceeded(env, db, webhookEvent.data.object as Stripe.Invoice)
         break
       case 'invoice.payment_failed':
-        await handlePaymentFailed(db, webhookEvent.data.object as Stripe.Invoice)
+        await handlePaymentFailed(env, db, webhookEvent.data.object as Stripe.Invoice)
         break
       default:
         console.log(`Unhandled webhook event type: ${webhookEvent.type}`)
@@ -259,7 +260,12 @@ async function handleCheckoutCompleted(
     const plan = session.metadata?.plan
     const transferId = session.metadata?.transfer_request_id
     if (!organizationId || !plan || !transferId) { console.error('Invalid site transfer metadata:', session.id); return }
-    const resolvedSiteId = siteId ?? session.metadata?.transfer_site_id
+    const transferSiteId = session.metadata?.transfer_site_id
+    if (siteId && transferSiteId && siteId !== transferSiteId) {
+      console.error('Mismatched site_id and transfer_site_id in site_transfer checkout:', { sessionId: session.id, siteId, transferSiteId })
+      return
+    }
+    const resolvedSiteId = transferSiteId ?? siteId
     if (!resolvedSiteId) { console.error('No site found for site_transfer checkout:', session.id); return }
     const customerId = session.customer as string
     const subscriptionId = checkoutSubscriptionId(session)
@@ -297,6 +303,19 @@ async function handleCheckoutCompleted(
   const expanded = expandedSub(session)
   await applySiteSubscription(db, resolvedSiteId, organizationId, customerId, subscriptionId, expanded?.items?.data?.[0]?.id ?? null, plan, checkoutSubscriptionPeriodEnd(session))
   console.log(`Checkout completed for site ${resolvedSiteId}, plan ${plan}`)
+
+  // This is the revenue-confirming event GA4 should treat as the key event for
+  // billing — checkout_started (browser-side) only signals intent, this signals
+  // Stripe actually completed the subscription.
+  await sendGa4Event(env, session.metadata?.ga_client_id, {
+    name: 'subscription_created',
+    params: {
+      plan,
+      value: typeof session.amount_total === 'number' ? session.amount_total / 100 : undefined,
+      currency: session.currency?.toUpperCase(),
+      transaction_id: subscriptionId,
+    },
+  })
 }
 
 async function handleSubscriptionUpdated(
@@ -310,8 +329,8 @@ async function handleSubscriptionUpdated(
 
   const { siteId, organizationId } = resolved
   const sub = canonicalSubscription as Stripe.Subscription & SubscriptionTimingFields
-  const existingBilling = await queryFirst<{ current_period_end: string | null }>(db, `
-    SELECT current_period_end FROM site_billing WHERE site_id = ? LIMIT 1
+  const existingBilling = await queryFirst<{ current_period_end: string | null; plan: string | null }>(db, `
+    SELECT current_period_end, plan FROM site_billing WHERE site_id = ? LIMIT 1
   `, [siteId])
   const currentPeriodEnd = subscriptionPeriodEndIso(canonicalSubscription)
     ?? existingBilling?.current_period_end
@@ -331,8 +350,19 @@ async function handleSubscriptionUpdated(
     await setSiteEntitlementsFromPlan(db, siteId, organizationId, 'free')
     await deleteSiteCustomDomains(env, db, siteId, 'system')
   }
+
+  const previousPlan = existingBilling?.plan ?? null
+  if (plan && previousPlan && plan !== previousPlan) {
+    const isUpgrade = (PLAN_RANK[plan] ?? 0) > (PLAN_RANK[previousPlan] ?? 0)
+    await sendGa4Event(env, canonicalSubscription.metadata?.ga_client_id, {
+      name: isUpgrade ? 'plan_upgraded' : 'plan_downgraded',
+      params: { plan, previous_plan: previousPlan },
+    })
+  }
   console.log(`Subscription updated for site ${siteId}, status ${canonicalSubscription.status}`)
 }
+
+const PLAN_RANK: Record<string, number> = { free: 0, growth: 1, managed: 2, seo_accelerator: 3 }
 
 async function handleSubscriptionDeleted(
   env: Record<string, string | undefined>,
@@ -343,6 +373,7 @@ async function handleSubscriptionDeleted(
   if (!resolved) { console.error('Site not found for deleted subscription:', subscription.id); return }
 
   const { siteId, organizationId } = resolved
+  const existingBilling = await queryFirst<{ plan: string | null }>(db, `SELECT plan FROM site_billing WHERE site_id = ? LIMIT 1`, [siteId])
   await execute(db, `
     UPDATE site_billing SET stripe_subscription_id = NULL, status = 'canceled',
       current_period_end = NULL, cancel_at_period_end = false, updated_at = ?
@@ -351,21 +382,47 @@ async function handleSubscriptionDeleted(
 
   await setSiteEntitlementsFromPlan(db, siteId, organizationId, 'free')
   await deleteSiteCustomDomains(env, db, siteId, 'system')
+  await sendGa4Event(env, subscription.metadata?.ga_client_id, {
+    name: 'subscription_cancelled',
+    params: { plan: existingBilling?.plan ?? undefined },
+  })
   console.log(`Subscription deleted for site ${siteId}`)
 }
 
-async function handlePaymentSucceeded(db: D1Database, invoice: Stripe.Invoice) {
+async function handlePaymentSucceeded(env: Record<string, string | undefined>, db: D1Database, invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string
   const billing = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM organization_billing WHERE stripe_customer_id = ? LIMIT 1`, [customerId])
   if (!billing) { console.error('Org not found for payment_succeeded, customer:', customerId); return }
   console.log(`Payment succeeded for org ${billing.organization_id}`)
 }
 
-async function handlePaymentFailed(db: D1Database, invoice: Stripe.Invoice) {
+async function handlePaymentFailed(env: Record<string, string | undefined>, db: D1Database, invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string
   const billing = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM organization_billing WHERE stripe_customer_id = ? LIMIT 1`, [customerId])
   if (!billing) { console.error('Org not found for payment_failed, customer:', customerId); return }
+
+  const gaClientId = await resolveGaClientIdFromInvoiceSubscription(env, invoice)
+  await sendGa4Event(env, gaClientId, {
+    name: 'payment_failed',
+    params: { organization_id: billing.organization_id },
+  })
   console.log(`Payment failed for org ${billing.organization_id}`)
+}
+
+async function resolveGaClientIdFromInvoiceSubscription(
+  env: Record<string, string | undefined>,
+  invoice: Stripe.Invoice,
+): Promise<string | undefined> {
+  const subRef = (invoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null }).subscription
+  if (!subRef) return undefined
+  if (typeof subRef === 'object') return subRef.metadata?.ga_client_id
+  try {
+    const subscription = await getStripe(env).subscriptions.retrieve(subRef)
+    return subscription.metadata?.ga_client_id
+  } catch (error) {
+    console.error('Failed to retrieve subscription for payment_failed GA4 event:', subRef, error)
+    return undefined
+  }
 }
 
 async function handleServiceAddon(db: D1Database, organizationId: string, addonType: string, paymentIntentId: string | null) {

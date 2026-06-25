@@ -10,6 +10,7 @@ interface CheckoutRequest {
   interval?: 'month' | 'year'
   successUrl?: string
   cancelUrl?: string
+  gaClientId?: string
 }
 
 export default defineEventHandler(async (event) => {
@@ -105,9 +106,15 @@ export default defineEventHandler(async (event) => {
         organization_id: orgId,
         site_id: resolvedSiteId,
         plan,
+        ...(body.gaClientId ? { ga_client_id: body.gaClientId } : {}),
       },
       subscription_data: {
-        metadata: { organization_id: orgId, site_id: resolvedSiteId, plan },
+        metadata: {
+          organization_id: orgId,
+          site_id: resolvedSiteId,
+          plan,
+          ...(body.gaClientId ? { ga_client_id: body.gaClientId } : {}),
+        },
       },
     })
 

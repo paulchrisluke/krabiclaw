@@ -4,6 +4,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getConfig } from '~/server/utils/site-config'
 import { queryFirst } from '~/server/db'
+import { createError } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const { db, organization, site: dashboardSite } = await getDashboardContext(event, { requireSite: false })
@@ -26,7 +27,10 @@ export default defineEventHandler(async (event) => {
   `, [dashboardSite.id, organization.id])
 
   if (!site) {
-    return jsonResponse({ success: true, settings: null })
+    // dashboardSite was already resolved by getDashboardContext, so a miss here means
+    // the row vanished or the org/site pairing is broken — a backend contract violation,
+    // not the normal "no site selected yet" state handled above.
+    throw createError({ statusCode: 500, message: 'Resolved dashboard site not found' })
   }
 
   const siteSettings = (() => {

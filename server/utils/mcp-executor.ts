@@ -1675,6 +1675,9 @@ export async function executeMcpToolCall(
         );
       }
       const entityTypes = requiredStringArray(args.entities, "entities");
+      if (entityTypes.length === 0) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "entities must include at least one content type to copy.");
+      }
       for (const type of entityTypes) {
         if (!VALID_ENTITY_TYPES.includes(type as CopyEntityType)) {
           throw mcpProtocolError(

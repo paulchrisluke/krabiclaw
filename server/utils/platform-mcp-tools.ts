@@ -435,7 +435,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'list_platform_blog_posts',
-    description: 'List KrabiClaw platform blog posts. Optionally filter by published or draft status.',
+    description: 'List KrabiClaw platform blog posts. Optionally filter by published or draft status. Each result includes slug — if you only have a public blog URL (e.g. krabiclaw.com/blog/<slug>), call this first and match the URL slug against the returned slug field to find the post id, then pass that id to get_platform_blog_post or update_platform_blog_post. There is no direct lookup-by-slug or lookup-by-URL tool.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -452,7 +452,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'get_platform_blog_post',
-    description: 'Fetch one platform blog post in the canonical component model with resolved media fields.',
+    description: 'Fetch one platform blog post in the canonical component model with resolved media fields. Requires post_id, not a slug or URL. If you only have a public blog URL, call list_platform_blog_posts first and match its slug field to the URL to find the post_id.',
     inputSchema: {
       type: 'object',
       properties: { post_id: { type: 'string' } },
@@ -566,7 +566,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'list_platform_docs',
-    description: 'List KrabiClaw platform docs. Optionally filter by published or draft status.',
+    description: 'List KrabiClaw platform docs. Optionally filter by published or draft status. Each result includes slug — if you only have a public docs URL (e.g. krabiclaw.com/docs/<slug>), call this first and match the URL slug against the returned slug field to find the doc id, then pass that id to get_platform_doc or update_platform_doc. There is no direct lookup-by-slug or lookup-by-URL tool.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -583,7 +583,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'get_platform_doc',
-    description: 'Fetch one platform doc in the canonical component model with resolved media fields.',
+    description: 'Fetch one platform doc in the canonical component model with resolved media fields. Requires doc_id, not a slug or URL. If you only have a public docs URL, call list_platform_docs first and match its slug field to the URL to find the doc id.',
     inputSchema: {
       type: 'object',
       properties: { doc_id: { type: 'string' } },

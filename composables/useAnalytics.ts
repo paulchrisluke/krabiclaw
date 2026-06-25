@@ -93,6 +93,19 @@ export interface AnalyticsEventParams {
   status_code?: number
 }
 
+// Reads the GA4 client_id out of the `_ga` cookie GA4's own gtag.js sets
+// (format `GA1.1.<random>.<timestamp>`; client_id is the last two segments).
+// Used to stitch server-side Stripe webhook events back to the browsing
+// session that started checkout — see server/utils/ga4-measurement-protocol.ts.
+export const getGaClientId = (): string | null => {
+  if (!import.meta.client) return null
+  const match = document.cookie.match(/(?:^|;\s*)_ga=([^;]+)/)
+  if (!match) return null
+  const parts = (match[1] ?? '').split('.')
+  if (parts.length < 4) return null
+  return `${parts[2]}.${parts[3]}`
+}
+
 export const useAnalytics = () => {
   const trackEvent = (eventName: AnalyticsEventName, params: AnalyticsEventParams = {}) => {
     if (import.meta.client) {

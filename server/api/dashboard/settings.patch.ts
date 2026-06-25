@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
-  const { db, session, organization, site } = await getDashboardContext(event, { requireSite: false })
+  const { db, session, organization, site } = await getDashboardContext(event, { requireSite: true })
 
   if (!site) {
     return jsonResponse({ error: 'Site not found' }, { status: 404 })

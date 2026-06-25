@@ -19,6 +19,8 @@ export interface CloudflareEnv {
   GOOGLE_CLIENT_SECRET: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
+  GA4_MEASUREMENT_ID?: string
+  GA4_API_SECRET?: string
   CLOUDFLARE_ACCOUNT_ID?: string
   CLOUDFLARE_API_TOKEN?: string
   CLOUDFLARE_IMAGES_ACCOUNT_ID?: string

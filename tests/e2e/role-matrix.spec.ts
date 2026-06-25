@@ -57,7 +57,7 @@ test.describe('role permission matrix', () => {
         data: { plan: 'growth', interval: 'month', siteId },
       })
       if (expected === 'owner') {
-        expect(res.status()).not.toBe(403)
+        expect(res.status()).toBe(200)
       } else {
         expect(res.status()).toBe(403)
       }
