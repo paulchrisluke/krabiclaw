@@ -59,13 +59,18 @@ async function openMockedTransferOnboarding(
 ) {
   const suffix = Date.now()
   const userId = `e2e-transfer-ui-${plan}-${suffix}`
-  const orgId = `org-transfer-ui-${suffix}`
-  const orgSlug = `transfer-ui-${suffix}`
   const siteId = `site-transfer-ui-${suffix}`
   const siteSlug = `transfer-site-${suffix}`
   const locationId = `loc-transfer-ui-${suffix}`
 
   await loginFreshUser(page, baseURL, userId)
+  const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
+  expect(contextRes.status()).toBe(200)
+  const context = await contextRes.json() as { organization?: { id?: string; slug?: string } }
+  const orgId = context.organization?.id
+  const orgSlug = context.organization?.slug
+  expect(orgId).toBeTruthy()
+  expect(orgSlug).toBeTruthy()
 
   await page.route('**/api/dashboard/context?afterTransfer=true', async route => {
     await route.fulfill({
@@ -140,7 +145,7 @@ async function openMockedTransferOnboarding(
 
   await page.goto(`${baseURL}/dashboard/${orgSlug}/~/onboarding`, { waitUntil: 'load' })
 
-  return { siteId, orgSlug }
+  return { siteId, orgSlug: orgSlug! }
 }
 
 async function saveNotificationSettings(page: Page, siteId: string) {
