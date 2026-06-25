@@ -93,7 +93,7 @@ function slugify(name: string): string {
   return slug;
 }
 
-function parseStringArray(value: unknown): string[] {
+export function parseStringArray(value: unknown): string[] {
   if (Array.isArray(value))
     return value.filter((item): item is string => typeof item === "string");
   if (typeof value !== "string" || !value) return [];
@@ -107,7 +107,7 @@ function parseStringArray(value: unknown): string[] {
   }
 }
 
-function normalizeSectionOrder(sections: unknown): string[] {
+export function normalizeSectionOrder(sections: unknown): string[] {
   const source = Array.isArray(sections)
     ? sections
     : parseStringArray(sections);
@@ -123,14 +123,14 @@ function normalizeSectionOrder(sections: unknown): string[] {
   return normalized;
 }
 
-function mapMenu(row: Record<string, unknown>): Menu {
+export function mapMenu(row: Record<string, unknown>): Menu {
   return {
     ...(row as unknown as Menu),
     section_order: normalizeSectionOrder(row.section_order),
   };
 }
 
-function mapMenuItem(row: Record<string, unknown>): MenuItem {
+export function mapMenuItem(row: Record<string, unknown>): MenuItem {
   return {
     ...(row as unknown as MenuItem),
     available: Boolean(row.available),
@@ -145,7 +145,7 @@ function mapMenuItem(row: Record<string, unknown>): MenuItem {
   };
 }
 
-function sortMenuItems(items: MenuItem[], sectionOrder: string[]): MenuItem[] {
+export function sortMenuItems(items: MenuItem[], sectionOrder: string[]): MenuItem[] {
   const sectionIndex = new Map(
     sectionOrder.map((section, index) => [section, index]),
   );

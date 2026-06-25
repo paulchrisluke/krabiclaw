@@ -96,6 +96,7 @@ export const useBootstrap = () => {
           {
             default: emptyBootstrap,
             server: true,
+            lazy: true,
             watch: [url],
             // Return payload data if already fetched this key — prevents re-fetch across
             // header/footer/page calling the same key in the same render cycle.
