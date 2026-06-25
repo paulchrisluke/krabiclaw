@@ -32,6 +32,7 @@ test.describe('billing webhook signed flow', () => {
 
     const eventId = `evt_e2e_${Date.now()}`
     const now = Math.floor(Date.now() / 1000)
+    const customerId = `cus_e2e_${Date.now()}`
     const payload = JSON.stringify({
       id: eventId,
       object: 'event',
@@ -45,7 +46,7 @@ test.describe('billing webhook signed flow', () => {
         object: {
           id: `cs_e2e_${Date.now()}`,
           object: 'checkout.session',
-          customer: `cus_e2e_${Date.now()}`,
+          customer: customerId,
           metadata: {
             organization_id: organizationId,
             site_id: siteId,
@@ -95,10 +96,8 @@ test.describe('billing webhook signed flow', () => {
     expect(stateBody.billing).toBeTruthy()
     expect(stateBody.billing?.plan).toBe('growth')
     // applySiteSubscription upserts organization_billing.stripe_customer_id unconditionally
-    // from the event, so with site_id now present in metadata this is deterministic — but
-    // stay loose on the exact prefix in case a parallel test run on the same shared
-    // dev-login org races this read.
-    expect(String(stateBody.billing?.stripe_customer_id || '')).toMatch(/^cus_/)
+    // from the event, so with site_id now present in metadata this is deterministic.
+    expect(stateBody.billing?.stripe_customer_id).toBe(customerId)
     expect(stateBody.entitlements.some(e => e.key === 'plan' && e.value === 'growth')).toBe(true)
 
     const replay = await request.post(`${baseURL}/api/billing/webhook`, {

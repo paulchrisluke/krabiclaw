@@ -978,6 +978,7 @@ export const site_locales = sqliteTable("site_locales", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	unique("site_locales_organization_id_site_id_locale_unique").on(table.organization_id, table.site_id, table.locale),
+	uniqueIndex("idx_site_locales_one_source_per_site").on(table.organization_id, table.site_id).where(sql`is_source = 1`),
 ]);
 
 export const platform_pageview_events = sqliteTable("platform_pageview_events", {
@@ -1089,7 +1090,7 @@ export const sites = sqliteTable("sites", {
 
 export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 	id: text().primaryKey(),
-	stripe_event_id: text().unique(),
+	stripe_event_id: text().notNull().unique(),
 	event_type: text(),
 	status: text().default("pending"),
 	payload: text(),

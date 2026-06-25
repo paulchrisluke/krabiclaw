@@ -144,17 +144,21 @@ onMounted(async () => {
     // This route has no siteSlug segment, so the dashboard-site-header plugin never
     // attaches a header — set it explicitly so /api/dashboard/locations resolves the
     // same site /api/dashboard/context just found instead of hitting the generic
-    // multi-site-ambiguity 400.
+    // multi-site-ambiguity 400. A transferred site without a subdomain (custom-domain-only)
+    // has no header value to send, so skip the call rather than letting it 404 and take
+    // down the already-resolved notifRes via Promise.all's fail-fast rejection.
     const [locsRes, notifRes] = await Promise.all([
-      $fetch<{ locations: LocationRow[] }>('/api/dashboard/locations', {
-        headers: { 'x-dashboard-site-slug': subdomain.value },
-      }),
+      subdomain.value
+        ? $fetch<{ locations: LocationRow[] }>('/api/dashboard/locations', {
+            headers: { 'x-dashboard-site-slug': subdomain.value },
+          }).catch(() => null)
+        : Promise.resolve(null),
       $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>(
         `/api/editor/sites/${siteId.value}/notifications`
       ).catch(() => null),
     ])
 
-    locations.value = locsRes.locations ?? []
+    locations.value = locsRes?.locations ?? []
     const primary = locations.value.find(l => l.is_primary) ?? locations.value[0]
     if (primary) selectedLocationId.value = primary.id
 
