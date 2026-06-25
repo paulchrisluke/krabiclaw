@@ -194,6 +194,12 @@ CREATE TABLE `contact_submissions` (
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE TABLE `d1_migrations` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`name` text,
+	`applied_at` numeric DEFAULT (CURRENT_TIMESTAMP) NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE `dashboard_preferences` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -346,7 +352,7 @@ CREATE TABLE `google_business_connections` (
 	`location_id` text,
 	`connected_by_user_id` text,
 	`provider_account_email` text NOT NULL,
-	`encrypted_access_token` text,
+	`encrypted_access_token` text NOT NULL,
 	`encrypted_refresh_token` text NOT NULL,
 	`scopes` text NOT NULL,
 	`expires_at` text,
@@ -366,7 +372,7 @@ CREATE TABLE `google_business_events` (
 	`google_location_id` text,
 	`event_type` text,
 	`payload` text,
-	`status` text DEFAULT 'pending',
+	`status` text DEFAULT 'pending' NOT NULL,
 	`error` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
