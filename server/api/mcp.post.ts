@@ -1,4 +1,4 @@
-import { createError, getHeader, getRequestURL, setResponseHeader } from "h3";
+import { createError, getHeader, getRequestURL } from "h3";
 import {
   asMcpError,
   mcpFailure,
@@ -20,8 +20,23 @@ import { MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { isWidgetEnabledForTool } from "~/server/utils/mcp-widget-config";
-import { purgeSiteKvCache } from "~/server/utils/edge-cache";
 import { queryAll } from "~/server/db";
+import { purgeSiteKvCache } from "~/server/utils/edge-cache";
+import {
+  buildMcpAuthChallengeForError,
+  buildMcpOAuthChallenge,
+  getCloudflareWaitUntil,
+  isMcpMutatingTool,
+  mcpAuthRequiredResult,
+  setMcpAuthChallenge,
+} from "~/server/utils/mcp-route-helpers";
+
+const TENANT_AUTH_DESCRIPTION = "Connect KrabiClaw to continue.";
+const TENANT_AUTH_REQUIRED_TEXT = "Authentication required: connect KrabiClaw to continue.";
+
+function resourceMetadataUrl(baseUrl: string) {
+  return `${baseUrl}/.well-known/oauth-protected-resource`;
+}
 
 const WIDGET_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app";
 
@@ -46,62 +61,6 @@ function resolveBaseUrl(event: Parameters<typeof getRequestURL>[0]): string {
   );
 }
 
-function quoteChallengeValue(value: string) {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
-}
-
-function oauthChallenge(
-  baseUrl: string,
-  error = "invalid_token",
-  description = "Connect KrabiClaw to continue.",
-  scope?: string,
-) {
-  return [
-    `Bearer resource_metadata="${quoteChallengeValue(`${baseUrl}/.well-known/oauth-protected-resource`)}"`,
-    `error="${quoteChallengeValue(error)}"`,
-    `error_description="${quoteChallengeValue(description)}"`,
-    ...(scope ? [`scope="${quoteChallengeValue(scope)}"`] : []),
-  ].join(", ")
-}
-
-function setMcpAuthChallenge(event: Parameters<typeof getRequestURL>[0], challenge: string) {
-  setResponseHeader(event, "WWW-Authenticate", challenge)
-}
-
-function mcpAuthRequiredResult(challenge: string) {
-  return {
-    isError: true,
-    content: [
-      {
-        type: "text",
-        text: "Authentication required: connect KrabiClaw to continue.",
-      },
-    ],
-    _meta: {
-      "mcp/www_authenticate": [challenge],
-    },
-  }
-}
-
-function authChallengeForError(error: unknown, baseUrl: string) {
-  const data = error && typeof error === "object" && "data" in error
-    ? (error as { data?: unknown }).data
-    : null
-  const auth = data && typeof data === "object" && "mcpAuth" in data
-    ? (data as { mcpAuth?: unknown }).mcpAuth
-    : null
-  if (!auth || typeof auth !== "object") return oauthChallenge(baseUrl)
-  const details = auth as { error?: unknown; description?: unknown; scope?: unknown }
-  return oauthChallenge(
-    baseUrl,
-    details.error === "insufficient_scope" ? "insufficient_scope" : "invalid_token",
-    typeof details.description === "string"
-      ? details.description
-      : "Token missing, expired, invalid, or not issued for this MCP resource",
-    typeof details.scope === "string" ? details.scope : undefined,
-  )
-}
-
 export default defineEventHandler(async (event) => {
   let requestId: string | number | null | undefined;
   let requestMethod: string | undefined;
@@ -114,7 +73,10 @@ export default defineEventHandler(async (event) => {
     const baseUrl = (
       cfEnv.BETTER_AUTH_URL ?? "https://krabiclaw.com"
     ).replace(/\/$/, "");
-    const authChallenge = oauthChallenge(baseUrl);
+    const authChallenge = buildMcpOAuthChallenge({
+      resourceMetadataUrl: resourceMetadataUrl(baseUrl),
+      description: TENANT_AUTH_DESCRIPTION,
+    });
     const tenantAuthOptions = {
       audiences: [`${baseUrl}/api/mcp`],
       requiredScopes: ["tenant"],
@@ -144,7 +106,7 @@ export default defineEventHandler(async (event) => {
         tool_name: requestToolName ?? null,
       }));
       if (requestMethod === "tools/call") {
-        return mcpSuccess(requestId ?? null, mcpAuthRequiredResult(authChallenge));
+        return mcpSuccess(requestId ?? null, mcpAuthRequiredResult({ challenge: authChallenge, message: TENANT_AUTH_REQUIRED_TEXT }));
       }
       setResponseStatus(event, 401);
       setMcpAuthChallenge(event, authChallenge);
@@ -533,8 +495,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
       // next browser load gets fresh SSR HTML with the correct /_nuxt/ asset hashes.
       // Fire-and-forget — never block the MCP response on cache ops.
       const mutatedTool = MCP_TOOLS.find((t) => t.name === toolName);
-      const isReadOnly = mutatedTool?.annotations?.readOnlyHint !== false;
-      if (!isReadOnly) {
+      if (isMcpMutatingTool(mutatedTool)) {
         const ctxSiteId = structuredContent && typeof structuredContent === 'object' && 'context' in structuredContent
           ? (structuredContent.context as Record<string, unknown>)?.site_id
           : null;
@@ -566,10 +527,9 @@ Common workflows: update menus and items, create and publish posts, triage conta
               })
             // Use Cloudflare's waitUntil when available so the purge
             // can outlive the response; fall back to a detached promise.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const ctx = (event.context.cloudflare as any)?.context as { waitUntil?: (_p: Promise<unknown>) => void } | undefined
-            if (ctx?.waitUntil) {
-              ctx.waitUntil(purgeAsync)
+            const waitUntil = getCloudflareWaitUntil(event)
+            if (waitUntil) {
+              waitUntil(purgeAsync)
             }
             // purgeAsync already runs detached whether or not waitUntil is available
           }
@@ -639,9 +599,12 @@ Common workflows: update menus and items, create and publish posts, triage conta
       const baseUrl = (
         cfEnv.BETTER_AUTH_URL ?? "https://krabiclaw.com"
       ).replace(/\/$/, "");
-      const authChallenge = authChallengeForError(error, baseUrl);
+      const authChallenge = buildMcpAuthChallengeForError(error, {
+        resourceMetadataUrl: resourceMetadataUrl(baseUrl),
+        defaultDescription: TENANT_AUTH_DESCRIPTION,
+      });
       if (requestMethod === "tools/call") {
-        return mcpSuccess(requestId, mcpAuthRequiredResult(authChallenge));
+        return mcpSuccess(requestId, mcpAuthRequiredResult({ challenge: authChallenge, message: TENANT_AUTH_REQUIRED_TEXT }));
       }
       setResponseStatus(event, 401);
       setMcpAuthChallenge(event, authChallenge);
