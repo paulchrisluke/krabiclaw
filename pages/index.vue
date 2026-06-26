@@ -609,14 +609,10 @@ definePageMeta({ layout: false })
 const { isPlatform, siteId, site } = useTenantSite()
 const { locale } = useI18n()
 
-const plans = ref(null)
-const isAuthenticated = ref(false)
-if (isPlatform) {
-  const { plans: platformPlans } = usePlans()
-  watch(platformPlans, (val) => { plans.value = val }, { immediate: true })
-  const { isAuthenticated: platformIsAuthenticated } = useAuth()
-  watch(platformIsAuthenticated, (val) => { isAuthenticated.value = val }, { immediate: true })
-}
+const platformPlans = isPlatform ? usePlans().plans : ref(null)
+const plans = computed(() => isPlatform ? platformPlans.value : null)
+
+const { isAuthenticated } = useAuth()
 const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
 // Inline location grid — load videos via IntersectionObserver when cards scroll into view

@@ -214,7 +214,12 @@ async function resolvePlatformContentId(
   identifier: string,
   notFoundMessage: string,
 ): Promise<string> {
-  const row = await queryFirst<{ id: string }>(db, `SELECT id FROM ${table} WHERE id = ? OR slug = ? LIMIT 1`, [identifier, identifier])
+  const byId = await queryFirst<{ id: string }>(db, `SELECT id FROM ${table} WHERE id = ? LIMIT 1`, [identifier])
+  const bySlug = await queryFirst<{ id: string }>(db, `SELECT id FROM ${table} WHERE slug = ? LIMIT 1`, [identifier])
+  if (byId && bySlug && byId.id !== bySlug.id) {
+    badRequest('Ambiguous platform content identifier; use the row id.')
+  }
+  const row = byId ?? bySlug
   if (!row) notFound(notFoundMessage)
   return row.id
 }

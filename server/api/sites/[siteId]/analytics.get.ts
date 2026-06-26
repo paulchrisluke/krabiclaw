@@ -337,19 +337,27 @@ export default defineEventHandler(async (event) => {
       WHERE site_id = ? AND created_at >= ? AND created_at < ?
       GROUP BY COALESCE(NULLIF(country, ''), 'XX')
       ORDER BY views DESC
-      LIMIT 12
     `, [siteId, startIso, endIso])
 
-    const countries: CountryBreakdown[] = countryRows.map(row => {
-      const views = toNumber(row.views)
-      return {
-        country: normalizeCountryCode(row.country),
-        countryCode: normalizeCountryCode(row.country),
+    const countryMap = new Map<string, { views: number; visitors: number }>()
+    for (const row of countryRows) {
+      const code = normalizeCountryCode(row.country)
+      const existing = countryMap.get(code) || { views: 0, visitors: 0 }
+      countryMap.set(code, {
+        views: existing.views + toNumber(row.views),
+        visitors: existing.visitors + toNumber(row.visitors)
+      })
+    }
+    const countries: CountryBreakdown[] = Array.from(countryMap.entries())
+      .map(([code, { views, visitors }]) => ({
+        country: code,
+        countryCode: code,
         views,
-        visitors: toNumber(row.visitors),
+        visitors,
         percentOfTotal: totalPageViews > 0 ? Math.round((views / totalPageViews) * 100) : 0
-      }
-    })
+      }))
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 12)
 
     const cities = (await queryAll<{ city: string | null; region: string | null; country: string | null; views: number }>(db, `
       SELECT

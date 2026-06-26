@@ -290,6 +290,7 @@ async function loadAnalytics() {
       query: { startDate: range.startDate, endDate: range.endDate }
     })
   } catch (error) {
+    analytics.value = null
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load analytics', color: 'error' })
   } finally {
     loading.value = false

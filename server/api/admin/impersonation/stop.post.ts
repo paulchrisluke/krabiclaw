@@ -8,13 +8,11 @@ interface SessionMeta {
 }
 
 interface StopImpersonationApi {
-  stopImpersonating(input: {
+  stopImpersonating(_input: {
     headers: HeadersInit
     asResponse: true
   }): Promise<Response>
 }
-
-const IMPERSONATION_STOP_TIMEOUT_MS = 5_000
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -29,28 +27,17 @@ export default defineEventHandler(async (event) => {
   const stopApi = auth.api as unknown as StopImpersonationApi
 
   let response: Response
-  let timeoutHandle: ReturnType<typeof setTimeout> | null = null
   try {
-    const stopPromise = stopApi.stopImpersonating({
+    response = await stopApi.stopImpersonating({
       headers: getHeaders(event) as HeadersInit,
       asResponse: true
     })
-    response = await Promise.race([
-      stopPromise,
-      new Promise<Response>((_, reject) => {
-        timeoutHandle = setTimeout(() => reject(new DOMException('Stop impersonation timed out', 'AbortError')), IMPERSONATION_STOP_TIMEOUT_MS)
-      })
-    ])
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Auth API invocation failed')
-    const isAbort = normalizedError.name === 'AbortError'
     console.error('admin_impersonation_stop_failed', {
-      timeoutMs: IMPERSONATION_STOP_TIMEOUT_MS,
       error: normalizedError.message
     })
-    return jsonResponse({ error: isAbort ? 'Stop impersonation timed out' : 'Failed to stop impersonation' }, { status: isAbort ? 504 : 502 })
-  } finally {
-    if (timeoutHandle) clearTimeout(timeoutHandle)
+    return jsonResponse({ error: 'Failed to stop impersonation' }, { status: 502 })
   }
 
   const headerBag = response.headers as Headers & {

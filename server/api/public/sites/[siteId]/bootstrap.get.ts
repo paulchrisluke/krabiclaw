@@ -485,7 +485,7 @@ export default defineEventHandler(async (event) => {
        FROM experiences e
        LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
        LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
-       WHERE e.site_id = ? AND e.slug = ?
+       WHERE e.site_id = ? AND e.slug = ? AND e.status = 'active'
        LIMIT 1`,
       [siteId, experienceSlug],
     );
@@ -695,9 +695,15 @@ export default defineEventHandler(async (event) => {
 
     let selectedMenuRow: Record<string, unknown> | null = null;
 
-    if (locationId) {
+    const primaryLoc =
+      (locRows.results ?? []).find((l) => l.is_primary) ??
+      (locRows.results ?? [])[0] ??
+      null;
+    const effectiveLocationId = locationId ?? primaryLoc?.id ?? null;
+
+    if (effectiveLocationId) {
       selectedMenuRow =
-        menuRows.find((m) => m.location_id === locationId) ?? null;
+        menuRows.find((m) => m.location_id === effectiveLocationId) ?? null;
     }
 
     if (!selectedMenuRow) {
@@ -705,17 +711,6 @@ export default defineEventHandler(async (event) => {
         menuRows.find(
           (m) => m.location_id === null || m.location_id === undefined,
         ) ?? null;
-    }
-
-    if (!selectedMenuRow && menuRows.length) {
-      const primaryLoc =
-        (locRows.results ?? []).find((l) => l.is_primary) ??
-        (locRows.results ?? [])[0] ??
-        null;
-      if (primaryLoc) {
-        selectedMenuRow =
-          menuRows.find((m) => m.location_id === primaryLoc.id) ?? null;
-      }
     }
 
     if (selectedMenuRow) {
