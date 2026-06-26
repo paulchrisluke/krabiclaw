@@ -8,7 +8,19 @@ test.describe('OAuth discovery endpoints', () => {
     expect(body.resource).toBe(`${baseURL}/api/mcp`)
     expect(Array.isArray(body.authorization_servers)).toBe(true)
     expect((body.authorization_servers as string[]).length).toBeGreaterThan(0)
-    expect(body.bearer_methods_supported).toContain('header')
+    expect(Array.isArray(body.bearer_methods_supported)).toBe(true)
+    expect((body.bearer_methods_supported as string[])).toContain('header')
+  })
+
+  test('/.well-known/oauth-protected-resource/platform-mcp returns valid document', async ({ request, baseURL }) => {
+    const res = await request.get(`${baseURL}/.well-known/oauth-protected-resource/platform-mcp`)
+    expect(res.status()).toBe(200)
+    const body = await res.json() as Record<string, unknown>
+    expect(body.resource).toBe(`${baseURL}/api/mcp/platform`)
+    expect(Array.isArray(body.authorization_servers)).toBe(true)
+    expect((body.authorization_servers as string[]).length).toBeGreaterThan(0)
+    expect(Array.isArray(body.bearer_methods_supported)).toBe(true)
+    expect((body.bearer_methods_supported as string[])).toContain('header')
   })
 
   test('/.well-known/openid-configuration returns valid document', async ({ request, baseURL }) => {
@@ -99,5 +111,30 @@ test.describe('OAuth discovery endpoints', () => {
     expect(challenge).toContain('resource_metadata=')
     expect(challenge).toContain('error="invalid_token"')
     expect(challenge).toContain('error_description=')
+  })
+
+  test('unauthenticated platform MCP request returns platform WWW-Authenticate header', async ({ request, baseURL }) => {
+    const MCP_VERSION = '2026-07-28'
+    const res = await request.post(`${baseURL}/api/mcp/platform`, {
+      headers: {
+        'content-type': 'application/json',
+        'mcp-protocol-version': MCP_VERSION,
+        'mcp-method': 'server/discover',
+      },
+      data: {
+        jsonrpc: '2.0',
+        id: 'platform-auth-check',
+        method: 'server/discover',
+        params: {},
+        _meta: {
+          'io.modelcontextprotocol/version': MCP_VERSION,
+          'io.modelcontextprotocol/method': 'server/discover',
+        },
+      },
+    })
+    expect(res.status()).toBe(401)
+    const wwwAuth = res.headers()['www-authenticate']
+    expect(wwwAuth).toBeTruthy()
+    expect(wwwAuth).toContain('/.well-known/oauth-protected-resource/platform-mcp')
   })
 })

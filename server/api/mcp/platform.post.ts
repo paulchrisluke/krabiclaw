@@ -99,6 +99,7 @@ export default defineEventHandler(async (event) => {
           'Early in a session, read the kc://docs/product-context resource (PRODUCT.md) for what KrabiClaw actually is, its surfaces, verticals, and business model — do not assume or invent product facts.',
           'Derive voice and tone from existing published posts/docs (via list_platform_blog_posts, get_platform_blog_post, list_platform_docs, get_platform_doc) rather than inventing a style — KrabiClaw has no separate style guide; the published content is the style guide.',
           'Ground prioritization in get_platform_analytics (traffic and new_signups), not guesses about what readers want.',
+          'If the writer wants a featured image or step image, use list_platform_media_assets to choose an existing asset or upload_platform_image with a real ChatGPT attachment. Do not suggest or rely on generated images for this surface.',
           'Prefer the prompts audit_content_for_growth, draft_blog_post, and update_and_publish_post as starting points for those respective workflows.',
           'New content should be drafted for the writer\'s approval before publishing. Once the writer has supplied or approved final content, execute the corresponding tool calls directly and in sequence — do not stop to describe a call instead of making it.',
         ].join(' '),
@@ -180,6 +181,7 @@ export default defineEventHandler(async (event) => {
           _meta: {
             securitySchemes: tool.securitySchemes,
             'krabiclaw/toolSurface': 'platform_admin',
+            ...(tool.fileParams?.length ? { 'openai/fileParams': tool.fileParams } : {}),
           },
         })),
       })

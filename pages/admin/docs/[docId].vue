@@ -3,7 +3,7 @@
     <div class="mb-6 flex items-center justify-between gap-3">
       <div>
         <h1 class="text-2xl font-bold text-default">Edit Documentation</h1>
-        <p class="mt-1 text-sm text-muted">{{ doc?.slug ? `/docs/${doc.slug}` : 'Documentation draft' }}</p>
+        <p class="mt-1 text-sm text-muted">{{ doc?.slug && doc?.category ? `/docs/${categoryToSlug(doc.category)}/${doc.slug}` : 'Documentation draft' }}</p>
       </div>
       <UButton to="/admin" color="neutral" variant="soft" icon="i-heroicons-arrow-left">Admin</UButton>
     </div>
@@ -218,6 +218,7 @@ import { categories, difficultyLevels } from '~/config/documentation'
 import { getErrorMessage } from '~/utils/errors'
 import { createEmptyFaqItem, createEmptyHowToStep } from '~/composables/useBlogForm'
 import { useDocForm } from '~/composables/useDocForm'
+import { categoryToSlug } from '~/utils/docs-categories'
 
 interface DocComponent {
   type: 'faq' | 'how_to'
