@@ -52,6 +52,7 @@ test.describe('site transfer handoff flow', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('paid handoff stays pending until checkout completes and reminders can be forced', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
     test.skip(
       !testEnv('STRIPE_SECRET_KEY') || !testEnv('NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'),
       'Stripe must be configured for the paid handoff flow test.',

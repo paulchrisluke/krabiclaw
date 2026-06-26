@@ -138,10 +138,14 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
     return [];
   };
 
+  const isStringArray = (value: unknown): value is string[] =>
+    Array.isArray(value) && value.every((item) => typeof item === "string");
+
   let time_slots: string[] | null = null;
   if (row.time_slots && typeof row.time_slots === "string") {
     try {
-      time_slots = JSON.parse(row.time_slots);
+      const parsed = JSON.parse(row.time_slots);
+      time_slots = isStringArray(parsed) ? parsed : null;
     } catch {
       time_slots = null;
     }
@@ -150,7 +154,12 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
   let recurring_slots: Partial<Record<string, string[]>> | null = null;
   if (row.recurring_slots && typeof row.recurring_slots === "string") {
     try {
-      recurring_slots = JSON.parse(row.recurring_slots);
+      const parsed = JSON.parse(row.recurring_slots);
+      recurring_slots =
+        parsed && typeof parsed === "object" && !Array.isArray(parsed) &&
+        Object.values(parsed).every(isStringArray)
+          ? (parsed as Partial<Record<string, string[]>>)
+          : null;
     } catch {
       recurring_slots = null;
     }
@@ -451,7 +460,7 @@ export default defineEventHandler(async (event) => {
     page === "location";
 
   if (needsExperiencesList) {
-    const expParams: unknown[] = [siteId];
+    const expParams: unknown[] = [orgId, siteId];
     let expSql = `SELECT e.id, e.organization_id, e.site_id, e.location_id,
                          e.title, e.slug, e.tagline, e.body, e.image_asset_id,
                          e.video_asset_id, e.images,
@@ -463,7 +472,7 @@ export default defineEventHandler(async (event) => {
                   FROM experiences e
                   LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
                   LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
-                  WHERE e.site_id = ? AND e.status = 'active'`;
+                  WHERE e.organization_id = ? AND e.site_id = ? AND e.status = 'active'`;
     if (page === "location" && locationId) {
       expSql += ` AND e.location_id = ?`;
       expParams.push(locationId);
@@ -485,9 +494,9 @@ export default defineEventHandler(async (event) => {
        FROM experiences e
        LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
        LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
-       WHERE e.site_id = ? AND e.slug = ? AND e.status = 'active'
+       WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ? AND e.status = 'active'
        LIMIT 1`,
-      [siteId, experienceSlug],
+      [orgId, siteId, experienceSlug],
     );
   }
 

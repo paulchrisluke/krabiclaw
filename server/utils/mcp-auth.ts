@@ -44,6 +44,12 @@ interface TokenVerificationResult {
   scopes: string[]
 }
 
+interface McpAuthChallengeDetails {
+  error: 'invalid_token' | 'insufficient_scope'
+  description: string
+  scope?: string
+}
+
 interface RequireMcpUserOptions {
   audiences?: string[]
   requiredScopes?: string[]
@@ -120,7 +126,7 @@ async function verifyBearerToken(
 
   const audiences = options.audiences?.length
     ? options.audiences
-    : [`${baseUrl}/api/mcp`, 'https://krabiclaw.com/api/mcp']
+    : [`${baseUrl}/api/mcp`]
   // Use ?? (not ?.length ? :) so a surface can explicitly opt out of any scope
   // requirement by passing requiredScopes: [] — see platform.post.ts, where the
   // real authorization boundary is requirePlatformAdmin (DB role), not the OAuth
@@ -131,13 +137,19 @@ async function verifyBearerToken(
 
   const verification = await verifyJwtOrOpaqueToken(token, baseUrl, db, audiences, requiredScopes)
   if (!verification.identity) {
+    const authChallenge = mcpAuthChallengeDetails(verification, requiredScopes)
     logMcpAuth(event, 'warn', 'credential_rejected', {
       token_fingerprint: tokenFingerprint,
       token_shape: token.split('.').length === 3 ? 'jwt' : 'opaque',
       jwt_reason: verification.jwtReason,
       opaque_reason: verification.opaqueReason,
+      oauth_error: authChallenge.error,
     })
-    throw createError({ statusCode: 401, statusMessage: 'Invalid or expired token' })
+    throw createError({
+      statusCode: 401,
+      statusMessage: authChallenge.description,
+      data: { mcpAuth: authChallenge },
+    })
   }
   const identity = verification.identity
   ensureForbiddenScopesAbsent(verification.scopes, options.forbiddenScopes)
@@ -174,6 +186,27 @@ async function verifyBearerToken(
       env,
     ),
     scopes: verification.scopes,
+  }
+}
+
+function mcpAuthChallengeDetails(
+  verification: TokenVerificationResult,
+  requiredScopes: string[],
+): McpAuthChallengeDetails {
+  const missingScope = requiredScopes.find(scope =>
+    verification.jwtReason === `${scope}_scope_missing` ||
+    verification.opaqueReason === `${scope}_scope_missing`
+  )
+  if (missingScope) {
+    return {
+      error: 'insufficient_scope',
+      description: `${missingScope} scope required`,
+      scope: missingScope,
+    }
+  }
+  return {
+    error: 'invalid_token',
+    description: 'Token missing, expired, invalid, or not issued for this MCP resource',
   }
 }
 
