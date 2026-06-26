@@ -1,4 +1,4 @@
-import { createError, getHeader, setResponseHeader, type H3Event } from 'h3'
+import { createError, getHeader } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import {
   asMcpError,
@@ -13,67 +13,36 @@ import { executePlatformMcpToolCall } from '~/server/utils/platform-mcp-executor
 import { PLATFORM_MCP_TOOLS } from '~/server/utils/platform-mcp-tools'
 import { PLATFORM_MCP_RESOURCES, readPlatformMcpResource } from '~/server/utils/platform-mcp-resources'
 import { PLATFORM_MCP_PROMPTS, renderPlatformMcpPrompt } from '~/server/utils/platform-mcp-prompts'
+import {
+  buildMcpAuthChallengeForError,
+  buildMcpOAuthChallenge,
+  isMcpMutatingTool,
+  mcpAuthRequiredResult,
+  scheduleMcpKvHtmlPurge,
+  setMcpAuthChallenge,
+} from '~/server/utils/mcp-route-helpers'
 
-function quoteChallengeValue(value: string) {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+const PLATFORM_AUTH_DESCRIPTION = 'Connect the KrabiClaw platform admin app to continue.'
+const PLATFORM_AUTH_REQUIRED_TEXT = 'Authentication required: connect the KrabiClaw platform admin app to continue.'
+
+function resourceMetadataUrl(baseUrl: string) {
+  return `${baseUrl}/.well-known/oauth-protected-resource/platform-mcp`
 }
 
-function oauthChallenge(
-  baseUrl: string,
-  error = 'invalid_token',
-  description = 'Connect the KrabiClaw platform admin app to continue.',
-  scope?: string,
-) {
-  return [
-    `Bearer resource_metadata="${quoteChallengeValue(`${baseUrl}/.well-known/oauth-protected-resource/platform-mcp`)}"`,
-    `error="${quoteChallengeValue(error)}"`,
-    `error_description="${quoteChallengeValue(description)}"`,
-    ...(scope ? [`scope="${quoteChallengeValue(scope)}"`] : []),
-  ].join(', ')
-}
-
-function setMcpAuthChallenge(event: H3Event, challenge: string) {
-  setResponseHeader(event, 'WWW-Authenticate', challenge)
-}
-
-function mcpAuthRequiredResult(challenge: string) {
-  return {
-    isError: true,
-    content: [
-      {
-        type: 'text',
-        text: 'Authentication required: connect the KrabiClaw platform admin app to continue.',
-      },
-    ],
-    _meta: {
-      'mcp/www_authenticate': [challenge],
-    },
-  }
-}
-
-function authChallengeForError(error: unknown, baseUrl: string) {
-  const data = error && typeof error === 'object' && 'data' in error
-    ? (error as { data?: unknown }).data
-    : null
-  const auth = data && typeof data === 'object' && 'mcpAuth' in data
-    ? (data as { mcpAuth?: unknown }).mcpAuth
-    : null
-  if (!auth || typeof auth !== 'object') return oauthChallenge(baseUrl)
-  const details = auth as { error?: unknown; description?: unknown; scope?: unknown }
-  return oauthChallenge(
-    baseUrl,
-    details.error === 'insufficient_scope' ? 'insufficient_scope' : 'invalid_token',
-    typeof details.description === 'string'
-      ? details.description
-      : 'Token missing, expired, invalid, or not issued for this MCP resource',
-    typeof details.scope === 'string' ? details.scope : undefined,
-  )
+// NUXT_PUBLIC_PLATFORM_DOMAIN is normally a full URL (e.g. "https://krabiclaw.com")
+// but config can legitimately hold a bare domain — strip a scheme if present
+// instead of relying on new URL(), which throws on domain-only input.
+function hostnameFromConfigValue(value: string): string {
+  return value.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
 }
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
-  const authChallenge = oauthChallenge(baseUrl)
+  const authChallenge = buildMcpOAuthChallenge({
+    resourceMetadataUrl: resourceMetadataUrl(baseUrl),
+    description: PLATFORM_AUTH_DESCRIPTION,
+  })
   const platformAdminAuthOptions = {
     // aud claim, bound to the `resource` param ChatGPT sends at /authorize, is the
     // real per-surface boundary — see scopes comment in server/utils/auth.ts for
@@ -97,7 +66,7 @@ export default defineEventHandler(async (event) => {
         ? String((rawBody.params as Record<string, unknown>).name)
         : undefined
       if (requestMethod === 'tools/call') {
-        return mcpSuccess(requestId ?? null, mcpAuthRequiredResult(authChallenge))
+        return mcpSuccess(requestId ?? null, mcpAuthRequiredResult({ challenge: authChallenge, message: PLATFORM_AUTH_REQUIRED_TEXT }))
       }
       setResponseStatus(event, 401)
       setMcpAuthChallenge(event, authChallenge)
@@ -226,6 +195,27 @@ export default defineEventHandler(async (event) => {
           : Object.fromEntries(Object.entries(request.params ?? {}).filter(([key]) => key !== 'name'))
 
       const result = await executePlatformMcpToolCall(event, toolName, rawArgs)
+
+      // After any mutating tool call, purge KV HTML cache for the platform
+      // site so the next browser load gets fresh SSR HTML. Fire-and-forget —
+      // never block the MCP response on cache ops. Mirrors the per-site purge
+      // in server/api/mcp.post.ts.
+      const mutatedTool = PLATFORM_MCP_TOOLS.find(tool => tool.name === toolName)
+      if (isMcpMutatingTool(mutatedTool)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const kv = (env as any).SITE_CACHE as KVNamespace | undefined
+        scheduleMcpKvHtmlPurge({
+          event,
+          kv,
+          hostnames: [
+            new URL(baseUrl).hostname,
+            env.NUXT_PUBLIC_PLATFORM_DOMAIN ? hostnameFromConfigValue(env.NUXT_PUBLIC_PLATFORM_DOMAIN) : null,
+            'krabiclaw.com',
+          ],
+          logPrefix: 'platform-mcp-cache-purge',
+        })
+      }
+
       return mcpSuccess(request.id, {
         isError: false,
         structuredContent: result,
@@ -253,9 +243,12 @@ export default defineEventHandler(async (event) => {
           ? 400
           : 500)
     if (status === 401) {
-      const authChallengeForFailure = authChallengeForError(error, baseUrl)
+      const authChallengeForFailure = buildMcpAuthChallengeForError(error, {
+        resourceMetadataUrl: resourceMetadataUrl(baseUrl),
+        defaultDescription: PLATFORM_AUTH_DESCRIPTION,
+      })
       if (requestMethod === 'tools/call') {
-        return mcpSuccess(requestId, mcpAuthRequiredResult(authChallengeForFailure))
+        return mcpSuccess(requestId, mcpAuthRequiredResult({ challenge: authChallengeForFailure, message: PLATFORM_AUTH_REQUIRED_TEXT }))
       }
       setResponseStatus(event, 401)
       setMcpAuthChallenge(event, authChallengeForFailure)
