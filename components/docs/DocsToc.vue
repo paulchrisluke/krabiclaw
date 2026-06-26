@@ -33,7 +33,7 @@ interface Heading {
 
 const headings = computed<Heading[]>(() => {
   const matches: Heading[] = []
-  const regex = /<h([23])\s+id="([^"]+)">([\s\S]*?)<\/h\1>/g
+  const regex = /<h([23])\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/h\1>/g
   let match: RegExpExecArray | null
   while ((match = regex.exec(props.html))) {
     const [, depth, id, text] = match
