@@ -110,6 +110,11 @@ import {
 } from "~/server/utils/facebook-pages";
 import { getMcpTool } from "~/server/utils/mcp-tools";
 import { requireMcpSite, requireMcpUser } from "~/server/utils/mcp-auth";
+import {
+  buildDashboardUrl,
+  DASHBOARD_DESTINATIONS,
+  type DashboardDestination,
+} from "~/server/utils/dashboard-links";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
 import { renderWidget } from "~/server/utils/mcp-render";
 import {
@@ -2459,6 +2464,16 @@ export async function executeMcpToolCall(
         site.siteId,
       );
       return { deleted: true, context: await mutationContextPayload(site) };
+    case "get_dashboard_link": {
+      const destination = requiredString(args, "destination") as DashboardDestination;
+      if (!Object.prototype.hasOwnProperty.call(DASHBOARD_DESTINATIONS, destination)) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          `Unknown destination "${destination}". Valid destinations: ${Object.keys(DASHBOARD_DESTINATIONS).join(", ")}`,
+        );
+      }
+      return { url: buildDashboardUrl(site, destination) };
+    }
     case "get_facebook_connection": {
       const connection = await getFacebookPagesConnection(
         site.env as never,
@@ -2466,12 +2481,9 @@ export async function executeMcpToolCall(
         site.siteId,
       );
       if (!connection) {
-        const platformDomain =
-          site.env.NUXT_PUBLIC_PLATFORM_DOMAIN || "https://krabiclaw.com";
-        const orgSlug = site.organizationSlug || site.organizationId;
         return {
           connected: false,
-          connectUrl: `${platformDomain}/dashboard/${orgSlug}/~/settings/general`,
+          connectUrl: buildDashboardUrl(site, "settings.general"),
         };
       }
       return {

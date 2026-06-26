@@ -12,15 +12,31 @@
 
       <!-- Pill nav (desktop) -->
       <nav class="hidden lg:flex items-center gap-1 bg-elevated/50 border border-muted rounded-full px-1 py-1">
-        <NuxtLink
-          v-for="item in navItems"
-          :key="item.label"
-          :to="item.to"
-          class="px-4 py-2 rounded-full text-[13.5px] font-medium text-muted transition-colors hover:text-default no-underline"
-          :class="isActiveRoute(item.to) ? 'bg-elevated text-default shadow-[0_1px_2px_rgba(31,37,71,0.06)]' : ''"
-        >
-          {{ item.label }}
-        </NuxtLink>
+        <template v-for="item in navItems" :key="item.label">
+          <UDropdownMenu
+            v-if="item.label === 'Docs' && categories.length"
+            :items="[[{ label: 'All docs', to: '/docs' }], categories.map(cat => ({ label: cat.category, to: `/docs/${cat.categorySlug}/${cat.docs[0]?.slug}` }))]"
+            :content="{ align: 'start', collisionPadding: 12 }"
+          >
+            <UButton
+              :label="item.label"
+              trailing-icon="i-lucide-chevron-down"
+              color="neutral"
+              variant="ghost"
+              class="px-4 py-2 rounded-full text-[13.5px] font-medium"
+              :class="isActiveRoute(item.to) ? 'bg-elevated text-default' : 'text-muted'"
+              :ui="{ base: 'hover:bg-transparent hover:text-default' }"
+            />
+          </UDropdownMenu>
+          <NuxtLink
+            v-else
+            :to="item.to"
+            class="px-4 py-2 rounded-full text-[13.5px] font-medium text-muted transition-colors hover:text-default no-underline"
+            :class="isActiveRoute(item.to) ? 'bg-elevated text-default shadow-[0_1px_2px_rgba(31,37,71,0.06)]' : ''"
+          >
+            {{ item.label }}
+          </NuxtLink>
+        </template>
       </nav>
 
       <!-- Right actions -->
@@ -106,6 +122,7 @@ const navItems = [
 ]
 
 const route = useRoute()
+const { categories } = useDocsNav()
 
 function isActiveRoute(to: string) {
   const path = to.split('#')[0]!

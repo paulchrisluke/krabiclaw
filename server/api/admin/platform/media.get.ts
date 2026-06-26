@@ -2,7 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
-import { queryAll } from '~/server/db'
+import { listPlatformMediaAssets } from '~/server/utils/platform-media'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -21,19 +21,8 @@ export default defineEventHandler(async (event) => {
   const limit = Math.min(Math.max(Number.isNaN(parsed) ? 50 : parsed, 1), 100)
   const id = Array.isArray(query.id) ? query.id[0] : (query.id as string | undefined)
 
-  let sql = `SELECT id, public_url, thumbnail_url, alt_text FROM media_assets WHERE site_id = 'platform' AND status = 'active'`
-  const params: ApiRecord[] = []
-
-  if (id) {
-    sql += ` AND id = ?`
-    params.push(id)
-  }
-
-  sql += ` ORDER BY created_at DESC LIMIT ?`
-  params.push(limit)
-
   try {
-    const results = await queryAll(db, sql, params)
+    const results = await listPlatformMediaAssets(db, { id, kind: 'image', limit })
     return jsonResponse({ media: results ?? [] })
   } catch (err) {
     console.error('Failed to fetch platform media:', err)

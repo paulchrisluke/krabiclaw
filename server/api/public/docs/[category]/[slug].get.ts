@@ -1,11 +1,16 @@
-// GET /api/public/docs/[slug] - Get single published doc
+// GET /api/public/docs/[category]/[slug] - Get single published doc, scoped to its category
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { attachFeaturedImageFromBareJoin, listContentComponents, resolveContentComponentsMedia } from '~/server/utils/platform-content'
+import { slugToCategory } from '~/utils/docs-categories'
 
 export default defineEventHandler(async (event) => {
+  const categorySlug = getRouterParam(event, 'category')
   const slug = getRouterParam(event, 'slug')
-  if (!slug) return jsonResponse({ error: 'Slug required' }, { status: 400 })
+  if (!categorySlug || !slug) return jsonResponse({ error: 'Category and slug required' }, { status: 400 })
+
+  const category = slugToCategory(categorySlug)
+  if (!category) return jsonResponse({ error: 'Documentation not found' }, { status: 404 })
 
   const env = cloudflareEnv(event)
   const db = env.db
@@ -21,8 +26,8 @@ export default defineEventHandler(async (event) => {
          ma.public_url, ma.kind, ma.width, ma.height
        FROM platform_docs p
        LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
-       WHERE p.slug = ? AND p.status = 'published'`,
-      [slug],
+       WHERE p.slug = ? AND p.category = ? AND p.status = 'published'`,
+      [slug, category],
     )
 
     if (!doc) {

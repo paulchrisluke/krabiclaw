@@ -1,6 +1,7 @@
 import type { McpToolRole } from '~/server/utils/mcp-auth'
 import { EXPERIENCE_STATUSES } from '~/server/utils/experiences'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
+import { DASHBOARD_DESTINATIONS } from '~/server/utils/dashboard-links'
 
 export interface McpToolDefinition {
   name: string
@@ -596,6 +597,7 @@ const READ_ONLY_TOOL_NAMES = [
   'get_post',
   'get_site_media_assets',
   'get_facebook_connection',
+  'get_dashboard_link',
   'get_page_fields',
   'list_location_qa',
   'list_location_reviews',
@@ -1982,7 +1984,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_facebook_connection',
-    description: 'Check whether a Facebook Page is connected to this site. If not connected, direct the user to the dashboard general settings page to connect: https://krabiclaw.com/dashboard/{orgSlug}/~/settings/general',
+    description: 'Check whether a Facebook Page is connected to this site. If not connected, the response includes connectUrl — a deep link to the dashboard general settings page to connect (same link get_dashboard_link returns for destination "settings.general").',
     domain: 'integrations',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -1995,6 +1997,26 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         status: { type: 'string', enum: ['active', 'disabled', 'error'] },
       },
       required: ['connected'],
+    },
+  }),
+  siteTool({
+    name: 'get_dashboard_link',
+    description: 'Resolve a deep link into this site\'s org dashboard for a given destination, so a reply can point the user straight at the right settings page instead of just naming it.',
+    domain: 'settings',
+    minimumRole: 'editor',
+    confirmRequired: false,
+    inputSchema: {
+      destination: {
+        type: 'string',
+        enum: Object.keys(DASHBOARD_DESTINATIONS),
+        description: 'Which dashboard page to link to.',
+      },
+    },
+    required: ['destination'],
+    outputSchema: {
+      type: 'object',
+      properties: { url: { type: 'string' } },
+      required: ['url'],
     },
   }),
   siteTool({

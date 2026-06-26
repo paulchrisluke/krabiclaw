@@ -1,102 +1,92 @@
 <template>
-  <div class="container mx-auto px-4 py-16">
-    <div class="mx-auto max-w-3xl">
-      <NuxtLink to="/docs" class="mb-6 inline-flex items-center text-primary hover:text-primary">
-        ← Back to Documentation
-      </NuxtLink>
+  <div>
+    <div v-if="loading" class="py-12 text-center">
+      <p class="text-muted">Loading...</p>
+    </div>
 
-      <div v-if="loading" class="py-12 text-center">
-        <p class="text-muted">Loading...</p>
+    <div v-else-if="error || !doc" class="rounded-lg border border-red-200 bg-red-50 p-6">
+      <p class="text-red-600">{{ error?.message || 'Documentation not found' }}</p>
+    </div>
+
+    <div v-else class="xl:grid xl:grid-cols-[minmax(0,1fr)_240px] xl:gap-10">
+    <article>
+      <DocsBreadcrumb :crumbs="breadcrumbs" />
+
+      <h1 class="mb-6 text-4xl font-bold text-default">{{ doc.title }}</h1>
+
+      <p v-if="doc.excerpt" class="mb-8 text-xl leading-relaxed text-muted">{{ doc.excerpt }}</p>
+
+      <div v-if="docMedia.url" class="mb-10 overflow-hidden rounded-2xl">
+        <video
+          v-if="docMedia.isVideo"
+          :src="docMedia.url"
+          autoplay
+          muted
+          loop
+          playsinline
+          class="max-h-96 w-full object-cover"
+        />
+        <img
+          v-else
+          :src="docMedia.url"
+          :alt="doc.title"
+          class="max-h-96 w-full object-cover"
+        />
       </div>
 
-      <div v-else-if="error || !doc" class="rounded-lg border border-red-200 bg-red-50 p-6">
-        <p class="text-red-600">{{ error?.message || 'Documentation not found' }}</p>
-      </div>
+      <!-- eslint-disable-next-line vue/no-v-html -->
+      <div ref="articleBodyRef" class="prose prose-lg max-w-none text-default prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base dark:prose-invert" v-html="renderedBody"></div>
 
-      <article v-else>
-        <div class="mb-6 flex flex-wrap items-center gap-3">
-          <span v-if="doc.category" class="rounded-full bg-(--kc-teal) px-3 py-1 text-sm font-medium text-white">
-            {{ doc.category }}
-          </span>
-          <span v-if="doc.difficulty_level" class="rounded-full bg-(--kc-navy) px-3 py-1 text-sm font-medium text-white">
-            {{ doc.difficulty_level }}
-          </span>
-          <span v-if="doc.updated_at" class="text-sm text-dimmed">
-            <NuxtTime :datetime="doc.updated_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
-          </span>
-        </div>
-
-        <h1 class="mb-6 text-4xl font-bold text-default">{{ doc.title }}</h1>
-
-        <p v-if="doc.excerpt" class="mb-8 text-xl leading-relaxed text-muted">{{ doc.excerpt }}</p>
-
-        <div v-if="docMedia.url" class="mb-10 overflow-hidden rounded-2xl">
-          <video
-            v-if="docMedia.isVideo"
-            :src="docMedia.url"
-            autoplay
-            muted
-            loop
-            playsinline
-            class="max-h-96 w-full object-cover"
-          />
-          <img
-            v-else
-            :src="docMedia.url"
-            :alt="doc.title"
-            class="max-h-96 w-full object-cover"
-          />
-        </div>
-
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <div ref="articleBodyRef" class="prose prose-lg max-w-none text-default prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base dark:prose-invert" v-html="renderedBody"></div>
-
-        <template v-for="(section, sectionIndex) in orderedSections" :key="`section-${sectionIndex}`">
-          <section v-if="section.type === 'faq' && section.items.length" class="mt-14 space-y-4 border-t border-default pt-8">
-            <div>
-              <h2 class="text-2xl font-semibold text-default">{{ section.label || 'Frequently Asked Questions' }}</h2>
-              <p class="mt-1 text-sm text-muted">Helpful answers related to this guide.</p>
+      <template v-for="(section, sectionIndex) in orderedSections" :key="`section-${sectionIndex}`">
+        <section v-if="section.type === 'faq' && section.items.length" class="mt-14 space-y-4 border-t border-default pt-8">
+          <div>
+            <h2 class="text-2xl font-semibold text-default">{{ section.label || 'Frequently Asked Questions' }}</h2>
+            <p class="mt-1 text-sm text-muted">Helpful answers related to this guide.</p>
+          </div>
+          <div class="space-y-3">
+            <div v-for="(item, index) in section.items" :key="`faq-${index}`" class="rounded-2xl border border-default p-5">
+              <h3 class="text-lg font-medium text-default">{{ item.question }}</h3>
+              <!-- eslint-disable-next-line vue/no-v-html -->
+              <div class="prose mt-3 max-w-none text-muted dark:prose-invert" v-html="item.answerHtml" />
             </div>
-            <div class="space-y-3">
-              <div v-for="(item, index) in section.items" :key="`faq-${index}`" class="rounded-2xl border border-default p-5">
-                <h3 class="text-lg font-medium text-default">{{ item.question }}</h3>
-                <!-- eslint-disable-next-line vue/no-v-html -->
-                <div class="prose mt-3 max-w-none text-muted dark:prose-invert" v-html="item.answerHtml" />
-              </div>
-            </div>
-          </section>
+          </div>
+        </section>
 
-          <section v-else-if="section.type === 'how_to' && section.steps.length" class="mt-14 space-y-4 border-t border-default pt-8">
-            <div>
-              <h2 class="text-2xl font-semibold text-default">{{ section.label || 'How To' }}</h2>
-              <p class="mt-1 text-sm text-muted">Complete the task with these ordered steps.</p>
-            </div>
-            <div class="space-y-4">
-              <div v-for="(step, index) in section.steps" :key="`howto-${index}`" class="rounded-2xl border border-default p-5">
-                <div class="flex items-start gap-4">
-                  <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-elevated text-sm font-semibold text-default">
-                    {{ index + 1 }}
-                  </div>
-                  <div class="min-w-0 flex-1 space-y-3">
-                  <div>
-                    <h3 class="text-lg font-medium text-default">{{ step.name }}</h3>
-                    <a v-if="step.url" :href="step.url" class="text-sm text-(--kc-teal) hover:underline">{{ step.url }}</a>
-                  </div>
-                    <!-- eslint-disable-next-line vue/no-v-html -->
-                    <div class="prose max-w-none text-muted dark:prose-invert" v-html="step.textHtml" />
-                    <img
-                      v-if="step.image_public_url"
-                      :src="step.image_public_url"
-                      :alt="step.name"
-                      class="max-h-72 w-full rounded-xl object-cover"
-                    />
-                  </div>
+        <section v-else-if="section.type === 'how_to' && section.steps.length" class="mt-14 space-y-4 border-t border-default pt-8">
+          <div>
+            <h2 class="text-2xl font-semibold text-default">{{ section.label || 'How To' }}</h2>
+            <p class="mt-1 text-sm text-muted">Complete the task with these ordered steps.</p>
+          </div>
+          <div class="space-y-4">
+            <div v-for="(step, index) in section.steps" :key="`howto-${index}`" class="rounded-2xl border border-default p-5">
+              <div class="flex items-start gap-4">
+                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-elevated text-sm font-semibold text-default">
+                  {{ index + 1 }}
+                </div>
+                <div class="min-w-0 flex-1 space-y-3">
+                <div>
+                  <h3 class="text-lg font-medium text-default">{{ step.name }}</h3>
+                  <a v-if="step.url" :href="step.url" class="text-sm text-(--kc-teal) hover:underline">{{ step.url }}</a>
+                </div>
+                  <!-- eslint-disable-next-line vue/no-v-html -->
+                  <div class="prose max-w-none text-muted dark:prose-invert" v-html="step.textHtml" />
+                  <img
+                    v-if="step.image_public_url"
+                    :src="step.image_public_url"
+                    :alt="step.name"
+                    class="max-h-72 w-full rounded-xl object-cover"
+                  />
                 </div>
               </div>
             </div>
-          </section>
-        </template>
-      </article>
+          </div>
+        </section>
+      </template>
+    </article>
+
+    <aside class="hidden xl:block">
+      <DocsToc :html="renderedBody" />
+    </aside>
     </div>
   </div>
 </template>
@@ -105,8 +95,9 @@
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { sanitizeUrl } from '~/utils/sanitize'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
+import { categoryToSlug } from '~/utils/docs-categories'
 
-definePageMeta({ layout: 'platform' })
+definePageMeta({ layout: 'docs' })
 
 // isomorphic-dompurify's jsdom shim breaks during SSR on the Workers runtime
 // (no real DOM globals) — load it client-only, matching pages/experiences/[slug].vue.
@@ -163,11 +154,11 @@ const route = useRoute()
 const requestFetch = useRequestFetch()
 
 const { data: doc, pending: loading, error } = await useAsyncData(
-  `doc-${route.params.slug}`,
+  `doc-${route.params.category}-${route.params.slug}`,
   async () => {
     const response = import.meta.server
-      ? await requestFetch<{ doc?: Doc }>(`/api/public/docs/${route.params.slug}`)
-      : await $fetch<{ doc?: Doc }>(`/api/public/docs/${route.params.slug}`)
+      ? await requestFetch<{ doc?: Doc }>(`/api/public/docs/${route.params.category}/${route.params.slug}`)
+      : await $fetch<{ doc?: Doc }>(`/api/public/docs/${route.params.category}/${route.params.slug}`)
     if (!response?.doc) {
       throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
     }
@@ -226,10 +217,18 @@ const docMedia = computed(() => resolveMedia({
   public_url: doc.value?.featured_image?.public_url,
   kind: doc.value?.featured_image?.kind,
 }))
-const canonicalUrl = usePlatformSeoUrl(() => doc.value ? (doc.value.canonical_url || `/docs/${doc.value.slug}`) : '/docs')
+
+const categorySlug = computed(() => categoryToSlug(doc.value?.category) || String(route.params.category))
+const canonicalUrl = usePlatformSeoUrl(() => doc.value ? (doc.value.canonical_url || `/docs/${categorySlug.value}/${doc.value.slug}`) : '/docs')
 const ogImage = useSharedOgImage(() => docMedia.value.thumb)
 const seoTitle = computed(() => doc.value?.title || 'Documentation')
 const seoDescription = computed(() => doc.value?.seo_description || doc.value?.excerpt || `Learn about ${doc.value?.title || 'this topic'} in KrabiClaw documentation.`)
+
+const breadcrumbs = computed(() => [
+  { name: 'Docs', url: '/docs' },
+  ...(doc.value?.category ? [{ name: doc.value.category, url: `/docs/${categorySlug.value}` }] : []),
+  ...(doc.value ? [{ name: doc.value.title, url: `/docs/${categorySlug.value}/${doc.value.slug}` }] : []),
+])
 
 useSeoMeta({
   title: seoTitle,
@@ -266,10 +265,7 @@ useContentPageSchema(computed(() => {
     keywords: doc.value.seo_keywords || undefined,
     inLanguage: 'en-US',
     proficiencyLevel: doc.value.difficulty_level || undefined,
-    breadcrumbs: [
-      { name: 'Docs', url: '/docs' },
-      { name: doc.value.title, url: `/docs/${doc.value.slug}` },
-    ],
+    breadcrumbs: breadcrumbs.value,
     components: renderableComponents.value,
   }
 }))

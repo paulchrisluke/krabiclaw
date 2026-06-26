@@ -100,7 +100,9 @@ export default defineNuxtConfig({
   },
 
   // Sitemap configuration
-  sitemap: {},
+  sitemap: {
+    sources: ['/api/__sitemap__/docs'],
+  },
 
   
   // Components configuration
@@ -140,6 +142,10 @@ export default defineNuxtConfig({
     },
     {
       path: '~/components/onboarding',
+      pathPrefix: false,
+    },
+    {
+      path: '~/components/docs',
       pathPrefix: false,
     },
   ],

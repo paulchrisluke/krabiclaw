@@ -87,6 +87,11 @@ import {
 } from "~/server/utils/chowbot-tools";
 import { SUPPORTED_CURRENCIES } from "~/shared/currencies";
 import { queryAll, queryFirst } from "~/server/db";
+import {
+  buildDashboardUrl,
+  DASHBOARD_DESTINATIONS,
+  type DashboardDestination,
+} from "~/server/utils/dashboard-links";
 
 const MAX_ITERATIONS = 10;
 const HERO_FIELDS = new Set([
@@ -2755,6 +2760,26 @@ async function executeTool(
         fields,
       });
       return { updated: true, ...result };
+    }
+
+    case "get_dashboard_link": {
+      const destination = toSqlText(input.destination) as DashboardDestination | null;
+      if (!destination || !Object.prototype.hasOwnProperty.call(DASHBOARD_DESTINATIONS, destination)) {
+        return {
+          error: `destination is required and must be one of: ${Object.keys(DASHBOARD_DESTINATIONS).join(", ")}`,
+        };
+      }
+      const org = await queryFirst<{ slug: string | null }>(
+        db,
+        `SELECT slug FROM organization WHERE id = ?`,
+        [orgId],
+      );
+      return {
+        url: buildDashboardUrl(
+          { env, organizationId: orgId, organizationSlug: org?.slug ?? undefined },
+          destination,
+        ),
+      };
     }
 
     default:
