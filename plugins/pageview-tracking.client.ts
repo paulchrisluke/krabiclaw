@@ -7,6 +7,11 @@
 //   for the page that's being left, never as a pageview trigger itself.
 // - All calls fail silently — analytics must never break the public site.
 export default defineNuxtPlugin(() => {
+  const pluginKey = '__kc_pageview_tracking_registered'
+  const win = typeof window !== 'undefined' ? (window as unknown as Record<string, unknown>) : null
+  if (win && win[pluginKey]) return
+  if (win) win[pluginKey] = true
+
   const { isTenant, isPlatform, siteId } = useTenantSite()
   if (!isTenant && !isPlatform) return
   if (isTenant && !siteId) return
@@ -16,6 +21,8 @@ export default defineNuxtPlugin(() => {
   const router = useRouter()
   let pageEnteredAt = Date.now()
   let currentPath = router.currentRoute.value.fullPath
+  let isInitialRoute = true
+  let lastTrackedPath: string | null = null
 
   const sendTrack = (payload: Record<string, unknown>) => {
     try {
@@ -55,12 +62,20 @@ export default defineNuxtPlugin(() => {
   // Initial SSR-rendered pageview is already recorded server-side by
   // zz-pageview-tracking.ts — only track subsequent client-side navigations here.
   router.afterEach((to, from) => {
+    // Skip the first afterEach invocation, which is the initial hydration navigation
+    // that SSR already recorded.
+    if (isInitialRoute) {
+      isInitialRoute = false
+      return
+    }
     if (to.fullPath === from.fullPath) return
+    if (to.fullPath === lastTrackedPath) return
 
     // Report duration for the page we're leaving, then start the new page's clock.
     sendDurationBeacon()
     pageEnteredAt = Date.now()
     currentPath = to.fullPath
+    lastTrackedPath = currentPath
 
     sendTrack({
       ...identity,

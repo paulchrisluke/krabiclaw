@@ -88,17 +88,13 @@ export function renderPlatformMcpPrompt(name: string, args: Record<string, strin
       const identifier = requireArg(args, 'identifier')
       const body = requireArg(args, 'body')
       const notes = args.notes?.trim()
-      const looksLikeId = /^[0-9a-f-]{16,}$/i.test(identifier)
       return {
         description: `Update and publish post: ${identifier}`,
         text: [
-          looksLikeId
-            ? `"${identifier}" looks like a post_id — use it directly.`
-            : `"${identifier}" is a slug, not a post_id — call list_platform_blog_posts first and match this slug against the returned slug field to find the post_id. There is no direct lookup-by-slug tool.`,
-          'Compute the SEO fields (seo_description, canonical_url, robots, featured_image_asset_id) and any structured-content fields per the field-usage rules in the tool description, based on the body below.',
-          `Call update_platform_blog_post with the resolved post_id and this body: ${body}`,
+          `Call update_platform_blog_post with post_id "${identifier}" (it accepts either the post's id or its slug) and this body: ${body}`,
+          'Compute the SEO fields (seo_description, canonical_url, robots, featured_image_asset_id) and any structured-content fields per the field-usage rules in the tool description, based on the body above.',
           notes ? `Additional instructions: ${notes}` : '',
-          'Immediately after the update succeeds, call publish_platform_blog_post with the same post_id — do not stop to describe the publish step instead of executing it.',
+          `Immediately after the update succeeds, call publish_platform_blog_post with post_id "${identifier}" — do not stop to describe the publish step instead of executing it.`,
           'Report back what changed (fields updated, publish status) once both calls complete.',
         ].filter(Boolean).join(' '),
       }

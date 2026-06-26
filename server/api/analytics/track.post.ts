@@ -12,7 +12,8 @@ import {
   hashIp,
   insertPageviewEvent,
   insertPlatformPageviewEvent,
-  isTrackablePath
+  isTrackablePath,
+  resolveLocationIdFromPath
 } from '~/server/utils/pageview-tracking'
 
 interface PageviewRequest {
@@ -188,8 +189,10 @@ export default defineEventHandler(async (event) => {
         city: geo.city || null
       })
     } else {
+      const locationId = await resolveLocationIdFromPath(db, siteId, pagePath)
       await insertPageviewEvent(db, {
         siteId,
+        locationId,
         pagePath,
         referrer: referrer || null,
         userAgent: userAgent || null,

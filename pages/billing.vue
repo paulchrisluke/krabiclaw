@@ -15,7 +15,7 @@
 
       <UCard class="relative bg-elevated/20 backdrop-blur-md shadow-2xl border-default/50 rounded-4xl">
         <div class="p-6 sm:p-10">
-          <LazyBillingPricingTable />
+          <BillingPricingTable :plans="plans" />
         </div>
       </UCard>
     </UPageBody>
@@ -23,6 +23,8 @@
 </template>
 
 <script setup lang="ts">
+const { plans } = usePlans()
+
 useSeoMeta({
   title: 'Billing & Plans | KrabiClaw',
   description: 'Managed business websites from $49/month. Start free, upgrade when ready.',

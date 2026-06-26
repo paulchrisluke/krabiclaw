@@ -7,7 +7,7 @@
 import { getCookie, getHeader, setCookie } from 'h3'
 import type { H3Event } from 'h3'
 import type { AppDb } from '~/server/db'
-import { execute } from '~/server/db'
+import { execute, queryFirst } from '~/server/db'
 
 export const VISITOR_COOKIE = 'kc_visitor_id'
 export const SESSION_COOKIE = 'kc_session_id'
@@ -84,6 +84,31 @@ export function getCloudflareGeo(event: H3Event): CloudflareGeo {
   // Fallback for environments where the raw request isn't exposed (e.g. local dev).
   const country = getHeader(event, 'cf-ipcountry')
   return country && country !== 'XX' ? { country } : {}
+}
+
+export function extractLocationSlug(pagePath: string): string | null {
+  if (!pagePath || pagePath === '/') return null
+  const match = pagePath.match(/^\/locations\/([^/]+)/)
+  return match?.[1] ?? null
+}
+
+export async function getLocationIdBySlug(db: AppDb, siteId: string, slug: string): Promise<string | null> {
+  const row = await queryFirst<{ id: string }>(
+    db,
+    'SELECT id FROM business_locations WHERE site_id = ? AND slug = ? LIMIT 1',
+    [siteId, slug]
+  )
+  return row?.id ?? null
+}
+
+export async function resolveLocationIdFromPath(
+  db: AppDb,
+  siteId: string,
+  pagePath: string
+): Promise<string | null> {
+  const slug = extractLocationSlug(pagePath)
+  if (!slug) return null
+  return getLocationIdBySlug(db, siteId, slug)
 }
 
 export interface PageviewEventInput {

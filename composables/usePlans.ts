@@ -3,8 +3,12 @@ import type { Plan } from '~/server/api/billing/plans.get'
 export type { Plan, PlanPrice, PlanLimits } from '~/server/api/billing/plans.get'
 
 export const usePlans = () => {
-  const { data, status, error } = useFetch<Plan[]>('/api/billing/plans', {
-    key: 'billing-plans',
+  const nuxtApp = useNuxtApp()
+  const { data, status, error } = useAsyncData<Plan[]>('billing-plans', () => $fetch<Plan[]>('/api/billing/plans'), {
+    server: true,
+    getCachedData(key) {
+      return nuxtApp.payload.data[key] as Plan[] | undefined
+    },
   })
 
   const plans = computed(() => data.value ?? null)

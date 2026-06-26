@@ -2,6 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { queryAll } from '~/server/db'
+import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
 
 type UserQueryParam = string | number
 
@@ -11,7 +12,7 @@ interface UserRow {
   email: string
   role: string
   banned: boolean | number | null
-  createdAt: number
+  createdAt: BetterAuthTimestamp
 }
 
 export default defineEventHandler(async (event) => {
@@ -56,7 +57,7 @@ export default defineEventHandler(async (event) => {
   const normalized = users.map((user) => ({
     ...user,
     banned: Boolean(user.banned),
-    createdAt: new Date(user.createdAt * 1000).toISOString()
+    createdAt: betterAuthTimestampToIso(user.createdAt, 'user.createdAt')
   }))
 
   return jsonResponse({ users: normalized })

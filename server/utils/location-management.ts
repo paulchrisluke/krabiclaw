@@ -203,21 +203,25 @@ async function loadLocation(
   db: D1Database,
   organizationId: string,
   siteId: string,
-  locationId: string,
+  locationIdOrSlug: string,
 ) {
-  return queryFirst<LocationRecord>(
-    db,
-    `
-    SELECT id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
+  const columns = `id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_place_id,
            rating, review_count, description, short_description, status, is_primary,
            address, opening_hours, hero_image_asset_id, hero_video_asset_id, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-           notification_phone, timezone, created_at, updated_at
-    FROM business_locations
-    WHERE id = ? AND organization_id = ? AND site_id = ?
-    LIMIT 1
-  `,
-    [locationId, organizationId, siteId],
+           notification_phone, timezone, created_at, updated_at`;
+  // Check id first so a slug that happens to collide with another row's id can
+  // never shadow the row actually addressed by that id.
+  const byId = await queryFirst<LocationRecord>(
+    db,
+    `SELECT ${columns} FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+    [locationIdOrSlug, organizationId, siteId],
+  );
+  if (byId) return byId;
+  return queryFirst<LocationRecord>(
+    db,
+    `SELECT ${columns} FROM business_locations WHERE slug = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+    [locationIdOrSlug, organizationId, siteId],
   );
 }
 
@@ -419,14 +423,18 @@ export async function updateLocation(
   db: D1Database,
   organizationId: string,
   siteId: string,
-  locationId: string,
+  locationIdOrSlug: string,
   input: UpdateLocationInput,
   userId: string,
 ) {
-  const existing = await loadLocation(db, organizationId, siteId, locationId);
+  const existing = await loadLocation(db, organizationId, siteId, locationIdOrSlug);
   if (!existing) {
     return { status: 404, data: { error: "Location not found." } };
   }
+  // Every other reference to locationId below must use the canonical row id,
+  // never the raw locationIdOrSlug — site_id/sites.primary_location_id and the
+  // final UPDATE's WHERE clause are matched against the real id.
+  const locationId = existing.id;
 
   if (Object.keys(input).length === 0) {
     return { status: 400, data: { error: "No update fields provided." } };
@@ -695,9 +703,14 @@ export async function deleteLocation(
   db: D1Database,
   organizationId: string,
   siteId: string,
-  locationId: string,
+  locationIdOrSlug: string,
   userId: string,
 ) {
+  const existing = await loadLocation(db, organizationId, siteId, locationIdOrSlug);
+  if (!existing) {
+    return { status: 404, data: { error: "Location not found." } };
+  }
+  const locationId = existing.id;
   const now = new Date().toISOString();
   // A location delete can cascade SET NULL into Google Business rows. If the
   // site already has a site-level connection, that null transition can collide

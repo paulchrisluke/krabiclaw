@@ -438,7 +438,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'list_platform_blog_posts',
-    description: 'List KrabiClaw platform blog posts. Optionally filter by published or draft status. Each result includes slug — if you only have a public blog URL (e.g. krabiclaw.com/blog/<slug>), call this first and match the URL slug against the returned slug field to find the post id, then pass that id to get_platform_blog_post or update_platform_blog_post. There is no direct lookup-by-slug or lookup-by-URL tool.',
+    description: 'List KrabiClaw platform blog posts. Optionally filter by published or draft status.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -455,10 +455,10 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'get_platform_blog_post',
-    description: 'Fetch one platform blog post in the canonical component model with resolved media fields. Requires post_id, not a slug or URL. If you only have a public blog URL, call list_platform_blog_posts first and match its slug field to the URL to find the post_id.',
+    description: 'Fetch one platform blog post in the canonical component model with resolved media fields.',
     inputSchema: {
       type: 'object',
-      properties: { post_id: { type: 'string' } },
+      properties: { post_id: { type: 'string', description: "Post id, or its slug from the public URL (krabiclaw.com/blog/<slug>)." } },
       required: ['post_id'],
       additionalProperties: false,
     },
@@ -494,7 +494,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        post_id: { type: 'string' },
+        post_id: { type: 'string', description: 'Post id or slug.' },
         title: { type: 'string' },
         body: { type: 'string' },
         excerpt: { type: 'string' },
@@ -519,10 +519,10 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   writeTool({
     name: 'publish_platform_blog_post',
-    description: 'Publish a platform blog post immediately. If the user asked to update and publish in the same request, call update_platform_blog_post first, then call this tool right after with the same post_id — do not stop after the update to describe the publish step instead of executing it.',
+    description: 'Publish a platform blog post immediately. If update and publish were both requested, call update_platform_blog_post then this tool, back to back.',
     inputSchema: {
       type: 'object',
-      properties: { post_id: { type: 'string' } },
+      properties: { post_id: { type: 'string', description: 'Post id or slug.' } },
       required: ['post_id'],
       additionalProperties: false,
     },
@@ -541,7 +541,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     description: 'Move a published platform blog post back to draft.',
     inputSchema: {
       type: 'object',
-      properties: { post_id: { type: 'string' } },
+      properties: { post_id: { type: 'string', description: 'Post id or slug.' } },
       required: ['post_id'],
       additionalProperties: false,
     },
@@ -561,7 +561,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     destructive: true,
     inputSchema: {
       type: 'object',
-      properties: { post_id: { type: 'string' } },
+      properties: { post_id: { type: 'string', description: 'Post id or slug.' } },
       required: ['post_id'],
       additionalProperties: false,
     },
@@ -569,7 +569,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'list_platform_docs',
-    description: 'List KrabiClaw platform docs. Optionally filter by published or draft status. Each result includes slug — if you only have a public docs URL (e.g. krabiclaw.com/docs/<slug>), call this first and match the URL slug against the returned slug field to find the doc id, then pass that id to get_platform_doc or update_platform_doc. There is no direct lookup-by-slug or lookup-by-URL tool.',
+    description: 'List KrabiClaw platform docs. Optionally filter by published or draft status.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -586,10 +586,10 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'get_platform_doc',
-    description: 'Fetch one platform doc in the canonical component model with resolved media fields. Requires doc_id, not a slug or URL. If you only have a public docs URL, call list_platform_docs first and match its slug field to the URL to find the doc id.',
+    description: 'Fetch one platform doc in the canonical component model with resolved media fields.',
     inputSchema: {
       type: 'object',
-      properties: { doc_id: { type: 'string' } },
+      properties: { doc_id: { type: 'string', description: 'Doc id, or its slug from the public URL (krabiclaw.com/docs/<slug>).' } },
       required: ['doc_id'],
       additionalProperties: false,
     },
@@ -628,7 +628,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        doc_id: { type: 'string' },
+        doc_id: { type: 'string', description: 'Doc id or slug.' },
         title: { type: 'string' },
         body: { type: 'string' },
         excerpt: { type: 'string' },
@@ -659,7 +659,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     description: 'Publish a platform doc immediately.',
     inputSchema: {
       type: 'object',
-      properties: { doc_id: { type: 'string' } },
+      properties: { doc_id: { type: 'string', description: 'Doc id or slug.' } },
       required: ['doc_id'],
       additionalProperties: false,
     },
@@ -678,7 +678,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     description: 'Move a published platform doc back to draft.',
     inputSchema: {
       type: 'object',
-      properties: { doc_id: { type: 'string' } },
+      properties: { doc_id: { type: 'string', description: 'Doc id or slug.' } },
       required: ['doc_id'],
       additionalProperties: false,
     },
@@ -698,7 +698,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     destructive: true,
     inputSchema: {
       type: 'object',
-      properties: { doc_id: { type: 'string' } },
+      properties: { doc_id: { type: 'string', description: 'Doc id or slug.' } },
       required: ['doc_id'],
       additionalProperties: false,
     },

@@ -216,15 +216,22 @@ export async function getLocationForMcp(
   db: D1Database,
   organizationId: string,
   siteId: string,
-  locationId: string,
+  locationIdOrSlug: string,
 ) {
-  const row = await queryFirst<Record<string, unknown>>(db, `
+  const byId = await queryFirst<Record<string, unknown>>(db, `
     SELECT bl.*, img.public_url AS hero_public_url, img.kind AS hero_kind
     FROM business_locations bl
     LEFT JOIN media_assets img ON bl.hero_image_asset_id = img.id AND img.status = 'active'
     WHERE bl.id = ? AND bl.organization_id = ? AND bl.site_id = ?
     LIMIT 1
-  `, [locationId, organizationId, siteId]);
+  `, [locationIdOrSlug, organizationId, siteId]);
+  const row = byId ?? await queryFirst<Record<string, unknown>>(db, `
+    SELECT bl.*, img.public_url AS hero_public_url, img.kind AS hero_kind
+    FROM business_locations bl
+    LEFT JOIN media_assets img ON bl.hero_image_asset_id = img.id AND img.status = 'active'
+    WHERE bl.slug = ? AND bl.organization_id = ? AND bl.site_id = ?
+    LIMIT 1
+  `, [locationIdOrSlug, organizationId, siteId]);
 
   if (!row) throw new Error("Location not found");
   return {

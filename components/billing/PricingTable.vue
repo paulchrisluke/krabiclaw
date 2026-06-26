@@ -145,11 +145,17 @@
 </template>
 
 <script setup lang="ts">
-const { plans } = usePlans()
+import type { Plan } from '~/server/api/billing/plans.get'
+
+const props = defineProps<{
+  plans?: Plan[] | null
+}>()
+
+const planList = computed(() => props.plans ?? [])
 
 const MAIN_PLAN_IDS = ['free', 'growth', 'managed']
-const mainPlans = computed(() => (plans.value ?? []).filter(p => MAIN_PLAN_IDS.includes(p.id)))
-const seoAcceleratorPlan = computed(() => (plans.value ?? []).find(p => p.id === 'seo_accelerator') ?? null)
+const mainPlans = computed(() => planList.value.filter(p => MAIN_PLAN_IDS.includes(p.id)))
+const seoAcceleratorPlan = computed(() => planList.value.find(p => p.id === 'seo_accelerator') ?? null)
 const seoAcceleratorMonthlyPrice = computed(() => {
   const plan = seoAcceleratorPlan.value
   if (!plan) return null

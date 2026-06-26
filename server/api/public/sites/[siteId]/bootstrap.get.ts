@@ -4,17 +4,21 @@
 //   ?location=slug          scope content to a location
 //   ?menu=1                 include active menu items
 //   ?data=reviews|photos|qa include full page-specific dataset (type A/E/F)
-// All inline D1 queries run in a single executeBatch() call alongside helper functions.
+// All inline D1 queries run in a single executeBatch() call.
 import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-business";
-import { getPublishedPageContentForLocale, type SiteContent } from "~/server/utils/content-management";
-import { getActiveMenu } from "~/server/utils/menu-management";
-import { verifyPreviewToken } from "~/server/utils/preview-token";
+import { type SiteContent } from "~/server/utils/content-management";
 import {
-  getExperienceBySlug,
-  listExperiences,
-} from "~/server/utils/experiences";
+  mapMenu,
+  mapMenuItem,
+  sortMenuItems,
+  normalizeSectionOrder,
+  parseStringArray,
+} from "~/server/utils/menu-management";
+import { verifyPreviewToken } from "~/server/utils/preview-token";
+import { type Experience } from "~/server/utils/experiences";
+import { type MenuWithItems } from "~/server/types/menu";
 
 function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
   const groups: Record<string, SiteContent & { _section: string }> = {}
@@ -56,6 +60,42 @@ interface ReviewRow {
   created_at: string | null;
 }
 
+interface ContentSourceRow extends SiteContent {
+  media_public_url: string | null;
+  media_kind: string | null;
+}
+
+interface ContentTranslationRow {
+  field: string;
+  content: string | null;
+  value: string | null;
+  type: string | null;
+  hero_title: string | null;
+  hero_subtitle: string | null;
+  component: string | null;
+  updated_at: string;
+  media_public_url: string | null;
+}
+
+interface MenuTranslationRow {
+  menu_id: string;
+  name: string | null;
+  description: string | null;
+  section_order: string | null;
+}
+
+interface MenuItemTranslationRow {
+  menu_item_id: string;
+  section: string | null;
+  name: string | null;
+  description: string | null;
+  allergens: string | null;
+  ingredients: string | null;
+  dietary_notes: string | null;
+  preparation: string | null;
+  serving_note: string | null;
+}
+
 const parseJson = (raw: string | null) => {
   if (!raw) return null;
   try {
@@ -64,6 +104,100 @@ const parseJson = (raw: string | null) => {
     return null;
   }
 };
+
+function resolveContentMedia(row: ContentSourceRow): SiteContent {
+  const { media_public_url, ...rest } = row as unknown as Record<
+    string,
+    unknown
+  >;
+  if (rest.type === "media" && media_public_url) {
+    rest.value = media_public_url;
+    rest.content = media_public_url;
+  }
+  return rest as unknown as SiteContent;
+}
+
+function parseExperienceRow(row: Record<string, unknown>): Experience {
+  const parseStringArr = (value: unknown): string[] => {
+    if (typeof value === "string" && value) {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed)
+          ? parsed.filter(
+              (item): item is string =>
+                typeof item === "string" && item.trim().length > 0,
+            )
+          : [];
+      } catch {
+        return [];
+      }
+    }
+    if (Array.isArray(value)) {
+      return value.filter((item): item is string => typeof item === "string");
+    }
+    return [];
+  };
+
+  const isStringArray = (value: unknown): value is string[] =>
+    Array.isArray(value) && value.every((item) => typeof item === "string");
+
+  let time_slots: string[] | null = null;
+  if (row.time_slots && typeof row.time_slots === "string") {
+    try {
+      const parsed = JSON.parse(row.time_slots);
+      time_slots = isStringArray(parsed) ? parsed : null;
+    } catch {
+      time_slots = null;
+    }
+  }
+
+  let recurring_slots: Partial<Record<string, string[]>> | null = null;
+  if (row.recurring_slots && typeof row.recurring_slots === "string") {
+    try {
+      const parsed = JSON.parse(row.recurring_slots);
+      recurring_slots =
+        parsed && typeof parsed === "object" && !Array.isArray(parsed) &&
+        Object.values(parsed).every(isStringArray)
+          ? (parsed as Partial<Record<string, string[]>>)
+          : null;
+    } catch {
+      recurring_slots = null;
+    }
+  }
+
+  let images: Array<{ url: string; kind: "image" | "video" }> = [];
+  if (row.images && typeof row.images === "string") {
+    try {
+      const parsed = JSON.parse(row.images);
+      if (Array.isArray(parsed)) {
+        images = parsed.filter(
+          (item: unknown) =>
+            typeof item === "object" &&
+            item !== null &&
+            typeof (item as { url: unknown }).url === "string" &&
+            ((item as { kind: string }).kind === "image" ||
+              (item as { kind: string }).kind === "video"),
+        ) as Array<{ url: string; kind: "image" | "video" }>;
+      }
+    } catch {
+      images = [];
+    }
+  }
+
+  return {
+    ...(row as unknown as Experience),
+    status: row.status as Experience["status"],
+    highlights: parseStringArr(row.highlights),
+    included_items: parseStringArr(row.included_items),
+    what_to_bring: parseStringArr(row.what_to_bring),
+    meeting_point: row.meeting_point ?? null,
+    cancellation_policy: row.cancellation_policy ?? null,
+    time_slots,
+    recurring_slots,
+    images,
+    featured: Boolean(row.featured),
+  } as Experience;
+}
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, "siteId");
@@ -162,10 +296,18 @@ export default defineEventHandler(async (event) => {
     idxPhotos = -1,
     idxQa = -1,
     idxLocPosts = -1;
+  let idxSourceContent = -1,
+    idxContentTranslations = -1;
+  let idxMenus = -1,
+    idxMenuItems = -1,
+    idxMenuTranslations = -1,
+    idxMenuItemTranslations = -1;
+  let idxExperiencesList = -1,
+    idxExperienceDetail = -1;
 
-  const push = (query: string, params: unknown[]) => {
+  const push = (q: string, params: unknown[]) => {
     const i = batchStmts.length;
-    batchStmts.push({ query, params });
+    batchStmts.push({ query: q, params });
     return i;
   };
 
@@ -216,6 +358,147 @@ export default defineEventHandler(async (event) => {
     `SELECT COUNT(*) AS cnt FROM experiences WHERE site_id = ? AND status = 'active'`,
     [siteId],
   );
+
+  // Content for the requested page (source + translations)
+  if (page) {
+    const contentParams: unknown[] = [orgId, siteId, page];
+    if (locationId) contentParams.push(locationId);
+
+    idxSourceContent = push(
+      `SELECT sc.id, sc.organization_id, sc.site_id, sc.location_id, sc.page, sc.field,
+              sc.value, sc.type, sc.source, sc.content, sc.hero_title, sc.hero_subtitle,
+              sc.hero_image_asset_id, sc.hero_video_asset_id, sc.component, sc.updated_at,
+              img.public_url AS hero_public_url, img.kind AS hero_kind,
+              vid.public_url AS hero_video_public_url, vid.kind AS hero_video_kind,
+              vid.thumbnail_url,
+              ma.public_url AS media_public_url, ma.kind AS media_kind
+       FROM site_content sc
+       LEFT JOIN media_assets img ON sc.hero_image_asset_id = img.id AND img.status = 'active'
+       LEFT JOIN media_assets vid ON sc.hero_video_asset_id = vid.id AND vid.status = 'active'
+       LEFT JOIN media_assets ma ON sc.type = 'media'
+         AND ma.id = COALESCE(
+           CASE WHEN sc.content NOT LIKE 'http%' AND length(sc.content) > 0 THEN sc.content END,
+           CASE WHEN sc.value NOT LIKE 'http%' AND length(sc.value) > 0 THEN sc.value END
+         )
+         AND ma.status = 'active'
+       WHERE sc.organization_id = ? AND sc.site_id = ? AND sc.page = ?
+         AND sc.location_id ${locationId ? "= ?" : "IS NULL"}
+       ORDER BY sc.field`,
+      contentParams,
+    );
+
+    if (locale) {
+      const translationParams: unknown[] = [orgId, siteId, page, locale];
+      if (locationId) translationParams.push(locationId);
+
+      idxContentTranslations = push(
+        `SELECT sct.field, sct.content, sct.value, sct.type, sct.hero_title, sct.hero_subtitle,
+                sct.component, sct.updated_at, ma.public_url AS media_public_url, ma.kind AS media_kind
+         FROM site_content_translations sct
+         LEFT JOIN media_assets ma ON sct.type = 'media'
+           AND ma.id = COALESCE(
+             CASE WHEN sct.content NOT LIKE 'http%' AND length(sct.content) > 0 THEN sct.content END,
+             CASE WHEN sct.value NOT LIKE 'http%' AND length(sct.value) > 0 THEN sct.value END
+           )
+           AND ma.status = 'active'
+         WHERE sct.organization_id = ? AND sct.site_id = ? AND sct.page = ?
+           AND sct.locale = ? AND sct.status = 'published'
+           AND sct.location_id ${locationId ? "= ?" : "IS NULL"}`,
+        translationParams,
+      );
+    }
+  }
+
+  // Menu data for the requested scope (all published menus/items + translations)
+  if (includeMenu) {
+    idxMenus = push(
+      `SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+              created_at, updated_at, created_by, updated_by
+       FROM menus
+       WHERE organization_id = ? AND site_id = ? AND status = 'published'`,
+      [orgId, siteId],
+    );
+
+    idxMenuItems = push(
+      `SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
+              mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured,
+              mi.featured_sort_order, mi.sort_order, mi.allergens, mi.ingredients, mi.dietary_notes,
+              mi.preparation, mi.serving_note, mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
+       FROM menu_items mi
+       JOIN menus m ON m.id = mi.menu_id
+       LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
+       WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published'
+       ORDER BY mi.sort_order, mi.name`,
+      [orgId, siteId],
+    );
+
+    if (locale) {
+      idxMenuTranslations = push(
+        `SELECT menu_id, name, description, section_order
+         FROM menu_translations
+         WHERE organization_id = ? AND site_id = ? AND locale = ? AND status = 'published'`,
+        [orgId, siteId, locale],
+      );
+
+      idxMenuItemTranslations = push(
+        `SELECT mit.menu_item_id, mit.section, mit.name, mit.description, mit.allergens,
+                mit.ingredients, mit.dietary_notes, mit.preparation, mit.serving_note
+         FROM menu_item_translations mit
+         JOIN menu_items mi ON mi.id = mit.menu_item_id
+         JOIN menus m ON m.id = mi.menu_id
+         WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published'
+           AND mit.locale = ? AND mit.status = 'published'`,
+        [orgId, siteId, locale],
+      );
+    }
+  }
+
+  // Experiences list + detail (mutually exclusive with the query conditions above)
+  const needsExperiencesList =
+    (page === "experiences" && !experienceSlug) ||
+    page === "home" ||
+    page === "location";
+
+  if (needsExperiencesList) {
+    const expParams: unknown[] = [orgId, siteId];
+    let expSql = `SELECT e.id, e.organization_id, e.site_id, e.location_id,
+                         e.title, e.slug, e.tagline, e.body, e.image_asset_id,
+                         e.video_asset_id, e.images,
+                         e.price, e.price_amount, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
+                         e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point, e.cancellation_policy,
+                         e.status, e.sort_order, e.featured, e.featured_sort_order,
+                         e.seo_title, e.seo_description, e.created_at, e.updated_at,
+                         img.public_url AS image_url, vid.public_url AS video_url
+                  FROM experiences e
+                  LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
+                  LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
+                  WHERE e.organization_id = ? AND e.site_id = ? AND e.status = 'active'`;
+    if (page === "location" && locationId) {
+      expSql += ` AND e.location_id = ?`;
+      expParams.push(locationId);
+    }
+    expSql += ` ORDER BY e.sort_order ASC, e.created_at ASC`;
+    idxExperiencesList = push(expSql, expParams);
+  }
+
+  if (page === "experiences" && experienceSlug) {
+    idxExperienceDetail = push(
+      `SELECT e.id, e.organization_id, e.site_id, e.location_id,
+              e.title, e.slug, e.tagline, e.body, e.image_asset_id,
+              e.video_asset_id, e.images,
+              e.price, e.price_amount, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
+              e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point, e.cancellation_policy,
+              e.status, e.sort_order, e.featured, e.featured_sort_order,
+              e.seo_title, e.seo_description, e.created_at, e.updated_at,
+              img.public_url AS image_url, vid.public_url AS video_url
+       FROM experiences e
+       LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
+       LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
+       WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ? AND e.status = 'active'
+       LIMIT 1`,
+      [orgId, siteId, experienceSlug],
+    );
+  }
 
   // Conditional
   if (needsGlobalReviews)
@@ -293,25 +576,8 @@ export default defineEventHandler(async (event) => {
       locationId ? [locationId, siteId] : [siteId],
     );
 
-  // Fire batch + helper functions in one parallel round
-  const [batchResults, contentRows, menuData, experiencesList, experienceDetail] =
-    await Promise.all([
-      executeBatch(db, batchStmts),
-      page
-        ? getPublishedPageContentForLocale(db, orgId, siteId, page, { locale, locationId })
-        : Promise.resolve([]),
-      includeMenu
-        ? getActiveMenu(db, orgId, siteId, locationId, locale)
-        : Promise.resolve(null),
-      (page === "experiences" && !experienceSlug) || page === "home"
-        ? listExperiences(db, siteId, { activeOnly: true })
-        : page === "location"
-          ? listExperiences(db, siteId, { activeOnly: true, locationId: locationId ?? undefined })
-          : Promise.resolve([]),
-      page === "experiences" && experienceSlug
-        ? getExperienceBySlug(db, siteId, experienceSlug)
-        : Promise.resolve(null),
-    ]);
+  // Single D1 round trip
+  const batchResults = await executeBatch(db, batchStmts);
 
   // Extract batch results by tracked index
   const locRows = batchResults[idxLoc] as { results: Record<string, unknown>[] };
@@ -360,6 +626,176 @@ export default defineEventHandler(async (event) => {
         | { cnt: number }
         | undefined
     )?.cnt ?? 0;
+
+  const sourceLocale = (localeRows.results ?? []).find((l) => l.is_source)?.locale;
+
+  // Build content rows
+  const buildContentRows = (
+    sourceRows: ContentSourceRow[],
+    translationRows: ContentTranslationRow[],
+  ): SiteContent[] => {
+    if (!locale || locale === sourceLocale) {
+      return sourceRows.map(resolveContentMedia);
+    }
+
+    const sourceByField = new Map(
+      sourceRows.map((row) => [row.field, { ...row }]),
+    );
+
+    for (const t of translationRows) {
+      const base = sourceByField.get(t.field);
+      const translationHasMediaValue =
+        t.value !== null || t.content !== null;
+      const mediaPublicUrl = translationHasMediaValue
+        ? t.media_public_url
+        : (t.media_public_url ?? base?.media_public_url ?? null);
+
+      const merged: ContentSourceRow = {
+        ...(base ?? ({
+          id: `translation::${orgId}::${siteId}::${locationId ?? "site"}::${locale}::${page}::${t.field}`,
+          organization_id: orgId,
+          site_id: siteId,
+          location_id: locationId,
+          page: page!,
+          field: t.field,
+          source: "manual",
+          hero_image_asset_id: undefined,
+          hero_video_asset_id: undefined,
+        } as unknown as SiteContent)),
+        field: t.field,
+        value: (t.value ?? t.content ?? base?.value) as string | undefined,
+        content: (t.content ?? t.value ?? base?.content) as string | undefined,
+        type: (t.type ?? base?.type ?? "text") as string,
+        hero_title: (t.hero_title ?? base?.hero_title) as string | null | undefined,
+        hero_subtitle: (t.hero_subtitle ?? base?.hero_subtitle) as string | null | undefined,
+        component: (t.component ?? base?.component) as string | null | undefined,
+        updated_at: t.updated_at,
+        media_public_url: mediaPublicUrl,
+        media_kind: null,
+      } as ContentSourceRow;
+
+      sourceByField.set(t.field, merged);
+    }
+
+    return Array.from(sourceByField.values())
+      .map(resolveContentMedia)
+      .sort((a, b) => a.field.localeCompare(b.field));
+  };
+
+  const contentRows: SiteContent[] =
+    idxSourceContent >= 0
+      ? buildContentRows(
+          (batchResults[idxSourceContent] as { results: ContentSourceRow[] }).results ?? [],
+          (batchResults[idxContentTranslations] as { results: ContentTranslationRow[] })?.results ?? [],
+        )
+      : [];
+
+  // Build active menu
+  let menuData: MenuWithItems | null = null;
+  if (includeMenu) {
+    const menuRows =
+      (batchResults[idxMenus] as { results: Record<string, unknown>[] })?.results ?? [];
+    const menuItemRows =
+      (batchResults[idxMenuItems] as { results: Record<string, unknown>[] })?.results ?? [];
+    const menuTranslations =
+      (batchResults[idxMenuTranslations] as { results: MenuTranslationRow[] })?.results ?? [];
+    const menuItemTranslations =
+      (batchResults[idxMenuItemTranslations] as { results: MenuItemTranslationRow[] })?.results ?? [];
+
+    let selectedMenuRow: Record<string, unknown> | null = null;
+
+    const primaryLoc =
+      (locRows.results ?? []).find((l) => l.is_primary) ??
+      (locRows.results ?? [])[0] ??
+      null;
+    const effectiveLocationId = locationId ?? primaryLoc?.id ?? null;
+
+    if (effectiveLocationId) {
+      selectedMenuRow =
+        menuRows.find((m) => m.location_id === effectiveLocationId) ?? null;
+    }
+
+    if (!selectedMenuRow) {
+      selectedMenuRow =
+        menuRows.find(
+          (m) => m.location_id === null || m.location_id === undefined,
+        ) ?? null;
+    }
+
+    if (selectedMenuRow) {
+      const menuId = selectedMenuRow.id as string;
+      const mappedMenu = mapMenu(selectedMenuRow);
+      const menuTranslation = locale
+        ? menuTranslations.find((t) => t.menu_id === menuId)
+        : undefined;
+      const sectionOrder = menuTranslation?.section_order
+        ? normalizeSectionOrder(menuTranslation.section_order)
+        : (mappedMenu.section_order ?? []);
+
+      const itemTranslationsById = new Map(
+        menuItemTranslations.map((t) => [t.menu_item_id, t]),
+      );
+
+      const items = sortMenuItems(
+        menuItemRows
+          .filter((raw) => raw.menu_id === menuId)
+          .map((raw) => {
+            const item = mapMenuItem(raw);
+            const t = itemTranslationsById.get(item.id);
+            if (!t) return item;
+
+            return {
+              ...item,
+              section: t.section ?? item.section,
+              name: t.name ?? item.name,
+              description: t.description ?? item.description,
+              allergens:
+                t.allergens !== null
+                  ? parseStringArray(t.allergens)
+                  : item.allergens,
+              ingredients:
+                t.ingredients !== null
+                  ? parseStringArray(t.ingredients)
+                  : item.ingredients,
+              dietary_notes:
+                t.dietary_notes !== null
+                  ? parseStringArray(t.dietary_notes)
+                  : item.dietary_notes,
+              preparation: t.preparation ?? item.preparation,
+              serving_note: t.serving_note ?? item.serving_note,
+            };
+          }),
+        sectionOrder,
+      );
+
+      menuData = {
+        ...mappedMenu,
+        name: menuTranslation?.name ?? mappedMenu.name,
+        description: menuTranslation?.description ?? mappedMenu.description,
+        section_order: sectionOrder,
+        items,
+      };
+    }
+  }
+
+  // Build experiences
+  const experiencesList: Experience[] =
+    idxExperiencesList >= 0
+      ? (
+          (batchResults[idxExperiencesList] as { results: Record<string, unknown>[] })?.results ?? []
+        ).map(parseExperienceRow)
+      : [];
+
+  const experienceDetail: Experience | null =
+    idxExperienceDetail >= 0
+      ? (
+          (batchResults[idxExperienceDetail] as { results: Record<string, unknown>[] })?.results[0] ?? null
+        )
+        ? parseExperienceRow(
+            (batchResults[idxExperienceDetail] as { results: Record<string, unknown>[] }).results[0]!,
+          )
+        : null
+      : null;
 
   // Shape locations
   const locations = (locRows.results ?? []).map((loc) => {

@@ -44,7 +44,7 @@ DELETE FROM site_domains WHERE domain IN ('pottery-house.localhost', 'pottery-ho
 
 -- Organization (owned by the dedicated Pottery House owner account)
 INSERT INTO organization (id, name, slug, createdAt)
-VALUES ('org-pottery-house', 'Pottery House Krabi', 'pottery-house-krabi', CURRENT_TIMESTAMP);
+VALUES ('org-pottery-house', 'Pottery House Krabi', 'pottery-house-krabi', unixepoch());
 
 -- Ensure the dedicated owner user exists in the user table to satisfy foreign key constraints.
 INSERT OR IGNORE INTO user (id, name, email, emailVerified)
@@ -53,7 +53,7 @@ VALUES
 
 INSERT INTO member (id, organizationId, userId, role, createdAt)
 VALUES
-  ('member-pottery-house', 'org-pottery-house', 'user-pottery-house', 'owner', CURRENT_TIMESTAMP);
+  ('member-pottery-house', 'org-pottery-house', 'user-pottery-house', 'owner', unixepoch());
 
 ${renderCompiledPotteryHouseCoreSeedBlock()}
 

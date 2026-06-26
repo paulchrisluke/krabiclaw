@@ -34,13 +34,13 @@ function renderMcpFixtureOrg(orgId: string, userId: string, name: string, slug: 
   const locationId = `loc-${orgId.replace(/^org-/, '')}`
   const status = plan === 'free' ? 'free' : 'active'
   return `INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
-VALUES (${sqlValue(userId)}, ${sqlValue(name)}, ${sqlValue(`${userId}@example.test`)}, 1, 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES (${sqlValue(userId)}, ${sqlValue(name)}, ${sqlValue(`${userId}@example.test`)}, 1, 'user', unixepoch(), unixepoch());
 
 INSERT INTO organization (id, name, slug, createdAt)
-VALUES (${sqlValue(orgId)}, ${sqlValue(name)}, ${sqlValue(slug)}, CURRENT_TIMESTAMP);
+VALUES (${sqlValue(orgId)}, ${sqlValue(name)}, ${sqlValue(slug)}, unixepoch());
 
 INSERT INTO member (id, organizationId, userId, role, createdAt)
-VALUES (${sqlValue(`member-${orgId}`)}, ${sqlValue(orgId)}, ${sqlValue(userId)}, 'owner', CURRENT_TIMESTAMP);
+VALUES (${sqlValue(`member-${orgId}`)}, ${sqlValue(orgId)}, ${sqlValue(userId)}, 'owner', unixepoch());
 
 INSERT OR REPLACE INTO sites (id, organization_id, theme_id, theme, slug, subdomain, brand_name, status, plan, onboarding_status, source_locale, default_currency, url_structure, vertical, created_at, updated_at)
 VALUES (${sqlValue(siteId)}, ${sqlValue(orgId)}, 'saya-theme-v1', 'saya', ${sqlValue(slug)}, ${sqlValue(slug)}, ${sqlValue(name)}, 'active', ${sqlValue(plan)}, 'active', 'en', 'THB', 'location_subdirectories', 'restaurant', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
@@ -97,18 +97,18 @@ DELETE FROM site_domains WHERE domain IN ('demo.localhost', 'demo.krabiclaw.com'
 
 -- Users
 INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
-VALUES ('user-demo', 'Demo Owner', 'demo@krabiclaw.com', 1, 'admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('user-demo', 'Demo Owner', 'demo@krabiclaw.com', 1, 'admin', unixepoch(), unixepoch());
 
 -- Site-transfer recipient: used by site-transfer E2E tests.
 -- Must be an owner of an org so that the site-transfer accept endpoint can find an owner organization.
 INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
-VALUES ('Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re', 'Transfer Recipient', 'recipient@example.test', 1, 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re', 'Transfer Recipient', 'recipient@example.test', 1, 'user', unixepoch(), unixepoch());
 
 INSERT OR IGNORE INTO organization (id, name, slug, createdAt)
-VALUES ('org-transfer-recipient', 'Recipient Studio', 'recipient-studio', CURRENT_TIMESTAMP);
+VALUES ('org-transfer-recipient', 'Recipient Studio', 'recipient-studio', unixepoch());
 
 INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt)
-VALUES ('member-transfer-recipient', 'org-transfer-recipient', 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re', 'owner', CURRENT_TIMESTAMP);
+VALUES ('member-transfer-recipient', 'org-transfer-recipient', 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re', 'owner', unixepoch());
 
 -- Standard paid/free fixture orgs for MCP and editor E2E tests.
 ${renderMcpFixtureOrg('org-mcp-free', 'user-mcp-free', 'MCP Free Fixture', 'mcp-free-fixture', 'free')}
@@ -119,10 +119,10 @@ ${renderMcpFixtureOrg('org-mcp-managed', 'user-mcp-managed', 'MCP Managed Fixtur
 
 -- Organization
 INSERT INTO organization (id, name, slug, createdAt)
-VALUES ('org-demo', 'Ember & Slice', 'ember-slice-demo', CURRENT_TIMESTAMP);
+VALUES ('org-demo', 'Ember & Slice', 'ember-slice-demo', unixepoch());
 
 INSERT INTO member (id, organizationId, userId, role, createdAt)
-VALUES ('member-demo', 'org-demo', 'user-demo', 'owner', CURRENT_TIMESTAMP);
+VALUES ('member-demo', 'org-demo', 'user-demo', 'owner', unixepoch());
 
 ${renderCompiledDemoCoreSeedBlock()}
 

@@ -33,7 +33,7 @@
           </div>
         </UCard>
 
-        <div class="grid gap-4 md:grid-cols-4">
+        <div class="grid gap-4 md:grid-cols-4 xl:grid-cols-6">
           <UCard>
             <p class="text-sm text-muted">Phone</p>
             <p class="mt-2 truncate font-semibold text-highlighted">{{ location.phone || 'Not set' }}</p>
@@ -50,6 +50,30 @@
             <p class="text-sm text-muted">Menus</p>
             <p class="mt-2 font-semibold text-highlighted">{{ menus.length }}</p>
           </UCard>
+          <NuxtLink :to="analyticsPath" class="block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            <UCard class="h-full transition-colors hover:bg-muted/40">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-sm text-muted">Pageviews</p>
+                  <p class="mt-2 text-xl font-semibold text-highlighted">{{ analyticsLoading ? '...' : formatCount(analyticsSummary.pageViews) }}</p>
+                </div>
+                <UIcon name="i-heroicons-chart-bar-square" class="size-5 text-muted" />
+              </div>
+              <p class="mt-2 text-xs text-muted">Last 30 days</p>
+            </UCard>
+          </NuxtLink>
+          <NuxtLink :to="analyticsPath" class="block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            <UCard class="h-full transition-colors hover:bg-muted/40">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-sm text-muted">Unique visitors</p>
+                  <p class="mt-2 text-xl font-semibold text-highlighted">{{ analyticsLoading ? '...' : formatCount(analyticsSummary.uniqueVisitors) }}</p>
+                </div>
+                <UIcon name="i-heroicons-users" class="size-5 text-muted" />
+              </div>
+              <p class="mt-2 text-xs text-muted">Last 30 days</p>
+            </UCard>
+          </NuxtLink>
         </div>
 
         <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -440,6 +464,13 @@ interface GbConnection {
   updated_at: string
 }
 
+interface AnalyticsResponse {
+  metrics: {
+    pageViews: number
+    uniqueVisitors: number
+  }
+}
+
 interface DayHours {
   day: string
   isOpen: boolean
@@ -486,10 +517,13 @@ const _headerLinks = computed(() => buildHeaderLinks([
 
 const locationTabs = computed(() => [
   { label: 'Overview', icon: 'i-heroicons-home', active: true, to: locationPath(locationId.value) },
+  { label: 'Analytics', icon: 'i-heroicons-chart-bar-square', active: false, to: `${locationPath(locationId.value)}/analytics` },
   { label: 'Content', icon: 'i-heroicons-document-text', active: false, to: locationContentPath(locationId.value) },
   { label: 'Menu', icon: 'i-heroicons-list-bullet', active: false, to: locationMenuPath(locationId.value) },
   { label: 'Details', icon: 'i-heroicons-map-pin', active: false, to: `${paths.value.settings}?tab=locations&locationId=${locationId.value}` }
 ])
+
+const analyticsPath = computed(() => `${locationPath(locationId.value)}/analytics`)
 
 const workspaceActions = computed(() => [
   { label: 'Edit Local Content', icon: 'i-heroicons-document-text', to: locationContentPath(locationId.value) },
@@ -505,6 +539,11 @@ const reviewSaving = ref(false)
 const reviewFormVisible = ref(false)
 const editingReviewId = ref<string | null>(null)
 const manualReviews = ref<ManualReview[]>([])
+const analyticsLoading = ref(false)
+const analyticsSummary = reactive({
+  pageViews: 0,
+  uniqueVisitors: 0
+})
 
 const detailsForm = reactive({
   title: '',
@@ -558,6 +597,35 @@ function getErrorMessage(error: unknown, fallback: string): string {
     if (typeof message === 'string' && message) return message
   }
   return fallback
+}
+
+function formatCount(value: number): string {
+  return new Intl.NumberFormat('en-US').format(value)
+}
+
+function getDateString(date: Date): string {
+  const [day] = date.toISOString().split('T')
+  return day || ''
+}
+
+async function loadAnalyticsSummary() {
+  analyticsLoading.value = true
+  try {
+    const endDate = getDateString(new Date())
+    const start = new Date()
+    start.setUTCDate(start.getUTCDate() - 29)
+    const startDate = getDateString(start)
+    const response = await $fetch<AnalyticsResponse>(`/api/sites/${siteId}/analytics`, {
+      query: { startDate, endDate }
+    })
+    analyticsSummary.pageViews = response.metrics.pageViews
+    analyticsSummary.uniqueVisitors = response.metrics.uniqueVisitors
+  } catch {
+    analyticsSummary.pageViews = 0
+    analyticsSummary.uniqueVisitors = 0
+  } finally {
+    analyticsLoading.value = false
+  }
 }
 
 watch(location, (loc) => {
@@ -925,6 +993,7 @@ const { evaluateAndSuggest } = useUpsellTriggers()
 
 onMounted(async () => {
   const workspaceLoaded = await loadLocationWorkspace()
+  await loadAnalyticsSummary()
   await loadGbConnection()
   if (workspaceLoaded) await loadManualReviews()
 

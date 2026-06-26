@@ -5,7 +5,7 @@ test.describe('OAuth discovery endpoints', () => {
     const res = await request.get(`${baseURL}/.well-known/oauth-protected-resource`)
     expect(res.status()).toBe(200)
     const body = await res.json() as Record<string, unknown>
-    expect(body.resource).toMatch(/\/api\/mcp$/)
+    expect(body.resource).toBe(`${baseURL}/api/mcp`)
     expect(Array.isArray(body.authorization_servers)).toBe(true)
     expect((body.authorization_servers as string[]).length).toBeGreaterThan(0)
     expect(body.bearer_methods_supported).toContain('header')
@@ -87,7 +87,7 @@ test.describe('OAuth discovery endpoints', () => {
         },
       },
     })
-    expect(res.status()).toBe(401)
+    expect(res.status()).toBe(200)
     const body = await res.json() as {
       result?: {
         isError?: boolean
@@ -97,7 +97,7 @@ test.describe('OAuth discovery endpoints', () => {
     expect(body.result?.isError).toBe(true)
     const challenge = (body.result?._meta?.['mcp/www_authenticate'] as string[] | undefined)?.[0]
     expect(challenge).toContain('resource_metadata=')
-    expect(challenge).toContain('error=')
+    expect(challenge).toContain('error="invalid_token"')
     expect(challenge).toContain('error_description=')
   })
 })

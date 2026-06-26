@@ -106,12 +106,12 @@ async function main() {
   else fail('WWW-Authenticate missing resource_metadata', wwwAuth)
 
   const unauthTool = await request('tools/call', { name: 'list_sites', arguments: {} })
-  expectStatus('unauthenticated tools/call returns 401', unauthTool.res.status, 401)
+  expectStatus('unauthenticated tools/call returns JSON-RPC auth result', unauthTool.res.status, 200)
   const toolChallenge = unauthTool.body?.result?._meta?.['mcp/www_authenticate']?.[0] ?? ''
   if (
     unauthTool.body?.result?.isError === true
     && toolChallenge.includes('resource_metadata=')
-    && toolChallenge.includes('error=')
+    && toolChallenge.includes('error="invalid_token"')
     && toolChallenge.includes('error_description=')
   ) {
     pass('unauthenticated tools/call includes mcp/www_authenticate challenge')

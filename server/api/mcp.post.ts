@@ -46,8 +46,22 @@ function resolveBaseUrl(event: Parameters<typeof getRequestURL>[0]): string {
   );
 }
 
-function oauthChallenge(baseUrl: string, error = "invalid_token", description = "Connect KrabiClaw to continue.") {
-  return `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource", error="${error}", error_description="${description}"`
+function quoteChallengeValue(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+}
+
+function oauthChallenge(
+  baseUrl: string,
+  error = "invalid_token",
+  description = "Connect KrabiClaw to continue.",
+  scope?: string,
+) {
+  return [
+    `Bearer resource_metadata="${quoteChallengeValue(`${baseUrl}/.well-known/oauth-protected-resource`)}"`,
+    `error="${quoteChallengeValue(error)}"`,
+    `error_description="${quoteChallengeValue(description)}"`,
+    ...(scope ? [`scope="${quoteChallengeValue(scope)}"`] : []),
+  ].join(", ")
 }
 
 function setMcpAuthChallenge(event: Parameters<typeof getRequestURL>[0], challenge: string) {
@@ -69,6 +83,25 @@ function mcpAuthRequiredResult(challenge: string) {
   }
 }
 
+function authChallengeForError(error: unknown, baseUrl: string) {
+  const data = error && typeof error === "object" && "data" in error
+    ? (error as { data?: unknown }).data
+    : null
+  const auth = data && typeof data === "object" && "mcpAuth" in data
+    ? (data as { mcpAuth?: unknown }).mcpAuth
+    : null
+  if (!auth || typeof auth !== "object") return oauthChallenge(baseUrl)
+  const details = auth as { error?: unknown; description?: unknown; scope?: unknown }
+  return oauthChallenge(
+    baseUrl,
+    details.error === "insufficient_scope" ? "insufficient_scope" : "invalid_token",
+    typeof details.description === "string"
+      ? details.description
+      : "Token missing, expired, invalid, or not issued for this MCP resource",
+    typeof details.scope === "string" ? details.scope : undefined,
+  )
+}
+
 export default defineEventHandler(async (event) => {
   let requestId: string | number | null | undefined;
   let requestMethod: string | undefined;
@@ -82,6 +115,10 @@ export default defineEventHandler(async (event) => {
       cfEnv.BETTER_AUTH_URL ?? "https://krabiclaw.com"
     ).replace(/\/$/, "");
     const authChallenge = oauthChallenge(baseUrl);
+    const tenantAuthOptions = {
+      audiences: [`${baseUrl}/api/mcp`],
+      requiredScopes: ["tenant"],
+    };
     if (
       !getHeader(event, "authorization")?.startsWith("Bearer ") &&
       !getHeader(event, "cookie")
@@ -106,11 +143,11 @@ export default defineEventHandler(async (event) => {
         mcp_method: requestMethod ?? null,
         tool_name: requestToolName ?? null,
       }));
-      setResponseStatus(event, 401);
-      setMcpAuthChallenge(event, authChallenge);
       if (requestMethod === "tools/call") {
         return mcpSuccess(requestId ?? null, mcpAuthRequiredResult(authChallenge));
       }
+      setResponseStatus(event, 401);
+      setMcpAuthChallenge(event, authChallenge);
       return mcpFailure(requestId ?? null, {
         code: MCP_ERROR.invalidRequest,
         message: "Authentication required.",
@@ -135,7 +172,7 @@ export default defineEventHandler(async (event) => {
 
     // MCP protocol handshake — required before any tools/list or tools/call
     if (request.method === "initialize") {
-      await requireMcpUser(event);
+      await requireMcpUser(event, tenantAuthOptions);
       return mcpSuccess(request.id, {
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: {}, resources: {}, prompts: {} },
@@ -244,7 +281,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
     }
 
     if (request.method === "resources/list") {
-      await requireMcpUser(event);
+      await requireMcpUser(event, tenantAuthOptions);
       return mcpSuccess(request.id, {
         resources: WIDGETS.map((w) => ({
           uri: widgetResourceUri(w.name),
@@ -256,12 +293,12 @@ Common workflows: update menus and items, create and publish posts, triage conta
     }
 
     if (request.method === "resources/templates/list") {
-      await requireMcpUser(event);
+      await requireMcpUser(event, tenantAuthOptions);
       return mcpSuccess(request.id, { resourceTemplates: [] });
     }
 
     if (request.method === "resources/read") {
-      await requireMcpUser(event);
+      await requireMcpUser(event, tenantAuthOptions);
       const uri =
         typeof request.params?.uri === "string" ? request.params.uri : "";
       // Accept both versioned (name@vN.html) and plain (name.html) forms so that
@@ -328,12 +365,12 @@ Common workflows: update menus and items, create and publish posts, triage conta
     }
 
     if (request.method === "prompts/list") {
-      await requireMcpUser(event);
+      await requireMcpUser(event, tenantAuthOptions);
       return mcpSuccess(request.id, { prompts: MCP_PROMPTS });
     }
 
     if (request.method === "prompts/get") {
-      await requireMcpUser(event);
+      await requireMcpUser(event, tenantAuthOptions);
       const name =
         typeof request.params?.name === "string" ? request.params.name : "";
       const rawPromptArgs = request.params?.arguments;
@@ -359,7 +396,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
     }
 
     if (request.method === "server/discover") {
-      await requireMcpUser(event);
+      await requireMcpUser(event, tenantAuthOptions);
       return mcpSuccess(request.id, {
         supportedVersions: [
           "2026-07-28",
@@ -378,7 +415,7 @@ Common workflows: update menus and items, create and publish posts, triage conta
     }
 
     if (request.method === "tools/list") {
-      const user = await requireMcpUser(event);
+      const user = await requireMcpUser(event, tenantAuthOptions);
       const siteId =
         typeof request.params?.site_id === "string"
           ? request.params.site_id
@@ -597,18 +634,20 @@ Common workflows: update menus and items, create and publish posts, triage conta
       "request_id:",
       requestId ?? null,
     );
-    setResponseStatus(event, status);
     if (status === 401) {
       const cfEnv = cloudflareEnv(event);
       const baseUrl = (
         cfEnv.BETTER_AUTH_URL ?? "https://krabiclaw.com"
       ).replace(/\/$/, "");
-      const authChallenge = oauthChallenge(baseUrl);
-      setMcpAuthChallenge(event, authChallenge);
+      const authChallenge = authChallengeForError(error, baseUrl);
       if (requestMethod === "tools/call") {
         return mcpSuccess(requestId, mcpAuthRequiredResult(authChallenge));
       }
+      setResponseStatus(event, 401);
+      setMcpAuthChallenge(event, authChallenge);
+      return mcpFailure(requestId, mcpError);
     }
+    setResponseStatus(event, status);
     return mcpFailure(requestId, mcpError);
   }
 });

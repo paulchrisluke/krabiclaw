@@ -205,6 +205,25 @@ function notFound(message: string): never {
   throw createError({ statusCode: 404, statusMessage: message })
 }
 
+// Lets every blog/doc tool accept either the row id or its public slug, so a
+// model (or person) holding only a public URL doesn't need a separate
+// list-then-match step before it can get/update/publish/delete a post or doc.
+async function resolvePlatformContentId(
+  db: DbClient,
+  table: 'platform_blog_posts' | 'platform_docs',
+  identifier: string,
+  notFoundMessage: string,
+): Promise<string> {
+  const byId = await queryFirst<{ id: string }>(db, `SELECT id FROM ${table} WHERE id = ? LIMIT 1`, [identifier])
+  const bySlug = await queryFirst<{ id: string }>(db, `SELECT id FROM ${table} WHERE slug = ? LIMIT 1`, [identifier])
+  if (byId && bySlug && byId.id !== bySlug.id) {
+    badRequest('Ambiguous platform content identifier; use the row id.')
+  }
+  const row = byId ?? bySlug
+  if (!row) notFound(notFoundMessage)
+  return row.id
+}
+
 function randomSlugSuffix(): string {
   return Math.random().toString(36).slice(2, 8)
 }
@@ -867,7 +886,8 @@ export async function listPlatformBlogPosts(db: DbClient, status?: string | null
   return (results ?? []).map(record => attachFeaturedImage(attachPublished(record, Boolean(record.published_at))))
 }
 
-export async function getPlatformBlogPost(db: DbClient, postId: string) {
+export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string) {
+  const postId = await resolvePlatformContentId(db, 'platform_blog_posts', postIdOrSlug, 'Post not found')
   const post = await queryFirst<ApiRecord | null>(
     db,
     `SELECT
@@ -941,9 +961,10 @@ export async function createPlatformBlogPost(
 
 export async function updatePlatformBlogPost(
   db: D1Database,
-  postId: string,
+  postIdOrSlug: string,
   input: PlatformBlogUpdateInput,
 ) {
+  const postId = await resolvePlatformContentId(db, 'platform_blog_posts', postIdOrSlug, 'Post not found')
   validateBlogCommon(input)
   const now = new Date().toISOString()
   const updates: string[] = ['updated_at = ?']
@@ -1029,7 +1050,8 @@ export async function updatePlatformBlogPost(
   }
 }
 
-export async function deletePlatformBlogPost(db: D1Database, postId: string) {
+export async function deletePlatformBlogPost(db: D1Database, postIdOrSlug: string) {
+  const postId = await resolvePlatformContentId(db, 'platform_blog_posts', postIdOrSlug, 'Post not found')
   await replaceContentComponents(db, 'blog_post', postId, [])
   const result = await execute(db, 'DELETE FROM platform_blog_posts WHERE id = ?', [postId])
   if (!result.meta.changes || result.meta.changes === 0) notFound('Post not found')
@@ -1051,7 +1073,8 @@ export async function listPlatformDocs(db: DbClient, status?: string | null) {
   return (results ?? []).map(record => attachFeaturedImage(attachPublished(record, record.status === 'published')))
 }
 
-export async function getPlatformDoc(db: DbClient, docId: string) {
+export async function getPlatformDoc(db: DbClient, docIdOrSlug: string) {
+  const docId = await resolvePlatformContentId(db, 'platform_docs', docIdOrSlug, 'Doc not found')
   const doc = await queryFirst<ApiRecord | null>(
     db,
     `SELECT
@@ -1133,9 +1156,10 @@ export async function createPlatformDoc(
 
 export async function updatePlatformDoc(
   db: D1Database,
-  docId: string,
+  docIdOrSlug: string,
   input: PlatformDocUpdateInput,
 ) {
+  const docId = await resolvePlatformContentId(db, 'platform_docs', docIdOrSlug, 'Doc not found')
   validateDocCommon(input)
   const now = new Date().toISOString()
   const updates: string[] = ['updated_at = ?']
@@ -1225,7 +1249,8 @@ export async function updatePlatformDoc(
   }
 }
 
-export async function deletePlatformDoc(db: D1Database, docId: string) {
+export async function deletePlatformDoc(db: D1Database, docIdOrSlug: string) {
+  const docId = await resolvePlatformContentId(db, 'platform_docs', docIdOrSlug, 'Doc not found')
   await replaceContentComponents(db, 'doc', docId, [])
   const result = await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [docId])
   if (!result.meta.changes || result.meta.changes === 0) notFound('Doc not found')

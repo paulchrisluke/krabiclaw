@@ -1,12 +1,13 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { queryAll } from '~/server/db'
+import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
 
 export default defineEventHandler(async (event) => {
   const { db, organization } = await getDashboardContext(event, { requireSite: false })
 
   const memberRows = await queryAll<{
-    id: string; role: string; createdAt: number
+    id: string; role: string; createdAt: BetterAuthTimestamp
     userId: string; name: string; email: string; image: string | null
   }>(db, `
     SELECT m.id, m.role, m.createdAt,
@@ -18,12 +19,12 @@ export default defineEventHandler(async (event) => {
   `, [organization.id])
   const members = memberRows.map(m => ({
     ...m,
-    createdAt: new Date(m.createdAt * 1000).toISOString()
+    createdAt: betterAuthTimestampToIso(m.createdAt, 'member.createdAt')
   }))
 
   const invitationRows = await queryAll<{
     id: string; email: string; role: string | null
-    status: string; expiresAt: number; createdAt: number
+    status: string; expiresAt: BetterAuthTimestamp; createdAt: BetterAuthTimestamp
     inviterName: string | null
   }>(db, `
     SELECT i.id, i.email, i.role, i.status, i.expiresAt, i.createdAt,
@@ -35,8 +36,8 @@ export default defineEventHandler(async (event) => {
   `, [organization.id])
   const invitations = invitationRows.map(i => ({
     ...i,
-    expiresAt: new Date(i.expiresAt * 1000).toISOString(),
-    createdAt: new Date(i.createdAt * 1000).toISOString()
+    expiresAt: betterAuthTimestampToIso(i.expiresAt, 'invitation.expiresAt'),
+    createdAt: betterAuthTimestampToIso(i.createdAt, 'invitation.createdAt')
   }))
 
   return jsonResponse({
