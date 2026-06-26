@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isPlatformAdmin } from '~/server/utils/platform-auth'
 import { queryAll } from '~/server/db'
+import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
   if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
 
   const [teamRows, pendingInvitationRows] = await Promise.all([
-    queryAll<{ id: string; name: string | null; email: string; image: string | null; role: string; createdAt: number }>(db, `
+    queryAll<{ id: string; name: string | null; email: string; image: string | null; role: string; createdAt: BetterAuthTimestamp }>(db, `
       SELECT id, name, email, image, role, createdAt
       FROM user
       WHERE role = 'admin'
@@ -23,7 +24,7 @@ export default defineEventHandler(async (event) => {
 
     queryAll<{
       id: string; email: string; role: string | null; status: string
-      expiresAt: number; createdAt: number
+      expiresAt: BetterAuthTimestamp; createdAt: BetterAuthTimestamp
       orgName: string | null; orgSlug: string | null; inviterName: string | null
     }>(db, `
       SELECT i.id, i.email, i.role, i.status, i.expiresAt, i.createdAt,
@@ -40,12 +41,12 @@ export default defineEventHandler(async (event) => {
 
   const team = teamRows.map(u => ({
     ...u,
-    createdAt: new Date(u.createdAt * 1000).toISOString()
+    createdAt: betterAuthTimestampToIso(u.createdAt, 'user.createdAt')
   }))
   const pendingInvitations = pendingInvitationRows.map(i => ({
     ...i,
-    expiresAt: new Date(i.expiresAt * 1000).toISOString(),
-    createdAt: new Date(i.createdAt * 1000).toISOString()
+    expiresAt: betterAuthTimestampToIso(i.expiresAt, 'invitation.expiresAt'),
+    createdAt: betterAuthTimestampToIso(i.createdAt, 'invitation.createdAt')
   }))
 
   return jsonResponse({

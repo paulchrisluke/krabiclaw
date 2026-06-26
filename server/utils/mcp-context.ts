@@ -165,11 +165,12 @@ export async function resolveMcpWorkspace(
   // sites/locations can share a word in their name, and guessing wrong is worse
   // than requiring list_sites/list_locations first for that case.
   let site = requestedSiteId
-    ? scopedSites.find((entry) =>
-        entry.id === requestedSiteId ||
+    ? scopedSites.find((entry) => entry.id === requestedSiteId) ??
+      scopedSites.find((entry) =>
         entry.subdomain === requestedSiteId ||
         entry.custom_domain === requestedSiteId,
-      ) ?? null
+      ) ??
+      null
     : null
 
   if (!requestedSiteId) {
@@ -205,7 +206,9 @@ export async function resolveMcpWorkspace(
   const requestedLocationId = normalizeId(options.locationId)
   const preferredLocationId = normalizeId(preference?.location_id)
   let location = requestedLocationId
-    ? locations.find((entry) => entry.id === requestedLocationId || entry.slug === requestedLocationId) ?? null
+    ? locations.find((entry) => entry.id === requestedLocationId) ??
+      locations.find((entry) => entry.slug === requestedLocationId) ??
+      null
     : null
 
   if (!requestedLocationId) {

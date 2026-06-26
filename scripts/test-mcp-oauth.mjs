@@ -115,6 +115,26 @@ function pkce() {
   return { verifier, challenge };
 }
 
+function decodeJwtPayload(token) {
+  const [, payload] = String(token).split(".");
+  if (!payload) return null;
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function hasAudience(payload, expected) {
+  const aud = payload?.aud;
+  return Array.isArray(aud) ? aud.includes(expected) : aud === expected;
+}
+
+function hasScope(payload, expected) {
+  return typeof payload?.scope === "string" &&
+    payload.scope.split(/\s+/).includes(expected);
+}
+
 function pass(label) {
   console.log(`  ✅ ${label}`);
 }
@@ -144,6 +164,13 @@ async function main() {
   const { body: prJson } = get(
     `${BASE_URL}/.well-known/oauth-protected-resource`,
   );
+  const advertisedResource = prJson.resource;
+  if (advertisedResource === `${BASE_URL}/api/mcp`) {
+    pass(`protected resource = ${advertisedResource}`);
+  } else {
+    fail("oauth-protected-resource resource mismatch", prJson);
+    return;
+  }
   if (prJson.authorization_servers?.[0] === BASE_URL)
     pass("oauth-protected-resource issuer matches");
   else fail("oauth-protected-resource issuer mismatch", prJson);
@@ -234,7 +261,7 @@ async function main() {
       state,
       code_challenge: challenge,
       code_challenge_method: "S256",
-      resource: `${BASE_URL}/api/mcp`,
+      resource: advertisedResource,
     });
     const authResp = get(`${AUTHORIZE_URL}?${authParams}`, {
       Cookie: sessionCookie,
@@ -280,7 +307,7 @@ async function main() {
       redirect_uri: redirectUri,
       client_id: testClientId,
       code_verifier: verifier,
-      resource: `${BASE_URL}/api/mcp`,
+      resource: advertisedResource,
     });
     if (tokenResp.status !== 200 || !tokenResp.body.access_token) {
       fail("Token exchange failed", tokenResp.body);
@@ -288,12 +315,48 @@ async function main() {
     }
     accessToken = tokenResp.body.access_token;
     pass(`Got JWT access token (type=${tokenResp.body.token_type})`);
+
+    const accessTokenPayload = decodeJwtPayload(accessToken);
+    if (accessTokenPayload && hasAudience(accessTokenPayload, advertisedResource)) {
+      pass("access token audience matches MCP resource");
+    } else {
+      fail("access token audience missing MCP resource", accessTokenPayload);
+      return;
+    }
+    if (hasScope(accessTokenPayload, "tenant")) {
+      pass("access token includes tenant scope");
+    } else {
+      fail("access token missing tenant scope", accessTokenPayload);
+      return;
+    }
+    if (typeof tokenResp.body.id_token === "string") {
+      pass("token response includes id_token for reauthorization context");
+    } else {
+      fail("token response missing id_token", tokenResp.body);
+      return;
+    }
   } else {
     section("Token (production)");
     skip("No MCP_BEARER_TOKEN set — skipping authenticated MCP checks");
     skip("Set MCP_BEARER_TOKEN=<jwt> to run full flow against production");
     console.log("\n✅ Discovery + unauthenticated checks passed.");
     return;
+  }
+
+  const bearerPayload = decodeJwtPayload(accessToken);
+  if (bearerPayload) {
+    if (hasAudience(bearerPayload, advertisedResource)) {
+      pass("Bearer token audience is accepted by tenant MCP");
+    } else {
+      fail("Bearer token audience is not accepted by tenant MCP", bearerPayload);
+    }
+    if (hasScope(bearerPayload, "tenant")) {
+      pass("Bearer token includes tenant scope");
+    } else {
+      fail("Bearer token missing tenant scope", bearerPayload);
+    }
+  } else {
+    skip("Bearer token is opaque — audience cannot be inspected locally");
   }
 
   // 4. MCP initialize

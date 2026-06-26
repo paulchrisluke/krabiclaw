@@ -30,6 +30,33 @@ interface TopPage {
   percentOfTotal: number
 }
 
+interface CountryBreakdown {
+  country: string
+  countryCode: string
+  views: number
+  visitors: number
+  percentOfTotal: number
+}
+
+interface CityBreakdown {
+  city: string
+  region: string | null
+  countryCode: string
+  views: number
+}
+
+interface ReferrerBreakdown {
+  source: string
+  views: number
+  percentOfTotal: number
+}
+
+interface DeviceBreakdown {
+  type: 'Mobile' | 'Desktop' | 'Tablet' | 'Bot' | 'Unknown'
+  views: number
+  percentOfTotal: number
+}
+
 interface PeriodStats {
   pageViews: number
   sessions: number
@@ -53,6 +80,12 @@ interface PeriodTotalsRow {
   unique_sessions: number | null
 }
 
+interface SiteAccessRow {
+  id: string
+  organization_id: string
+  subdomain: string | null
+}
+
 interface TopPageJson {
   path?: string
   pagePath?: string
@@ -67,6 +100,35 @@ function toNumber(value: unknown): number {
 function normalizePath(value: unknown): string {
   const str = String(value || '').trim()
   return str || '/'
+}
+
+function normalizeCountryCode(value: unknown): string {
+  const code = String(value || '').trim().toUpperCase()
+  return /^[A-Z]{2}$/.test(code) ? code : 'XX'
+}
+
+function normalizeReferrer(value: unknown, siteSubdomain: string | null): string {
+  const raw = String(value || '').trim()
+  if (!raw) return 'Direct'
+
+  try {
+    const url = new URL(raw)
+    const host = url.hostname.replace(/^www\./, '')
+    const freeHost = siteSubdomain ? `${siteSubdomain}.krabiclaw.com` : ''
+    if (siteSubdomain && (host === freeHost || host === `${siteSubdomain}.localhost`)) return 'Internal'
+    return host || 'Direct'
+  } catch {
+    return 'Direct'
+  }
+}
+
+function classifyDevice(userAgent: unknown): DeviceBreakdown['type'] {
+  const ua = String(userAgent || '').toLowerCase()
+  if (!ua) return 'Unknown'
+  if (/bot|crawler|spider|crawling|preview|slurp/.test(ua)) return 'Bot'
+  if (/ipad|tablet|kindle|silk/.test(ua)) return 'Tablet'
+  if (/mobile|iphone|ipod|android.*mobile|windows phone/.test(ua)) return 'Mobile'
+  return 'Desktop'
 }
 
 function parseDateParam(value: unknown, name: string): string {
@@ -106,8 +168,8 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Verify user belongs to organization that owns the site
-    const site = await queryFirst(db, `
-      SELECT s.id, s.organization_id
+    const site = await queryFirst<SiteAccessRow>(db, `
+      SELECT s.id, s.organization_id, s.subdomain
       FROM sites s
       JOIN member m ON s.organization_id = m.organizationId
       WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin', 'editor')
@@ -264,6 +326,99 @@ export default defineEventHandler(async (event) => {
         percentOfTotal: totalPageViews > 0 ? Math.round((views / totalPageViews) * 100) : 0
       }))
       .sort((a, b) => b.views - a.views)
+      .slice(0, 10)
+
+    const countryRows = await queryAll<{ country: string | null; views: number; visitors: number }>(db, `
+      SELECT
+        COALESCE(NULLIF(country, ''), 'XX') as country,
+        COUNT(*) as views,
+        COUNT(DISTINCT visitor_id) as visitors
+      FROM site_pageview_events
+      WHERE site_id = ? AND created_at >= ? AND created_at < ?
+      GROUP BY COALESCE(NULLIF(country, ''), 'XX')
+      ORDER BY views DESC
+    `, [siteId, startIso, endIso])
+
+    const countryMap = new Map<string, { views: number; visitors: number }>()
+    for (const row of countryRows) {
+      const code = normalizeCountryCode(row.country)
+      const existing = countryMap.get(code) || { views: 0, visitors: 0 }
+      countryMap.set(code, {
+        views: existing.views + toNumber(row.views),
+        visitors: existing.visitors + toNumber(row.visitors)
+      })
+    }
+    const countries: CountryBreakdown[] = Array.from(countryMap.entries())
+      .map(([code, { views, visitors }]) => ({
+        country: code,
+        countryCode: code,
+        views,
+        visitors,
+        percentOfTotal: totalPageViews > 0 ? Math.round((views / totalPageViews) * 100) : 0
+      }))
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 12)
+
+    const cities = (await queryAll<{ city: string | null; region: string | null; country: string | null; views: number }>(db, `
+      SELECT
+        COALESCE(NULLIF(city, ''), 'Unknown') as city,
+        NULLIF(region, '') as region,
+        COALESCE(NULLIF(country, ''), 'XX') as country,
+        COUNT(*) as views
+      FROM site_pageview_events
+      WHERE site_id = ? AND created_at >= ? AND created_at < ?
+      GROUP BY COALESCE(NULLIF(city, ''), 'Unknown'), NULLIF(region, ''), COALESCE(NULLIF(country, ''), 'XX')
+      ORDER BY views DESC
+      LIMIT 10
+    `, [siteId, startIso, endIso])).map(row => ({
+      city: String(row.city || 'Unknown'),
+      region: row.region,
+      countryCode: normalizeCountryCode(row.country),
+      views: toNumber(row.views)
+    } satisfies CityBreakdown))
+
+    const referrerMap = new Map<string, number>()
+    const referrerRows = await queryAll<{ referrer: string | null; views: number }>(db, `
+      SELECT referrer, COUNT(*) as views
+      FROM site_pageview_events
+      WHERE site_id = ? AND created_at >= ? AND created_at < ?
+      GROUP BY referrer
+      ORDER BY views DESC
+      LIMIT 200
+    `, [siteId, startIso, endIso])
+    for (const row of referrerRows) {
+      const source = normalizeReferrer(row.referrer, site.subdomain)
+      referrerMap.set(source, (referrerMap.get(source) || 0) + toNumber(row.views))
+    }
+    const referrers: ReferrerBreakdown[] = Array.from(referrerMap.entries())
+      .map(([source, views]) => ({
+        source,
+        views,
+        percentOfTotal: totalPageViews > 0 ? Math.round((views / totalPageViews) * 100) : 0
+      }))
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 10)
+
+    const deviceMap = new Map<DeviceBreakdown['type'], number>()
+    const deviceRows = await queryAll<{ user_agent: string | null; views: number }>(db, `
+      SELECT user_agent, COUNT(*) as views
+      FROM site_pageview_events
+      WHERE site_id = ? AND created_at >= ? AND created_at < ?
+      GROUP BY user_agent
+      ORDER BY views DESC
+      LIMIT 500
+    `, [siteId, startIso, endIso])
+    for (const row of deviceRows) {
+      const type = classifyDevice(row.user_agent)
+      deviceMap.set(type, (deviceMap.get(type) || 0) + toNumber(row.views))
+    }
+    const devices: DeviceBreakdown[] = Array.from(deviceMap.entries())
+      .map(([type, views]) => ({
+        type,
+        views,
+        percentOfTotal: totalPageViews > 0 ? Math.round((views / totalPageViews) * 100) : 0
+      }))
+      .sort((a, b) => b.views - a.views)
 
     // Format daily data for response
     const dailyData: DailyData[] = (dailyStats || []).map((row) => ({
@@ -314,6 +469,10 @@ export default defineEventHandler(async (event) => {
       metrics,
       dailyData,
       topPages,
+      countries,
+      cities,
+      referrers,
+      devices,
       period: { startDate, endDate }
     })
   } catch (error) {

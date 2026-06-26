@@ -103,7 +103,6 @@ export async function executePlatformMcpToolCall(
     // are the real boundary, matching server/api/mcp/platform.post.ts.
     audiences: [
       `${String(event.context.cloudflare?.env?.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')}/api/mcp/platform`,
-      'https://krabiclaw.com/api/mcp/platform',
     ],
     requiredScopes: ['platform_admin'],
     requirePlatformAdmin: true,

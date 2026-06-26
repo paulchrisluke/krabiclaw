@@ -14,8 +14,22 @@ import { PLATFORM_MCP_TOOLS } from '~/server/utils/platform-mcp-tools'
 import { PLATFORM_MCP_RESOURCES, readPlatformMcpResource } from '~/server/utils/platform-mcp-resources'
 import { PLATFORM_MCP_PROMPTS, renderPlatformMcpPrompt } from '~/server/utils/platform-mcp-prompts'
 
-function oauthChallenge(baseUrl: string, error = 'invalid_token', description = 'Connect the KrabiClaw platform admin app to continue.') {
-  return `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource/platform-mcp", error="${error}", error_description="${description}"`
+function quoteChallengeValue(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+function oauthChallenge(
+  baseUrl: string,
+  error = 'invalid_token',
+  description = 'Connect the KrabiClaw platform admin app to continue.',
+  scope?: string,
+) {
+  return [
+    `Bearer resource_metadata="${quoteChallengeValue(`${baseUrl}/.well-known/oauth-protected-resource/platform-mcp`)}"`,
+    `error="${quoteChallengeValue(error)}"`,
+    `error_description="${quoteChallengeValue(description)}"`,
+    ...(scope ? [`scope="${quoteChallengeValue(scope)}"`] : []),
+  ].join(', ')
 }
 
 function setMcpAuthChallenge(event: H3Event, challenge: string) {
@@ -37,6 +51,25 @@ function mcpAuthRequiredResult(challenge: string) {
   }
 }
 
+function authChallengeForError(error: unknown, baseUrl: string) {
+  const data = error && typeof error === 'object' && 'data' in error
+    ? (error as { data?: unknown }).data
+    : null
+  const auth = data && typeof data === 'object' && 'mcpAuth' in data
+    ? (data as { mcpAuth?: unknown }).mcpAuth
+    : null
+  if (!auth || typeof auth !== 'object') return oauthChallenge(baseUrl)
+  const details = auth as { error?: unknown; description?: unknown; scope?: unknown }
+  return oauthChallenge(
+    baseUrl,
+    details.error === 'insufficient_scope' ? 'insufficient_scope' : 'invalid_token',
+    typeof details.description === 'string'
+      ? details.description
+      : 'Token missing, expired, invalid, or not issued for this MCP resource',
+    typeof details.scope === 'string' ? details.scope : undefined,
+  )
+}
+
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
@@ -46,7 +79,7 @@ export default defineEventHandler(async (event) => {
     // real per-surface boundary — see scopes comment in server/utils/auth.ts for
     // why DCR-registered clients carry every custom scope and forbiddenScopes
     // isn't used here.
-    audiences: [`${baseUrl}/api/mcp/platform`, 'https://krabiclaw.com/api/mcp/platform'],
+    audiences: [`${baseUrl}/api/mcp/platform`],
     requiredScopes: ['platform_admin'],
     requirePlatformAdmin: true,
   }
@@ -63,11 +96,11 @@ export default defineEventHandler(async (event) => {
       requestToolName = rawBody?.params && typeof rawBody.params === 'object' && !Array.isArray(rawBody.params) && typeof (rawBody.params as Record<string, unknown>).name === 'string'
         ? String((rawBody.params as Record<string, unknown>).name)
         : undefined
-      setResponseStatus(event, 401)
-      setMcpAuthChallenge(event, authChallenge)
       if (requestMethod === 'tools/call') {
         return mcpSuccess(requestId ?? null, mcpAuthRequiredResult(authChallenge))
       }
+      setResponseStatus(event, 401)
+      setMcpAuthChallenge(event, authChallenge)
       return mcpFailure(requestId ?? null, {
         code: MCP_ERROR.invalidRequest,
         message: 'Authentication required.',
@@ -219,13 +252,16 @@ export default defineEventHandler(async (event) => {
         : mcpError.code === MCP_ERROR.invalidRequest || mcpError.code === MCP_ERROR.invalidParams || mcpError.code === MCP_ERROR.parse
           ? 400
           : 500)
-    setResponseStatus(event, status)
     if (status === 401) {
-      setMcpAuthChallenge(event, authChallenge)
+      const authChallengeForFailure = authChallengeForError(error, baseUrl)
       if (requestMethod === 'tools/call') {
-        return mcpSuccess(requestId, mcpAuthRequiredResult(authChallenge))
+        return mcpSuccess(requestId, mcpAuthRequiredResult(authChallengeForFailure))
       }
+      setResponseStatus(event, 401)
+      setMcpAuthChallenge(event, authChallengeForFailure)
+      return mcpFailure(requestId, mcpError)
     }
+    setResponseStatus(event, status)
     console.error(
       '[PLATFORM_MCP]',
       status,

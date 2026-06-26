@@ -14,7 +14,8 @@ import {
   hashIp,
   insertPageviewEvent,
   insertPlatformPageviewEvent,
-  isTrackablePath
+  isTrackablePath,
+  resolveLocationIdFromPath
 } from '~/server/utils/pageview-tracking'
 
 export default defineEventHandler(async (event) => {
@@ -46,18 +47,21 @@ export default defineEventHandler(async (event) => {
     const userAgent = rawUa ? rawUa.slice(0, 1024) : null
 
     const insertPromise = isTenant
-      ? insertPageviewEvent(db, {
-          siteId: siteId as string,
-          pagePath: url.pathname,
-          referrer,
-          userAgent,
-          ipHash,
-          sessionId,
-          visitorId,
-          country: geo.country || null,
-          region: geo.region || null,
-          city: geo.city || null
-        })
+      ? resolveLocationIdFromPath(db, siteId as string, url.pathname).then((locationId) =>
+          insertPageviewEvent(db, {
+            siteId: siteId as string,
+            locationId,
+            pagePath: url.pathname,
+            referrer,
+            userAgent,
+            ipHash,
+            sessionId,
+            visitorId,
+            country: geo.country || null,
+            region: geo.region || null,
+            city: geo.city || null
+          })
+        )
       : insertPlatformPageviewEvent(db, {
           pagePath: url.pathname,
           referrer,

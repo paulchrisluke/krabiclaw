@@ -144,7 +144,7 @@
             </h2>
           </div>
           <div class="relative rounded-[28px] border border-default/60 p-6 sm:p-10 shadow-2xl backdrop-blur-sm" style="background: color-mix(in srgb, var(--ui-bg-elevated) 80%, transparent);">
-            <LazyBillingPricingTable />
+            <BillingPricingTable :plans="plans" />
           </div>
         </div>
       </section>
@@ -608,6 +608,11 @@ definePageMeta({ layout: false })
 
 const { isPlatform, siteId, site } = useTenantSite()
 const { locale } = useI18n()
+
+const platformPlans = isPlatform ? usePlans().plans : ref(null)
+const plans = computed(() => isPlatform ? platformPlans.value : null)
+
+const { isAuthenticated } = useAuth()
 const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
 // Inline location grid — load videos via IntersectionObserver when cards scroll into view
@@ -642,8 +647,6 @@ const features = [
   { icon: 'i-heroicons-shopping-bag', title: 'Online ordering', body: 'Pickup & delivery with no commission. Stripe payouts straight to your bank.' },
   { icon: 'i-heroicons-chart-bar', title: 'Real-time insights', body: 'See visits, top pages, and busy hours — ask ChatGPT or check the analytics tab.' },
 ]
-const { isAuthenticated } = useAuth()
-
 // Validate tenant context ONLY for tenant sites
 if (!isPlatform && !siteId) {
   throw createError({

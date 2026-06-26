@@ -5,6 +5,10 @@ import { authClient } from '~/lib/auth-client'
 export function useAuth() {
   const session = authClient.useSession()
 
+  async function refreshSession() {
+    await session.value?.refetch()
+  }
+
   const sessionData = computed(() => session.value?.data ?? null)
   const sessionLoading = computed(() => session.value?.isPending ?? true)
   const sessionError = computed(() => session.value?.error ?? null)
@@ -22,6 +26,7 @@ export function useAuth() {
     isAuthenticated,
     signOut: authClient.signOut,
     signIn: authClient.signIn,
+    refreshSession,
   }
 }
 
