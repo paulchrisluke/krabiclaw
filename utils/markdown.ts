@@ -4,7 +4,7 @@ import { marked } from 'marked'
 // becomes "you&#39;re"). Stripping non-alphanumeric chars without decoding
 // entities first leaves the digits behind as literal text (e.g. "you39re"),
 // so this must run before the alphanumeric strip below.
-function decodeHtmlEntities(value: string): string {
+export function decodeHtmlEntities(value: string): string {
   return value
     .replace(/&#x([0-9a-f]+);?/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
     .replace(/&#(\d+);?/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))

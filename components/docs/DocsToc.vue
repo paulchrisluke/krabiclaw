@@ -23,6 +23,8 @@
 // Parses h2/h3 + their id (added by the shared heading-id slugger in
 // utils/markdown.ts) out of the already-rendered article HTML, so the TOC
 // always matches the live article body instead of duplicating heading logic.
+import { decodeHtmlEntities } from '~/utils/markdown'
+
 const props = defineProps<{ html: string }>()
 
 interface Heading {
@@ -40,7 +42,7 @@ const headings = computed<Heading[]>(() => {
     matches.push({
       depth: Number(depth) as 2 | 3,
       id: id!,
-      text: text!.replace(/<[^>]+>/g, ''),
+      text: decodeHtmlEntities(text!.replace(/<[^>]+>/g, '')),
     })
   }
   return matches
