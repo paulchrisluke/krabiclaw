@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { isIP } from 'node:net'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { queryFirst } from '~/server/db'
@@ -132,19 +133,115 @@ function validateImageContentType(contentType: string, label: string) {
   }
 }
 
+const MAX_PLATFORM_IMAGE_BYTES = 10 * 1024 * 1024
+
+function isPrivateIpv4(hostname: string): boolean {
+  const parts = hostname.split('.').map(part => Number.parseInt(part, 10))
+  if (parts.length !== 4 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 255)) return false
+  const [a, b = -1] = parts
+  return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+}
+
+function isPrivateIpv6(hostname: string): boolean {
+  const normalized = hostname.toLowerCase()
+  return normalized === '::1' || normalized === '::' || normalized.startsWith('fe80:') || normalized.startsWith('fc') || normalized.startsWith('fd')
+}
+
+function normalizeHostnameForIpChecks(hostname: string): string {
+  if (hostname.startsWith('[') && hostname.endsWith(']')) {
+    return hostname.slice(1, -1)
+  }
+  return hostname
+}
+
+function assertSafeDownloadUrl(rawUrl: string, label: string): URL {
+  let parsed: URL
+  try {
+    parsed = new URL(rawUrl)
+  } catch {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} download URL is invalid.`)
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} download URL must use https.`)
+  }
+
+  const hostname = parsed.hostname.trim().toLowerCase()
+  const normalizedHostname = normalizeHostnameForIpChecks(hostname)
+  if (!hostname) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} download URL must include a hostname.`)
+  }
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} download URL cannot target localhost.`)
+  }
+  if (isIP(normalizedHostname) === 4 && isPrivateIpv4(normalizedHostname)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} download URL cannot target a private IPv4 address.`)
+  }
+  if (isIP(normalizedHostname) === 6 && isPrivateIpv6(normalizedHostname)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} download URL cannot target a private IPv6 address.`)
+  }
+
+  return parsed
+}
+
+async function readResponseBufferWithLimit(response: Response, label: string): Promise<ArrayBuffer> {
+  const declaredLength = Number.parseInt(response.headers.get('content-length') ?? '', 10)
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_PLATFORM_IMAGE_BYTES) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeds the ${MAX_PLATFORM_IMAGE_BYTES} byte limit.`)
+  }
+
+  if (!response.body) {
+    const buffer = await response.arrayBuffer()
+    if (buffer.byteLength > MAX_PLATFORM_IMAGE_BYTES) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeds the ${MAX_PLATFORM_IMAGE_BYTES} byte limit.`)
+    }
+    return buffer
+  }
+
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value) continue
+      total += value.byteLength
+      if (total > MAX_PLATFORM_IMAGE_BYTES) {
+        await reader.cancel()
+        throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeds the ${MAX_PLATFORM_IMAGE_BYTES} byte limit.`)
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  const merged = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return merged.buffer
+}
+
 async function resolveAttachmentImageFile(
   file: ToolFileReference,
 ): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
-  const response = await fetch(file.download_url, {
+  const safeDownloadUrl = assertSafeDownloadUrl(file.download_url, `Attachment ${file.file_id}`)
+  const response = await fetch(safeDownloadUrl, {
+    redirect: 'manual',
     signal: AbortSignal.timeout(15_000),
   })
   if (!response.ok) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `Failed to download attachment ${file.file_id}: ${response.status}`)
   }
 
-  const contentType = file.mime_type ?? response.headers.get('content-type') ?? 'application/octet-stream'
+  const contentType = response.headers.get('content-type') ?? file.mime_type ?? 'application/octet-stream'
   validateImageContentType(contentType, `Attachment ${file.file_id}`)
-  const buffer = await response.arrayBuffer()
+  const buffer = await readResponseBufferWithLimit(response, `Attachment ${file.file_id}`)
   const filename = file.file_name ?? `${file.file_id}.${contentType.split('/')[1] ?? 'png'}`
   return { buffer, contentType, filename }
 }
@@ -183,7 +280,7 @@ async function resolveUserUploadedImageFile(
 
   const contentType = response.headers.get('content-type') ?? 'application/octet-stream'
   validateImageContentType(contentType, `File ${normalizedFileId}`)
-  const buffer = await response.arrayBuffer()
+  const buffer = await readResponseBufferWithLimit(response, `File ${normalizedFileId}`)
   const filename = `${normalizedFileId}.${contentType.split('/')[1] ?? 'png'}`
   return { buffer, contentType, filename }
 }

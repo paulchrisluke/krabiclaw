@@ -227,6 +227,7 @@
 import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
 import { getQuickActionPrompts } from '~/composables/useOnboardingPrompts'
+import { sanitizeHtmlForSsr } from '~/utils/markdown'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 const props = defineProps<{ embedded?: boolean; setupMode?: boolean }>()
@@ -235,7 +236,9 @@ const setupMode = computed(() => Boolean(props.setupMode))
 const dashboard = useDashboardSite()
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, currentPageOverride, draftMessage } = useChowBot()
 const orgSettings = useOrgSettings()
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
+const DOMPurify = import.meta.client
+  ? (await import('isomorphic-dompurify')).default
+  : { sanitize: sanitizeHtmlForSsr }
 const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
 
 watch(isOpen, (open: boolean) => { if (open && siteId.value) fetchCredits() })
@@ -672,6 +675,28 @@ const toolLabel = (name: string): string => {
 
 // --- markdown ---
 
+// Tool results like get_dashboard_link hand the model a bare URL, which it
+// then either writes as a markdown link or just drops inline — both need to
+// render as an actual <a>, not literal text, for a deep link to be useful.
+function linkifyMarkdown(text: string): string {
+  const anchors: string[] = []
+  const withPlaceholders = text.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)"'<]+)\)/g,
+    (_match, label: string, url: string) => {
+      const placeholder = `__KC_MD_LINK_${anchors.length}__`
+      anchors.push(`<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`)
+      return placeholder
+    },
+  )
+
+  const autolinked = withPlaceholders.replace(
+    /(?<!href=")(https?:\/\/[^\s<>")']+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
+  )
+
+  return autolinked.replace(/__KC_MD_LINK_(\d+)__/g, (_match, index: string) => anchors[Number(index)] ?? '')
+}
+
 function renderMarkdown(text: string): string {
   const html = text
     .replace(/```[\s\S]*?```/g, m => `<pre><code>${m.slice(3, -3).replace(/^[^\n]*\n/, '')}</code></pre>`)
@@ -683,9 +708,7 @@ function renderMarkdown(text: string): string {
     .replace(/\n\n/g, '</p><p>')
     .replace(/\n/g, '<br>')
     .replace(/^(.+)$/, '<p>$1</p>')
-  
-  if (import.meta.server) return html
-  return DOMPurify.sanitize(html)
+  return DOMPurify.sanitize(linkifyMarkdown(html))
 }
 </script>
 

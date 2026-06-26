@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
-const _baseUrlArg = process.argv.includes('--base-url')
-  ? process.argv[process.argv.indexOf('--base-url') + 1]
-  : undefined
-if (_baseUrlArg !== undefined && !_baseUrlArg) {
-  console.error('--base-url requires a non-empty URL value')
-  process.exit(1)
+const baseUrlFlagIndex = process.argv.indexOf('--base-url')
+let _baseUrlArg
+if (baseUrlFlagIndex !== -1) {
+  _baseUrlArg = process.argv[baseUrlFlagIndex + 1]
+  if (!_baseUrlArg || _baseUrlArg.startsWith('-')) {
+    console.error('--base-url requires a non-flag URL value immediately after the flag')
+    process.exit(1)
+  }
 }
 const BASE_URL = (_baseUrlArg ?? process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 

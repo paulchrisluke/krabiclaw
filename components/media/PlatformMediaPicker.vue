@@ -60,6 +60,9 @@
         <div v-else-if="images.length === 0" class="text-center py-12">
           <UIcon name="i-heroicons-photo" class="size-8 text-muted mx-auto mb-2" />
           <p class="text-sm text-muted">No uploaded images yet</p>
+          <p class="mt-1 text-xs text-muted">
+            Upload one in the dashboard media library, then reopen this picker.
+          </p>
         </div>
 
         <div v-else class="grid grid-cols-3 gap-3 max-h-96 overflow-y-auto">
@@ -99,7 +102,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [assetId: string | null]
-  change: [asset: { id: string; publicUrl: string; thumbnailUrl: string } | null]
+  change: [asset: { id: string; publicUrl: string; thumbnailUrl: string; altText: string } | null]
 }>()
 
 interface PlatformMediaAsset {
@@ -110,7 +113,7 @@ interface PlatformMediaAsset {
 }
 
 const isOpen = ref(false)
-const pendingAsset = ref<{ id: string; publicUrl: string; thumbnailUrl: string } | null>(null)
+const pendingAsset = ref<{ id: string; publicUrl: string; thumbnailUrl: string; altText: string } | null>(null)
 const loading = ref(false)
 const images = ref<PlatformMediaAsset[]>([])
 
@@ -209,14 +212,21 @@ function onSelect(asset: PlatformMediaAsset) {
     id: asset.id,
     publicUrl: asset.public_url ?? '',
     thumbnailUrl: asset.thumbnail_url ?? '',
+    altText: asset.alt_text || '',
   }
 }
 
 function confirm() {
   if (!pendingAsset.value) return
   selectedUrl.value = pendingAsset.value.thumbnailUrl || pendingAsset.value.publicUrl
+  selectedAlt.value = pendingAsset.value.altText
   emit('update:modelValue', pendingAsset.value.id)
-  emit('change', pendingAsset.value)
+  emit('change', {
+    id: pendingAsset.value.id,
+    publicUrl: pendingAsset.value.publicUrl,
+    thumbnailUrl: pendingAsset.value.thumbnailUrl,
+    altText: pendingAsset.value.altText,
+  })
   isOpen.value = false
 }
 

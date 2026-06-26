@@ -1,6 +1,7 @@
 import type { AiTool } from "~/server/utils/ai-gateway";
 import { contentRegistry } from "~/config/content-registry";
 import { SUPPORTED_CURRENCIES } from "~/shared/currencies";
+import { DASHBOARD_DESTINATIONS } from "~/server/utils/dashboard-links";
 
 export const CHOWBOT_TOOLS: AiTool[] = [
   // ── Posts ──────────────────────────────────────────────────────────────────
@@ -1772,6 +1773,24 @@ export const CHOWBOT_TOOLS: AiTool[] = [
         },
       },
       required: ["locale", "entity_type", "entity_id", "field", "fields"],
+    },
+  },
+
+  // ── Dashboard links ────────────────────────────────────────────────────────
+  {
+    name: "get_dashboard_link",
+    description:
+      "Resolve a deep link into this site's org dashboard for a destination ChowBot can't act on directly (e.g. billing/subscription management has no chat tool). Use this so the reply can link straight to the right settings page instead of just naming it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        destination: {
+          type: "string",
+          enum: Object.keys(DASHBOARD_DESTINATIONS),
+          description: "Which dashboard page to link to.",
+        },
+      },
+      required: ["destination"],
     },
   },
 ];

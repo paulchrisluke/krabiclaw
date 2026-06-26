@@ -8,7 +8,8 @@ test.describe('OAuth discovery endpoints', () => {
     expect(body.resource).toBe(`${baseURL}/api/mcp`)
     expect(Array.isArray(body.authorization_servers)).toBe(true)
     expect((body.authorization_servers as string[]).length).toBeGreaterThan(0)
-    expect(body.bearer_methods_supported).toContain('header')
+    expect(Array.isArray(body.bearer_methods_supported)).toBe(true)
+    expect((body.bearer_methods_supported as string[])).toContain('header')
   })
 
   test('/.well-known/oauth-protected-resource/platform-mcp returns valid document', async ({ request, baseURL }) => {
@@ -18,7 +19,8 @@ test.describe('OAuth discovery endpoints', () => {
     expect(body.resource).toBe(`${baseURL}/api/mcp/platform`)
     expect(Array.isArray(body.authorization_servers)).toBe(true)
     expect((body.authorization_servers as string[]).length).toBeGreaterThan(0)
-    expect(body.bearer_methods_supported).toContain('header')
+    expect(Array.isArray(body.bearer_methods_supported)).toBe(true)
+    expect((body.bearer_methods_supported as string[])).toContain('header')
   })
 
   test('/.well-known/openid-configuration returns valid document', async ({ request, baseURL }) => {
