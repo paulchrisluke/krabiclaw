@@ -79,7 +79,8 @@ export function renderPlatformMcpPrompt(name: string, args: Record<string, strin
           referencePostId
             ? `Call get_platform_blog_post with post_id "${referencePostId}" and study its voice, structure, and SEO field usage as the primary reference.`
             : 'Call list_platform_blog_posts (status "published"), pick 1-2 of the most relevant existing posts, and call get_platform_blog_post on them to study voice, structure, and SEO field usage — do not invent a new voice.',
-          `Draft a full post body about "${topic}"${targetKeyword ? ` targeting the keyword "${targetKeyword}"` : ''}, matching the established voice, plus the appropriate SEO fields (seo_description, seo_keywords, robots, featured_image_asset_id) and structured-content fields (FAQ/How-To) if the content genuinely supports them.`,
+          `Draft a full post body about "${topic}"${targetKeyword ? ` targeting the keyword "${targetKeyword}"` : ''}, matching the established voice, plus the appropriate SEO fields (seo_description, seo_keywords, robots) and structured-content fields (FAQ/How-To) if the content genuinely supports them.`,
+          'Only set featured_image_asset_id if the writer has already chosen an existing asset from list_platform_media_assets or uploaded one with upload_platform_image. Otherwise leave featured_image_asset_id null.',
           'Present the full draft — body and all computed fields — to the user for approval. Do NOT call create_platform_blog_post or publish_platform_blog_post until the user explicitly approves the draft.',
         ].join(' '),
       }
@@ -92,7 +93,8 @@ export function renderPlatformMcpPrompt(name: string, args: Record<string, strin
         description: `Update and publish post: ${identifier}`,
         text: [
           `Call update_platform_blog_post with post_id "${identifier}" (it accepts either the post's id or its slug) and this body: ${body}`,
-          'Compute the SEO fields (seo_description, canonical_url, robots, featured_image_asset_id) and any structured-content fields per the field-usage rules in the tool description, based on the body above.',
+          'Compute the SEO fields (seo_description, canonical_url, robots) and any structured-content fields per the field-usage rules in the tool description, based on the body above.',
+          'Only send featured_image_asset_id if the writer has already selected or uploaded a real platform media asset. Otherwise leave it unset or null.',
           notes ? `Additional instructions: ${notes}` : '',
           `Immediately after the update succeeds, call publish_platform_blog_post with post_id "${identifier}" — do not stop to describe the publish step instead of executing it.`,
           'Report back what changed (fields updated, publish status) once both calls complete.',

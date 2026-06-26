@@ -29,7 +29,7 @@
           <p class="truncate text-xs font-medium text-default">
             {{ selectedUrl ? (selectedAlt || 'Image selected') : 'Select image' }}
           </p>
-          <p class="text-xs text-muted">{{ selectedUrl ? 'Click to change' : 'Click to browse or generate' }}</p>
+          <p class="text-xs text-muted">{{ selectedUrl ? 'Click to change' : 'Click to browse uploaded images' }}</p>
         </div>
         <UButton
           v-if="modelValue"
@@ -47,13 +47,11 @@
   <!-- Modal -->
   <UModal
     v-model:open="isOpen"
-    :title="panel === 'generate' ? 'Generate image' : 'Select image'"
+    title="Select image"
     :ui="{ content: 'max-w-2xl' }"
-    @close="panel = 'library'"
   >
     <template #body>
-      <!-- Library panel -->
-      <div v-if="panel === 'library'" class="space-y-4">
+      <div class="space-y-4">
         <div v-if="loading" class="text-center py-12">
           <UIcon name="i-heroicons-arrow-path" class="size-8 text-muted animate-spin mx-auto mb-2" />
           <p class="text-sm text-muted">Loading images...</p>
@@ -61,8 +59,7 @@
 
         <div v-else-if="images.length === 0" class="text-center py-12">
           <UIcon name="i-heroicons-photo" class="size-8 text-muted mx-auto mb-2" />
-          <p class="text-sm text-muted mb-4">No images yet</p>
-          <UButton size="sm" @click="panel = 'generate'">Generate one</UButton>
+          <p class="text-sm text-muted">No uploaded images yet</p>
         </div>
 
         <div v-else class="grid grid-cols-3 gap-3 max-h-96 overflow-y-auto">
@@ -78,45 +75,15 @@
           </button>
         </div>
       </div>
-
-      <!-- Generate panel -->
-      <div v-else>
-        <PlatformImageGeneratePanel
-          ref="generatePanel"
-          @keep="onGenerated"
-          @back="panel = 'library'"
-        />
-      </div>
     </template>
 
     <template #footer>
       <div class="flex w-full items-center justify-between gap-2">
-        <UButton
-          v-if="panel === 'generate'"
-          icon="i-heroicons-arrow-left"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          @click="panel = 'library'"
-        >
-          Back
-        </UButton>
-        <div v-else />
+        <div />
 
         <div class="flex gap-2">
           <UButton color="neutral" variant="ghost" @click="isOpen = false">Cancel</UButton>
-          <UButton
-            v-if="panel === 'generate'"
-            :disabled="!generatePanel?.canKeep"
-            @click="generatePanel?.keep()"
-          >
-            Keep
-          </UButton>
-          <UButton
-            v-else
-            :disabled="!pendingAsset"
-            @click="confirm"
-          >
+          <UButton :disabled="!pendingAsset" @click="confirm">
             Done
           </UButton>
         </div>
@@ -135,8 +102,6 @@ const emit = defineEmits<{
   change: [asset: { id: string; publicUrl: string; thumbnailUrl: string } | null]
 }>()
 
-type Panel = 'library' | 'generate'
-
 interface PlatformMediaAsset {
   id: string
   public_url: string | null
@@ -145,9 +110,7 @@ interface PlatformMediaAsset {
 }
 
 const isOpen = ref(false)
-const panel = ref<Panel>('library')
 const pendingAsset = ref<{ id: string; publicUrl: string; thumbnailUrl: string } | null>(null)
-const generatePanel = ref<{ canKeep: boolean; keep: () => void } | null>(null)
 const loading = ref(false)
 const images = ref<PlatformMediaAsset[]>([])
 
@@ -237,7 +200,6 @@ watch(isOpen, (open) => {
 function open() {
   libraryLoadController.value?.abort()
   pendingAsset.value = null
-  panel.value = 'library'
   loadImages()
   isOpen.value = true
 }
@@ -248,16 +210,6 @@ function onSelect(asset: PlatformMediaAsset) {
     publicUrl: asset.public_url ?? '',
     thumbnailUrl: asset.thumbnail_url ?? '',
   }
-}
-
-function onGenerated(asset: { id: string; publicUrl: string; thumbnailUrl: string }) {
-  pendingAsset.value = asset
-  selectedUrl.value = asset.thumbnailUrl || asset.publicUrl
-  emit('update:modelValue', asset.id)
-  emit('change', asset)
-  isOpen.value = false
-  panel.value = 'library'
-  loadImages()
 }
 
 function confirm() {

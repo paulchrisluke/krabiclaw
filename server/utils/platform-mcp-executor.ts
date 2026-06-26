@@ -3,7 +3,10 @@ import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { queryFirst } from '~/server/db'
 import { aggregatePlatformAnalyticsForDate, getPlatformAnalyticsSummary } from '~/server/utils/analytics'
+import { hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/cloudflare-images'
+import { createMediaAsset, deleteMediaAsset, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
 import { getPlatformMcpTool } from '~/server/utils/platform-mcp-tools'
+import { ensurePlatformMediaScope, listPlatformMediaAssets, PLATFORM_MEDIA_ORG_ID, PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
 import {
   createPlatformBlogPost,
   createPlatformDoc,
@@ -86,6 +89,105 @@ function structuredContentInput(args: Record<string, unknown>) {
   }
 }
 
+interface ToolFileReference {
+  download_url: string
+  file_id: string
+  mime_type?: string
+  file_name?: string
+}
+
+function toolFileReference(value: unknown, key: string): ToolFileReference {
+  if (typeof value === 'string' && value.trim()) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `${key} must be sent as a ChatGPT file argument so the host rewrites the local path into an authorized file reference before KrabiClaw receives it.`,
+    )
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}`)
+  }
+
+  const record = value as Record<string, unknown>
+  const downloadUrl = record.download_url
+  const fileId = record.file_id
+  if (typeof downloadUrl !== 'string' || !downloadUrl.trim()) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}.download_url`)
+  }
+  if (typeof fileId !== 'string' || !fileId.trim()) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}.file_id`)
+  }
+
+  return {
+    download_url: downloadUrl.trim(),
+    file_id: fileId.trim(),
+    mime_type: typeof record.mime_type === 'string' && record.mime_type.trim() ? record.mime_type.trim() : undefined,
+    file_name: typeof record.file_name === 'string' && record.file_name.trim() ? record.file_name.trim() : undefined,
+  }
+}
+
+function validateImageContentType(contentType: string, label: string) {
+  if (!contentType.startsWith('image/')) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} is not an image.`)
+  }
+}
+
+async function resolveAttachmentImageFile(
+  file: ToolFileReference,
+): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
+  const response = await fetch(file.download_url, {
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!response.ok) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Failed to download attachment ${file.file_id}: ${response.status}`)
+  }
+
+  const contentType = file.mime_type ?? response.headers.get('content-type') ?? 'application/octet-stream'
+  validateImageContentType(contentType, `Attachment ${file.file_id}`)
+  const buffer = await response.arrayBuffer()
+  const filename = file.file_name ?? `${file.file_id}.${contentType.split('/')[1] ?? 'png'}`
+  return { buffer, contentType, filename }
+}
+
+async function resolveUserUploadedImageFile(
+  fileId: string,
+  env: ApiRecord,
+): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
+  const accountId = env.CF_ACCOUNT_ID as string | undefined
+  const gatewayName = env.CF_GATEWAY_NAME as string | undefined
+  const aigToken = env.CLOUDFLARE_API_TOKEN as string | undefined
+
+  if (!accountId || !gatewayName || !aigToken) {
+    throw new Error('CF AI Gateway env vars not configured (CF_ACCOUNT_ID, CF_GATEWAY_NAME, CLOUDFLARE_API_TOKEN)')
+  }
+
+  const normalizedFileId = fileId
+    .trim()
+    .replace(/^sediment:\/\//i, '')
+    .replace(/^file:\/\//i, '')
+    .replace(/^\/+/, '')
+
+  if (!normalizedFileId || !/^[a-zA-Z0-9_-]+$/.test(normalizedFileId)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, 'file_id must be a valid uploaded file identifier.')
+  }
+
+  const url = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayName}/openai/v1/files/${normalizedFileId}/content`
+  const response = await fetch(url, {
+    headers: { 'cf-aig-authorization': `Bearer ${aigToken}` },
+    signal: AbortSignal.timeout(30_000),
+  })
+
+  if (!response.ok) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `Failed to fetch uploaded file ${normalizedFileId} via AI Gateway: ${response.status}`)
+  }
+
+  const contentType = response.headers.get('content-type') ?? 'application/octet-stream'
+  validateImageContentType(contentType, `File ${normalizedFileId}`)
+  const buffer = await response.arrayBuffer()
+  const filename = `${normalizedFileId}.${contentType.split('/')[1] ?? 'png'}`
+  return { buffer, contentType, filename }
+}
+
 export async function executePlatformMcpToolCall(
   event: H3Event,
   toolName: string,
@@ -110,15 +212,15 @@ export async function executePlatformMcpToolCall(
 
   switch (toolName) {
     case 'get_platform_context': {
-      const currentUser = await queryFirst<{ id: string; email: string | null; name: string | null; role: string | null }>(
+      const currentUser = await queryFirst<{ role: string | null }>(
         user.db,
-        'SELECT id, email, name, role FROM user WHERE id = ? LIMIT 1',
+        'SELECT role FROM user WHERE id = ? LIMIT 1',
         [user.userId],
       )
       if (!currentUser) throw mcpProtocolError(MCP_ERROR.internal, 'Current user not found.')
       return {
         currentUser: {
-          ...currentUser,
+          role: currentUser.role ?? null,
           isPlatformAdmin: user.isPlatformAdmin,
         },
       }
@@ -154,6 +256,78 @@ export async function executePlatformMcpToolCall(
         })),
         period: { start_date: startDate, end_date: endDate },
       }
+    }
+    case 'list_platform_media_assets':
+      return {
+        media: await listPlatformMediaAssets(user.db, {
+          id: optionalString(rawArguments, 'id'),
+          kind: optionalString(rawArguments, 'kind') as 'image' | 'video' | 'file' | undefined,
+          limit: optionalNumber(rawArguments, 'limit'),
+        }),
+      }
+    case 'upload_platform_image': {
+      if (!hasCloudflareImagesConfig(user.env)) {
+        throw new Error('Cloudflare Images not configured')
+      }
+
+      const fileReferenceValue = rawArguments.file
+      const fileReference = fileReferenceValue !== undefined ? toolFileReference(fileReferenceValue, 'file') : null
+      const fileId = optionalString(rawArguments, 'file_id') ?? null
+      if (!fileReference && !fileId) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, 'upload_platform_image requires either file or file_id.')
+      }
+
+      const upload = fileReference
+        ? await resolveAttachmentImageFile(fileReference)
+        : await resolveUserUploadedImageFile(fileId!, user.env)
+      const uploaded = await uploadImageBuffer(
+        user.env as Parameters<typeof uploadImageBuffer>[0],
+        upload.buffer,
+        upload.filename,
+        upload.contentType,
+      )
+
+      await ensurePlatformMediaScope(user.db)
+      const assetId = crypto.randomUUID()
+      await createMediaAsset(user.db, {
+        id: assetId,
+        organization_id: PLATFORM_MEDIA_ORG_ID,
+        site_id: PLATFORM_MEDIA_SITE_ID,
+        kind: 'image',
+        provider: 'cloudflare_images',
+        source: 'uploaded',
+        cloudflare_image_id: uploaded.imageId,
+        public_url: uploaded.publicUrl,
+        thumbnail_url: uploaded.thumbnailUrl,
+        alt_text: optionalString(rawArguments, 'alt_text') ?? fileReference?.file_name ?? null,
+        mime_type: upload.contentType,
+        file_name: upload.filename,
+        status: 'active',
+        created_by_user_id: user.userId,
+      })
+
+      const asset = (await listPlatformMediaAssets(user.db, { id: assetId, limit: 1 }))[0] ?? null
+      if (!asset) throw mcpProtocolError(MCP_ERROR.internal, 'Uploaded media asset was not found after creation.')
+      return { asset }
+    }
+    case 'update_platform_media_asset': {
+      const assetId = requiredString(rawArguments, 'asset_id')
+      const updated = await updateMediaAssetMetadata(user.db, assetId, PLATFORM_MEDIA_SITE_ID, {
+        alt_text: rawArguments.alt_text === null ? null : optionalString(rawArguments, 'alt_text'),
+      })
+      if (!updated) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, 'No platform media fields were updated.')
+      }
+      const asset = (await listPlatformMediaAssets(user.db, { id: assetId, limit: 1 }))[0] ?? null
+      if (!asset) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Platform media asset not found.')
+      return { success: true, asset }
+    }
+    case 'delete_platform_media_asset': {
+      const assetId = requiredString(rawArguments, 'asset_id')
+      const asset = (await listPlatformMediaAssets(user.db, { id: assetId, limit: 1 }))[0] ?? null
+      if (!asset) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Platform media asset not found.')
+      await deleteMediaAsset(user.db, user.env, assetId, PLATFORM_MEDIA_SITE_ID)
+      return { success: true }
     }
     case 'list_platform_blog_posts':
       return { posts: await listPlatformBlogPosts(user.db, optionalString(rawArguments, 'status')) }

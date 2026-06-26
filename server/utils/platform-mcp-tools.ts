@@ -3,8 +3,10 @@ export interface PlatformMcpToolDefinition {
   description: string
   inputSchema: Record<string, unknown>
   outputSchema: Record<string, unknown>
+  fileParams?: string[]
   annotations: {
     readOnlyHint: boolean
+    openWorldHint?: boolean
     destructiveHint?: boolean
     idempotentHint?: boolean
   }
@@ -37,6 +39,39 @@ const FEATURED_IMAGE_SCHEMA = {
     height: NULLABLE_NUMBER,
   },
   required: ['asset_id', 'public_url', 'kind', 'width', 'height'],
+  additionalProperties: false,
+}
+
+const CHATGPT_FILE_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    download_url: { type: 'string' },
+    file_id: { type: 'string' },
+    mime_type: NULLABLE_STRING,
+    file_name: NULLABLE_STRING,
+  },
+  required: ['download_url', 'file_id'],
+  additionalProperties: false,
+}
+
+const PLATFORM_MEDIA_ASSET_SCHEMA = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    public_url: NULLABLE_STRING,
+    thumbnail_url: NULLABLE_STRING,
+    alt_text: NULLABLE_STRING,
+    kind: { type: 'string', enum: ['image', 'video', 'file'] },
+    provider: { type: 'string' },
+    source: { type: 'string' },
+    mime_type: NULLABLE_STRING,
+    file_name: NULLABLE_STRING,
+    width: NULLABLE_NUMBER,
+    height: NULLABLE_NUMBER,
+    created_at: { type: 'string' },
+    updated_at: { type: 'string' },
+  },
+  required: ['id', 'public_url', 'thumbnail_url', 'alt_text', 'kind', 'provider', 'source', 'mime_type', 'file_name', 'width', 'height', 'created_at', 'updated_at'],
   additionalProperties: false,
 }
 
@@ -313,7 +348,7 @@ const STRUCTURED_CONVENIENCE_INPUT = {
 }
 
 const SHARED_TOOL_DESCRIPTION_LINES = [
-  'Set seo_description explicitly for the intended search snippet. Use canonical_url only for deliberate canonical consolidation. Use robots only for non-default index behavior. Set featured_image_asset_id whenever a social preview image is available.',
+  'Set seo_description explicitly for the intended search snippet. Use canonical_url only for deliberate canonical consolidation. Use robots only for non-default index behavior. Set featured_image_asset_id only when the user has selected or uploaded a real platform media asset; otherwise leave it null.',
   'Use faq_items only for real visible Q&A content. Use how_to_steps only for genuinely procedural content. Use how_to_estimated_time, how_to_tool_items, and how_to_supply_items to round out How-To data when the content visibly supports it.',
   'Use faq_render_enabled/how_to_render_enabled to control whether a component appears on the page. Use faq_schema_enabled/how_to_schema_enabled to control whether a component emits structured data. Use faq_status/how_to_status to disable a component without deleting it.',
   'For normal authoring, prefer the convenience fields. For full parity and explicit metadata control, use components[]. Do not send components[] together with convenience structured-content fields.',
@@ -344,12 +379,12 @@ function readTool(definition: Omit<PlatformMcpToolDefinition, 'annotations' | 's
 }
 
 function writeTool(
-  definition: Omit<PlatformMcpToolDefinition, 'annotations' | 'securitySchemes'> & { destructive?: boolean },
+  definition: Omit<PlatformMcpToolDefinition, 'annotations' | 'securitySchemes'> & { destructive?: boolean; openWorld?: boolean },
 ): PlatformMcpToolDefinition {
-  const { destructive, ...rest } = definition
+  const { destructive, openWorld, ...rest } = definition
   return {
     ...rest,
-    annotations: { readOnlyHint: false, destructiveHint: Boolean(destructive) },
+    annotations: { readOnlyHint: false, openWorldHint: openWorld ?? false, destructiveHint: Boolean(destructive) },
     securitySchemes: [...PLATFORM_SECURITY_SCHEMES],
   }
 }
@@ -365,13 +400,10 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         currentUser: {
           type: 'object',
           properties: {
-            id: { type: 'string' },
-            email: NULLABLE_STRING,
-            name: NULLABLE_STRING,
             role: NULLABLE_STRING,
             isPlatformAdmin: { type: 'boolean' },
           },
-          required: ['id', 'email', 'name', 'role', 'isPlatformAdmin'],
+          required: ['role', 'isPlatformAdmin'],
         },
       },
       required: ['currentUser'],
@@ -437,6 +469,90 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     },
   }),
   readTool({
+    name: 'list_platform_media_assets',
+    description: 'List active platform media assets for krabiclaw.com blog/docs authoring. Use this before assigning featured_image_asset_id so you can choose a real uploaded asset instead of inventing one.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Optional asset id to fetch a single media item.' },
+        kind: { type: 'string', enum: ['image', 'video', 'file'], description: 'Optional kind filter. Blog/docs featured images should use kind="image".' },
+        limit: { type: 'number', description: 'Maximum number of media assets to return. Defaults to 50 and caps at 100.' },
+      },
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        media: { type: 'array', items: PLATFORM_MEDIA_ASSET_SCHEMA },
+      },
+      required: ['media'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'upload_platform_image',
+    description: 'Upload a user-supplied image attachment into the platform media library for krabiclaw.com blog/docs use. Prefer the top-level file argument from a ChatGPT attachment. After upload succeeds, use the returned asset id as featured_image_asset_id or how_to_steps[].image_asset_id.',
+    openWorld: true,
+    fileParams: ['file'],
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file: {
+          ...CHATGPT_FILE_INPUT_SCHEMA,
+          description: 'Authorized file reference supplied by ChatGPT after rewriting the declared top-level file argument.',
+        },
+        file_id: { type: 'string', description: 'Resolved uploaded file identifier when the host can supply it directly.' },
+        alt_text: { type: 'string', description: 'Optional alt text or image description.' },
+      },
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        asset: PLATFORM_MEDIA_ASSET_SCHEMA,
+      },
+      required: ['asset'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'update_platform_media_asset',
+    description: 'Update metadata on an existing platform media asset. Use this to set or refine alt text before referencing the asset in a blog post or doc.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        asset_id: { type: 'string' },
+        alt_text: NULLABLE_STRING,
+      },
+      required: ['asset_id'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        asset: PLATFORM_MEDIA_ASSET_SCHEMA,
+      },
+      required: ['success', 'asset'],
+      additionalProperties: false,
+    },
+  }),
+  writeTool({
+    name: 'delete_platform_media_asset',
+    description: 'Delete a platform media asset from the shared krabiclaw.com media library.',
+    destructive: true,
+    openWorld: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        asset_id: { type: 'string' },
+      },
+      required: ['asset_id'],
+      additionalProperties: false,
+    },
+    outputSchema: DELETE_RESPONSE_SCHEMA,
+  }),
+  readTool({
     name: 'list_platform_blog_posts',
     description: 'List KrabiClaw platform blog posts. Optionally filter by published or draft status.',
     inputSchema: {
@@ -472,6 +588,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   writeTool({
     name: 'create_platform_blog_post',
     description: PLATFORM_BLOG_TOOL_DESCRIPTION,
+    openWorld: true,
     inputSchema: {
       type: 'object',
       properties: {
@@ -491,6 +608,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   writeTool({
     name: 'update_platform_blog_post',
     description: PLATFORM_BLOG_TOOL_DESCRIPTION,
+    openWorld: true,
     inputSchema: {
       type: 'object',
       properties: {
@@ -520,6 +638,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   writeTool({
     name: 'publish_platform_blog_post',
     description: 'Publish a platform blog post immediately. If update and publish were both requested, call update_platform_blog_post then this tool, back to back.',
+    openWorld: true,
     inputSchema: {
       type: 'object',
       properties: { post_id: { type: 'string', description: 'Post id or slug.' } },
@@ -539,6 +658,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   writeTool({
     name: 'unpublish_platform_blog_post',
     description: 'Move a published platform blog post back to draft.',
+    openWorld: true,
     inputSchema: {
       type: 'object',
       properties: { post_id: { type: 'string', description: 'Post id or slug.' } },
@@ -559,6 +679,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     name: 'delete_platform_blog_post',
     description: 'Delete a platform blog post permanently.',
     destructive: true,
+    openWorld: true,
     inputSchema: {
       type: 'object',
       properties: { post_id: { type: 'string', description: 'Post id or slug.' } },
@@ -603,6 +724,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   writeTool({
     name: 'create_platform_doc',
     description: PLATFORM_DOC_TOOL_DESCRIPTION,
+    openWorld: true,
     inputSchema: {
       type: 'object',
       properties: {
@@ -625,6 +747,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   writeTool({
     name: 'update_platform_doc',
     description: PLATFORM_DOC_TOOL_DESCRIPTION,
+    openWorld: true,
     inputSchema: {
       type: 'object',
       properties: {
@@ -657,6 +780,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   writeTool({
     name: 'publish_platform_doc',
     description: 'Publish a platform doc immediately.',
+    openWorld: true,
     inputSchema: {
       type: 'object',
       properties: { doc_id: { type: 'string', description: 'Doc id or slug.' } },
@@ -676,6 +800,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   writeTool({
     name: 'unpublish_platform_doc',
     description: 'Move a published platform doc back to draft.',
+    openWorld: true,
     inputSchema: {
       type: 'object',
       properties: { doc_id: { type: 'string', description: 'Doc id or slug.' } },
@@ -696,6 +821,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     name: 'delete_platform_doc',
     description: 'Delete a platform doc permanently.',
     destructive: true,
+    openWorld: true,
     inputSchema: {
       type: 'object',
       properties: { doc_id: { type: 'string', description: 'Doc id or slug.' } },

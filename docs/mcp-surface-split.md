@@ -26,8 +26,8 @@ KrabiClaw now ships two separate MCP surfaces. They must stay separate in auth, 
 
 - Never expose client and platform tools from the same MCP endpoint.
 - Never rely on tool filtering alone to separate internal and external capabilities.
-- Client MCP rejects `platform_admin` tokens by default.
-- Platform Admin MCP requires `platform_admin` and rejects `tenant` tokens.
+- Do not rely on scope presence alone to separate these surfaces. Dynamic client registration currently gives registered MCP clients both custom scopes by default.
+- The real runtime boundary is the token `aud` claim bound to the MCP resource URL, plus the server-side DB checks for site membership or platform-admin role.
 - Platform blog/docs content must stay on `platform_blog_posts` and `platform_docs`; do not route it through tenant site content tables.
 
 ## Auth Model
