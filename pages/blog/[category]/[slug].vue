@@ -80,68 +80,32 @@
       </div>
       <div v-else class="mb-10 h-64 rounded-2xl bg-muted" aria-hidden="true" />
 
-      <!-- eslint-disable vue/no-v-html -->
-      <div
-        ref="articleBodyRef"
-        class="prose prose-lg max-w-none
-               prose-headings:text-default prose-headings:font-bold
-               prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base
-               prose-p:leading-relaxed prose-p:text-muted
-               prose-a:text-(--kc-teal) prose-a:no-underline hover:prose-a:underline
-               prose-strong:text-default
-               prose-li:text-muted
-               prose-hr:border-default
-               prose-blockquote:border-l-(--kc-teal) prose-blockquote:text-muted
-               dark:prose-invert"
-        v-html="renderedBody"
-      />
-      <!-- eslint-enable vue/no-v-html -->
+      <div ref="articleBodyRef" class="space-y-14">
+        <template v-for="(block, blockIndex) in contentBlocks" :key="`block-${blockIndex}`">
+          <!-- eslint-disable vue/no-v-html -->
+          <div
+            v-if="block.kind === 'html'"
+            class="prose prose-lg max-w-none
+                   prose-headings:text-default prose-headings:font-bold
+                   prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base
+                   prose-p:leading-relaxed prose-p:text-muted
+                   prose-a:text-(--kc-teal) prose-a:no-underline hover:prose-a:underline
+                   prose-strong:text-default
+                   prose-li:text-muted
+                   prose-hr:border-default
+                   prose-blockquote:border-l-(--kc-teal) prose-blockquote:text-muted
+                   dark:prose-invert"
+            v-html="block.html"
+          />
+          <!-- eslint-enable vue/no-v-html -->
 
-      <template v-for="(section, sectionIndex) in orderedSections" :key="`section-${sectionIndex}`">
-        <section v-if="section.type === 'faq' && section.items.length" class="mt-14 space-y-4 border-t border-default pt-8">
-          <div>
-            <h2 class="text-2xl font-semibold text-default">{{ section.label || 'Frequently Asked Questions' }}</h2>
-            <p class="mt-1 text-sm text-muted">Quick answers related to this article.</p>
-          </div>
-          <div class="space-y-3">
-            <div v-for="(item, index) in section.items" :key="`faq-${index}`" class="rounded-2xl border border-default p-5">
-              <h3 class="text-lg font-medium text-default">{{ item.question }}</h3>
-              <!-- eslint-disable-next-line vue/no-v-html -->
-              <div class="prose mt-3 max-w-none text-muted dark:prose-invert" v-html="item.answerHtml" />
-            </div>
-          </div>
-        </section>
-
-        <section v-else-if="section.type === 'how_to' && section.steps.length" class="mt-14 space-y-4 border-t border-default pt-8">
-          <div>
-            <h2 class="text-2xl font-semibold text-default">{{ section.label || 'How To' }}</h2>
-            <p class="mt-1 text-sm text-muted">Follow these steps in order.</p>
-          </div>
-          <div class="space-y-4">
-            <div v-for="(step, index) in section.steps" :key="`howto-${index}`" class="rounded-2xl border border-default p-5">
-              <div class="flex items-start gap-4">
-                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-elevated text-sm font-semibold text-default">
-                  {{ index + 1 }}
-                </div>
-                <div class="min-w-0 flex-1 space-y-3">
-                  <div>
-                    <h3 class="text-lg font-medium text-default">{{ step.name }}</h3>
-                    <a v-if="step.url" :href="step.url" class="text-sm text-(--kc-teal) hover:underline">{{ step.url }}</a>
-                  </div>
-                  <!-- eslint-disable-next-line vue/no-v-html -->
-                  <div class="prose max-w-none text-muted dark:prose-invert" v-html="step.textHtml" />
-                  <img
-                    v-if="step.image_public_url"
-                    :src="step.image_public_url"
-                    :alt="step.name"
-                    class="max-h-72 w-full rounded-xl object-cover"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </template>
+          <component
+            :is="resolveContentComponent(block.type)"
+            v-else
+            v-bind="block.props"
+          />
+        </template>
+      </div>
 
       <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
         <div class="flex items-center gap-4">
@@ -170,41 +134,23 @@
     </article>
 
     <aside class="hidden xl:block">
-      <DocsToc :html="renderedBody" />
+      <DocsToc :html="tocHtml" />
     </aside>
   </div>
 </template>
 
 <script setup lang="ts">
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
-import { sanitizeUrl } from '~/utils/sanitize'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { blogCategoryClass, blogCategoryToSlug, getBlogPostPath } from '~/utils/blog-categories'
+import { buildContentBlocks, type ContentComponent } from '~/utils/content-blocks'
+import { resolveContentComponent } from '~/utils/content-component-resolver'
 
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: sanitizeHtmlForSsr }
 
 const { resolveMedia } = useMedia()
 
 definePageMeta({ layout: 'blog' })
-
-interface BlogComponent {
-  type: 'faq' | 'how_to'
-  label?: string | null
-  status?: 'active' | 'inactive'
-  render_enabled?: boolean
-  schema_enabled?: boolean
-  data?: {
-    items?: Array<{ question?: string | null; answer?: string | null }>
-    steps?: Array<{
-      name?: string | null
-      text?: string | null
-      url?: string | null
-      image_public_url?: string | null
-      image_width?: number | null
-      image_height?: number | null
-    }>
-  } | null
-}
 
 interface BlogPost {
   id: string
@@ -231,7 +177,7 @@ interface BlogPost {
     width: number | null
     height: number | null
   } | null
-  components?: BlogComponent[]
+  components?: ContentComponent[]
 }
 
 const route = useRoute()
@@ -261,47 +207,27 @@ function renderMarkdown(markdown: string) {
   return DOMPurify.sanitize(renderMarkdownToHtml(markdown || ''))
 }
 
-const renderedBody = computed(() => post.value?.body ? renderMarkdown(post.value.body) : '')
+const contentBlocks = computed(() =>
+  buildContentBlocks(post.value?.body ?? '', post.value?.components ?? [], renderMarkdown),
+)
+const tocHtml = computed(() => contentBlocks.value
+  .filter(block => block.kind === 'html')
+  .map(block => block.html)
+  .join('\n'))
 
 const articleBodyRef = ref<HTMLElement | null>(null)
-useCopyableCodeBlocks(articleBodyRef, renderedBody)
+useCopyableCodeBlocks(articleBodyRef, contentBlocks)
 
 const renderableComponents = computed(() => (post.value?.components ?? []).filter(component =>
   component.render_enabled !== false &&
   (component.status === undefined || component.status === null || component.status === 'active')
 ))
 
-const SECTION_TYPE_PRIORITY: Record<'how_to' | 'faq', number> = { how_to: 0, faq: 1 }
-
-const orderedSections = computed(() => renderableComponents.value.map((component) => {
-  if (component.type === 'faq') {
-    return {
-      type: 'faq' as const,
-      label: component.label,
-      items: (component.data?.items ?? [])
-        .filter(item => item.question && item.answer)
-        .map(item => ({
-          question: item.question as string,
-          answerHtml: renderMarkdown(item.answer as string),
-        })),
-    }
-  }
-  return {
-    type: 'how_to' as const,
-    label: component.label,
-    steps: (component.data?.steps ?? [])
-      .filter(step => step.name && step.text)
-      .map(step => ({
-        name: step.name as string,
-        url: sanitizeUrl(step.url),
-        image_public_url: sanitizeUrl(step.image_public_url),
-        textHtml: renderMarkdown(step.text as string),
-      })),
-  }
-}).sort((a, b) => SECTION_TYPE_PRIORITY[a.type] - SECTION_TYPE_PRIORITY[b.type]))
-
 const readTime = computed(() => {
-  const words = (post.value?.body ?? '').split(/\s+/).length
+  const words = (post.value?.body ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length
   return Math.max(1, Math.ceil(words / 200))
 })
 

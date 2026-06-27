@@ -27,14 +27,14 @@ interface ContentHowToStep {
 interface ContentComponent {
   type: 'faq' | 'how_to'
   status?: string | null
-  render_enabled?: boolean
-  schema_enabled?: boolean
+  render_enabled?: boolean | null
+  schema_enabled?: boolean | null
   data?: {
-    items?: ContentFaqItem[]
-    steps?: ContentHowToStep[]
+    items?: ContentFaqItem[] | null
+    steps?: ContentHowToStep[] | null
     estimated_time?: string | null
-    tool_items?: string[]
-    supply_items?: string[]
+    tool_items?: string[] | null
+    supply_items?: string[] | null
   } | null
 }
 

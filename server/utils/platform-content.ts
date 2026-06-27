@@ -986,7 +986,8 @@ export async function updatePlatformBlogPost(
   validateBlogCommon(input)
   if (input.publish) {
     const current = await queryFirst<{ category: string | null }>(db, 'SELECT category FROM platform_blog_posts WHERE id = ? LIMIT 1', [postId])
-    assertPublishableBlogCategory(input.category ?? current?.category ?? null)
+    const publishCategory = input.category !== undefined ? input.category : current?.category ?? null
+    assertPublishableBlogCategory(publishCategory)
   }
   const now = new Date().toISOString()
   const updates: string[] = ['updated_at = ?']

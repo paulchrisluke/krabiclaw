@@ -65,19 +65,6 @@ function optionalDateParam(args: Record<string, unknown>, key: string): string |
 
 function structuredContentInput(args: Record<string, unknown>) {
   return {
-    faq_items: optionalArray(args, 'faq_items') as Array<{ question: string; answer: string; position?: number }> | undefined,
-    faq_label: optionalString(args, 'faq_label'),
-    faq_status: optionalString(args, 'faq_status') as 'active' | 'inactive' | undefined,
-    faq_render_enabled: optionalBoolean(args, 'faq_render_enabled'),
-    faq_schema_enabled: optionalBoolean(args, 'faq_schema_enabled'),
-    how_to_steps: optionalArray(args, 'how_to_steps') as Array<{ name: string; text: string; image_asset_id?: string; url?: string; position?: number }> | undefined,
-    how_to_estimated_time: optionalString(args, 'how_to_estimated_time'),
-    how_to_tool_items: optionalArray(args, 'how_to_tool_items') as string[] | undefined,
-    how_to_supply_items: optionalArray(args, 'how_to_supply_items') as string[] | undefined,
-    how_to_label: optionalString(args, 'how_to_label'),
-    how_to_status: optionalString(args, 'how_to_status') as 'active' | 'inactive' | undefined,
-    how_to_render_enabled: optionalBoolean(args, 'how_to_render_enabled'),
-    how_to_schema_enabled: optionalBoolean(args, 'how_to_schema_enabled'),
     components: optionalArray(args, 'components') as Array<{
       type: 'faq' | 'how_to'
       position?: number

@@ -45,16 +45,13 @@
             </div>
             <h2 class="mb-4 text-3xl font-bold text-default">{{ featuredPost.title }}</h2>
             <p v-if="featuredPost.excerpt" class="mb-6 text-lg text-muted">{{ featuredPost.excerpt }}</p>
-            <div class="flex items-center justify-between">
-              <p class="text-sm text-dimmed">{{ readTime(featuredPost) }} min read</p>
-              <span class="text-sm font-semibold" style="color: var(--kc-teal)">Read Article →</span>
-            </div>
+            <span class="text-sm font-semibold" style="color: var(--kc-teal)">Read Article →</span>
           </div>
         </div>
       </NuxtLink>
 
       <section
-        v-for="group in categories"
+        v-for="group in visibleCategories"
         :id="group.categorySlug"
         :key="group.categorySlug"
         class="scroll-mt-28 space-y-6"
@@ -74,10 +71,10 @@
             class="block"
           >
             <div class="h-full overflow-hidden rounded-xl border border-default bg-elevated shadow-sm transition-shadow hover:shadow-md">
-              <div v-if="resolveMedia(post.featured_image).url" class="h-48 overflow-hidden">
+              <div v-if="post.media.url" class="h-48 overflow-hidden">
                 <video
-                  v-if="resolveMedia(post.featured_image).isVideo"
-                  :src="resolveMedia(post.featured_image).url ?? undefined"
+                  v-if="post.media.isVideo"
+                  :src="post.media.url ?? undefined"
                   autoplay
                   muted
                   loop
@@ -86,7 +83,7 @@
                 />
                 <img
                   v-else
-                  :src="resolveMedia(post.featured_image).url ?? undefined"
+                  :src="post.media.url ?? undefined"
                   :alt="post.title"
                   class="h-full w-full object-cover"
                 />
@@ -125,11 +122,20 @@ const { posts, categories } = useBlogNav()
 const featuredPost = computed(() => posts.value[0] ?? null)
 const featuredPostPath = computed(() => getBlogPostPath(featuredPost.value?.category, featuredPost.value?.slug))
 const featuredMedia = computed(() => resolveMedia(featuredPost.value?.featured_image))
-
-function readTime(post: ApiValue) {
-  const words = (post.body ?? post.excerpt ?? '').split(/\s+/).length
-  return Math.max(1, Math.ceil(words / 200))
-}
+const visibleCategories = computed(() => {
+  const featuredId = featuredPost.value?.id ?? null
+  return categories.value
+    .map(group => ({
+      ...group,
+      posts: group.posts
+        .filter(post => post.id !== featuredId)
+        .map(post => ({
+          ...post,
+          media: resolveMedia(post.featured_image),
+        })),
+    }))
+    .filter(group => group.posts.length > 0)
+})
 
 usePlatformPageSeo({
   path: '/blog',
