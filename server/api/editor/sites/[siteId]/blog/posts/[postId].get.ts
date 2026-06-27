@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ success: true, post })
   } catch (err) {
     const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? Number((err as { statusCode: number }).statusCode) : 500
-    const message = err instanceof Error ? err.message : 'Failed to fetch post'
+    const message = statusCode >= 500 ? 'Failed to fetch post' : err instanceof Error ? err.message : 'Failed to fetch post'
     if (statusCode >= 500) console.error('Failed to fetch site blog post:', err)
     return jsonResponse({ error: message }, { status: statusCode })
   }

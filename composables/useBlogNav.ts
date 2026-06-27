@@ -23,9 +23,7 @@ interface BlogNavCategory {
 }
 
 export function useBlogNav() {
-  const { data } = useFetch<{ posts: PublicBlogPost[] }>('/api/public/blog', {
-    default: () => ({ posts: [] }),
-  })
+  const { data, pending, error } = useFetch<{ posts: PublicBlogPost[] }>('/api/public/blog')
 
   const posts = computed(() => data.value?.posts || [])
 
@@ -47,5 +45,5 @@ export function useBlogNav() {
       }))
   })
 
-  return { posts, categories }
+  return { posts, categories, pending, error }
 }

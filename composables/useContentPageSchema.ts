@@ -162,11 +162,12 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
       articleNode.proficiencyLevel = value.proficiencyLevel.trim()
     }
 
+    const tenantPublisherFields = Boolean(value.siteName?.trim() || value.siteLogoUrl?.trim() || value.siteDescription?.trim())
     const siteName = value.siteName?.trim() || 'KrabiClaw'
     const siteLogoUrl = value.siteLogoUrl?.trim()
       ? normalizeAbsoluteUrl(value.siteLogoUrl.trim(), origin)
-      : `${siteRoot}/krabi-claw-logo.png`
-    const siteDescription = value.siteDescription?.trim() || 'The Shopify for restaurants. AI-powered website builder for independent restaurants.'
+      : (tenantPublisherFields ? undefined : `${siteRoot}/krabi-claw-logo.png`)
+    const siteDescription = value.siteDescription?.trim() || (tenantPublisherFields ? undefined : 'The Shopify for restaurants. AI-powered website builder for independent restaurants.')
 
     const graph: ApiRecord[] = [
       {
@@ -174,15 +175,15 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
         '@id': organizationId,
         name: siteName,
         url: siteRoot,
-        logo: siteLogoUrl,
-        description: siteDescription,
+        ...(siteLogoUrl ? { logo: siteLogoUrl } : {}),
+        ...(siteDescription ? { description: siteDescription } : {}),
       },
       {
         '@type': 'WebSite',
         '@id': websiteId,
         url: siteRoot,
         name: siteName,
-        description: siteDescription,
+        ...(siteDescription ? { description: siteDescription } : {}),
         publisher: { '@id': organizationId },
       },
       webpageNode,

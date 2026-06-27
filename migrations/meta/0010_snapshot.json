@@ -487,10 +487,23 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "blog_posts_featured_image_asset_id_media_assets_old_id_fk": {
-          "name": "blog_posts_featured_image_asset_id_media_assets_old_id_fk",
+        "blog_posts_site_id_sites_id_fk": {
+          "name": "blog_posts_site_id_sites_id_fk",
           "tableFrom": "blog_posts",
-          "tableTo": "media_assets_old",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "blog_posts_featured_image_asset_id_media_assets_fk": {
+          "name": "blog_posts_featured_image_asset_id_media_assets_fk",
+          "tableFrom": "blog_posts",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "featured_image_asset_id"
           ],
@@ -498,21 +511,6 @@
             "id"
           ],
           "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "blog_posts_site_scope_fk": {
-          "name": "blog_posts_site_scope_fk",
-          "tableFrom": "blog_posts",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id",
-            "site_id"
-          ],
-          "columnsTo": [
-            "id",
-            "id"
-          ],
-          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },

@@ -51,10 +51,14 @@ export default defineEventHandler(async (event) => {
       faq_render_enabled: body.faq_render_enabled,
       faq_schema_enabled: body.faq_schema_enabled,
       how_to_steps: body.how_to_steps,
+      how_to_estimated_time: body.how_to_estimated_time,
+      how_to_tool_items: body.how_to_tool_items,
+      how_to_supply_items: body.how_to_supply_items,
       how_to_label: body.how_to_label,
       how_to_status: body.how_to_status,
       how_to_render_enabled: body.how_to_render_enabled,
       how_to_schema_enabled: body.how_to_schema_enabled,
+      components: body.components,
       publish: body.publish ?? false,
     }, { site_id: siteId, organization_id: site.organization_id })
     return jsonResponse(result, { status: 201 })

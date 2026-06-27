@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse(await deletePlatformBlogPost(db, postId, siteId))
   } catch (err) {
     const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? Number((err as { statusCode: number }).statusCode) : 500
-    const message = err instanceof Error ? err.message : 'Failed to delete post'
+    const message = statusCode >= 500 ? 'Failed to delete post' : err instanceof Error ? err.message : 'Failed to delete post'
     if (statusCode >= 500) console.error('Failed to delete site blog post:', err)
     return jsonResponse({ error: message }, { status: statusCode })
   }

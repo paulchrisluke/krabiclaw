@@ -7,7 +7,17 @@
       </p>
     </div>
 
-    <div v-if="posts.length === 0" class="py-24 text-center text-muted">
+    <div v-if="pending" class="py-24 text-center text-muted">
+      <p class="mb-2 text-xl">Loading posts...</p>
+      <p class="text-sm">Fetching the latest blog content.</p>
+    </div>
+
+    <div v-else-if="error" class="py-24 text-center text-muted">
+      <p class="mb-2 text-xl">Blog unavailable</p>
+      <p class="text-sm">We couldn’t load the blog right now. Please try again soon.</p>
+    </div>
+
+    <div v-else-if="posts.length === 0" class="py-24 text-center text-muted">
       <p class="mb-2 text-xl">No posts yet</p>
       <p class="text-sm">Check back soon — new content is on the way.</p>
     </div>
@@ -115,7 +125,7 @@ import { BLOG_CATEGORY_LABELS, blogCategoryClass, blogCategoryToSlug, getBlogPos
 
 const { resolveMedia } = useMedia()
 
-const { posts } = useBlogNav()
+const { posts, pending, error } = useBlogNav()
 
 const featuredPost = computed(() => posts.value[0] ?? null)
 const featuredPostPath = computed(() => getBlogPostPath(featuredPost.value?.category, featuredPost.value?.slug))
@@ -131,7 +141,7 @@ const visibleCategories = computed(() => {
         ...post,
         media: resolveMedia(post.featured_image),
       })),
-  })).filter(group => group.posts.length > 0)
+  }))
 })
 
 usePlatformPageSeo({

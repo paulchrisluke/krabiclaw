@@ -50,8 +50,14 @@
               <UInput v-model="form.title" placeholder="Our new summer menu" size="lg" />
             </UFormField>
 
-            <UFormField label="Category" hint="Optional — free text, e.g. 'News', 'Recipes'">
-              <UInput v-model="form.category" placeholder="News" />
+            <UFormField label="Category" hint="Optional — choose a shared blog category">
+              <USelect
+                v-model="form.category"
+                :items="categoryItems"
+                value-key="value"
+                label-key="label"
+                placeholder="Select a category"
+              />
             </UFormField>
 
             <UFormField label="Excerpt">
@@ -106,6 +112,7 @@
 </template>
 
 <script setup lang="ts">
+import { BLOG_CATEGORY_LABELS } from '~/utils/blog-categories'
 import { useBlogForm } from '~/composables/useBlogForm'
 
 interface DashboardBlogPost {
@@ -123,6 +130,7 @@ const toast = useToast()
 const posts = ref<DashboardBlogPost[]>([])
 const loading = ref(false)
 const activeTab = ref('all')
+const categoryItems = computed(() => BLOG_CATEGORY_LABELS.map(item => ({ label: item, value: item })))
 
 const loadPosts = async () => {
   loading.value = true

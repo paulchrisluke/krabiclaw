@@ -487,10 +487,23 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "blog_posts_featured_image_asset_id_media_assets_old_id_fk": {
-          "name": "blog_posts_featured_image_asset_id_media_assets_old_id_fk",
+        "blog_posts_site_id_sites_id_fk": {
+          "name": "blog_posts_site_id_sites_id_fk",
           "tableFrom": "blog_posts",
-          "tableTo": "media_assets_old",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "blog_posts_featured_image_asset_id_media_assets_fk": {
+          "name": "blog_posts_featured_image_asset_id_media_assets_fk",
+          "tableFrom": "blog_posts",
+          "tableTo": "media_assets",
           "columnsFrom": [
             "featured_image_asset_id"
           ],
@@ -507,6 +520,10 @@
         "blog_posts_scope_check": {
           "name": "blog_posts_scope_check",
           "value": "(organization_id IS NULL AND site_id IS NULL) OR (organization_id IS NOT NULL AND site_id IS NOT NULL)"
+        },
+        "blog_posts_category_check": {
+          "name": "blog_posts_category_check",
+          "value": "site_id IS NOT NULL OR category IS NOT NULL"
         },
         "blog_posts_status_check": {
           "name": "blog_posts_status_check",

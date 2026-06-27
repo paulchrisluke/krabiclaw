@@ -28,7 +28,8 @@
           <div class="min-w-0 flex-1 space-y-3">
             <div>
               <h3 class="text-lg font-medium text-default">{{ step.name }}</h3>
-              <a v-if="step.url" :href="step.url" class="text-sm text-(--kc-teal) hover:underline">{{ step.url }}</a>
+              <a v-if="safeStepUrl(step.url)" :href="safeStepUrl(step.url)" class="text-sm text-(--kc-teal) hover:underline">{{ step.url }}</a>
+              <span v-else-if="step.url" class="text-sm text-muted">{{ step.url }}</span>
             </div>
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="prose max-w-none text-muted dark:prose-invert" v-html="step.textHtml" />
@@ -46,6 +47,8 @@
 </template>
 
 <script setup lang="ts">
+import { sanitizeUrl } from '~/utils/sanitize'
+
 const props = defineProps<{
   label?: string | null
   estimatedTime?: string | null
@@ -66,4 +69,9 @@ const hasMeta = computed(() =>
   || Boolean(props.toolItems?.length)
   || Boolean(props.supplyItems?.length),
 )
+
+function safeStepUrl(url: string | null | undefined) {
+  const sanitized = sanitizeUrl(url)
+  return sanitized.startsWith('http://') || sanitized.startsWith('https://') ? sanitized : ''
+}
 </script>

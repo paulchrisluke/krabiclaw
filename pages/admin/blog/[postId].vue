@@ -242,7 +242,7 @@ interface BlogPostResponse {
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
-const postId = route.params.postId as string
+const postId = computed(() => String(route.params.postId ?? ''))
 const categoryItems = computed(() => BLOG_CATEGORY_LABELS.map((item) => ({ label: item, value: item })))
 const robotsItems = [
   { label: 'Default (index,follow)', value: '' },
@@ -274,7 +274,9 @@ const saving = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 
-onMounted(loadPost)
+watch(postId, () => {
+  if (postId.value) loadPost()
+}, { immediate: true })
 
 function addFaqItem() {
   form.faq_items.push(createEmptyFaqItem())
@@ -298,6 +300,28 @@ function moveItem<T>(items: T[], index: number, delta: number) {
   const [item] = items.splice(index, 1)
   if (item === undefined) return
   items.splice(nextIndex, 0, item)
+}
+
+function resetForm() {
+  form.title = ''
+  form.excerpt = ''
+  form.category = ''
+  form.seo_description = ''
+  form.seo_keywords = ''
+  form.canonical_url = ''
+  form.robots = ''
+  form.body = ''
+  form.featured_image_asset_id = ''
+  form.faq_items = [createEmptyFaqItem()]
+  form.faq_label = ''
+  form.faq_status = 'active'
+  form.faq_render_enabled = true
+  form.faq_schema_enabled = true
+  form.how_to_steps = [createEmptyHowToStep(), createEmptyHowToStep()]
+  form.how_to_label = ''
+  form.how_to_status = 'active'
+  form.how_to_render_enabled = true
+  form.how_to_schema_enabled = true
 }
 
 function hydrateStructuredContent(components: BlogComponent[] | undefined) {
@@ -349,8 +373,10 @@ async function loadPost() {
   loadError.value = ''
   categoryEdited.value = false
   categoryInitialized.value = false
+  post.value = null
+  resetForm()
   try {
-    const res = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId}`)
+    const res = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId.value}`)
     if (!res.post) throw new Error('Post not found')
     post.value = res.post
     form.title = res.post.title
@@ -380,7 +406,7 @@ async function update(publish = false) {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId}`, {
+    const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId.value}`, {
       method: 'PATCH',
       body: { ...buildPayload(), ...(publish ? { publish: true } : {}) },
     })
@@ -400,7 +426,7 @@ async function unpublish() {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId}`, {
+    const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId.value}`, {
       method: 'PATCH',
       body: { unpublish: true },
     })
@@ -420,7 +446,7 @@ async function remove() {
   saving.value = true
   errorMessage.value = ''
   try {
-    await $fetch(`/api/admin/blog/posts/${postId}`, { method: 'DELETE' })
+    await $fetch(`/api/admin/blog/posts/${postId.value}`, { method: 'DELETE' })
     await navigateTo('/admin')
   } catch (err) {
     errorMessage.value = getErrorMessage(err, 'Failed to delete.')

@@ -1,3 +1,5 @@
+import type { PlatformContentComponentInput } from '~/server/utils/platform-content'
+
 export interface PlatformStructuredContentRequestBody {
   faq_items?: Array<{ question: string; answer: string }>
   faq_label?: string
@@ -5,10 +7,14 @@ export interface PlatformStructuredContentRequestBody {
   faq_render_enabled?: boolean
   faq_schema_enabled?: boolean
   how_to_steps?: Array<{ name: string; text: string; image_asset_id?: string; url?: string }>
+  how_to_estimated_time?: string
+  how_to_tool_items?: string[]
+  how_to_supply_items?: string[]
   how_to_label?: string
   how_to_status?: 'active' | 'inactive'
   how_to_render_enabled?: boolean
   how_to_schema_enabled?: boolean
+  components?: PlatformContentComponentInput[]
 }
 
 export interface PlatformBlogPostRequestBody extends PlatformStructuredContentRequestBody {

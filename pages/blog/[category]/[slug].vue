@@ -81,7 +81,7 @@
       <div v-else class="mb-10 h-64 rounded-2xl bg-muted" aria-hidden="true" />
 
       <div ref="articleBodyRef" class="space-y-14">
-        <template v-for="(block, blockIndex) in contentBlocks" :key="`block-${blockIndex}`">
+        <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">
           <!-- eslint-disable vue/no-v-html -->
           <div
             v-if="block.kind === 'html'"
@@ -143,7 +143,7 @@
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { blogCategoryClass, blogCategoryToSlug, getBlogPostPath } from '~/utils/blog-categories'
-import { buildContentBlocks, type ContentComponent } from '~/utils/content-blocks'
+import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
 
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: sanitizeHtmlForSsr }
@@ -196,11 +196,17 @@ const { data, pending, error } = await useAsyncData(
       const statusCode = typeof err === 'object' && err !== null
         ? Number((err as { statusCode?: unknown; status?: unknown }).statusCode ?? (err as { status?: unknown }).status)
         : undefined
-      if (statusCode === 404) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+      if (statusCode === 404) {
+        setResponseStatus(404)
+        throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+      }
       throw err
     }
 
-    if (!payload.post) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+    if (!payload.post) {
+      setResponseStatus(404)
+      throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+    }
     return {
       post: {
         ...payload.post,
@@ -217,21 +223,30 @@ function renderMarkdown(markdown: string) {
   return DOMPurify.sanitize(renderMarkdownToHtml(markdown || ''))
 }
 
-const contentBlocks = computed(() =>
-  buildContentBlocks(post.value?.body ?? '', post.value?.components ?? [], renderMarkdown),
-)
-const tocHtml = computed(() => contentBlocks.value
+const hasExplicitEmbeds = computed(() => /\{\{\s*component\s+type\s*=/.test(post.value?.body ?? ''))
+const renderedBlocks = computed(() => {
+  const blocks = buildContentBlocks(post.value?.body ?? '', post.value?.components ?? [], renderMarkdown)
+  if (hasExplicitEmbeds.value) return blocks
+
+  const fallbackBlocks = (post.value?.components ?? [])
+    .map(component => normalizeContentComponent(component, renderMarkdown))
+    .filter((component): component is NonNullable<ReturnType<typeof normalizeContentComponent>> => Boolean(component))
+    .map(component => ({ kind: 'component' as const, type: component.type, props: component.props, component: component.source }))
+
+  return [...blocks, ...fallbackBlocks]
+})
+const tocHtml = computed(() => renderedBlocks.value
   .filter(block => block.kind === 'html')
   .map(block => block.html)
   .join('\n'))
 
 const articleBodyRef = ref<HTMLElement | null>(null)
-useCopyableCodeBlocks(articleBodyRef, contentBlocks)
-
-const renderableComponents = computed(() => (post.value?.components ?? []).filter(component =>
-  component.render_enabled !== false &&
-  (component.status === undefined || component.status === null || component.status === 'active')
-))
+useCopyableCodeBlocks(articleBodyRef, renderedBlocks)
+const renderableComponents = computed(() =>
+  renderedBlocks.value
+    .filter((block): block is Extract<typeof block, { kind: 'component' }> => block.kind === 'component')
+    .map(block => block.component),
+)
 
 const readTime = computed(() => {
   const words = (post.value?.body ?? '')
