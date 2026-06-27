@@ -37,7 +37,23 @@ export const CHOWBOT_TOOLS: AiTool[] = [
         },
         body: {
           type: "string",
-          description: "Post body (max 400 chars). Friendly, warm tone.",
+          description: "Post body (max 400 chars). Friendly, warm tone. To embed structured content, include {{component type=\"faq\"}} or {{component type=\"how_to\"}} where the matching component should render.",
+        },
+        components: {
+          type: "array",
+          description: "Optional structured content components to render with the post. Use faq or how_to components only.",
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: ["faq", "how_to"] },
+              label: { type: ["string", "null"] },
+              status: { type: ["string", "null"], enum: ["active", "inactive", null] },
+              render_enabled: { type: ["boolean", "null"] },
+              schema_enabled: { type: ["boolean", "null"] },
+              position: { type: ["number", "null"] },
+              data: { type: "object" },
+            },
+          },
         },
         image_asset_id: {
           type: "string",
@@ -111,7 +127,23 @@ export const CHOWBOT_TOOLS: AiTool[] = [
         body: {
           type: "string",
           description:
-            "New post body (max 400 chars). Omit to leave unchanged.",
+            "New post body (max 400 chars). Omit to leave unchanged. Use {{component type=\"faq\"}} or {{component type=\"how_to\"}} to embed structured content blocks.",
+        },
+        components: {
+          type: "array",
+          description: "Updated structured content components. Use faq or how_to components only.",
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: ["faq", "how_to"] },
+              label: { type: ["string", "null"] },
+              status: { type: ["string", "null"], enum: ["active", "inactive", null] },
+              render_enabled: { type: ["boolean", "null"] },
+              schema_enabled: { type: ["boolean", "null"] },
+              position: { type: ["number", "null"] },
+              data: { type: "object" },
+            },
+          },
         },
         image_asset_id: {
           type: "string",

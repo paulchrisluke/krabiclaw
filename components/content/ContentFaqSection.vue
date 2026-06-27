@@ -1,5 +1,5 @@
 <template>
-  <section class="space-y-4">
+  <section v-if="items.length" class="space-y-4">
     <div>
       <h2 class="text-2xl font-semibold text-default">{{ label || 'Frequently Asked Questions' }}</h2>
       <p class="mt-1 text-sm text-muted">Helpful answers related to this page.</p>

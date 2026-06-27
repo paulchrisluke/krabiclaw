@@ -30,6 +30,9 @@ export default defineEventHandler(async (event) => {
   try { body = await readBody(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
+  }
 
   try {
     return jsonResponse(await updatePlatformBlogPost(db, postId, body, siteId))

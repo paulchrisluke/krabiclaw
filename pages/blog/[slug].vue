@@ -26,7 +26,21 @@
     <p v-if="post.excerpt" class="mb-8 text-xl leading-relaxed text-muted">{{ post.excerpt }}</p>
 
     <div v-if="postMedia.url" class="relative mb-10 h-64 w-full overflow-hidden rounded-2xl md:h-96">
-      <img :src="postMedia.url" :alt="post.title" class="h-full w-full object-cover" />
+      <video
+        v-if="postMedia.isVideo"
+        :src="postMedia.url"
+        autoplay
+        muted
+        loop
+        playsinline
+        class="h-full w-full object-cover"
+      />
+      <img
+        v-else
+        :src="postMedia.url"
+        :alt="post.title"
+        class="h-full w-full object-cover"
+      />
     </div>
 
     <div class="space-y-14">
@@ -55,7 +69,7 @@
 
 <script setup lang="ts">
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
-import { buildContentBlocks, type ContentComponent } from '~/utils/content-blocks'
+import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
 
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: sanitizeHtmlForSsr }
@@ -124,8 +138,15 @@ function renderMarkdown(markdown: string) {
   return DOMPurify.sanitize(renderMarkdownToHtml(markdown || ''))
 }
 
+const renderableComponents = computed(() =>
+  (post.value?.components ?? [])
+    .map(component => normalizeContentComponent(component, renderMarkdown))
+    .filter((component): component is NonNullable<ReturnType<typeof normalizeContentComponent>> => Boolean(component))
+    .map(component => component.source),
+)
+
 const contentBlocks = computed(() =>
-  buildContentBlocks(post.value?.body ?? '', post.value?.components ?? [], renderMarkdown),
+  buildContentBlocks(post.value?.body ?? '', renderableComponents.value, renderMarkdown),
 )
 
 const postMedia = computed(() => resolveMedia({
@@ -181,7 +202,7 @@ useContentPageSchema(computed(() => {
       { name: 'Blog', url: '/blog' },
       { name: post.value.title, url: postPath.value },
     ],
-    components: post.value.components ?? [],
+    components: renderableComponents.value,
     siteName: siteName.value,
     siteLogoUrl: site?.logo_url || undefined,
     siteDescription: site?.brand_description || undefined,

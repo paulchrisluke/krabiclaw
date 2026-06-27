@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
     FROM blog_posts p
     LEFT JOIN user u ON u.id = p.author_id
     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
-    WHERE p.slug = ? AND p.site_id = ? AND p.published_at IS NOT NULL
+    WHERE p.slug = ? AND p.site_id = ? AND p.status = 'published'
   `, [slug, siteId])
 
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })

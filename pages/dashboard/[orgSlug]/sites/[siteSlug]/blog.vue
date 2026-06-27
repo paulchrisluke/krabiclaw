@@ -178,7 +178,7 @@ async function selectPost(postId: string) {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const res = await $fetch<{ post: ApiRecord }>(`/api/dashboard/editor/blog/posts/${postId}`)
+    const res = await $fetch<{ post: ApiRecord }>(`/api/editor/sites/${siteId}/blog/posts/${postId}`)
     const post = res.post
     selectedPostId.value = post.id as string
     selectedPublished.value = Boolean(post.published)

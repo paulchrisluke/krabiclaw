@@ -187,19 +187,25 @@ const postEndpoint = computed(() => `/api/public/blog/${String(route.params.cate
 const { data, pending, error } = await useAsyncData(
   () => `blog-post-${postEndpoint.value}`,
   async () => {
+    let payload: { post?: BlogPost }
     try {
-      const payload = import.meta.server
+      payload = import.meta.server
         ? await requestFetch<{ post?: BlogPost }>(postEndpoint.value)
         : await $fetch<{ post?: BlogPost }>(postEndpoint.value)
-      if (!payload.post) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
-      return {
-        post: {
-          ...payload.post,
-          author_subtitle: payload.post.author_subtitle || payload.post.author_bio || '',
-        },
-      }
-    } catch {
-      throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+    } catch (err) {
+      const statusCode = typeof err === 'object' && err !== null
+        ? Number((err as { statusCode?: unknown; status?: unknown }).statusCode ?? (err as { status?: unknown }).status)
+        : undefined
+      if (statusCode === 404) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+      throw err
+    }
+
+    if (!payload.post) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+    return {
+      post: {
+        ...payload.post,
+        author_subtitle: payload.post.author_subtitle || payload.post.author_bio || '',
+      },
     }
   }
 )

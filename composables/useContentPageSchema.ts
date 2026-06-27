@@ -163,7 +163,9 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
     }
 
     const siteName = value.siteName?.trim() || 'KrabiClaw'
-    const siteLogoUrl = value.siteLogoUrl || `${siteRoot}/krabi-claw-logo.png`
+    const siteLogoUrl = value.siteLogoUrl?.trim()
+      ? normalizeAbsoluteUrl(value.siteLogoUrl.trim(), origin)
+      : `${siteRoot}/krabi-claw-logo.png`
     const siteDescription = value.siteDescription?.trim() || 'The Shopify for restaurants. AI-powered website builder for independent restaurants.'
 
     const graph: ApiRecord[] = [

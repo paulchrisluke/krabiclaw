@@ -927,8 +927,8 @@ export async function listPlatformBlogPosts(db: DbClient, status?: string | null
     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
     WHERE ${siteId ? 'p.site_id = ?' : 'p.site_id IS NULL'}`
   const params: ApiValue[] = siteId ? [siteId] : []
-  if (status === 'published') sql += ' AND p.published_at IS NOT NULL'
-  else if (status === 'draft') sql += ' AND p.published_at IS NULL'
+  if (status === 'published') sql += " AND p.status = 'published'"
+  else if (status === 'draft') sql += " AND p.status = 'draft'"
   sql += ' ORDER BY p.created_at DESC'
   const results = await queryAll<ApiRecord>(db, sql, params)
   return (results ?? []).map(record => attachFeaturedImage(attachPublished(record, Boolean(record.published_at))))
@@ -962,6 +962,7 @@ export async function createPlatformBlogPost(
   if (!input.title?.trim() || !input.body?.trim()) badRequest('title and body are required')
   const isTenant = Boolean(scope.site_id)
   validateBlogCommon(input, isTenant)
+  if (!isTenant && !input.category?.trim()) badRequest('category is required')
   if (input.publish && !isTenant) assertPublishableBlogCategory(input.category)
   if (input.featured_image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id, 'featured_image_asset_id', scope.site_id ?? null)
 
@@ -1029,10 +1030,13 @@ export async function updatePlatformBlogPost(
   const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
   const isTenant = Boolean(siteId)
   validateBlogCommon(input, isTenant)
+  const current = !isTenant
+    ? await queryFirst<{ category: string | null }>(db, 'SELECT category FROM blog_posts WHERE id = ? LIMIT 1', [postId])
+    : null
+  const effectiveCategory = input.category !== undefined ? input.category : current?.category ?? null
+  if (!isTenant && !effectiveCategory?.trim()) badRequest('category is required')
   if (input.publish && !isTenant) {
-    const current = await queryFirst<{ category: string | null }>(db, 'SELECT category FROM blog_posts WHERE id = ? LIMIT 1', [postId])
-    const publishCategory = input.category !== undefined ? input.category : current?.category ?? null
-    assertPublishableBlogCategory(publishCategory)
+    assertPublishableBlogCategory(effectiveCategory)
   }
   const now = new Date().toISOString()
   const updates: string[] = ['updated_at = ?']

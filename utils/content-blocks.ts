@@ -84,7 +84,7 @@ function sortByPosition<T extends { position?: number | null }>(items: T[]) {
 
 export function normalizeContentComponent(
   component: ContentComponent,
-  renderMarkdown: (markdown: string) => string,
+  renderMarkdown: (_markdown: string) => string,
 ): NormalizedContentComponent | null {
   if (component.render_enabled === false) return null
   if (component.status != null && component.status !== 'active') return null
@@ -140,7 +140,7 @@ export function normalizeContentComponent(
 export function buildContentBlocks(
   body: string,
   components: ContentComponent[],
-  renderMarkdown: (markdown: string) => string,
+  renderMarkdown: (_markdown: string) => string,
 ): ContentBlock[] {
   const normalized = components
     .map(component => normalizeContentComponent(component, renderMarkdown))

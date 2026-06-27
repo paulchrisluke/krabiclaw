@@ -35,7 +35,7 @@
       </div>
 
       <div ref="articleBodyRef" class="space-y-14">
-        <template v-for="(block, blockIndex) in contentBlocks" :key="`block-${blockIndex}`">
+        <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">
           <!-- eslint-disable-next-line vue/no-v-html -->
           <div
             v-if="block.kind === 'html'"
@@ -63,7 +63,7 @@
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { categoryToSlug } from '~/utils/docs-categories'
-import { buildContentBlocks, type ContentComponent } from '~/utils/content-blocks'
+import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
 
 definePageMeta({ layout: 'docs' })
@@ -123,6 +123,7 @@ function renderMarkdown(markdown: string) {
 const contentBlocks = computed(() =>
   buildContentBlocks(doc.value?.body ?? '', doc.value?.components ?? [], renderMarkdown),
 )
+const hasExplicitEmbeds = computed(() => /\{\{\s*component\s+type\s*=/.test(doc.value?.body ?? ''))
 const tocHtml = computed(() => contentBlocks.value
   .filter(block => block.kind === 'html')
   .map(block => block.html)
@@ -130,11 +131,30 @@ const tocHtml = computed(() => contentBlocks.value
 
 const articleBodyRef = ref<HTMLElement | null>(null)
 useCopyableCodeBlocks(articleBodyRef, contentBlocks)
-const renderedComponents = computed(() =>
-  contentBlocks.value
-    .filter((block): block is Extract<(typeof contentBlocks.value)[number], { kind: 'component' }> => block.kind === 'component')
-    .map(block => block.component),
-)
+const renderedBlocks = computed(() => {
+  if (hasExplicitEmbeds.value) return contentBlocks.value
+
+  const fallbackBlocks = (doc.value?.components ?? [])
+    .map(component => normalizeContentComponent(component, renderMarkdown))
+    .filter((component): component is NonNullable<typeof component> => Boolean(component))
+    .map(component => ({ kind: 'component' as const, type: component.type, props: component.props, component: component.source }))
+
+  return [...contentBlocks.value, ...fallbackBlocks]
+})
+const renderedComponents = computed(() => {
+  const fallbackBlocks = hasExplicitEmbeds.value
+    ? []
+    : (doc.value?.components ?? [])
+      .map(component => normalizeContentComponent(component, renderMarkdown))
+      .filter((component): component is NonNullable<typeof component> => Boolean(component))
+      .map(component => ({ kind: 'component' as const, type: component.type, props: component.props, component: component.source }))
+
+  return [
+    ...contentBlocks.value,
+    ...fallbackBlocks,
+  ].filter((block): block is Extract<typeof block, { kind: 'component' }> => block.kind === 'component')
+    .map(block => block.component)
+})
 
 const docMedia = computed(() => resolveMedia({
   public_url: doc.value?.featured_image?.public_url,

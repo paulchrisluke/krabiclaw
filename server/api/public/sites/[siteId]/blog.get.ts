@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
       ma.height
     FROM blog_posts p
     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
-    WHERE p.published_at IS NOT NULL AND p.site_id = ?
+    WHERE p.status = 'published' AND p.site_id = ?
     ORDER BY p.published_at DESC
   `
 

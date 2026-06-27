@@ -616,7 +616,7 @@ export const platform_analytics = sqliteTable("platform_analytics", {
 export const blog_posts = sqliteTable("blog_posts", {
 	id: text().primaryKey(),
 	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ), // null = platform blog post
-	site_id: text(), // null = platform blog post
+	site_id: text().references(() => sites.id, { onDelete: "cascade" } ), // null = platform blog post
 	title: text().notNull(),
 	slug: text().notNull(),
 	body: text().notNull(),
@@ -636,6 +636,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 }, (table) => [
 	check("blog_posts_scope_check", sql`(organization_id IS NULL AND site_id IS NULL) OR (organization_id IS NOT NULL AND site_id IS NOT NULL)`),
 	check("blog_posts_status_check", sql`status IN ('draft', 'published', 'scheduled', 'archived')`),
+	check("blog_posts_category_check", sql`site_id IS NOT NULL OR category IS NOT NULL`),
 	uniqueIndex("blog_posts_platform_slug_idx").on(table.slug).where(sql`site_id IS NULL`),
 	uniqueIndex("blog_posts_site_slug_idx").on(table.site_id, table.slug).where(sql`site_id IS NOT NULL`),
 ]);
