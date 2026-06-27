@@ -572,6 +572,8 @@ async function ensureBlogFeaturedImageAssetExists(
   if (siteId) {
     conditions.push('site_id = ?')
     params.push(siteId)
+  } else {
+    conditions.push('site_id IS NULL')
   }
 
   const asset = await queryFirst(db, `SELECT id FROM media_assets WHERE ${conditions.join(' AND ')} LIMIT 1`, params)

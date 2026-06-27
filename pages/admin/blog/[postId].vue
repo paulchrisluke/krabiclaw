@@ -273,6 +273,8 @@ const loadError = ref('')
 const saving = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
+let loadRequestSeq = 0
+let saveRequestSeq = 0
 
 watch(postId, () => {
   if (postId.value) loadPost()
@@ -369,6 +371,9 @@ function buildPayload() {
 }
 
 async function loadPost() {
+  const requestPostId = postId.value
+  if (!requestPostId) return
+  const requestSeq = ++loadRequestSeq
   loadPending.value = true
   loadError.value = ''
   categoryEdited.value = false
@@ -376,7 +381,8 @@ async function loadPost() {
   post.value = null
   resetForm()
   try {
-    const res = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId.value}`)
+    const res = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${requestPostId}`)
+    if (requestSeq !== loadRequestSeq || requestPostId !== postId.value) return
     if (!res.post) throw new Error('Post not found')
     post.value = res.post
     form.title = res.post.title
@@ -391,9 +397,12 @@ async function loadPost() {
     hydrateStructuredContent(res.post.components)
     categoryInitialized.value = true
   } catch (err) {
+    if (requestSeq !== loadRequestSeq || requestPostId !== postId.value) return
     loadError.value = getErrorMessage(err, 'Failed to load post.')
   } finally {
-    loadPending.value = false
+    if (requestSeq === loadRequestSeq && requestPostId === postId.value) {
+      loadPending.value = false
+    }
   }
 }
 
@@ -402,42 +411,56 @@ async function update(publish = false) {
     errorMessage.value = 'Title and body are required.'
     return
   }
+  const requestPostId = postId.value
+  if (!requestPostId) return
+  const requestSeq = ++saveRequestSeq
   saving.value = true
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId.value}`, {
+    const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${requestPostId}`, {
       method: 'PATCH',
       body: { ...buildPayload(), ...(publish ? { publish: true } : {}) },
     })
+    if (requestSeq !== saveRequestSeq || requestPostId !== postId.value) return
     if (!updated.post) throw new Error('Post not found after save')
     post.value = updated.post
     hydrateStructuredContent(updated.post.components)
     successMessage.value = publish ? 'Published.' : 'Saved.'
   } catch (err) {
+    if (requestSeq !== saveRequestSeq || requestPostId !== postId.value) return
     errorMessage.value = getErrorMessage(err, 'Failed to save.')
   } finally {
-    saving.value = false
+    if (requestSeq === saveRequestSeq && requestPostId === postId.value) {
+      saving.value = false
+    }
   }
 }
 
 async function unpublish() {
+  const requestPostId = postId.value
+  if (!requestPostId) return
+  const requestSeq = ++saveRequestSeq
   saving.value = true
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId.value}`, {
+    const updated = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${requestPostId}`, {
       method: 'PATCH',
       body: { unpublish: true },
     })
+    if (requestSeq !== saveRequestSeq || requestPostId !== postId.value) return
     if (!updated.post) throw new Error('Post not found after unpublish')
     post.value = updated.post
     hydrateStructuredContent(updated.post.components)
     successMessage.value = 'Post unpublished.'
   } catch (err) {
+    if (requestSeq !== saveRequestSeq || requestPostId !== postId.value) return
     errorMessage.value = getErrorMessage(err, 'Failed to unpublish.')
   } finally {
-    saving.value = false
+    if (requestSeq === saveRequestSeq && requestPostId === postId.value) {
+      saving.value = false
+    }
   }
 }
 
