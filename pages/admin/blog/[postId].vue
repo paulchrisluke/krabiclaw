@@ -258,7 +258,7 @@ const componentStatusItems = [
 const { form, canSave, canPublish, handleImageChange } = useBlogForm()
 
 const post = ref<BlogPost | null>(null)
-const publicPath = computed(() => getBlogPostPath(post.value?.category, post.value?.slug) || 'Platform blog draft')
+const publicPath = computed(() => getBlogPostPath(form.category || post.value?.category, post.value?.slug) || 'Platform blog draft')
 const loadPending = ref(true)
 const loadError = ref('')
 const saving = ref(false)

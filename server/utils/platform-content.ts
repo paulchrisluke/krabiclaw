@@ -111,6 +111,11 @@ export interface PlatformStructuredContentInput {
   components?: PlatformContentComponentInput[]
 }
 
+export interface BlogScope {
+  site_id?: string | null
+  organization_id?: string | null
+}
+
 export interface PlatformBlogCreateInput extends PlatformStructuredContentInput {
   title: string
   body: string
@@ -212,12 +217,15 @@ function notFound(message: string): never {
 // list-then-match step before it can get/update/publish/delete a post or doc.
 async function resolvePlatformContentId(
   db: DbClient,
-  table: 'platform_blog_posts' | 'platform_docs',
+  table: 'blog_posts' | 'platform_docs',
   identifier: string,
   notFoundMessage: string,
+  siteId: string | null = null,
 ): Promise<string> {
-  const byId = await queryFirst<{ id: string }>(db, `SELECT id FROM ${table} WHERE id = ? LIMIT 1`, [identifier])
-  const bySlug = await queryFirst<{ id: string }>(db, `SELECT id FROM ${table} WHERE slug = ? LIMIT 1`, [identifier])
+  const scope = table === 'blog_posts' ? (siteId ? ' AND site_id = ?' : ' AND site_id IS NULL') : ''
+  const scopeParams = table === 'blog_posts' && siteId ? [siteId] : []
+  const byId = await queryFirst<{ id: string }>(db, `SELECT id FROM ${table} WHERE id = ?${scope} LIMIT 1`, [identifier, ...scopeParams])
+  const bySlug = await queryFirst<{ id: string }>(db, `SELECT id FROM ${table} WHERE slug = ?${scope} LIMIT 1`, [identifier, ...scopeParams])
   if (byId && bySlug && byId.id !== bySlug.id) {
     badRequest('Ambiguous platform content identifier; use the row id.')
   }
@@ -235,7 +243,7 @@ function normalizeSlugFromTitle(title: string, fallbackPrefix: 'post' | 'doc') {
   return slug || `${fallbackPrefix}-${Date.now()}`
 }
 
-function isUniqueConstraintError(err: unknown, table: 'platform_blog_posts' | 'platform_docs') {
+function isUniqueConstraintError(err: unknown, table: 'blog_posts' | 'platform_docs') {
   const message = String((err as ApiValue)?.message || err || '')
   return message.includes(`${table}.slug`) || message.includes('UNIQUE constraint failed')
 }
@@ -743,14 +751,16 @@ function normalizeBlankToNull(input: { canonical_url?: string | null; robots?: s
   if (input.robots !== undefined && input.robots?.trim() === '') input.robots = null
 }
 
-function validateBlogCommon(input: Partial<PlatformBlogCreateInput>) {
+// The fixed PLATFORM_BLOG_CATEGORIES taxonomy (Marketing, SEO, ...) only makes sense
+// for KrabiClaw's own marketing blog — a tenant restaurant's blog category is free text.
+function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant = false) {
   normalizeBlankToNull(input)
   if (input.title !== undefined) assertStringLength(input.title, BLOG_TITLE_MAX, 'title')
   if (input.body !== undefined) assertStringLength(input.body, BLOG_BODY_MAX, 'body')
   if (input.excerpt !== undefined) assertStringLength(input.excerpt ?? null, BLOG_EXCERPT_MAX, 'excerpt')
   if (input.category !== undefined) {
     assertStringLength(input.category ?? null, BLOG_CATEGORY_MAX, 'category')
-    assertValidBlogCategory(input.category ?? null)
+    if (!isTenant) assertValidBlogCategory(input.category ?? null)
   }
   if (input.seo_description !== undefined) assertStringLength(input.seo_description ?? null, BLOG_SEO_DESCRIPTION_MAX, 'seo_description')
   if (input.seo_keywords !== undefined) assertStringLength(input.seo_keywords ?? null, BLOG_SEO_KEYWORDS_MAX, 'seo_keywords')
@@ -888,23 +898,25 @@ export async function resolveContentComponentsMedia(db: DbClient, components: Pl
   })
 }
 
-export async function listPlatformBlogPosts(db: DbClient, status?: string | null) {
+export async function listPlatformBlogPosts(db: DbClient, status?: string | null, siteId: string | null = null) {
   let sql = `SELECT
       p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
       p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
       ma.width AS featured_image_width, ma.height AS featured_image_height,
       p.published_at, p.created_at, p.updated_at
-    FROM platform_blog_posts p
-    LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'`
-  if (status === 'published') sql += ' WHERE p.published_at IS NOT NULL'
-  else if (status === 'draft') sql += ' WHERE p.published_at IS NULL'
+    FROM blog_posts p
+    LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+    WHERE ${siteId ? 'p.site_id = ?' : 'p.site_id IS NULL'}`
+  const params: ApiValue[] = siteId ? [siteId] : []
+  if (status === 'published') sql += ' AND p.published_at IS NOT NULL'
+  else if (status === 'draft') sql += ' AND p.published_at IS NULL'
   sql += ' ORDER BY p.created_at DESC'
-  const results = await queryAll<ApiRecord>(db, sql)
+  const results = await queryAll<ApiRecord>(db, sql, params)
   return (results ?? []).map(record => attachFeaturedImage(attachPublished(record, Boolean(record.published_at))))
 }
 
-export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string) {
-  const postId = await resolvePlatformContentId(db, 'platform_blog_posts', postIdOrSlug, 'Post not found')
+export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, siteId: string | null = null) {
+  const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
   const post = await queryFirst<ApiRecord | null>(
     db,
     `SELECT
@@ -912,7 +924,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string) {
        p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
        ma.width AS featured_image_width, ma.height AS featured_image_height,
        p.published_at, p.created_at, p.updated_at
-     FROM platform_blog_posts p
+     FROM blog_posts p
      LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
      WHERE p.id = ?`,
     [postId],
@@ -926,12 +938,16 @@ export async function createPlatformBlogPost(
   db: D1Database,
   authorId: string,
   input: PlatformBlogCreateInput,
+  scope: BlogScope = {},
 ) {
   if (!input.title || !input.body) badRequest('title and body are required')
-  validateBlogCommon(input)
-  if (input.publish) assertPublishableBlogCategory(input.category)
+  const isTenant = Boolean(scope.site_id)
+  validateBlogCommon(input, isTenant)
+  if (input.publish && !isTenant) assertPublishableBlogCategory(input.category)
   if (input.featured_image_asset_id) await ensureMediaAssetExists(db, input.featured_image_asset_id)
 
+  const siteId = scope.site_id ?? null
+  const organizationId = scope.organization_id ?? null
   const id = crypto.randomUUID()
   const slugBase = normalizeSlugFromTitle(input.title, 'post')
   const now = new Date().toISOString()
@@ -941,14 +957,17 @@ export async function createPlatformBlogPost(
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
       await execute(db, `
-        INSERT INTO platform_blog_posts (id, title, slug, body, excerpt, category, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, status, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
         id,
+        organizationId,
+        siteId,
         input.title,
         slug,
         input.body,
         input.excerpt ?? null,
         input.category ?? null,
+        input.publish ? 'published' : 'draft',
         input.seo_description ?? null,
         input.seo_keywords ?? null,
         input.canonical_url ?? null,
@@ -963,13 +982,13 @@ export async function createPlatformBlogPost(
       try {
         await syncStructuredContent(db, 'blog_post', id, input)
       } catch (err) {
-        await execute(db, 'DELETE FROM platform_blog_posts WHERE id = ?', [id])
+        await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [id])
         throw err
       }
-      const post = await getPlatformBlogPost(db, id)
+      const post = await getPlatformBlogPost(db, id, siteId)
       return { success: true, id, slug, published_at: publishedAt, post }
     } catch (err) {
-      if (isUniqueConstraintError(err, 'platform_blog_posts') && attempt < MAX_SLUG_ATTEMPTS - 1) continue
+      if (isUniqueConstraintError(err, 'blog_posts') && attempt < MAX_SLUG_ATTEMPTS - 1) continue
       throw err
     }
   }
@@ -981,11 +1000,13 @@ export async function updatePlatformBlogPost(
   db: D1Database,
   postIdOrSlug: string,
   input: PlatformBlogUpdateInput,
+  siteId: string | null = null,
 ) {
-  const postId = await resolvePlatformContentId(db, 'platform_blog_posts', postIdOrSlug, 'Post not found')
-  validateBlogCommon(input)
-  if (input.publish) {
-    const current = await queryFirst<{ category: string | null }>(db, 'SELECT category FROM platform_blog_posts WHERE id = ? LIMIT 1', [postId])
+  const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
+  const isTenant = Boolean(siteId)
+  validateBlogCommon(input, isTenant)
+  if (input.publish && !isTenant) {
+    const current = await queryFirst<{ category: string | null }>(db, 'SELECT category FROM blog_posts WHERE id = ? LIMIT 1', [postId])
     const publishCategory = input.category !== undefined ? input.category : current?.category ?? null
     assertPublishableBlogCategory(publishCategory)
   }
@@ -996,7 +1017,9 @@ export async function updatePlatformBlogPost(
   if (input.title !== undefined) {
     if (!input.title?.trim()) badRequest('title cannot be blank')
     const slug = normalizeSlugFromTitle(input.title, 'post')
-    const existing = await queryFirst(db, 'SELECT id FROM platform_blog_posts WHERE slug = ? AND id != ? LIMIT 1', [slug, postId])
+    const scopeClause = siteId ? 'site_id = ?' : 'site_id IS NULL'
+    const scopeParams = siteId ? [siteId] : []
+    const existing = await queryFirst(db, `SELECT id FROM blog_posts WHERE slug = ? AND id != ? AND ${scopeClause} LIMIT 1`, [slug, postId, ...scopeParams])
     if (existing) badRequest('Slug already in use')
     updates.push('title = ?', 'slug = ?')
     params.push(input.title, slug)
@@ -1048,35 +1071,35 @@ export async function updatePlatformBlogPost(
 
   if (input.publish && input.unpublish) badRequest('Cannot publish and unpublish simultaneously')
   if (input.publish) {
-    updates.push('published_at = ?')
+    updates.push('published_at = ?', "status = 'published'")
     params.push(now)
   }
   if (input.unpublish) {
-    updates.push('published_at = NULL')
+    updates.push('published_at = NULL', "status = 'draft'")
   }
 
   params.push(postId)
 
   try {
     const post = await queryFirst<ApiRecord | null>(db, `
-      UPDATE platform_blog_posts
+      UPDATE blog_posts
        SET ${updates.join(', ')}
        WHERE id = ?
        RETURNING id`, params)
     if (!post) notFound('Post not found')
 
     await syncStructuredContent(db, 'blog_post', postId, input)
-    return { success: true, post: await getPlatformBlogPost(db, postId) }
+    return { success: true, post: await getPlatformBlogPost(db, postId, siteId) }
   } catch (err) {
-    if (isUniqueConstraintError(err, 'platform_blog_posts')) badRequest('Slug already in use')
+    if (isUniqueConstraintError(err, 'blog_posts')) badRequest('Slug already in use')
     throw err
   }
 }
 
-export async function deletePlatformBlogPost(db: D1Database, postIdOrSlug: string) {
-  const postId = await resolvePlatformContentId(db, 'platform_blog_posts', postIdOrSlug, 'Post not found')
+export async function deletePlatformBlogPost(db: D1Database, postIdOrSlug: string, siteId: string | null = null) {
+  const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
   await replaceContentComponents(db, 'blog_post', postId, [])
-  const result = await execute(db, 'DELETE FROM platform_blog_posts WHERE id = ?', [postId])
+  const result = await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [postId])
   if (!result.meta.changes || result.meta.changes === 0) notFound('Post not found')
   return { success: true }
 }

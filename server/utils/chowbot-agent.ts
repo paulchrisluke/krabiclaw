@@ -12,6 +12,13 @@ import {
   publishPost,
 } from "~/server/utils/post-management";
 import {
+  listPlatformBlogPosts,
+  getPlatformBlogPost,
+  createPlatformBlogPost,
+  updatePlatformBlogPost,
+  deletePlatformBlogPost,
+} from "~/server/utils/platform-content";
+import {
   getMenus,
   getMenuWithItems,
   createMenu,
@@ -2500,6 +2507,69 @@ async function executeTool(
       const result = await updatePost(db, orgId, siteId, postId, { image_asset_id: assetId }, userId);
       if (!result) return { error: "Failed to update post image." };
       return { updated: true, post_id: postId, asset_id: assetId };
+    }
+
+    case "list_blog_posts": {
+      const status = typeof input.status === "string" ? input.status : undefined;
+      const posts = await listPlatformBlogPosts(db, status, siteId);
+      return { posts };
+    }
+
+    case "get_blog_post": {
+      const postId = toSqlText(input.post_id);
+      if (!postId) return { error: "post_id is required." };
+      const post = await getPlatformBlogPost(db, postId, siteId);
+      return { post };
+    }
+
+    case "create_blog_post": {
+      const result = await createPlatformBlogPost(
+        db,
+        userId,
+        {
+          title: input.title,
+          body: input.body,
+          excerpt: input.excerpt,
+          category: input.category,
+          publish: input.publish,
+        },
+        { site_id: siteId, organization_id: orgId },
+      );
+      return { post: result.post };
+    }
+
+    case "update_blog_post": {
+      const postId = toSqlText(input.post_id);
+      if (!postId) return { error: "post_id is required." };
+      const result = await updatePlatformBlogPost(
+        db,
+        postId,
+        {
+          title: input.title,
+          body: input.body,
+          excerpt: input.excerpt,
+          category: input.category,
+          publish: input.publish,
+          unpublish: input.unpublish,
+        },
+        siteId,
+      );
+      return { post: result.post };
+    }
+
+    case "set_blog_post_image": {
+      const postId = toSqlText(input.post_id);
+      const assetId = toSqlText(input.asset_id);
+      if (!postId || !assetId) return { error: "post_id and asset_id required." };
+      const result = await updatePlatformBlogPost(db, postId, { featured_image_asset_id: assetId }, siteId);
+      return { updated: true, post_id: postId, asset_id: assetId, post: result.post };
+    }
+
+    case "delete_blog_post": {
+      const postId = toSqlText(input.post_id);
+      if (!postId) return { error: "post_id is required." };
+      await deletePlatformBlogPost(db, postId, siteId);
+      return { post_id: postId, deleted: true };
     }
 
     case "list_menus": {

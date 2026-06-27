@@ -1,10 +1,12 @@
-// GET /api/public/blog - List published platform blog posts
+// GET /api/public/sites/[siteId]/blog - List a tenant site's published blog posts
 import { queryAll } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { attachFeaturedImageFromBareJoin } from '~/server/utils/platform-content'
-import { blogCategoryToSlug } from '~/utils/blog-categories'
 
 export default defineEventHandler(async (event) => {
+  const siteId = getRouterParam(event, 'siteId')
+  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
+
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -19,19 +21,16 @@ export default defineEventHandler(async (event) => {
       ma.height
     FROM blog_posts p
     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
-    WHERE p.published_at IS NOT NULL AND p.site_id IS NULL
-    ORDER BY p.category, p.published_at DESC
+    WHERE p.published_at IS NOT NULL AND p.site_id = ?
+    ORDER BY p.published_at DESC
     LIMIT 100
   `
 
   try {
-    const results = await queryAll<ApiRecord>(db, sql)
-    const posts = (results ?? [])
-      .filter(post => blogCategoryToSlug(post.category))
-      .map(attachFeaturedImageFromBareJoin)
-    return jsonResponse({ posts })
+    const results = await queryAll<ApiRecord>(db, sql, [siteId])
+    return jsonResponse({ posts: (results ?? []).map(attachFeaturedImageFromBareJoin) })
   } catch (err) {
-    console.error('Failed to fetch public blog posts:', err)
+    console.error('Failed to fetch public site blog posts:', err)
     return jsonResponse({ error: 'Failed to fetch posts' }, { status: 500 })
   }
 })

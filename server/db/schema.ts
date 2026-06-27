@@ -613,23 +613,30 @@ export const platform_analytics = sqliteTable("platform_analytics", {
 	unique("platform_analytics_metric_date_unique").on(table.metric, table.date),
 ]);
 
-export const platform_blog_posts = sqliteTable("platform_blog_posts", {
+export const blog_posts = sqliteTable("blog_posts", {
 	id: text().primaryKey(),
+	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ), // null = platform blog post
+	site_id: text().references(() => sites.id, { onDelete: "cascade" } ), // null = platform blog post
 	title: text().notNull(),
-	slug: text().notNull().unique(),
+	slug: text().notNull(),
 	body: text().notNull(),
 	excerpt: text(),
 	category: text(),
+	status: text().default("draft").notNull(), // draft | published | scheduled | archived
 	author_id: text().references(() => user.id, { onDelete: "set null" } ),
 	featured_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
 	published_at: text(),
+	scheduled_for: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	seo_description: text(),
 	seo_keywords: text(),
 	canonical_url: text(),
 	robots: text(),
-});
+}, (table) => [
+	uniqueIndex("blog_posts_platform_slug_idx").on(table.slug).where(sql`site_id IS NULL`),
+	uniqueIndex("blog_posts_site_slug_idx").on(table.site_id, table.slug).where(sql`site_id IS NOT NULL`),
+]);
 
 export const platform_contact_submissions = sqliteTable("platform_contact_submissions", {
 	id: text().primaryKey(),

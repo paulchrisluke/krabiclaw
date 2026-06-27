@@ -130,10 +130,11 @@ const tocHtml = computed(() => contentBlocks.value
 
 const articleBodyRef = ref<HTMLElement | null>(null)
 useCopyableCodeBlocks(articleBodyRef, contentBlocks)
-const renderableComponents = computed(() => (doc.value?.components ?? []).filter(component =>
-  component.render_enabled !== false &&
-  (component.status === undefined || component.status === null || component.status === 'active')
-))
+const renderedComponents = computed(() =>
+  contentBlocks.value
+    .filter((block): block is Extract<(typeof contentBlocks.value)[number], { kind: 'component' }> => block.kind === 'component')
+    .map(block => block.component),
+)
 
 const docMedia = computed(() => resolveMedia({
   public_url: doc.value?.featured_image?.public_url,
@@ -188,7 +189,7 @@ useContentPageSchema(computed(() => {
     inLanguage: 'en-US',
     proficiencyLevel: doc.value.difficulty_level || undefined,
     breadcrumbs: breadcrumbs.value,
-    components: renderableComponents.value,
+    components: renderedComponents.value,
   }
 }))
 </script>

@@ -55,6 +55,10 @@ interface ContentPageSchemaInput {
   breadcrumbs: ContentBreadcrumb[]
   proficiencyLevel?: string | null
   components?: ContentComponent[] | null
+  /** Publisher identity for the Organization/WebSite nodes. Defaults to KrabiClaw (the platform blog's own identity) — tenant callers must pass their own site name/logo/description so a tenant's blog post doesn't get stamped with KrabiClaw as its publisher. */
+  siteName?: string | null
+  siteLogoUrl?: string | null
+  siteDescription?: string | null
 }
 
 function normalizeDate(value?: string | null) {
@@ -158,21 +162,25 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
       articleNode.proficiencyLevel = value.proficiencyLevel.trim()
     }
 
+    const siteName = value.siteName?.trim() || 'KrabiClaw'
+    const siteLogoUrl = value.siteLogoUrl || `${siteRoot}/krabi-claw-logo.png`
+    const siteDescription = value.siteDescription?.trim() || 'The Shopify for restaurants. AI-powered website builder for independent restaurants.'
+
     const graph: ApiRecord[] = [
       {
         '@type': 'Organization',
         '@id': organizationId,
-        name: 'KrabiClaw',
+        name: siteName,
         url: siteRoot,
-        logo: `${siteRoot}/krabi-claw-logo.png`,
-        description: 'The Shopify for restaurants. AI-powered website builder for independent restaurants.',
+        logo: siteLogoUrl,
+        description: siteDescription,
       },
       {
         '@type': 'WebSite',
         '@id': websiteId,
         url: siteRoot,
-        name: 'KrabiClaw',
-        description: 'AI-powered restaurant website builder',
+        name: siteName,
+        description: siteDescription,
         publisher: { '@id': organizationId },
       },
       webpageNode,

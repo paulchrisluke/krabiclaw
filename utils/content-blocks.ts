@@ -69,12 +69,12 @@ export interface ContentHowToSectionProps {
 }
 
 export type NormalizedContentComponent =
-  | { type: 'faq'; position: number; props: ContentFaqSectionProps }
-  | { type: 'how_to'; position: number; props: ContentHowToSectionProps }
+  | { type: 'faq'; position: number; props: ContentFaqSectionProps; source: ContentComponent }
+  | { type: 'how_to'; position: number; props: ContentHowToSectionProps; source: ContentComponent }
 
 export type ContentBlock =
   | { kind: 'html'; html: string }
-  | { kind: 'component'; type: ContentComponentType; props: ContentFaqSectionProps | ContentHowToSectionProps }
+  | { kind: 'component'; type: ContentComponentType; props: ContentFaqSectionProps | ContentHowToSectionProps; component: ContentComponent }
 
 const COMPONENT_EMBED_REGEX = /\{\{\s*component\s+type\s*=\s*(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_-]+))\s*\}\}/g
 
@@ -102,6 +102,7 @@ export function normalizeContentComponent(
     return {
       type: 'faq',
       position: component.position ?? 0,
+      source: component,
       props: {
         label: component.label,
         items,
@@ -125,6 +126,7 @@ export function normalizeContentComponent(
   return {
     type: 'how_to',
     position: component.position ?? 0,
+    source: component,
     props: {
       label: component.label,
       estimatedTime: component.data?.estimated_time ?? null,
@@ -170,6 +172,7 @@ export function buildContentBlocks(
           kind: 'component',
           type,
           props: nextComponent.props,
+          component: nextComponent.source,
         })
       }
     }

@@ -521,6 +521,7 @@ const mainNavigation = computed(() => [
     { label: 'Conversations', icon: 'i-lucide-messages-square', to: siteBase.value ? `${siteBase.value}/conversations` : '/dashboard' },
   ],
   [
+    { label: 'Blog', icon: 'i-lucide-newspaper', to: siteBase.value ? `${siteBase.value}/blog` : '/dashboard' },
     { label: 'Translations', icon: 'i-lucide-languages', to: siteBase.value ? `${siteBase.value}/translations` : '/dashboard' },
     { label: 'Support', icon: 'i-lucide-headphones', to: orgBase.value ? `${orgBase.value}/support` : '/dashboard' },
   ],
@@ -619,6 +620,7 @@ const navbarTitle = computed(() => {
     account: 'Account',
     analytics: 'Analytics',
     billing: 'Billing',
+    blog: 'Blog',
     chatgpt: 'ChatGPT',
     conversations: 'Conversations',
     content: 'Content',

@@ -1,3 +1,5 @@
+import { BLOG_CATEGORY_LABELS } from '~/utils/blog-categories'
+
 export interface PlatformMcpToolDefinition {
   name: string
   description: string
@@ -18,6 +20,7 @@ const NULLABLE_NUMBER = { type: ['number', 'null'] }
 const NULLABLE_BOOLEAN = { type: ['boolean', 'null'] }
 const COMPONENT_STATUS_ENUM = ['active', 'inactive']
 const ROBOTS_ENUM = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
+const BLOG_CATEGORY_ENUM = BLOG_CATEGORY_LABELS
 const DOC_CATEGORY_ENUM = ['Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced']
 const DOC_DIFFICULTY_ENUM = ['Beginner', 'Intermediate', 'Advanced']
 
@@ -578,7 +581,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         title: { type: 'string' },
         body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
         excerpt: { type: 'string' },
-        category: { type: 'string' },
+        category: { type: 'string', enum: BLOG_CATEGORY_ENUM },
         ...SEO_FIELDS_SCHEMA,
         components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
         publish: { type: 'boolean' },
@@ -599,7 +602,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         title: { type: 'string' },
         body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
         excerpt: { type: 'string' },
-        category: { type: 'string' },
+        category: { type: 'string', enum: BLOG_CATEGORY_ENUM },
         ...SEO_FIELDS_SCHEMA,
         components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
         publish: { type: 'boolean' },
