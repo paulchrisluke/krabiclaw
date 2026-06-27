@@ -574,7 +574,7 @@ export const PLATFORM_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     description: 'Fetch one platform blog post in the canonical component model with resolved media fields.',
     inputSchema: {
       type: 'object',
-      properties: { post_id: { type: 'string', description: "Post id, or its slug from the public URL (krabiclaw.com/blog/<slug>)." } },
+      properties: { post_id: { type: 'string', description: "Post id, or its slug from the public URL (krabiclaw.com/blog/<category>/<slug>)." } },
       required: ['post_id'],
       additionalProperties: false,
     },

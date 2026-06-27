@@ -28,6 +28,24 @@
               :ui="{ base: 'hover:bg-transparent hover:text-default' }"
             />
           </UDropdownMenu>
+          <UDropdownMenu
+            v-else-if="item.label === 'Blog' && blogCategories.length"
+            :items="[
+              [{ label: 'All blog', to: '/blog' }],
+              blogCategories.map(cat => ({ label: cat.category, to: `/blog#${cat.categorySlug}` }))
+            ]"
+            :content="{ align: 'start', collisionPadding: 12 }"
+          >
+            <UButton
+              :label="item.label"
+              trailing-icon="i-lucide-chevron-down"
+              color="neutral"
+              variant="ghost"
+              class="px-4 py-2 rounded-full text-[13.5px] font-medium"
+              :class="isActiveRoute(item.to) ? 'bg-elevated text-default' : 'text-muted'"
+              :ui="{ base: 'hover:bg-transparent hover:text-default' }"
+            />
+          </UDropdownMenu>
           <NuxtLink
             v-else
             :to="item.to"
@@ -119,10 +137,12 @@ const navItems = [
   { label: 'Pricing', to: '/pricing' },
   { label: 'Templates', to: '/templates' },
   { label: 'Docs', to: '/docs' },
+  { label: 'Blog', to: '/blog' },
 ]
 
 const route = useRoute()
 const { categories } = useDocsNav()
+const { categories: blogCategories } = useBlogNav()
 
 function isActiveRoute(to: string) {
   const path = to.split('#')[0]!

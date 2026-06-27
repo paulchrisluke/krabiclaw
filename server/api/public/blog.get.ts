@@ -1,4 +1,4 @@
-// GET /api/public/blog/posts - List published platform blog posts
+// GET /api/public/blog - List published platform blog posts
 import { queryAll } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { attachFeaturedImageFromBareJoin } from '~/server/utils/platform-content'
@@ -8,15 +8,7 @@ export default defineEventHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const query = getQuery(event)
-  const category = query.category as string | undefined
-  let parsedLimit = Number.parseInt(query.limit as string, 10)
-  if (Number.isNaN(parsedLimit)) {
-    parsedLimit = 20
-  }
-  const limit = Math.max(1, Math.min(parsedLimit, 100))
-
-  let sql = `
+  const sql = `
     SELECT
       p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots, p.published_at,
       p.featured_image_asset_id,
@@ -27,20 +19,12 @@ export default defineEventHandler(async (event) => {
     FROM platform_blog_posts p
     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
     WHERE p.published_at IS NOT NULL
+    ORDER BY p.category, p.published_at DESC
   `
-  const params: (string | number)[] = []
-
-  if (category) {
-    sql += ` AND p.category = ?`
-    params.push(category)
-  }
-
-  sql += ` ORDER BY p.published_at DESC LIMIT ?`
-  params.push(limit)
 
   try {
-    const results = await queryAll<ApiRecord>(db, sql, params)
-    return jsonResponse({ posts: results.map(attachFeaturedImageFromBareJoin) })
+    const results = await queryAll<ApiRecord>(db, sql)
+    return jsonResponse({ posts: (results ?? []).map(attachFeaturedImageFromBareJoin) })
   } catch (err) {
     console.error('Failed to fetch public blog posts:', err)
     return jsonResponse({ error: 'Failed to fetch posts' }, { status: 500 })

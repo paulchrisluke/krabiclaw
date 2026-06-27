@@ -3,7 +3,7 @@
     <div class="mb-6 flex items-center justify-between gap-3">
       <div>
         <h1 class="text-2xl font-bold text-default">Edit Post</h1>
-        <p class="mt-1 text-sm text-muted">{{ post?.slug ? `/blog/${post.slug}` : 'Platform blog draft' }}</p>
+        <p class="mt-1 text-sm text-muted">{{ publicPath }}</p>
       </div>
       <UButton to="/admin" color="neutral" variant="soft" icon="i-heroicons-arrow-left">Admin</UButton>
     </div>
@@ -205,6 +205,7 @@
 <script setup lang="ts">
 import { getErrorMessage } from '~/utils/errors'
 import { createEmptyFaqItem, createEmptyHowToStep, useBlogForm } from '~/composables/useBlogForm'
+import { BLOG_CATEGORY_LABELS, getBlogPostPath } from '~/utils/blog-categories'
 
 interface BlogComponent {
   type: 'faq' | 'how_to'
@@ -242,8 +243,7 @@ definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const postId = route.params.postId as string
-const categories = ['Marketing', 'Technology', 'Design', 'Business', 'SEO', 'Social Media']
-const categoryItems = computed(() => categories.map((item) => ({ label: item, value: item })))
+const categoryItems = computed(() => BLOG_CATEGORY_LABELS.map((item) => ({ label: item, value: item })))
 const robotsItems = [
   { label: 'Default (index,follow)', value: '' },
   { label: 'index,follow', value: 'index,follow' },
@@ -258,6 +258,7 @@ const componentStatusItems = [
 const { form, canSave, canPublish, handleImageChange } = useBlogForm()
 
 const post = ref<BlogPost | null>(null)
+const publicPath = computed(() => getBlogPostPath(post.value?.category, post.value?.slug) || 'Platform blog draft')
 const loadPending = ref(true)
 const loadError = ref('')
 const saving = ref(false)

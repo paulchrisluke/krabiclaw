@@ -1,5 +1,6 @@
 import slugify from 'slugify'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { BLOG_CATEGORY_LABELS } from '~/utils/blog-categories'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_BODY_MAX = 100000
@@ -21,6 +22,7 @@ const COMPONENT_LABEL_MAX = 200
 const MAX_SLUG_ATTEMPTS = 8
 
 export const PLATFORM_DOC_CATEGORIES = ['Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced'] as const
+export const PLATFORM_BLOG_CATEGORIES = BLOG_CATEGORY_LABELS
 export const PLATFORM_DOC_DIFFICULTIES = ['Beginner', 'Intermediate', 'Advanced'] as const
 
 export type PlatformContentType = 'blog_post' | 'doc'
@@ -249,6 +251,18 @@ function assertValidRobotsDirective(value: string | null | undefined) {
   if (!PLATFORM_ROBOTS_DIRECTIVES.includes(value as PlatformRobotsDirective)) {
     badRequest(`robots must be one of: ${PLATFORM_ROBOTS_DIRECTIVES.join(', ')}`)
   }
+}
+
+function assertValidBlogCategory(value: string | null | undefined) {
+  if (value == null || value === '') return
+  if (!PLATFORM_BLOG_CATEGORIES.includes(value)) {
+    badRequest(`category must be one of: ${PLATFORM_BLOG_CATEGORIES.join(', ')}`)
+  }
+}
+
+function assertPublishableBlogCategory(value: string | null | undefined) {
+  if (!value) badRequest('category is required when publishing a blog post')
+  assertValidBlogCategory(value)
 }
 
 function assertValidCanonicalUrl(value: string | null | undefined) {
@@ -734,7 +748,10 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>) {
   if (input.title !== undefined) assertStringLength(input.title, BLOG_TITLE_MAX, 'title')
   if (input.body !== undefined) assertStringLength(input.body, BLOG_BODY_MAX, 'body')
   if (input.excerpt !== undefined) assertStringLength(input.excerpt ?? null, BLOG_EXCERPT_MAX, 'excerpt')
-  if (input.category !== undefined) assertStringLength(input.category ?? null, BLOG_CATEGORY_MAX, 'category')
+  if (input.category !== undefined) {
+    assertStringLength(input.category ?? null, BLOG_CATEGORY_MAX, 'category')
+    assertValidBlogCategory(input.category ?? null)
+  }
   if (input.seo_description !== undefined) assertStringLength(input.seo_description ?? null, BLOG_SEO_DESCRIPTION_MAX, 'seo_description')
   if (input.seo_keywords !== undefined) assertStringLength(input.seo_keywords ?? null, BLOG_SEO_KEYWORDS_MAX, 'seo_keywords')
   if (input.canonical_url !== undefined) assertValidCanonicalUrl(input.canonical_url)
@@ -912,6 +929,7 @@ export async function createPlatformBlogPost(
 ) {
   if (!input.title || !input.body) badRequest('title and body are required')
   validateBlogCommon(input)
+  if (input.publish) assertPublishableBlogCategory(input.category)
   if (input.featured_image_asset_id) await ensureMediaAssetExists(db, input.featured_image_asset_id)
 
   const id = crypto.randomUUID()
@@ -966,6 +984,10 @@ export async function updatePlatformBlogPost(
 ) {
   const postId = await resolvePlatformContentId(db, 'platform_blog_posts', postIdOrSlug, 'Post not found')
   validateBlogCommon(input)
+  if (input.publish) {
+    const current = await queryFirst<{ category: string | null }>(db, 'SELECT category FROM platform_blog_posts WHERE id = ? LIMIT 1', [postId])
+    assertPublishableBlogCategory(input.category ?? current?.category ?? null)
+  }
   const now = new Date().toISOString()
   const updates: string[] = ['updated_at = ?']
   const params: ApiValue[] = [now]

@@ -101,7 +101,7 @@ export default defineNuxtConfig({
 
   // Sitemap configuration
   sitemap: {
-    sources: ['/api/__sitemap__/docs'],
+    sources: ['/api/__sitemap__/docs', '/api/__sitemap__/blog'],
   },
 
   
@@ -146,6 +146,10 @@ export default defineNuxtConfig({
     },
     {
       path: '~/components/docs',
+      pathPrefix: false,
+    },
+    {
+      path: '~/components/blog',
       pathPrefix: false,
     },
   ],

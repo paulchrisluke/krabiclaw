@@ -100,7 +100,7 @@
             </p>
             <div class="flex flex-wrap gap-4 pt-2">
               <NuxtLink
-                to="/blog/demystifying-restaurant-seo-search-console-analytics"
+                to="/blog/seo/demystifying-restaurant-seo-search-console-analytics"
                 class="inline-flex items-center gap-1.5 bg-white text-(--kc-navy) text-[14px] font-bold px-5 py-3 rounded-[9px] hover:bg-white/90 transition-colors no-underline"
               >
                 Read our SEO Strategy Guide

@@ -186,6 +186,7 @@
 <script setup lang="ts">
 import { getErrorMessage } from '~/utils/errors'
 import { createEmptyFaqItem, createEmptyHowToStep, useBlogForm } from '~/composables/useBlogForm'
+import { BLOG_CATEGORY_LABELS } from '~/utils/blog-categories'
 
 interface CreatePostResponse {
   id: string | number
@@ -194,8 +195,7 @@ interface CreatePostResponse {
 
 definePageMeta({ layout: 'dashboard' })
 
-const categories = ['Marketing', 'Technology', 'Design', 'Business', 'SEO', 'Social Media']
-const categoryItems = computed(() => categories.map((item) => ({ label: item, value: item })))
+const categoryItems = computed(() => BLOG_CATEGORY_LABELS.map((item) => ({ label: item, value: item })))
 const robotsItems = [
   { label: 'Default (index,follow)', value: '' },
   { label: 'index,follow', value: 'index,follow' },
