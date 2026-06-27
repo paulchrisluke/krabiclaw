@@ -14,6 +14,8 @@ export default defineSitemapEventHandler(async (event) => {
 
   const siteId = event.context.tenantType === 'tenant' ? (event.context.siteId as string | undefined) : null
 
+  if (event.context.tenantType === 'tenant' && !siteId) return []
+
   if (siteId) {
     const posts = await queryAll<ApiRecord>(
       db,

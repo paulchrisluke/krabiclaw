@@ -30,6 +30,10 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
+  }
+
   try {
     const result = await createPlatformBlogPost(db, session.user.id, {
       title: body.title ?? '',
@@ -56,8 +60,8 @@ export default defineEventHandler(async (event) => {
     return jsonResponse(result, { status: 201 })
   } catch (err) {
     const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number' ? Number((err as { statusCode: number }).statusCode) : 500
-    const message = err instanceof Error ? err.message : 'Failed to create post'
     if (statusCode >= 500) console.error('Failed to create site blog post:', err)
+    const message = statusCode >= 500 ? 'Failed to create post' : err instanceof Error ? err.message : 'Failed to create post'
     return jsonResponse({ error: message }, { status: statusCode })
   }
 })

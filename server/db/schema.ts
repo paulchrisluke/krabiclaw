@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { sqliteTable, integer, text, numeric, real, unique, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core"
+import { sqliteTable, integer, text, numeric, real, unique, primaryKey, uniqueIndex, check } from "drizzle-orm/sqlite-core"
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core"
 
 export const account = sqliteTable("account", {
@@ -616,7 +616,7 @@ export const platform_analytics = sqliteTable("platform_analytics", {
 export const blog_posts = sqliteTable("blog_posts", {
 	id: text().primaryKey(),
 	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ), // null = platform blog post
-	site_id: text().references(() => sites.id, { onDelete: "cascade" } ), // null = platform blog post
+	site_id: text(), // null = platform blog post
 	title: text().notNull(),
 	slug: text().notNull(),
 	body: text().notNull(),
@@ -634,6 +634,8 @@ export const blog_posts = sqliteTable("blog_posts", {
 	canonical_url: text(),
 	robots: text(),
 }, (table) => [
+	check("blog_posts_scope_check", sql`(organization_id IS NULL AND site_id IS NULL) OR (organization_id IS NOT NULL AND site_id IS NOT NULL)`),
+	check("blog_posts_status_check", sql`status IN ('draft', 'published', 'scheduled', 'archived')`),
 	uniqueIndex("blog_posts_platform_slug_idx").on(table.slug).where(sql`site_id IS NULL`),
 	uniqueIndex("blog_posts_site_slug_idx").on(table.site_id, table.slug).where(sql`site_id IS NOT NULL`),
 ]);

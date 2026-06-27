@@ -129,7 +129,7 @@ const loadPosts = async () => {
   try {
     const query: Record<string, string> = {}
     if (activeTab.value !== 'all') query.status = activeTab.value
-    const res = await $fetch<{ posts: DashboardBlogPost[] }>('/api/dashboard/editor/blog/posts', { query })
+    const res = await $fetch<{ posts: DashboardBlogPost[] }>(`/api/editor/sites/${siteId}/blog/posts`, { query })
     posts.value = res.posts ?? []
   } catch {
     toast.add({ description: 'Failed to load posts', color: 'error' })
@@ -220,13 +220,13 @@ async function save(publish = false) {
   successMessage.value = ''
   try {
     if (selectedPostId.value) {
-      const res = await $fetch<{ post: ApiRecord }>(`/api/dashboard/editor/blog/posts/${selectedPostId.value}`, {
+      const res = await $fetch<{ post: ApiRecord }>(`/api/editor/sites/${siteId}/blog/posts/${selectedPostId.value}`, {
         method: 'PATCH',
         body: { ...buildPayload(), ...(publish ? { publish: true } : {}) },
       })
       selectedPublished.value = Boolean(res.post.published)
     } else {
-      const res = await $fetch<{ id: string; post: ApiRecord }>('/api/dashboard/editor/blog/posts', {
+      const res = await $fetch<{ id: string; post: ApiRecord }>(`/api/editor/sites/${siteId}/blog/posts`, {
         method: 'POST',
         body: { ...buildPayload(), publish },
       })
@@ -248,7 +248,7 @@ async function unpublish() {
   saving.value = true
   errorMessage.value = ''
   try {
-    const res = await $fetch<{ post: ApiRecord }>(`/api/dashboard/editor/blog/posts/${selectedPostId.value}`, {
+    const res = await $fetch<{ post: ApiRecord }>(`/api/editor/sites/${siteId}/blog/posts/${selectedPostId.value}`, {
       method: 'PATCH',
       body: { unpublish: true },
     })
@@ -267,7 +267,7 @@ async function remove() {
   if (!confirm('Delete this post permanently?')) return
   saving.value = true
   try {
-    await $fetch(`/api/dashboard/editor/blog/posts/${selectedPostId.value}`, { method: 'DELETE' })
+    await $fetch(`/api/editor/sites/${siteId}/blog/posts/${selectedPostId.value}`, { method: 'DELETE' })
     closeEditor()
     toast.add({ description: 'Post deleted', color: 'neutral' })
     await loadPosts()

@@ -88,20 +88,34 @@ interface TenantBlogPost {
 
 const postEndpoint = computed(() => `/api/public/sites/${siteId}/blog/${String(route.params.slug)}`)
 
+function getErrorStatusCode(error: unknown) {
+  if (!error || typeof error !== 'object') return undefined
+  const statusCode = (error as { statusCode?: unknown }).statusCode
+  if (typeof statusCode === 'number') return statusCode
+  const status = (error as { status?: unknown }).status
+  return typeof status === 'number' ? status : undefined
+}
+
 const { data, pending, error } = await useAsyncData(
   () => `tenant-blog-post-${postEndpoint.value}`,
   async () => {
+    let payload: { post?: TenantBlogPost }
     try {
-      const payload = import.meta.server
+      payload = import.meta.server
         ? await requestFetch<{ post?: TenantBlogPost }>(postEndpoint.value)
         : await $fetch<{ post?: TenantBlogPost }>(postEndpoint.value)
-      if (!payload.post) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
-      return { post: payload.post }
-    } catch {
-      throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+    } catch (err) {
+      if (getErrorStatusCode(err) === 404) throw err
+      throw err
     }
+
+    if (!payload.post) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+
+    return { post: payload.post }
   },
 )
+
+if (error.value && getErrorStatusCode(error.value) !== 404) throw error.value
 
 const post = computed(() => data.value?.post ?? null)
 const siteName = computed(() => site?.brand_name || 'Our Site')
@@ -169,6 +183,8 @@ useContentPageSchema(computed(() => {
     ],
     components: post.value.components ?? [],
     siteName: siteName.value,
+    siteLogoUrl: site?.logo_url || undefined,
+    siteDescription: site?.brand_description || undefined,
   }
 }))
 </script>

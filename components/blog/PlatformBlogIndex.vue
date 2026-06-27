@@ -131,7 +131,7 @@ const visibleCategories = computed(() => {
         ...post,
         media: resolveMedia(post.featured_image),
       })),
-  }))
+  })).filter(group => group.posts.length > 0)
 })
 
 usePlatformPageSeo({

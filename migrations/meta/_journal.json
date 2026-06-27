@@ -22,6 +22,20 @@
       "when": 1782529082947,
       "tag": "0009_nappy_justin_hammer",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1782532286449,
+      "tag": "0010_smart_sphinx",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1782532381202,
+      "tag": "0011_lethal_gargoyle",
+      "breakpoints": true
     }
   ]
 }

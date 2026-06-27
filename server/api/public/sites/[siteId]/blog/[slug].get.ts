@@ -19,7 +19,6 @@ export default defineEventHandler(async (event) => {
       p.published_at, p.created_at, p.updated_at,
       p.featured_image_asset_id,
       u.name AS author_name,
-      u.email AS author_email,
       u.image AS author_image,
       ma.public_url,
       ma.kind,

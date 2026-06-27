@@ -559,6 +559,25 @@ async function ensureMediaAssetExists(db: D1Database, assetId: string, field = '
   if (!asset) badRequest(`${field} not found or not active`)
 }
 
+async function ensureBlogFeaturedImageAssetExists(
+  db: D1Database,
+  assetId: string,
+  field = 'featured_image_asset_id',
+  siteId: string | null = null,
+) {
+  const conditions = ['id = ?', 'status = ?', 'kind = ?']
+  const params: ApiValue[] = [assetId, 'active', 'image']
+  if (siteId) {
+    conditions.push('site_id = ?')
+    params.push(siteId)
+  }
+
+  const asset = await queryFirst(db, `SELECT id FROM media_assets WHERE ${conditions.join(' AND ')} LIMIT 1`, params)
+  if (!asset) {
+    badRequest(siteId ? `${field} must reference an active image asset from this site` : `${field} must reference an active image asset`)
+  }
+}
+
 async function ensureDocParentExists(db: D1Database, docId: string) {
   const doc = await queryFirst(db, 'SELECT id FROM platform_docs WHERE id = ? LIMIT 1', [docId])
   if (!doc) badRequest('parent_doc_id not found')
@@ -940,11 +959,11 @@ export async function createPlatformBlogPost(
   input: PlatformBlogCreateInput,
   scope: BlogScope = {},
 ) {
-  if (!input.title || !input.body) badRequest('title and body are required')
+  if (!input.title?.trim() || !input.body?.trim()) badRequest('title and body are required')
   const isTenant = Boolean(scope.site_id)
   validateBlogCommon(input, isTenant)
   if (input.publish && !isTenant) assertPublishableBlogCategory(input.category)
-  if (input.featured_image_asset_id) await ensureMediaAssetExists(db, input.featured_image_asset_id)
+  if (input.featured_image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id, 'featured_image_asset_id', scope.site_id ?? null)
 
   const siteId = scope.site_id ?? null
   const organizationId = scope.organization_id ?? null
@@ -982,7 +1001,12 @@ export async function createPlatformBlogPost(
       try {
         await syncStructuredContent(db, 'blog_post', id, input)
       } catch (err) {
-        await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [id])
+        try {
+          await execute(db, 'DELETE FROM blog_posts WHERE id = ?', [id])
+          await replaceContentComponents(db, 'blog_post', id, [])
+        } catch (cleanupErr) {
+          console.error('Failed to clean up blog post after create rollback:', cleanupErr)
+        }
         throw err
       }
       const post = await getPlatformBlogPost(db, id, siteId)
@@ -1032,7 +1056,7 @@ export async function updatePlatformBlogPost(
   }
 
   if (input.featured_image_asset_id !== undefined && input.featured_image_asset_id) {
-    await ensureMediaAssetExists(db, input.featured_image_asset_id)
+    await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id, 'featured_image_asset_id', siteId)
   }
 
   const fields: Array<keyof Omit<PlatformBlogUpdateInput,

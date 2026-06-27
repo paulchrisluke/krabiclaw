@@ -256,9 +256,18 @@ const componentStatusItems = [
   { label: 'Inactive', value: 'inactive' },
 ]
 const { form, canSave, canPublish, handleImageChange } = useBlogForm()
+const categoryEdited = ref(false)
+const categoryInitialized = ref(false)
+
+watch(() => form.category, () => {
+  if (categoryInitialized.value) categoryEdited.value = true
+})
 
 const post = ref<BlogPost | null>(null)
-const publicPath = computed(() => getBlogPostPath(form.category || post.value?.category, post.value?.slug) || 'Platform blog draft')
+const publicPath = computed(() => {
+  const category = categoryEdited.value ? form.category : (form.category || post.value?.category)
+  return getBlogPostPath(category, post.value?.slug) || 'Platform blog draft'
+})
 const loadPending = ref(true)
 const loadError = ref('')
 const saving = ref(false)
@@ -338,6 +347,8 @@ function buildPayload() {
 async function loadPost() {
   loadPending.value = true
   loadError.value = ''
+  categoryEdited.value = false
+  categoryInitialized.value = false
   try {
     const res = await $fetch<BlogPostResponse>(`/api/admin/blog/posts/${postId}`)
     if (!res.post) throw new Error('Post not found')
@@ -352,6 +363,7 @@ async function loadPost() {
     form.featured_image_asset_id = res.post.featured_image_asset_id ?? ''
     form.body = res.post.body
     hydrateStructuredContent(res.post.components)
+    categoryInitialized.value = true
   } catch (err) {
     loadError.value = getErrorMessage(err, 'Failed to load post.')
   } finally {
