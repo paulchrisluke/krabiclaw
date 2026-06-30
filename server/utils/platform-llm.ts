@@ -202,7 +202,7 @@ export function renderPlatformDocMarkdown(doc: PlatformLlmDocDetail, origin: str
   const categorySlug = categoryToSlug(doc.category)
   if (!categorySlug) throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
   const path = `/docs/${categorySlug}/${doc.slug}`
-  const markdownPath = `/docs-md/${categorySlug}/${doc.slug}`
+  const markdownPath = `/docs-md/${categorySlug}/${doc.slug}.md`
   const canonicalUrl = doc.canonical_url?.trim() || absoluteUrl(origin, path)
   const body = renderContentMarkdownWithComponents(doc.body, doc.components)
 
@@ -320,7 +320,7 @@ export function buildPlatformDocLinkEntries(docs: PlatformLlmDocSummary[], origi
     return [{
       title: doc.title,
       path,
-      markdownPath: `/docs-md/${categorySlug}/${doc.slug}`,
+      markdownPath: `/docs-md/${categorySlug}/${doc.slug}.md`,
       canonicalUrl: doc.canonical_url?.trim() || absoluteUrl(origin, path),
       summary: safeSummary(doc.seo_description || doc.excerpt, 'KrabiClaw documentation.'),
       category: doc.category,
@@ -372,7 +372,7 @@ export function buildLlmsTxt(origin: string, docs: PlatformLlmLinkEntry[], posts
     '',
     '## Optional',
     `- [Full LLM context](${absoluteUrl(origin, '/llms-full.txt')}): Aggregated export of published docs and blog posts.`,
-    `- [Docs index JSON](${absoluteUrl(origin, '/api/public/docs-index.json')}): Machine-readable manifest of published docs.`,
+    `- [Docs index JSON](${absoluteUrl(origin, '/docs/index.json')}): Machine-readable manifest of published docs.`,
     `- [Blog index JSON](${absoluteUrl(origin, '/blog/index.json')}): Machine-readable manifest of published platform blog posts.`,
     `- [Blog RSS feed](${absoluteUrl(origin, '/blog/rss.xml')}): Chronological feed for published platform posts.`,
     `- [Blog JSON feed](${absoluteUrl(origin, '/blog/feed.json')}): JSON Feed export for published platform posts.`,
